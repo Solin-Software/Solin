@@ -88,31 +88,31 @@ def build_jw_media_placement_options(
     ]
     total = len(items)
     num_sections = len(sections)
+    has_many_items = total > 13
+    has_multiple_sections = num_sections >= 2
+    should_prompt = has_many_items or has_multiple_sections
 
     _tr = lambda text: QCoreApplication.translate(translate_context, text)  # noqa: E731
 
-    if total > 6 and num_sections >= 2:
-        options: list[dict[str, Any]] = [
-            {"id": "top", "label": _tr("Top of playlist"), "type": "position"},
-            {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
-        ]
-        for sec in sections:
-            hue = sec.get("color_hue", 215)
-            options.append({
-                "id": f"section:{sec['id']}",
-                "label": sec.get("name", "Section"),
-                "type": "section",
-                "color": _accent_from_hue(hue),
-            })
-        return options
+    if not should_prompt:
+        return []
 
-    if total > 13:
-        return [
-            {"id": "top", "label": _tr("Top of playlist"), "type": "position"},
-            {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
-        ]
-
-    return []
+    options: list[dict[str, Any]] = [
+        {"id": "top", "label": _tr("Top of playlist"), "type": "position"},
+        {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
+    ]
+    for sec in sections:
+        section_id = sec.get("id")
+        if not section_id:
+            continue
+        hue = sec.get("color_hue", 215)
+        options.append({
+            "id": f"section:{section_id}",
+            "label": sec.get("name", "Section"),
+            "type": "section",
+            "color": _accent_from_hue(hue),
+        })
+    return options
 
 
 # ── Catalog list model ────────────────────────────────────────────────────────
