@@ -31,14 +31,19 @@ def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str, str]:
 
 
 def _fmt_duration(seconds: float) -> tuple[str, str]:
-    """Return (primary_text, seconds_text) for a timer duration."""
+    """Return (primary_text, seconds_text) for a timer duration.
+
+    Durations under one hour stay as a conventional MM:SS readout. Once the
+    hour field appears, seconds move to the small secondary readout so the
+    large timer stays compact.
+    """
     sign = "-" if seconds < 0 else ""
     total = int(round(abs(seconds)))
     h, rem = divmod(total, 3600)
     m, s = divmod(rem, 60)
     if h > 0:
         return f"{sign}{h}:{m:02d}", f"{s:02d}"
-    return f"{sign}{m:02d}", f"{s:02d}"
+    return f"{sign}{m:02d}:{s:02d}", ""
 
 
 def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:

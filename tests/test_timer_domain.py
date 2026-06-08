@@ -810,9 +810,25 @@ def test_render_active_countdown_and_overrun():
     assert model["active"]
     assert model["analog_style"] == AnalogClockStyle.CLASSIC.value
     assert model["overrun"]
-    assert model["primary_text"] == "-00"
-    assert model["seconds_text"] == "30"
+    assert model["primary_text"] == "-00:30"
+    assert model["seconds_text"] == ""
     assert model["secondary_text"] == ""
+
+
+def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
+        active_part_title="Long Part", planned_seconds=7200,
+        elapsed_seconds=3540, remaining_seconds=3661, overrun=False, state=PartState.RUNNING,
+    )
+
+    model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
+
+    assert model["primary_text"] == "1:01"
+    assert model["seconds_text"] == "01"
 
 
 def test_render_stopped_countdown_shows_elapsed_result():
@@ -826,8 +842,8 @@ def test_render_stopped_countdown_shows_elapsed_result():
     )
     model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
 
-    assert model["primary_text"] == "00"
-    assert model["seconds_text"] == "03"
+    assert model["primary_text"] == "00:03"
+    assert model["seconds_text"] == ""
 
 
 def test_store_roundtrip(tmp_path):
