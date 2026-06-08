@@ -749,6 +749,25 @@ def test_render_idle_analog_sets_hand_angles():
     assert 0.0 <= model["second_angle"] < 360.0
 
 
+def test_render_idle_analog_digital_sets_hands_and_clock_text():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(active=False, wall_clock_epoch=epoch, direction=Direction.DOWN)
+    cfg = ClockConfig(mode=ClockMode.ANALOG_DIGITAL, hour_format_24h=True, show_seconds=True)
+
+    model = build_render_model(snap, cfg)
+
+    assert model["mode"] == "analog_digital"
+    assert model["primary_text"] == _time.strftime("%H:%M:%S", _time.localtime(epoch))
+    assert model["secondary_text"] == ""
+    assert model["hour_angle"] > 0.0
+    assert model["minute_angle"] > 0.0
+    assert model["second_angle"] == 60.0
+
+
 def test_render_idle_analog_second_hand_ticks_once_per_second():
     import time as _time
     from app.core.timer.render import build_render_model

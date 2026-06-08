@@ -10,7 +10,9 @@ Rectangle {
 
     readonly property var model: clock.model
     readonly property bool active: model.active === true
-    readonly property bool isAnalog: (model.mode === "analog") && !active
+    readonly property bool isAnalogOnly: (model.mode === "analog") && !active
+    readonly property bool isAnalogDigital: (model.mode === "analog_digital") && !active
+    readonly property bool hasAnalogFace: root.isAnalogOnly || root.isAnalogDigital
     readonly property string analogStyle: model.analog_style ? model.analog_style : "signature"
     readonly property bool overrun: model.overrun === true
     readonly property real requestedDisplayPct: Number(model.text_scale_pct)
@@ -32,6 +34,10 @@ Rectangle {
     readonly property int primaryPx: Math.max(12, Math.round(digitalMaxPrimaryPx * displayPct))
     readonly property int secondaryPx: Math.max(10, Math.round(primaryPx * secondaryRatio))
     readonly property real analogDiameter: Math.max(24, Math.min(availableWidth, availableHeight) * displayPct)
+    readonly property real analogDigitalHeightRatio: 1.22
+    readonly property real analogDigitalDiameter: Math.max(24,
+        Math.min(availableWidth, availableHeight / analogDigitalHeightRatio) * displayPct)
+    readonly property real analogDigitalHeight: analogDigitalDiameter * analogDigitalHeightRatio
 
     TimerDigits {
         id: primaryProbe
@@ -53,7 +59,7 @@ Rectangle {
     // ── Digital readout (wall clock or countdown) ─────────────────────────────
     Row {
         anchors.centerIn: parent
-        visible: !root.isAnalog
+        visible: !root.hasAnalogFace
         spacing: suffixSlot.visible ? Math.round(primary.font.pixelSize * root.digitalSuffixSpacingRatio) : 0
 
         TimerDigits {
@@ -87,12 +93,26 @@ Rectangle {
     AnalogClockFace {
         id: analog
         anchors.centerIn: parent
-        visible: root.isAnalog
+        visible: root.isAnalogOnly
         width: root.analogDiameter
         height: width
         style: root.analogStyle
         hourAngle: root.model.hour_angle ? root.model.hour_angle : 0
         minuteAngle: root.model.minute_angle ? root.model.minute_angle : 0
         secondAngle: root.model.second_angle ? root.model.second_angle : 0
+    }
+
+    AnalogDigitalClockFace {
+        anchors.centerIn: parent
+        visible: root.isAnalogDigital
+        width: root.analogDigitalDiameter
+        height: root.analogDigitalHeight
+        analogDiameter: root.analogDigitalDiameter
+        style: root.analogStyle
+        hourAngle: root.model.hour_angle ? root.model.hour_angle : 0
+        minuteAngle: root.model.minute_angle ? root.model.minute_angle : 0
+        secondAngle: root.model.second_angle ? root.model.second_angle : 0
+        primaryText: root.model.primary_text ? root.model.primary_text : ""
+        secondaryText: root.model.secondary_text ? root.model.secondary_text : ""
     }
 }

@@ -23,12 +23,16 @@ Item {
     property color pal_danger: "#f85149"
 
     readonly property var cfg: timer.clockConfig
-    readonly property bool isAnalogClock: page.cfg.mode === "analog"
-    readonly property bool digitalClockOptionsAvailable: !page.isAnalogClock
+    readonly property bool clockHasAnalog: page.cfg.mode === "analog" || page.cfg.mode === "analog_digital"
+    readonly property bool clockHasDigital: page.cfg.mode === "digital" || page.cfg.mode === "analog_digital"
+    readonly property bool digitalClockOptionsAvailable: page.clockHasDigital
     readonly property bool ampmOptionAvailable: page.digitalClockOptionsAvailable && !page.cfg.hour_format_24h
-    readonly property var analogStyleRows: page.analogStyles()
-    readonly property var analogStyleOptions: page.analogStyleLabels(page.analogStyleRows)
-    readonly property int analogStyleCurrent: page.analogStyleIndex(page.cfg.analog_style)
+    readonly property var clockModeRows: page.optionRows(timer.clockModes, ["digital", "analog", "analog_digital"])
+    readonly property var clockModeOptions: page.optionLabels(page.clockModeRows, page.clockModeLabel)
+    readonly property int clockModeCurrent: page.optionIndex(page.clockModeRows, page.cfg.mode, "digital")
+    readonly property var analogStyleRows: page.optionRows(timer.analogClockStyles, ["signature", "classic"])
+    readonly property var analogStyleOptions: page.optionLabels(page.analogStyleRows, page.analogStyleLabel)
+    readonly property int analogStyleCurrent: page.optionIndex(page.analogStyleRows, page.cfg.analog_style, "signature")
     property int pendingReserveIndex: -1
 
     readonly property int sideInset: 20
@@ -40,36 +44,56 @@ Item {
         return available ? 1.0 : 0.68
     }
 
-    function analogStyles() {
-        var rows = timer.analogClockStyles
+    function optionRows(rows, fallback) {
         if (rows && rows.length > 0)
             return rows
-        return [
-            { "id": "signature", "label": qsTr("Signature") },
-            { "id": "classic", "label": qsTr("Classic") }
-        ]
+        return fallback
     }
 
-    function analogStyleLabels(rows) {
+    function optionId(row) {
+        if (typeof row === "string")
+            return row
+        return row && row.id ? row.id : ""
+    }
+
+    function optionLabels(rows, labelFunc) {
         var labels = []
         for (var i = 0; i < rows.length; ++i)
-            labels.push(rows[i].label)
+            labels.push(labelFunc(page.optionId(rows[i])))
         return labels
     }
 
-    function analogStyleIndex(styleId) {
-        var id = styleId ? styleId : "signature"
-        for (var i = 0; i < page.analogStyleRows.length; ++i) {
-            if (page.analogStyleRows[i].id === id)
+    function optionIndex(rows, optionId, fallbackId) {
+        var id = optionId ? optionId : fallbackId
+        for (var i = 0; i < rows.length; ++i) {
+            if (page.optionId(rows[i]) === id)
                 return i
         }
         return 0
     }
 
-    function analogStyleId(index) {
-        if (index >= 0 && index < page.analogStyleRows.length)
-            return page.analogStyleRows[index].id
-        return "signature"
+    function optionIdAt(rows, index, fallbackId) {
+        if (index >= 0 && index < rows.length)
+            return page.optionId(rows[index])
+        return fallbackId
+    }
+
+    function clockModeLabel(id) {
+        if (id === "digital")
+            return qsTr("Digital")
+        if (id === "analog")
+            return qsTr("Analog")
+        if (id === "analog_digital")
+            return qsTr("Analog + digital")
+        return id
+    }
+
+    function analogStyleLabel(id) {
+        if (id === "signature")
+            return qsTr("Signature")
+        if (id === "classic")
+            return qsTr("Classic")
+        return id
     }
 
     // Reuse the shared meeting-section translations (matches the Meetings tab).
@@ -189,27 +213,31 @@ Item {
 
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
-                        RowLabel { text: qsTr("Type") }
-                        TimerSegment {
-                            Layout.preferredWidth: Math.max(page.controlWidth, implicitWidth)
-                            options: [qsTr("Digital"), qsTr("Analog")]
-                            current: page.cfg.mode === "analog" ? 1 : 0
-                            accent: page.pal_accent; stretch: true
-                            onPicked: function(i) { timer.updateClock("mode", i === 1 ? "analog" : "digital") }
+                        RowLabel { text: qsTr("Clock face") }
+                        TimerSelect {
+                            Layout.preferredWidth: page.controlWidth
+                            options: page.clockModeOptions
+                            current: page.clockModeCurrent
+                            accent: page.pal_accent
+                            onPicked: function(i) {
+                                timer.updateClock("mode", page.optionIdAt(page.clockModeRows, i, "digital"))
+                            }
                         }
                     }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
-                        opacity: page.optionOpacity(page.isAnalogClock)
+                        opacity: page.optionOpacity(page.clockHasAnalog)
                         Behavior on opacity { NumberAnimation { duration: 140 } }
                         RowLabel { text: qsTr("Analog style") }
-                        TimerSegment {
-                            Layout.preferredWidth: Math.max(page.controlWidth, implicitWidth)
+                        TimerSelect {
+                            Layout.preferredWidth: page.controlWidth
                             options: page.analogStyleOptions
                             current: page.analogStyleCurrent
-                            accent: page.pal_accent; stretch: true
-                            enabled: page.isAnalogClock
-                            onPicked: function(i) { timer.updateClock("analog_style", page.analogStyleId(i)) }
+                            accent: page.pal_accent
+                            enabled: page.clockHasAnalog
+                            onPicked: function(i) {
+                                timer.updateClock("analog_style", page.optionIdAt(page.analogStyleRows, i, "signature"))
+                            }
                         }
                     }
                     RowLayout {
