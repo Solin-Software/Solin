@@ -8,6 +8,7 @@ from datetime import date
 from PySide6.QtCore import QCoreApplication
 
 from app.core.timer.models import (
+    AnalogClockStyle,
     ClockConfig,
     ClockMode,
     Direction,
@@ -589,10 +590,16 @@ def test_part_roundtrip_defaults_missing_kind_to_standard():
 
 def test_clock_config_roundtrip():
     cfg = ClockConfig(
-        mode=ClockMode.ANALOG, hour_format_24h=False, show_ampm=True,
-        show_seconds=False, direction=Direction.UP, text_scale_pct=75,
+        mode=ClockMode.ANALOG, analog_style=AnalogClockStyle.CLASSIC,
+        hour_format_24h=False, show_ampm=True, show_seconds=False,
+        direction=Direction.UP, text_scale_pct=75,
     )
     assert ClockConfig.from_dict(cfg.to_dict()) == cfg
+
+
+def test_clock_config_defaults_to_signature_analog_style():
+    assert ClockConfig().analog_style is AnalogClockStyle.SIGNATURE
+    assert ClockConfig.from_dict({"mode": "analog"}).analog_style is AnalogClockStyle.SIGNATURE
 
 
 def test_clock_config_clamps_display_size():
@@ -736,6 +743,7 @@ def test_render_idle_analog_sets_hand_angles():
     cfg = ClockConfig(mode=ClockMode.ANALOG)
     model = build_render_model(snap, cfg)
     assert model["mode"] == "analog"
+    assert model["analog_style"] == AnalogClockStyle.SIGNATURE.value
     assert 0.0 <= model["hour_angle"] < 360.0
     assert 0.0 <= model["minute_angle"] < 360.0
     assert 0.0 <= model["second_angle"] < 360.0
@@ -776,9 +784,10 @@ def test_render_active_countdown_and_overrun():
         active_part_title="Part 1", planned_seconds=300,
         elapsed_seconds=330, remaining_seconds=-30, overrun=True, state=PartState.RUNNING,
     )
-    cfg = ClockConfig(direction=Direction.DOWN)
+    cfg = ClockConfig(direction=Direction.DOWN, analog_style=AnalogClockStyle.CLASSIC)
     model = build_render_model(snap, cfg)
     assert model["active"]
+    assert model["analog_style"] == AnalogClockStyle.CLASSIC.value
     assert model["overrun"]
     assert model["primary_text"] == "-00:30"
     assert model["secondary_text"] == ""
@@ -804,7 +813,11 @@ def test_store_roundtrip(tmp_path):
     _ps.set_org("SolinTest_timer_store")
     try:
         store = TimerStore()
-        cfg = ClockConfig(mode=ClockMode.ANALOG, text_scale_pct=90)
+        cfg = ClockConfig(
+            mode=ClockMode.ANALOG,
+            analog_style=AnalogClockStyle.CLASSIC,
+            text_scale_pct=90,
+        )
         store.save_clock_config(cfg)
         assert store.load_clock_config() == cfg
 

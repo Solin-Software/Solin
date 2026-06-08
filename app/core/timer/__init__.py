@@ -17,6 +17,8 @@ Public surface:
 """
 
 from .models import (
+    ANALOG_CLOCK_STYLE_OPTIONS,
+    AnalogClockStyle,
     ClockConfig,
     MeetingPart,
     MeetingSchedule,
@@ -37,6 +39,8 @@ from .schedule_factory import (
 from .store import TimerStore
 
 __all__ = [
+    "ANALOG_CLOCK_STYLE_OPTIONS",
+    "AnalogClockStyle",
     "ClockConfig",
     "MeetingPart",
     "MeetingSchedule",
