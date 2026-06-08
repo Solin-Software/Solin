@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "fr_FR",
+    "name": "Français",
+    "api_code": "F",
+    "wol_lang": "fr",
+    "wol_region": "r30",
+    "wol_lp": "lp-f",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

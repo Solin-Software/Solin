@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "zh_CN",
+    "name": "简体中文（普通话）",
+    "api_code": "CHS",
+    "wol_lang": "cmn-Hans",
+    "wol_region": "r23",
+    "wol_lp": "lp-chs",
+    "date_format": "%Y年%m月%d日 %H:%M",
+    "time_with_seconds_format": "%H:%M:%S"
+  }
+}

@@ -1,0 +1,285 @@
+import QtQuick
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QuickAccessToolbar.qml
+//
+// Floating toolbar with monitor, OBS, camera, zoom buttons and a minimize
+// chevron.  Rendered entirely in QML for proper alpha compositing (no black-
+// corner artefacts over browser / web-engine content).
+//
+// IMPORTANT: the hosting QQuickWidget has a FIXED size that never changes.
+// The pill Rectangle sizes itself from its content (btnRow) and is centred
+// within the root Item.  This avoids OpenGL surface rebuilds on Windows
+// that would destroy the alpha buffer.
+//
+// All state comes from the `bridge` context property (QuickToolbarBridge).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Item {
+    id: root
+
+    property Item tooltipItem: null
+    property string tooltipText: ""
+
+    Timer {
+        id: tooltipTimer
+        interval: 700
+        repeat: false
+        onTriggered: {
+            if (!root.tooltipItem || root.tooltipText === "")
+                return
+            var pos = root.tooltipItem.mapToItem(root, 0, 0)
+            bridge.showTooltip(
+                root.tooltipText,
+                pos.x,
+                pos.y,
+                root.tooltipItem.width,
+                root.tooltipItem.height
+            )
+        }
+    }
+
+    function beginButtonHover(item, text) {
+        bridge.onPointerEntered()
+        tooltipTimer.stop()
+        bridge.hideTooltip()
+        root.tooltipItem = item
+        root.tooltipText = text
+        if (text !== "")
+            tooltipTimer.start()
+    }
+
+    function endButtonHover() {
+        tooltipTimer.stop()
+        root.tooltipItem = null
+        root.tooltipText = ""
+        bridge.hideTooltip()
+        bridge.onPointerExited()
+    }
+
+    // ── Expanded Pill ────────────────────────────────────────────────────
+    Rectangle {
+        id: pill
+        visible: bridge.pillVisible
+
+        // Auto-size from content, centred horizontally in the fixed-width root.
+        // In solidMode (macOS) the host widget is already content-sized, so the
+        // pill fills it edge-to-edge — leaving NO transparent pixels (which the
+        // macOS compositor would render black). Rounded corners are clipped on
+        // the native layer instead of via QML transparency.
+        width: bridge.solidMode ? parent.width : (btnRow.implicitWidth + 12 + 4)
+        height: parent.height
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+
+        radius: (bridge.solidMode || bridge.browserRectMode) ? 0 : 20
+        color: bridge.solidMode
+               ? Qt.rgba(0.0863, 0.1059, 0.1333, 1.0)    // #161b22 opaque
+               : Qt.rgba(0.0863, 0.1059, 0.1333, 0.94)   // #161b22 @ 94 %
+        // solidMode: border is drawn on the native CALayer so it follows the
+        // rounded-corner clip; a QML rectangular border would be clipped flat.
+        border.width: bridge.solidMode ? 0 : 1
+        border.color: Qt.rgba(0.1882, 0.2118, 0.2392, 0.7)  // #30363d @ 70 %
+
+        Row {
+            id: btnRow
+            anchors.centerIn: parent
+            spacing: 3
+
+            // ── Monitor ──────────────────────────────────────────────
+            Item {
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: monitorMA.pressed
+                           ? Qt.rgba(1,1,1,0.13)
+                           : monitorMA.containsMouse
+                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/monitor/14/" + bridge.monitorIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: monitorMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(monitorMA, bridge.monitorTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onMonitorClicked()
+                }
+            }
+
+            // ── Separator ────────────────────────────────────────────
+            Rectangle {
+                visible: bridge.separatorVisible
+                width: 1; height: 18
+                color: Qt.rgba(0.1882, 0.2118, 0.2392, 0.6)
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // ── OBS ──────────────────────────────────────────────────
+            Item {
+                visible: bridge.obsVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: obsMA.pressed
+                           ? Qt.rgba(1,1,1,0.13)
+                           : obsMA.containsMouse
+                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/obs/14/" + bridge.obsIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                // Green connected dot
+                Rectangle {
+                    visible: bridge.obsDotVisible
+                    x: 21; y: 3; width: 7; height: 7; radius: 3.5
+                    color: "#3fb950"
+                    border.width: 1.5
+                    border.color: Qt.rgba(0.0863, 0.1059, 0.1333, 0.95)
+                }
+                MouseArea {
+                    id: obsMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(obsMA, bridge.obsTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onObsClicked()
+                }
+            }
+
+            // ── Camera ───────────────────────────────────────────────
+            Item {
+                visible: bridge.cameraVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: cameraMA.pressed
+                           ? Qt.rgba(1,1,1,0.13)
+                           : cameraMA.containsMouse
+                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/camera/14/" + bridge.cameraIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: cameraMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(cameraMA, bridge.cameraTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onCameraClicked()
+                }
+            }
+
+            // ── Zoom ─────────────────────────────────────────────────
+            Item {
+                visible: bridge.zoomVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: zoomMA.pressed
+                           ? Qt.rgba(1,1,1,0.13)
+                           : zoomMA.containsMouse
+                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/zoom/14/" + bridge.zoomIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: zoomMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(zoomMA, bridge.zoomTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onZoomClicked()
+                }
+            }
+
+            // ── Minimize chevron ─────────────────────────────────────
+            Item {
+                width: 22; height: 22
+                anchors.verticalCenter: parent.verticalCenter
+
+                Rectangle {
+                    anchors.fill: parent; radius: 11
+                    color: minMA.containsMouse
+                           ? Qt.rgba(1,1,1,0.06) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/chevron_down/10/484f58"
+                    sourceSize: Qt.size(10, 10)
+                    cache: true
+                }
+                MouseArea {
+                    id: minMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(minMA, bridge.minimizeTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onMinimizeClicked()
+                }
+            }
+        }
+    }
+
+    // ── Minimized Tab ────────────────────────────────────────────────────
+    Rectangle {
+        id: miniTab
+        visible: bridge.miniVisible
+
+        // Windows: width is 34 with the right 8px clipped outside the widget
+        // boundary, giving a flat/square right edge. solidMode (macOS): the host
+        // widget is sized to the visible tab, so the mini tab fills it opaquely
+        // (no transparent pixels → no black); corners clipped on the native layer.
+        x: bridge.solidMode ? 0 : (parent.width - width + 8)
+        y: bridge.solidMode ? 0 : (parent.height - 30) / 2
+        width: bridge.solidMode ? parent.width : 34
+        height: bridge.solidMode ? parent.height : 30
+        radius: (bridge.solidMode || bridge.browserRectMode) ? 0 : 8
+
+        color: (bridge.solidMode || bridge.browserRectMode)
+               ? (miniMA.containsMouse ? Qt.rgba(0.0863, 0.1059, 0.1333, 1.0) : Qt.rgba(0.0863, 0.1059, 0.1333, 0.94))
+               : (miniMA.containsMouse ? Qt.rgba(0.0863, 0.1059, 0.1333, 0.92) : Qt.rgba(0.0863, 0.1059, 0.1333, 0.55))
+        // solidMode: border drawn on the native CALayer to follow the rounding.
+        border.width: bridge.solidMode ? 0 : 1
+        border.color: (bridge.solidMode || bridge.browserRectMode)
+                      ? Qt.rgba(0.1882, 0.2118, 0.2392, 0.7)
+                      : (miniMA.containsMouse
+                         ? Qt.rgba(0.2196, 0.5451, 0.9922, 0.35)
+                         : Qt.rgba(0.1882, 0.2118, 0.2392, 0.35))
+
+        Image {
+            anchors.verticalCenter: parent.verticalCenter
+            x: 8  // Center of the visible 26px width (26 - 10)/2 = 8
+            source: "image://icons/chevron_left/10/6e7681"
+            sourceSize: Qt.size(10, 10)
+            cache: true
+        }
+
+        MouseArea {
+            id: miniMA
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 26  // Constrain hover/clicks to the visible part
+            hoverEnabled: true
+            onEntered: root.beginButtonHover(miniMA, bridge.expandTooltip)
+            onExited: root.endButtonHover()
+            onClicked: bridge.onExpandClicked()
+        }
+    }
+}

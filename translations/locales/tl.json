@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "tl",
+    "name": "Tagalog",
+    "api_code": "TG",
+    "wol_lang": "tl",
+    "wol_region": "r27",
+    "wol_lp": "lp-tg",
+    "date_format": "MM/dd/yyyy h:mm a",
+    "time_with_seconds_format": "h:mm:ss a"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "sw",
+    "name": "Kiswahili",
+    "api_code": "SW",
+    "wol_lang": "sw",
+    "wol_region": "r13",
+    "wol_lp": "lp-sw",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

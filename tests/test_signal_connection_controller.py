@@ -1,0 +1,183 @@
+from types import SimpleNamespace
+
+from app.controllers.signal_connection_controller import SignalConnectionController
+
+
+class _Signal:
+    registry = []
+
+    def __init__(self, name):
+        self.name = name
+        self.connected = []
+        self.registry.append(self)
+
+    def connect(self, callback):
+        self.connected.append(callback)
+
+
+def _slot(name):
+    def _callback(*_args, **_kwargs):
+        return None
+
+    _callback.__name__ = name
+    return _callback
+
+
+def _signal_namespace(prefix, *names):
+    return SimpleNamespace(**{
+        name: _Signal(f"{prefix}.{name}") for name in names
+    })
+
+
+class _WindowStub:
+    def __init__(self):
+        self._profile_switch = SimpleNamespace(update_avatar=_slot("update_avatar"))
+        self.songs_widget = _signal_namespace("songs", "project_video_signal")
+        self.meetings_widget = _signal_namespace("meetings", "project_media")
+        self.clips_widget = _signal_namespace("clips", "project_video_signal")
+        self.timer_widget = _signal_namespace("timer", "project_timer_signal")
+        self.sermon_theme_widget = _signal_namespace("theme", "project_theme_signal")
+        self.playlist_widget = _signal_namespace(
+            "playlist",
+            "project_video_signal",
+            "project_image_signal",
+        )
+        self.playlist_widget.set_watched_folder = _slot("playlist_set_watched_folder")
+
+        self.proj_bar = _signal_namespace(
+            "projection_bar",
+            "add_to_playlist_requested",
+            "send_to_temp_playlist_requested",
+            "stop_requested",
+            "seek_requested",
+            "toggle_requested",
+            "volume_changed",
+            "timer_updated",
+            "timer_blink",
+            "play_next_requested",
+            "playlist_navigate",
+            "image_apply_transform",
+            "image_reset_transform",
+            "image_reset_transform_instant",
+            "obs_scene_toggle_requested",
+            "set_as_idle_requested",
+        )
+        self.proj_bar.set_cover_art = _slot("set_cover_art")
+
+        self.media_ctrl = _signal_namespace(
+            "media_ctrl",
+            "frame_ready",
+            "state_changed",
+            "cover_art_changed",
+            "title_from_metadata",
+        )
+        self.media_ctrl.seek = _slot("seek")
+        self.media_ctrl.toggle_play_pause = _slot("toggle_play_pause")
+        self.media_ctrl.set_volume = _slot("set_volume")
+
+        self.screen_mgr = _signal_namespace("screen_mgr", "screens_changed")
+        self.lang = _signal_namespace("lang", "language_changed")
+        self.settings_widget = _signal_namespace(
+            "settings",
+            "yearly_text_changed",
+            "watched_folder_changed",
+            "zoom_enabled_toggled",
+            "zoom_participants_toggled",
+            "obs_stream_config_changed",
+            "camera_enabled_toggled",
+        )
+        self.meetings_widget.set_watched_folder = _slot("meetings_set_watched_folder")
+
+        self._obs_service = _signal_namespace(
+            "obs",
+            "state_changed",
+            "current_scene_changed",
+            "scenes_updated",
+        )
+        self._ndi_service = _signal_namespace("ndi", "frame_ready", "error", "stopped")
+        self._camera_service = _signal_namespace(
+            "camera",
+            "frame_ready",
+            "error",
+            "stopped",
+        )
+        self._auto_share_start_finished = _Signal("auto_share_start_finished")
+
+        self._playlist_imports = SimpleNamespace(
+            add_current_to_playlist=_slot("add_current_to_playlist"),
+            send_to_temp_playlist=_slot("send_to_temp_playlist"),
+        )
+        self._auto_key_projection = SimpleNamespace(on_media_state=_slot("on_media_state"))
+        self._projection_targets = SimpleNamespace(
+            on_screens_changed=_slot("on_screens_changed"),
+            apply_yearly_text=_slot("apply_yearly_text"),
+            on_idle_media_changed=_slot("on_idle_media_changed"),
+        )
+        self._language_controller = SimpleNamespace(
+            change_language=_slot("change_language"),
+        )
+        self._live_integrations = SimpleNamespace(
+            on_zoom_settings_enabled_toggled=_slot("zoom_enabled"),
+            on_zoom_settings_parts_toggled=_slot("zoom_parts"),
+            refresh_obs_stream_availability=_slot("refresh_obs_stream"),
+            on_camera_settings_enabled_toggled=_slot("camera_enabled"),
+            on_obs_state_changed=_slot("obs_state"),
+            on_obs_scene_changed=_slot("obs_scene"),
+            refresh_obs_btn_availability=_slot("refresh_obs_button"),
+            on_obs_scenes_updated=_slot("obs_scenes_updated"),
+            on_obs_ndi_frame=_slot("ndi_frame"),
+            on_obs_ndi_error=_slot("ndi_error"),
+            on_obs_ndi_stopped=_slot("ndi_stopped"),
+            on_camera_frame=_slot("camera_frame"),
+            on_camera_error=_slot("camera_error"),
+            on_camera_stopped=_slot("camera_stopped"),
+            on_obs_scene_toggle=_slot("obs_scene_toggle"),
+        )
+        self._projection_integrations = SimpleNamespace(
+            on_auto_share_start_finished=_slot("auto_share_finished"),
+        )
+
+        self._on_sjjm_project = _slot("on_sjjm_project")
+        self._on_meeting_media_project = _slot("on_meeting_media_project")
+        self._on_song_project = _slot("on_song_project")
+        self._start_timer = _slot("start_timer")
+        self._project_sermon_theme = _slot("project_sermon_theme")
+        self._on_playlist_project = _slot("on_playlist_project")
+        self._project_image_bytes = _slot("project_image_bytes")
+        self._distribute_frame = _slot("distribute_frame")
+        self._on_title_from_metadata = _slot("title_from_metadata")
+        self._stop_any = _slot("stop_any")
+        self._on_timer_update_proj = _slot("timer_update")
+        self._on_timer_blink_proj = _slot("timer_blink")
+        self._project_next_auto = _slot("project_next")
+        self._on_playlist_navigate = _slot("playlist_navigate")
+        self._on_image_apply_transform = _slot("image_apply")
+        self._on_image_reset_transform = _slot("image_reset")
+        self._on_image_reset_transform_instant = _slot("image_reset_instant")
+
+
+def test_connect_signals_wires_expected_signal_graph():
+    _Signal.registry = []
+    window = _WindowStub()
+    profile_manager = SimpleNamespace(profile_switched=_Signal("profile_switched"))
+    controller = SignalConnectionController(window, lambda: profile_manager)
+
+    controller.connect_signals()
+
+    total_connections = sum(len(signal.connected) for signal in _Signal.registry)
+    assert total_connections == 47
+    assert profile_manager.profile_switched.connected == [
+        window._profile_switch.update_avatar
+    ]
+    assert window.songs_widget.project_video_signal.connected == [
+        window._on_sjjm_project
+    ]
+    assert window.settings_widget.watched_folder_changed.connected == [
+        window.playlist_widget.set_watched_folder,
+        window.meetings_widget.set_watched_folder,
+    ]
+    assert window.proj_bar.stop_requested.connected == [window._stop_any]
+    assert window._auto_share_start_finished.connected == [
+        window._projection_integrations.on_auto_share_start_finished
+    ]
+    assert len(window._obs_service.scenes_updated.connected) == 2

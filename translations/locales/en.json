@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "en",
+    "name": "English",
+    "api_code": "E",
+    "wol_lang": "en",
+    "wol_region": "r1",
+    "wol_lp": "lp-e",
+    "date_format": "MM/dd/yyyy hh:mm a",
+    "time_with_seconds_format": "hh:mm:ss a"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "es",
+    "name": "Español",
+    "api_code": "S",
+    "wol_lang": "es",
+    "wol_region": "r4",
+    "wol_lp": "lp-s",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "nl",
+    "name": "Nederlands",
+    "api_code": "O",
+    "wol_lang": "nl",
+    "wol_region": "r18",
+    "wol_lp": "lp-o",
+    "date_format": "dd-MM-yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

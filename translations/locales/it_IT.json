@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "it_IT",
+    "name": "Italiano",
+    "api_code": "I",
+    "wol_lang": "it",
+    "wol_region": "r6",
+    "wol_lp": "lp-i",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

@@ -1,0 +1,442 @@
+name: Build Solin macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Artifact retention in days
+        required: true
+        type: number
+        default: 5
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solin-macos-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_NAME: Solin
+  PYTHON_VERSION: "3.13.12"
+  MACOSX_DEPLOYMENT_TARGET: "12.0"
+  BUILD_DIR: build
+  DIST_DIR: dist
+
+jobs:
+  build:
+    name: macOS Intel
+    runs-on: macos-15-intel
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            .pip-wheels
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-pip-
+
+      - name: Cache Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-nuitka-
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          python - <<'PY' | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
+          import re
+          from pathlib import Path
+
+          constants_path = Path("app/core/foundation/constants.py")
+          text = constants_path.read_text(encoding="utf-8")
+          match = re.search(r'APP_VERSION:\s*str\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit(f"APP_VERSION was not found in {constants_path}")
+          internal_version = match.group(1)
+          parts = internal_version.split(".")
+          if len(parts) != 4 or not all(part.isdigit() for part in parts):
+              raise SystemExit(f"APP_VERSION must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
+          macos_version = ".".join(parts[:3])
+          print(f"APP_VERSION={macos_version}")
+          print(f"app_version={macos_version}")
+          print(f"APP_INTERNAL_VERSION={internal_version}")
+          PY
+
+      - name: Verify required macOS inputs
+        shell: bash
+        run: |
+          test -f main.py
+          test -f assets/icon.icns
+          test -d app/qml
+          test -d translations/locales
+          test -d translations
+          test -f native_webview_widget/__init__.py
+          test -f native_webview_widget/_backend.py
+          test -f native_webview_widget/widget.py
+
+          if [ -f native_webview_widget/libnative_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
+          elif [ -f native_webview_widget/native_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
+          else
+            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into native_webview_widget/ before running this workflow."
+            exit 1
+          fi
+
+      - name: Install Python dependencies
+        shell: bash
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PIP_NO_INPUT: "1"
+        run: |
+          python -m pip install --upgrade --retries 10 --timeout 120 pip
+          mkdir -p .pip-wheels
+          python -m pip download \
+            --requirement requirements.txt \
+            --dest .pip-wheels \
+            --only-binary=:all: \
+            --retries 10 \
+            --timeout 120 \
+            --progress-bar off
+          python -m pip install \
+            --no-index \
+            --find-links .pip-wheels \
+            --requirement requirements.txt
+          python -m pip install --upgrade --retries 10 --timeout 120 --prefer-binary nuitka ordered-set zstandard
+
+      - name: Generate compiled QML cache
+        shell: bash
+        run: |
+          rm -rf "${BUILD_DIR}/qmlcache/app/qml"
+          python tools/compile_qml_cache.py \
+            --source-dir app/qml \
+            --output-dir "${BUILD_DIR}/qmlcache/app/qml/Solin" \
+            --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \
+            --qt-framework-output-dir "${BUILD_DIR}/qmlcache/qt-libs"
+
+      - name: Remove Homebrew OpenSSL unversioned symlinks
+        shell: bash
+        run: |
+          brew unlink openssl@3 2>/dev/null || true
+          brew unlink openssl@1.1 2>/dev/null || true
+
+      - name: Build app bundle with Nuitka
+        shell: bash
+        run: |
+          qml_binary_args=()
+          if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.dylib" -print -quit | grep -q .; then
+            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml/=**/*.dylib")
+          fi
+          if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.so" -print -quit | grep -q .; then
+            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml/=**/*.so")
+          fi
+
+          python -m nuitka \
+            --standalone \
+            --macos-create-app-bundle \
+            --output-dir="${BUILD_DIR}" \
+            --macos-app-name="${APP_NAME}" \
+            --macos-app-version="${APP_VERSION}" \
+            --macos-app-icon="assets/icon.icns" \
+            --assume-yes-for-downloads \
+            --follow-imports \
+            --follow-import-to=app \
+            --follow-import-to=app.core \
+            --follow-import-to=app.styles \
+            --follow-import-to=app.widgets \
+            --nofollow-import-to=PySide6.QtTranslations \
+            --nofollow-import-to=app.core.zoom_controls \
+            --include-package=app \
+            --include-package=app.core \
+            --include-package=app.styles \
+            --include-package=app.widgets \
+            --include-package=native_webview_widget \
+            --include-module=websocket \
+            --include-module=websocket._core \
+            --include-module=websocket._app \
+            --include-package=ephem \
+            --include-data-dir=assets=assets \
+            --include-data-dir=translations/locales=translations/locales \
+            --include-data-dir="${BUILD_DIR}/qmlcache/app/qml/Solin=app/qml/Solin" \
+            --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
+            "${qml_binary_args[@]}" \
+            --include-data-files="translations/*.qm=translations/" \
+            --include-data-files="${NATIVE_WEBVIEW_DYLIB}=native_webview_widget/$(basename "${NATIVE_WEBVIEW_DYLIB}")" \
+            --enable-plugin=pyside6 \
+            --include-qt-plugins=platforms,styles,imageformats,multimedia,position \
+            main.py
+
+      - name: Rename bundle
+        shell: bash
+        run: |
+          echo "=== ${BUILD_DIR} contents after Nuitka ==="
+          ls -la "${BUILD_DIR}/"
+          if [ -d "${BUILD_DIR}/main.app" ]; then
+            mv "${BUILD_DIR}/main.app" "${BUILD_DIR}/${APP_NAME}.app"
+          fi
+          test -d "${BUILD_DIR}/${APP_NAME}.app"
+
+      - name: Normalize macOS Qt QML runtime links
+        shell: bash
+        run: |
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          MACOS_DIR="$BUNDLE/Contents/MacOS"
+          QT_LIB_SOURCE="${BUILD_DIR}/qmlcache/qt-libs"
+          test -d "$QT_LIB_SOURCE"
+
+          while IFS= read -r library; do
+            name="$(basename "$library")"
+            target="$MACOS_DIR/$name"
+            if [ ! -f "$target" ]; then
+              cp "$library" "$target"
+              chmod 755 "$target"
+              echo "Staged $name"
+            fi
+          done < <(find "$QT_LIB_SOURCE" -maxdepth 1 -type f -name "Qt*" | sort)
+
+          for duplicate_dir in "$BUNDLE/Contents/Frameworks/PySide6/lib" "$BUNDLE/Contents/MacOS/PySide6/lib"; do
+            if [ -d "$duplicate_dir" ]; then
+              find "$duplicate_dir" -maxdepth 1 -name "Qt*.framework" -type d -prune -exec rm -rf {} +
+            fi
+          done
+
+          runtime_binaries=()
+          while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
+            find "$BUNDLE" \
+              \( -path "*/PySide6/qml/QtQuick/*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Layouts/*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Controls/*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Controls/Basic/*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Templates/*.dylib" \
+              -o -path "*/PySide6/qml/QtQml/*.dylib" \) \
+              -type f
+          )
+          while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
+            find "$MACOS_DIR" -maxdepth 1 -type f -name "Qt*"
+          )
+
+          missing=()
+          for binary in "${runtime_binaries[@]}"; do
+            chmod u+w "$binary"
+            name="$(basename "$binary")"
+            if [[ "$name" == Qt* ]]; then
+              install_name_tool -id "@executable_path/$name" "$binary" || true
+            fi
+            while IFS='|' read -r dependency framework; do
+              if [ -z "$dependency" ]; then
+                continue
+              fi
+              if [ ! -f "$MACOS_DIR/$framework" ]; then
+                missing+=("${binary} -> ${framework}")
+                continue
+              fi
+              install_name_tool -change "$dependency" "@executable_path/$framework" "$binary"
+            done < <(otool -L "$binary" | sed -n 's#^[[:space:]]*\(@rpath/\(Qt[^./]*\)\.framework/[^[:space:]]*\).*#\1|\2#p' | sort -u)
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '%s\n' "${missing[@]}" | sed 's/^/::error::Missing flat Qt runtime library: /'
+            exit 1
+          fi
+
+      - name: Verify compiled QML deployment
+        shell: bash
+        run: |
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          find "$BUNDLE" -path "*/app/qml/*.qmlc" -not -path "*/app/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/app/qml/*.qml" -not -path "*/app/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/app/qml/qmldir" -delete
+          if ! find "$BUNDLE" -path "*/app/qml/Solin/*.qmlc" -print -quit | grep -q .; then
+            echo "::error::Compiled QML cache files were not packaged in the app bundle."
+            exit 1
+          fi
+          find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -delete
+          if ! find "$BUNDLE" -path "*/app/qml/Solin/qmldir" -print -quit | grep -q .; then
+            echo "::error::Compiled QML qmldir metadata was not packaged in the app bundle."
+            exit 1
+          fi
+          if find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -print -quit | grep -q .; then
+            echo "::error::Raw QML source files remained in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" -path "*/PySide6/qml/QtQuick/qmldir" -print -quit | grep -q .; then
+            echo "::error::QtQuick QML runtime was not packaged in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" -path "*/PySide6/qml/QtQml/qmldir" -print -quit | grep -q .; then
+            echo "::error::QtQml QML runtime was not packaged in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" \( -path "*/PySide6/qml/QtQuick/Layouts/*qquicklayoutsplugin*.dylib" -o -path "*/PySide6/qml/QtQuick/Layouts/*qquicklayoutsplugin*.so" \) -print -quit | grep -q .; then
+            echo "::error::qquicklayoutsplugin binary was not packaged in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" \( -path "*/PySide6/qml/QtQuick/Controls/*qtquickcontrols2plugin*.dylib" -o -path "*/PySide6/qml/QtQuick/Controls/*qtquickcontrols2plugin*.so" \) -print -quit | grep -q .; then
+            echo "::error::qtquickcontrols2plugin binary was not packaged in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" \( -path "*/PySide6/qml/QtQuick/Controls/Basic/*qtquickcontrols2basicstyleplugin*.dylib" -o -path "*/PySide6/qml/QtQuick/Controls/Basic/*qtquickcontrols2basicstyleplugin*.so" \) -print -quit | grep -q .; then
+            echo "::error::qtquickcontrols2basicstyleplugin binary was not packaged in the app bundle."
+            exit 1
+          fi
+          if ! find "$BUNDLE" \( -path "*/PySide6/qml/QtQuick/Templates/*qtquicktemplates2plugin*.dylib" -o -path "*/PySide6/qml/QtQuick/Templates/*qtquicktemplates2plugin*.so" \) -print -quit | grep -q .; then
+            echo "::error::qtquicktemplates2plugin binary was not packaged in the app bundle."
+            exit 1
+          fi
+          if find "$BUNDLE" -path "*/PySide6/lib/Qt*.framework" -print -quit | grep -q .; then
+            echo "::error::Qt frameworks must not be packaged under PySide6/lib because they duplicate Nuitka's Qt runtime."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuickLayouts"; then
+            echo "::error::QtQuickLayouts runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuickControls2Basic"; then
+            echo "::error::QtQuickControls2Basic runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuickControls2BasicStyleImpl"; then
+            echo "::error::QtQuickControls2BasicStyleImpl runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQml"; then
+            echo "::error::QtQml runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQmlMeta"; then
+            echo "::error::QtQmlMeta runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuick"; then
+            echo "::error::QtQuick runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtCore"; then
+            echo "::error::QtCore runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtDBus"; then
+            echo "::error::QtDBus runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtOpenGL"; then
+            echo "::error::QtOpenGL runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuickControls2Impl"; then
+            echo "::error::QtQuickControls2Impl runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          if ! test -f "$BUNDLE/Contents/MacOS/QtQuickTemplates2"; then
+            echo "::error::QtQuickTemplates2 runtime library was not packaged in Contents/MacOS."
+            exit 1
+          fi
+          runtime_binaries=()
+          while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
+            find "$BUNDLE" \
+              \( -path "*/PySide6/qml/QtQuick/libqtquick2plugin.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Layouts/*qquicklayoutsplugin*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Controls/*qtquickcontrols2plugin*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Controls/Basic/*qtquickcontrols2basicstyleplugin*.dylib" \
+              -o -path "*/PySide6/qml/QtQuick/Templates/*qtquicktemplates2plugin*.dylib" \
+              -o -path "*/PySide6/qml/QtQml/*.dylib" \) \
+              -type f
+          )
+          while IFS= read -r binary; do runtime_binaries+=("$binary"); done < <(
+            find "$BUNDLE/Contents/MacOS" -maxdepth 1 -type f -name "Qt*"
+          )
+
+          missing=()
+          for binary in "${runtime_binaries[@]}"; do
+            while IFS= read -r dependency; do
+              missing+=("${binary} -> ${dependency}")
+            done < <(otool -L "$binary" | sed -n 's#.*\(@rpath/Qt[^[:space:]]*\.framework/[^[:space:]]*\).*#\1#p' | sort -u)
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '%s\n' "${missing[@]}" | sed 's/^/::error::Unnormalized Qt framework dependency: /'
+            exit 1
+          fi
+          echo "App QML packaged as compiled .qmlc cache only."
+
+      - name: Ad-hoc sign app bundle
+        shell: bash
+        run: |
+          codesign --force --deep --sign - "${BUILD_DIR}/${APP_NAME}.app"
+          codesign --verify --deep --strict --verbose=2 "${BUILD_DIR}/${APP_NAME}.app"
+
+      - name: Inspect app bundle
+        shell: bash
+        run: |
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          echo "=== Top-level bundle layout ==="
+          find "$BUNDLE/Contents" -maxdepth 2 -type d | sort
+          echo ""
+          echo "=== Native webview dylibs ==="
+          find "$BUNDLE" -iname "*native_webview*.dylib" -o -iname "native_webview_widget.dll" | sort
+          echo ""
+          echo "=== Bundle size ==="
+          du -sh "$BUNDLE"
+
+      - name: Verify executable
+        shell: bash
+        run: |
+          BINARY="${BUILD_DIR}/${APP_NAME}.app/Contents/MacOS/main"
+          if [ ! -x "$BINARY" ]; then
+            echo "::error::Executable not found at $BINARY"
+            exit 1
+          fi
+          echo "[OK] $BINARY"
+
+      - name: Install create-dmg
+        shell: bash
+        run: brew install create-dmg
+
+      - name: Create DMG
+        shell: bash
+        run: |
+          mkdir -p "${DIST_DIR}"
+          create-dmg \
+            --volname "${APP_NAME} ${APP_VERSION}" \
+            --volicon "assets/icon.icns" \
+            --window-pos 200 120 \
+            --window-size 660 420 \
+            --icon-size 128 \
+            --icon "${APP_NAME}.app" 165 195 \
+            --hide-extension "${APP_NAME}.app" \
+            --app-drop-link 495 195 \
+            --no-internet-enable \
+            "${DIST_DIR}/${APP_NAME}-${APP_VERSION}-macOS.dmg" \
+            "${BUILD_DIR}/${APP_NAME}.app" \
+          || [ $? -eq 2 ]
+
+          shasum -a 256 "${DIST_DIR}"/*.dmg > "${DIST_DIR}/SHA256SUMS-macos.txt"
+          ls -lh "${DIST_DIR}/"
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solin-${{ steps.version.outputs.app_version }}-macOS
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS-macos.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}

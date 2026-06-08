@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "id",
+    "name": "Indonesia",
+    "api_code": "IN",
+    "wol_lang": "id",
+    "wol_region": "r25",
+    "wol_lp": "lp-in",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

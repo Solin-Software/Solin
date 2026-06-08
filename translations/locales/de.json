@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "de",
+    "name": "Deutsch",
+    "api_code": "X",
+    "wol_lang": "de",
+    "wol_region": "r10",
+    "wol_lp": "lp-x",
+    "date_format": "dd.MM.yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

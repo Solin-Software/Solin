@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "ko",
+    "name": "한국어",
+    "api_code": "KO",
+    "wol_lang": "ko",
+    "wol_region": "r8",
+    "wol_lp": "lp-ko",
+    "date_format": "yyyy-MM-dd HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

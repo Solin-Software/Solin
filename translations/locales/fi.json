@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "fi",
+    "name": "Suomi",
+    "api_code": "FI",
+    "wol_lang": "fi",
+    "wol_region": "r16",
+    "wol_lp": "lp-fi",
+    "date_format": "dd.MM.yyyy HH.mm",
+    "time_with_seconds_format": "HH.mm.ss"
+  }
+}

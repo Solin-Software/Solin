@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "ja_JP",
+    "name": "日本語",
+    "api_code": "J",
+    "wol_lang": "ja",
+    "wol_region": "r7",
+    "wol_lp": "lp-j",
+    "date_format": "%Y年%m月%d日 %H:%M",
+    "time_with_seconds_format": "%H:%M:%S"
+  }
+}

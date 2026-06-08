@@ -1,0 +1,310 @@
+name: Build Solin Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Artifact retention in days
+        required: true
+        type: number
+        default: 5
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solin-windows-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_NAME: Solin
+  PYTHON_VERSION: "3.13.12"
+  BUILD_DIR: build
+  DIST_DIR: dist
+  COMPANY_NAME: Solin Software
+  PRODUCT_NAME: Solin
+  FILE_DESCRIPTION: Solin - Audio and Video for Kingdom Hall meetings
+  COPYRIGHT: Copyright (c) 2026 Alexsander. All rights reserved.
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-pip-
+
+      - name: Cache Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka
+          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-nuitka-
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install --upgrade nuitka ordered-set zstandard
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Read and verify app version
+        id: version
+        shell: pwsh
+        run: |
+          $constantsPath = "app\core\foundation\constants.py"
+          $constants = Get-Content $constantsPath -Raw
+          if ($constants -notmatch 'APP_VERSION:\s*str\s*=\s*"([^"]+)"') {
+            throw "APP_VERSION was not found in $constantsPath"
+          }
+          $version = $Matches[1]
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "app_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          $buildScript = Get-Content "build\scripts\build_solin.bat" -Raw
+          if ($buildScript -notmatch "set VERSION=$([regex]::Escape($version))") {
+            throw "build\scripts\build_solin.bat VERSION does not match APP_VERSION=$version"
+          }
+
+          $setup = Get-Content "build\installer\setup.iss" -Raw
+          if ($setup -notmatch "#define MyAppVersion\s+`"$([regex]::Escape($version))`"") {
+            throw "build\installer\setup.iss MyAppVersion does not match APP_VERSION=$version"
+          }
+
+          $patch = Get-Content "build\installer\patch.iss" -Raw
+          if ($patch -notmatch "#define MyPatchVersion\s+`"$([regex]::Escape($version))`"") {
+            throw "build\installer\patch.iss MyPatchVersion does not match APP_VERSION=$version"
+          }
+
+          Write-Host "APP_VERSION=$version"
+
+      - name: Verify required build inputs
+        shell: pwsh
+        run: |
+          $required = @(
+            "main.py",
+            "assets\icon.ico",
+            "app\qml",
+            "translations\locales",
+            "translations",
+            "native_webview_widget\__init__.py",
+            "native_webview_widget\_backend.py",
+            "native_webview_widget\widget.py",
+            "native_webview_widget\native_webview_widget.dll",
+            "build\installer\setup.iss"
+          )
+
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Required build input is missing: $path"
+            }
+          }
+
+      - name: Generate compiled QML cache
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath "$env:BUILD_DIR\qmlcache\app\qml" -Recurse -Force -ErrorAction SilentlyContinue
+          python tools\compile_qml_cache.py `
+            --source-dir "app\qml" `
+            --output-dir "$env:BUILD_DIR\qmlcache\app\qml\Solin" `
+            --qt-qml-output-dir "$env:BUILD_DIR\qmlcache\PySide6\qml" `
+            --qt-library-output-dir "$env:BUILD_DIR\qmlcache\qt-libs" `
+            --qt-qml-module "QtQuick/Controls/impl"
+
+      - name: Build standalone app with Nuitka
+        shell: pwsh
+        run: |
+          python -m nuitka `
+            --standalone `
+            --output-dir="$env:BUILD_DIR" `
+            --output-filename="$env:APP_NAME" `
+            --windows-icon-from-ico="assets\icon.ico" `
+            --windows-console-mode=disable `
+            --assume-yes-for-downloads `
+            --windows-file-version="$env:APP_VERSION" `
+            --windows-product-version="$env:APP_VERSION" `
+            --windows-product-name="$env:PRODUCT_NAME" `
+            --windows-company-name="$env:COMPANY_NAME" `
+            --windows-file-description="$env:FILE_DESCRIPTION" `
+            --copyright="$env:COPYRIGHT" `
+            --follow-imports `
+            --follow-import-to=app `
+            --follow-import-to=app.core `
+            --follow-import-to=app.styles `
+            --follow-import-to=app.widgets `
+            --nofollow-import-to=PySide6.QtTranslations `
+            --include-package=app `
+            --include-package=app.core `
+            --include-package=app.styles `
+            --include-package=app.widgets `
+            --include-package=native_webview_widget `
+            --include-module=websocket `
+            --include-module=websocket._core `
+            --include-module=websocket._app `
+            --include-package=ephem `
+            --include-package=pywinauto `
+            --include-package=comtypes `
+            --include-data-dir="assets=assets" `
+            --include-data-dir="translations\locales=translations/locales" `
+            --include-data-dir="$env:BUILD_DIR\qmlcache\app\qml\Solin=app/qml/Solin" `
+            --include-data-dir="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml" `
+            --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
+            --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
+            --include-data-files="translations\*.qm=translations/" `
+            --include-data-files="native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" `
+            --enable-plugin=pyside6 `
+            --include-qt-plugins=platforms,styles,imageformats,multimedia,position `
+            main.py
+
+      - name: Post-build cleanup
+        shell: pwsh
+        run: |
+          $dist = Join-Path $env:BUILD_DIR "main.dist"
+          if (-not (Test-Path "$dist\Solin.exe")) {
+            throw "Solin.exe was not produced at $dist"
+          }
+
+          $remove = @(
+            "$dist\qtwebengine_devtools_resources.debug.pak"
+            "$dist\PIL\_avif.pyd"
+          )
+
+          foreach ($path in $remove) {
+            if (Test-Path $path) {
+              Remove-Item -LiteralPath $path -Force
+              Write-Host "Removed $path"
+            }
+          }
+
+          Get-ChildItem -LiteralPath (Join-Path $dist "app\qml") -Filter "*.qmlc" -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          Get-ChildItem -LiteralPath (Join-Path $dist "app\qml") -Filter "*.qml" -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          Remove-Item -LiteralPath (Join-Path $dist "app\qml\qmldir") -Force -ErrorAction SilentlyContinue
+
+          $qmlDir = Join-Path $dist "app\qml\Solin"
+          if (-not (Test-Path (Join-Path $qmlDir "*.qmlc"))) {
+            throw "Compiled QML cache files were not packaged in $qmlDir"
+          }
+          Get-ChildItem -LiteralPath $qmlDir -Filter "*.qml" -File |
+            Remove-Item -Force
+          if (-not (Test-Path (Join-Path $qmlDir "qmldir"))) {
+            throw "Compiled QML qmldir metadata was not packaged in $qmlDir"
+          }
+          if (Test-Path (Join-Path $qmlDir "*.qml")) {
+            throw "Raw QML source files remained in $qmlDir"
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\qmldir"))) {
+            throw "QtQuick QML runtime was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQml\qmldir"))) {
+            throw "QtQml QML runtime was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Layouts\qquicklayoutsplugin.dll"))) {
+            throw "qquicklayoutsplugin.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Controls\qtquickcontrols2plugin.dll"))) {
+            throw "qtquickcontrols2plugin.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Controls\impl\qtquickcontrols2implplugin.dll"))) {
+            throw "qtquickcontrols2implplugin.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Templates\qtquicktemplates2plugin.dll"))) {
+            throw "qtquicktemplates2plugin.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "Qt6QuickLayouts.dll"))) {
+            throw "Qt6QuickLayouts.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "Qt6QuickControls2.dll"))) {
+            throw "Qt6QuickControls2.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "Qt6QuickControls2Impl.dll"))) {
+            throw "Qt6QuickControls2Impl.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "Qt6QuickTemplates2.dll"))) {
+            throw "Qt6QuickTemplates2.dll was not packaged."
+          }
+          Write-Host "App QML packaged as compiled .qmlc cache only."
+
+      - name: Package standalone zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:DIST_DIR | Out-Null
+          $zip = "$env:DIST_DIR\$env:APP_NAME-$env:APP_VERSION-windows-standalone.zip"
+          Compress-Archive -Path "$env:BUILD_DIR\main.dist\*" -DestinationPath $zip -Force
+          Get-FileHash $zip -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content "$env:DIST_DIR\SHA256SUMS-windows.txt"
+
+      - name: Build full installer with Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe was not found at $iscc"
+          }
+
+          Push-Location "build\installer"
+          try {
+            & $iscc setup.iss
+          }
+          finally {
+            Pop-Location
+          }
+
+      # Patch installers are intentionally not built here. build/installer/patch.iss expects
+      # build/scripts/diff.py needs an explicit OLD dist directory plus
+      # the newly built dist. A GitHub runner does not naturally have the previous
+      # release's dist, so producing a patch here would be misleading.
+
+      - name: Collect installer artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:DIST_DIR\installers" | Out-Null
+          Copy-Item "build\installer_output\Solin_Setup_*.exe" "$env:DIST_DIR\installers\" -Force
+
+          Get-FileHash "$env:DIST_DIR\installers\*.exe" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content "$env:DIST_DIR\installers\SHA256SUMS.txt"
+
+          Get-ChildItem "$env:DIST_DIR" -Recurse | Select-Object FullName, Length
+
+      - name: Upload Windows standalone
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solin-${{ steps.version.outputs.app_version }}-windows-standalone
+          path: |
+            dist/*windows-standalone.zip
+            dist/SHA256SUMS-windows.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solin-${{ steps.version.outputs.app_version }}-windows-installers
+          path: dist/installers/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}

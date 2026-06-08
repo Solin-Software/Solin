@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "pt_BR",
+    "name": "Português (Brasil)",
+    "api_code": "T",
+    "wol_lang": "pt",
+    "wol_region": "r5",
+    "wol_lp": "lp-t",
+    "date_format": "dd/MM/yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

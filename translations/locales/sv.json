@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "sv",
+    "name": "Svenska",
+    "api_code": "Z",
+    "wol_lang": "sv",
+    "wol_region": "r14",
+    "wol_lp": "lp-z",
+    "date_format": "yyyy-MM-dd HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}

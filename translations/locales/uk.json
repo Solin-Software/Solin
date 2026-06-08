@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "code": "uk",
+    "name": "Українська",
+    "api_code": "K",
+    "wol_lang": "uk",
+    "wol_region": "r15",
+    "wol_lp": "lp-k",
+    "date_format": "dd.MM.yyyy HH:mm",
+    "time_with_seconds_format": "HH:mm:ss"
+  }
+}
