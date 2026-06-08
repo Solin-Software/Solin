@@ -98,6 +98,11 @@ class BackgroundSongService(QObject):
         self._auto_stop_timer.setSingleShot(True)
         self._auto_stop_timer.timeout.connect(self._begin_scheduled_stop)
 
+        self._retry_timer = QTimer(self)
+        self._retry_timer.setSingleShot(True)
+        self._retry_timer.setInterval(400)
+        self._retry_timer.timeout.connect(self._retry_after_error)
+
         self._fade_timer = QTimer(self)
         self._fade_timer.setInterval(_FADE_TICK_MS)
         self._fade_timer.timeout.connect(self._on_fade_tick)
@@ -165,6 +170,7 @@ class BackgroundSongService(QObject):
     def shutdown(self) -> None:
         self._schedule_timer.stop()
         self._auto_stop_timer.stop()
+        self._retry_timer.stop()
         self._fade_timer.stop()
         self._desired_playing = False
         self._media.stop()
@@ -270,6 +276,7 @@ class BackgroundSongService(QObject):
                 self._suppressed_slot_id = occurrence.slot_id
         self._desired_playing = False
         self._auto_stop_timer.stop()
+        self._retry_timer.stop()
         if immediate or self._fade_seconds <= 0 or not self.is_playing:
             self._finish_stop()
             return
@@ -414,6 +421,9 @@ class BackgroundSongService(QObject):
         self.availability_changed.emit(bool(self._songs))
 
     def _play_next(self) -> None:
+        if not self._enabled or not self._desired_playing:
+            return
+        self._retry_timer.stop()
         if not self._songs:
             self._set_status(
                 self.tr("No audio songs available.")
@@ -441,13 +451,20 @@ class BackgroundSongService(QObject):
 
     @Slot(QMediaPlayer.PlaybackState)
     def _on_playback_state(self, state: QMediaPlayer.PlaybackState) -> None:
+        if state == QMediaPlayer.PlaybackState.PlayingState:
+            self._retry_timer.stop()
         self.playback_changed.emit(state == QMediaPlayer.PlaybackState.PlayingState)
 
     def _on_player_error(self, error_string: str) -> None:
         if error_string:
             self._set_status(error_string)
-        if self._desired_playing:
-            QTimer.singleShot(400, self._play_next)
+        if self._enabled and self._desired_playing:
+            self._retry_timer.start()
+
+    def _retry_after_error(self) -> None:
+        if not self._enabled or not self._desired_playing:
+            return
+        self._play_next()
 
     def _begin_scheduled_stop(self) -> None:
         self._suppressed_slot_id = self._active_occurrence.slot_id if self._active_occurrence else ""
