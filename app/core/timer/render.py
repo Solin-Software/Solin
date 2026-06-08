@@ -17,27 +17,28 @@ import time
 from .models import ClockConfig, ClockMode, TimerSnapshot
 
 
-def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str]:
-    """Return (time_text, ampm_text) for the wall clock."""
+def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str, str]:
+    """Return (primary_text, seconds_text, ampm_text) for the wall clock."""
     lt = time.localtime(epoch)
     if config.hour_format_24h:
-        fmt = "%H:%M:%S" if config.show_seconds else "%H:%M"
-        return time.strftime(fmt, lt), ""
-    fmt = "%I:%M:%S" if config.show_seconds else "%I:%M"
-    text = time.strftime(fmt, lt).lstrip("0")
+        text = time.strftime("%H:%M", lt)
+        seconds = time.strftime("%S", lt) if config.show_seconds else ""
+        return text, seconds, ""
+    text = time.strftime("%I:%M", lt).lstrip("0")
+    seconds = time.strftime("%S", lt) if config.show_seconds else ""
     ampm = time.strftime("%p", lt) if config.show_ampm else ""
-    return text, ampm
+    return text, seconds, ampm
 
 
-def _fmt_duration(seconds: float) -> str:
-    """mm:ss (or h:mm:ss past an hour), with a leading sign for overrun."""
+def _fmt_duration(seconds: float) -> tuple[str, str]:
+    """Return (primary_text, seconds_text) for a timer duration."""
     sign = "-" if seconds < 0 else ""
     total = int(round(abs(seconds)))
     h, rem = divmod(total, 3600)
     m, s = divmod(rem, 60)
     if h > 0:
-        return f"{sign}{h}:{m:02d}:{s:02d}"
-    return f"{sign}{m:02d}:{s:02d}"
+        return f"{sign}{h}:{m:02d}", f"{s:02d}"
+    return f"{sign}{m:02d}", f"{s:02d}"
 
 
 def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
@@ -49,7 +50,9 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
                           the *idle* clock).
         analog_style    — selected analog face id for analog idle mode.
         primary_text    — the large text (countdown when active, else digital
-                          clock; empty in analog-idle, which draws hands).
+                          clock without the trailing seconds; empty in
+                          analog-idle, which draws hands).
+        seconds_text    — small trailing seconds, without a leading colon.
         secondary_text  — AM/PM suffix for the idle digital wall clock.
         overrun         — bool: countdown went negative (paint red).
         show_seconds    — bool.
@@ -61,6 +64,7 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         "mode": config.mode.value,
         "analog_style": config.analog_style.value,
         "primary_text": "",
+        "seconds_text": "",
         "secondary_text": "",
         "overrun": bool(snapshot.overrun and snapshot.active),
         "show_seconds": config.show_seconds,
@@ -74,7 +78,9 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         # Active part: always a large digital countdown/up, regardless of the
         # idle clock mode. ``display_seconds`` already respects the direction.
         model["mode"] = ClockMode.DIGITAL.value
-        model["primary_text"] = _fmt_duration(snapshot.display_seconds())
+        primary, seconds = _fmt_duration(snapshot.display_seconds())
+        model["primary_text"] = primary
+        model["seconds_text"] = seconds
         return model
 
     # Idle: show the wall clock in the configured mode.
@@ -94,11 +100,13 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         model["hour_angle"] = hour * 30.0
         # Analog projection is face-only unless the combined face is selected.
         if config.mode is ClockMode.ANALOG_DIGITAL:
-            text, ampm = _fmt_clock(epoch, config)
+            text, seconds, ampm = _fmt_clock(epoch, config)
             model["primary_text"] = text
+            model["seconds_text"] = seconds
             model["secondary_text"] = ampm
     else:
-        text, ampm = _fmt_clock(epoch, config)
+        text, seconds, ampm = _fmt_clock(epoch, config)
         model["primary_text"] = text
+        model["seconds_text"] = seconds
         model["secondary_text"] = ampm
     return model

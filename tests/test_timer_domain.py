@@ -731,7 +731,8 @@ def test_render_idle_digital_matches_wall_clock():
     cfg = ClockConfig(mode=ClockMode.DIGITAL, hour_format_24h=True, show_seconds=True)
     model = build_render_model(snap, cfg)
     assert model["mode"] == "digital"
-    assert model["primary_text"] == _time.strftime("%H:%M:%S", _time.localtime(epoch))
+    assert model["primary_text"] == _time.strftime("%H:%M", _time.localtime(epoch))
+    assert model["seconds_text"] == _time.strftime("%S", _time.localtime(epoch))
     assert not model["active"]
 
 
@@ -761,7 +762,8 @@ def test_render_idle_analog_digital_sets_hands_and_clock_text():
     model = build_render_model(snap, cfg)
 
     assert model["mode"] == "analog_digital"
-    assert model["primary_text"] == _time.strftime("%H:%M:%S", _time.localtime(epoch))
+    assert model["primary_text"] == _time.strftime("%H:%M", _time.localtime(epoch))
+    assert model["seconds_text"] == _time.strftime("%S", _time.localtime(epoch))
     assert model["secondary_text"] == ""
     assert model["hour_angle"] > 0.0
     assert model["minute_angle"] > 0.0
@@ -808,7 +810,8 @@ def test_render_active_countdown_and_overrun():
     assert model["active"]
     assert model["analog_style"] == AnalogClockStyle.CLASSIC.value
     assert model["overrun"]
-    assert model["primary_text"] == "-00:30"
+    assert model["primary_text"] == "-00"
+    assert model["seconds_text"] == "30"
     assert model["secondary_text"] == ""
 
 
@@ -823,7 +826,8 @@ def test_render_stopped_countdown_shows_elapsed_result():
     )
     model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
 
-    assert model["primary_text"] == "00:03"
+    assert model["primary_text"] == "00"
+    assert model["seconds_text"] == "03"
 
 
 def test_store_roundtrip(tmp_path):
