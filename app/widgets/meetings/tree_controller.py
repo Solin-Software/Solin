@@ -94,6 +94,21 @@ def _meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
     return MeetingMedia(**data)
 
 
+def _has_jw_media_identity(ref: dict[str, Any]) -> bool:
+    return bool(str(ref.get("key_symbol") or "").strip() or ref.get("meps_doc_id"))
+
+
+def _usable_ref_file_path(ref: dict[str, Any]) -> str:
+    path = str(ref.get("file_path") or "")
+    if not path:
+        return ""
+    if MediaCacheManager.is_remote(path) or os.path.exists(path):
+        return path
+    if _has_jw_media_identity(ref):
+        return ""
+    return path
+
+
 def _ref_title(ref: dict[str, Any]) -> str:
     return _clean_title(str(ref.get("label") or ref.get("caption") or ""))
 
@@ -1529,7 +1544,7 @@ class MeetingTreeController(QObject):
         if node.get("resolved_url"):
             return str(node.get("resolved_url"))
         ref = node.get("media_ref") or {}
-        path = str(ref.get("file_path") or "")
+        path = _usable_ref_file_path(ref)
         if path:
             return path
         return ""

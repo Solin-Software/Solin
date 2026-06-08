@@ -17,6 +17,7 @@ from app.core.meetings.publications import (
     _get_cbs_ref,
     _get_mwb_publication_refs,
     _JwpubWorker,
+    _make_media_item,
 )
 from app.core.meetings.tree_builder import MeetingTreeBuilder
 from app.core.meetings.tree_store import MeetingTreeStore
@@ -44,6 +45,74 @@ def media(**kwargs) -> MeetingMedia:
     }
     base.update(kwargs)
     return MeetingMedia(**base)
+
+
+def multimedia_row(**kwargs) -> dict:
+    base = {
+        "MultimediaId": 1,
+        "MimeType": "video/mp4",
+        "FilePath": "",
+        "Label": "Media",
+        "Caption": "",
+        "par": 1,
+        "KeySymbol": "",
+        "Track": 0,
+        "IssueTagNumber": 0,
+        "MepsDocumentId": 0,
+    }
+    base.update(kwargs)
+    return base
+
+
+class MeetingMediaPathTests(unittest.TestCase):
+    def test_jwpub_image_file_path_becomes_existing_absolute_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pub_dir = Path(tmp)
+            image_path = pub_dir / "image.jpg"
+            image_path.write_bytes(b"jpg")
+
+            item = _make_media_item(
+                multimedia_row(MimeType="image/jpeg", FilePath="image.jpg"),
+                pub_dir,
+                "wt",
+                False,
+            )
+
+            self.assertEqual(item.file_path, str(image_path))
+
+    def test_jwpub_video_file_path_is_empty_when_file_is_not_extracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            item = _make_media_item(
+                multimedia_row(
+                    FilePath="w_LGP_202604_02_r720P.mp4",
+                    KeySymbol="w",
+                    Track=2,
+                    IssueTagNumber=20260400,
+                    MepsDocumentId=2026365,
+                ),
+                Path(tmp),
+                "wt",
+                False,
+            )
+
+            self.assertEqual(item.file_path, "")
+            self.assertEqual(item.key_symbol, "w")
+            self.assertEqual(item.track, 2)
+
+    def test_jwpub_video_file_path_becomes_absolute_when_file_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pub_dir = Path(tmp)
+            video_path = pub_dir / "local.mp4"
+            video_path.write_bytes(b"mp4")
+
+            item = _make_media_item(
+                multimedia_row(FilePath="local.mp4"),
+                pub_dir,
+                "wt",
+                False,
+            )
+
+            self.assertEqual(item.file_path, str(video_path))
 
 
 class MeetingTreeBuilderTests(unittest.TestCase):
@@ -415,6 +484,123 @@ class MeetingTreeMergerTests(unittest.TestCase):
 
         self.assertNotIn("resolved_url", media_node)
         self.assertNotIn("base_duration_ticks", media_node)
+
+    def test_preserves_durable_metadata_when_jw_file_path_was_normalized(self):
+        canonical = MeetingTreeBuilder().build_weekend(
+            WeekData(
+                monday=date(2026, 6, 8),
+                wt_all_media=[
+                    media(
+                        multimedia_id=15,
+                        mime_type="video/mp4",
+                        file_path="",
+                        label="O “Deus da verdade” cumpre sempre o que promete",
+                        section="wt",
+                        key_symbol="w",
+                        track=2,
+                        issue_tag=20260400,
+                        meps_doc_id=2026365,
+                    ),
+                ],
+            )
+        )
+        saved = MeetingTreeBuilder().build_weekend(
+            WeekData(
+                monday=date(2026, 6, 8),
+                wt_all_media=[
+                    media(
+                        multimedia_id=15,
+                        mime_type="video/mp4",
+                        file_path="w_LGP_202604_02_r720P.mp4",
+                        label="O “Deus da verdade” cumpre sempre o que promete",
+                        section="wt",
+                        key_symbol="w",
+                        track=2,
+                        issue_tag=20260400,
+                        meps_doc_id=2026365,
+                    ),
+                ],
+            )
+        )
+        saved_media = self.wt_section(saved)["children"][0]
+        saved_media["resolved_url"] = "https://cdn.example/w_LGP_202604_02.mp4"
+        saved_media["thumbnail_url"] = "https://cdn.example/thumb.jpg"
+
+        merged = MeetingTreeMerger(canonical).merge(saved)
+        media_node = self.wt_section(merged)["children"][0]
+
+        self.assertEqual(media_node["media_ref"]["file_path"], "")
+        self.assertEqual(media_node["resolved_url"], saved_media["resolved_url"])
+        self.assertEqual(media_node["thumbnail_url"], saved_media["thumbnail_url"])
+
+
+class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
+    def test_stale_jwpub_video_file_path_falls_back_to_jw_resolution(self):
+        calls: list[tuple[str, MeetingMedia]] = []
+
+        class FakeService:
+            def resolve_video_async(self, request_id: str, item: MeetingMedia) -> None:
+                calls.append((request_id, item))
+
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._resolved_urls = {}
+        controller._resolve_to_node_id = {}
+        controller._svc = FakeService()
+        controller._url_for_node = (
+            lambda node: MeetingTreeController._url_for_node(controller, node)
+        )
+        controller._has_local_thumbnail = lambda node: False
+        controller._duration_ticks = lambda node: 0
+        controller._media_type_from_ref = lambda ref: "video"
+        controller._queue_info = lambda *args, **kwargs: None
+        controller._emit_cloud_for_node = lambda item_id: None
+
+        node = {
+            "id": "video-node",
+            "type": "media",
+            "media_type": "video",
+            "media_ref": {
+                "file_path": "w_LGP_202604_02_r720P.mp4",
+                "key_symbol": "w",
+                "track": 2,
+                "issue_tag": 20260400,
+                "meps_doc_id": 2026365,
+                "mime_type": "video/mp4",
+            },
+        }
+
+        self.assertEqual(MeetingTreeController._url_for_node(controller, node), "")
+
+        MeetingTreeController._start_media_request(controller, node)
+
+        self.assertEqual(len(calls), 1)
+        request_id, item = calls[0]
+        self.assertIn(request_id, controller._resolve_to_node_id)
+        self.assertEqual(controller._resolve_to_node_id[request_id], "video-node")
+        self.assertEqual(item.key_symbol, "w")
+        self.assertEqual(item.track, 2)
+
+    def test_missing_plain_local_file_still_reports_missing_url(self):
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._resolved_urls = {}
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_path = str(Path(tmp) / "missing-local-video.mp4")
+            node = {
+                "id": "local-node",
+                "type": "media",
+                "media_ref": {"file_path": missing_path},
+            }
+
+            self.assertEqual(
+                MeetingTreeController._url_for_node(controller, node),
+                missing_path,
+            )
 
 
 class _FakeJwpubCache:

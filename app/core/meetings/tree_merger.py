@@ -30,9 +30,19 @@ _MEDIA_IDENTITY_FIELDS = (
 )
 
 
+def _has_jw_media_identity(ref: dict) -> bool:
+    return bool(str(ref.get("key_symbol") or "").strip() or ref.get("meps_doc_id"))
+
+
+def _media_identity_value(ref: dict, field: str) -> str:
+    if field == "file_path" and _has_jw_media_identity(ref):
+        return ""
+    return str(ref.get(field, ""))
+
+
 def _media_identity_signature(node: Node) -> tuple:
     ref = node.get("media_ref") or {}
-    return tuple(str(ref.get(field, "")) for field in _MEDIA_IDENTITY_FIELDS)
+    return tuple(_media_identity_value(ref, field) for field in _MEDIA_IDENTITY_FIELDS)
 
 
 class MeetingTreeMerger:

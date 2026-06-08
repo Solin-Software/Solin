@@ -865,15 +865,30 @@ def _query_multimedia(conn, doc_id: int) -> list:
             continue
     return []
 
+def _media_file_path(raw_path: str, pub_dir: Path) -> str:
+    raw_path = str(raw_path or "").strip()
+    if not raw_path:
+        return ""
+    if raw_path.startswith(("http://", "https://")):
+        return raw_path
+
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = pub_dir / raw_path
+    if candidate.exists():
+        return str(candidate)
+    return ""
+
+
 def _make_media_item(r, pub_dir: Path, section: str,
                      is_song: bool, cbs_title: str = "") -> MeetingMedia:
     mime   = (r["MimeType"] or "").lower()
     fp     = r["FilePath"] or ""
-    abs_fp = str(pub_dir / fp) if fp and mime.startswith("image") else fp
+    file_path = _media_file_path(fp, pub_dir)
     return MeetingMedia(
         multimedia_id     = r["MultimediaId"],
         mime_type         = mime,
-        file_path         = abs_fp,
+        file_path         = file_path,
         label             = r["Label"] or "",
         caption           = r["Caption"] or "",
         begin_ordinal     = r["par"] or 0,
