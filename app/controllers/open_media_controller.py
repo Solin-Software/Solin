@@ -18,6 +18,10 @@ from ..core.foundation.constants import (
     PPTX_EXTS,
     VIDEO_EXTS,
 )
+from ..core.jw.language_context import (
+    JWMediaLanguageContext,
+    jw_media_language_context,
+)
 from ..core.media.mime import mime_to_ext
 from ..widgets.playlist.items import _new_item
 
@@ -172,7 +176,7 @@ class OpenMediaController:
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(jwpub_path).stem
-        lang = self._media_api_code()
+        lang = self._media_language_context().api_code
 
         self._window._navigation.switch_page(7)
         self._window.playlist_widget.open_pdf_as_temp_playlist([], f"📖  {stem}")
@@ -297,7 +301,10 @@ class OpenMediaController:
         from ..core.playlists.reader import read_jwlplaylist
 
         try:
-            parsed = read_jwlplaylist(path, fallback_lang_code=self._interface_api_code())
+            parsed = read_jwlplaylist(
+                path,
+                fallback_lang_code=self._media_language_context().fallback_code,
+            )
         except zipfile.BadZipFile:
             QMessageBox.warning(
                 self._window,
@@ -386,20 +393,10 @@ class OpenMediaController:
         self._window._jwl_tmp_files.add(tmp.name)
         return tmp.name
 
-    def _interface_api_code(self) -> str:
-        return getattr(getattr(self._window, "lang", None), "api_code", "E")
-
-    def _media_api_code(self) -> str:
+    def _media_language_context(self) -> JWMediaLanguageContext:
         lang_manager = getattr(
             self._window,
             "_lang_mgr",
             getattr(self._window, "_lang_manager", getattr(self._window, "lang", None)),
         )
-        if lang_manager is None:
-            return "E"
-        if (
-            hasattr(lang_manager, "jw_lang_service")
-            and hasattr(lang_manager.jw_lang_service, "media_api_code")
-        ):
-            return lang_manager.jw_lang_service.media_api_code
-        return getattr(lang_manager, "api_code", "E")
+        return jw_media_language_context(lang_manager)

@@ -31,6 +31,10 @@ from ..jw_songs_bridge import JWSongsBridge
 from ...qml_module import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.i18n.manager import LanguageManager
+from ...core.jw.language_context import (
+    JWMediaLanguageContext,
+    jw_media_language_context,
+)
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ..media_info_extractor import MediaInfoQueue, is_filename_title
@@ -95,28 +99,24 @@ class _PlaylistEditView(
         self.catalog_bridge = JWMediaCatalogBridge(self)
         self.songs_bridge = JWSongsBridge(self)
 
-        # Set initial language code on the catalog bridge
-        self.catalog_bridge.set_language_code(self._current_media_api_code())
-        self._sync_songs_bridge_language()
+        self._apply_media_language_context()
         self._connect_media_language_signal()
 
         self._build_ui()
         self._connect_bridge_signals()
         self._connect_cache_signals()
 
-    def _current_media_api_code(self) -> str:
-        """Return the current JW media language, including interface fallback."""
-        if not self.lang:
-            return "E"
-        code = getattr(self.lang, "media_api_code", "")
-        if code:
-            return code
-        svc = getattr(self.lang, "jw_lang_service", None)
-        if svc is not None:
-            code = getattr(svc, "media_api_code", "")
-            if code:
-                return code
-        return getattr(self.lang, "api_code", "E") or "E"
+    def _current_media_context(self) -> JWMediaLanguageContext:
+        return jw_media_language_context(self.lang)
+
+    def _apply_media_language_context(self) -> None:
+        context = self._current_media_context()
+        self.catalog_bridge.set_language_code(context.api_code)
+        self.songs_bridge.set_language_context(
+            api_code=context.api_code,
+            fallback_code=context.fallback_code,
+            is_sign_language=context.is_sign_language,
+        )
 
     def _connect_media_language_signal(self) -> None:
         svc = getattr(self.lang, "jw_lang_service", None) if self.lang else None
@@ -128,17 +128,9 @@ class _PlaylistEditView(
             pass
 
     @Slot(str)
-    def _on_media_language_changed(self, code: str) -> None:
-        """Keep the JW catalog bridge in sync with Settings immediately."""
-        self.catalog_bridge.set_language_code(code or self._current_media_api_code())
-        self._sync_songs_bridge_language()
-
-    def _sync_songs_bridge_language(self) -> None:
-        self.songs_bridge.set_language_context(
-            api_code=self._current_media_api_code(),
-            fallback_code=getattr(self.lang, "api_code", "") if self.lang else "",
-            is_sign_language=getattr(self.lang, "is_media_sign_language", False),
-        )
+    def _on_media_language_changed(self, _code: str) -> None:
+        """Keep JW media integrations in sync with Settings immediately."""
+        self._apply_media_language_context()
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
@@ -335,16 +327,16 @@ class _PlaylistEditView(
         pending = get_pending_files(self._watched_path)
         if not pending:
             return
-        lang = "E"
-        if self.lang:
-            if hasattr(self.lang, "jw_lang_service") and hasattr(self.lang.jw_lang_service, "media_api_code"):
-                lang = self.lang.jw_lang_service.media_api_code
-            else:
-                lang = getattr(self.lang, "api_code", "E")
+        context = self._current_media_context()
         self._toast.show_message(
             "✨  " + self.tr("Processing %n file(s)...", None, len(pending))
         )
-        thread = WatchedFolderSyncThread(self._watched_path, lang=lang, parent=self)
+        thread = WatchedFolderSyncThread(
+            self._watched_path,
+            media_lang=context.api_code,
+            fallback_lang_code=context.fallback_code,
+            parent=self,
+        )
         self._wf_sync_thread = thread
         thread.progress.connect(
             lambda fname, msg: self._toast.show_message(fname + ": " + msg)
@@ -438,7 +430,7 @@ class _PlaylistEditView(
             return
 
         self.catalog_bridge.set_playlist_ref(self._pl)
-        self.catalog_bridge.set_language_code(self._current_media_api_code())
+        self._apply_media_language_context()
 
         self._thumb_idx_to_id.clear()
 
@@ -819,8 +811,7 @@ class _PlaylistEditView(
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.catalog_bridge.set_language_code(self._current_media_api_code())
-        self._sync_songs_bridge_language()
+        self._apply_media_language_context()
         if hasattr(self, "qml_widget"):
             engine = self.qml_widget.engine()
             if hasattr(engine, "retranslate"):

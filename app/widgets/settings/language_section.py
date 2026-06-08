@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDialog, QLabel
 
+from ...core.jw.language_context import jw_media_language_context
 from ...styles.icons import ICON_BOOK, ICON_NAV_BROWSER
 from ._shared import create_interface_language_picker, create_jw_language_picker
 
@@ -75,7 +76,7 @@ class LanguageSectionMixin:
 
     def _open_media_lang_picker(self):
         svc = self.lang.jw_lang_service
-        current_code = svc.media_api_code or self.lang.api_code
+        current_code = jw_media_language_context(self.lang).api_code
         picker = create_jw_language_picker(svc, current_code, parent=self)
         if picker.exec() == QDialog.DialogCode.Accepted:
             chosen = picker.chosen_code

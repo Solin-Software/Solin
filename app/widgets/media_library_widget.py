@@ -25,6 +25,7 @@ from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
+from ..core.jw.language_context import jw_media_language_context
 from ..core.jw.media_api import fetch_clips
 from ..core.jw.songs import JWSongsStore
 from ..core.foundation.exception_logging import log_ignored_exception
@@ -567,7 +568,8 @@ class MediaLibraryWidget(QWidget):
         self._refresh_download_all_state()
 
     def _update_mode_availability(self) -> None:
-        supports_audio = self.kind == "songs" and not getattr(self.lang, "is_media_sign_language", False)
+        context = jw_media_language_context(self.lang)
+        supports_audio = self.kind == "songs" and not context.is_sign_language
         if not supports_audio and self._audio_mode:
             self._audio_mode = False
         self.bridge.update_state(supports_audio=supports_audio, audio_mode=self._audio_mode)
@@ -588,17 +590,15 @@ class MediaLibraryWidget(QWidget):
         self._set_loading(loading_text)
         self.model.set_items([], self._audio_mode)
 
-        api_code = self.lang.media_api_code
-        fallback_code = self.lang.api_code
+        context = jw_media_language_context(self.lang)
         audio_mode = self._audio_mode
-        is_sign_language = getattr(self.lang, "is_media_sign_language", False)
         kind = self.kind
 
         if kind == "songs" and self._songs_store is not None:
             request = self._songs_store.request_for(
-                api_code=api_code,
-                fallback_code=fallback_code,
-                is_sign_language=is_sign_language,
+                api_code=context.api_code,
+                fallback_code=context.fallback_code,
+                is_sign_language=context.is_sign_language,
                 audio_mode=audio_mode,
             )
             self._song_request_key = self._songs_store.ensure_loaded(request, force=force)
@@ -607,10 +607,10 @@ class MediaLibraryWidget(QWidget):
         def worker():
             try:
                 items, fetched_at, from_cache = fetch_clips(
-                    api_code,
+                    context.api_code,
                     force,
-                    fallback_code=fallback_code,
-                    is_sign_language=is_sign_language,
+                    fallback_code=context.fallback_code,
+                    is_sign_language=context.is_sign_language,
                 )
                 pub_name = ""
                 self._loaded_signal.emit(items, pub_name, fetched_at, from_cache)

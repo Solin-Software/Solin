@@ -820,10 +820,18 @@ class WatchedFolderSyncThread(QThread):
     sync_complete = Signal()
     sync_failed   = Signal(str)
 
-    def __init__(self, subfolder_path: str, lang: str = "E", parent=None):
+    def __init__(
+        self,
+        subfolder_path: str,
+        *,
+        media_lang: str,
+        fallback_lang_code: str,
+        parent=None,
+    ):
         super().__init__(parent)
         self._subfolder = subfolder_path
-        self._lang = lang
+        self._media_lang = media_lang or "E"
+        self._fallback_lang = fallback_lang_code or "E"
 
     def run(self) -> None:
         sub = Path(self._subfolder)
@@ -952,7 +960,7 @@ class WatchedFolderSyncThread(QThread):
     def _process_jwpub(self, jwpub_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         from app.core.jw.publication_reader import read_jwpub_for_playlist
         items, stem = read_jwpub_for_playlist(
-            str(jwpub_path), lang=self._lang,
+            str(jwpub_path), lang=self._media_lang,
             dest_images_dir=str(cache), resolve_urls=True,
         )
         outputs = []
@@ -982,7 +990,7 @@ class WatchedFolderSyncThread(QThread):
 
     def _process_jwlplaylist(self, jwl_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         from app.core.playlists.reader import read_jwlplaylist
-        data = read_jwlplaylist(str(jwl_path), fallback_lang_code=self._lang)
+        data = read_jwlplaylist(str(jwl_path), fallback_lang_code=self._fallback_lang)
         outputs = []
         virtuals = []
         for raw in data.get("items", []):

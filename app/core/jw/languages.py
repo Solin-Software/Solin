@@ -203,14 +203,6 @@ class JWLanguageService(QObject):
             return False
         return bool(lang.get("isSignLanguage", False))
 
-    def effective_media_code(self, ui_api_code: str) -> str:
-        """
-        Retorna o código de mídia efetivo.
-        Se nenhum estiver definido, usa o api_code da UI.
-        """
-        stored = self.media_api_code
-        return stored if stored else ui_api_code
-
     # ── Fetch ───────────────────────────────────────────────────────────────────
 
     def fetch_if_needed(self) -> None:
