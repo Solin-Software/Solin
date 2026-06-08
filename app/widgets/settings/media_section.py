@@ -6,6 +6,7 @@ from ...styles.icons import (
     ICON_MUSIC,
     ICON_NAV_MEETINGS,
     ICON_PLAY_PAUSE,
+    ICON_SONG_ANNOUNCEMENT,
 )
 
 
@@ -44,7 +45,7 @@ class MediaSectionMixin:
         saved_announce = self._prefs.value(SettingsKey.SJJM_ANNOUNCE_MODE, False, bool)
         row3, self._sjjm_announce_toggle, self._sjjm_announce_label, self._sjjm_announce_desc = \
             self._toggle_row(
-                ICON_MUSIC,
+                ICON_SONG_ANNOUNCEMENT,
                 self.tr("Song Announcement Mode"),
                 self.tr("Song starts muted for title display. Press play to start."),
                 checked=saved_announce,
