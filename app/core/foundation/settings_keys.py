@@ -26,6 +26,7 @@ class SettingsKey:
     BACKGROUND_SONG_ENABLED: Final = "background_song/enabled"
     BACKGROUND_SONG_VOLUME: Final = "background_song/volume"
     BACKGROUND_SONG_FADE_SECONDS: Final = "background_song/fade_seconds"
+    BACKGROUND_SONG_STOP_BEFORE_SECONDS: Final = "background_song/stop_before_seconds"
 
     CAMERA_ENABLED: Final = "camera/enabled"
     CAMERA_BACKEND: Final = "camera/backend"

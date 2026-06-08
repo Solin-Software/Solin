@@ -18,6 +18,7 @@ from app.core.profiles import settings as _ps
 
 DEFAULT_BACKGROUND_SONG_VOLUME = 25
 DEFAULT_BACKGROUND_SONG_FADE_SECONDS = 5
+DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS = 10
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50
 
@@ -39,6 +40,21 @@ def _display_title(item: dict[str, Any]) -> str:
     return f"{number}. {title}" if number else title
 
 
+def _scheduled_stop_delays_ms(
+    occurrence: MeetingOccurrence,
+    now: datetime,
+    *,
+    fade_seconds: int,
+    stop_before_seconds: int,
+) -> tuple[int, int]:
+    """Return delays until fade start and full stop for one occurrence."""
+
+    until_meeting_ms = occurrence.milliseconds_until_start(now)
+    stop_delay_ms = max(0, until_meeting_ms - stop_before_seconds * 1000)
+    fade_start_delay_ms = max(0, stop_delay_ms - fade_seconds * 1000)
+    return fade_start_delay_ms, stop_delay_ms
+
+
 class BackgroundSongService(QObject):
     """Plays JW audio songs independently from projection playback."""
 
@@ -48,6 +64,7 @@ class BackgroundSongService(QObject):
     status_changed = Signal(str)
     volume_changed = Signal(int)
     fade_seconds_changed = Signal(int)
+    stop_before_seconds_changed = Signal(int)
     availability_changed = Signal(bool)
 
     def __init__(self, lang_manager: object, parent: QObject | None = None) -> None:
@@ -61,6 +78,7 @@ class BackgroundSongService(QObject):
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME
         self._fade_seconds = DEFAULT_BACKGROUND_SONG_FADE_SECONDS
+        self._stop_before_seconds = DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS
         self._songs: list[dict[str, Any]] = []
         self._queue: list[dict[str, Any]] = []
         self._active_key = ""
@@ -78,7 +96,7 @@ class BackgroundSongService(QObject):
 
         self._auto_stop_timer = QTimer(self)
         self._auto_stop_timer.setSingleShot(True)
-        self._auto_stop_timer.timeout.connect(self._stop_for_meeting_start)
+        self._auto_stop_timer.timeout.connect(self._begin_scheduled_stop)
 
         self._fade_timer = QTimer(self)
         self._fade_timer.setInterval(_FADE_TICK_MS)
@@ -130,6 +148,10 @@ class BackgroundSongService(QObject):
         return self._fade_seconds
 
     @property
+    def stop_before_seconds(self) -> int:
+        return self._stop_before_seconds
+
+    @property
     def has_songs(self) -> bool:
         return bool(self._songs)
 
@@ -169,11 +191,21 @@ class BackgroundSongService(QObject):
             30,
             DEFAULT_BACKGROUND_SONG_FADE_SECONDS,
         )
+        stop_before_seconds = _clamp_int(
+            self._prefs.value(
+                SettingsKey.BACKGROUND_SONG_STOP_BEFORE_SECONDS,
+                DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
+            ),
+            0,
+            300,
+            DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
+        )
 
         enabled_changed = enabled != self._enabled
         self._enabled = bool(enabled)
         self._set_volume_percent(volume, persist=False)
         self._set_fade_seconds(fade_seconds, persist=False)
+        self._set_stop_before_seconds(stop_before_seconds, persist=False)
         if enabled_changed:
             self.enabled_changed.emit(self._enabled)
         self.availability_changed.emit(self._enabled)
@@ -198,6 +230,10 @@ class BackgroundSongService(QObject):
 
     def set_fade_seconds(self, value: int) -> None:
         self._set_fade_seconds(value, persist=True)
+        self.evaluate_auto_playback()
+
+    def set_stop_before_seconds(self, value: int) -> None:
+        self._set_stop_before_seconds(value, persist=True)
         self.evaluate_auto_playback()
 
     @Slot()
@@ -260,19 +296,37 @@ class BackgroundSongService(QObject):
                 self._set_status(self.tr("Waiting for the next configured meeting."))
             return
 
-        stop_delay_ms = self._milliseconds_until_fade_start(occurrence)
+        fade_start_delay_ms, stop_delay_ms = _scheduled_stop_delays_ms(
+            occurrence,
+            datetime.now().astimezone(),
+            fade_seconds=self._fade_seconds,
+            stop_before_seconds=self._stop_before_seconds,
+        )
         if stop_delay_ms <= 0:
             self._auto_stop_timer.stop()
-            if not self.is_playing:
+            self._suppressed_slot_id = occurrence.slot_id
+            if self.is_playing or self._desired_playing:
+                self.stop(immediate=True)
+            self._set_status(self.tr("Stopped before the meeting."))
+            return
+
+        if fade_start_delay_ms <= 0:
+            self._auto_stop_timer.stop()
+            self._suppressed_slot_id = occurrence.slot_id
+            if self.is_playing or self._desired_playing:
+                self._desired_playing = False
+                self._fade_to(0.0, stop_delay_ms / 1000.0, stop_after=True)
+                self._set_status(self.tr("Stopping background song..."))
+            else:
                 self._set_status(self.tr("Meeting is about to start."))
             return
 
-        self._auto_stop_timer.start(stop_delay_ms)
         if self._suppressed_slot_id == occurrence.slot_id:
             if not self.is_playing:
                 self._set_status(self.tr("Stopped for this meeting."))
             return
 
+        self._auto_stop_timer.start(fade_start_delay_ms)
         if self.is_playing or self._desired_playing:
             return
 
@@ -395,16 +449,12 @@ class BackgroundSongService(QObject):
         if self._desired_playing:
             QTimer.singleShot(400, self._play_next)
 
-    def _stop_for_meeting_start(self) -> None:
+    def _begin_scheduled_stop(self) -> None:
         self._suppressed_slot_id = self._active_occurrence.slot_id if self._active_occurrence else ""
         self.stop()
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
         return load_meeting_schedule(_ps.prefs()).pre_meeting_occurrence(datetime.now().astimezone())
-
-    def _milliseconds_until_fade_start(self, occurrence: MeetingOccurrence) -> int:
-        now = datetime.now().astimezone()
-        return max(0, occurrence.milliseconds_until_start(now) - self._fade_seconds * 1000)
 
     def _set_volume_percent(self, value: int, *, persist: bool) -> None:
         value = _clamp_int(value, 0, 100, DEFAULT_BACKGROUND_SONG_VOLUME)
@@ -425,12 +475,20 @@ class BackgroundSongService(QObject):
             self._fade_seconds = value
             self.fade_seconds_changed.emit(value)
 
-    def _fade_to(self, target: float, seconds: int, *, stop_after: bool) -> None:
+    def _set_stop_before_seconds(self, value: int, *, persist: bool) -> None:
+        value = _clamp_int(value, 0, 300, DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS)
+        if persist:
+            self._prefs.setValue(SettingsKey.BACKGROUND_SONG_STOP_BEFORE_SECONDS, value)
+        if value != self._stop_before_seconds:
+            self._stop_before_seconds = value
+            self.stop_before_seconds_changed.emit(value)
+
+    def _fade_to(self, target: float, seconds: float, *, stop_after: bool) -> None:
         self._fade_timer.stop()
         self._fade_target = max(0.0, min(1.0, target))
         self._fade_start = self._media.audio_output.volume()
         self._fade_elapsed_ms = 0
-        self._fade_duration_ms = max(1, seconds * 1000)
+        self._fade_duration_ms = max(1, int(seconds * 1000))
         self._stop_after_fade = stop_after
         self._fade_timer.start()
 
@@ -462,6 +520,7 @@ class BackgroundSongService(QObject):
 
 __all__ = [
     "DEFAULT_BACKGROUND_SONG_FADE_SECONDS",
+    "DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS",
     "DEFAULT_BACKGROUND_SONG_VOLUME",
     "BackgroundSongService",
 ]

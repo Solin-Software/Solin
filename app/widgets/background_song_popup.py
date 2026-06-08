@@ -150,28 +150,57 @@ class BackgroundSongPopup(QWidget):
         volume_row.addWidget(self._volume_value_lbl)
         layout.addLayout(volume_row)
 
-        fade_row = QHBoxLayout()
-        fade_row.setSpacing(10)
-        self._fade_lbl = QLabel(self.tr("Fade"))
-        self._fade_lbl.setStyleSheet(
-            f"color: {_MUTED}; font-size: 11px; background: transparent;"
+        layout.addWidget(self._divider())
+
+        self._timing_title_lbl = QLabel(self.tr("Meeting timing"))
+        self._timing_title_lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 10px; font-weight: 600;"
+            " background: transparent;"
         )
+        layout.addWidget(self._timing_title_lbl)
+
+        self._stop_before_spin = QSpinBox()
+        self._stop_before_spin.setRange(0, 300)
+        self._stop_before_spin.setSuffix(" s")
+        self._stop_before_spin.setSpecialValueText(self.tr("At start"))
+        self._stop_before_spin.setMinimumHeight(32)
+        self._stop_before_spin.setFixedWidth(88)
+        self._stop_before_spin.setAccelerated(True)
+        self._stop_before_spin.setStyleSheet(self._spin_style())
+        self._stop_before_spin.valueChanged.connect(
+            self._service.set_stop_before_seconds
+        )
+        self._stop_before_lbl = QLabel(self.tr("Stop before meeting"))
+        self._stop_before_hint_lbl = QLabel(
+            self.tr("Stops playback before the scheduled meeting time.")
+        )
+        layout.addLayout(
+            self._timing_row(
+                self._stop_before_lbl,
+                self._stop_before_hint_lbl,
+                self._stop_before_spin,
+            )
+        )
+
         self._fade_spin = QSpinBox()
         self._fade_spin.setRange(0, 30)
         self._fade_spin.setSuffix(" s")
         self._fade_spin.setMinimumHeight(32)
         self._fade_spin.setFixedWidth(82)
+        self._fade_spin.setAccelerated(True)
         self._fade_spin.setStyleSheet(self._spin_style())
         self._fade_spin.valueChanged.connect(self._service.set_fade_seconds)
-        self._fade_hint_lbl = QLabel(self.tr("Fade finishes before meeting start."))
-        self._fade_hint_lbl.setWordWrap(True)
-        self._fade_hint_lbl.setStyleSheet(
-            f"color: {_DIM}; font-size: 10px; background: transparent;"
+        self._fade_lbl = QLabel(self.tr("Fade duration"))
+        self._fade_hint_lbl = QLabel(
+            self.tr("Lowers the volume before playback stops.")
         )
-        fade_row.addWidget(self._fade_lbl)
-        fade_row.addWidget(self._fade_spin)
-        fade_row.addWidget(self._fade_hint_lbl, stretch=1)
-        layout.addLayout(fade_row)
+        layout.addLayout(
+            self._timing_row(
+                self._fade_lbl,
+                self._fade_hint_lbl,
+                self._fade_spin,
+            )
+        )
 
         root.addWidget(card)
         self.setFixedWidth(self._POP_W)
@@ -182,6 +211,7 @@ class BackgroundSongPopup(QWidget):
         self._service.status_changed.connect(self._status_lbl.setText)
         self._service.volume_changed.connect(self._set_volume)
         self._service.fade_seconds_changed.connect(self._set_fade_seconds)
+        self._service.stop_before_seconds_changed.connect(self._set_stop_before_seconds)
         self._service.availability_changed.connect(lambda _available: self._sync_buttons())
 
     def _sync_all(self) -> None:
@@ -190,6 +220,7 @@ class BackgroundSongPopup(QWidget):
         self._status_lbl.setText(self._service.status_text)
         self._set_volume(self._service.volume_percent)
         self._set_fade_seconds(self._service.fade_seconds)
+        self._set_stop_before_seconds(self._service.stop_before_seconds)
         self._sync_buttons()
 
     def _set_playing(self, playing: bool) -> None:
@@ -209,6 +240,11 @@ class BackgroundSongPopup(QWidget):
         self._fade_spin.blockSignals(True)
         self._fade_spin.setValue(int(value))
         self._fade_spin.blockSignals(False)
+
+    def _set_stop_before_seconds(self, value: int) -> None:
+        self._stop_before_spin.blockSignals(True)
+        self._stop_before_spin.setValue(int(value))
+        self._stop_before_spin.blockSignals(False)
 
     def _sync_buttons(self) -> None:
         if self._playing:
@@ -256,11 +292,41 @@ class BackgroundSongPopup(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self._title_lbl.setText(self.tr("Background Song"))
             self._next_btn.setToolTip(self.tr("Next song"))
-            self._fade_lbl.setText(self.tr("Fade"))
-            self._fade_hint_lbl.setText(self.tr("Fade finishes before meeting start."))
+            self._timing_title_lbl.setText(self.tr("Meeting timing"))
+            self._stop_before_lbl.setText(self.tr("Stop before meeting"))
+            self._stop_before_hint_lbl.setText(
+                self.tr("Stops playback before the scheduled meeting time.")
+            )
+            self._stop_before_spin.setSpecialValueText(self.tr("At start"))
+            self._fade_lbl.setText(self.tr("Fade duration"))
+            self._fade_hint_lbl.setText(
+                self.tr("Lowers the volume before playback stops.")
+            )
             self._set_current_song(self._service.current_title)
             self._sync_buttons()
         super().changeEvent(event)
+
+    @staticmethod
+    def _timing_row(label: QLabel, hint: QLabel, control: QSpinBox) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(12)
+
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        label.setStyleSheet(
+            f"color: {_TEXT}; font-size: 11px; font-weight: 500;"
+            " background: transparent;"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            f"color: {_DIM}; font-size: 10px; background: transparent;"
+        )
+        text.addWidget(label)
+        text.addWidget(hint)
+
+        row.addLayout(text, stretch=1)
+        row.addWidget(control, alignment=Qt.AlignmentFlag.AlignVCenter)
+        return row
 
     @staticmethod
     def _divider() -> QFrame:
