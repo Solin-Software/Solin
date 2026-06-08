@@ -7,6 +7,7 @@ Item {
     property real hourAngle: 0
     property real minuteAngle: 0
     property real secondAngle: 0
+    property var durationSector: ({})
 
     Canvas {
         id: dial
@@ -29,14 +30,6 @@ Item {
 
             ctx.reset();
             ctx.clearRect(0, 0, width, height);
-
-            function point(angleDeg, radius) {
-                var a = angleDeg * Math.PI / 180;
-                return {
-                    x: cx + radius * Math.sin(a),
-                    y: cy - radius * Math.cos(a)
-                };
-            }
 
             function circle(radius, fillStyle, strokeStyle, lineWidth) {
                 ctx.beginPath();
@@ -86,8 +79,58 @@ Item {
             innerGlow.addColorStop(0.72, "rgba(255, 255, 255, 0.0)");
             innerGlow.addColorStop(1.00, "rgba(120, 138, 154, 0.12)");
             circle(r * 0.875, innerGlow, "", 0);
+        }
+    }
 
-            // Minute and hour track. This is static, so it never repaints per tick.
+    AnalogClockSector {
+        anchors.fill: parent
+        sector: root.durationSector
+    }
+
+    Canvas {
+        id: markings
+        anchors.fill: parent
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        Component.onCompleted: requestPaint()
+
+        onPaint: {
+            var ctx = getContext("2d");
+            var size = Math.min(width, height);
+            if (size <= 0)
+                return;
+
+            var cx = width / 2;
+            var cy = height / 2;
+            var r = size * 0.485;
+            var tau = Math.PI * 2;
+
+            ctx.reset();
+            ctx.clearRect(0, 0, width, height);
+
+            function point(angleDeg, radius) {
+                var a = angleDeg * Math.PI / 180;
+                return {
+                    x: cx + radius * Math.sin(a),
+                    y: cy - radius * Math.cos(a)
+                };
+            }
+
+            function circle(radius, fillStyle, strokeStyle, lineWidth) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, tau);
+                if (fillStyle) {
+                    ctx.fillStyle = fillStyle;
+                    ctx.fill();
+                }
+                if (strokeStyle && lineWidth > 0) {
+                    ctx.strokeStyle = strokeStyle;
+                    ctx.lineWidth = lineWidth;
+                    ctx.stroke();
+                }
+            }
+
             for (var i = 0; i < 60; ++i) {
                 var isHour = i % 5 === 0;
                 var isQuarter = i % 15 === 0;

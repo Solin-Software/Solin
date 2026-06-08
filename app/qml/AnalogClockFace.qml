@@ -16,17 +16,13 @@ Item {
         sourceComponent: root.style === "classic" ? classicFace : signatureFace
     }
 
-    AnalogClockSector {
-        anchors.fill: parent
-        sector: root.durationSector
-    }
-
     Component {
         id: signatureFace
         AnalogClockSignature {
             hourAngle: root.hourAngle
             minuteAngle: root.minuteAngle
             secondAngle: root.secondAngle
+            durationSector: root.durationSector
         }
     }
 
@@ -36,6 +32,7 @@ Item {
             hourAngle: root.hourAngle
             minuteAngle: root.minuteAngle
             secondAngle: root.secondAngle
+            durationSector: root.durationSector
         }
     }
 }
