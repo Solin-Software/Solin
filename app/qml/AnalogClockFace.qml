@@ -8,6 +8,7 @@ Item {
     property real hourAngle: 0
     property real minuteAngle: 0
     property real secondAngle: 0
+    property var durationSector: ({})
 
     Loader {
         id: faceLoader
@@ -21,6 +22,7 @@ Item {
             hourAngle: root.hourAngle
             minuteAngle: root.minuteAngle
             secondAngle: root.secondAngle
+            durationSector: root.durationSector
         }
     }
 
@@ -30,6 +32,7 @@ Item {
             hourAngle: root.hourAngle
             minuteAngle: root.minuteAngle
             secondAngle: root.secondAngle
+            durationSector: root.durationSector
         }
     }
 }

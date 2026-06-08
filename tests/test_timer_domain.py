@@ -17,6 +17,7 @@ from app.core.timer.models import (
     MeetingType,
     PartKind,
     PartState,
+    PartTimerDisplay,
     Section,
     FIXED_TOTAL_SECONDS,
 )
@@ -592,7 +593,8 @@ def test_clock_config_roundtrip():
     cfg = ClockConfig(
         mode=ClockMode.ANALOG, analog_style=AnalogClockStyle.CLASSIC,
         hour_format_24h=False, show_ampm=True, show_seconds=False,
-        direction=Direction.UP, text_scale_pct=75,
+        direction=Direction.UP, part_timer_display=PartTimerDisplay.CLOCK_TIMER,
+        text_scale_pct=75,
     )
     assert ClockConfig.from_dict(cfg.to_dict()) == cfg
 
@@ -600,6 +602,7 @@ def test_clock_config_roundtrip():
 def test_clock_config_defaults_to_signature_analog_style():
     assert ClockConfig().analog_style is AnalogClockStyle.SIGNATURE
     assert ClockConfig.from_dict({"mode": "analog"}).analog_style is AnalogClockStyle.SIGNATURE
+    assert ClockConfig.from_dict({"mode": "analog"}).part_timer_display is PartTimerDisplay.TIMER
 
 
 def test_clock_config_clamps_display_size():
@@ -731,8 +734,10 @@ def test_render_idle_digital_matches_wall_clock():
     cfg = ClockConfig(mode=ClockMode.DIGITAL, hour_format_24h=True, show_seconds=True)
     model = build_render_model(snap, cfg)
     assert model["mode"] == "digital"
+    assert model["display_mode"] == "clock"
     assert model["primary_text"] == _time.strftime("%H:%M", _time.localtime(epoch))
     assert model["seconds_text"] == _time.strftime("%S", _time.localtime(epoch))
+    assert model["clock"]["primary_text"] == model["primary_text"]
     assert not model["active"]
 
 
@@ -808,11 +813,155 @@ def test_render_active_countdown_and_overrun():
     cfg = ClockConfig(direction=Direction.DOWN, analog_style=AnalogClockStyle.CLASSIC)
     model = build_render_model(snap, cfg)
     assert model["active"]
-    assert model["analog_style"] == AnalogClockStyle.CLASSIC.value
+    assert model["display_mode"] == "timer"
+    assert model["mode"] == "digital"
+    assert model["clock"]["analog_style"] == AnalogClockStyle.CLASSIC.value
     assert model["overrun"]
-    assert model["primary_text"] == "-00"
-    assert model["seconds_text"] == "30"
+    assert model["primary_text"] == "-00:30"
+    assert model["seconds_text"] == ""
     assert model["secondary_text"] == ""
+    assert model["timer"]["primary_text"] == "-00:30"
+    assert model["timer"]["overrun"]
+
+
+def test_render_active_can_show_clock_only_with_configured_clock_face():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG_DIGITAL,
+        hour_format_24h=True,
+        show_seconds=True,
+        part_timer_display=PartTimerDisplay.CLOCK,
+    )
+
+    model = build_render_model(snap, cfg)
+
+    assert model["display_mode"] == "clock"
+    assert model["mode"] == "analog_digital"
+    assert model["primary_text"] == "12:34"
+    assert model["seconds_text"] == "10"
+    assert model["clock"]["mode"] == "analog_digital"
+    assert model["timer"]["primary_text"] == "03:00"
+
+
+def test_render_active_can_show_configured_clock_with_timer():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.CLOCK_TIMER,
+    )
+
+    model = build_render_model(snap, cfg)
+
+    assert model["display_mode"] == "clock_timer"
+    assert model["clock"]["mode"] == "analog"
+    assert model["clock"]["hour_angle"] > 0.0
+    assert model["timer"]["mode"] == "digital"
+    assert model["timer"]["primary_text"] == "03:00"
+
+
+def test_render_active_analog_clock_sector_marks_remaining_time():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.CLOCK,
+    )
+
+    model = build_render_model(snap, cfg)
+    sector = model["clock"]["duration_sector"]
+
+    assert sector["visible"]
+    assert sector["show_remaining"]
+    assert not sector["show_overrun"]
+    assert sector["end_angle"] == 223.0
+    assert sector["current_angle"] == 205.0
+
+
+def test_render_active_analog_clock_sector_marks_overrun_trail():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=330, remaining_seconds=-30, overrun=True, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.CLOCK_TIMER,
+    )
+
+    model = build_render_model(snap, cfg)
+    sector = model["clock"]["duration_sector"]
+
+    assert sector["visible"]
+    assert not sector["show_remaining"]
+    assert sector["show_overrun"]
+    assert sector["end_angle"] == 202.0
+    assert sector["current_angle"] == 205.0
+
+
+def test_render_active_analog_clock_sector_stays_hidden_when_clock_is_not_visible():
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.TIMER,
+    )
+
+    model = build_render_model(snap, cfg)
+
+    assert not model["clock"]["duration_sector"]["visible"]
+
+
+def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
+        active_part_title="Long Part", planned_seconds=7200,
+        elapsed_seconds=3540, remaining_seconds=3661, overrun=False, state=PartState.RUNNING,
+    )
+
+    model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
+
+    assert model["primary_text"] == "1:01"
+    assert model["seconds_text"] == "01"
 
 
 def test_render_stopped_countdown_shows_elapsed_result():
@@ -826,8 +975,8 @@ def test_render_stopped_countdown_shows_elapsed_result():
     )
     model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
 
-    assert model["primary_text"] == "00"
-    assert model["seconds_text"] == "03"
+    assert model["primary_text"] == "00:03"
+    assert model["seconds_text"] == ""
 
 
 def test_store_roundtrip(tmp_path):

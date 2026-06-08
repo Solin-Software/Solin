@@ -19,6 +19,7 @@ Public surface:
 from .models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
+    PART_TIMER_DISPLAY_OPTIONS,
     AnalogClockStyle,
     ClockConfig,
     MeetingPart,
@@ -26,6 +27,7 @@ from .models import (
     MeetingType,
     PartKind,
     PartState,
+    PartTimerDisplay,
     Section,
     TimerSnapshot,
 )
@@ -42,6 +44,7 @@ from .store import TimerStore
 __all__ = [
     "ANALOG_CLOCK_STYLE_OPTIONS",
     "CLOCK_MODE_OPTIONS",
+    "PART_TIMER_DISPLAY_OPTIONS",
     "AnalogClockStyle",
     "ClockConfig",
     "MeetingPart",
@@ -49,6 +52,7 @@ __all__ = [
     "MeetingType",
     "PartKind",
     "PartState",
+    "PartTimerDisplay",
     "Section",
     "TimerSnapshot",
     "TimerEngine",
