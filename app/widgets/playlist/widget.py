@@ -26,6 +26,7 @@ from .edit_visuals import (
     PlaylistIconProvider,
 )
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
+from ..jw_songs_bridge import JWSongsBridge
 
 from ...qml_module import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
@@ -92,9 +93,11 @@ class _PlaylistEditView(
         self.bridge = PlaylistEditBridge(self)
         self.bridge.attach_model(self.model)
         self.catalog_bridge = JWMediaCatalogBridge(self)
+        self.songs_bridge = JWSongsBridge(self)
 
         # Set initial language code on the catalog bridge
         self.catalog_bridge.set_language_code(self._current_media_api_code())
+        self._sync_songs_bridge_language()
         self._connect_media_language_signal()
 
         self._build_ui()
@@ -128,6 +131,14 @@ class _PlaylistEditView(
     def _on_media_language_changed(self, code: str) -> None:
         """Keep the JW catalog bridge in sync with Settings immediately."""
         self.catalog_bridge.set_language_code(code or self._current_media_api_code())
+        self._sync_songs_bridge_language()
+
+    def _sync_songs_bridge_language(self) -> None:
+        self.songs_bridge.set_language_context(
+            api_code=self._current_media_api_code(),
+            fallback_code=getattr(self.lang, "api_code", "") if self.lang else "",
+            is_sign_language=getattr(self.lang, "is_media_sign_language", False),
+        )
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
@@ -135,6 +146,10 @@ class _PlaylistEditView(
             self.catalog_bridge.cleanup()
         except Exception:
             log_ignored_exception(__name__, "Could not cleanup playlist catalog bridge")
+        try:
+            self.songs_bridge.cleanup()
+        except Exception:
+            log_ignored_exception(__name__, "Could not cleanup playlist songs bridge")
         svc = getattr(self.lang, "jw_lang_service", None) if self.lang else None
         if svc is not None:
             try:
@@ -179,6 +194,7 @@ class _PlaylistEditView(
         ctx.setContextProperty("playlistModel", self.model)
         ctx.setContextProperty("controller", self.bridge)
         ctx.setContextProperty("catalogBridge", self.catalog_bridge)
+        ctx.setContextProperty("songsBridge", self.songs_bridge)
 
         load_qml_type(self.qml_widget, "PlaylistEditView")
         self.qml_widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
@@ -226,6 +242,8 @@ class _PlaylistEditView(
         # Catalog bridge connections
         self.catalog_bridge.itemAddedSuccessfully.connect(self._toast.show_message)
         self.catalog_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
+        self.songs_bridge.itemAddedSuccessfully.connect(self._toast.show_message)
+        self.songs_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
 
     def _toggle_section_collapse(self, section_id: str) -> None:
         self.model.toggle_collapse(section_id)
@@ -801,6 +819,8 @@ class _PlaylistEditView(
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
+        self.catalog_bridge.set_language_code(self._current_media_api_code())
+        self._sync_songs_bridge_language()
         if hasattr(self, "qml_widget"):
             engine = self.qml_widget.engine()
             if hasattr(engine, "retranslate"):

@@ -170,10 +170,15 @@ class _PlaylistEditActionsMixin:
             pass
 
         meps_lang = 0
+        try:
+            meps_lang = int(item_data.get("meps_language") or 0)
+        except (ValueError, TypeError):
+            meps_lang = 0
+
         from ...core.jw.metadata import MEPS_FROM_LANG as _MEPS
 
         lang_str = item_data.get("language", "").upper()
-        if lang_str in _MEPS:
+        if not meps_lang and lang_str in _MEPS:
             meps_lang = _MEPS[lang_str]
 
         pl_item = {

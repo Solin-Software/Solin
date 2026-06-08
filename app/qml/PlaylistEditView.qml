@@ -136,7 +136,7 @@ Rectangle {
                     Menu {
                         id: addMenu
                         y: parent.height + 4
-                        width: 170
+                        width: 182
                         background: MenuPanel {}
 
                         MenuItem {
@@ -151,6 +151,14 @@ Rectangle {
                             text: qsTranslate("_PlaylistEditView", "Search JW.org...")
                             icon.source: root.picon("media_video", 13, "8b949e")
                             onTriggered: jwCatalogModal.open()
+                            contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                            background: MenuBg { hovered: parent.hovered }
+                        }
+
+                        MenuItem {
+                            text: qsTranslate("_PlaylistEditView", "Add Song...")
+                            icon.source: root.picon("media_audio", 13, "8b949e")
+                            onTriggered: jwSongsModal.open()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
                         }
@@ -372,6 +380,12 @@ Rectangle {
         id: jwCatalogModal
         anchors.fill: parent
         z: 1000
+    }
+
+    JWSongsModal {
+        id: jwSongsModal
+        anchors.fill: parent
+        z: 1001
     }
 
     component MenuPanel: Rectangle {

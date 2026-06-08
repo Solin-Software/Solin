@@ -68,14 +68,14 @@ _JW_MEDIATOR_CLIPS = (
     "?detailed=1&clientType=www"
 )
 
-def _songs_pub(is_sign: bool) -> str:
+def song_publication_symbol(is_sign_language: bool) -> str:
     """
     Retorna o símbolo da publicação de cânticos correto:
       • True  → 'sjj'   (língua gestual — sem trilha musical)
       • False → 'sjjm'  (idioma normal — com trilha musical)
-    Uso centralizado: toda referência a 'sjj'/'sjjm' deve passar aqui.
+    Uso centralizado: toda referência programática a 'sjj'/'sjjm' deve passar aqui.
     """
-    return "sjj" if is_sign else "sjjm"
+    return "sjj" if is_sign_language else "sjjm"
 
 
 def _songs_fmt(is_sign: bool, audio: bool) -> str:
@@ -100,7 +100,7 @@ def _clips_fmt(is_sign: bool) -> str:
 
 
 def _build_songs_url(api_code: str, is_sign: bool, audio: bool) -> str:
-    pub = _songs_pub(is_sign)
+    pub = song_publication_symbol(is_sign)
     fmt = _songs_fmt(is_sign, audio)
     return _JW_PUBMEDIA.format(pub=pub, fmt=fmt, code=api_code)
 

@@ -51,6 +51,7 @@ from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.memorial import MemorialData, MemorialService
 from ...qml_module import load_qml_type
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
+from ..jw_songs_bridge import JWSongsBridge
 from .tree_controller import MeetingTreeController
 from .overview import _Overview
 from .visuals import (
@@ -72,6 +73,17 @@ def _meeting_drop_exts() -> frozenset[str]:
 
 def _tr_ctx(context: str, source: str) -> str:
     return QCoreApplication.translate(context, source)
+
+
+def _configure_songs_bridge_from_service(bridge: JWSongsBridge, service: JwpubService) -> None:
+    lang_code = service.get_lang() if hasattr(service, "get_lang") else "T"
+    is_sign = service.is_sign_language() if hasattr(service, "is_sign_language") else False
+    bridge.set_language_context(
+        api_code=lang_code,
+        fallback_code=lang_code,
+        is_sign_language=is_sign,
+    )
+
 
 # ── Study detail view (QML-based) ─────────────────────────────────────────────
 
@@ -128,6 +140,11 @@ class StudyDetailView(QWidget):
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
+        self.songs_bridge = JWSongsBridge(self)
+        self._sync_songs_bridge_language()
+        self.songs_bridge.jwMediaConfirmed.connect(
+            self.controller.add_from_jw_catalog
+        )
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 
@@ -143,6 +160,7 @@ class StudyDetailView(QWidget):
         ctx = self.qml_widget.rootContext()
         ctx.setContextProperty("controller", self.controller)
         ctx.setContextProperty("catalogBridge", self.catalog_bridge)
+        ctx.setContextProperty("songsBridge", self.songs_bridge)
         ctx.setContextProperty("meetingPill", self.pill_text)
         ctx.setContextProperty("meetingDate", self.date_text)
         ctx.setContextProperty("pillColor", self.pill_color)
@@ -178,10 +196,18 @@ class StudyDetailView(QWidget):
         self._populate()
 
     def _sync_catalog_placement(self):
-        if hasattr(self, "catalog_bridge") and hasattr(self, "controller"):
-            self.catalog_bridge.set_playlist_ref(
-                self.controller.placement_playlist_ref()
-            )
+        if not hasattr(self, "controller"):
+            return
+        playlist_ref = self.controller.placement_playlist_ref()
+        if hasattr(self, "catalog_bridge"):
+            self.catalog_bridge.set_playlist_ref(playlist_ref)
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _sync_songs_bridge_language(self):
+        if not hasattr(self, "songs_bridge"):
+            return
+        _configure_songs_bridge_from_service(self.songs_bridge, self._svc)
 
     def _refresh_shell_texts(self, *, update_context: bool = True):
         is_mwb = self._pub == "mwb"
@@ -295,6 +321,8 @@ class StudyDetailView(QWidget):
             self.controller.cleanup()
         if hasattr(self, "catalog_bridge"):
             self.catalog_bridge.cleanup()
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.cleanup()
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
@@ -358,6 +386,11 @@ class _MemorialDetailView(QWidget):
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
+        self.songs_bridge = JWSongsBridge(self)
+        self._sync_songs_bridge_language()
+        self.songs_bridge.jwMediaConfirmed.connect(
+            self.controller.add_from_jw_catalog
+        )
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 
@@ -373,6 +406,7 @@ class _MemorialDetailView(QWidget):
         ctx = self.qml_widget.rootContext()
         ctx.setContextProperty("controller", self.controller)
         ctx.setContextProperty("catalogBridge", self.catalog_bridge)
+        ctx.setContextProperty("songsBridge", self.songs_bridge)
         ctx.setContextProperty("meetingPill", self.pill_text)
         ctx.setContextProperty("meetingDate", self.date_text)
         ctx.setContextProperty("pillColor", self.pill_color)
@@ -390,10 +424,18 @@ class _MemorialDetailView(QWidget):
             self.controller.load_memorial(self._md)
 
     def _sync_catalog_placement(self):
-        if hasattr(self, "catalog_bridge") and hasattr(self, "controller"):
-            self.catalog_bridge.set_playlist_ref(
-                self.controller.placement_playlist_ref()
-            )
+        if not hasattr(self, "controller"):
+            return
+        playlist_ref = self.controller.placement_playlist_ref()
+        if hasattr(self, "catalog_bridge"):
+            self.catalog_bridge.set_playlist_ref(playlist_ref)
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _sync_songs_bridge_language(self):
+        if not hasattr(self, "songs_bridge"):
+            return
+        _configure_songs_bridge_from_service(self.songs_bridge, self._svc)
 
     def _refresh_shell_texts(self, *, update_context: bool = True):
         self.pill_text = _tr_ctx("_MemorialCard", "MEMORIAL")
@@ -501,6 +543,8 @@ class _MemorialDetailView(QWidget):
             self.controller.cleanup()
         if hasattr(self, "catalog_bridge"):
             self.catalog_bridge.cleanup()
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.cleanup()
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
