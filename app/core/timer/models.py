@@ -34,6 +34,12 @@ class Direction(str, Enum):
     UP = "up"       # count-up / stopwatch
 
 
+class PartTimerDisplay(str, Enum):
+    TIMER = "timer"
+    CLOCK = "clock"
+    CLOCK_TIMER = "clock_timer"
+
+
 class MeetingType(str, Enum):
     MIDWEEK = "midweek"
     WEEKEND = "weekend"
@@ -71,6 +77,12 @@ CLOCK_MODE_OPTIONS: tuple[ClockMode, ...] = (
     ClockMode.ANALOG_DIGITAL,
 )
 
+PART_TIMER_DISPLAY_OPTIONS: tuple[PartTimerDisplay, ...] = (
+    PartTimerDisplay.TIMER,
+    PartTimerDisplay.CLOCK,
+    PartTimerDisplay.CLOCK_TIMER,
+)
+
 # Sections whose parts must keep a fixed section total (redistribution applies).
 FIXED_TOTAL_SECONDS: dict[Section, int] = {
     Section.MINISTRY: 12 * 60,
@@ -102,6 +114,7 @@ class ClockConfig:
     show_ampm: bool = False
     show_seconds: bool = True
     direction: Direction = Direction.DOWN
+    part_timer_display: PartTimerDisplay = PartTimerDisplay.TIMER
     # Display size as a percentage of the largest rendered content that fits.
     text_scale_pct: int = 100
     # Seconds a stopped part's frozen result lingers before the clock returns
@@ -116,6 +129,7 @@ class ClockConfig:
             "show_ampm": self.show_ampm,
             "show_seconds": self.show_seconds,
             "direction": self.direction.value,
+            "part_timer_display": self.part_timer_display.value,
             "text_scale_pct": int(self.text_scale_pct),
             "freeze_seconds": int(self.freeze_seconds),
         }
@@ -142,6 +156,11 @@ class ClockConfig:
                 Direction,
                 data.get("direction", Direction.DOWN.value),
                 Direction.DOWN,
+            ),
+            part_timer_display=_enum_or_default(
+                PartTimerDisplay,
+                data.get("part_timer_display", PartTimerDisplay.TIMER.value),
+                PartTimerDisplay.TIMER,
             ),
             text_scale_pct=int(data.get("text_scale_pct", 100)),
             freeze_seconds=int(data.get("freeze_seconds", 3)),

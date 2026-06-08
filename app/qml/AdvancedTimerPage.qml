@@ -33,6 +33,9 @@ Item {
     readonly property var analogStyleRows: page.optionRows(timer.analogClockStyles, ["signature", "classic"])
     readonly property var analogStyleOptions: page.optionLabels(page.analogStyleRows, page.analogStyleLabel)
     readonly property int analogStyleCurrent: page.optionIndex(page.analogStyleRows, page.cfg.analog_style, "signature")
+    readonly property var partDisplayRows: page.optionRows(timer.partTimerDisplays, ["timer", "clock", "clock_timer"])
+    readonly property var partDisplayOptions: page.optionLabels(page.partDisplayRows, page.partDisplayLabel)
+    readonly property int partDisplayCurrent: page.optionIndex(page.partDisplayRows, page.cfg.part_timer_display, "timer")
     property int pendingReserveIndex: -1
 
     readonly property int sideInset: 20
@@ -93,6 +96,16 @@ Item {
             return qsTr("Signature")
         if (id === "classic")
             return qsTr("Classic")
+        return id
+    }
+
+    function partDisplayLabel(id) {
+        if (id === "timer")
+            return qsTr("Timer")
+        if (id === "clock")
+            return qsTr("Clock")
+        if (id === "clock_timer")
+            return qsTr("Clock + timer")
         return id
     }
 
@@ -281,6 +294,19 @@ Item {
 
                     CardTitle { label: qsTr("Part timer") }
 
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 12
+                        RowLabel { text: qsTr("During parts") }
+                        TimerSelect {
+                            Layout.preferredWidth: page.controlWidth
+                            options: page.partDisplayOptions
+                            current: page.partDisplayCurrent
+                            accent: page.pal_accent
+                            onPicked: function(i) {
+                                timer.updateClock("part_timer_display", page.optionIdAt(page.partDisplayRows, i, "timer"))
+                            }
+                        }
+                    }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
                         RowLabel { text: qsTr("Count direction") }

@@ -28,6 +28,7 @@ from ..core.meetings.section_meta import SECTION_META
 from ..core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
+    PART_TIMER_DISPLAY_OPTIONS,
     ClockConfig,
     MeetingType,
     PartState,
@@ -401,6 +402,15 @@ class TimerBridge(QObject):
     clockModes = Property(
         "QVariant",
         _clock_modes_model,
+        notify=clockConfigChanged,
+    )
+
+    def _part_timer_displays_model(self) -> list[str]:
+        return [display.value for display in PART_TIMER_DISPLAY_OPTIONS]
+
+    partTimerDisplays = Property(
+        "QVariant",
+        _part_timer_displays_model,
         notify=clockConfigChanged,
     )
 
