@@ -27,8 +27,10 @@ from ..core.meetings.publications import current_monday
 from ..core.meetings.section_meta import SECTION_META
 from ..core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
+    CLOCK_MODE_OPTIONS,
     AnalogClockStyle,
     ClockConfig,
+    ClockMode,
     MeetingType,
     PartState,
     Section,
@@ -98,6 +100,15 @@ def _analog_style_label(style: AnalogClockStyle, translate) -> str:
         AnalogClockStyle.CLASSIC: translate("Classic"),
     }
     return labels[style]
+
+
+def _clock_mode_label(mode: ClockMode, translate) -> str:
+    labels = {
+        ClockMode.DIGITAL: translate("Digital"),
+        ClockMode.ANALOG: translate("Analog"),
+        ClockMode.ANALOG_DIGITAL: translate("Analog + digital"),
+    }
+    return labels[mode]
 
 
 def _fmt_mmss(seconds: float) -> str:
@@ -402,6 +413,21 @@ class TimerBridge(QObject):
         return self._clock_config.to_dict()
 
     clockConfig = Property("QVariant", _clock_model, notify=clockConfigChanged)
+
+    def _clock_modes_model(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": mode.value,
+                "label": _clock_mode_label(mode, self.tr),
+            }
+            for mode in CLOCK_MODE_OPTIONS
+        ]
+
+    clockModes = Property(
+        "QVariant",
+        _clock_modes_model,
+        notify=clockConfigChanged,
+    )
 
     def _analog_clock_styles_model(self) -> list[dict[str, str]]:
         return [

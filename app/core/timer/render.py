@@ -45,7 +45,8 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
 
     Keys:
         active          — bool: a meeting part is running/frozen.
-        mode            — "analog" | "digital" (governs the *idle* clock).
+        mode            — "analog" | "analog_digital" | "digital" (governs
+                          the *idle* clock).
         analog_style    — selected analog face id for analog idle mode.
         primary_text    — the large text (countdown when active, else digital
                           clock; empty in analog-idle, which draws hands).
@@ -78,7 +79,7 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
 
     # Idle: show the wall clock in the configured mode.
     epoch = snapshot.wall_clock_epoch
-    if config.mode is ClockMode.ANALOG:
+    if config.mode in (ClockMode.ANALOG, ClockMode.ANALOG_DIGITAL):
         # The timer engine ticks faster than once per second so countdowns stay
         # smooth. Analog clocks should not inherit that cadence: the second hand
         # advances in whole-second steps, while minute/hour hands follow that
@@ -91,7 +92,11 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         model["second_angle"] = second * 6.0
         model["minute_angle"] = minute * 6.0
         model["hour_angle"] = hour * 30.0
-        # Analog projection is intentionally face-only: no digital suffixes.
+        # Analog projection is face-only unless the combined face is selected.
+        if config.mode is ClockMode.ANALOG_DIGITAL:
+            text, ampm = _fmt_clock(epoch, config)
+            model["primary_text"] = text
+            model["secondary_text"] = ampm
     else:
         text, ampm = _fmt_clock(epoch, config)
         model["primary_text"] = text

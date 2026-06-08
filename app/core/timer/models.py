@@ -20,6 +20,7 @@ from enum import Enum
 
 class ClockMode(str, Enum):
     ANALOG = "analog"
+    ANALOG_DIGITAL = "analog_digital"
     DIGITAL = "digital"
 
 
@@ -62,6 +63,12 @@ class PartState(str, Enum):
 ANALOG_CLOCK_STYLE_OPTIONS: tuple[AnalogClockStyle, ...] = (
     AnalogClockStyle.SIGNATURE,
     AnalogClockStyle.CLASSIC,
+)
+
+CLOCK_MODE_OPTIONS: tuple[ClockMode, ...] = (
+    ClockMode.DIGITAL,
+    ClockMode.ANALOG,
+    ClockMode.ANALOG_DIGITAL,
 )
 
 # Sections whose parts must keep a fixed section total (redistribution applies).
