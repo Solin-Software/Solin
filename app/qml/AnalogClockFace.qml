@@ -8,11 +8,17 @@ Item {
     property real hourAngle: 0
     property real minuteAngle: 0
     property real secondAngle: 0
+    property var durationSector: ({})
 
     Loader {
         id: faceLoader
         anchors.fill: parent
         sourceComponent: root.style === "classic" ? classicFace : signatureFace
+    }
+
+    AnalogClockSector {
+        anchors.fill: parent
+        sector: root.durationSector
     }
 
     Component {

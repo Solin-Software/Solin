@@ -877,6 +877,77 @@ def test_render_active_can_show_configured_clock_with_timer():
     assert model["timer"]["primary_text"] == "03:00"
 
 
+def test_render_active_analog_clock_sector_marks_remaining_time():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.CLOCK,
+    )
+
+    model = build_render_model(snap, cfg)
+    sector = model["clock"]["duration_sector"]
+
+    assert sector["visible"]
+    assert sector["show_remaining"]
+    assert not sector["show_overrun"]
+    assert sector["end_angle"] == 223.0
+    assert sector["current_angle"] == 205.0
+
+
+def test_render_active_analog_clock_sector_marks_overrun_trail():
+    import time as _time
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=330, remaining_seconds=-30, overrun=True, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.CLOCK_TIMER,
+    )
+
+    model = build_render_model(snap, cfg)
+    sector = model["clock"]["duration_sector"]
+
+    assert sector["visible"]
+    assert not sector["show_remaining"]
+    assert sector["show_overrun"]
+    assert sector["end_angle"] == 202.0
+    assert sector["current_angle"] == 205.0
+
+
+def test_render_active_analog_clock_sector_stays_hidden_when_clock_is_not_visible():
+    from app.core.timer.render import build_render_model
+    from app.core.timer.models import TimerSnapshot
+
+    snap = TimerSnapshot(
+        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
+        active_part_title="Part 1", planned_seconds=300,
+        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+    )
+    cfg = ClockConfig(
+        mode=ClockMode.ANALOG,
+        part_timer_display=PartTimerDisplay.TIMER,
+    )
+
+    model = build_render_model(snap, cfg)
+
+    assert not model["clock"]["duration_sector"]["visible"]
+
+
 def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
     from app.core.timer.render import build_render_model
     from app.core.timer.models import TimerSnapshot

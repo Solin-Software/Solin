@@ -12,6 +12,7 @@ Item {
     readonly property bool hasAnalogFace: root.isAnalogOnly || root.isAnalogDigital
     readonly property string analogStyle: faceModel.analog_style ? faceModel.analog_style : "signature"
     readonly property bool overrun: faceModel.overrun === true
+    readonly property var durationSector: faceModel.duration_sector ? faceModel.duration_sector : ({})
     readonly property real availableWidth: Math.max(1, width)
     readonly property real availableHeight: Math.max(1, height)
     readonly property real digitalProbeWidth: Math.max(1, digitalProbe.implicitWidth)
@@ -54,6 +55,7 @@ Item {
         hourAngle: root.faceModel.hour_angle ? root.faceModel.hour_angle : 0
         minuteAngle: root.faceModel.minute_angle ? root.faceModel.minute_angle : 0
         secondAngle: root.faceModel.second_angle ? root.faceModel.second_angle : 0
+        durationSector: root.durationSector
     }
 
     AnalogDigitalClockFace {
@@ -69,5 +71,6 @@ Item {
         primaryText: root.faceModel.primary_text ? root.faceModel.primary_text : ""
         secondsText: root.faceModel.seconds_text ? root.faceModel.seconds_text : ""
         secondaryText: root.faceModel.secondary_text ? root.faceModel.secondary_text : ""
+        durationSector: root.durationSector
     }
 }

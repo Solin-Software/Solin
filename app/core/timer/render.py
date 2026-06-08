@@ -14,7 +14,10 @@ from __future__ import annotations
 import math
 import time
 
-from .models import ClockConfig, ClockMode, PartTimerDisplay, TimerSnapshot
+from .models import ClockConfig, ClockMode, PartState, PartTimerDisplay, TimerSnapshot
+
+
+_SECONDS_PER_ANALOG_LAP = 3600.0
 
 
 def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str, str]:
@@ -46,6 +49,12 @@ def _fmt_duration(seconds: float) -> tuple[str, str]:
     return f"{sign}{m:02d}:{s:02d}", ""
 
 
+def _minute_angle_for_epoch(epoch: float) -> float:
+    whole_epoch = math.floor(epoch)
+    lt = time.localtime(whole_epoch)
+    return (lt.tm_min * 6.0) + (lt.tm_sec * 0.1)
+
+
 def _blank_face(config: ClockConfig) -> dict:
     return {
         "mode": config.mode.value,
@@ -54,6 +63,7 @@ def _blank_face(config: ClockConfig) -> dict:
         "seconds_text": "",
         "secondary_text": "",
         "overrun": False,
+        "duration_sector": {"visible": False},
         "hour_angle": 0.0,
         "minute_angle": 0.0,
         "second_angle": 0.0,
@@ -99,9 +109,35 @@ def _timer_face(snapshot: TimerSnapshot) -> dict:
         "seconds_text": seconds,
         "secondary_text": "",
         "overrun": bool(snapshot.overrun and snapshot.active),
+        "duration_sector": {"visible": False},
         "hour_angle": 0.0,
         "minute_angle": 0.0,
         "second_angle": 0.0,
+    }
+
+
+def _duration_sector(snapshot: TimerSnapshot) -> dict:
+    if (
+        not snapshot.active
+        or snapshot.state is PartState.STOPPED
+        or snapshot.planned_seconds <= 0
+    ):
+        return {"visible": False}
+
+    remaining = float(snapshot.remaining_seconds)
+    current_epoch = snapshot.wall_clock_epoch
+    overrun_seconds = max(0.0, -remaining)
+
+    end_epoch = current_epoch + remaining
+    show_remaining = 0.0 < remaining < _SECONDS_PER_ANALOG_LAP
+    show_overrun = snapshot.overrun and overrun_seconds < _SECONDS_PER_ANALOG_LAP
+
+    return {
+        "visible": bool(show_remaining or show_overrun),
+        "show_remaining": bool(show_remaining),
+        "show_overrun": bool(show_overrun),
+        "end_angle": _minute_angle_for_epoch(end_epoch),
+        "current_angle": _minute_angle_for_epoch(current_epoch),
     }
 
 
@@ -142,6 +178,8 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         display_mode = _select_active_display(config)
         if display_mode == "timer":
             selected_face = timer_face
+        elif config.mode in (ClockMode.ANALOG, ClockMode.ANALOG_DIGITAL):
+            clock_face["duration_sector"] = _duration_sector(snapshot)
 
     model: dict = {
         "active": snapshot.active,

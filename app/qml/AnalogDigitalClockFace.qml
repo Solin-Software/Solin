@@ -11,6 +11,7 @@ Item {
     property string primaryText: ""
     property string secondsText: ""
     property string secondaryText: ""
+    property var durationSector: ({})
     property real analogDiameter: Math.min(width, height)
 
     readonly property real gap: Math.round(analogDiameter * 0.035)
@@ -26,6 +27,7 @@ Item {
         hourAngle: root.hourAngle
         minuteAngle: root.minuteAngle
         secondAngle: root.secondAngle
+        durationSector: root.durationSector
     }
 
     DigitalClockReadout {
