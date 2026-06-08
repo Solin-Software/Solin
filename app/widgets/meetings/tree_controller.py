@@ -135,12 +135,14 @@ class MeetingTreeController(QObject):
         *,
         meeting_type: str,
         language_code: str,
+        fallback_language_code: str = "",
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._svc = service
         self._meeting_type = meeting_type
         self._language_code = language_code or "E"
+        self._fallback_language_code = fallback_language_code or self._language_code
         self._store = MeetingTreeStore()
         self._builder = MeetingTreeBuilder()
         self._nodes: list[Node] = []
@@ -630,7 +632,10 @@ class MeetingTreeController(QObject):
 
         path = str(source.get("path") or "")
         try:
-            data = read_jwlplaylist(path, fallback_lang_code=self._language_code)
+            data = read_jwlplaylist(
+                path,
+                fallback_lang_code=self._fallback_language_code,
+            )
             nodes = [
                 self._node_from_playlist_item(raw, Path(path).stem)
                 for raw in data.get("items", [])
@@ -873,7 +878,10 @@ class MeetingTreeController(QObject):
         total = 0
         for path in paths:
             try:
-                data = read_jwlplaylist(path, fallback_lang_code=self._language_code)
+                data = read_jwlplaylist(
+                    path,
+                    fallback_lang_code=self._fallback_language_code,
+                )
                 nodes = [
                     self._node_from_playlist_item(raw, Path(path).stem)
                     for raw in data.get("items", [])

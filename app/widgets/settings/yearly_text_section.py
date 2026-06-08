@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...core.jw.language_context import jw_media_language_context
 from ...core.jw.yeartext import YeartextService
 from ...styles.icons import (
     ICON_CLOUD_DONE,
@@ -193,8 +194,10 @@ class YearlyTextSectionMixin:
         return datetime.now().year
 
     def _current_api_code(self):
-        svc = self.lang.jw_lang_service
-        return svc.effective_media_code(self.lang.api_code)
+        return jw_media_language_context(self.lang).api_code
+
+    def _fallback_api_code(self):
+        return jw_media_language_context(self.lang).fallback_code
 
     def _check_and_fetch_yeartext(self):
         api_code = self._current_api_code()
@@ -246,15 +249,15 @@ class YearlyTextSectionMixin:
         fallback = getattr(self, "_yeartext_fallback_code", None)
         if api_code != self._current_api_code() and api_code != fallback:
             return
-        ui_code = self.lang.api_code
-        if api_code != ui_code and fallback is None:
-            cached_fallback = self._yt_service.get_cached(ui_code, year)
+        fallback_code = self._fallback_api_code()
+        if api_code != fallback_code and fallback is None:
+            cached_fallback = self._yt_service.get_cached(fallback_code, year)
             if cached_fallback:
-                self._apply_yeartext_to_ui(ui_code, year, *cached_fallback)
+                self._apply_yeartext_to_ui(fallback_code, year, *cached_fallback)
                 return
-            if not self._yt_service.is_fetching(ui_code):
-                self._yt_service.fetch_async(ui_code, year)
-            self._yeartext_fallback_code = ui_code
+            if not self._yt_service.is_fetching(fallback_code):
+                self._yt_service.fetch_async(fallback_code, year)
+            self._yeartext_fallback_code = fallback_code
             return
         self._yeartext_fallback_code = None
         self._set_status_error(message)

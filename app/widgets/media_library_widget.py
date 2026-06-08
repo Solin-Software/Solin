@@ -25,7 +25,9 @@ from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
-from ..core.jw.media_api import fetch_clips, fetch_songs, fetch_songs_audio
+from ..core.jw.language_context import jw_media_language_context
+from ..core.jw.media_api import fetch_clips
+from ..core.jw.songs import JWSongsStore
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.media.cache import MediaCacheManager, cached_path_for
 from ..core.i18n.strings import (
@@ -479,6 +481,8 @@ class MediaLibraryWidget(QWidget):
             self.filtered_clips = self.filtered_items
         self._query = ""
         self._audio_mode = False
+        self._song_request_key = ""
+        self._songs_store = JWSongsStore.instance() if self.kind == "songs" else None
         self._qml_pointer_depth = 0
         self._disposed = False
         self._download_all_batch_id = ""
@@ -522,6 +526,10 @@ class MediaLibraryWidget(QWidget):
     def _connect_signals(self) -> None:
         self._loaded_signal.connect(self._on_items_loaded)
         self._error_signal.connect(self._on_items_error)
+        if self._songs_store is not None:
+            self._songs_store.songs_ready.connect(self._on_song_store_ready)
+            self._songs_store.songs_failed.connect(self._on_song_store_failed)
+            self._songs_store.loading_changed.connect(self._on_song_store_loading_changed)
         self.bridge.refreshRequested.connect(lambda: self._load_items(force=True))
         self.bridge.playAllRequested.connect(self._play_all)
         self.bridge.shuffleRequested.connect(self._play_shuffle)
@@ -560,7 +568,8 @@ class MediaLibraryWidget(QWidget):
         self._refresh_download_all_state()
 
     def _update_mode_availability(self) -> None:
-        supports_audio = self.kind == "songs" and not getattr(self.lang, "is_media_sign_language", False)
+        context = jw_media_language_context(self.lang)
+        supports_audio = self.kind == "songs" and not context.is_sign_language
         if not supports_audio and self._audio_mode:
             self._audio_mode = False
         self.bridge.update_state(supports_audio=supports_audio, audio_mode=self._audio_mode)
@@ -581,42 +590,56 @@ class MediaLibraryWidget(QWidget):
         self._set_loading(loading_text)
         self.model.set_items([], self._audio_mode)
 
-        api_code = self.lang.media_api_code
-        fallback_code = self.lang.api_code
+        context = jw_media_language_context(self.lang)
         audio_mode = self._audio_mode
-        is_sign_language = getattr(self.lang, "is_media_sign_language", False)
         kind = self.kind
+
+        if kind == "songs" and self._songs_store is not None:
+            request = self._songs_store.request_for(
+                api_code=context.api_code,
+                fallback_code=context.fallback_code,
+                is_sign_language=context.is_sign_language,
+                audio_mode=audio_mode,
+            )
+            self._song_request_key = self._songs_store.ensure_loaded(request, force=force)
+            return
 
         def worker():
             try:
-                if kind == "songs":
-                    if audio_mode:
-                        items, pub_name, fetched_at, from_cache = fetch_songs_audio(
-                            api_code,
-                            force,
-                            fallback_code=fallback_code,
-                            is_sign_language=is_sign_language,
-                        )
-                    else:
-                        items, pub_name, fetched_at, from_cache = fetch_songs(
-                            api_code,
-                            force,
-                            fallback_code=fallback_code,
-                            is_sign_language=is_sign_language,
-                        )
-                else:
-                    items, fetched_at, from_cache = fetch_clips(
-                        api_code,
-                        force,
-                        fallback_code=fallback_code,
-                        is_sign_language=is_sign_language,
-                    )
-                    pub_name = ""
+                items, fetched_at, from_cache = fetch_clips(
+                    context.api_code,
+                    force,
+                    fallback_code=context.fallback_code,
+                    is_sign_language=context.is_sign_language,
+                )
+                pub_name = ""
                 self._loaded_signal.emit(items, pub_name, fetched_at, from_cache)
             except Exception as exc:
                 self._error_signal.emit(str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @Slot(str, list, str, float, bool)
+    def _on_song_store_ready(
+        self,
+        key: str,
+        items: list,
+        pub_name: str,
+        fetched_at: float,
+        from_cache: bool,
+    ) -> None:
+        if key == self._song_request_key:
+            self._on_items_loaded(items, pub_name, fetched_at, from_cache)
+
+    @Slot(str, str)
+    def _on_song_store_failed(self, key: str, error_msg: str) -> None:
+        if key == self._song_request_key:
+            self._on_items_error(error_msg)
+
+    @Slot(str, bool)
+    def _on_song_store_loading_changed(self, key: str, loading: bool) -> None:
+        if key == self._song_request_key and loading:
+            self._set_loading(self.tr("Loading songs..."))
 
     @Slot(str)
     def _on_media_language_changed(self, _code: str) -> None:
@@ -936,6 +959,15 @@ class MediaLibraryWidget(QWidget):
             self.model.cleanup()
         except Exception:
             log_ignored_exception(__name__, "Could not cleanup media library model")
+        if self._songs_store is not None:
+            try:
+                self._songs_store.songs_ready.disconnect(self._on_song_store_ready)
+                self._songs_store.songs_failed.disconnect(self._on_song_store_failed)
+                self._songs_store.loading_changed.disconnect(
+                    self._on_song_store_loading_changed
+                )
+            except Exception:
+                log_ignored_exception(__name__, "Could not disconnect JW songs store signals")
         try:
             svc = getattr(self.lang, "jw_lang_service", None)
             if svc is not None:

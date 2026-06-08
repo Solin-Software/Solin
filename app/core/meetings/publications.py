@@ -394,7 +394,7 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
     is_sign_language: quando True e key_symbol for 'sjjm', substitui por 'sjj'
     (língua gestual não usa a versão com música).
     """
-    # Centraliza a lógica sjj/sjjm: mesmo critério de jw.media_api._songs_pub()
+    # Centraliza a lógica sjj/sjjm: mesmo critério de jw.media_api.song_publication_symbol()
     if is_sign_language and (key_symbol or "").lower() == "sjjm":
         key_symbol = "sjj"
 
@@ -1690,6 +1690,7 @@ class JwpubService(QObject):
         self._prefs  = _ps.prefs()
         self._active: dict[str, WeekData] = {}
         self._lang   = "T"
+        self._is_sign_language = False
 
         # Cria worker + thread dedicada
         self._thread = QThread(self)
@@ -1755,10 +1756,14 @@ class JwpubService(QObject):
         Quando True, cânticos com key_symbol='sjjm' são resolvidos como 'sjj'.
         Deve ser chamado sempre que o idioma de mídia mudar.
         """
+        self._is_sign_language = bool(is_sign)
         self._sig_set_sign_language.emit(is_sign)
 
     def get_lang(self) -> str:
         return self._lang
+
+    def is_sign_language(self) -> bool:
+        return self._is_sign_language
 
     def load_week(self, monday: date, force: bool = False):
         key = monday.isoformat()
@@ -1796,7 +1801,7 @@ class JwpubService(QObject):
         return _resolve_video(
             item.key_symbol, item.track, item.issue_tag,
             item.meps_doc_id, self._lang,
-            is_sign_language=getattr(self._worker, "_is_sign_language", False),
+            is_sign_language=self._is_sign_language,
         )
 
     def clear_week(self, monday: date):

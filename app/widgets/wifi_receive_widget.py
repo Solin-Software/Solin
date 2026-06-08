@@ -40,6 +40,7 @@ from ..core.foundation.constants import (
     PLAYLIST_EXTS as _JWL_EXTS,
     VIDEO_EXTS as _VIDEO_EXTS,
 )
+from ..core.jw.language_context import jw_media_language_context
 from ..core.media.mime import mime_to_ext
 from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
@@ -982,9 +983,10 @@ class WifiReceiveWidget(QWidget):
 
         stem = Path(orig_name).stem or Path(path).stem
         self._toast.show_message(f"🔄  {stem}…", ok=True)
+        lang = jw_media_language_context(self._lang).api_code
 
         thread = JwpubImportThread.create(
-            path, lang="T", dest_images_dir=_paths_local.IMAGES_DIR, parent=self
+            path, lang=lang, dest_images_dir=_paths_local.IMAGES_DIR, parent=self
         )
 
         if not hasattr(self, "_jwpub_threads"):
@@ -1028,16 +1030,10 @@ class WifiReceiveWidget(QWidget):
         import zipfile as _zipmod
         from ..core.playlists.reader import read_jwlplaylist
 
-        # Resolve o idioma de mídia JW configurado como fallback (quando MEPS não é encontrado).
-        _media_lang = "E"
-        if self._lang:
-            if hasattr(self._lang, "jw_lang_service") and hasattr(self._lang.jw_lang_service, "media_api_code"):
-                _media_lang = self._lang.jw_lang_service.media_api_code
-            else:
-                _media_lang = getattr(self._lang, "api_code", "E")
+        fallback_lang = jw_media_language_context(self._lang).fallback_code
 
         try:
-            parsed = read_jwlplaylist(path, fallback_lang_code=_media_lang)
+            parsed = read_jwlplaylist(path, fallback_lang_code=fallback_lang)
         except (_zipmod.BadZipFile, Exception):
             self._toast.show_message(f"Erro ao ler playlist: {Path(orig_name).name}", ok=False)
             return

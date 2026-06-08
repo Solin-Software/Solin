@@ -8,6 +8,10 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation import paths as _paths
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
+from ..core.jw.language_context import (
+    JWMediaLanguageContext,
+    jw_media_language_context,
+)
 from ..core.media.mime import mime_to_ext
 from ..widgets.playlist.items import _media_type_from_url, _new_item
 
@@ -102,10 +106,10 @@ class PlaylistImportController:
     def items_from_jwlplaylist_for_playlist(self, jwl_path: str) -> list:
         from ..core.playlists.reader import read_jwlplaylist
 
-        media_lang = self._media_api_code()
+        fallback_lang = self._media_language_context().fallback_code
 
         try:
-            data = read_jwlplaylist(jwl_path, fallback_lang_code=media_lang)
+            data = read_jwlplaylist(jwl_path, fallback_lang_code=fallback_lang)
         except zipfile.BadZipFile:
             QMessageBox.warning(
                 self._window,
@@ -265,7 +269,7 @@ class PlaylistImportController:
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(jwpub_path).stem
-        lang = self._media_api_code()
+        lang = self._media_language_context().api_code
 
         self._window._success_toast.show_message(
             self._window.tr("Opening {name}...").replace("{name}", stem)
@@ -335,20 +339,13 @@ class PlaylistImportController:
             self._window.tr("Add to Playlist"),
         )
 
-    def _media_api_code(self) -> str:
+    def _media_language_context(self) -> JWMediaLanguageContext:
         lang_manager = getattr(
             self._window,
             "_lang_mgr",
             getattr(self._window, "_lang_manager", getattr(self._window, "lang", None)),
         )
-        if lang_manager is None:
-            return "E"
-        if (
-            hasattr(lang_manager, "jw_lang_service")
-            and hasattr(lang_manager.jw_lang_service, "media_api_code")
-        ):
-            return lang_manager.jw_lang_service.media_api_code
-        return getattr(lang_manager, "api_code", "E")
+        return jw_media_language_context(lang_manager)
 
     @staticmethod
     def _items_from_pages(pages: list[str], stem: str) -> list:

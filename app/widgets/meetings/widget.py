@@ -46,11 +46,16 @@ from ...core.foundation.constants import (
     PLAYLIST_EXTS as _PLAYLIST_EXTS,
     PPTX_EXTS as _PPTX_EXTS,
 )
+from ...core.jw.language_context import (
+    JWMediaLanguageContext,
+    jw_media_language_context,
+)
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.memorial import MemorialData, MemorialService
 from ...qml_module import load_qml_type
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
+from ..jw_songs_bridge import JWSongsBridge
 from .tree_controller import MeetingTreeController
 from .overview import _Overview
 from .visuals import (
@@ -73,6 +78,18 @@ def _meeting_drop_exts() -> frozenset[str]:
 def _tr_ctx(context: str, source: str) -> str:
     return QCoreApplication.translate(context, source)
 
+
+def _configure_songs_bridge_language(
+    bridge: JWSongsBridge,
+    context: JWMediaLanguageContext,
+) -> None:
+    bridge.set_language_context(
+        api_code=context.api_code,
+        fallback_code=context.fallback_code,
+        is_sign_language=context.is_sign_language,
+    )
+
+
 # ── Study detail view (QML-based) ─────────────────────────────────────────────
 
 class StudyDetailView(QWidget):
@@ -81,11 +98,13 @@ class StudyDetailView(QWidget):
 
     def __init__(self, pub_type: str, wd: "WeekData",
                  service: "JwpubService", *,
+                 language_context: JWMediaLanguageContext,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
         self._pub   = pub_type
         self._wd    = wd
         self._svc   = service
+        self._language_context = language_context
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -111,11 +130,12 @@ class StudyDetailView(QWidget):
         self.qml_widget.setAcceptDrops(False)
         self.qml_widget.installEventFilter(self)
 
-        lang_code = getattr(self._svc, "_lang", "T") or "T"
+        lang_code = self._language_context.api_code
         self.controller = MeetingTreeController(
             self._svc,
             meeting_type=self._pub,
             language_code=lang_code,
+            fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
         self.controller.backRequested.connect(self.back_requested.emit)
@@ -126,6 +146,11 @@ class StudyDetailView(QWidget):
         self.catalog_bridge = JWMediaCatalogBridge(self)
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
+            self.controller.add_from_jw_catalog
+        )
+        self.songs_bridge = JWSongsBridge(self)
+        self._sync_songs_bridge_language()
+        self.songs_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
@@ -143,6 +168,7 @@ class StudyDetailView(QWidget):
         ctx = self.qml_widget.rootContext()
         ctx.setContextProperty("controller", self.controller)
         ctx.setContextProperty("catalogBridge", self.catalog_bridge)
+        ctx.setContextProperty("songsBridge", self.songs_bridge)
         ctx.setContextProperty("meetingPill", self.pill_text)
         ctx.setContextProperty("meetingDate", self.date_text)
         ctx.setContextProperty("pillColor", self.pill_color)
@@ -178,10 +204,18 @@ class StudyDetailView(QWidget):
         self._populate()
 
     def _sync_catalog_placement(self):
-        if hasattr(self, "catalog_bridge") and hasattr(self, "controller"):
-            self.catalog_bridge.set_playlist_ref(
-                self.controller.placement_playlist_ref()
-            )
+        if not hasattr(self, "controller"):
+            return
+        playlist_ref = self.controller.placement_playlist_ref()
+        if hasattr(self, "catalog_bridge"):
+            self.catalog_bridge.set_playlist_ref(playlist_ref)
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _sync_songs_bridge_language(self):
+        if not hasattr(self, "songs_bridge"):
+            return
+        _configure_songs_bridge_language(self.songs_bridge, self._language_context)
 
     def _refresh_shell_texts(self, *, update_context: bool = True):
         is_mwb = self._pub == "mwb"
@@ -295,6 +329,8 @@ class StudyDetailView(QWidget):
             self.controller.cleanup()
         if hasattr(self, "catalog_bridge"):
             self.catalog_bridge.cleanup()
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.cleanup()
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
@@ -313,11 +349,13 @@ class _MemorialDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
 
-    def __init__(self, md: "MemorialData", service: "JwpubService",
+    def __init__(self, md: "MemorialData", service: "JwpubService", *,
+                 language_context: JWMediaLanguageContext,
                  parent=None):
         super().__init__(parent)
         self._md  = md
         self._svc = service
+        self._language_context = language_context
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -341,11 +379,12 @@ class _MemorialDetailView(QWidget):
         self.qml_widget.setAcceptDrops(False)
         self.qml_widget.installEventFilter(self)
 
-        lang_code = getattr(self._svc, "_lang", "T") or "T"
+        lang_code = self._language_context.api_code
         self.controller = MeetingTreeController(
             self._svc,
             meeting_type="memorial",
             language_code=lang_code,
+            fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
         self.controller.backRequested.connect(self.back_requested.emit)
@@ -356,6 +395,11 @@ class _MemorialDetailView(QWidget):
         self.catalog_bridge = JWMediaCatalogBridge(self)
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
+            self.controller.add_from_jw_catalog
+        )
+        self.songs_bridge = JWSongsBridge(self)
+        self._sync_songs_bridge_language()
+        self.songs_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
@@ -373,6 +417,7 @@ class _MemorialDetailView(QWidget):
         ctx = self.qml_widget.rootContext()
         ctx.setContextProperty("controller", self.controller)
         ctx.setContextProperty("catalogBridge", self.catalog_bridge)
+        ctx.setContextProperty("songsBridge", self.songs_bridge)
         ctx.setContextProperty("meetingPill", self.pill_text)
         ctx.setContextProperty("meetingDate", self.date_text)
         ctx.setContextProperty("pillColor", self.pill_color)
@@ -390,10 +435,18 @@ class _MemorialDetailView(QWidget):
             self.controller.load_memorial(self._md)
 
     def _sync_catalog_placement(self):
-        if hasattr(self, "catalog_bridge") and hasattr(self, "controller"):
-            self.catalog_bridge.set_playlist_ref(
-                self.controller.placement_playlist_ref()
-            )
+        if not hasattr(self, "controller"):
+            return
+        playlist_ref = self.controller.placement_playlist_ref()
+        if hasattr(self, "catalog_bridge"):
+            self.catalog_bridge.set_playlist_ref(playlist_ref)
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _sync_songs_bridge_language(self):
+        if not hasattr(self, "songs_bridge"):
+            return
+        _configure_songs_bridge_language(self.songs_bridge, self._language_context)
 
     def _refresh_shell_texts(self, *, update_context: bool = True):
         self.pill_text = _tr_ctx("_MemorialCard", "MEMORIAL")
@@ -501,6 +554,8 @@ class _MemorialDetailView(QWidget):
             self.controller.cleanup()
         if hasattr(self, "catalog_bridge"):
             self.catalog_bridge.cleanup()
+        if hasattr(self, "songs_bridge"):
+            self.songs_bridge.cleanup()
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
@@ -571,36 +626,21 @@ class MeetingsWidget(QWidget):
         self._wf_debounce.setInterval(600)
         self._wf_debounce.timeout.connect(self._do_folder_refresh)
 
+    def _current_media_context(self) -> JWMediaLanguageContext:
+        return jw_media_language_context(self._lang_mgr, default_api_code="T")
+
     def _set_lang_from_mgr(self):
-        if self._lang_mgr:
-            api = (getattr(self._lang_mgr, "media_api_code", None)
-                or getattr(self._lang_mgr, "api_code", "T"))
-            self._service.set_lang(api)
-            is_sign = getattr(self._lang_mgr, "is_media_sign_language", False)
-            self._service.set_sign_language(is_sign)
+        context = self._current_media_context()
+        self._service.set_lang(context.api_code)
+        self._service.set_sign_language(context.is_sign_language)
 
     def _set_memorial_lang_from_mgr(self):
         """
         Aplica o idioma de mídia JW ao serviço do Memorial.
-        Sempre usa media_api_code, não o api_code da interface.
+        Sempre usa o idioma de mídia efetivo, não o fallback da interface.
         """
-        if self._lang_mgr:
-            api = (getattr(self._lang_mgr, "media_api_code", None)
-                   or getattr(self._lang_mgr, "api_code", "T"))
-            self._memorial_svc.set_lang(api)
-
-    def _set_media_lang_from_mgr(self):
-        """
-        Aplica o idioma de mídia JW ao serviço de reuniões, incluindo o flag
-        de língua gestual (para substituir sjjm → sjj quando necessário).
-        Chamado apenas quando media_language_changed dispara.
-        """
-        if self._lang_mgr:
-            api = getattr(self._lang_mgr, "media_api_code", None) \
-                  or getattr(self._lang_mgr, "api_code", "T")
-            self._service.set_lang(api)
-            is_sign = getattr(self._lang_mgr, "is_media_sign_language", False)
-            self._service.set_sign_language(is_sign)
+        context = self._current_media_context()
+        self._memorial_svc.set_lang(context.api_code)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -768,6 +808,7 @@ class MeetingsWidget(QWidget):
         detail_key = f"{pub_type}:{key}"
         if detail_key not in self._details:
             d = StudyDetailView(pub_type, wd, self._service,
+                                language_context=self._current_media_context(),
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -794,7 +835,11 @@ class MeetingsWidget(QWidget):
 
         detail_key = f"memorial:{self._monday.isoformat()}"
         if detail_key not in self._details:
-            d = _MemorialDetailView(md, self._service)
+            d = _MemorialDetailView(
+                md,
+                self._service,
+                language_context=self._current_media_context(),
+            )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
             self._stack.addWidget(d)
@@ -909,6 +954,7 @@ class MeetingsWidget(QWidget):
     @Slot(str)
     def _on_lang_changed(self, code: str):
         self._set_lang_from_mgr()
+        self._set_memorial_lang_from_mgr()
         for key in list(self._cache.keys()):
             self._service.clear_week(date.fromisoformat(key))
         self._cache.clear()
@@ -922,10 +968,9 @@ class MeetingsWidget(QWidget):
     def _on_media_lang_changed(self, _code: str):
         """
         Idioma de mídia JW mudou → recarrega reuniões com o novo código.
-        Usa _set_media_lang_from_mgr (media_api_code) em vez de api_code da UI.
+        Usa o contexto JW centralizado em vez do fallback da interface.
         """
-        self._set_media_lang_from_mgr()
-        # Recarrega também o Memorial com o novo idioma de mídia
+        self._set_lang_from_mgr()
         self._set_memorial_lang_from_mgr()
         for key in list(self._cache.keys()):
             self._service.clear_week(date.fromisoformat(key))

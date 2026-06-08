@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.foundation import paths as _paths
+from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
@@ -355,7 +356,13 @@ class _PlaylistListView(QWidget):
             return
         try:
             items = _enrich_items_for_export(pl.get("items", []), {})
-            write_jwlplaylist(pl["name"], items, path)
+            fallback_lang = jw_media_language_context(self.lang).fallback_code
+            write_jwlplaylist(
+                pl["name"],
+                items,
+                path,
+                fallback_lang_code=fallback_lang,
+            )
             QMessageBox.information(
                 self,
                 self.tr("Export complete"),
@@ -373,20 +380,12 @@ class _PlaylistListView(QWidget):
         )
         if not paths:
             return
-        media_lang = "E"
-        if self.lang:
-            if (
-                hasattr(self.lang, "jw_lang_service")
-                and hasattr(self.lang.jw_lang_service, "media_api_code")
-            ):
-                media_lang = self.lang.jw_lang_service.media_api_code
-            else:
-                media_lang = getattr(self.lang, "api_code", "E")
+        fallback_lang = jw_media_language_context(self.lang).fallback_code
 
         imported = 0
         for path in paths:
             try:
-                data = read_jwlplaylist(path, fallback_lang_code=media_lang)
+                data = read_jwlplaylist(path, fallback_lang_code=fallback_lang)
                 pl_name = data.get("name", Path(path).stem)
                 items = []
                 for raw in data.get("items", []):
@@ -491,7 +490,13 @@ class _PlaylistListView(QWidget):
             return
         try:
             enriched = _enrich_items_for_export(items, {})
-            write_jwlplaylist(name, enriched, path)
+            fallback_lang = jw_media_language_context(self.lang).fallback_code
+            write_jwlplaylist(
+                name,
+                enriched,
+                path,
+                fallback_lang_code=fallback_lang,
+            )
             QMessageBox.information(
                 self,
                 self.tr("Export complete"),

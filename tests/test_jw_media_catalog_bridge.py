@@ -7,6 +7,7 @@ from PySide6.QtCore import QCoreApplication
 from app.widgets.jw_media_catalog_bridge import (
     JWMediaCatalogBridge,
     JWMediaCatalogModel,
+    build_jw_media_placement_options,
 )
 
 
@@ -21,6 +22,17 @@ def item(key: str) -> dict:
         "duration_ticks": 100_000_000,
         "primary_category": "",
     }
+
+
+def playlist_with(item_count: int, sections: list[dict] | None = None) -> dict:
+    return {
+        "items": [{"id": f"item-{index}"} for index in range(item_count)],
+        "sections": sections or [],
+    }
+
+
+def option_ids(options: list[dict]) -> list[str]:
+    return [option["id"] for option in options]
 
 
 class JWMediaCatalogModelTests(unittest.TestCase):
@@ -38,6 +50,48 @@ class JWMediaCatalogModelTests(unittest.TestCase):
         self.assertTrue(model.set_items_if_changed([item("b"), item("a")]))
 
         self.assertEqual(len(resets), 2)
+
+
+class JWMediaPlacementOptionsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._app = QCoreApplication.instance() or QCoreApplication([])
+
+    def test_many_items_include_single_section_when_prompting(self):
+        options = build_jw_media_placement_options(
+            playlist_with(
+                14,
+                [{"id": "section-1", "name": "Opening", "color_hue": 170}],
+            ),
+        )
+
+        self.assertEqual(option_ids(options), ["top", "bottom", "section:section-1"])
+
+    def test_two_sections_prompt_even_with_short_playlist(self):
+        options = build_jw_media_placement_options(
+            playlist_with(
+                1,
+                [
+                    {"id": "section-1", "name": "Opening", "color_hue": 170},
+                    {"id": "section-2", "name": "Main", "color_hue": 240},
+                ],
+            ),
+        )
+
+        self.assertEqual(
+            option_ids(options),
+            ["top", "bottom", "section:section-1", "section:section-2"],
+        )
+
+    def test_single_section_short_playlist_does_not_prompt(self):
+        options = build_jw_media_placement_options(
+            playlist_with(
+                1,
+                [{"id": "section-1", "name": "Opening", "color_hue": 170}],
+            ),
+        )
+
+        self.assertEqual(options, [])
 
 
 class JWMediaCatalogBridgeProgressTests(unittest.TestCase):

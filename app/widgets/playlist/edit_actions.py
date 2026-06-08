@@ -15,6 +15,7 @@ from ...core.foundation.constants import (
     MEDIA_EXTS as _MEDIA_EXTS,
     PDF_EXTS as _PDF_EXTS,
 )
+from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.writer import write_jwlplaylist
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, _media_type_from_url, _new_item
@@ -170,10 +171,15 @@ class _PlaylistEditActionsMixin:
             pass
 
         meps_lang = 0
+        try:
+            meps_lang = int(item_data.get("meps_language") or 0)
+        except (ValueError, TypeError):
+            meps_lang = 0
+
         from ...core.jw.metadata import MEPS_FROM_LANG as _MEPS
 
         lang_str = item_data.get("language", "").upper()
-        if lang_str in _MEPS:
+        if not meps_lang and lang_str in _MEPS:
             meps_lang = _MEPS[lang_str]
 
         pl_item = {
@@ -315,7 +321,13 @@ class _PlaylistEditActionsMixin:
             return
         try:
             items = _enrich_items_for_export(self._pl.get("items", []), self._id_to_thumb)
-            write_jwlplaylist(self._pl["name"], items, path)
+            fallback_lang = jw_media_language_context(self.lang).fallback_code
+            write_jwlplaylist(
+                self._pl["name"],
+                items,
+                path,
+                fallback_lang_code=fallback_lang,
+            )
             QMessageBox.information(
                 self,
                 self.tr("Export complete"),

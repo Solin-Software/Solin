@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from ...core.foundation import paths as _paths
+from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.rendering.libreoffice import LoConvertThread, cached_pages as lo_cached_pages
 from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
@@ -111,15 +112,7 @@ class _PlaylistEditImportMixin:
         if not self._pl:
             return
         stem = Path(jwpub_path).stem
-        lang = "E"
-        if self.lang:
-            if (
-                hasattr(self.lang, "jw_lang_service")
-                and hasattr(self.lang.jw_lang_service, "media_api_code")
-            ):
-                lang = self.lang.jw_lang_service.media_api_code
-            else:
-                lang = getattr(self.lang, "api_code", "E")
+        lang = jw_media_language_context(self.lang).api_code
         pl_ref = self._pl
         insert_pos = insert_at
         target_section_id = section_id
@@ -282,19 +275,11 @@ class _PlaylistEditImportMixin:
     ) -> None:
         if not self._pl:
             return
-        media_lang = "E"
-        if self.lang:
-            if (
-                hasattr(self.lang, "jw_lang_service")
-                and hasattr(self.lang.jw_lang_service, "media_api_code")
-            ):
-                media_lang = self.lang.jw_lang_service.media_api_code
-            else:
-                media_lang = getattr(self.lang, "api_code", "E")
+        fallback_lang = jw_media_language_context(self.lang).fallback_code
         total_added = 0
         for jwl_path in jwl_paths:
             try:
-                data = read_jwlplaylist(jwl_path, fallback_lang_code=media_lang)
+                data = read_jwlplaylist(jwl_path, fallback_lang_code=fallback_lang)
                 new_items = []
                 for raw in data.get("items", []):
                     url = raw.get("url") or raw.get("jworg_url") or ""

@@ -72,6 +72,49 @@ def _file_url(path: str) -> str:
     return QUrl.fromLocalFile(path).toString()
 
 
+def build_jw_media_placement_options(
+    pl: dict[str, Any] | None,
+    *,
+    translate_context: str = "JWMediaCatalogBridge",
+) -> list[dict[str, Any]]:
+    """Compute where a JW media item can be placed within a playlist/tree."""
+    if not pl:
+        return []
+
+    items = pl.get("items", [])
+    sections = [
+        s for s in pl.get("sections", [])
+        if not s.get("parent_id")
+    ]
+    total = len(items)
+    num_sections = len(sections)
+    has_many_items = total > 13
+    has_multiple_sections = num_sections >= 2
+    should_prompt = has_many_items or has_multiple_sections
+
+    _tr = lambda text: QCoreApplication.translate(translate_context, text)  # noqa: E731
+
+    if not should_prompt:
+        return []
+
+    options: list[dict[str, Any]] = [
+        {"id": "top", "label": _tr("Top of playlist"), "type": "position"},
+        {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
+    ]
+    for sec in sections:
+        section_id = sec.get("id")
+        if not section_id:
+            continue
+        hue = sec.get("color_hue", 215)
+        options.append({
+            "id": f"section:{section_id}",
+            "label": sec.get("name", "Section"),
+            "type": "section",
+            "color": _accent_from_hue(hue),
+        })
+    return options
+
+
 # ── Catalog list model ────────────────────────────────────────────────────────
 
 
@@ -819,46 +862,7 @@ class JWMediaCatalogBridge(QObject):
 
     def _compute_placement_options(self) -> list[dict[str, Any]]:
         """Compute where the video can be placed within the playlist."""
-        if not self._pl:
-            return []
-
-        items = self._pl.get("items", [])
-        sections = [
-            s for s in self._pl.get("sections", [])
-            if not s.get("parent_id")
-        ]
-        total = len(items)
-        num_sections = len(sections)
-
-        _tr = lambda text: QCoreApplication.translate(  # noqa: E731
-            "JWMediaCatalogBridge", text
-        )
-
-        if total > 6 and num_sections >= 2:
-            # Condition 2: Top, Bottom, or specific section.
-            options: list[dict[str, Any]] = [
-                {"id": "top",    "label": _tr("Top of playlist"), "type": "position"},
-                {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
-            ]
-            for sec in sections:
-                hue = sec.get("color_hue", 215)
-                options.append({
-                    "id": f"section:{sec['id']}",
-                    "label": sec.get("name", "Section"),
-                    "type": "section",
-                    "color": _accent_from_hue(hue),
-                })
-            return options
-
-        if total > 13:
-            # Condition 1: Top or Bottom only.
-            return [
-                {"id": "top",    "label": _tr("Top of playlist"), "type": "position"},
-                {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
-            ]
-
-        # Small playlist — no placement needed, add to end.
-        return []
+        return build_jw_media_placement_options(self._pl)
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
@@ -899,6 +903,7 @@ class JWMediaCatalogBridge(QObject):
 
 
 __all__ = [
+    "build_jw_media_placement_options",
     "JWMediaCatalogBridge",
     "JWMediaCatalogModel",
 ]
