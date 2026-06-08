@@ -25,6 +25,7 @@ from .core.timer import TimerEngine, TimerStore
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
+from .core.jw.background_song_service import BackgroundSongService
 from .core.media.playback import MediaController
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
@@ -97,6 +98,8 @@ class MainWindow(QMainWindow):
         _saved_lang = _prefs_boot.value(SettingsKey.APP_LANGUAGE, "", str)
         if _saved_lang:
             self.lang.set_language(_saved_lang)
+
+        self._background_song_service = BackgroundSongService(self.lang, self)
 
         self.setWindowTitle(self.tr("Solin"))
         self.setMinimumSize(900, 600)

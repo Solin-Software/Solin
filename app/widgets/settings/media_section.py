@@ -54,8 +54,23 @@ class MediaSectionMixin:
 
         lay.addWidget(self._divider())
 
+        saved_background_song = self._prefs.value(
+            SettingsKey.BACKGROUND_SONG_ENABLED, False, bool
+        )
+        row4, self._background_song_toggle, self._background_song_label, \
+            self._background_song_desc = self._toggle_row(
+                ICON_MUSIC,
+                self.tr("Automatic background song"),
+                self._background_song_description(),
+                checked=saved_background_song,
+            )
+        self._background_song_toggle.toggled.connect(self._on_background_song_toggled)
+        lay.addWidget(row4)
+
+        lay.addWidget(self._divider())
+
         saved_start_paused = self._prefs.value(SettingsKey.START_VIDEOS_PAUSED, False, bool)
-        row4, self._start_paused_toggle, self._start_paused_label, self._start_paused_desc = \
+        row5, self._start_paused_toggle, self._start_paused_label, self._start_paused_desc = \
             self._toggle_row(
                 ICON_PLAY_PAUSE,
                 self.tr("Start videos paused"),
@@ -63,7 +78,7 @@ class MediaSectionMixin:
                 checked=saved_start_paused,
             )
         self._start_paused_toggle.toggled.connect(self._on_start_paused_toggled)
-        lay.addWidget(row4)
+        lay.addWidget(row5)
         return card
 
     def _on_auto_download_toggled(self, checked):
@@ -83,6 +98,23 @@ class MediaSectionMixin:
 
     def get_sjjm_announce_mode(self):
         return self._prefs.value(SettingsKey.SJJM_ANNOUNCE_MODE, False, bool)
+
+    def _background_song_description(self) -> str:
+        if not self._meeting_schedule_configured():
+            return self.tr("Configure the meeting day/time before automatic playback can start.")
+        return self.tr("Plays audio songs before configured meetings and fades out before start.")
+
+    def _sync_background_song_desc(self) -> None:
+        if hasattr(self, "_background_song_desc"):
+            self._background_song_desc.setText(self._background_song_description())
+
+    def _on_background_song_toggled(self, checked):
+        self._prefs.setValue(SettingsKey.BACKGROUND_SONG_ENABLED, checked)
+        self._sync_background_song_desc()
+        self.background_song_toggled.emit(bool(checked))
+
+    def get_background_song_enabled(self):
+        return self._prefs.value(SettingsKey.BACKGROUND_SONG_ENABLED, False, bool)
 
     def _on_start_paused_toggled(self, checked):
         self._prefs.setValue(SettingsKey.START_VIDEOS_PAUSED, checked)

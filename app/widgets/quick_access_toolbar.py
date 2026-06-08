@@ -16,6 +16,7 @@ from app.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from app.core.ui.macos_layer import apply_corner_radius
 from app.qml_module import load_qml_type
 from app.quick_toolbar_bridge import QuickToolbarBridge, SvgIconProvider
+from app.widgets.background_song_popup import BackgroundSongPopup
 from app.widgets.camera_popup import CameraPopup
 from app.widgets.obs_scene_popup import OBSScenePopup
 from app.widgets.zoom_panel import ZoomPanel
@@ -30,7 +31,7 @@ _QAT_BAR_H = 48
 _QAT_MINI_W = 26
 _QAT_MINI_H = 30
 # The QQuickWidget is fixed-width; QML handles the actual pill width.
-_QAT_MAX_W = 200
+_QAT_MAX_W = 240
 
 # Pill / mini corner radii used for the native macOS layer clip (see below).
 _QAT_PILL_RADIUS = 20
@@ -63,11 +64,19 @@ class QuickAccessToolbar(QQuickWidget):
     camera_stream_requested = Signal()
     camera_selection_changed = Signal(object)
 
-    def __init__(self, obs_service, zoom_service, camera_service=None, parent=None):
+    def __init__(
+        self,
+        obs_service,
+        zoom_service,
+        camera_service=None,
+        parent=None,
+        background_song_service=None,
+    ):
         super().__init__(None)
         self._obs = obs_service
         self._zoom = zoom_service
         self._camera = camera_service
+        self._background_song = background_song_service
         self._minimized = False
         self._obs_connected = False
         self._camera_enabled = False
@@ -112,6 +121,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.monitorClicked.connect(
             lambda: self.monitor_clicked.emit(self._monitor_btn)
         )
+        self._bridge.backgroundSongClicked.connect(self._on_background_song_clicked)
         self._bridge.obsClicked.connect(self._on_obs_clicked)
         self._bridge.zoomClicked.connect(self._on_zoom_clicked)
         self._bridge.cameraClicked.connect(self._on_camera_clicked)
@@ -140,6 +150,26 @@ class QuickAccessToolbar(QQuickWidget):
         # Pill proxy — the QQuickWidget itself is the pill, so popups that
         # call show_above(self._pill) will centre above the toolbar.
         self._pill = self
+
+        # ── Background Song Popup ────────────────────────────────────────
+        self._background_song_panel = (
+            BackgroundSongPopup(background_song_service, self)
+            if background_song_service is not None else None
+        )
+        if self._background_song is not None:
+            self._background_song.enabled_changed.connect(
+                lambda _enabled: self._sync_background_song_state()
+            )
+            self._background_song.playback_changed.connect(
+                lambda _playing: self._sync_background_song_state()
+            )
+            self._background_song.current_song_changed.connect(
+                lambda _title: self._sync_background_song_state()
+            )
+            self._background_song.status_changed.connect(
+                lambda _status: self._sync_background_song_state()
+            )
+            QTimer.singleShot(0, self._sync_background_song_state)
 
         # ── Zoom Panel (native QWidget popup) ─────────────────────────────
         self._zoom_panel = ZoomPanel(self)
@@ -316,6 +346,23 @@ class QuickAccessToolbar(QQuickWidget):
             self._camera_panel.set_stream_active(active)
         self._scene_popup.set_camera_stream_active(active)
 
+    def _sync_background_song_state(self):
+        service = self._background_song
+        visible = bool(service is not None and service.is_enabled)
+        self._bridge.set_background_song_visible(visible)
+        if not visible:
+            self._bridge.set_background_song_icon_color("484f58")
+            self._bridge.set_background_song_tooltip(self.tr("Background Song"))
+            if self._background_song_panel and self._background_song_panel.isVisible():
+                self._background_song_panel.close()
+        else:
+            self._bridge.set_background_song_icon_color(
+                "58a6ff" if service.is_playing else "8b949e"
+            )
+            tooltip = service.current_title or service.status_text or self.tr("Background Song")
+            self._bridge.set_background_song_tooltip(tooltip)
+        self._reposition()
+
     def set_obs_current_scene(self, scene_name: str):
         if scene_name:
             self._bridge.set_obs_tooltip(f"OBS: {scene_name}")
@@ -379,6 +426,8 @@ class QuickAccessToolbar(QQuickWidget):
     def _calc_pill_width(self) -> int:
         """Calculate total pill width from visible buttons."""
         items: list[int] = [30]  # monitor btn is always visible
+        if self._bridge._background_song_visible:
+            items.append(30)
         if self._bridge._separator_visible:
             items.append(1)
         if self._bridge._obs_visible:
@@ -559,6 +608,14 @@ class QuickAccessToolbar(QQuickWidget):
         if not scenes:
             self._obs.request_scenes_refresh()
 
+    def _on_background_song_clicked(self):
+        QToolTip.hideText()
+        if not self._background_song_panel or not self._background_song:
+            return
+        if not self._background_song.is_enabled:
+            return
+        self._background_song_panel.show_above(self)
+
     def _on_zoom_clicked(self):
         QToolTip.hideText()
         if not self._zoom or not self._zoom.is_connected:
@@ -576,5 +633,6 @@ class QuickAccessToolbar(QQuickWidget):
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self._bridge.update_translations()
+            self._sync_background_song_state()
         super().changeEvent(event)
 

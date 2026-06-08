@@ -112,6 +112,33 @@ Item {
                 }
             }
 
+            // ── Background Song ─────────────────────────────────────
+            Item {
+                visible: bridge.backgroundSongVisible
+                width: 30; height: 30
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: backgroundSongMA.pressed
+                           ? Qt.rgba(1,1,1,0.13)
+                           : backgroundSongMA.containsMouse
+                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/background_song/14/" + bridge.backgroundSongIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                MouseArea {
+                    id: backgroundSongMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(backgroundSongMA, bridge.backgroundSongTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: bridge.onBackgroundSongClicked()
+                }
+            }
+
             // ── Separator ────────────────────────────────────────────
             Rectangle {
                 visible: bridge.separatorVisible

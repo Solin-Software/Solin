@@ -18,6 +18,7 @@ from .settings.camera_section import CameraSectionMixin
 from .settings.language_section import LanguageSectionMixin
 from .settings.layout_helpers import SettingsLayoutMixin
 from .settings.media_section import MediaSectionMixin
+from .settings.meeting_schedule_section import MeetingScheduleSectionMixin
 from .settings.obs_section import ObsSectionMixin
 from .settings.screens_section import ScreensSectionMixin
 from .settings.watched_folder_section import WatchedFolderSectionMixin
@@ -34,6 +35,7 @@ class SettingsWidget(
     AboutSectionMixin,
     YearlyTextSectionMixin,
     LanguageSectionMixin,
+    MeetingScheduleSectionMixin,
     MediaSectionMixin,
     ObsSectionMixin,
     CameraSectionMixin,
@@ -52,6 +54,8 @@ class SettingsWidget(
     zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
     camera_enabled_toggled = Signal(bool)
+    background_song_toggled = Signal(bool)
+    meeting_schedule_changed = Signal()
 
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
@@ -103,6 +107,12 @@ class SettingsWidget(
         lay.addWidget(self._section_title(self.tr("Media"), "_media_section_title"))
         lay.addSpacing(8)
         lay.addWidget(self._build_media_card())
+        lay.addSpacing(20)
+
+        # Meetings
+        lay.addWidget(self._section_title(self.tr("Meetings"), "_meetings_section_title"))
+        lay.addSpacing(8)
+        lay.addWidget(self._build_meeting_schedule_card())
         lay.addSpacing(20)
 
         # Folders
@@ -163,6 +173,7 @@ class SettingsWidget(
         self._main_title.setText(self.tr("Settings"))
         self._lang_section_title.setText(self.tr("Language").upper())
         self._media_section_title.setText(self.tr("Media").upper())
+        self._meetings_section_title.setText(self.tr("Meetings").upper())
         self._folders_section_title.setText(self.tr("Folders").upper())
         self._integrations_section_title.setText(self.tr("Integrations").upper())
         self._yearly_section_title.setText(self.tr("Annual Text").upper())
@@ -184,6 +195,8 @@ class SettingsWidget(
         self._sjjm_announce_desc.setText(
             self.tr("Song starts muted for title display. Press play to start.")
         )
+        self._background_song_label.setText(self.tr("Automatic background song"))
+        self._sync_background_song_desc()
         self._start_paused_label.setText(self.tr("Start videos paused"))
         self._start_paused_desc.setText(
             self.tr("Videos open paused so you can start them manually.")
@@ -237,6 +250,7 @@ class SettingsWidget(
         self._auto_keys_empty_lbl.setText(self.tr("No shortcuts configured."))
         self._auto_keys_add_btn.setText(self.tr("Add shortcut"))
         self._refresh_auto_keys_list()
+        self._refresh_meeting_schedule_texts()
 
         if sys.platform == "win32":
             if hasattr(self, "_zoom_enabled_label"):
