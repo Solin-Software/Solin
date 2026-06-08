@@ -46,6 +46,7 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
     Keys:
         active          — bool: a meeting part is running/frozen.
         mode            — "analog" | "digital" (governs the *idle* clock).
+        analog_style    — selected analog face id for analog idle mode.
         primary_text    — the large text (countdown when active, else digital
                           clock; empty in analog-idle, which draws hands).
         secondary_text  — AM/PM suffix for the idle digital wall clock.
@@ -57,6 +58,7 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
     model: dict = {
         "active": snapshot.active,
         "mode": config.mode.value,
+        "analog_style": config.analog_style.value,
         "primary_text": "",
         "secondary_text": "",
         "overrun": bool(snapshot.overrun and snapshot.active),

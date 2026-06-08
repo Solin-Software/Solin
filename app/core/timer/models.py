@@ -23,6 +23,11 @@ class ClockMode(str, Enum):
     DIGITAL = "digital"
 
 
+class AnalogClockStyle(str, Enum):
+    SIGNATURE = "signature"
+    CLASSIC = "classic"
+
+
 class Direction(str, Enum):
     DOWN = "down"   # countdown (default)
     UP = "up"       # count-up / stopwatch
@@ -54,6 +59,11 @@ class PartState(str, Enum):
     STOPPED = "stopped"  # frozen after a stop
 
 
+ANALOG_CLOCK_STYLE_OPTIONS: tuple[AnalogClockStyle, ...] = (
+    AnalogClockStyle.SIGNATURE,
+    AnalogClockStyle.CLASSIC,
+)
+
 # Sections whose parts must keep a fixed section total (redistribution applies).
 FIXED_TOTAL_SECONDS: dict[Section, int] = {
     Section.MINISTRY: 12 * 60,
@@ -66,6 +76,13 @@ def _now() -> float:
     return time.time()
 
 
+def _enum_or_default(enum_type, value, default):
+    try:
+        return enum_type(value)
+    except (TypeError, ValueError):
+        return default
+
+
 # ── ClockConfig ───────────────────────────────────────────────────────────────
 
 @dataclass
@@ -73,6 +90,7 @@ class ClockConfig:
     """Per-profile presentation settings for the advanced clock window."""
 
     mode: ClockMode = ClockMode.DIGITAL
+    analog_style: AnalogClockStyle = AnalogClockStyle.SIGNATURE
     hour_format_24h: bool = True
     show_ampm: bool = False
     show_seconds: bool = True
@@ -86,6 +104,7 @@ class ClockConfig:
     def to_dict(self) -> dict:
         return {
             "mode": self.mode.value,
+            "analog_style": self.analog_style.value,
             "hour_format_24h": self.hour_format_24h,
             "show_ampm": self.show_ampm,
             "show_seconds": self.show_seconds,
@@ -99,11 +118,24 @@ class ClockConfig:
         if not data:
             return cls()
         return cls(
-            mode=ClockMode(data.get("mode", ClockMode.DIGITAL.value)),
+            mode=_enum_or_default(
+                ClockMode,
+                data.get("mode", ClockMode.DIGITAL.value),
+                ClockMode.DIGITAL,
+            ),
+            analog_style=_enum_or_default(
+                AnalogClockStyle,
+                data.get("analog_style", AnalogClockStyle.SIGNATURE.value),
+                AnalogClockStyle.SIGNATURE,
+            ),
             hour_format_24h=bool(data.get("hour_format_24h", True)),
             show_ampm=bool(data.get("show_ampm", False)),
             show_seconds=bool(data.get("show_seconds", True)),
-            direction=Direction(data.get("direction", Direction.DOWN.value)),
+            direction=_enum_or_default(
+                Direction,
+                data.get("direction", Direction.DOWN.value),
+                Direction.DOWN,
+            ),
             text_scale_pct=int(data.get("text_scale_pct", 100)),
             freeze_seconds=int(data.get("freeze_seconds", 3)),
         )

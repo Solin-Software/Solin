@@ -26,7 +26,12 @@ from ..core.i18n.date import format_time_with_seconds, week_label
 from ..core.meetings.publications import current_monday
 from ..core.meetings.section_meta import SECTION_META
 from ..core.timer.models import (
-    ClockConfig, MeetingType, PartState, Section,
+    ANALOG_CLOCK_STYLE_OPTIONS,
+    AnalogClockStyle,
+    ClockConfig,
+    MeetingType,
+    PartState,
+    Section,
 )
 from ..core.timer.schedule_factory import (
     adjust_part,
@@ -85,6 +90,14 @@ def _section_palette(section: Section) -> dict[str, str]:
         "badge": colors["badge"],
         "border": colors["border"],
     }
+
+
+def _analog_style_label(style: AnalogClockStyle, translate) -> str:
+    labels = {
+        AnalogClockStyle.SIGNATURE: translate("Signature"),
+        AnalogClockStyle.CLASSIC: translate("Classic"),
+    }
+    return labels[style]
 
 
 def _fmt_mmss(seconds: float) -> str:
@@ -208,6 +221,7 @@ class TimerBridge(QObject):
 
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
+        self.clockConfigChanged.emit()
 
     def _on_engine_state(self, snapshot: dict) -> None:
         # Engine transitions mutate run-state in place → persist so a meeting in
@@ -388,6 +402,21 @@ class TimerBridge(QObject):
         return self._clock_config.to_dict()
 
     clockConfig = Property("QVariant", _clock_model, notify=clockConfigChanged)
+
+    def _analog_clock_styles_model(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": style.value,
+                "label": _analog_style_label(style, self.tr),
+            }
+            for style in ANALOG_CLOCK_STYLE_OPTIONS
+        ]
+
+    analogClockStyles = Property(
+        "QVariant",
+        _analog_clock_styles_model,
+        notify=clockConfigChanged,
+    )
 
     @Slot(str, "QVariant")
     def updateClock(self, key: str, value) -> None:
