@@ -28,9 +28,7 @@ from ..core.meetings.section_meta import SECTION_META
 from ..core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
-    AnalogClockStyle,
     ClockConfig,
-    ClockMode,
     MeetingType,
     PartState,
     Section,
@@ -92,23 +90,6 @@ def _section_palette(section: Section) -> dict[str, str]:
         "badge": colors["badge"],
         "border": colors["border"],
     }
-
-
-def _analog_style_label(style: AnalogClockStyle, translate) -> str:
-    labels = {
-        AnalogClockStyle.SIGNATURE: translate("Signature"),
-        AnalogClockStyle.CLASSIC: translate("Classic"),
-    }
-    return labels[style]
-
-
-def _clock_mode_label(mode: ClockMode, translate) -> str:
-    labels = {
-        ClockMode.DIGITAL: translate("Digital"),
-        ClockMode.ANALOG: translate("Analog"),
-        ClockMode.ANALOG_DIGITAL: translate("Analog + digital"),
-    }
-    return labels[mode]
 
 
 def _fmt_mmss(seconds: float) -> str:
@@ -414,14 +395,8 @@ class TimerBridge(QObject):
 
     clockConfig = Property("QVariant", _clock_model, notify=clockConfigChanged)
 
-    def _clock_modes_model(self) -> list[dict[str, str]]:
-        return [
-            {
-                "id": mode.value,
-                "label": _clock_mode_label(mode, self.tr),
-            }
-            for mode in CLOCK_MODE_OPTIONS
-        ]
+    def _clock_modes_model(self) -> list[str]:
+        return [mode.value for mode in CLOCK_MODE_OPTIONS]
 
     clockModes = Property(
         "QVariant",
@@ -429,14 +404,8 @@ class TimerBridge(QObject):
         notify=clockConfigChanged,
     )
 
-    def _analog_clock_styles_model(self) -> list[dict[str, str]]:
-        return [
-            {
-                "id": style.value,
-                "label": _analog_style_label(style, self.tr),
-            }
-            for style in ANALOG_CLOCK_STYLE_OPTIONS
-        ]
+    def _analog_clock_styles_model(self) -> list[str]:
+        return [style.value for style in ANALOG_CLOCK_STYLE_OPTIONS]
 
     analogClockStyles = Property(
         "QVariant",
