@@ -20,73 +20,36 @@ Rectangle {
     readonly property real safeInset: Math.round(Math.min(width, height) * 0.035)
     readonly property real availableWidth: Math.max(1, width - safeInset * 2)
     readonly property real availableHeight: Math.max(1, height - safeInset * 2)
-    readonly property real secondaryRatio: 0.21
-    readonly property real digitalSuffixSpacingRatio: 0.055
-    readonly property real digitalSuffixBottomRatio: 0.16
-    readonly property real digitalProbeWidth: Math.max(1,
-        primaryProbe.implicitWidth
-        + (secondaryProbe.visible ? 100 * digitalSuffixSpacingRatio + secondaryProbe.implicitWidth : 0))
-    readonly property real digitalProbeHeight: Math.max(1,
-        Math.max(primaryProbe.implicitHeight, secondaryProbe.visible ? secondaryProbe.implicitHeight : 0))
+    readonly property real digitalProbeWidth: Math.max(1, digitalProbe.implicitWidth)
+    readonly property real digitalProbeHeight: Math.max(1, digitalProbe.implicitHeight)
     readonly property real digitalMaxPrimaryPx: Math.min(
         availableWidth * 100 / digitalProbeWidth,
         availableHeight * 100 / digitalProbeHeight)
     readonly property int primaryPx: Math.max(12, Math.round(digitalMaxPrimaryPx * displayPct))
-    readonly property int secondaryPx: Math.max(10, Math.round(primaryPx * secondaryRatio))
     readonly property real analogDiameter: Math.max(24, Math.min(availableWidth, availableHeight) * displayPct)
     readonly property real analogDigitalHeightRatio: 1.22
     readonly property real analogDigitalDiameter: Math.max(24,
         Math.min(availableWidth, availableHeight / analogDigitalHeightRatio) * displayPct)
     readonly property real analogDigitalHeight: analogDigitalDiameter * analogDigitalHeightRatio
 
-    TimerDigits {
-        id: primaryProbe
+    DigitalClockReadout {
+        id: digitalProbe
         visible: false
-        text: root.model.primary_text ? root.model.primary_text : ""
-        font.weight: Font.DemiBold
-        font.pixelSize: 100
-    }
-
-    Text {
-        id: secondaryProbe
-        visible: root.model.secondary_text && root.model.secondary_text.length > 0
-        text: root.model.secondary_text ? root.model.secondary_text : ""
-        font.family: "Segoe UI"
-        font.weight: Font.Medium
-        font.pixelSize: Math.round(100 * root.secondaryRatio)
+        primaryText: root.model.primary_text ? root.model.primary_text : ""
+        secondsText: root.model.seconds_text ? root.model.seconds_text : ""
+        secondaryText: root.model.secondary_text ? root.model.secondary_text : ""
+        primaryPx: 100
     }
 
     // ── Digital readout (wall clock or countdown) ─────────────────────────────
-    Row {
+    DigitalClockReadout {
         anchors.centerIn: parent
         visible: !root.hasAnalogFace
-        spacing: suffixSlot.visible ? Math.round(primary.font.pixelSize * root.digitalSuffixSpacingRatio) : 0
-
-        TimerDigits {
-            id: primary
-            text: root.model.primary_text ? root.model.primary_text : ""
-            color: root.overrun ? "#ff5555" : "#ffffff"
-            font.weight: Font.DemiBold
-            font.pixelSize: root.primaryPx
-        }
-
-        Item {
-            id: suffixSlot
-            visible: root.model.secondary_text && root.model.secondary_text.length > 0
-            width: suffix.implicitWidth
-            height: primary.implicitHeight
-
-            Text {
-                id: suffix
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: Math.round(primary.font.pixelSize * root.digitalSuffixBottomRatio)
-                text: root.model.secondary_text ? root.model.secondary_text : ""
-                color: "#aeb8c2"
-                font.family: "Segoe UI"
-                font.weight: Font.DemiBold
-                font.pixelSize: root.secondaryPx
-            }
-        }
+        primaryText: root.model.primary_text ? root.model.primary_text : ""
+        secondsText: root.model.seconds_text ? root.model.seconds_text : ""
+        secondaryText: root.model.secondary_text ? root.model.secondary_text : ""
+        digitColor: root.overrun ? "#ff5555" : "#ffffff"
+        primaryPx: root.primaryPx
     }
 
     // ── Analog clock (idle only) ──────────────────────────────────────────────
@@ -113,6 +76,7 @@ Rectangle {
         minuteAngle: root.model.minute_angle ? root.model.minute_angle : 0
         secondAngle: root.model.second_angle ? root.model.second_angle : 0
         primaryText: root.model.primary_text ? root.model.primary_text : ""
+        secondsText: root.model.seconds_text ? root.model.seconds_text : ""
         secondaryText: root.model.secondary_text ? root.model.secondary_text : ""
     }
 }
