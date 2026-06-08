@@ -85,6 +85,8 @@ class _WindowStub:
             "zoom_participants_toggled",
             "obs_stream_config_changed",
             "camera_enabled_toggled",
+            "background_song_toggled",
+            "meeting_schedule_changed",
         )
         self.meetings_widget.set_watched_folder = _slot("meetings_set_watched_folder")
 
@@ -100,6 +102,10 @@ class _WindowStub:
             "frame_ready",
             "error",
             "stopped",
+        )
+        self._background_song_service = SimpleNamespace(
+            set_enabled=_slot("background_song_enabled"),
+            reload_settings=_slot("background_song_reload_settings"),
         )
         self._auto_share_start_finished = _Signal("auto_share_start_finished")
 
@@ -165,7 +171,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 47
+    assert total_connections == 49
     assert profile_manager.profile_switched.connected == [
         window._profile_switch.update_avatar
     ]
@@ -177,6 +183,12 @@ def test_connect_signals_wires_expected_signal_graph():
         window.meetings_widget.set_watched_folder,
     ]
     assert window.proj_bar.stop_requested.connected == [window._stop_any]
+    assert window.settings_widget.background_song_toggled.connected == [
+        window._background_song_service.set_enabled
+    ]
+    assert window.settings_widget.meeting_schedule_changed.connected == [
+        window._background_song_service.reload_settings
+    ]
     assert window._auto_share_start_finished.connected == [
         window._projection_integrations.on_auto_share_start_finished
     ]

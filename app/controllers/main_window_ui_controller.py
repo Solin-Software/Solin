@@ -236,6 +236,7 @@ class MainWindowUiController:
             window._zoom_service,
             window._camera_service,
             window.right_col,
+            background_song_service=window._background_song_service,
         )
         window._quick_toolbar.monitor_clicked.connect(
             window._projection_targets.on_monitor_manager_requested

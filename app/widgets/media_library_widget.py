@@ -485,7 +485,7 @@ class MediaLibraryWidget(QWidget):
         self._songs_store = JWSongsStore.instance() if self.kind == "songs" else None
         self._qml_pointer_depth = 0
         self._disposed = False
-        self._download_all_batch_id = ""
+        self._download_all_batch_ids: dict[str, str] = {"video": "", "audio": ""}
         self._download_all_error_batches: set[str] = set()
         self._download_all_refresh_timer = QTimer(self)
         self._download_all_refresh_timer.setSingleShot(True)
@@ -533,7 +533,7 @@ class MediaLibraryWidget(QWidget):
         self.bridge.refreshRequested.connect(lambda: self._load_items(force=True))
         self.bridge.playAllRequested.connect(self._play_all)
         self.bridge.shuffleRequested.connect(self._play_shuffle)
-        self.bridge.downloadAllRequested.connect(self._download_all_videos)
+        self.bridge.downloadAllRequested.connect(self._download_all_current_mode)
         self.bridge.searchChanged.connect(self._filter_items)
         self.bridge.modeChanged.connect(self._set_mode)
         self.bridge.itemPlayRequested.connect(self._on_item_play_by_row)
@@ -560,7 +560,7 @@ class MediaLibraryWidget(QWidget):
             refresh_tooltip=self.tr("Refresh"),
             play_all_tooltip=self.tr("Play all (in order)"),
             shuffle_tooltip=self.tr("Play in random order"),
-            download_all_tooltip=self.tr("Download all video songs"),
+            download_all_tooltip=self._download_all_title(),
             video_tooltip=self.tr("Video songs"),
             audio_tooltip=self.tr("Audio songs"),
             audio_mode=self._audio_mode,
@@ -734,23 +734,23 @@ class MediaLibraryWidget(QWidget):
             self.model.dataChanged.emit(idx, idx)
         self._refresh_download_all_state()
 
-    def _download_all_videos(self) -> None:
+    def _download_all_current_mode(self) -> None:
         mgr = MediaCacheManager.instance()
-        if self._download_all_batch_id and mgr.batch_is_active(self._download_all_batch_id):
-            mgr.cancel_batch(self._download_all_batch_id)
-            self._download_all_batch_id = ""
+        mode = self._download_all_mode()
+        batch_id = self._download_all_batch_ids.get(mode, "")
+        if batch_id and mgr.batch_is_active(batch_id):
+            mgr.cancel_batch(batch_id)
+            self._download_all_batch_ids[mode] = ""
             self._refresh_download_all_state()
             return
 
-        urls = self._pending_video_urls()
+        urls = self._pending_download_all_urls()
         if not urls:
             self._refresh_download_all_state()
             return
 
-        title = self.tr("Download all video songs")
-        body = self.tr(
-            "Download {count} video songs for offline playback?"
-        ).replace("{count}", str(len(urls)))
+        title = self._download_all_title(mode)
+        body = self._download_all_confirm_text(mode, len(urls))
         reply = QMessageBox.question(
             self,
             title,
@@ -761,15 +761,17 @@ class MediaLibraryWidget(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        batch_id = f"songs-video:{uuid.uuid4().hex}"
+        batch_id = f"songs-{mode}:{uuid.uuid4().hex}"
         added = mgr.prefetch_many(urls, batch_id)
         if added > 0:
-            self._download_all_batch_id = batch_id
+            self._download_all_batch_ids[mode] = batch_id
             self._download_all_error_batches.discard(batch_id)
         self._refresh_download_all_state()
 
-    def _pending_video_urls(self) -> list[str]:
-        if self.kind != "songs" or self._audio_mode:
+    def _pending_download_all_urls(self) -> list[str]:
+        if self.kind != "songs":
+            return []
+        if self._audio_mode and not self.bridge.supports_audio:
             return []
         mgr = MediaCacheManager.instance()
         urls: list[str] = []
@@ -786,23 +788,59 @@ class MediaLibraryWidget(QWidget):
             urls.append(url)
         return urls
 
+    def _download_all_mode(self) -> str:
+        return "audio" if self._audio_mode else "video"
+
+    def _download_all_title(self, mode: str | None = None) -> str:
+        mode = mode or self._download_all_mode()
+        if mode == "audio":
+            return self.tr("Download all audio songs")
+        return self.tr("Download all video songs")
+
+    def _download_all_confirm_text(self, mode: str, count: int) -> str:
+        if mode == "audio":
+            return self.tr(
+                "Download {count} audio songs for offline playback?"
+            ).replace("{count}", str(count))
+        return self.tr(
+            "Download {count} video songs for offline playback?"
+        ).replace("{count}", str(count))
+
+    def _download_all_complete_text(self, mode: str) -> str:
+        if mode == "audio":
+            return self.tr("All audio songs downloaded")
+        return self.tr("All video songs downloaded")
+
+    def _download_all_failed_text(self, mode: str) -> str:
+        if mode == "audio":
+            return self.tr("Could not finish downloading all audio songs.")
+        return self.tr("Could not finish downloading all video songs.")
+
+    def _download_all_mode_for_batch(self, batch_id: str) -> str:
+        for mode, active_batch_id in self._download_all_batch_ids.items():
+            if active_batch_id == batch_id:
+                return mode
+        return ""
+
     def _refresh_download_all_state(self) -> None:
         if not hasattr(self, "bridge"):
             return
         mgr = MediaCacheManager.instance()
+        mode = self._download_all_mode()
+        batch_id = self._download_all_batch_ids.get(mode, "")
         active = bool(
-            self._download_all_batch_id
-            and mgr.batch_is_active(self._download_all_batch_id)
+            batch_id
+            and mgr.batch_is_active(batch_id)
         )
-        pending_count = len(self._pending_video_urls())
-        show = self.kind == "songs" and not self._audio_mode
+        pending_count = len(self._pending_download_all_urls())
+        show = self.kind == "songs"
         enabled = show and not self.bridge.loading and (active or pending_count > 0)
         if active:
             tooltip = self.tr("Cancel downloads")
         elif pending_count > 0:
-            tooltip = self.tr("Download all video songs")
+            tooltip = self._download_all_title(mode)
         else:
-            tooltip = self.tr("All video songs downloaded")
+            tooltip = self._download_all_complete_text(mode)
         self.bridge.update_state(
             show_download_all=show,
             download_all_enabled=enabled,
@@ -823,21 +861,23 @@ class MediaLibraryWidget(QWidget):
         _done: int,
         _failed: int,
     ) -> None:
-        if batch_id != self._download_all_batch_id:
+        mode = self._download_all_mode_for_batch(batch_id)
+        if not mode:
             return
         if queued + active == 0:
-            self._download_all_batch_id = ""
+            self._download_all_batch_ids[mode] = ""
         self._schedule_download_all_state_refresh()
 
     @Slot(str, str)
     def _on_prefetch_batch_error(self, batch_id: str, message: str) -> None:
-        if batch_id != self._download_all_batch_id:
+        mode = self._download_all_mode_for_batch(batch_id)
+        if not mode:
             return
         if batch_id in self._download_all_error_batches:
             return
         self._download_all_error_batches.add(batch_id)
         detail = str(message or "").strip()
-        text = self.tr("Could not finish downloading all video songs.")
+        text = self._download_all_failed_text(mode)
         if detail:
             text = f"{text}\n\n{detail}"
         QMessageBox.warning(
@@ -845,7 +885,7 @@ class MediaLibraryWidget(QWidget):
             self.tr("Download failed"),
             text,
         )
-        self._download_all_batch_id = ""
+        self._download_all_batch_ids[mode] = ""
         self._refresh_download_all_state()
 
     def _schedule_download_all_state_refresh(self) -> None:

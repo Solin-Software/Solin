@@ -89,6 +89,12 @@ class SignalConnectionController:
         window.settings_widget.camera_enabled_toggled.connect(
             window._live_integrations.on_camera_settings_enabled_toggled
         )
+        window.settings_widget.background_song_toggled.connect(
+            window._background_song_service.set_enabled
+        )
+        window.settings_widget.meeting_schedule_changed.connect(
+            window._background_song_service.reload_settings
+        )
 
         window._obs_service.state_changed.connect(
             window._live_integrations.on_obs_state_changed

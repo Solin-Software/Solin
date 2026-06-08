@@ -139,6 +139,7 @@ class _Window:
         self._live_integrations = _LiveIntegrations(self)
         self._zoom_service = _ZoomService(self)
         self._zoom_prefs = _Prefs({"zoom/enabled": zoom_enabled})
+        self._background_song_service = _Startable(self, "background-song")
         self.stylesheets = []
 
     def setStyleSheet(self, stylesheet):
@@ -173,6 +174,7 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
         "connect:zoom.sharing_state_changed",
         "connect:zoom.share_error",
         "zoom",
+        "background-song",
         "monitor",
         "ipc",
         "remote",

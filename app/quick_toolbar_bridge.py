@@ -11,7 +11,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtQuick import QQuickImageProvider
 
 from .styles.icons import (
-    ICON_MONITOR, ICON_OBS, ICON_ZOOM, ICON_CAMERA,
+    ICON_MONITOR, ICON_OBS, ICON_ZOOM, ICON_CAMERA, ICON_MUSIC,
     ICON_CHEVRON_DOWN, ICON_CHEVRON_LEFT,
 )
 
@@ -19,6 +19,7 @@ from .styles.icons import (
 
 _ICON_MAP: dict[str, str] = {
     "monitor":      ICON_MONITOR,
+    "background_song": ICON_MUSIC,
     "obs":          ICON_OBS,
     "zoom":         ICON_ZOOM,
     "camera":       ICON_CAMERA,
@@ -79,6 +80,7 @@ class QuickToolbarBridge(QObject):
 
     # ── Action signals (QML → Python) ─────────────────────────────────────
     monitorClicked = Signal()
+    backgroundSongClicked = Signal()
     obsClicked = Signal()
     zoomClicked = Signal()
     cameraClicked = Signal()
@@ -93,6 +95,8 @@ class QuickToolbarBridge(QObject):
 
         # Visual state
         self._monitor_icon_color: str = "8b949e"
+        self._background_song_visible: bool = False
+        self._background_song_icon_color: str = "484f58"
         self._obs_visible: bool = False
         self._obs_icon_color: str = "484f58"
         self._obs_dot_visible: bool = False
@@ -108,6 +112,7 @@ class QuickToolbarBridge(QObject):
 
         # Tooltips
         self._monitor_tooltip: str = ""
+        self._background_song_tooltip: str = ""
         self._obs_tooltip: str = ""
         self._zoom_tooltip: str = ""
         self._camera_tooltip: str = ""
@@ -121,6 +126,10 @@ class QuickToolbarBridge(QObject):
     @Property(str, notify=stateChanged)
     def monitorIconColor(self) -> str:  # noqa: N802
         return self._monitor_icon_color
+
+    @Property(str, notify=stateChanged)
+    def backgroundSongIconColor(self) -> str:  # noqa: N802
+        return self._background_song_icon_color
 
     @Property(str, notify=stateChanged)
     def obsIconColor(self) -> str:  # noqa: N802
@@ -138,6 +147,10 @@ class QuickToolbarBridge(QObject):
     @Property(bool, notify=stateChanged)
     def obsVisible(self) -> bool:  # noqa: N802
         return self._obs_visible
+
+    @Property(bool, notify=stateChanged)
+    def backgroundSongVisible(self) -> bool:  # noqa: N802
+        return self._background_song_visible
 
     @Property(bool, notify=stateChanged)
     def obsDotVisible(self) -> bool:  # noqa: N802
@@ -180,6 +193,10 @@ class QuickToolbarBridge(QObject):
         return self._monitor_tooltip
 
     @Property(str, notify=tooltipsChanged)
+    def backgroundSongTooltip(self) -> str:  # noqa: N802
+        return self._background_song_tooltip
+
+    @Property(str, notify=tooltipsChanged)
     def obsTooltip(self) -> str:  # noqa: N802
         return self._obs_tooltip
 
@@ -204,6 +221,10 @@ class QuickToolbarBridge(QObject):
     @Slot()
     def onMonitorClicked(self) -> None:  # noqa: N802
         self.monitorClicked.emit()
+
+    @Slot()
+    def onBackgroundSongClicked(self) -> None:  # noqa: N802
+        self.backgroundSongClicked.emit()
 
     @Slot()
     def onObsClicked(self) -> None:  # noqa: N802
@@ -254,6 +275,17 @@ class QuickToolbarBridge(QObject):
         color = color.lstrip("#")
         if self._monitor_icon_color != color:
             self._monitor_icon_color = color
+            self.stateChanged.emit()
+
+    def set_background_song_visible(self, visible: bool) -> None:
+        if self._background_song_visible != visible:
+            self._background_song_visible = visible
+            self.stateChanged.emit()
+
+    def set_background_song_icon_color(self, color: str) -> None:
+        color = color.lstrip("#")
+        if self._background_song_icon_color != color:
+            self._background_song_icon_color = color
             self.stateChanged.emit()
 
     def set_obs_visible(self, visible: bool) -> None:
@@ -324,10 +356,16 @@ class QuickToolbarBridge(QObject):
             self._obs_tooltip = text
             self.tooltipsChanged.emit()
 
+    def set_background_song_tooltip(self, text: str) -> None:
+        if self._background_song_tooltip != text:
+            self._background_song_tooltip = text
+            self.tooltipsChanged.emit()
+
     # ── i18n ──────────────────────────────────────────────────────────────
 
     def update_translations(self) -> None:
         self._monitor_tooltip = self.tr("Manage monitors")
+        self._background_song_tooltip = self.tr("Background Song")
         self._obs_tooltip = self.tr("OBS Scenes")
         self._zoom_tooltip = self.tr("Zoom Settings")
         self._camera_tooltip = self.tr("Camera")

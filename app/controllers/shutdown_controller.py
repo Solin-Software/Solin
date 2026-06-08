@@ -60,6 +60,7 @@ class ShutdownController:
             self._cleanup_widget(getattr(self._window, attr, None))
 
     def stop_media_services(self) -> None:
+        self._window._background_song_service.shutdown()
         self._window.media_ctrl.stop()
         self._window._ndi_service.stop()
         self._window._camera_service.stop()

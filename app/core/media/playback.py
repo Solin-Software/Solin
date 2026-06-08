@@ -91,7 +91,14 @@ class MediaController(QObject):
 
     # ── Playback público ──────────────────────────────────────────────────
 
-    def play_url(self, url: str):
+    def play_url(self, url: str, *, download_persist: bool | None = None):
+        """Play a URL using the standard stream+cache pipeline.
+
+        When ``download_persist`` is ``None``, the profile auto-download setting
+        decides whether the parallel download is permanent or temporary.
+        Callers such as background songs can force ``False`` to get the same
+        resilient local-switch behavior without creating persistent cache files.
+        """
         self._reconnect_timer.stop()
 
         # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova
@@ -130,7 +137,10 @@ class MediaController(QObject):
         else:
             self._play_source(url)
             prefs = _ps.prefs()
-            auto_download = prefs.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool)
+            auto_download = (
+                prefs.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool)
+                if download_persist is None else bool(download_persist)
+            )
             self._stream_persist = auto_download
             # Inicia download (persist ou temp) — buffer bar funciona em ambos
             self._downloader.start(url, persist=auto_download)
@@ -218,11 +228,16 @@ class MediaController(QObject):
     # ── Reconexao automatica ──────────────────────────────────────────────
 
     def _on_error(self, error, error_string: str):
+        lowered = (error_string or "").lower()
+        if "immediate exit requested" in lowered:
+            return
+        source = self.player.source().toString()
         is_network_drop = (
             "10054" in error_string
             or "10060" in error_string
             or "ConnectionReset" in error_string
-            or "partial" in error_string.lower()
+            or "partial" in lowered
+            or ("i/o error" in lowered and source.startswith("http"))
         )
 
         if is_network_drop and self._current_url:

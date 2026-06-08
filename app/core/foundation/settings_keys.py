@@ -18,6 +18,16 @@ class SettingsKey:
     SJJM_ANNOUNCE_MODE: Final = "sjjm_announce_mode"
     START_VIDEOS_PAUSED: Final = "start_videos_paused"
 
+    MEETING_MIDWEEK_DAY: Final = "meeting_schedule/midweek_day"
+    MEETING_MIDWEEK_TIME: Final = "meeting_schedule/midweek_time"
+    MEETING_WEEKEND_DAY: Final = "meeting_schedule/weekend_day"
+    MEETING_WEEKEND_TIME: Final = "meeting_schedule/weekend_time"
+
+    BACKGROUND_SONG_ENABLED: Final = "background_song/enabled"
+    BACKGROUND_SONG_VOLUME: Final = "background_song/volume"
+    BACKGROUND_SONG_FADE_SECONDS: Final = "background_song/fade_seconds"
+    BACKGROUND_SONG_STOP_BEFORE_SECONDS: Final = "background_song/stop_before_seconds"
+
     CAMERA_ENABLED: Final = "camera/enabled"
     CAMERA_BACKEND: Final = "camera/backend"
     CAMERA_DEVICE_NAME: Final = "camera/device_name"

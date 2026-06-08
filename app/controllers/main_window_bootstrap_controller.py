@@ -42,6 +42,7 @@ class MainWindowBootstrapController:
         self.start_obs_integration()
         self.connect_zoom_signals()
         self.start_zoom_if_enabled()
+        self.start_background_song_service()
         self.build_monitor_popup()
         self.initialize_open_media_state()
         self.initialize_ipc_controller()
@@ -83,6 +84,9 @@ class MainWindowBootstrapController:
             and self._platform == "win32"
         ):
             window._zoom_service.start()
+
+    def start_background_song_service(self) -> None:
+        self._window._background_song_service.start()
 
     def build_monitor_popup(self) -> None:
         window = self._window
