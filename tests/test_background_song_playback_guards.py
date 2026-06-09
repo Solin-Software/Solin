@@ -52,9 +52,7 @@ def test_new_track_is_allowed_during_final_fade_window(monkeypatch):
     monkeypatch.setattr(
         service_module,
         "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(
-            pre_meeting_occurrence=lambda _now: occurrence
-        ),
+        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence),
     )
     allowed = BackgroundSongService._can_start_new_track(service)
 
@@ -72,9 +70,7 @@ def test_new_track_rearms_stop_timer_before_fade_window(monkeypatch):
     monkeypatch.setattr(
         service_module,
         "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(
-            pre_meeting_occurrence=lambda _now: occurrence
-        ),
+        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence),
     )
     allowed = BackgroundSongService._can_start_new_track(service)
 
@@ -92,9 +88,7 @@ def test_manual_track_is_allowed_after_meeting_start(monkeypatch):
     monkeypatch.setattr(
         service_module,
         "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(
-            pre_meeting_occurrence=lambda _now: None
-        ),
+        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: None),
     )
     allowed = BackgroundSongService._can_start_new_track(service)
 
@@ -113,9 +107,7 @@ def test_delayed_automatic_track_is_rejected_after_meeting_start(monkeypatch):
     monkeypatch.setattr(
         service_module,
         "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(
-            pre_meeting_occurrence=lambda _now: None
-        ),
+        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: None),
     )
 
     allowed = BackgroundSongService._can_start_new_track(service)
@@ -132,9 +124,7 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
         _scheduled_fade_deadline=datetime.now().astimezone() + timedelta(seconds=2),
         _desired_playing=True,
         _manual_session=True,
-        _fade_to=lambda target, seconds, *, stop_after: faded.append(
-            (target, seconds, stop_after)
-        ),
+        _fade_to=lambda target, seconds, *, stop_after: faded.append((target, seconds, stop_after)),
         _set_status=statuses.append,
         stop=lambda *, immediate=False: None,
         tr=lambda text: text,
@@ -214,3 +204,47 @@ def test_sign_language_context_stops_existing_audio_immediately(monkeypatch):
     assert service._songs == []
     assert service._queue == []
     assert service._active_key == ""
+
+
+def _ready_service(*, current_title: str, is_playing: bool):
+    plays: list[bool] = []
+    statuses: list[str] = []
+    service = SimpleNamespace(
+        _active_key="E||regular|audio",
+        _loading=True,
+        _desired_playing=True,
+        is_playing=is_playing,
+        _current_title=current_title,
+        _set_songs=lambda _items: None,
+        _play_next=lambda: plays.append(True),
+        _set_status=statuses.append,
+        tr=lambda text: text,
+    )
+    return service, plays, statuses
+
+
+def test_cached_songs_ready_does_not_restart_track_in_flight():
+    # A manual start/skip already issued _play_next (current_title set) and the
+    # player is still buffering (is_playing False). The redundant songs_ready
+    # that ensure_loaded() schedules for cached lists must not start a second
+    # track — that is what desynced the popup title from the audio.
+    service, plays, statuses = _ready_service(current_title="127. Como quero ser", is_playing=False)
+
+    BackgroundSongService._on_songs_ready(
+        service, "E||regular|audio", [{"url": "u"}], "", 0.0, False
+    )
+
+    assert plays == []
+    assert statuses == []
+
+
+def test_songs_ready_starts_playback_when_idle_and_waiting():
+    # Genuine "waiting for the list to load" case: nothing handed to the player
+    # yet (current_title empty), playback desired — songs_ready must start it.
+    service, plays, statuses = _ready_service(current_title="", is_playing=False)
+
+    BackgroundSongService._on_songs_ready(
+        service, "E||regular|audio", [{"url": "u"}], "", 0.0, False
+    )
+
+    assert plays == [True]

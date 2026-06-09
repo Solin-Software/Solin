@@ -412,9 +412,18 @@ class BackgroundSongService(QObject):
             return
         self._loading = False
         self._set_songs(items)
-        if self._desired_playing and not self.is_playing:
+        # ``ensure_loaded`` schedules a ``songs_ready`` even when the list is
+        # already cached, so a manual start/skip that already issued
+        # ``_play_next`` synchronously would otherwise be restarted here. A
+        # second ``_play_next`` reshuffles the queue and fires a fresh
+        # ``play_url`` racing the first, which desyncs the popup title from the
+        # audio. Only auto-start from here when no track is in flight yet — the
+        # genuine "waiting for the list to load" case (``_current_title`` is
+        # still empty because nothing has been handed to the player).
+        track_in_flight = bool(self._current_title)
+        if self._desired_playing and not self.is_playing and not track_in_flight:
             self._play_next()
-        elif not self.is_playing:
+        elif not self.is_playing and not track_in_flight:
             self._set_status(self.tr("Ready."))
 
     @Slot(str, str)
@@ -451,7 +460,8 @@ class BackgroundSongService(QObject):
         if not self._songs:
             self._set_status(
                 self.tr("No audio songs available.")
-                if not self._loading else self.tr("Loading audio songs...")
+                if not self._loading
+                else self.tr("Loading audio songs...")
             )
             return
         self._fade_timer.stop()
@@ -476,11 +486,7 @@ class BackgroundSongService(QObject):
         occurrence = load_meeting_schedule(self._prefs).pre_meeting_occurrence(now)
         if occurrence is None:
             active = self._active_occurrence
-            if (
-                not self._manual_session
-                and active is not None
-                and now >= active.starts_at
-            ):
+            if not self._manual_session and active is not None and now >= active.starts_at:
                 self._suppressed_slot_id = active.slot_id
                 self._desired_playing = False
                 self._set_status(self.tr("Stopped before the meeting."))
@@ -554,11 +560,15 @@ class BackgroundSongService(QObject):
         self._play_next()
 
     def _begin_scheduled_stop(self) -> None:
-        self._suppressed_slot_id = self._active_occurrence.slot_id if self._active_occurrence else ""
+        self._suppressed_slot_id = (
+            self._active_occurrence.slot_id if self._active_occurrence else ""
+        )
         self.stop()
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
-        return load_meeting_schedule(_ps.prefs()).pre_meeting_occurrence(datetime.now().astimezone())
+        return load_meeting_schedule(_ps.prefs()).pre_meeting_occurrence(
+            datetime.now().astimezone()
+        )
 
     def _set_volume_percent(self, value: int, *, persist: bool) -> None:
         value = _clamp_int(value, 0, 100, DEFAULT_BACKGROUND_SONG_VOLUME)
