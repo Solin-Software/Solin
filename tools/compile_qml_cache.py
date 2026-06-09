@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import logging
+import re
 import shutil
 import subprocess
 import sys
@@ -61,6 +63,18 @@ def obfuscated_qml_name(qml_file: Path) -> str:
     return f"q_{digest}.qml"
 
 
+_TRANSLATOR_PRAGMA_RE = re.compile(r"(?m)^\s*pragma\s+Translator\s*:")
+
+
+def qml_source_with_translation_context(qml_file: Path) -> str:
+    source = qml_file.read_text(encoding="utf-8")
+    if _TRANSLATOR_PRAGMA_RE.search(source):
+        return source
+
+    context = json.dumps(qml_file.stem, ensure_ascii=False)
+    return f"pragma Translator: {context}\n{source}"
+
+
 def compile_qml_cache(source_dir: Path, output_dir: Path) -> list[Path]:
     if not source_dir.is_dir():
         raise SystemExit(f"QML source directory does not exist: {source_dir}")
@@ -81,7 +95,10 @@ def compile_qml_cache(source_dir: Path, output_dir: Path) -> list[Path]:
     for qml_file in qml_files:
         staged_name = obfuscated_qml_name(qml_file)
         qml_map[qml_file.stem] = staged_name
-        (output_dir / staged_name).write_bytes(qml_file.read_bytes())
+        (output_dir / staged_name).write_text(
+            qml_source_with_translation_context(qml_file),
+            encoding="utf-8",
+        )
 
     qmldir = output_dir / "qmldir"
     qmldir.write_text(

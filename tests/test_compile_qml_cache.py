@@ -5,6 +5,31 @@ import pytest
 from tools import compile_qml_cache
 
 
+def test_qml_source_preserves_original_translation_context(tmp_path):
+    qml_file = tmp_path / "AdvancedTimerPage.qml"
+    qml_file.write_text(
+        'import QtQuick\nText { text: qsTr("Clock face") }\n',
+        encoding="utf-8",
+    )
+
+    staged = compile_qml_cache.qml_source_with_translation_context(qml_file)
+
+    assert staged.startswith('pragma Translator: "AdvancedTimerPage"\n')
+    assert 'qsTr("Clock face")' in staged
+
+
+def test_qml_source_keeps_explicit_translation_context(tmp_path):
+    qml_file = tmp_path / "TimerView.qml"
+    source = (
+        'pragma Translator: "SharedTimer"\n'
+        'import QtQuick\n'
+        'Text { text: qsTr("Timer") }\n'
+    )
+    qml_file.write_text(source, encoding="utf-8")
+
+    assert compile_qml_cache.qml_source_with_translation_context(qml_file) == source
+
+
 def test_find_qt_library_dir_skips_candidates_without_required_frameworks(tmp_path, monkeypatch):
     empty_lib = tmp_path / "PySide6" / "lib"
     framework_lib = tmp_path / "PySide6" / "Qt" / "lib"
