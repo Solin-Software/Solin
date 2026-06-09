@@ -54,7 +54,7 @@
     <message>
         <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
         <source>Signature</source>
-        <translation>Подпись</translation>
+        <translation>Signature</translation>
     </message>
     <message>
         <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>

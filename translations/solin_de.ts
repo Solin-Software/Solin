@@ -103,7 +103,7 @@ Neue erstellen:</translation>
     <message>
         <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
         <source>Signature</source>
-        <translation>Signatur</translation>
+        <translation>Signature</translation>
     </message>
     <message>
         <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>
