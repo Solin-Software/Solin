@@ -24,7 +24,7 @@
 ; =============================================================================
 
 #define MyAppName        "Solin"
-#define MyAppVersion     "26.17.0.0"
+#define MyAppVersion     "26.17.1.0"
 #define MyAppPublisher   "Solin Software"
 #define MyAppURL         "https://solinav.vercel.app"
 #define MyAppExeName     "Solin.exe"

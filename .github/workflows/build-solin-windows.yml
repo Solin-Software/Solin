@@ -131,7 +131,8 @@ jobs:
             --output-dir "$env:BUILD_DIR\qmlcache\app\qml\Solin" `
             --qt-qml-output-dir "$env:BUILD_DIR\qmlcache\PySide6\qml" `
             --qt-library-output-dir "$env:BUILD_DIR\qmlcache\qt-libs" `
-            --qt-qml-module "QtQuick/Controls/impl"
+            --qt-qml-module "QtQuick/Controls/impl" `
+            --qt-qml-module "QtQuick/Controls/Basic/impl"
 
       - name: Build standalone app with Nuitka
         shell: pwsh
@@ -231,6 +232,9 @@ jobs:
           if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Controls\impl\qtquickcontrols2implplugin.dll"))) {
             throw "qtquickcontrols2implplugin.dll was not packaged."
           }
+          if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Controls\Basic\impl\qtquickcontrols2basicstyleimplplugin.dll"))) {
+            throw "qtquickcontrols2basicstyleimplplugin.dll was not packaged."
+          }
           if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\Templates\qtquicktemplates2plugin.dll"))) {
             throw "qtquicktemplates2plugin.dll was not packaged."
           }
@@ -242,6 +246,9 @@ jobs:
           }
           if (-not (Test-Path (Join-Path $dist "Qt6QuickControls2Impl.dll"))) {
             throw "Qt6QuickControls2Impl.dll was not packaged."
+          }
+          if (-not (Test-Path (Join-Path $dist "Qt6QuickControls2BasicStyleImpl.dll"))) {
+            throw "Qt6QuickControls2BasicStyleImpl.dll was not packaged."
           }
           if (-not (Test-Path (Join-Path $dist "Qt6QuickTemplates2.dll"))) {
             throw "Qt6QuickTemplates2.dll was not packaged."

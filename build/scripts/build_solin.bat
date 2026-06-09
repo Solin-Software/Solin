@@ -26,7 +26,7 @@ rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
 :: "%PYTHON%" -m nuitka --clean-cache=all
 
 :: ── Metadados do executavel ───────────────────────────────
-set VERSION=26.17.0.0
+set VERSION=26.17.1.0
 set PRODUCT_NAME=Solin
 set COMPANY_NAME=Solin Software
 set DESCRIPTION=Solin - Audio and Video for Kingdom Hall meetings
@@ -45,7 +45,8 @@ rmdir /s /q "%QML_MODULE_ROOT%" 2>nul
     --output-dir "%QML_CACHE_DIR%" ^
     --qt-qml-output-dir "%QT_QML_CACHE_DIR%" ^
     --qt-library-output-dir "%QT_LIBRARY_CACHE_DIR%" ^
-    --qt-qml-module "QtQuick/Controls/impl"
+    --qt-qml-module "QtQuick/Controls/impl" ^
+    --qt-qml-module "QtQuick/Controls/Basic/impl"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
@@ -186,6 +187,12 @@ if not exist "%DIST%\PySide6\qml\QtQuick\Controls\impl\qtquickcontrols2implplugi
     exit /b 1
 )
 
+if not exist "%DIST%\PySide6\qml\QtQuick\Controls\Basic\impl\qtquickcontrols2basicstyleimplplugin.dll" (
+    echo  [ERRO] Plugin QML qtquickcontrols2basicstyleimplplugin.dll nao foi empacotado.
+    pause
+    exit /b 1
+)
+
 if not exist "%DIST%\PySide6\qml\QtQuick\Templates\qtquicktemplates2plugin.dll" (
     echo  [ERRO] Plugin QML qtquicktemplates2plugin.dll nao foi empacotado.
     pause
@@ -206,6 +213,12 @@ if not exist "%DIST%\Qt6QuickControls2.dll" (
 
 if not exist "%DIST%\Qt6QuickControls2Impl.dll" (
     echo  [ERRO] Qt6QuickControls2Impl.dll nao foi empacotado.
+    pause
+    exit /b 1
+)
+
+if not exist "%DIST%\Qt6QuickControls2BasicStyleImpl.dll" (
+    echo  [ERRO] Qt6QuickControls2BasicStyleImpl.dll nao foi empacotado.
     pause
     exit /b 1
 )
