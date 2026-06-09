@@ -38,7 +38,7 @@
 #define MyAppMutex      "Solin_SingleInstance_Mutex"
 #define MyRegSubkey     "Software\Solin\Solin"
 #define MyPatchFromVer  "1.0.0.0"   ; minimum installed version this patch accepts
-#define MyPatchVersion  "26.16.0.0"  ; new version being installed
+#define MyPatchVersion  "26.17.0.0"  ; new version being installed
 #define MyDistDir       "..\diff" ; Nuitka/PyInstaller output directory
 
 ; =============================================================================

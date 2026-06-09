@@ -26,7 +26,7 @@ rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
 :: "%PYTHON%" -m nuitka --clean-cache=all
 
 :: ── Metadados do executavel ───────────────────────────────
-set VERSION=26.16.0.0
+set VERSION=26.17.0.0
 set PRODUCT_NAME=Solin
 set COMPANY_NAME=Solin Software
 set DESCRIPTION=Solin - Audio and Video for Kingdom Hall meetings

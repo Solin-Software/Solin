@@ -38,7 +38,7 @@ QSETTINGS_GLOBAL_APP: str = "GlobalApp"
 # ── Versão do aplicativo ────────────────────────────────────────────────────────
 # Fonte única de verdade para comparações de update.
 # Formato: MAJOR.MINOR.PATCH.BUILD  (deve espelhar setup.iss / patch.iss)
-APP_VERSION: str = "26.16.0.0"
+APP_VERSION: str = "26.17.0.0"
 
 # Identificador estável enviado às APIs do Solin. Não use sys.platform cru no
 # backend: "win32"/"darwin" são nomes Python, não nomes de produto.

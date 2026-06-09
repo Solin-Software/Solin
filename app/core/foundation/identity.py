@@ -14,9 +14,7 @@ Privacidade:
     - É um UUID aleatório gerado com uuid4() na primeira execução.
     - NÃO contém nome de usuário, e-mail, HWID, MAC address ou qualquer
       dado de identificação pessoal.
-    - Equivalente ao ID de telemetria do VS Code e ao client ID do Firefox.
     - Pode ser redefinido limpando as configurações do Solin (QSettings).
-    - Nunca é enviado a serviços de terceiros; apenas ao servidor solinav.com.
 
 IMPORTANTE — escopo GLOBAL (não por perfil):
     O install_id identifica a *instalação/dispositivo*, não o perfil de usuário.
