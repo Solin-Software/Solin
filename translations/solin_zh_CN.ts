@@ -27,203 +27,243 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="153"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="106"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="225"/>
         <source>Clock</source>
         <translation>时钟</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="157"/>
         <source>Type</source>
-        <translation>类型</translation>
+        <translation type="vanished">类型</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="86"/>
         <source>Digital</source>
         <translation>数字</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="88"/>
         <source>Analog</source>
         <translation>模拟</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="170"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="90"/>
+        <source>Analog + digital</source>
+        <translation>模拟 + 数字</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
+        <source>Signature</source>
+        <translation>签名</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>
+        <source>Classic</source>
+        <translation>经典</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="104"/>
+        <source>Timer</source>
+        <translation>计时器</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="108"/>
+        <source>Clock + timer</source>
+        <translation>时钟 + 计时器</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="229"/>
+        <source>Clock face</source>
+        <translation>钟面</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="244"/>
+        <source>Analog style</source>
+        <translation>模拟样式</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="260"/>
         <source>Format</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>24-hour</source>
         <translation>24小时</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>12-hour</source>
         <translation>12小时</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="184"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="274"/>
         <source>Show seconds</source>
         <translation>显示秒数</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="195"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="285"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="205"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="295"/>
         <source>Part timer</source>
         <translation>环节计时器</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="209"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="299"/>
+        <source>During parts</source>
+        <translation>节目进行期间</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="312"/>
         <source>Count direction</source>
         <translation>计时方向</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count down</source>
         <translation>倒计时</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count up</source>
         <translation>正计时</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="220"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="323"/>
         <source>Hold duration when stopped</source>
         <translation>停止时保持时长</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>Less</source>
         <translation>减少</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>More</source>
         <translation>增加</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="232"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="335"/>
         <source>Display</source>
         <translation>显示</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="237"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="340"/>
         <source>Display size</source>
         <translation>显示大小</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="269"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="372"/>
         <source>Monitors</source>
         <translation>显示器</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="271"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="374"/>
         <source>Show timer</source>
         <translation>显示计时器</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="324"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="427"/>
         <source>Reserved for the timer · %1</source>
         <translation>已为计时器预留 · %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
         <source>Unreserve</source>
         <translation>取消预留</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="689"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="792"/>
         <source>Reserve</source>
         <translation>预留</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="334"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
         <source>Reserve this monitor for the timer</source>
         <translation>为计时器预留此显示器</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="362"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="465"/>
         <source>No secondary monitors detected</source>
         <translation>未检测到副显示器</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="381"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="484"/>
         <source>Previous week</source>
         <translation>上周</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="404"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="507"/>
         <source>Not the current week</source>
         <translation>不是当前周</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="414"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="517"/>
         <source>Next week</source>
         <translation>下周</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="420"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="523"/>
         <source>Back to this week</source>
         <translation>返回本周</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Midweek</source>
         <translation>周中</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Weekend</source>
         <translation>周末</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="540"/>
         <source>Export PDF</source>
         <translation>导出 PDF</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="447"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="550"/>
         <source>Meeting parts</source>
         <translation>聚会环节</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="532"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="635"/>
         <source>Parts</source>
         <translation>环节</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>Fewer parts</source>
         <translation>减少环节</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>More parts</source>
         <translation>增加环节</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="553"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="656"/>
         <source>%1 total</source>
         <translation>总计 %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="662"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="765"/>
         <source>Monitor in use by media</source>
         <translation>显示器正被媒体使用</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="669"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="772"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>媒体当前正在使用 %1。要为计时器预留它并将媒体移出此显示器吗？</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="683"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="786"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
@@ -382,6 +422,151 @@
         <location filename="../app/widgets/settings/auto_share_section.py" line="349"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
         <translation>请在 macOS 辅助功能中允许 Solin，以便自动点击正常工作。</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongPopup</name>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="103"/>
+        <location filename="../app/widgets/background_song_popup.py" line="324"/>
+        <source>Background Song</source>
+        <translation>背景诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="142"/>
+        <location filename="../app/widgets/background_song_popup.py" line="325"/>
+        <source>Next song</source>
+        <translation>下一首诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="178"/>
+        <location filename="../app/widgets/background_song_popup.py" line="326"/>
+        <source>Meeting timing</source>
+        <translation>聚会时间</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="186"/>
+        <location filename="../app/widgets/background_song_popup.py" line="331"/>
+        <source>At start</source>
+        <translation>在开始时间</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="188"/>
+        <location filename="../app/widgets/background_song_popup.py" line="327"/>
+        <source>Stop before meeting</source>
+        <translation>聚会前停止</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="193"/>
+        <location filename="../app/widgets/background_song_popup.py" line="329"/>
+        <source>Stops playback before the scheduled meeting time.</source>
+        <translation>在预定聚会时间之前停止播放。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="199"/>
+        <location filename="../app/widgets/background_song_popup.py" line="332"/>
+        <source>Fade duration</source>
+        <translation>淡出时长</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="204"/>
+        <location filename="../app/widgets/background_song_popup.py" line="333"/>
+        <source>Lowers the volume before playback stops.</source>
+        <translation>在停止播放前逐渐降低音量。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="244"/>
+        <source>No song playing</source>
+        <translation>没有正在播放的诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="271"/>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="275"/>
+        <source>Start</source>
+        <translation>开始</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongService</name>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="225"/>
+        <source>Automatic background song is disabled.</source>
+        <translation>自动背景诗歌已禁用。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="259"/>
+        <source>Enable automatic background song in Settings.</source>
+        <translation>请在设置中启用自动背景诗歌。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="294"/>
+        <location filename="../app/core/jw/background_song_service.py" line="538"/>
+        <source>Stopping background song...</source>
+        <translation>正在停止背景诗歌...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="305"/>
+        <source>Configure the meeting day/time in Settings.</source>
+        <translation>请在设置中配置聚会日期和时间。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="314"/>
+        <source>Waiting for the next configured meeting.</source>
+        <translation>正在等待下一个已配置的聚会。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="321"/>
+        <source>Stopped for this meeting.</source>
+        <translation>已为本次聚会停止。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="336"/>
+        <location filename="../app/core/jw/background_song_service.py" line="492"/>
+        <location filename="../app/core/jw/background_song_service.py" line="515"/>
+        <location filename="../app/core/jw/background_song_service.py" line="532"/>
+        <source>Stopped before the meeting.</source>
+        <translation>已在聚会前停止。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="373"/>
+        <source>Audio songs are unavailable for sign-language media.</source>
+        <translation>手语媒体不提供音频诗歌。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="391"/>
+        <location filename="../app/core/jw/background_song_service.py" line="442"/>
+        <location filename="../app/core/jw/background_song_service.py" line="464"/>
+        <source>Loading audio songs...</source>
+        <translation>正在加载音频诗歌...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="427"/>
+        <source>Ready.</source>
+        <translation>准备就绪。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="434"/>
+        <source>Could not load audio songs.</source>
+        <translation>无法加载音频诗歌。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="462"/>
+        <source>No audio songs available.</source>
+        <translation>没有可用的音频诗歌。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="482"/>
+        <source>Playing background song.</source>
+        <translation>正在播放背景诗歌。</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="627"/>
+        <source>Background song stopped.</source>
+        <translation>背景诗歌已停止。</translation>
     </message>
 </context>
 <context>
@@ -788,22 +973,22 @@
 <context>
     <name>JWMediaCatalogBridge</name>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="410"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="453"/>
         <source>Catalog loaded</source>
         <translation>目录已加载</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="412"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="455"/>
         <source>Loading {done}/{total}</source>
         <translation>正在加载 {done}/{total}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="415"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="458"/>
         <source>Loading</source>
         <translation>正在加载</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="885"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="889"/>
         <source>{title} added</source>
         <translation>已添加 {title}</translation>
     </message>
@@ -858,12 +1043,12 @@
         <translation>未找到视频</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1327"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="85"/>
         <source>Where to add?</source>
         <translation>添加到哪里？</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1454"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="206"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
@@ -877,19 +1062,62 @@
     </message>
 </context>
 <context>
+    <name>JWSongsBridge</name>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="142"/>
+        <source>Add video song</source>
+        <translation>添加诗歌视频</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="149"/>
+        <source>Songs from JW.org</source>
+        <translation>来自JW.org的诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="255"/>
+        <source>Search by number or title...</source>
+        <translation>按编号或标题搜索...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="330"/>
+        <source>No results</source>
+        <translation>没有结果</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="331"/>
+        <source>songs</source>
+        <translation>诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="406"/>
+        <source>No songs found</source>
+        <translation>未找到诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="404"/>
+        <source>Loading songs...</source>
+        <translation>正在加载诗歌…</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="459"/>
+        <source>{title} added</source>
+        <translation>已添加 {title}</translation>
+    </message>
+</context>
+<context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="18"/>
+        <location filename="../app/widgets/settings/language_section.py" line="19"/>
         <source>Interface</source>
         <translation>界面</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="27"/>
+        <location filename="../app/widgets/settings/language_section.py" line="28"/>
         <source>JW Media</source>
         <translation>JW 媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="61"/>
+        <location filename="../app/widgets/settings/language_section.py" line="62"/>
         <source>(same as interface)</source>
         <translation>（与界面相同）</translation>
     </message>
@@ -897,7 +1125,7 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../app/main_window.py" line="101"/>
+        <location filename="../app/main_window.py" line="104"/>
         <location filename="../app/controllers/main_window_nav.py" line="9"/>
         <source>Solin</source>
         <translation>Solin</translation>
@@ -1210,94 +1438,113 @@ with %2 file(s)!</source>
 <context>
     <name>MediaLibraryWidget</name>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Songs</source>
         <translation>诗歌</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Original Songs</source>
         <translation>原创歌曲</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search song...</source>
         <translation>搜索诗歌…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search clip...</source>
         <translation>搜索片段...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="552"/>
+        <location filename="../app/widgets/media_library_widget.py" line="560"/>
         <source>Refresh</source>
         <translation>刷新</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="553"/>
+        <location filename="../app/widgets/media_library_widget.py" line="561"/>
         <source>Play all (in order)</source>
         <translation>全部播放（按顺序）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="554"/>
+        <location filename="../app/widgets/media_library_widget.py" line="562"/>
         <source>Play in random order</source>
         <translation>随机播放</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="555"/>
-        <location filename="../app/widgets/media_library_widget.py" line="727"/>
-        <location filename="../app/widgets/media_library_widget.py" line="780"/>
+        <location filename="../app/widgets/media_library_widget.py" line="798"/>
         <source>Download all video songs</source>
         <translation>下载所有视频诗歌</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="556"/>
+        <location filename="../app/widgets/media_library_widget.py" line="564"/>
         <source>Video songs</source>
         <translation>视频诗歌</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="557"/>
+        <location filename="../app/widgets/media_library_widget.py" line="565"/>
         <source>Audio songs</source>
         <translation>音频诗歌</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
+        <location filename="../app/widgets/media_library_widget.py" line="642"/>
         <source>Loading songs...</source>
         <translation>正在加载诗歌…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
         <source>Loading clips...</source>
         <translation>正在加载片段...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="635"/>
+        <location filename="../app/widgets/media_library_widget.py" line="658"/>
         <source>Updated on {date}</source>
         <translation>更新于 {date}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading songs. Check your connection.</source>
         <translation>加载诗歌时出错。请检查您的网络连接。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading clips. Check your connection.</source>
         <translation>加载片段出错。请检查网络连接。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="729"/>
+        <location filename="../app/widgets/media_library_widget.py" line="797"/>
+        <source>Download all audio songs</source>
+        <translation>下载所有音频诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="803"/>
+        <source>Download {count} audio songs for offline playback?</source>
+        <translation>要下载 {count} 首音频诗歌以供离线播放吗？</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="806"/>
         <source>Download {count} video songs for offline playback?</source>
         <translation>下载 {count} 首视频诗歌供离线播放？</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="778"/>
+        <location filename="../app/widgets/media_library_widget.py" line="811"/>
+        <source>All audio songs downloaded</source>
+        <translation>所有音频诗歌均已下载</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="816"/>
+        <source>Could not finish downloading all audio songs.</source>
+        <translation>无法完成所有音频诗歌的下载。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="839"/>
         <source>Cancel downloads</source>
         <translation>取消下载</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="782"/>
+        <location filename="../app/widgets/media_library_widget.py" line="812"/>
         <source>All video songs downloaded</source>
         <translation>所有视频诗歌已下载</translation>
     </message>
@@ -1307,17 +1554,17 @@ with %2 file(s)!</source>
         <translation>无法完成所有视频诗歌的下载。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="822"/>
+        <location filename="../app/widgets/media_library_widget.py" line="885"/>
         <source>Download failed</source>
         <translation>下载失败</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="892"/>
+        <location filename="../app/widgets/media_library_widget.py" line="955"/>
         <source>{count} songs available</source>
         <translation>有 {count} 首诗歌可用</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="893"/>
+        <location filename="../app/widgets/media_library_widget.py" line="956"/>
         <source>{count} clips available</source>
         <translation>{count}个片段</translation>
     </message>
@@ -1325,44 +1572,59 @@ with %2 file(s)!</source>
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="22"/>
+        <location filename="../app/widgets/settings/media_section.py" line="23"/>
         <source>Auto-download on play</source>
         <translation>播放时自动下载</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="23"/>
+        <location filename="../app/widgets/settings/media_section.py" line="24"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>下载正在播放的媒体以供离线使用。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="35"/>
+        <location filename="../app/widgets/settings/media_section.py" line="36"/>
         <source>Auto-download weekly study</source>
         <translation>自动下载每周学习资料</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="36"/>
+        <location filename="../app/widgets/settings/media_section.py" line="37"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>下载本周和下周的聚会媒体。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="48"/>
+        <location filename="../app/widgets/settings/media_section.py" line="49"/>
         <source>Song Announcement Mode</source>
         <translation>诗歌宣布模式</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="49"/>
+        <location filename="../app/widgets/settings/media_section.py" line="50"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>诗歌开始时处于静音状态以显示标题。请按播放键开始。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="61"/>
+        <location filename="../app/widgets/settings/media_section.py" line="64"/>
+        <source>Automatic background song</source>
+        <translation>自动背景诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="77"/>
         <source>Start videos paused</source>
         <translation>视频开始时暂停</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="62"/>
+        <location filename="../app/widgets/settings/media_section.py" line="78"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>视频打开时处于暂停状态，以便您可以手动开始播放。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="105"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>请先设置聚会日期和时间，再启动自动播放。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="106"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>在已配置的聚会前播放音频诗歌，并在开始前淡出。</translation>
     </message>
 </context>
 <context>
@@ -1401,6 +1663,79 @@ with %2 file(s)!</source>
         <location filename="../app/qml/MeetingPartRow.qml" line="208"/>
         <source>Start</source>
         <translation>开始</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingScheduleSectionMixin</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="390"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="536"/>
+        <source>Used by automatic features that depend on the meeting start time.</source>
+        <translation>供依赖聚会开始时间的自动功能使用。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="401"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="538"/>
+        <source>Midweek meeting</source>
+        <translation>周中聚会</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="402"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="540"/>
+        <source>Day and time for the midweek meeting.</source>
+        <translation>周中聚会的日期和时间。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="410"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="542"/>
+        <source>Weekend meeting</source>
+        <translation>周末聚会</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="411"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="544"/>
+        <source>Day and time for the weekend meeting.</source>
+        <translation>周末聚会的日期和时间。</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="527"/>
+        <source>Not configured</source>
+        <translation>未配置</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="557"/>
+        <source>Monday</source>
+        <translation>星期一</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="558"/>
+        <source>Tuesday</source>
+        <translation>星期二</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="559"/>
+        <source>Wednesday</source>
+        <translation>星期三</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="560"/>
+        <source>Thursday</source>
+        <translation>星期四</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="561"/>
+        <source>Friday</source>
+        <translation>星期五</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="562"/>
+        <source>Saturday</source>
+        <translation>星期六</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="563"/>
+        <source>Sunday</source>
+        <translation>星期日</translation>
     </message>
 </context>
 <context>
@@ -2429,36 +2764,47 @@ Create a new one:</source>
         <source>Expand toolbar</source>
         <translation type="vanished">展开工具栏</translation>
     </message>
+    <message>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="355"/>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="362"/>
+        <source>Background Song</source>
+        <translation>背景诗歌</translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="330"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="367"/>
         <source>Manage monitors</source>
         <translation>管理显示器</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="331"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="368"/>
+        <source>Background Song</source>
+        <translation>背景诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/quick_toolbar_bridge.py" line="369"/>
         <source>OBS Scenes</source>
         <translation>OBS场景</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="332"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="370"/>
         <source>Zoom Settings</source>
         <translation>Zoom设置</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="333"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="371"/>
         <source>Camera</source>
         <translation>摄像机</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="334"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="372"/>
         <source>Minimize</source>
         <translation>最小化</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="335"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="373"/>
         <source>Expand toolbar</source>
         <translation>展开工具栏</translation>
     </message>
@@ -2566,14 +2912,14 @@ Create a new one:</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="82"/>
-        <location filename="../app/widgets/settings_widget.py" line="163"/>
+        <location filename="../app/widgets/settings_widget.py" line="86"/>
+        <location filename="../app/widgets/settings_widget.py" line="173"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="133"/>
-        <location filename="../app/widgets/settings_widget.py" line="168"/>
+        <location filename="../app/widgets/settings_widget.py" line="143"/>
+        <location filename="../app/widgets/settings_widget.py" line="179"/>
         <source>Annual Text</source>
         <translation>年度经文</translation>
     </message>
@@ -2582,22 +2928,22 @@ Create a new one:</source>
         <translation type="vanished">没有内容投影时在屏幕上显示的文字。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="267"/>
+        <location filename="../app/widgets/settings_widget.py" line="281"/>
         <source>Scripture:</source>
         <translation>经文：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="269"/>
+        <location filename="../app/widgets/settings_widget.py" line="283"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>例如：意识到自己属灵需要的人有福了。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="271"/>
+        <location filename="../app/widgets/settings_widget.py" line="285"/>
         <source>Bible reference:</source>
         <translation>圣经出处：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="272"/>
+        <location filename="../app/widgets/settings_widget.py" line="286"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>例如：马太福音5:3。</translation>
     </message>
@@ -2606,7 +2952,7 @@ Create a new one:</source>
         <translation type="vanished">播放</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="175"/>
+        <location filename="../app/widgets/settings_widget.py" line="186"/>
         <source>Auto-download on play</source>
         <translation>播放时自动下载</translation>
     </message>
@@ -2623,11 +2969,13 @@ Create a new one:</source>
         <translation type="vanished">关</translation>
     </message>
     <message>
+        <location filename="../app/widgets/settings_widget.py" line="113"/>
+        <location filename="../app/widgets/settings_widget.py" line="176"/>
         <source>Meetings</source>
-        <translation type="vanished">聚会</translation>
+        <translation>聚会</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="179"/>
+        <location filename="../app/widgets/settings_widget.py" line="190"/>
         <source>Auto-download weekly study</source>
         <translation>自动下载每周学习资料</translation>
     </message>
@@ -2644,7 +2992,7 @@ Create a new one:</source>
         <translation type="vanished">诗歌</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="183"/>
+        <location filename="../app/widgets/settings_widget.py" line="194"/>
         <source>Song Announcement Mode</source>
         <translation>诗歌宣布模式</translation>
     </message>
@@ -2653,12 +3001,12 @@ Create a new one:</source>
         <translation type="vanished">诗歌开始时为静音，以便在宣布时显示标题。按播放从头开始。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="171"/>
+        <location filename="../app/widgets/settings_widget.py" line="182"/>
         <source>Interface</source>
         <translation>界面</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="172"/>
+        <location filename="../app/widgets/settings_widget.py" line="183"/>
         <source>JW Media</source>
         <translation>JW 媒体</translation>
     </message>
@@ -2667,7 +3015,7 @@ Create a new one:</source>
         <translation type="vanished">（与界面相同）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="197"/>
+        <location filename="../app/widgets/settings_widget.py" line="210"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2676,7 +3024,7 @@ Create a new one:</source>
         <translation type="vanished">将 Solin 与 OBS Studio 集成</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="199"/>
+        <location filename="../app/widgets/settings_widget.py" line="212"/>
         <source>Automatically switches scenes during projection</source>
         <translation>在投影过程中自动切换场景</translation>
     </message>
@@ -2685,17 +3033,17 @@ Create a new one:</source>
         <translation type="vanished">已断开连接</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="201"/>
+        <location filename="../app/widgets/settings_widget.py" line="214"/>
         <source>WebSocket Port</source>
         <translation>WebSocket 端口</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="202"/>
+        <location filename="../app/widgets/settings_widget.py" line="215"/>
         <source>Password (optional)</source>
         <translation>密码（可选）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="204"/>
+        <location filename="../app/widgets/settings_widget.py" line="217"/>
         <source>Leave blank if no password is set</source>
         <translation>如果没有设置密码，请留空</translation>
     </message>
@@ -2704,17 +3052,17 @@ Create a new one:</source>
         <translation type="vanished">● 更改会自动保存</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="206"/>
+        <location filename="../app/widgets/settings_widget.py" line="219"/>
         <source>Default scene (idle)</source>
         <translation>默认场景（空闲）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="208"/>
+        <location filename="../app/widgets/settings_widget.py" line="221"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation>未投影任何内容时显示的场景。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="210"/>
+        <location filename="../app/widgets/settings_widget.py" line="223"/>
         <source>Media window scene</source>
         <translation>媒体窗口场景</translation>
     </message>
@@ -2765,67 +3113,72 @@ Create a new one:</source>
         <translation type="vanished">若已禁用，媒体将在您打开某周的学习资料时按需加载。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="97"/>
-        <location filename="../app/widgets/settings_widget.py" line="164"/>
+        <location filename="../app/widgets/settings_widget.py" line="101"/>
+        <location filename="../app/widgets/settings_widget.py" line="174"/>
         <source>Language</source>
         <translation>语言</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="103"/>
-        <location filename="../app/widgets/settings_widget.py" line="165"/>
+        <location filename="../app/widgets/settings_widget.py" line="107"/>
+        <location filename="../app/widgets/settings_widget.py" line="175"/>
         <source>Media</source>
         <translation>媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="109"/>
-        <location filename="../app/widgets/settings_widget.py" line="166"/>
+        <location filename="../app/widgets/settings_widget.py" line="119"/>
+        <location filename="../app/widgets/settings_widget.py" line="177"/>
         <source>Folders</source>
         <translation>文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="115"/>
-        <location filename="../app/widgets/settings_widget.py" line="167"/>
+        <location filename="../app/widgets/settings_widget.py" line="125"/>
+        <location filename="../app/widgets/settings_widget.py" line="178"/>
         <source>Integrations</source>
         <translation>集成</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="139"/>
-        <location filename="../app/widgets/settings_widget.py" line="169"/>
+        <location filename="../app/widgets/settings_widget.py" line="149"/>
+        <location filename="../app/widgets/settings_widget.py" line="180"/>
         <source>Screens</source>
         <translation>屏幕</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="177"/>
+        <location filename="../app/widgets/settings_widget.py" line="188"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>下载正在播放的媒体以供离线使用。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="181"/>
+        <location filename="../app/widgets/settings_widget.py" line="192"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>下载本周和下周的聚会媒体。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="185"/>
+        <location filename="../app/widgets/settings_widget.py" line="196"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>诗歌开始时处于静音状态以显示标题。请按播放键开始。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="187"/>
+        <location filename="../app/widgets/settings_widget.py" line="198"/>
+        <source>Automatic background song</source>
+        <translation>自动背景诗歌</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="200"/>
         <source>Start videos paused</source>
         <translation>视频开始时暂停</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="189"/>
+        <location filename="../app/widgets/settings_widget.py" line="202"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>视频打开时处于暂停状态，以便您可以手动开始播放。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="191"/>
+        <location filename="../app/widgets/settings_widget.py" line="204"/>
         <source>Link Folder</source>
         <translation>关联文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="193"/>
+        <location filename="../app/widgets/settings_widget.py" line="206"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>将同步文件夹（Dropbox、OneDrive 等）显示为播放列表。</translation>
     </message>
@@ -2834,7 +3187,7 @@ Create a new one:</source>
         <translation type="vanished">未选择文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="196"/>
+        <location filename="../app/widgets/settings_widget.py" line="209"/>
         <source>Choose…</source>
         <translation>选择……</translation>
     </message>
@@ -2847,22 +3200,22 @@ Create a new one:</source>
         <translation type="vanished">选择要关联的文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="215"/>
+        <location filename="../app/widgets/settings_widget.py" line="228"/>
         <source>Program stream (NDI)</source>
         <translation>节目串流 (NDI)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="217"/>
+        <location filename="../app/widgets/settings_widget.py" line="230"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>接收来自 OBS 的 DistroAV/NDI 输出作为实时投影。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="220"/>
+        <location filename="../app/widgets/settings_widget.py" line="233"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
         <translation>请在 DistroAV 中启用“主输出”(Main Output)，然后选择 OBS 显示的 NDI 源。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="222"/>
+        <location filename="../app/widgets/settings_widget.py" line="235"/>
         <source>Available NDI sources</source>
         <translation>可用的 NDI 源</translation>
     </message>
@@ -2871,12 +3224,12 @@ Create a new one:</source>
         <translation type="vanished">未加载任何源</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="223"/>
+        <location filename="../app/widgets/settings_widget.py" line="236"/>
         <source>Find sources</source>
         <translation>查找源</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="212"/>
+        <location filename="../app/widgets/settings_widget.py" line="225"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation>捕获投影显示器的场景。当显示内容时激活。</translation>
     </message>
@@ -2905,37 +3258,37 @@ Create a new one:</source>
         <translation type="vanished">未找到 NDI 源。请检查 OBS 中的 DistroAV 主输出是否已启用。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="226"/>
+        <location filename="../app/widgets/settings_widget.py" line="239"/>
         <source>Camera</source>
         <translation>摄像机</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="228"/>
+        <location filename="../app/widgets/settings_widget.py" line="241"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>在直播工具栏中显示摄像机按钮。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="230"/>
+        <location filename="../app/widgets/settings_widget.py" line="243"/>
         <source>Automatic Shortcuts</source>
         <translation>自动快捷键</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="232"/>
+        <location filename="../app/widgets/settings_widget.py" line="245"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>当视觉媒体状态改变时发送键盘快捷键。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="235"/>
+        <location filename="../app/widgets/settings_widget.py" line="248"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation>为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="237"/>
+        <location filename="../app/widgets/settings_widget.py" line="250"/>
         <source>No shortcuts configured.</source>
         <translation>未配置快捷键。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="238"/>
+        <location filename="../app/widgets/settings_widget.py" line="251"/>
         <source>Add shortcut</source>
         <translation>添加快捷键</translation>
     </message>
@@ -2948,7 +3301,7 @@ Create a new one:</source>
         <translation type="vanished">已禁用</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="250"/>
+        <location filename="../app/widgets/settings_widget.py" line="264"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
@@ -2957,7 +3310,7 @@ Create a new one:</source>
         <translation type="vanished">删除</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="243"/>
+        <location filename="../app/widgets/settings_widget.py" line="257"/>
         <source>Zoom Meetings</source>
         <translation>Zoom会议</translation>
     </message>
@@ -2974,12 +3327,12 @@ Create a new one:</source>
         <translation type="vanished">投影媒体时自动开启或停止屏幕共享。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="263"/>
+        <location filename="../app/widgets/settings_widget.py" line="277"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>空闲时在投影屏幕上显示的文字。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="273"/>
+        <location filename="../app/widgets/settings_widget.py" line="287"/>
         <source>Save changes</source>
         <translation>保存更改</translation>
     </message>
@@ -3012,8 +3365,8 @@ Create a new one:</source>
         <translation type="vanished">投影</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="147"/>
-        <location filename="../app/widgets/settings_widget.py" line="170"/>
+        <location filename="../app/widgets/settings_widget.py" line="157"/>
+        <location filename="../app/widgets/settings_widget.py" line="181"/>
         <source>About</source>
         <translation>关于</translation>
     </message>
@@ -3022,52 +3375,52 @@ Create a new one:</source>
         <translation type="vanished">版本1.0.0</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="275"/>
+        <location filename="../app/widgets/settings_widget.py" line="289"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>用于王国聚会所聚会的音视频应用程序。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="282"/>
+        <location filename="../app/widgets/settings_widget.py" line="296"/>
         <source>Official Website</source>
         <translation>官方网站</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="283"/>
+        <location filename="../app/widgets/settings_widget.py" line="297"/>
         <source>Changelog</source>
         <translation>更新日志</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="278"/>
+        <location filename="../app/widgets/settings_widget.py" line="292"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>本应用程序是独立开发的，与宾夕法尼亚法人守望台圣经书社或其任何相关组织无任何关联或认可关系。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="265"/>
+        <location filename="../app/widgets/settings_widget.py" line="279"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="244"/>
+        <location filename="../app/widgets/settings_widget.py" line="258"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>会议期间的音频控制和出席人数。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="246"/>
+        <location filename="../app/widgets/settings_widget.py" line="260"/>
         <source>Auto Screen Share</source>
         <translation>自动屏幕共享</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="247"/>
+        <location filename="../app/widgets/settings_widget.py" line="261"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>投放媒体时通过快捷键自动共享屏幕。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="248"/>
+        <location filename="../app/widgets/settings_widget.py" line="262"/>
         <source>Share hotkey</source>
         <translation>共享快捷键</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="249"/>
+        <location filename="../app/widgets/settings_widget.py" line="263"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
         <translation>使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
     </message>
@@ -3076,22 +3429,22 @@ Create a new one:</source>
         <translation type="vanished">未配置</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="257"/>
+        <location filename="../app/widgets/settings_widget.py" line="271"/>
         <source>Accessibility permission</source>
         <translation>辅助功能权限</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="258"/>
+        <location filename="../app/widgets/settings_widget.py" line="272"/>
         <source>Open Settings</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="251"/>
+        <location filename="../app/widgets/settings_widget.py" line="265"/>
         <source>Click Position</source>
         <translation>点击位置</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="253"/>
+        <location filename="../app/widgets/settings_widget.py" line="267"/>
         <source>Position to click after the share dialog opens to select the target.</source>
         <translation>共享对话框打开后用于选择目标的点击位置。</translation>
     </message>
@@ -3100,7 +3453,7 @@ Create a new one:</source>
         <translation type="vanished">位置: {x}, {y}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="255"/>
+        <location filename="../app/widgets/settings_widget.py" line="269"/>
         <source>Configure</source>
         <translation>配置</translation>
     </message>
@@ -3226,53 +3579,141 @@ Create a new one:</source>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="304"/>
+        <location filename="../app/widgets/timer_bridge.py" line="311"/>
         <source>Export PDF</source>
         <translation>导出 PDF</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="306"/>
+        <location filename="../app/widgets/timer_bridge.py" line="313"/>
         <source>PDF files (*.pdf)</source>
         <translation>PDF 文件 (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="317"/>
+        <location filename="../app/widgets/timer_bridge.py" line="324"/>
         <source>Weekend</source>
         <translation>周末</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="318"/>
+        <location filename="../app/widgets/timer_bridge.py" line="325"/>
         <source>Midweek</source>
         <translation>周中</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="332"/>
+        <location filename="../app/widgets/timer_bridge.py" line="339"/>
         <source>Export failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="333"/>
+        <location filename="../app/widgets/timer_bridge.py" line="340"/>
         <source>Could not export the timer PDF:
 {error}</source>
         <translation>无法导出计时器 PDF：
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="339"/>
+        <location filename="../app/widgets/timer_bridge.py" line="346"/>
         <source>PDF exported</source>
         <translation>PDF 已导出</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="340"/>
+        <location filename="../app/widgets/timer_bridge.py" line="347"/>
         <source>Saved to:
 {path}</source>
         <translation>已保存到：
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="462"/>
+        <location filename="../app/widgets/timer_bridge.py" line="496"/>
         <source>this monitor</source>
         <translation>此显示器</translation>
+    </message>
+</context>
+<context>
+    <name>TimerPdfExport</name>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="35"/>
+        <source>Meeting timer report</source>
+        <translation>聚会计时器报告</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="36"/>
+        <source>{meeting_type} - {week}</source>
+        <translation>{meeting_type} - {week}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="37"/>
+        <source>Total {time}</source>
+        <translation>总计 {time}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="38"/>
+        <source>In progress</source>
+        <translation>进行中</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="39"/>
+        <source>Running</source>
+        <translation>进行中</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="40"/>
+        <source>Completed</source>
+        <translation>已完成</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="41"/>
+        <source>Not started</source>
+        <translation>未开始</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="42"/>
+        <source>Page {page}</source>
+        <translation>第 {page} 页</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="43"/>
+        <source>Part</source>
+        <translation>环节</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="44"/>
+        <source>Planned</source>
+        <translation>计划</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="45"/>
+        <source>Started</source>
+        <translation>开始</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="46"/>
+        <source>Finished</source>
+        <translation>结束</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="47"/>
+        <source>Duration</source>
+        <translation>时长</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="48"/>
+        <source>Status</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="49"/>
+        <source>Generated</source>
+        <translation>生成</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="50"/>
+        <source>Within time</source>
+        <translation>未超时</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Over time</source>
+        <translation>超时</translation>
     </message>
 </context>
 <context>
@@ -3477,29 +3918,29 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WifiReceiveWidget</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="606"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="607"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1358"/>
         <source>Receive via Wi-Fi</source>
         <translation>通过Wi-Fi接收</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="621"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="622"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1359"/>
         <source>Starting server…</source>
         <translation>正在启动服务器…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="665"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="666"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1360"/>
         <source>Scan the QR code with your phone.
 Both devices must be on the same Wi-Fi network.</source>
         <translation>用手机扫描二维码。
 两台设备必须连接到同一Wi-Fi网络。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="675"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="695"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1370"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="676"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="696"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
         <source>Copy link</source>
         <translation>复制链接</translation>
     </message>
@@ -3508,91 +3949,91 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation type="vanished">服务器在15分钟无操作后自动停止。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="720"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="721"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
         <source>  Stop server</source>
         <translation>停止服务器</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="707"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="708"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1361"/>
         <source>The server stops automatically after 15 minutes outside this screen.</source>
         <translation>离开此界面15分钟后，服务器会自动停止。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="740"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1371"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="741"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
         <source>Received media</source>
         <translation>已接收媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="754"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1372"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="755"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
         <source>  Send all to playlist</source>
         <translation>全部发送到播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="795"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1373"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="796"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
         <source>Files sent from your phone will appear here.</source>
         <translation>从手机发送的文件将显示在此处。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="836"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="837"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
         <source>Receive media via Wi-Fi</source>
         <translation>通过Wi-Fi接收媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="845"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="907"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="846"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="908"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
         <source>Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio.</source>
         <translation>连接到相同的Wi-Fi，并在手机上打开链接以发送照片、视频或音频。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="859"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="860"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
         <source>  Start server</source>
         <translation>启动服务器</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="879"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
         <source>Send Media</source>
         <translation>发送媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
         <source>Select or drag photos, videos or audio files</source>
         <translation>选择或拖放照片、视频或音频文件</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
         <source>Send media</source>
         <translation>发送媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
         <source>Drag files here</source>
         <translation>将文件拖放到此处</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
         <source>✓ File sent!</source>
         <translation>✓ 文件已发送！</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="885"/>
         <source>Upload error</source>
         <translation>上传错误</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1120"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1116"/>
         <source>Could not start the server.</source>
         <translation>无法启动服务器。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1125"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1121"/>
         <source>Server stopped due to inactivity.</source>
         <translation>服务器因无操作而已停止。</translation>
     </message>
@@ -3600,75 +4041,75 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="57"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="58"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>空闲时在投影屏幕上显示的文字。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="75"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="219"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="292"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="76"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="222"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="295"/>
         <source>Fetching annual text…</source>
         <translation>正在获取年度经文…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="89"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="275"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="90"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="278"/>
         <source>Update</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="127"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="128"/>
         <source>Scripture:</source>
         <translation>经文：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="136"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="137"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>例如：意识到自己属灵需要的人有福了。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="147"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="148"/>
         <source>Bible reference:</source>
         <translation>圣经出处：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="155"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="156"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>例如：马太福音5:3。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="164"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="165"/>
         <source>Save changes</source>
         <translation>保存更改</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="267"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="270"/>
         <source>Annual text updated for {year}</source>
         <translation>{year}年度经文已更新</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="298"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="301"/>
         <source>Loading…</source>
         <translation>正在加载……</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="305"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="308"/>
         <source>Could not fetch annual text</source>
         <translation>无法获取年度经文</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="312"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="315"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="335"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="338"/>
         <source>▲  Edit text manually</source>
         <translation>▲  手动编辑经文</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="337"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="340"/>
         <source>▼  Edit text manually</source>
         <translation>▼  手动编辑经文</translation>
     </message>
@@ -4209,22 +4650,22 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_MediaCard</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="423"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
         <source>video</source>
         <translation>视频</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
         <source>audio</source>
         <translation>音频</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="426"/>
         <source>image</source>
         <translation>图片</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="453"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="454"/>
         <source>Add to playlist</source>
         <translation>添加到播放列表</translation>
     </message>
@@ -4401,79 +4842,79 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_PlaylistEditActionsMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>item</source>
         <translation>项</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>items</source>
         <translation>项</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="142"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="143"/>
         <source>✓  1 file added</source>
         <translation>✓  已添加1个文件</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="144"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="145"/>
         <source>✓  {count} files added</source>
         <translation>✓  已添加{count}个文件</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="146"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="147"/>
         <source>({count} duplicate skipped)</source>
         <translation>（已跳过{count}个重复项）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="148"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="149"/>
         <source>({count} duplicates skipped)</source>
         <translation>（已跳过{count}个重复项）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="155"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="156"/>
         <source>⚠  File already in playlist</source>
         <translation>⚠  文件已在播放列表中</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="157"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="158"/>
         <source>⚠  Files already in playlist</source>
         <translation>⚠  文件已在播放列表中</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="237"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="243"/>
         <source>Add Media</source>
         <translation>添加媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="307"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="313"/>
         <source>Export .jwlplaylist</source>
         <translation>导出 .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="321"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="333"/>
         <source>Export complete</source>
         <translation>导出完成</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="322"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="334"/>
         <source>Exported:
 {path}</source>
         <translation>已导出：
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="325"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="337"/>
         <source>Export error</source>
         <translation>导出错误</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="336"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="348"/>
         <source>Current playback</source>
         <translation>当前播放</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="350"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="362"/>
         <source>Save playlist</source>
         <translation>保存播放列表</translation>
     </message>
@@ -4481,70 +4922,70 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_PlaylistEditImportMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="35"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="36"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="214"/>
         <source>🔄  Converting PDF: {name}…</source>
         <translation>🔄  正在转换PDF：{name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="42"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="228"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="43"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
         <source>🔄  {name} — page {current}/{total}…</source>
         <translation>🔄  {name} — 第{current}/{total}页…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="86"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="272"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="87"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="265"/>
         <source>✓  {name} opened ({pages} pages)</source>
         <translation>✓  已打开{name}（共{pages}页）</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="93"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="94"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  转换PDF时出错：{error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="127"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="120"/>
         <source>🔄  Opening {name}…</source>
         <translation>正在打开 {name}...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="166"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="159"/>
         <source>⚠  No media found in {name}</source>
         <translation>在 {name} 中未找到媒体</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="182"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="175"/>
         <source>images</source>
         <translation>图片</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="184"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="177"/>
         <source>videos</source>
         <translation>视频</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="187"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="180"/>
         <source>unresolved</source>
         <translation>未解析</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="193"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="186"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>无法打开 .jwpub：{err}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="335"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="320"/>
         <source>⚠  Could not import: {name}</source>
         <translation>⚠ 无法导入：{name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="343"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="328"/>
         <source>✓  1 item imported</source>
         <translation>✓ 已导入 1 个项目</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="346"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="331"/>
         <source>✓  {count} items imported</source>
         <translation>✓ 已导入 {count} 个项目</translation>
     </message>
@@ -4591,24 +5032,30 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
         <translation>搜索 JW.org...</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="175"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="148"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="159"/>
+        <source>Add Song...</source>
+        <translation>添加诗歌...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/PlaylistEditView.qml" line="183"/>
         <source>Play all (in order)</source>
         <translation>全部播放（按顺序）</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="180"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="188"/>
         <source>Play in random order</source>
         <translation>随机播放</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="151"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="185"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="159"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="193"/>
         <source>Section</source>
         <translation>板块</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="152"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="186"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="160"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="194"/>
         <source>Add a new section</source>
         <translation>添加新板块</translation>
     </message>
@@ -4624,14 +5071,14 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation type="vanished">正在处理 {n} 个文件……</translation>
     </message>
     <message numerus="yes">
-        <location filename="../app/widgets/playlist/widget.py" line="327"/>
+        <location filename="../app/widgets/playlist/widget.py" line="332"/>
         <source>Processing %n file(s)...</source>
         <translation>
             <numerusform>正在处理 %n 个文件……</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="342"/>
+        <location filename="../app/widgets/playlist/widget.py" line="352"/>
         <source>All files processed</source>
         <translation>所有文件已处理完毕</translation>
     </message>
@@ -4644,40 +5091,40 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation type="vanished">项</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>Section name:</source>
         <translation>板块名称：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>E.g.: Introduction</source>
         <translation>例如：引言</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="567"/>
+        <location filename="../app/widgets/playlist/widget.py" line="577"/>
         <source>New Section</source>
         <translation>新板块</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>Subsection name:</source>
         <translation>小节名称：</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>E.g.: Part 1</source>
         <translation>例如：第 1 部分</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="590"/>
+        <location filename="../app/widgets/playlist/widget.py" line="600"/>
         <source>New Subsection</source>
         <translation>新建小节</translation>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1525"/>
-        <location filename="../app/widgets/playlist/widget.py" line="677"/>
+        <location filename="../app/widgets/playlist/widget.py" line="687"/>
         <source>Rename section</source>
         <translation>重命名板块</translation>
     </message>
@@ -4688,31 +5135,31 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1562"/>
-        <location filename="../app/widgets/playlist/widget.py" line="693"/>
+        <location filename="../app/widgets/playlist/widget.py" line="703"/>
         <source>Delete section</source>
         <translation>删除板块</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="694"/>
+        <location filename="../app/widgets/playlist/widget.py" line="704"/>
         <source>Delete section &quot;{name}&quot;?
 Items inside will be kept.</source>
         <translation>要删除“{name}”板块吗？
 其中的内容将被保留。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="767"/>
+        <location filename="../app/widgets/playlist/widget.py" line="777"/>
         <source>Media is playing</source>
         <translation>媒体正在播放</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="768"/>
+        <location filename="../app/widgets/playlist/widget.py" line="778"/>
         <source>Cannot remove &quot;{title}&quot; while it is currently playing.
 Stop the projection and try again.</source>
         <translation>无法移除正在播放的“{title}”。
 请先停止投影，然后重试。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="789"/>
+        <location filename="../app/widgets/playlist/widget.py" line="799"/>
         <source>Rename media</source>
         <translation>重命名媒体</translation>
     </message>
@@ -4849,120 +5296,120 @@ Stop the projection and try again.</source>
 <context>
     <name>_PlaylistListView</name>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="90"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="253"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="91"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
         <source>Playlists</source>
         <translation>播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="98"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="99"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="102"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="370"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="103"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="377"/>
         <source>Import .jwlplaylist</source>
         <translation>导入 .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="109"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="110"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="257"/>
         <source>New Playlist</source>
         <translation>新建播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="135"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="260"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="136"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
         <source>My Playlists</source>
         <translation>我的播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="148"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="258"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="149"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="259"/>
         <source>No playlists yet.
 Click &apos;＋ New Playlist&apos; to create one.</source>
         <translation>还没有播放列表。
 点击&quot;＋ 新建播放列表&quot;创建一个。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="157"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="158"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="262"/>
         <source>Link Folder</source>
         <translation>关联文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="171"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="263"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="172"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="264"/>
         <source>No subfolders found.
 Create subfolders inside the linked folder to use as playlists.</source>
         <translation>未找到子文件夹。
 请在关联的文件夹内创建子文件夹，以便用作播放列表。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="295"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="296"/>
         <source>Rename playlist</source>
         <translation>重命名播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="320"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="321"/>
         <source>Media is playing</source>
         <translation>媒体正在播放</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="322"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="323"/>
         <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
 Stop the projection and try again.</source>
         <translation>无法删除播放列表“{name}”，因为其中一个项目正在播放。
 请先停止投影，然后重试。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="328"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
         <source>Delete Playlist</source>
         <translation>删除播放列表</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="330"/>
         <source>Delete playlist &quot;{name}&quot;?
 This action cannot be undone.</source>
         <translation>删除播放列表“{name}”？
 此操作无法撤销。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="347"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="486"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="348"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="485"/>
         <source>Export .jwlplaylist</source>
         <translation>导出 .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="361"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="497"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="368"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="502"/>
         <source>Export complete</source>
         <translation>导出完成</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="362"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="498"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="369"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="503"/>
         <source>Exported:
 {path}</source>
         <translation>已导出：
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="365"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="501"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="372"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="506"/>
         <source>Export error</source>
         <translation>导出错误</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="419"/>
         <source>Import error</source>
         <translation>导入错误</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="421"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
         <source>Could not import:
 {name}
 
@@ -4973,35 +5420,35 @@ This action cannot be undone.</source>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="435"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="434"/>
         <source>Rename folder</source>
         <translation>重命名文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="445"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="467"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="444"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="466"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="453"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="452"/>
         <source>Delete folder</source>
         <translation>删除文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="455"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="454"/>
         <source>Delete folder &quot;{name}&quot; and all its contents from disk?
 This action cannot be undone.</source>
         <translation>是否从磁盘删除文件夹“{name}”及其所有内容？
 此操作无法撤销。</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="479"/>
         <source>Empty folder</source>
         <translation>清空文件夹</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="481"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation>在“{name}”中未找到媒体文件。</translation>
     </message>
@@ -5099,17 +5546,17 @@ This action cannot be undone.</source>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="42"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="114"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>上帝话语的宝藏</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="43"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="115"/>
         <source>APPLY YOURSELF TO THE FIELD MINISTRY</source>
         <translation>用心准备传道工作</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="44"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="116"/>
         <source>LIVING AS CHRISTIANS</source>
         <translation>基督徒的生活</translation>
     </message>
@@ -5118,12 +5565,12 @@ This action cannot be undone.</source>
         <translation type="vanished">会众研经班</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="46"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="118"/>
         <source>Watchtower Study</source>
         <translation>守望台研读</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="45"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="117"/>
         <source>PUBLIC TALK</source>
         <translation>公众演讲</translation>
     </message>
@@ -5135,6 +5582,42 @@ This action cannot be undone.</source>
         <location filename="../app/widgets/settings/auto_key_dialog.py" line="94"/>
         <source>Click to record</source>
         <translation>点击以录制</translation>
+    </message>
+</context>
+<context>
+    <name>_TimePickerPopup</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="275"/>
+        <source>Hour</source>
+        <translation>小时</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="276"/>
+        <source>Minute</source>
+        <translation>分钟</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="286"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="289"/>
+        <source>Apply</source>
+        <translation>应用</translation>
+    </message>
+</context>
+<context>
+    <name>_TimeStepper</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="198"/>
+        <source>Increase</source>
+        <translation>增加</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="199"/>
+        <source>Decrease</source>
+        <translation>减少</translation>
     </message>
 </context>
 <context>
@@ -5391,68 +5874,68 @@ This cannot be undone.</source>
         <translation>正在显示图片</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="98"/>
-        <location filename="../app/controllers/open_media_controller.py" line="304"/>
-        <location filename="../app/controllers/open_media_controller.py" line="314"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="112"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="122"/>
+        <location filename="../app/controllers/open_media_controller.py" line="102"/>
+        <location filename="../app/controllers/open_media_controller.py" line="311"/>
+        <location filename="../app/controllers/open_media_controller.py" line="321"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="116"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="126"/>
         <source>Unsupported file</source>
         <translation>不支持的文件</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="101"/>
+        <location filename="../app/controllers/open_media_controller.py" line="105"/>
         <source>File format not supported. Use videos (mp4, mkv, mov…) or images (jpg, png, webp…).</source>
         <translation>不支持此文件格式。请使用视频（mp4、mkv、mov…）或图片（jpg、png、webp…）。</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="143"/>
-        <location filename="../app/controllers/open_media_controller.py" line="265"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="248"/>
+        <location filename="../app/controllers/open_media_controller.py" line="147"/>
+        <location filename="../app/controllers/open_media_controller.py" line="269"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="252"/>
         <source>Error opening PDF</source>
         <translation>打开PDF时出错</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="144"/>
-        <location filename="../app/controllers/open_media_controller.py" line="266"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="249"/>
+        <location filename="../app/controllers/open_media_controller.py" line="148"/>
+        <location filename="../app/controllers/open_media_controller.py" line="270"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="253"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  转换PDF时出错：{error}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="221"/>
+        <location filename="../app/controllers/open_media_controller.py" line="225"/>
         <source>No media found</source>
         <translation>未找到媒体</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="222"/>
+        <location filename="../app/controllers/open_media_controller.py" line="226"/>
         <source>No media items found in {name}.</source>
         <translation>在 {name} 中未找到媒体。</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="238"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="312"/>
+        <location filename="../app/controllers/open_media_controller.py" line="242"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="316"/>
         <source>Error opening .jwpub</source>
         <translation>打开 .jwpub 时出错</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="305"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="113"/>
+        <location filename="../app/controllers/open_media_controller.py" line="312"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="117"/>
         <source>Invalid or corrupted .jwlplaylist file:
 %1</source>
         <translation>.jwlplaylist 文件无效或已损坏：
 %1</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="315"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="123"/>
+        <location filename="../app/controllers/open_media_controller.py" line="322"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="127"/>
         <source>Error reading %1:
 %2</source>
         <translation>读取 %1 时出错：
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="39"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="189"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="43"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="193"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="287"/>
         <source>Playlist &quot;%1&quot;
 created successfully!</source>
@@ -5460,7 +5943,7 @@ created successfully!</source>
 创建成功！</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="52"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="56"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="257"/>
         <source>Added to playlist
 &quot;%1&quot;</source>
@@ -5468,8 +5951,8 @@ created successfully!</source>
 “%1”</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="59"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="209"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="63"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="213"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="264"/>
         <source>This media is already in
 playlist &quot;%1&quot;</source>
@@ -5477,24 +5960,24 @@ playlist &quot;%1&quot;</source>
 播放列表“%1”中</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="69"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="73"/>
         <source>Download failed</source>
         <translation>下载失败</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="70"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="74"/>
         <source>Could not download %1:
 %2</source>
         <translation>无法下载 %1：
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="177"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="181"/>
         <source>No media found in {name}</source>
         <translation>{name} 中没有找到媒体文件</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="203"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="207"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="307"/>
         <source>%1 file(s) added
 to playlist &quot;%2&quot;</source>
@@ -5502,18 +5985,18 @@ to playlist &quot;%2&quot;</source>
 播放列表“%2”</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="230"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="271"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="234"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="275"/>
         <source>Opening {name}...</source>
         <translation>正在打开 {name}……</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="313"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="317"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>无法打开 .jwpub：{err}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="335"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="339"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="73"/>
         <source>Add to Playlist</source>
         <translation>添加到播放列表</translation>
@@ -5585,77 +6068,6 @@ with %2 file(s)!</source>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="420"/>
         <source>Close</source>
         <translation>关闭</translation>
-    </message>
-</context>
-<context>
-    <name>TimerPdfExport</name>
-    <message>
-        <source>Meeting timer report</source>
-        <translation>聚会计时器报告</translation>
-    </message>
-    <message>
-        <source>{meeting_type} - {week}</source>
-        <translation>{meeting_type} - {week}</translation>
-    </message>
-    <message>
-        <source>Total {time}</source>
-        <translation>总计 {time}</translation>
-    </message>
-    <message>
-        <source>In progress</source>
-        <translation>进行中</translation>
-    </message>
-    <message>
-        <source>Running</source>
-        <translation>进行中</translation>
-    </message>
-    <message>
-        <source>Completed</source>
-        <translation>已完成</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>未开始</translation>
-    </message>
-    <message>
-        <source>Page {page}</source>
-        <translation>第 {page} 页</translation>
-    </message>
-    <message>
-        <source>Part</source>
-        <translation>环节</translation>
-    </message>
-    <message>
-        <source>Planned</source>
-        <translation>计划</translation>
-    </message>
-    <message>
-        <source>Started</source>
-        <translation>开始</translation>
-    </message>
-    <message>
-        <source>Finished</source>
-        <translation>结束</translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation>时长</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>状态</translation>
-    </message>
-    <message>
-        <source>Generated</source>
-        <translation>生成</translation>
-    </message>
-    <message>
-        <source>Within time</source>
-        <translation>未超时</translation>
-    </message>
-    <message>
-        <source>Over time</source>
-        <translation>超时</translation>
     </message>
 </context>
 <context>

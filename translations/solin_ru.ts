@@ -27,203 +27,243 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="153"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="106"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="225"/>
         <source>Clock</source>
         <translation>Часы</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="157"/>
         <source>Type</source>
-        <translation>Тип</translation>
+        <translation type="vanished">Тип</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="86"/>
         <source>Digital</source>
         <translation>Цифровой</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="88"/>
         <source>Analog</source>
         <translation>Аналоговый</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="170"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="90"/>
+        <source>Analog + digital</source>
+        <translation>Аналоговый + цифровой</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
+        <source>Signature</source>
+        <translation>Подпись</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>
+        <source>Classic</source>
+        <translation>Классический</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="104"/>
+        <source>Timer</source>
+        <translation>Таймер</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="108"/>
+        <source>Clock + timer</source>
+        <translation>Часы + таймер</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="229"/>
+        <source>Clock face</source>
+        <translation>Циферблат</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="244"/>
+        <source>Analog style</source>
+        <translation>Аналоговый стиль</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="260"/>
         <source>Format</source>
         <translation>Формат</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>24-hour</source>
         <translation>24-часовой</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>12-hour</source>
         <translation>12-часовой</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="184"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="274"/>
         <source>Show seconds</source>
         <translation>Показывать секунды</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="195"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="285"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="205"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="295"/>
         <source>Part timer</source>
         <translation>Таймер пункта</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="209"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="299"/>
+        <source>During parts</source>
+        <translation>Во время пунктов программы</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="312"/>
         <source>Count direction</source>
         <translation>Направление отсчёта</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count down</source>
         <translation>Обратный отсчёт</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count up</source>
         <translation>Прямой отсчёт</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="220"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="323"/>
         <source>Hold duration when stopped</source>
         <translation>Сохранять длительность при остановке</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>Less</source>
         <translation>Меньше</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>More</source>
         <translation>Больше</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="232"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="335"/>
         <source>Display</source>
         <translation>Экран</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="237"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="340"/>
         <source>Display size</source>
         <translation>Размер отображения</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="269"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="372"/>
         <source>Monitors</source>
         <translation>Мониторы</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="271"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="374"/>
         <source>Show timer</source>
         <translation>Показывать таймер</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="324"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="427"/>
         <source>Reserved for the timer · %1</source>
         <translation>Зарезервировано для таймера · %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
         <source>Unreserve</source>
         <translation>Снять резервирование</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="689"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="792"/>
         <source>Reserve</source>
         <translation>Зарезервировать</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="334"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Зарезервировать этот монитор для таймера</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="362"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="465"/>
         <source>No secondary monitors detected</source>
         <translation>Вторичный монитор не обнаружен</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="381"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="484"/>
         <source>Previous week</source>
         <translation>Предыдущая неделя</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="404"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="507"/>
         <source>Not the current week</source>
         <translation>Не текущая неделя</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="414"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="517"/>
         <source>Next week</source>
         <translation>Следующая неделя</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="420"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="523"/>
         <source>Back to this week</source>
         <translation>Вернуться к этой неделе</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Midweek</source>
         <translation>Среди недели</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Weekend</source>
         <translation>Выходные</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="540"/>
         <source>Export PDF</source>
         <translation>Экспорт PDF</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="447"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="550"/>
         <source>Meeting parts</source>
         <translation>Пункты программы встречи</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="532"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="635"/>
         <source>Parts</source>
         <translation>Пункты</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>Fewer parts</source>
         <translation>Меньше пунктов</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>More parts</source>
         <translation>Больше пунктов</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="553"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="656"/>
         <source>%1 total</source>
         <translation>Всего %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="662"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="765"/>
         <source>Monitor in use by media</source>
         <translation>Монитор используется медиа</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="669"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="772"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Медиа сейчас использует %1. Зарезервировать его для таймера и убрать медиа с этого монитора?</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="683"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="786"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
@@ -382,6 +422,151 @@
         <location filename="../app/widgets/settings/auto_share_section.py" line="349"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
         <translation>Разрешите Solin в разделе «Универсальный доступ» macOS, чтобы автоматические щелчки работали.</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongPopup</name>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="103"/>
+        <location filename="../app/widgets/background_song_popup.py" line="324"/>
+        <source>Background Song</source>
+        <translation>Фоновая песня</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="142"/>
+        <location filename="../app/widgets/background_song_popup.py" line="325"/>
+        <source>Next song</source>
+        <translation>Следующая песня</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="178"/>
+        <location filename="../app/widgets/background_song_popup.py" line="326"/>
+        <source>Meeting timing</source>
+        <translation>Время встречи</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="186"/>
+        <location filename="../app/widgets/background_song_popup.py" line="331"/>
+        <source>At start</source>
+        <translation>Во время начала</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="188"/>
+        <location filename="../app/widgets/background_song_popup.py" line="327"/>
+        <source>Stop before meeting</source>
+        <translation>Остановить до встречи</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="193"/>
+        <location filename="../app/widgets/background_song_popup.py" line="329"/>
+        <source>Stops playback before the scheduled meeting time.</source>
+        <translation>Останавливает воспроизведение до запланированного времени встречи.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="199"/>
+        <location filename="../app/widgets/background_song_popup.py" line="332"/>
+        <source>Fade duration</source>
+        <translation>Длительность затухания</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="204"/>
+        <location filename="../app/widgets/background_song_popup.py" line="333"/>
+        <source>Lowers the volume before playback stops.</source>
+        <translation>Постепенно уменьшает громкость перед остановкой воспроизведения.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="244"/>
+        <source>No song playing</source>
+        <translation>Песня не воспроизводится</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="271"/>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="275"/>
+        <source>Start</source>
+        <translation>Начать</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongService</name>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="225"/>
+        <source>Automatic background song is disabled.</source>
+        <translation>Автоматическая фоновая песня отключена.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="259"/>
+        <source>Enable automatic background song in Settings.</source>
+        <translation>Включите автоматическую фоновую песню в настройках.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="294"/>
+        <location filename="../app/core/jw/background_song_service.py" line="538"/>
+        <source>Stopping background song...</source>
+        <translation>Остановка фоновой песни...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="305"/>
+        <source>Configure the meeting day/time in Settings.</source>
+        <translation>Укажите день и время встречи в настройках.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="314"/>
+        <source>Waiting for the next configured meeting.</source>
+        <translation>Ожидание следующей настроенной встречи.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="321"/>
+        <source>Stopped for this meeting.</source>
+        <translation>Остановлено для этой встречи.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="336"/>
+        <location filename="../app/core/jw/background_song_service.py" line="492"/>
+        <location filename="../app/core/jw/background_song_service.py" line="515"/>
+        <location filename="../app/core/jw/background_song_service.py" line="532"/>
+        <source>Stopped before the meeting.</source>
+        <translation>Остановлено до встречи.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="373"/>
+        <source>Audio songs are unavailable for sign-language media.</source>
+        <translation>Аудиопесни недоступны для материалов на жестовом языке.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="391"/>
+        <location filename="../app/core/jw/background_song_service.py" line="442"/>
+        <location filename="../app/core/jw/background_song_service.py" line="464"/>
+        <source>Loading audio songs...</source>
+        <translation>Загрузка аудиопесен...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="427"/>
+        <source>Ready.</source>
+        <translation>Готово.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="434"/>
+        <source>Could not load audio songs.</source>
+        <translation>Не удалось загрузить аудиопесни.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="462"/>
+        <source>No audio songs available.</source>
+        <translation>Нет доступных аудиопесен.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="482"/>
+        <source>Playing background song.</source>
+        <translation>Воспроизводится фоновая песня.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="627"/>
+        <source>Background song stopped.</source>
+        <translation>Фоновая песня остановлена.</translation>
     </message>
 </context>
 <context>
@@ -633,7 +818,7 @@
         <location filename="../app/widgets/cache_media_widget.py" line="428"/>
         <location filename="../app/widgets/cache_media_widget.py" line="677"/>
         <source>Delete selected</source>
-        <translation>Удалить {n}</translation>
+        <translation>Удалить выбранное</translation>
     </message>
     <message>
         <location filename="../app/widgets/cache_media_widget.py" line="459"/>
@@ -786,22 +971,22 @@
 <context>
     <name>JWMediaCatalogBridge</name>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="410"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="453"/>
         <source>Catalog loaded</source>
         <translation>Каталог загружен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="412"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="455"/>
         <source>Loading {done}/{total}</source>
         <translation>Загрузка {done}/{total}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="415"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="458"/>
         <source>Loading</source>
         <translation>Загрузка</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="885"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="889"/>
         <source>{title} added</source>
         <translation>{title} добавлено</translation>
     </message>
@@ -856,12 +1041,12 @@
         <translation>Видео не найдены</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1327"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="85"/>
         <source>Where to add?</source>
         <translation>Куда добавить?</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1454"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="206"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
@@ -875,19 +1060,62 @@
     </message>
 </context>
 <context>
+    <name>JWSongsBridge</name>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="142"/>
+        <source>Add video song</source>
+        <translation>Добавить видеопесню</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="149"/>
+        <source>Songs from JW.org</source>
+        <translation>Песни с JW.org</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="255"/>
+        <source>Search by number or title...</source>
+        <translation>Поиск по номеру или названию...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="330"/>
+        <source>No results</source>
+        <translation>Нет результатов</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="331"/>
+        <source>songs</source>
+        <translation>песни</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="406"/>
+        <source>No songs found</source>
+        <translation>Песни не найдены</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="404"/>
+        <source>Loading songs...</source>
+        <translation>Загрузка песен...</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="459"/>
+        <source>{title} added</source>
+        <translation>{title} добавлено</translation>
+    </message>
+</context>
+<context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="18"/>
+        <location filename="../app/widgets/settings/language_section.py" line="19"/>
         <source>Interface</source>
         <translation>Интерфейс</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="27"/>
+        <location filename="../app/widgets/settings/language_section.py" line="28"/>
         <source>JW Media</source>
         <translation>JW Медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="61"/>
+        <location filename="../app/widgets/settings/language_section.py" line="62"/>
         <source>(same as interface)</source>
         <translation>(равно интерфейсу)</translation>
     </message>
@@ -895,7 +1123,7 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../app/main_window.py" line="101"/>
+        <location filename="../app/main_window.py" line="104"/>
         <location filename="../app/controllers/main_window_nav.py" line="9"/>
         <source>Solin</source>
         <translation>Solin</translation>
@@ -1210,94 +1438,113 @@ with %2 file(s)!</source>
 <context>
     <name>MediaLibraryWidget</name>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Songs</source>
         <translation>Песни</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Original Songs</source>
         <translation>Оригинальные песни</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search song...</source>
         <translation>Поиск песни...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search clip...</source>
         <translation>Поиск клипа...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="552"/>
+        <location filename="../app/widgets/media_library_widget.py" line="560"/>
         <source>Refresh</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="553"/>
+        <location filename="../app/widgets/media_library_widget.py" line="561"/>
         <source>Play all (in order)</source>
         <translation>Воспроизвести все (по порядку)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="554"/>
+        <location filename="../app/widgets/media_library_widget.py" line="562"/>
         <source>Play in random order</source>
         <translation>Воспроизводить в случайном порядке</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="555"/>
-        <location filename="../app/widgets/media_library_widget.py" line="727"/>
-        <location filename="../app/widgets/media_library_widget.py" line="780"/>
+        <location filename="../app/widgets/media_library_widget.py" line="798"/>
         <source>Download all video songs</source>
         <translation>Скачать все видео-песни</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="556"/>
+        <location filename="../app/widgets/media_library_widget.py" line="564"/>
         <source>Video songs</source>
         <translation>Песни в видео</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="557"/>
+        <location filename="../app/widgets/media_library_widget.py" line="565"/>
         <source>Audio songs</source>
         <translation>Песни в аудио</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
+        <location filename="../app/widgets/media_library_widget.py" line="642"/>
         <source>Loading songs...</source>
         <translation>Загрузка песен...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
         <source>Loading clips...</source>
         <translation>Загрузка клипов...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="635"/>
+        <location filename="../app/widgets/media_library_widget.py" line="658"/>
         <source>Updated on {date}</source>
         <translation>Обновлено {date}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading songs. Check your connection.</source>
         <translation>Ошибка при загрузке песен. Проверьте соединение.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading clips. Check your connection.</source>
         <translation>Ошибка при загрузке клипов. Проверьте соединение.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="729"/>
+        <location filename="../app/widgets/media_library_widget.py" line="797"/>
+        <source>Download all audio songs</source>
+        <translation>Загрузить все аудиопесни</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="803"/>
+        <source>Download {count} audio songs for offline playback?</source>
+        <translation>Загрузить {count} аудиопесен для воспроизведения без подключения к интернету?</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="806"/>
         <source>Download {count} video songs for offline playback?</source>
         <translation>Скачать {count} видео-песен для воспроизведения офлайн?</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="778"/>
+        <location filename="../app/widgets/media_library_widget.py" line="811"/>
+        <source>All audio songs downloaded</source>
+        <translation>Все аудиопесни загружены</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="816"/>
+        <source>Could not finish downloading all audio songs.</source>
+        <translation>Не удалось завершить загрузку всех аудиопесен.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="839"/>
         <source>Cancel downloads</source>
         <translation>Отменить скачивания</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="782"/>
+        <location filename="../app/widgets/media_library_widget.py" line="812"/>
         <source>All video songs downloaded</source>
         <translation>Все видео-песни скачаны</translation>
     </message>
@@ -1307,17 +1554,17 @@ with %2 file(s)!</source>
         <translation>Не удалось завершить скачивание всех видео-песен.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="822"/>
+        <location filename="../app/widgets/media_library_widget.py" line="885"/>
         <source>Download failed</source>
         <translation>Ошибка загрузки</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="892"/>
+        <location filename="../app/widgets/media_library_widget.py" line="955"/>
         <source>{count} songs available</source>
         <translation>{count} доступных песен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="893"/>
+        <location filename="../app/widgets/media_library_widget.py" line="956"/>
         <source>{count} clips available</source>
         <translation>{count} доступных клипов</translation>
     </message>
@@ -1325,44 +1572,59 @@ with %2 file(s)!</source>
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="22"/>
+        <location filename="../app/widgets/settings/media_section.py" line="23"/>
         <source>Auto-download on play</source>
         <translation>Автоматическая загрузка при воспроизведении</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="23"/>
+        <location filename="../app/widgets/settings/media_section.py" line="24"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Загружает воспроизводимые медиа для использования в автономном режиме.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="35"/>
+        <location filename="../app/widgets/settings/media_section.py" line="36"/>
         <source>Auto-download weekly study</source>
         <translation>Автоматически загружать исследование недели</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="36"/>
+        <location filename="../app/widgets/settings/media_section.py" line="37"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Загружает медиа собраний этой недели и следующей.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="48"/>
+        <location filename="../app/widgets/settings/media_section.py" line="49"/>
         <source>Song Announcement Mode</source>
         <translation>Режим объявления песен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="49"/>
+        <location filename="../app/widgets/settings/media_section.py" line="50"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Песня начинается без звука для отображения названия. Нажмите «Воспроизвести», чтобы начать.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="61"/>
+        <location filename="../app/widgets/settings/media_section.py" line="64"/>
+        <source>Automatic background song</source>
+        <translation>Автоматическая фоновая песня</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="77"/>
         <source>Start videos paused</source>
         <translation>Запускать видео на паузе</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="62"/>
+        <location filename="../app/widgets/settings/media_section.py" line="78"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Видео открываются на паузе, чтобы их можно было запустить вручную.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="105"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Укажите день и время встречи, прежде чем запускать автоматическое воспроизведение.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="106"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Воспроизводит аудиопесни перед настроенными встречами и постепенно уменьшает громкость перед началом.</translation>
     </message>
 </context>
 <context>
@@ -1401,6 +1663,79 @@ with %2 file(s)!</source>
         <location filename="../app/qml/MeetingPartRow.qml" line="208"/>
         <source>Start</source>
         <translation>Начать</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingScheduleSectionMixin</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="390"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="536"/>
+        <source>Used by automatic features that depend on the meeting start time.</source>
+        <translation>Используется автоматическими функциями, которые зависят от времени начала встречи.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="401"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="538"/>
+        <source>Midweek meeting</source>
+        <translation>Встреча в будний день</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="402"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="540"/>
+        <source>Day and time for the midweek meeting.</source>
+        <translation>День и время встречи в будний день.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="410"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="542"/>
+        <source>Weekend meeting</source>
+        <translation>Встреча в выходной день</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="411"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="544"/>
+        <source>Day and time for the weekend meeting.</source>
+        <translation>День и время встречи в выходной день.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="527"/>
+        <source>Not configured</source>
+        <translation>Не настроено</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="557"/>
+        <source>Monday</source>
+        <translation>Понедельник</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="558"/>
+        <source>Tuesday</source>
+        <translation>Вторник</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="559"/>
+        <source>Wednesday</source>
+        <translation>Среда</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="560"/>
+        <source>Thursday</source>
+        <translation>Четверг</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="561"/>
+        <source>Friday</source>
+        <translation>Пятница</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="562"/>
+        <source>Saturday</source>
+        <translation>Суббота</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="563"/>
+        <source>Sunday</source>
+        <translation>Воскресенье</translation>
     </message>
 </context>
 <context>
@@ -2433,36 +2768,47 @@ Create a new one:</source>
         <source>Expand toolbar</source>
         <translation type="vanished">Развернуть панель инструментов</translation>
     </message>
+    <message>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="355"/>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="362"/>
+        <source>Background Song</source>
+        <translation>Фоновая песня</translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="330"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="367"/>
         <source>Manage monitors</source>
         <translation>Управление мониторами</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="331"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="368"/>
+        <source>Background Song</source>
+        <translation>Фоновая песня</translation>
+    </message>
+    <message>
+        <location filename="../app/quick_toolbar_bridge.py" line="369"/>
         <source>OBS Scenes</source>
         <translation>Сцены OBS</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="332"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="370"/>
         <source>Zoom Settings</source>
         <translation>Настройки Zoom</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="333"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="371"/>
         <source>Camera</source>
         <translation>Камера</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="334"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="372"/>
         <source>Minimize</source>
         <translation>Свернуть</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="335"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="373"/>
         <source>Expand toolbar</source>
         <translation>Развернуть панель инструментов</translation>
     </message>
@@ -2570,14 +2916,14 @@ Create a new one:</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="82"/>
-        <location filename="../app/widgets/settings_widget.py" line="163"/>
+        <location filename="../app/widgets/settings_widget.py" line="86"/>
+        <location filename="../app/widgets/settings_widget.py" line="173"/>
         <source>Settings</source>
         <translation>Настройки</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="133"/>
-        <location filename="../app/widgets/settings_widget.py" line="168"/>
+        <location filename="../app/widgets/settings_widget.py" line="143"/>
+        <location filename="../app/widgets/settings_widget.py" line="179"/>
         <source>Annual Text</source>
         <translation>Ежегодный текст</translation>
     </message>
@@ -2586,22 +2932,22 @@ Create a new one:</source>
         <translation type="vanished">Текст, отображаемый на проекции, когда ничего не показывается.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="267"/>
+        <location filename="../app/widgets/settings_widget.py" line="281"/>
         <source>Scripture:</source>
         <translation>Писание:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="269"/>
+        <location filename="../app/widgets/settings_widget.py" line="283"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Например: Блаженны нищие духом, так как для них есть Царство Небесное.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="271"/>
+        <location filename="../app/widgets/settings_widget.py" line="285"/>
         <source>Bible reference:</source>
         <translation>Библейская ссылка:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="272"/>
+        <location filename="../app/widgets/settings_widget.py" line="286"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Например: Матфея 5:3.</translation>
     </message>
@@ -2610,7 +2956,7 @@ Create a new one:</source>
         <translation type="vanished">Воспроизведение</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="175"/>
+        <location filename="../app/widgets/settings_widget.py" line="186"/>
         <source>Auto-download on play</source>
         <translation>Автоматическая загрузка при воспроизведении</translation>
     </message>
@@ -2627,11 +2973,13 @@ Create a new one:</source>
         <translation type="vanished">Выключено</translation>
     </message>
     <message>
+        <location filename="../app/widgets/settings_widget.py" line="113"/>
+        <location filename="../app/widgets/settings_widget.py" line="176"/>
         <source>Meetings</source>
-        <translation type="vanished">Встречи</translation>
+        <translation>Встречи</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="179"/>
+        <location filename="../app/widgets/settings_widget.py" line="190"/>
         <source>Auto-download weekly study</source>
         <translation>Автоматически загружать исследование недели</translation>
     </message>
@@ -2648,7 +2996,7 @@ Create a new one:</source>
         <translation type="vanished">Песни</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="183"/>
+        <location filename="../app/widgets/settings_widget.py" line="194"/>
         <source>Song Announcement Mode</source>
         <translation>Режим объявления песен</translation>
     </message>
@@ -2657,36 +3005,36 @@ Create a new one:</source>
         <translation type="vanished">Песня начинается без звука, чтобы можно было отобразить название во время объявления. Нажмите «Воспроизвести», чтобы начать с начала.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="97"/>
-        <location filename="../app/widgets/settings_widget.py" line="164"/>
+        <location filename="../app/widgets/settings_widget.py" line="101"/>
+        <location filename="../app/widgets/settings_widget.py" line="174"/>
         <source>Language</source>
         <translation>Язык</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="103"/>
-        <location filename="../app/widgets/settings_widget.py" line="165"/>
+        <location filename="../app/widgets/settings_widget.py" line="107"/>
+        <location filename="../app/widgets/settings_widget.py" line="175"/>
         <source>Media</source>
         <translation>Медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="109"/>
-        <location filename="../app/widgets/settings_widget.py" line="166"/>
+        <location filename="../app/widgets/settings_widget.py" line="119"/>
+        <location filename="../app/widgets/settings_widget.py" line="177"/>
         <source>Folders</source>
         <translation>Папки</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="115"/>
-        <location filename="../app/widgets/settings_widget.py" line="167"/>
+        <location filename="../app/widgets/settings_widget.py" line="125"/>
+        <location filename="../app/widgets/settings_widget.py" line="178"/>
         <source>Integrations</source>
         <translation>Интеграции</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="171"/>
+        <location filename="../app/widgets/settings_widget.py" line="182"/>
         <source>Interface</source>
         <translation>Интерфейс</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="172"/>
+        <location filename="../app/widgets/settings_widget.py" line="183"/>
         <source>JW Media</source>
         <translation>JW Медиа</translation>
     </message>
@@ -2695,33 +3043,33 @@ Create a new one:</source>
         <translation type="vanished">(равно интерфейсу)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="139"/>
-        <location filename="../app/widgets/settings_widget.py" line="169"/>
+        <location filename="../app/widgets/settings_widget.py" line="149"/>
+        <location filename="../app/widgets/settings_widget.py" line="180"/>
         <source>Screens</source>
         <translation>Экраны</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="244"/>
+        <location filename="../app/widgets/settings_widget.py" line="258"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Управление звуком и подсчет присутствующих во время встреч.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="246"/>
+        <location filename="../app/widgets/settings_widget.py" line="260"/>
         <source>Auto Screen Share</source>
         <translation>Автоматическая демонстрация экрана</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="247"/>
+        <location filename="../app/widgets/settings_widget.py" line="261"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Автоматически демонстрирует экран с помощью горячих клавиш при показе медиа.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="248"/>
+        <location filename="../app/widgets/settings_widget.py" line="262"/>
         <source>Share hotkey</source>
         <translation>Горячая клавиша демонстрации</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="249"/>
+        <location filename="../app/widgets/settings_widget.py" line="263"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
         <translation>Использует одну горячую клавишу Zoom для запуска и остановки демонстрации экрана.</translation>
     </message>
@@ -2730,22 +3078,22 @@ Create a new one:</source>
         <translation type="vanished">Не настроено</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="257"/>
+        <location filename="../app/widgets/settings_widget.py" line="271"/>
         <source>Accessibility permission</source>
         <translation>Разрешение универсального доступа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="258"/>
+        <location filename="../app/widgets/settings_widget.py" line="272"/>
         <source>Open Settings</source>
         <translation>Открыть настройки</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="251"/>
+        <location filename="../app/widgets/settings_widget.py" line="265"/>
         <source>Click Position</source>
         <translation>Позиция щелчка</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="253"/>
+        <location filename="../app/widgets/settings_widget.py" line="267"/>
         <source>Position to click after the share dialog opens to select the target.</source>
         <translation>Позиция, по которой нужно щелкнуть после открытия диалога демонстрации, чтобы выбрать цель.</translation>
     </message>
@@ -2754,7 +3102,7 @@ Create a new one:</source>
         <translation type="vanished">Позиция: {x}, {y}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="255"/>
+        <location filename="../app/widgets/settings_widget.py" line="269"/>
         <source>Configure</source>
         <translation>Настроить</translation>
     </message>
@@ -2795,7 +3143,7 @@ Create a new one:</source>
         <translation type="vanished">ПРОЕКЦИЯ</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="197"/>
+        <location filename="../app/widgets/settings_widget.py" line="210"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2804,7 +3152,7 @@ Create a new one:</source>
         <translation type="vanished">Интегрировать Solin в OBS Studio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="199"/>
+        <location filename="../app/widgets/settings_widget.py" line="212"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Автоматически переключает сцены во время проекции</translation>
     </message>
@@ -2813,17 +3161,17 @@ Create a new one:</source>
         <translation type="vanished">Отключено</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="201"/>
+        <location filename="../app/widgets/settings_widget.py" line="214"/>
         <source>WebSocket Port</source>
         <translation>Порт WebSocket</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="202"/>
+        <location filename="../app/widgets/settings_widget.py" line="215"/>
         <source>Password (optional)</source>
         <translation>Пароль (необязательно)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="204"/>
+        <location filename="../app/widgets/settings_widget.py" line="217"/>
         <source>Leave blank if no password is set</source>
         <translation>Оставьте пустым, если пароль не установлен</translation>
     </message>
@@ -2832,17 +3180,17 @@ Create a new one:</source>
         <translation type="vanished">● Изменения сохраняются автоматически</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="206"/>
+        <location filename="../app/widgets/settings_widget.py" line="219"/>
         <source>Default scene (idle)</source>
         <translation>Сцена по умолчанию (ожидание)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="208"/>
+        <location filename="../app/widgets/settings_widget.py" line="221"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation>Сцена, отображаемая, когда ничего не транслируется.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="210"/>
+        <location filename="../app/widgets/settings_widget.py" line="223"/>
         <source>Media window scene</source>
         <translation>Сцена медиаокна</translation>
     </message>
@@ -2883,8 +3231,8 @@ Create a new one:</source>
         <translation type="vanished">— Выберите сцену —</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="147"/>
-        <location filename="../app/widgets/settings_widget.py" line="170"/>
+        <location filename="../app/widgets/settings_widget.py" line="157"/>
+        <location filename="../app/widgets/settings_widget.py" line="181"/>
         <source>About</source>
         <translation>О программе</translation>
     </message>
@@ -2897,62 +3245,67 @@ Create a new one:</source>
         <translation type="vanished">Версия 1.0.0</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="275"/>
+        <location filename="../app/widgets/settings_widget.py" line="289"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Приложение Аудио и Видео для собраний Зала Царства.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="282"/>
+        <location filename="../app/widgets/settings_widget.py" line="296"/>
         <source>Official Website</source>
         <translation>Официальный сайт</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="283"/>
+        <location filename="../app/widgets/settings_widget.py" line="297"/>
         <source>Changelog</source>
         <translation>Журнал изменений</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="278"/>
+        <location filename="../app/widgets/settings_widget.py" line="292"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Это приложение является независимым и не связано с Обществом Сторожевой башни, Библий и трактатов (Пенсильвания) и не одобрено им или его филиалами.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="265"/>
+        <location filename="../app/widgets/settings_widget.py" line="279"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="177"/>
+        <location filename="../app/widgets/settings_widget.py" line="188"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Загружает воспроизводимые медиа для использования в автономном режиме.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="181"/>
+        <location filename="../app/widgets/settings_widget.py" line="192"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Загружает медиа собраний этой недели и следующей.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="185"/>
+        <location filename="../app/widgets/settings_widget.py" line="196"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Песня начинается без звука для отображения названия. Нажмите «Воспроизвести», чтобы начать.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="187"/>
+        <location filename="../app/widgets/settings_widget.py" line="198"/>
+        <source>Automatic background song</source>
+        <translation>Автоматическая фоновая песня</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="200"/>
         <source>Start videos paused</source>
         <translation>Запускать видео на паузе</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="189"/>
+        <location filename="../app/widgets/settings_widget.py" line="202"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Видео открываются на паузе, чтобы их можно было запустить вручную.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="191"/>
+        <location filename="../app/widgets/settings_widget.py" line="204"/>
         <source>Link Folder</source>
         <translation>Связать папку</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="193"/>
+        <location filename="../app/widgets/settings_widget.py" line="206"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Папка синхронизации (Dropbox, OneDrive и т. д.) отображается как плейлист.</translation>
     </message>
@@ -2961,7 +3314,7 @@ Create a new one:</source>
         <translation type="vanished">Папка не выбрана</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="196"/>
+        <location filename="../app/widgets/settings_widget.py" line="209"/>
         <source>Choose…</source>
         <translation>Выбрать…</translation>
     </message>
@@ -2974,22 +3327,22 @@ Create a new one:</source>
         <translation type="vanished">Выберите папку для связи</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="215"/>
+        <location filename="../app/widgets/settings_widget.py" line="228"/>
         <source>Program stream (NDI)</source>
         <translation>Программная трансляция (NDI)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="217"/>
+        <location filename="../app/widgets/settings_widget.py" line="230"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Получение выходного сигнала DistroAV/NDI из OBS в качестве прямой трансляции.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="220"/>
+        <location filename="../app/widgets/settings_widget.py" line="233"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
         <translation>Включите основной выход (Main Output) в DistroAV, затем выберите источник NDI, отображаемый в OBS.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="222"/>
+        <location filename="../app/widgets/settings_widget.py" line="235"/>
         <source>Available NDI sources</source>
         <translation>Доступные источники NDI</translation>
     </message>
@@ -2998,12 +3351,12 @@ Create a new one:</source>
         <translation type="vanished">Источники не загружены</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="223"/>
+        <location filename="../app/widgets/settings_widget.py" line="236"/>
         <source>Find sources</source>
         <translation>Найти источники</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="212"/>
+        <location filename="../app/widgets/settings_widget.py" line="225"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation>Сцена, захватывающая монитор проекции. Активируется при отображении контента.</translation>
     </message>
@@ -3028,37 +3381,37 @@ Create a new one:</source>
         <translation type="vanished">Источники NDI не найдены. Проверьте, включен ли основной выход DistroAV в OBS.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="226"/>
+        <location filename="../app/widgets/settings_widget.py" line="239"/>
         <source>Camera</source>
         <translation>Камера</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="228"/>
+        <location filename="../app/widgets/settings_widget.py" line="241"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Отображает кнопку камеры на панели инструментов для работы в прямом эфире.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="230"/>
+        <location filename="../app/widgets/settings_widget.py" line="243"/>
         <source>Automatic Shortcuts</source>
         <translation>Автоматические сочетания клавиш</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="232"/>
+        <location filename="../app/widgets/settings_widget.py" line="245"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Отправляет сочетания клавиш при изменении состояния визуальных медиафайлов.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="235"/>
+        <location filename="../app/widgets/settings_widget.py" line="248"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation>Создайте одно или несколько сочетаний клавиш для событий запуска, завершения, паузы и возобновления.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="237"/>
+        <location filename="../app/widgets/settings_widget.py" line="250"/>
         <source>No shortcuts configured.</source>
         <translation>Сочетания клавиш не настроены.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="238"/>
+        <location filename="../app/widgets/settings_widget.py" line="251"/>
         <source>Add shortcut</source>
         <translation>Добавить сочетание клавиш</translation>
     </message>
@@ -3071,7 +3424,7 @@ Create a new one:</source>
         <translation type="vanished">Отключено</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="250"/>
+        <location filename="../app/widgets/settings_widget.py" line="264"/>
         <source>Edit</source>
         <translation>Изменить</translation>
     </message>
@@ -3080,7 +3433,7 @@ Create a new one:</source>
         <translation type="vanished">Удалить</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="243"/>
+        <location filename="../app/widgets/settings_widget.py" line="257"/>
         <source>Zoom Meetings</source>
         <translation>Конференции Zoom</translation>
     </message>
@@ -3097,12 +3450,12 @@ Create a new one:</source>
         <translation type="vanished">Автоматически включает/выключает демонстрацию экрана при показе медиафайлов.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="263"/>
+        <location filename="../app/widgets/settings_widget.py" line="277"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Текст, отображаемый на экране проекции, когда он неактивен.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="273"/>
+        <location filename="../app/widgets/settings_widget.py" line="287"/>
         <source>Save changes</source>
         <translation>Сохранить изменения</translation>
     </message>
@@ -3220,53 +3573,141 @@ Create a new one:</source>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="304"/>
+        <location filename="../app/widgets/timer_bridge.py" line="311"/>
         <source>Export PDF</source>
         <translation>Экспорт PDF</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="306"/>
+        <location filename="../app/widgets/timer_bridge.py" line="313"/>
         <source>PDF files (*.pdf)</source>
         <translation>PDF-файлы (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="317"/>
+        <location filename="../app/widgets/timer_bridge.py" line="324"/>
         <source>Weekend</source>
         <translation>Выходные</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="318"/>
+        <location filename="../app/widgets/timer_bridge.py" line="325"/>
         <source>Midweek</source>
         <translation>Среди недели</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="332"/>
+        <location filename="../app/widgets/timer_bridge.py" line="339"/>
         <source>Export failed</source>
         <translation>Ошибка экспорта</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="333"/>
+        <location filename="../app/widgets/timer_bridge.py" line="340"/>
         <source>Could not export the timer PDF:
 {error}</source>
         <translation>Не удалось экспортировать PDF таймера:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="339"/>
+        <location filename="../app/widgets/timer_bridge.py" line="346"/>
         <source>PDF exported</source>
         <translation>PDF экспортирован</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="340"/>
+        <location filename="../app/widgets/timer_bridge.py" line="347"/>
         <source>Saved to:
 {path}</source>
         <translation>Сохранено в:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="462"/>
+        <location filename="../app/widgets/timer_bridge.py" line="496"/>
         <source>this monitor</source>
         <translation>этот монитор</translation>
+    </message>
+</context>
+<context>
+    <name>TimerPdfExport</name>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="35"/>
+        <source>Meeting timer report</source>
+        <translation>Отчёт таймера встречи</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="36"/>
+        <source>{meeting_type} - {week}</source>
+        <translation>{meeting_type} - {week}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="37"/>
+        <source>Total {time}</source>
+        <translation>Итого {time}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="38"/>
+        <source>In progress</source>
+        <translation>В процессе</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="39"/>
+        <source>Running</source>
+        <translation>Идёт</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="40"/>
+        <source>Completed</source>
+        <translation>Завершено</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="41"/>
+        <source>Not started</source>
+        <translation>Не начато</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="42"/>
+        <source>Page {page}</source>
+        <translation>Страница {page}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="43"/>
+        <source>Part</source>
+        <translation>Пункт</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="44"/>
+        <source>Planned</source>
+        <translation>Запланировано</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="45"/>
+        <source>Started</source>
+        <translation>Начало</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="46"/>
+        <source>Finished</source>
+        <translation>Окончание</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="47"/>
+        <source>Duration</source>
+        <translation>Длительность</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="48"/>
+        <source>Status</source>
+        <translation>Статус</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="49"/>
+        <source>Generated</source>
+        <translation>Создано</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="50"/>
+        <source>Within time</source>
+        <translation>В пределах времени</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Over time</source>
+        <translation>Сверх времени</translation>
     </message>
 </context>
 <context>
@@ -3471,29 +3912,29 @@ Click &apos;Download&apos; to open the download page.</source>
 <context>
     <name>WifiReceiveWidget</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="606"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="607"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1358"/>
         <source>Receive via Wi-Fi</source>
         <translation>Получить через Wi-Fi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="621"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="622"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1359"/>
         <source>Starting server…</source>
         <translation>Запуск сервера…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="665"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="666"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1360"/>
         <source>Scan the QR code with your phone.
 Both devices must be on the same Wi-Fi network.</source>
         <translation>Отсканируйте QR-код с помощью телефона.
 Оба устройства должны быть подключены к одной сети Wi-Fi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="675"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="695"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1370"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="676"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="696"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
         <source>Copy link</source>
         <translation>Копировать ссылку</translation>
     </message>
@@ -3502,91 +3943,91 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation type="vanished">Сервер автоматически останавливается после 15 минут без активности.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="720"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="721"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
         <source>  Stop server</source>
         <translation>Остановить сервер</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="707"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="708"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1361"/>
         <source>The server stops automatically after 15 minutes outside this screen.</source>
         <translation>Сервер автоматически останавливается через 15 минут вне этого экрана.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="740"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1371"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="741"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
         <source>Received media</source>
         <translation>Полученные медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="754"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1372"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="755"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
         <source>  Send all to playlist</source>
         <translation>Отправить все в плейлист</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="795"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1373"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="796"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
         <source>Files sent from your phone will appear here.</source>
         <translation>Файлы, отправленные с мобильного устройства, появятся здесь.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="836"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="837"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
         <source>Receive media via Wi-Fi</source>
         <translation>Получайте медиа по Wi-Fi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="845"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="907"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="846"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="908"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
         <source>Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio.</source>
         <translation>Подключитесь к той же сети Wi-Fi и откройте ссылку на телефоне, чтобы отправлять фото, видео или аудио.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="859"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="860"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
         <source>  Start server</source>
         <translation>Запустить сервер</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="879"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
         <source>Send Media</source>
         <translation>Отправить медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
         <source>Select or drag photos, videos or audio files</source>
         <translation>Выберите или перетащите фото, видео или аудиозаписи</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
         <source>Send media</source>
         <translation>Отправить медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
         <source>Drag files here</source>
         <translation>Перетащите файлы сюда</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
         <source>✓ File sent!</source>
         <translation>✓ Файл отправлен!</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="885"/>
         <source>Upload error</source>
         <translation>Ошибка при отправке</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1120"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1116"/>
         <source>Could not start the server.</source>
         <translation>Не удалось запустить сервер.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1125"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1121"/>
         <source>Server stopped due to inactivity.</source>
         <translation>Сервер остановлен из-за неактивности.</translation>
     </message>
@@ -3594,75 +4035,75 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="57"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="58"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Текст, отображаемый на экране проекции, когда он неактивен.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="75"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="219"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="292"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="76"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="222"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="295"/>
         <source>Fetching annual text…</source>
         <translation>Поиск ежегодного текста…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="89"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="275"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="90"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="278"/>
         <source>Update</source>
         <translation>Обновить</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="127"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="128"/>
         <source>Scripture:</source>
         <translation>Писание:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="136"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="137"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Например: Блаженны нищие духом, так как для них есть Царство Небесное.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="147"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="148"/>
         <source>Bible reference:</source>
         <translation>Библейская ссылка:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="155"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="156"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Например: Матфея 5:3.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="164"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="165"/>
         <source>Save changes</source>
         <translation>Сохранить изменения</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="267"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="270"/>
         <source>Annual text updated for {year}</source>
         <translation>Ежегодный текст обновлен для {year}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="298"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="301"/>
         <source>Loading…</source>
         <translation>Загрузка…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="305"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="308"/>
         <source>Could not fetch annual text</source>
         <translation>Не удалось получить ежегодный текст</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="312"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="315"/>
         <source>Retry</source>
         <translation>Попытка еще раз</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="335"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="338"/>
         <source>▲  Edit text manually</source>
         <translation>▲  Редактировать текст вручную</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="337"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="340"/>
         <source>▼  Edit text manually</source>
         <translation>▼  Редактировать текст вручную</translation>
     </message>
@@ -4205,22 +4646,22 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_MediaCard</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="423"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
         <source>video</source>
         <translation>видео</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
         <source>audio</source>
         <translation>аудио</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="426"/>
         <source>image</source>
         <translation>изображение</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="453"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="454"/>
         <source>Add to playlist</source>
         <translation>Добавить в плейлист</translation>
     </message>
@@ -4397,79 +4838,79 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_PlaylistEditActionsMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>item</source>
         <translation>элемент</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>items</source>
         <translation>элементы</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="142"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="143"/>
         <source>✓  1 file added</source>
         <translation>✓  1 файл добавлен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="144"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="145"/>
         <source>✓  {count} files added</source>
         <translation>✓  {count} файлов добавлено</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="146"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="147"/>
         <source>({count} duplicate skipped)</source>
         <translation>({count} дубликат игнорирован)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="148"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="149"/>
         <source>({count} duplicates skipped)</source>
         <translation>({count} дубликатов игнорировано)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="155"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="156"/>
         <source>⚠  File already in playlist</source>
         <translation>⚠  Файл уже существует в плейлисте</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="157"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="158"/>
         <source>⚠  Files already in playlist</source>
         <translation>⚠  Файлы уже существуют в плейлисте</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="237"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="243"/>
         <source>Add Media</source>
         <translation>Добавить медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="307"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="313"/>
         <source>Export .jwlplaylist</source>
         <translation>Экспортировать .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="321"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="333"/>
         <source>Export complete</source>
         <translation>Экспорт завершен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="322"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="334"/>
         <source>Exported:
 {path}</source>
         <translation>Экспортировано:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="325"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="337"/>
         <source>Export error</source>
         <translation>Ошибка при экспорте</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="336"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="348"/>
         <source>Current playback</source>
         <translation>Текущее воспроизведение</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="350"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="362"/>
         <source>Save playlist</source>
         <translation>Сохранить плейлист</translation>
     </message>
@@ -4477,70 +4918,70 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
 <context>
     <name>_PlaylistEditImportMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="35"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="36"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="214"/>
         <source>🔄  Converting PDF: {name}…</source>
         <translation>🔄  Преобразование PDF: {name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="42"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="228"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="43"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
         <source>🔄  {name} — page {current}/{total}…</source>
         <translation>🔄  {name} — страница {current}/{total}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="86"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="272"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="87"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="265"/>
         <source>✓  {name} opened ({pages} pages)</source>
         <translation>✓  {name} открыт ({pages} страниц)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="93"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="94"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Ошибка при преобразовании PDF: {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="127"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="120"/>
         <source>🔄  Opening {name}…</source>
         <translation>🔄  Открытие {name}...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="166"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="159"/>
         <source>⚠  No media found in {name}</source>
         <translation>⚠  Медиа не найдено в {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="182"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="175"/>
         <source>images</source>
         <translation>изображения</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="184"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="177"/>
         <source>videos</source>
         <translation>видео</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="187"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="180"/>
         <source>unresolved</source>
         <translation>не разрешено</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="193"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="186"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  Не удалось открыть .jwpub: {err}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="335"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="320"/>
         <source>⚠  Could not import: {name}</source>
         <translation>⚠  Не удалось импортировать: {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="343"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="328"/>
         <source>✓  1 item imported</source>
         <translation>✓  1 элемент импортирован</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="346"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="331"/>
         <source>✓  {count} items imported</source>
         <translation>✓  {count} элементов импортировано</translation>
     </message>
@@ -4587,24 +5028,30 @@ Example: &apos;Felipe &amp; Julia&apos; → 2 people</source>
         <translation>Поиск на JW.org...</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="175"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="148"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="159"/>
+        <source>Add Song...</source>
+        <translation>Добавить песню...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/PlaylistEditView.qml" line="183"/>
         <source>Play all (in order)</source>
         <translation>Воспроизвести все (по порядку)</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="180"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="188"/>
         <source>Play in random order</source>
         <translation>Воспроизводить в случайном порядке</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="151"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="185"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="159"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="193"/>
         <source>Section</source>
         <translation>Раздел</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="152"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="186"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="160"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="194"/>
         <source>Add a new section</source>
         <translation>Добавить новый раздел</translation>
     </message>
@@ -4620,7 +5067,7 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation type="vanished">Обработка {n} файла(ов)...</translation>
     </message>
     <message numerus="yes">
-        <location filename="../app/widgets/playlist/widget.py" line="327"/>
+        <location filename="../app/widgets/playlist/widget.py" line="332"/>
         <source>Processing %n file(s)...</source>
         <translation>
             <numerusform>Обработка %n файла...</numerusform>
@@ -4629,7 +5076,7 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="342"/>
+        <location filename="../app/widgets/playlist/widget.py" line="352"/>
         <source>All files processed</source>
         <translation>Все файлы обработаны</translation>
     </message>
@@ -4642,40 +5089,40 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation type="vanished">элементы</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>Section name:</source>
         <translation>Название раздела:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>E.g.: Introduction</source>
         <translation>Например: Вступление</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="567"/>
+        <location filename="../app/widgets/playlist/widget.py" line="577"/>
         <source>New Section</source>
         <translation>Новый раздел</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>Subsection name:</source>
         <translation>Название подраздела:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>E.g.: Part 1</source>
         <translation>Например: Часть 1</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="590"/>
+        <location filename="../app/widgets/playlist/widget.py" line="600"/>
         <source>New Subsection</source>
         <translation>Новый подраздел</translation>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1525"/>
-        <location filename="../app/widgets/playlist/widget.py" line="677"/>
+        <location filename="../app/widgets/playlist/widget.py" line="687"/>
         <source>Rename section</source>
         <translation>Переименовать раздел</translation>
     </message>
@@ -4686,31 +5133,31 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1562"/>
-        <location filename="../app/widgets/playlist/widget.py" line="693"/>
+        <location filename="../app/widgets/playlist/widget.py" line="703"/>
         <source>Delete section</source>
         <translation>Удалить раздел</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="694"/>
+        <location filename="../app/widgets/playlist/widget.py" line="704"/>
         <source>Delete section &quot;{name}&quot;?
 Items inside will be kept.</source>
         <translation>Удалить раздел «{name}»?
 Содержимое раздела будет сохранено.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="767"/>
+        <location filename="../app/widgets/playlist/widget.py" line="777"/>
         <source>Media is playing</source>
         <translation>Воспроизводимое медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="768"/>
+        <location filename="../app/widgets/playlist/widget.py" line="778"/>
         <source>Cannot remove &quot;{title}&quot; while it is currently playing.
 Stop the projection and try again.</source>
         <translation>Невозможно удалить «{title}», пока он воспроизводится.
 Остановите проекцию и попробуйте снова.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="789"/>
+        <location filename="../app/widgets/playlist/widget.py" line="799"/>
         <source>Rename media</source>
         <translation>Переименовать медиа</translation>
     </message>
@@ -4847,120 +5294,120 @@ Stop the projection and try again.</source>
 <context>
     <name>_PlaylistListView</name>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="90"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="253"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="91"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
         <source>Playlists</source>
         <translation>Плейлисты</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="98"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="99"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
         <source>Import</source>
         <translation>Импортировать</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="102"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="370"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="103"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="377"/>
         <source>Import .jwlplaylist</source>
         <translation>Импортировать .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="109"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="110"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="257"/>
         <source>New Playlist</source>
         <translation>Новый плейлист</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="135"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="260"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="136"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
         <source>My Playlists</source>
         <translation>Мои плейлисты</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="148"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="258"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="149"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="259"/>
         <source>No playlists yet.
 Click &apos;＋ New Playlist&apos; to create one.</source>
         <translation>Списков воспроизведения пока нет.
 Нажмите «＋ Новый список», чтобы создать его.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="157"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="158"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="262"/>
         <source>Link Folder</source>
         <translation>Связать папку</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="171"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="263"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="172"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="264"/>
         <source>No subfolders found.
 Create subfolders inside the linked folder to use as playlists.</source>
         <translation>Подпапки не найдены.
 Создайте подпапки в связанной папке, чтобы использовать их как списки воспроизведения.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="295"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="296"/>
         <source>Rename playlist</source>
         <translation>Переименовать плейлист</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="320"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="321"/>
         <source>Media is playing</source>
         <translation>Воспроизводимое медиа</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="322"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="323"/>
         <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
 Stop the projection and try again.</source>
         <translation>Невозможно удалить список «{name}», так как один из его элементов воспроизводится.
 Остановите проекцию и попробуйте снова.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="328"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
         <source>Delete Playlist</source>
         <translation>Удалить плейлист</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="330"/>
         <source>Delete playlist &quot;{name}&quot;?
 This action cannot be undone.</source>
         <translation>Удалить список «{name}»?
 Это действие нельзя отменить.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="347"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="486"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="348"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="485"/>
         <source>Export .jwlplaylist</source>
         <translation>Экспортировать .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="361"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="497"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="368"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="502"/>
         <source>Export complete</source>
         <translation>Экспорт завершен</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="362"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="498"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="369"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="503"/>
         <source>Exported:
 {path}</source>
         <translation>Экспортировано:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="365"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="501"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="372"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="506"/>
         <source>Export error</source>
         <translation>Ошибка при экспорте</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="419"/>
         <source>Import error</source>
         <translation>Ошибка при импорте</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="421"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
         <source>Could not import:
 {name}
 
@@ -4970,35 +5417,35 @@ This action cannot be undone.</source>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="435"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="434"/>
         <source>Rename folder</source>
         <translation>Переименовать папку</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="445"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="467"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="444"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="466"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="453"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="452"/>
         <source>Delete folder</source>
         <translation>Удалить папку</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="455"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="454"/>
         <source>Delete folder &quot;{name}&quot; and all its contents from disk?
 This action cannot be undone.</source>
         <translation>Удалить папку «{name}» и всё её содержимое с диска?
 Это действие нельзя отменить.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="479"/>
         <source>Empty folder</source>
         <translation>Пустая папка</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="481"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation>Файл медиа не найден в &quot;{name}&quot;.</translation>
     </message>
@@ -5096,17 +5543,17 @@ This action cannot be undone.</source>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="42"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="114"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>СОКРОВИЩА ИЗ СЛОВА БОГА</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="43"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="115"/>
         <source>APPLY YOURSELF TO THE FIELD MINISTRY</source>
         <translation>ОТТАЧИВАЕМ НАВЫКИ СЛУЖЕНИЯ</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="44"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="116"/>
         <source>LIVING AS CHRISTIANS</source>
         <translation>ХРИСТИАНСКАЯ ЖИЗНЬ</translation>
     </message>
@@ -5115,12 +5562,12 @@ This action cannot be undone.</source>
         <translation type="vanished">Изучение Библии в собрании</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="46"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="118"/>
         <source>Watchtower Study</source>
         <translation>Сторожевая башня</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="45"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="117"/>
         <source>PUBLIC TALK</source>
         <translation>ПУБЛИЧНАЯ РЕЧЬ</translation>
     </message>
@@ -5132,6 +5579,42 @@ This action cannot be undone.</source>
         <location filename="../app/widgets/settings/auto_key_dialog.py" line="94"/>
         <source>Click to record</source>
         <translation>Нажмите для записи</translation>
+    </message>
+</context>
+<context>
+    <name>_TimePickerPopup</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="275"/>
+        <source>Hour</source>
+        <translation>Час</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="276"/>
+        <source>Minute</source>
+        <translation>Минута</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="286"/>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="289"/>
+        <source>Apply</source>
+        <translation>Применить</translation>
+    </message>
+</context>
+<context>
+    <name>_TimeStepper</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="198"/>
+        <source>Increase</source>
+        <translation>Увеличить</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="199"/>
+        <source>Decrease</source>
+        <translation>Уменьшить</translation>
     </message>
 </context>
 <context>
@@ -5388,68 +5871,68 @@ This cannot be undone.</source>
         <translation>Отображение изображения</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="98"/>
-        <location filename="../app/controllers/open_media_controller.py" line="304"/>
-        <location filename="../app/controllers/open_media_controller.py" line="314"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="112"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="122"/>
+        <location filename="../app/controllers/open_media_controller.py" line="102"/>
+        <location filename="../app/controllers/open_media_controller.py" line="311"/>
+        <location filename="../app/controllers/open_media_controller.py" line="321"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="116"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="126"/>
         <source>Unsupported file</source>
         <translation>Файл не поддерживается</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="101"/>
+        <location filename="../app/controllers/open_media_controller.py" line="105"/>
         <source>File format not supported. Use videos (mp4, mkv, mov…) or images (jpg, png, webp…).</source>
         <translation>Формат файла не поддерживается. Используйте видео (mp4, mkv, mov...) или изображения (jpg, png, webp...).</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="143"/>
-        <location filename="../app/controllers/open_media_controller.py" line="265"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="248"/>
+        <location filename="../app/controllers/open_media_controller.py" line="147"/>
+        <location filename="../app/controllers/open_media_controller.py" line="269"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="252"/>
         <source>Error opening PDF</source>
         <translation>Ошибка при открытии PDF</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="144"/>
-        <location filename="../app/controllers/open_media_controller.py" line="266"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="249"/>
+        <location filename="../app/controllers/open_media_controller.py" line="148"/>
+        <location filename="../app/controllers/open_media_controller.py" line="270"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="253"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Ошибка при преобразовании PDF: {error}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="221"/>
+        <location filename="../app/controllers/open_media_controller.py" line="225"/>
         <source>No media found</source>
         <translation>Медиа не найдено</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="222"/>
+        <location filename="../app/controllers/open_media_controller.py" line="226"/>
         <source>No media items found in {name}.</source>
         <translation>Медиа не найдено в {name}.</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="238"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="312"/>
+        <location filename="../app/controllers/open_media_controller.py" line="242"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="316"/>
         <source>Error opening .jwpub</source>
         <translation>Ошибка при открытии .jwpub</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="305"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="113"/>
+        <location filename="../app/controllers/open_media_controller.py" line="312"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="117"/>
         <source>Invalid or corrupted .jwlplaylist file:
 %1</source>
         <translation>Недопустимый или поврежденный файл .jwlplaylist:
 %1</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="315"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="123"/>
+        <location filename="../app/controllers/open_media_controller.py" line="322"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="127"/>
         <source>Error reading %1:
 %2</source>
         <translation>Ошибка при чтении %1:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="39"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="189"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="43"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="193"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="287"/>
         <source>Playlist &quot;%1&quot;
 created successfully!</source>
@@ -5457,7 +5940,7 @@ created successfully!</source>
 успешно создан!</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="52"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="56"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="257"/>
         <source>Added to playlist
 &quot;%1&quot;</source>
@@ -5465,8 +5948,8 @@ created successfully!</source>
 «%1»</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="59"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="209"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="63"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="213"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="264"/>
         <source>This media is already in
 playlist &quot;%1&quot;</source>
@@ -5474,24 +5957,24 @@ playlist &quot;%1&quot;</source>
 в списке воспроизведения «%1»</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="69"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="73"/>
         <source>Download failed</source>
         <translation>Ошибка загрузки</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="70"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="74"/>
         <source>Could not download %1:
 %2</source>
         <translation>Не удалось загрузить %1:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="177"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="181"/>
         <source>No media found in {name}</source>
         <translation>В {name} не найдено медиафайлов</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="203"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="207"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="307"/>
         <source>%1 file(s) added
 to playlist &quot;%2&quot;</source>
@@ -5499,18 +5982,18 @@ to playlist &quot;%2&quot;</source>
 в список воспроизведения «%2»</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="230"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="271"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="234"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="275"/>
         <source>Opening {name}...</source>
         <translation>Открытие {name}...</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="313"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="317"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  Не удалось открыть .jwpub: {err}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="335"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="339"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="73"/>
         <source>Add to Playlist</source>
         <translation>Добавить в список воспроизведения</translation>
@@ -5584,77 +6067,6 @@ with %2 file(s)!</source>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="420"/>
         <source>Close</source>
         <translation>Закрыть</translation>
-    </message>
-</context>
-<context>
-    <name>TimerPdfExport</name>
-    <message>
-        <source>Meeting timer report</source>
-        <translation>Отчёт таймера встречи</translation>
-    </message>
-    <message>
-        <source>{meeting_type} - {week}</source>
-        <translation>{meeting_type} - {week}</translation>
-    </message>
-    <message>
-        <source>Total {time}</source>
-        <translation>Итого {time}</translation>
-    </message>
-    <message>
-        <source>In progress</source>
-        <translation>В процессе</translation>
-    </message>
-    <message>
-        <source>Running</source>
-        <translation>Идёт</translation>
-    </message>
-    <message>
-        <source>Completed</source>
-        <translation>Завершено</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>Не начато</translation>
-    </message>
-    <message>
-        <source>Page {page}</source>
-        <translation>Страница {page}</translation>
-    </message>
-    <message>
-        <source>Part</source>
-        <translation>Пункт</translation>
-    </message>
-    <message>
-        <source>Planned</source>
-        <translation>Запланировано</translation>
-    </message>
-    <message>
-        <source>Started</source>
-        <translation>Начало</translation>
-    </message>
-    <message>
-        <source>Finished</source>
-        <translation>Окончание</translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation>Длительность</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Статус</translation>
-    </message>
-    <message>
-        <source>Generated</source>
-        <translation>Создано</translation>
-    </message>
-    <message>
-        <source>Within time</source>
-        <translation>В пределах времени</translation>
-    </message>
-    <message>
-        <source>Over time</source>
-        <translation>Сверх времени</translation>
     </message>
 </context>
 <context>

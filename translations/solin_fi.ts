@@ -76,203 +76,243 @@ Luo uusi:</translation>
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="153"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="106"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="225"/>
         <source>Clock</source>
         <translation>Kello</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="157"/>
         <source>Type</source>
-        <translation>Tyyppi</translation>
+        <translation type="vanished">Tyyppi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="86"/>
         <source>Digital</source>
         <translation>Digitaalinen</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="88"/>
         <source>Analog</source>
         <translation>Analoginen</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="170"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="90"/>
+        <source>Analog + digital</source>
+        <translation>Analoginen + digitaalinen</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
+        <source>Signature</source>
+        <translation>Allekirjoitus</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>
+        <source>Classic</source>
+        <translation>Klassinen</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="104"/>
+        <source>Timer</source>
+        <translation>Ajastin</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="108"/>
+        <source>Clock + timer</source>
+        <translation>Kello + ajastin</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="229"/>
+        <source>Clock face</source>
+        <translation>Kellotaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="244"/>
+        <source>Analog style</source>
+        <translation>Analoginen tyyli</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="260"/>
         <source>Format</source>
         <translation>Muoto</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>24-hour</source>
         <translation>24 tuntia</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>12-hour</source>
         <translation>12 tuntia</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="184"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="274"/>
         <source>Show seconds</source>
         <translation>Näytä sekunnit</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="195"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="285"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="205"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="295"/>
         <source>Part timer</source>
         <translation>Osan ajastin</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="209"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="299"/>
+        <source>During parts</source>
+        <translation>Ohjelmanosien aikana</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="312"/>
         <source>Count direction</source>
         <translation>Laskennan suunta</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count down</source>
         <translation>Laske alaspäin</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count up</source>
         <translation>Laske ylöspäin</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="220"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="323"/>
         <source>Hold duration when stopped</source>
         <translation>Säilytä kesto pysäytettynä</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>Less</source>
         <translation>Vähemmän</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>More</source>
         <translation>Enemmän</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="232"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="335"/>
         <source>Display</source>
         <translation>Näyttö</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="237"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="340"/>
         <source>Display size</source>
         <translation>Näytön koko</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="269"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="372"/>
         <source>Monitors</source>
         <translation>Näytöt</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="271"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="374"/>
         <source>Show timer</source>
         <translation>Näytä ajastin</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="324"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="427"/>
         <source>Reserved for the timer · %1</source>
         <translation>Varattu ajastimelle · %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
         <source>Unreserve</source>
         <translation>Poista varaus</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="689"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="792"/>
         <source>Reserve</source>
         <translation>Varaa</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="334"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Varaa tämä näyttö ajastimelle</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="362"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="465"/>
         <source>No secondary monitors detected</source>
         <translation>Toissijaisia näyttöjä ei havaittu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="381"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="484"/>
         <source>Previous week</source>
         <translation>Edellinen viikko</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="404"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="507"/>
         <source>Not the current week</source>
         <translation>Ei nykyinen viikko</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="414"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="517"/>
         <source>Next week</source>
         <translation>Seuraava viikko</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="420"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="523"/>
         <source>Back to this week</source>
         <translation>Takaisin tähän viikkoon</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Midweek</source>
         <translation>Viikolla</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Weekend</source>
         <translation>Viikonloppu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="540"/>
         <source>Export PDF</source>
         <translation>Vie PDF</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="447"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="550"/>
         <source>Meeting parts</source>
         <translation>Kokouksen osat</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="532"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="635"/>
         <source>Parts</source>
         <translation>Osat</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>Fewer parts</source>
         <translation>Vähemmän osia</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>More parts</source>
         <translation>Lisää osia</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="553"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="656"/>
         <source>%1 total</source>
         <translation>%1 yhteensä</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="662"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="765"/>
         <source>Monitor in use by media</source>
         <translation>Näyttö on median käytössä</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="669"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="772"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Media käyttää parhaillaan näyttöä %1. Varataanko se ajastimelle ja siirretään media pois tältä näytöltä?</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="683"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="786"/>
         <source>Cancel</source>
         <translation>Peruuta</translation>
     </message>
@@ -431,6 +471,151 @@ Luo uusi:</translation>
         <location filename="../app/widgets/settings/auto_share_section.py" line="349"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
         <translation>Salli Solin macOS:n Käyttöavussa, jotta automaattiset napsautukset toimivat.</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongPopup</name>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="103"/>
+        <location filename="../app/widgets/background_song_popup.py" line="324"/>
+        <source>Background Song</source>
+        <translation>Taustalaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="142"/>
+        <location filename="../app/widgets/background_song_popup.py" line="325"/>
+        <source>Next song</source>
+        <translation>Seuraava laulu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="178"/>
+        <location filename="../app/widgets/background_song_popup.py" line="326"/>
+        <source>Meeting timing</source>
+        <translation>Kokouksen ajankohta</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="186"/>
+        <location filename="../app/widgets/background_song_popup.py" line="331"/>
+        <source>At start</source>
+        <translation>Alkamisajankohtana</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="188"/>
+        <location filename="../app/widgets/background_song_popup.py" line="327"/>
+        <source>Stop before meeting</source>
+        <translation>Pysäytä ennen kokousta</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="193"/>
+        <location filename="../app/widgets/background_song_popup.py" line="329"/>
+        <source>Stops playback before the scheduled meeting time.</source>
+        <translation>Pysäyttää toiston ennen kokouksen määritettyä alkamisaikaa.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="199"/>
+        <location filename="../app/widgets/background_song_popup.py" line="332"/>
+        <source>Fade duration</source>
+        <translation>Häivytyksen kesto</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="204"/>
+        <location filename="../app/widgets/background_song_popup.py" line="333"/>
+        <source>Lowers the volume before playback stops.</source>
+        <translation>Pienentää äänenvoimakkuutta asteittain ennen toiston pysäyttämistä.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="244"/>
+        <source>No song playing</source>
+        <translation>Laulua ei toisteta</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="271"/>
+        <source>Stop</source>
+        <translation>Pysäytä</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="275"/>
+        <source>Start</source>
+        <translation>Aloita</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongService</name>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="225"/>
+        <source>Automatic background song is disabled.</source>
+        <translation>Automaattinen taustalaulu ei ole käytössä.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="259"/>
+        <source>Enable automatic background song in Settings.</source>
+        <translation>Ota automaattinen taustalaulu käyttöön asetuksissa.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="294"/>
+        <location filename="../app/core/jw/background_song_service.py" line="538"/>
+        <source>Stopping background song...</source>
+        <translation>Pysäytetään taustalaulua...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="305"/>
+        <source>Configure the meeting day/time in Settings.</source>
+        <translation>Määritä kokouksen päivä ja aika asetuksissa.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="314"/>
+        <source>Waiting for the next configured meeting.</source>
+        <translation>Odotetaan seuraavaa määritettyä kokousta.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="321"/>
+        <source>Stopped for this meeting.</source>
+        <translation>Pysäytetty tätä kokousta varten.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="336"/>
+        <location filename="../app/core/jw/background_song_service.py" line="492"/>
+        <location filename="../app/core/jw/background_song_service.py" line="515"/>
+        <location filename="../app/core/jw/background_song_service.py" line="532"/>
+        <source>Stopped before the meeting.</source>
+        <translation>Pysäytetty ennen kokousta.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="373"/>
+        <source>Audio songs are unavailable for sign-language media.</source>
+        <translation>Äänilauluja ei ole saatavilla viittomakieliselle medialle.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="391"/>
+        <location filename="../app/core/jw/background_song_service.py" line="442"/>
+        <location filename="../app/core/jw/background_song_service.py" line="464"/>
+        <source>Loading audio songs...</source>
+        <translation>Ladataan äänilauluja...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="427"/>
+        <source>Ready.</source>
+        <translation>Valmis.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="434"/>
+        <source>Could not load audio songs.</source>
+        <translation>Äänilauluja ei voitu ladata.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="462"/>
+        <source>No audio songs available.</source>
+        <translation>Äänilauluja ei ole saatavilla.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="482"/>
+        <source>Playing background song.</source>
+        <translation>Toistetaan taustalaulua.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="627"/>
+        <source>Background song stopped.</source>
+        <translation>Taustalaulu pysäytettiin.</translation>
     </message>
 </context>
 <context>
@@ -830,22 +1015,22 @@ Luo uusi:</translation>
 <context>
     <name>JWMediaCatalogBridge</name>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="410"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="453"/>
         <source>Catalog loaded</source>
         <translation>Luettelo ladattu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="412"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="455"/>
         <source>Loading {done}/{total}</source>
         <translation>Ladataan {done}/{total}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="415"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="458"/>
         <source>Loading</source>
         <translation>Ladataan</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="885"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="889"/>
         <source>{title} added</source>
         <translation>{title} lisätty</translation>
     </message>
@@ -900,12 +1085,12 @@ Luo uusi:</translation>
         <translation>Videoita ei löytynyt</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1327"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="85"/>
         <source>Where to add?</source>
         <translation>Mihin lisätään?</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1454"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="206"/>
         <source>Cancel</source>
         <translation>Peruuta</translation>
     </message>
@@ -919,19 +1104,62 @@ Luo uusi:</translation>
     </message>
 </context>
 <context>
+    <name>JWSongsBridge</name>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="142"/>
+        <source>Add video song</source>
+        <translation>Lisää videolaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="149"/>
+        <source>Songs from JW.org</source>
+        <translation>Laulut JW.orgista</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="255"/>
+        <source>Search by number or title...</source>
+        <translation>Hae numerolla tai nimellä...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="330"/>
+        <source>No results</source>
+        <translation>Ei tuloksia</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="331"/>
+        <source>songs</source>
+        <translation>laulut</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="406"/>
+        <source>No songs found</source>
+        <translation>Lauluja ei löytynyt</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="404"/>
+        <source>Loading songs...</source>
+        <translation>Ladataan lauluja...</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="459"/>
+        <source>{title} added</source>
+        <translation>{title} lisätty</translation>
+    </message>
+</context>
+<context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="18"/>
+        <location filename="../app/widgets/settings/language_section.py" line="19"/>
         <source>Interface</source>
         <translation>Käyttöliittymä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="27"/>
+        <location filename="../app/widgets/settings/language_section.py" line="28"/>
         <source>JW Media</source>
         <translation>JW-media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="61"/>
+        <location filename="../app/widgets/settings/language_section.py" line="62"/>
         <source>(same as interface)</source>
         <translation>(sama kuin käyttöliittymä)</translation>
     </message>
@@ -939,7 +1167,7 @@ Luo uusi:</translation>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../app/main_window.py" line="101"/>
+        <location filename="../app/main_window.py" line="104"/>
         <location filename="../app/controllers/main_window_nav.py" line="9"/>
         <source>Solin</source>
         <translation>Solin</translation>
@@ -1253,94 +1481,113 @@ sisältää %2 tiedosto(a)!</translation>
 <context>
     <name>MediaLibraryWidget</name>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Songs</source>
         <translation>Laulut</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Original Songs</source>
         <translation>Alkuperäislaulut</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search song...</source>
         <translation>Etsi laulua...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search clip...</source>
         <translation>Etsi videota...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="552"/>
+        <location filename="../app/widgets/media_library_widget.py" line="560"/>
         <source>Refresh</source>
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="553"/>
+        <location filename="../app/widgets/media_library_widget.py" line="561"/>
         <source>Play all (in order)</source>
         <translation>Toista kaikki (järjestyksessä)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="554"/>
+        <location filename="../app/widgets/media_library_widget.py" line="562"/>
         <source>Play in random order</source>
         <translation>Toista satunnaisessa järjestyksessä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="555"/>
-        <location filename="../app/widgets/media_library_widget.py" line="727"/>
-        <location filename="../app/widgets/media_library_widget.py" line="780"/>
+        <location filename="../app/widgets/media_library_widget.py" line="798"/>
         <source>Download all video songs</source>
         <translation>Lataa kaikki videolaulut</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="556"/>
+        <location filename="../app/widgets/media_library_widget.py" line="564"/>
         <source>Video songs</source>
         <translation>Videolaulut</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="557"/>
+        <location filename="../app/widgets/media_library_widget.py" line="565"/>
         <source>Audio songs</source>
         <translation>Äänilaulut</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
+        <location filename="../app/widgets/media_library_widget.py" line="642"/>
         <source>Loading songs...</source>
         <translation>Ladataan lauluja...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
         <source>Loading clips...</source>
         <translation>Ladataan videoita...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="635"/>
+        <location filename="../app/widgets/media_library_widget.py" line="658"/>
         <source>Updated on {date}</source>
         <translation>Päivitetty {date}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading songs. Check your connection.</source>
         <translation>Virhe ladattaessa lauluja. Tarkista yhteytesi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading clips. Check your connection.</source>
         <translation>Virhe ladattaessa videoita. Tarkista yhteytesi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="729"/>
+        <location filename="../app/widgets/media_library_widget.py" line="797"/>
+        <source>Download all audio songs</source>
+        <translation>Lataa kaikki äänilaulut</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="803"/>
+        <source>Download {count} audio songs for offline playback?</source>
+        <translation>Ladataanko {count} äänilaulua offline-toistoa varten?</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="806"/>
         <source>Download {count} video songs for offline playback?</source>
         <translation>Ladataanko {count} videolaulua offline-toistoa varten?</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="778"/>
+        <location filename="../app/widgets/media_library_widget.py" line="811"/>
+        <source>All audio songs downloaded</source>
+        <translation>Kaikki äänilaulut on ladattu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="816"/>
+        <source>Could not finish downloading all audio songs.</source>
+        <translation>Kaikkien äänilaulujen lataamista ei voitu viimeistellä.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="839"/>
         <source>Cancel downloads</source>
         <translation>Peruuta lataukset</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="782"/>
+        <location filename="../app/widgets/media_library_widget.py" line="812"/>
         <source>All video songs downloaded</source>
         <translation>Kaikki videolaulut ladattu</translation>
     </message>
@@ -1350,17 +1597,17 @@ sisältää %2 tiedosto(a)!</translation>
         <translation>Kaikkien videolaulujen lataamista ei voitu viimeistellä.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="822"/>
+        <location filename="../app/widgets/media_library_widget.py" line="885"/>
         <source>Download failed</source>
         <translation>Lataus epäonnistui</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="892"/>
+        <location filename="../app/widgets/media_library_widget.py" line="955"/>
         <source>{count} songs available</source>
         <translation>{count} laulua saatavilla</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="893"/>
+        <location filename="../app/widgets/media_library_widget.py" line="956"/>
         <source>{count} clips available</source>
         <translation>{count} videota saatavilla</translation>
     </message>
@@ -1368,44 +1615,59 @@ sisältää %2 tiedosto(a)!</translation>
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="22"/>
+        <location filename="../app/widgets/settings/media_section.py" line="23"/>
         <source>Auto-download on play</source>
         <translation>Lataa automaattisesti toistettaessa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="23"/>
+        <location filename="../app/widgets/settings/media_section.py" line="24"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Lataa toistettavan median offline-käyttöä varten.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="35"/>
+        <location filename="../app/widgets/settings/media_section.py" line="36"/>
         <source>Auto-download weekly study</source>
         <translation>Lataa viikon kokouksen aineisto automaattisesti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="36"/>
+        <location filename="../app/widgets/settings/media_section.py" line="37"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Lataa tämän ja ensi viikon kokouksen median.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="48"/>
+        <location filename="../app/widgets/settings/media_section.py" line="49"/>
         <source>Song Announcement Mode</source>
         <translation>Laulun ilmoitustila</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="49"/>
+        <location filename="../app/widgets/settings/media_section.py" line="50"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Laulu alkaa mykistettynä otsikon näyttämistä varten. Paina toista aloittaaksesi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="61"/>
+        <location filename="../app/widgets/settings/media_section.py" line="64"/>
+        <source>Automatic background song</source>
+        <translation>Automaattinen taustalaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="77"/>
         <source>Start videos paused</source>
         <translation>Aloita videot tauotettuna</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="62"/>
+        <location filename="../app/widgets/settings/media_section.py" line="78"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Videot avautuvat tauotettuina, jotta voit käynnistää ne manuaalisesti.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="105"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Määritä kokouksen päivä ja aika ennen automaattisen toiston aloittamista.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="106"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Toistaa äänilauluja ennen määritettyjä kokouksia ja häivyttää äänen ennen alkua.</translation>
     </message>
 </context>
 <context>
@@ -1444,6 +1706,79 @@ sisältää %2 tiedosto(a)!</translation>
         <location filename="../app/qml/MeetingPartRow.qml" line="208"/>
         <source>Start</source>
         <translation>Aloita</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingScheduleSectionMixin</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="390"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="536"/>
+        <source>Used by automatic features that depend on the meeting start time.</source>
+        <translation>Automaattiset ominaisuudet käyttävät tätä kokouksen alkamisajan perusteella.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="401"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="538"/>
+        <source>Midweek meeting</source>
+        <translation>Viikkokokous</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="402"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="540"/>
+        <source>Day and time for the midweek meeting.</source>
+        <translation>Viikkokokouksen päivä ja aika.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="410"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="542"/>
+        <source>Weekend meeting</source>
+        <translation>Viikonlopun kokous</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="411"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="544"/>
+        <source>Day and time for the weekend meeting.</source>
+        <translation>Viikonlopun kokouksen päivä ja aika.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="527"/>
+        <source>Not configured</source>
+        <translation>Ei määritetty</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="557"/>
+        <source>Monday</source>
+        <translation>Maanantai</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="558"/>
+        <source>Tuesday</source>
+        <translation>Tiistai</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="559"/>
+        <source>Wednesday</source>
+        <translation>Keskiviikko</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="560"/>
+        <source>Thursday</source>
+        <translation>Torstai</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="561"/>
+        <source>Friday</source>
+        <translation>Perjantai</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="562"/>
+        <source>Saturday</source>
+        <translation>Lauantai</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="563"/>
+        <source>Sunday</source>
+        <translation>Sunnuntai</translation>
     </message>
 </context>
 <context>
@@ -2454,36 +2789,47 @@ Luo uusi:</translation>
         <source>Expand toolbar</source>
         <translation type="vanished">Laajenna työkalurivi</translation>
     </message>
+    <message>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="355"/>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="362"/>
+        <source>Background Song</source>
+        <translation>Taustalaulu</translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="330"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="367"/>
         <source>Manage monitors</source>
         <translation>Hallitse näyttöjä</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="331"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="368"/>
+        <source>Background Song</source>
+        <translation>Taustalaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/quick_toolbar_bridge.py" line="369"/>
         <source>OBS Scenes</source>
         <translation>OBS-skenet</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="332"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="370"/>
         <source>Zoom Settings</source>
         <translation>Zoom-asetukset</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="333"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="371"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="334"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="372"/>
         <source>Minimize</source>
         <translation>Pienennä</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="335"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="373"/>
         <source>Expand toolbar</source>
         <translation>Laajenna työkalurivi</translation>
     </message>
@@ -2591,60 +2937,66 @@ Luo uusi:</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="82"/>
-        <location filename="../app/widgets/settings_widget.py" line="163"/>
+        <location filename="../app/widgets/settings_widget.py" line="86"/>
+        <location filename="../app/widgets/settings_widget.py" line="173"/>
         <source>Settings</source>
         <translation>Asetukset</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="97"/>
-        <location filename="../app/widgets/settings_widget.py" line="164"/>
+        <location filename="../app/widgets/settings_widget.py" line="101"/>
+        <location filename="../app/widgets/settings_widget.py" line="174"/>
         <source>Language</source>
         <translation>Kieli</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="103"/>
-        <location filename="../app/widgets/settings_widget.py" line="165"/>
+        <location filename="../app/widgets/settings_widget.py" line="107"/>
+        <location filename="../app/widgets/settings_widget.py" line="175"/>
         <source>Media</source>
         <translation>Media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="109"/>
-        <location filename="../app/widgets/settings_widget.py" line="166"/>
+        <location filename="../app/widgets/settings_widget.py" line="113"/>
+        <location filename="../app/widgets/settings_widget.py" line="176"/>
+        <source>Meetings</source>
+        <translation>Kokoukset</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="119"/>
+        <location filename="../app/widgets/settings_widget.py" line="177"/>
         <source>Folders</source>
         <translation>Kansiot</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="115"/>
-        <location filename="../app/widgets/settings_widget.py" line="167"/>
+        <location filename="../app/widgets/settings_widget.py" line="125"/>
+        <location filename="../app/widgets/settings_widget.py" line="178"/>
         <source>Integrations</source>
         <translation>Integraatiot</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="133"/>
-        <location filename="../app/widgets/settings_widget.py" line="168"/>
+        <location filename="../app/widgets/settings_widget.py" line="143"/>
+        <location filename="../app/widgets/settings_widget.py" line="179"/>
         <source>Annual Text</source>
         <translation>Vuositeksti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="139"/>
-        <location filename="../app/widgets/settings_widget.py" line="169"/>
+        <location filename="../app/widgets/settings_widget.py" line="149"/>
+        <location filename="../app/widgets/settings_widget.py" line="180"/>
         <source>Screens</source>
         <translation>Näytöt</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="147"/>
-        <location filename="../app/widgets/settings_widget.py" line="170"/>
+        <location filename="../app/widgets/settings_widget.py" line="157"/>
+        <location filename="../app/widgets/settings_widget.py" line="181"/>
         <source>About</source>
         <translation>Tietoja</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="171"/>
+        <location filename="../app/widgets/settings_widget.py" line="182"/>
         <source>Interface</source>
         <translation>Käyttöliittymä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="172"/>
+        <location filename="../app/widgets/settings_widget.py" line="183"/>
         <source>JW Media</source>
         <translation>JW-media</translation>
     </message>
@@ -2653,52 +3005,57 @@ Luo uusi:</translation>
         <translation type="vanished">(sama kuin käyttöliittymä)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="175"/>
+        <location filename="../app/widgets/settings_widget.py" line="186"/>
         <source>Auto-download on play</source>
         <translation>Lataa automaattisesti toistettaessa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="177"/>
+        <location filename="../app/widgets/settings_widget.py" line="188"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Lataa toistettavan median offline-käyttöä varten.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="179"/>
+        <location filename="../app/widgets/settings_widget.py" line="190"/>
         <source>Auto-download weekly study</source>
         <translation>Lataa viikon kokouksen aineisto automaattisesti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="181"/>
+        <location filename="../app/widgets/settings_widget.py" line="192"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Lataa tämän ja ensi viikon kokouksen median.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="183"/>
+        <location filename="../app/widgets/settings_widget.py" line="194"/>
         <source>Song Announcement Mode</source>
         <translation>Laulun ilmoitustila</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="185"/>
+        <location filename="../app/widgets/settings_widget.py" line="196"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Laulu alkaa mykistettynä otsikon näyttämistä varten. Paina toista aloittaaksesi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="187"/>
+        <location filename="../app/widgets/settings_widget.py" line="198"/>
+        <source>Automatic background song</source>
+        <translation>Automaattinen taustalaulu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="200"/>
         <source>Start videos paused</source>
         <translation>Aloita videot tauotettuna</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="189"/>
+        <location filename="../app/widgets/settings_widget.py" line="202"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Videot avautuvat tauotettuina, jotta voit käynnistää ne manuaalisesti.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="191"/>
+        <location filename="../app/widgets/settings_widget.py" line="204"/>
         <source>Link Folder</source>
         <translation>Linkitä kansio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="193"/>
+        <location filename="../app/widgets/settings_widget.py" line="206"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Synkronointikansio (Dropbox, OneDrive jne.) näytetään soittolistoina.</translation>
     </message>
@@ -2707,7 +3064,7 @@ Luo uusi:</translation>
         <translation type="vanished">Kansiota ei ole valittu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="196"/>
+        <location filename="../app/widgets/settings_widget.py" line="209"/>
         <source>Choose…</source>
         <translation>Valitse…</translation>
     </message>
@@ -2720,12 +3077,12 @@ Luo uusi:</translation>
         <translation type="vanished">Valitse linkitettävä kansio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="197"/>
+        <location filename="../app/widgets/settings_widget.py" line="210"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="199"/>
+        <location filename="../app/widgets/settings_widget.py" line="212"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Vaihtaa skenejä automaattisesti heijastuksen aikana</translation>
     </message>
@@ -2734,17 +3091,17 @@ Luo uusi:</translation>
         <translation type="vanished">Yhteys katkaistu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="201"/>
+        <location filename="../app/widgets/settings_widget.py" line="214"/>
         <source>WebSocket Port</source>
         <translation>WebSocket-portti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="202"/>
+        <location filename="../app/widgets/settings_widget.py" line="215"/>
         <source>Password (optional)</source>
         <translation>Salasana (valinnainen)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="204"/>
+        <location filename="../app/widgets/settings_widget.py" line="217"/>
         <source>Leave blank if no password is set</source>
         <translation>Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
     </message>
@@ -2753,22 +3110,22 @@ Luo uusi:</translation>
         <translation type="vanished">● Muutokset tallennetaan automaattisesti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="215"/>
+        <location filename="../app/widgets/settings_widget.py" line="228"/>
         <source>Program stream (NDI)</source>
         <translation>Ohjelmalähetys (NDI)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="217"/>
+        <location filename="../app/widgets/settings_widget.py" line="230"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Vastaanota DistroAV/NDI-lähtö OBS:stä suorana heijastuksena.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="220"/>
+        <location filename="../app/widgets/settings_widget.py" line="233"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
         <translation>Ota käyttöön päälähtö (Main Output) DistroAV:ssä ja valitse sitten OBS:n näyttämä NDI-lähde.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="222"/>
+        <location filename="../app/widgets/settings_widget.py" line="235"/>
         <source>Available NDI sources</source>
         <translation>Käytettävissä olevat NDI-lähteet</translation>
     </message>
@@ -2777,27 +3134,27 @@ Luo uusi:</translation>
         <translation type="vanished">Lähteitä ei ole ladattu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="223"/>
+        <location filename="../app/widgets/settings_widget.py" line="236"/>
         <source>Find sources</source>
         <translation>Etsi lähteitä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="206"/>
+        <location filename="../app/widgets/settings_widget.py" line="219"/>
         <source>Default scene (idle)</source>
         <translation>Oletuskohtaus (valmiustila)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="208"/>
+        <location filename="../app/widgets/settings_widget.py" line="221"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation>Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="210"/>
+        <location filename="../app/widgets/settings_widget.py" line="223"/>
         <source>Media window scene</source>
         <translation>Mediaikkunakohtaus</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="212"/>
+        <location filename="../app/widgets/settings_widget.py" line="225"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation>Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
     </message>
@@ -2825,27 +3182,27 @@ Luo uusi:</translation>
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="244"/>
+        <location filename="../app/widgets/settings_widget.py" line="258"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Ääniohjaimet ja läsnäolomäärä kokousten aikana.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="246"/>
+        <location filename="../app/widgets/settings_widget.py" line="260"/>
         <source>Auto Screen Share</source>
         <translation>Automaattinen näytönjako</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="247"/>
+        <location filename="../app/widgets/settings_widget.py" line="261"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Jakaa näytön automaattisesti pikanäppäimillä mediaa projisoitaessa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="248"/>
+        <location filename="../app/widgets/settings_widget.py" line="262"/>
         <source>Share hotkey</source>
         <translation>Jakamisen pikanäppäin</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="249"/>
+        <location filename="../app/widgets/settings_widget.py" line="263"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
         <translation>Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
     </message>
@@ -2854,22 +3211,22 @@ Luo uusi:</translation>
         <translation type="vanished">Ei määritetty</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="257"/>
+        <location filename="../app/widgets/settings_widget.py" line="271"/>
         <source>Accessibility permission</source>
         <translation>Käyttöapu-oikeus</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="258"/>
+        <location filename="../app/widgets/settings_widget.py" line="272"/>
         <source>Open Settings</source>
         <translation>Avaa asetukset</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="251"/>
+        <location filename="../app/widgets/settings_widget.py" line="265"/>
         <source>Click Position</source>
         <translation>Napsautussijainti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="253"/>
+        <location filename="../app/widgets/settings_widget.py" line="267"/>
         <source>Position to click after the share dialog opens to select the target.</source>
         <translation>Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
     </message>
@@ -2878,7 +3235,7 @@ Luo uusi:</translation>
         <translation type="vanished">Sijainti: {x}, {y}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="255"/>
+        <location filename="../app/widgets/settings_widget.py" line="269"/>
         <source>Configure</source>
         <translation>Määritä</translation>
     </message>
@@ -2931,37 +3288,37 @@ Luo uusi:</translation>
         <translation type="vanished">— Valitse kohtaus —</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="226"/>
+        <location filename="../app/widgets/settings_widget.py" line="239"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="228"/>
+        <location filename="../app/widgets/settings_widget.py" line="241"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Näyttää kamerapainikkeen suorien lähetysten työkalupalkissa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="230"/>
+        <location filename="../app/widgets/settings_widget.py" line="243"/>
         <source>Automatic Shortcuts</source>
         <translation>Automaattiset pikanäppäimet</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="232"/>
+        <location filename="../app/widgets/settings_widget.py" line="245"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Lähettää pikanäppäinkomentoja, kun visuaalisen median tila muuttuu.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="235"/>
+        <location filename="../app/widgets/settings_widget.py" line="248"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation>Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="237"/>
+        <location filename="../app/widgets/settings_widget.py" line="250"/>
         <source>No shortcuts configured.</source>
         <translation>Pikanäppäimiä ei ole määritetty.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="238"/>
+        <location filename="../app/widgets/settings_widget.py" line="251"/>
         <source>Add shortcut</source>
         <translation>Lisää pikanäppäin</translation>
     </message>
@@ -2974,7 +3331,7 @@ Luo uusi:</translation>
         <translation type="vanished">Ei käytössä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="250"/>
+        <location filename="../app/widgets/settings_widget.py" line="264"/>
         <source>Edit</source>
         <translation>Muokkaa</translation>
     </message>
@@ -2983,7 +3340,7 @@ Luo uusi:</translation>
         <translation type="vanished">Poista</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="243"/>
+        <location filename="../app/widgets/settings_widget.py" line="257"/>
         <source>Zoom Meetings</source>
         <translation>Zoom-kokoukset</translation>
     </message>
@@ -3000,7 +3357,7 @@ Luo uusi:</translation>
         <translation type="vanished">Käynnistää tai lopettaa näytön jakamisen automaattisesti, kun mediaa esitetään.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="263"/>
+        <location filename="../app/widgets/settings_widget.py" line="277"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Teksti, joka näytetään heijastusnäytöllä valmiustilassa.</translation>
     </message>
@@ -3009,32 +3366,32 @@ Luo uusi:</translation>
         <translation type="vanished">Haetaan vuositekstiä…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="265"/>
+        <location filename="../app/widgets/settings_widget.py" line="279"/>
         <source>Update</source>
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="267"/>
+        <location filename="../app/widgets/settings_widget.py" line="281"/>
         <source>Scripture:</source>
         <translation>Raamatunkohta:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="269"/>
+        <location filename="../app/widgets/settings_widget.py" line="283"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="271"/>
+        <location filename="../app/widgets/settings_widget.py" line="285"/>
         <source>Bible reference:</source>
         <translation>Raamatunpaikka:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="272"/>
+        <location filename="../app/widgets/settings_widget.py" line="286"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Esim.: Matteus 5:3.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="273"/>
+        <location filename="../app/widgets/settings_widget.py" line="287"/>
         <source>Save changes</source>
         <translation>Tallenna muutokset</translation>
     </message>
@@ -3079,22 +3436,22 @@ Luo uusi:</translation>
         <translation type="vanished">HEIJASTUS</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="275"/>
+        <location filename="../app/widgets/settings_widget.py" line="289"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Ääni ja video -sovellus valtakunnansalin kokouksiin.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="282"/>
+        <location filename="../app/widgets/settings_widget.py" line="296"/>
         <source>Official Website</source>
         <translation>Virallinen verkkosivusto</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="283"/>
+        <location filename="../app/widgets/settings_widget.py" line="297"/>
         <source>Changelog</source>
         <translation>Muutosloki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="278"/>
+        <location filename="../app/widgets/settings_widget.py" line="292"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Tämä sovellus on itsenäinen, eikä sillä ole yhteyttä Watch Tower Bible and Tract Society of Pennsylvaniaan tai sen järjestöihin, eivätkä ne tue sitä.</translation>
     </message>
@@ -3168,53 +3525,141 @@ Luo uusi:</translation>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="304"/>
+        <location filename="../app/widgets/timer_bridge.py" line="311"/>
         <source>Export PDF</source>
         <translation>Vie PDF</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="306"/>
+        <location filename="../app/widgets/timer_bridge.py" line="313"/>
         <source>PDF files (*.pdf)</source>
         <translation>PDF-tiedostot (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="317"/>
+        <location filename="../app/widgets/timer_bridge.py" line="324"/>
         <source>Weekend</source>
         <translation>Viikonloppu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="318"/>
+        <location filename="../app/widgets/timer_bridge.py" line="325"/>
         <source>Midweek</source>
         <translation>Viikolla</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="332"/>
+        <location filename="../app/widgets/timer_bridge.py" line="339"/>
         <source>Export failed</source>
         <translation>Vienti epäonnistui</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="333"/>
+        <location filename="../app/widgets/timer_bridge.py" line="340"/>
         <source>Could not export the timer PDF:
 {error}</source>
         <translation>Ajastimen PDF-tiedostoa ei voitu viedä:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="339"/>
+        <location filename="../app/widgets/timer_bridge.py" line="346"/>
         <source>PDF exported</source>
         <translation>PDF viety</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="340"/>
+        <location filename="../app/widgets/timer_bridge.py" line="347"/>
         <source>Saved to:
 {path}</source>
         <translation>Tallennettu kohteeseen:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="462"/>
+        <location filename="../app/widgets/timer_bridge.py" line="496"/>
         <source>this monitor</source>
         <translation>tämä näyttö</translation>
+    </message>
+</context>
+<context>
+    <name>TimerPdfExport</name>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="35"/>
+        <source>Meeting timer report</source>
+        <translation>Kokouksen ajastinraportti</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="36"/>
+        <source>{meeting_type} - {week}</source>
+        <translation>{meeting_type} - {week}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="37"/>
+        <source>Total {time}</source>
+        <translation>Yhteensä {time}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="38"/>
+        <source>In progress</source>
+        <translation>Kesken</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="39"/>
+        <source>Running</source>
+        <translation>Käynnissä</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="40"/>
+        <source>Completed</source>
+        <translation>Valmis</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="41"/>
+        <source>Not started</source>
+        <translation>Ei aloitettu</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="42"/>
+        <source>Page {page}</source>
+        <translation>Sivu {page}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="43"/>
+        <source>Part</source>
+        <translation>Osa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="44"/>
+        <source>Planned</source>
+        <translation>Suunniteltu</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="45"/>
+        <source>Started</source>
+        <translation>Aloitettu</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="46"/>
+        <source>Finished</source>
+        <translation>Päättynyt</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="47"/>
+        <source>Duration</source>
+        <translation>Kesto</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="48"/>
+        <source>Status</source>
+        <translation>Tila</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="49"/>
+        <source>Generated</source>
+        <translation>Luotu</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="50"/>
+        <source>Within time</source>
+        <translation>Ajassa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Over time</source>
+        <translation>Yliajalla</translation>
     </message>
 </context>
 <context>
@@ -3411,118 +3856,118 @@ Avaa lataussivu napsauttamalla &apos;Lataa&apos;.</translation>
 <context>
     <name>WifiReceiveWidget</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="606"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="607"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1358"/>
         <source>Receive via Wi-Fi</source>
         <translation>Vastaanota Wi-Fin kautta</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="621"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="622"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1359"/>
         <source>Starting server…</source>
         <translation>Käynnistetään palvelinta…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="665"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="666"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1360"/>
         <source>Scan the QR code with your phone.
 Both devices must be on the same Wi-Fi network.</source>
         <translation>Skannaa QR-koodi puhelimellasi.
 Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="675"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="695"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1370"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="676"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="696"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
         <source>Copy link</source>
         <translation>Kopioi linkki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="707"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="708"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1361"/>
         <source>The server stops automatically after 15 minutes outside this screen.</source>
         <translation>Palvelin pysähtyy automaattisesti 15 minuutin kuluttua tämän näytön ulkopuolella.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="720"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="721"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
         <source>  Stop server</source>
         <translation>  Pysäytä palvelin</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="740"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1371"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="741"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
         <source>Received media</source>
         <translation>Vastaanotettu media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="754"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1372"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="755"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
         <source>  Send all to playlist</source>
         <translation>  Lähetä kaikki soittolistaan</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="795"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1373"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="796"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
         <source>Files sent from your phone will appear here.</source>
         <translation>Puhelimestasi lähetetyt tiedostot näkyvät tässä.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="836"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="837"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
         <source>Receive media via Wi-Fi</source>
         <translation>Vastaanota mediaa Wi-Fin kautta</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="845"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="907"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="846"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="908"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
         <source>Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio.</source>
         <translation>Yhdistä samaan Wi-Fi-verkkoon ja avaa linkki puhelimellasi lähettääksesi kuvia, videoita tai ääntä.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="859"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="860"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
         <source>  Start server</source>
         <translation>  Käynnistä palvelin</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="879"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
         <source>Send Media</source>
         <translation>Lähetä media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
         <source>Select or drag photos, videos or audio files</source>
         <translation>Valitse tai vedä kuvia, videoita tai äänitiedostoja</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
         <source>Send media</source>
         <translation>Lähetä mediaa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
         <source>Drag files here</source>
         <translation>Vedä tiedostot tähän</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
         <source>✓ File sent!</source>
         <translation>✓ Tiedosto lähetetty!</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="885"/>
         <source>Upload error</source>
         <translation>Lähetysvirhe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1120"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1116"/>
         <source>Could not start the server.</source>
         <translation>Palvelinta ei voitu käynnistää.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1125"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1121"/>
         <source>Server stopped due to inactivity.</source>
         <translation>Palvelin pysäytetty epäaktiivisuuden vuoksi.</translation>
     </message>
@@ -3534,75 +3979,75 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="57"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="58"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Teksti, joka näytetään heijastusnäytöllä valmiustilassa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="75"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="219"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="292"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="76"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="222"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="295"/>
         <source>Fetching annual text…</source>
         <translation>Haetaan vuositekstiä…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="89"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="275"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="90"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="278"/>
         <source>Update</source>
         <translation>Päivitä</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="127"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="128"/>
         <source>Scripture:</source>
         <translation>Raamatunkohta:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="136"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="137"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Esim.: Onnellisia ovat ne, jotka ymmärtävät hengellisen tarpeensa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="147"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="148"/>
         <source>Bible reference:</source>
         <translation>Raamatunpaikka:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="155"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="156"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Esim.: Matteus 5:3.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="164"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="165"/>
         <source>Save changes</source>
         <translation>Tallenna muutokset</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="267"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="270"/>
         <source>Annual text updated for {year}</source>
         <translation>Vuositeksti päivitetty vuodelle {year}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="298"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="301"/>
         <source>Loading…</source>
         <translation>Ladataan…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="305"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="308"/>
         <source>Could not fetch annual text</source>
         <translation>Vuositekstiä ei voitu hakea</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="312"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="315"/>
         <source>Retry</source>
         <translation>Yritä uudelleen</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="335"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="338"/>
         <source>▲  Edit text manually</source>
         <translation>▲  Muokkaa tekstiä manuaalisesti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="337"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="340"/>
         <source>▼  Edit text manually</source>
         <translation>▼  Muokkaa tekstiä manuaalisesti</translation>
     </message>
@@ -4119,22 +4564,22 @@ Esimerkki: &apos;Felipe &amp; Julia&apos; → 2 henkilöä</translation>
 <context>
     <name>_MediaCard</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="423"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
         <source>video</source>
         <translation>video</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
         <source>audio</source>
         <translation>ääni</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="426"/>
         <source>image</source>
         <translation>kuva</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="453"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="454"/>
         <source>Add to playlist</source>
         <translation>Lisää soittolistaan</translation>
     </message>
@@ -4311,79 +4756,79 @@ Esimerkki: &apos;Felipe &amp; Julia&apos; → 2 henkilöä</translation>
 <context>
     <name>_PlaylistEditActionsMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>item</source>
         <translation>kohde</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>items</source>
         <translation>kohdetta</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="142"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="143"/>
         <source>✓  1 file added</source>
         <translation>✓  1 tiedosto lisätty</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="144"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="145"/>
         <source>✓  {count} files added</source>
         <translation>✓  {count} tiedostoa lisätty</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="146"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="147"/>
         <source>({count} duplicate skipped)</source>
         <translation>({count} kaksoiskappale ohitettu)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="148"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="149"/>
         <source>({count} duplicates skipped)</source>
         <translation>({count} kaksoiskappaletta ohitettu)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="155"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="156"/>
         <source>⚠  File already in playlist</source>
         <translation>⚠  Tiedosto on jo soittolistassa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="157"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="158"/>
         <source>⚠  Files already in playlist</source>
         <translation>⚠  Tiedostot ovat jo soittolistassa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="237"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="243"/>
         <source>Add Media</source>
         <translation>Lisää media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="307"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="313"/>
         <source>Export .jwlplaylist</source>
         <translation>Vie .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="321"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="333"/>
         <source>Export complete</source>
         <translation>Vienti valmis</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="322"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="334"/>
         <source>Exported:
 {path}</source>
         <translation>Viety:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="325"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="337"/>
         <source>Export error</source>
         <translation>Vientivirhe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="336"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="348"/>
         <source>Current playback</source>
         <translation>Nykyinen toisto</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="350"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="362"/>
         <source>Save playlist</source>
         <translation>Tallenna soittolista</translation>
     </message>
@@ -4391,70 +4836,70 @@ Esimerkki: &apos;Felipe &amp; Julia&apos; → 2 henkilöä</translation>
 <context>
     <name>_PlaylistEditImportMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="35"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="36"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="214"/>
         <source>🔄  Converting PDF: {name}…</source>
         <translation>🔄  Muunnetaan PDF-tiedostoa: {name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="42"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="228"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="43"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
         <source>🔄  {name} — page {current}/{total}…</source>
         <translation>🔄  {name} — sivu {current}/{total}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="86"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="272"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="87"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="265"/>
         <source>✓  {name} opened ({pages} pages)</source>
         <translation>✓  {name} avattu ({pages} sivua)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="93"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="94"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Virhe muunnettaessa PDF-tiedostoa: {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="127"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="120"/>
         <source>🔄  Opening {name}…</source>
         <translation>🔄  Avataan {name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="166"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="159"/>
         <source>⚠  No media found in {name}</source>
         <translation>⚠  Mediaa ei löytynyt kohteesta {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="182"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="175"/>
         <source>images</source>
         <translation>kuvia</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="184"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="177"/>
         <source>videos</source>
         <translation>videoita</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="187"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="180"/>
         <source>unresolved</source>
         <translation>selvittämätön</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="193"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="186"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  .jwpub-tiedostoa ei voitu avata: {err}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="335"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="320"/>
         <source>⚠  Could not import: {name}</source>
         <translation>⚠  Tuonti epäonnistui: {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="343"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="328"/>
         <source>✓  1 item imported</source>
         <translation>✓  1 kohde tuotu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="346"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="331"/>
         <source>✓  {count} items imported</source>
         <translation>✓  {count} kohdetta tuotu</translation>
     </message>
@@ -4501,24 +4946,30 @@ Esimerkki: &apos;Felipe &amp; Julia&apos; → 2 henkilöä</translation>
         <translation>Hae JW.orgista...</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="175"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="148"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="159"/>
+        <source>Add Song...</source>
+        <translation>Lisää laulu...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/PlaylistEditView.qml" line="183"/>
         <source>Play all (in order)</source>
         <translation>Toista kaikki (järjestyksessä)</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="180"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="188"/>
         <source>Play in random order</source>
         <translation>Toista satunnaisessa järjestyksessä</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="151"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="185"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="159"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="193"/>
         <source>Section</source>
         <translation>Osio</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="152"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="186"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="160"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="194"/>
         <source>Add a new section</source>
         <translation>Lisää uusi osio</translation>
     </message>
@@ -4534,7 +4985,7 @@ Napsauta kohdetta heijastaaksesi sen · Järjestä uudelleen vetämällä kahvas
         <translation type="vanished">Käsitellään {n} tiedostoa...</translation>
     </message>
     <message numerus="yes">
-        <location filename="../app/widgets/playlist/widget.py" line="327"/>
+        <location filename="../app/widgets/playlist/widget.py" line="332"/>
         <source>Processing %n file(s)...</source>
         <translation>
             <numerusform>Käsitellään %n tiedostoa...</numerusform>
@@ -4542,7 +4993,7 @@ Napsauta kohdetta heijastaaksesi sen · Järjestä uudelleen vetämällä kahvas
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="342"/>
+        <location filename="../app/widgets/playlist/widget.py" line="352"/>
         <source>All files processed</source>
         <translation>Kaikki tiedostot on käsitelty</translation>
     </message>
@@ -4555,40 +5006,40 @@ Napsauta kohdetta heijastaaksesi sen · Järjestä uudelleen vetämällä kahvas
         <translation type="vanished">kohdetta</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>Section name:</source>
         <translation>Osion nimi:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>E.g.: Introduction</source>
         <translation>Esim.: johdanto</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="567"/>
+        <location filename="../app/widgets/playlist/widget.py" line="577"/>
         <source>New Section</source>
         <translation>Uusi osio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>Subsection name:</source>
         <translation>Aliosion nimi:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>E.g.: Part 1</source>
         <translation>Esim.: osa 1</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="590"/>
+        <location filename="../app/widgets/playlist/widget.py" line="600"/>
         <source>New Subsection</source>
         <translation>Uusi aliosio</translation>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1525"/>
-        <location filename="../app/widgets/playlist/widget.py" line="677"/>
+        <location filename="../app/widgets/playlist/widget.py" line="687"/>
         <source>Rename section</source>
         <translation>Nimeä osio uudelleen</translation>
     </message>
@@ -4599,31 +5050,31 @@ Napsauta kohdetta heijastaaksesi sen · Järjestä uudelleen vetämällä kahvas
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1562"/>
-        <location filename="../app/widgets/playlist/widget.py" line="693"/>
+        <location filename="../app/widgets/playlist/widget.py" line="703"/>
         <source>Delete section</source>
         <translation>Poista osio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="694"/>
+        <location filename="../app/widgets/playlist/widget.py" line="704"/>
         <source>Delete section &quot;{name}&quot;?
 Items inside will be kept.</source>
         <translation>Poistetaanko osio ”{name}”?
 Sen sisältö säilytetään.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="767"/>
+        <location filename="../app/widgets/playlist/widget.py" line="777"/>
         <source>Media is playing</source>
         <translation>Mediaa toistetaan</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="768"/>
+        <location filename="../app/widgets/playlist/widget.py" line="778"/>
         <source>Cannot remove &quot;{title}&quot; while it is currently playing.
 Stop the projection and try again.</source>
         <translation>Kohdetta &quot;{title}&quot; ei voi poistaa, kun sitä toistetaan.
 Lopeta heijastaminen ja yritä uudelleen.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="789"/>
+        <location filename="../app/widgets/playlist/widget.py" line="799"/>
         <source>Rename media</source>
         <translation>Nimeä media uudelleen</translation>
     </message>
@@ -4760,120 +5211,120 @@ Lopeta heijastaminen ja yritä uudelleen.</translation>
 <context>
     <name>_PlaylistListView</name>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="90"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="253"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="91"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
         <source>Playlists</source>
         <translation>Soittolistat</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="98"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="99"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
         <source>Import</source>
         <translation>Tuo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="102"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="370"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="103"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="377"/>
         <source>Import .jwlplaylist</source>
         <translation>Tuo .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="109"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="110"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="257"/>
         <source>New Playlist</source>
         <translation>Uusi soittolista</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="135"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="260"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="136"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
         <source>My Playlists</source>
         <translation>Omat soittolistat</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="148"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="258"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="149"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="259"/>
         <source>No playlists yet.
 Click &apos;＋ New Playlist&apos; to create one.</source>
         <translation>Ei vielä soittolistoja.
 Luo uusi napsauttamalla &apos;＋ Uusi soittolista&apos;.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="157"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="158"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="262"/>
         <source>Link Folder</source>
         <translation>Linkitä kansio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="171"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="263"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="172"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="264"/>
         <source>No subfolders found.
 Create subfolders inside the linked folder to use as playlists.</source>
         <translation>Alakansioita ei löytynyt.
 Luo alakansioita linkitetyn kansion sisälle käyttääksesi niitä soittolistoina.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="295"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="296"/>
         <source>Rename playlist</source>
         <translation>Nimeä soittolista uudelleen</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="320"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="321"/>
         <source>Media is playing</source>
         <translation>Mediaa toistetaan</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="322"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="323"/>
         <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
 Stop the projection and try again.</source>
         <translation>Soittolistaa &quot;{name}&quot; ei voi poistaa, koska yhtä sen kohteista toistetaan.
 Lopeta heijastaminen ja yritä uudelleen.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="328"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
         <source>Delete Playlist</source>
         <translation>Poista soittolista</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="330"/>
         <source>Delete playlist &quot;{name}&quot;?
 This action cannot be undone.</source>
         <translation>Poistetaanko soittolista &quot;{name}&quot;?
 Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="347"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="486"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="348"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="485"/>
         <source>Export .jwlplaylist</source>
         <translation>Vie .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="361"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="497"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="368"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="502"/>
         <source>Export complete</source>
         <translation>Vienti valmis</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="362"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="498"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="369"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="503"/>
         <source>Exported:
 {path}</source>
         <translation>Viety:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="365"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="501"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="372"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="506"/>
         <source>Export error</source>
         <translation>Vientivirhe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="419"/>
         <source>Import error</source>
         <translation>Tuontivirhe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="421"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
         <source>Could not import:
 {name}
 
@@ -4884,35 +5335,35 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="435"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="434"/>
         <source>Rename folder</source>
         <translation>Nimeä kansio uudelleen</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="445"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="467"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="444"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="466"/>
         <source>Error</source>
         <translation>Virhe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="453"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="452"/>
         <source>Delete folder</source>
         <translation>Poista kansio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="455"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="454"/>
         <source>Delete folder &quot;{name}&quot; and all its contents from disk?
 This action cannot be undone.</source>
         <translation>Poistetaanko kansio &quot;{name}&quot; ja kaikki sen sisältö levyltä?
 Tätä toimintoa ei voi peruuttaa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="479"/>
         <source>Empty folder</source>
         <translation>Tyhjä kansio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="481"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation>Mediatiedostoja ei löytynyt kansiosta &quot;{name}&quot;.</translation>
     </message>
@@ -5010,17 +5461,17 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="42"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="114"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>JUMALAN SANAN AARTEITA</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="43"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="115"/>
         <source>APPLY YOURSELF TO THE FIELD MINISTRY</source>
         <translation>VALMENNUSTA KENTTÄTYÖHÖN</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="44"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="116"/>
         <source>LIVING AS CHRISTIANS</source>
         <translation>ELÄMÄ KRISTITTYNÄ</translation>
     </message>
@@ -5029,12 +5480,12 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation type="vanished">Seurakunnan raamatuntutkistelu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="46"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="118"/>
         <source>Watchtower Study</source>
         <translation>Vartiotornin tutkistelu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="45"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="117"/>
         <source>PUBLIC TALK</source>
         <translation>JULKINEN PUHE</translation>
     </message>
@@ -5046,6 +5497,42 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <location filename="../app/widgets/settings/auto_key_dialog.py" line="94"/>
         <source>Click to record</source>
         <translation>Napsauta tallentaaksesi</translation>
+    </message>
+</context>
+<context>
+    <name>_TimePickerPopup</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="275"/>
+        <source>Hour</source>
+        <translation>Tunti</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="276"/>
+        <source>Minute</source>
+        <translation>Minuutti</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="286"/>
+        <source>Cancel</source>
+        <translation>Peruuta</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="289"/>
+        <source>Apply</source>
+        <translation>Käytä</translation>
+    </message>
+</context>
+<context>
+    <name>_TimeStepper</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="198"/>
+        <source>Increase</source>
+        <translation>Lisää</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="199"/>
+        <source>Decrease</source>
+        <translation>Vähennä</translation>
     </message>
 </context>
 <context>
@@ -5302,68 +5789,68 @@ Tätä ei voi peruuttaa.</translation>
         <translation>Näytetään kuvaa</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="98"/>
-        <location filename="../app/controllers/open_media_controller.py" line="304"/>
-        <location filename="../app/controllers/open_media_controller.py" line="314"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="112"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="122"/>
+        <location filename="../app/controllers/open_media_controller.py" line="102"/>
+        <location filename="../app/controllers/open_media_controller.py" line="311"/>
+        <location filename="../app/controllers/open_media_controller.py" line="321"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="116"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="126"/>
         <source>Unsupported file</source>
         <translation>Ei-tuettu tiedosto</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="101"/>
+        <location filename="../app/controllers/open_media_controller.py" line="105"/>
         <source>File format not supported. Use videos (mp4, mkv, mov…) or images (jpg, png, webp…).</source>
         <translation>Tiedostomuotoa ei tueta. Käytä videoita (mp4, mkv, mov...) tai kuvia (jpg, png, webp...).</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="143"/>
-        <location filename="../app/controllers/open_media_controller.py" line="265"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="248"/>
+        <location filename="../app/controllers/open_media_controller.py" line="147"/>
+        <location filename="../app/controllers/open_media_controller.py" line="269"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="252"/>
         <source>Error opening PDF</source>
         <translation>Virhe avattaessa PDF-tiedostoa</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="144"/>
-        <location filename="../app/controllers/open_media_controller.py" line="266"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="249"/>
+        <location filename="../app/controllers/open_media_controller.py" line="148"/>
+        <location filename="../app/controllers/open_media_controller.py" line="270"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="253"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Virhe muunnettaessa PDF-tiedostoa: {error}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="221"/>
+        <location filename="../app/controllers/open_media_controller.py" line="225"/>
         <source>No media found</source>
         <translation>Mediaa ei löytynyt</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="222"/>
+        <location filename="../app/controllers/open_media_controller.py" line="226"/>
         <source>No media items found in {name}.</source>
         <translation>Mediaa ei löytynyt kohteesta {name}.</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="238"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="312"/>
+        <location filename="../app/controllers/open_media_controller.py" line="242"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="316"/>
         <source>Error opening .jwpub</source>
         <translation>Virhe avattaessa .jwpub-tiedostoa</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="305"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="113"/>
+        <location filename="../app/controllers/open_media_controller.py" line="312"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="117"/>
         <source>Invalid or corrupted .jwlplaylist file:
 %1</source>
         <translation>Virheellinen tai vioittunut .jwlplaylist-tiedosto:
 %1</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="315"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="123"/>
+        <location filename="../app/controllers/open_media_controller.py" line="322"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="127"/>
         <source>Error reading %1:
 %2</source>
         <translation>Virhe luettaessa %1:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="39"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="189"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="43"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="193"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="287"/>
         <source>Playlist &quot;%1&quot;
 created successfully!</source>
@@ -5371,7 +5858,7 @@ created successfully!</source>
 luotiin onnistuneesti!</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="52"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="56"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="257"/>
         <source>Added to playlist
 &quot;%1&quot;</source>
@@ -5379,8 +5866,8 @@ luotiin onnistuneesti!</translation>
 &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="59"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="209"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="63"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="213"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="264"/>
         <source>This media is already in
 playlist &quot;%1&quot;</source>
@@ -5388,24 +5875,24 @@ playlist &quot;%1&quot;</source>
 soittolistassa &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="69"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="73"/>
         <source>Download failed</source>
         <translation>Lataus epäonnistui</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="70"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="74"/>
         <source>Could not download %1:
 %2</source>
         <translation>Kohteen %1 lataaminen epäonnistui:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="177"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="181"/>
         <source>No media found in {name}</source>
         <translation>Kohteesta {name} ei löytynyt mediaa</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="203"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="207"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="307"/>
         <source>%1 file(s) added
 to playlist &quot;%2&quot;</source>
@@ -5413,18 +5900,18 @@ to playlist &quot;%2&quot;</source>
 soittolistaan &quot;%2&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="230"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="271"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="234"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="275"/>
         <source>Opening {name}...</source>
         <translation>Avataan {name}...</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="313"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="317"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  .jwpub-tiedostoa ei voitu avata: {err}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="335"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="339"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="73"/>
         <source>Add to Playlist</source>
         <translation>Lisää soittolistaan</translation>
@@ -5497,77 +5984,6 @@ sisältää %2 tiedosto(a)!</translation>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="420"/>
         <source>Close</source>
         <translation>Sulje</translation>
-    </message>
-</context>
-<context>
-    <name>TimerPdfExport</name>
-    <message>
-        <source>Meeting timer report</source>
-        <translation>Kokouksen ajastinraportti</translation>
-    </message>
-    <message>
-        <source>{meeting_type} - {week}</source>
-        <translation>{meeting_type} - {week}</translation>
-    </message>
-    <message>
-        <source>Total {time}</source>
-        <translation>Yhteensä {time}</translation>
-    </message>
-    <message>
-        <source>In progress</source>
-        <translation>Kesken</translation>
-    </message>
-    <message>
-        <source>Running</source>
-        <translation>Käynnissä</translation>
-    </message>
-    <message>
-        <source>Completed</source>
-        <translation>Valmis</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>Ei aloitettu</translation>
-    </message>
-    <message>
-        <source>Page {page}</source>
-        <translation>Sivu {page}</translation>
-    </message>
-    <message>
-        <source>Part</source>
-        <translation>Osa</translation>
-    </message>
-    <message>
-        <source>Planned</source>
-        <translation>Suunniteltu</translation>
-    </message>
-    <message>
-        <source>Started</source>
-        <translation>Aloitettu</translation>
-    </message>
-    <message>
-        <source>Finished</source>
-        <translation>Päättynyt</translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation>Kesto</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Tila</translation>
-    </message>
-    <message>
-        <source>Generated</source>
-        <translation>Luotu</translation>
-    </message>
-    <message>
-        <source>Within time</source>
-        <translation>Ajassa</translation>
-    </message>
-    <message>
-        <source>Over time</source>
-        <translation>Yliajalla</translation>
     </message>
 </context>
 <context>

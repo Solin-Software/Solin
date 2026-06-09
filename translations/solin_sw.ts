@@ -27,203 +27,243 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="153"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="106"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="225"/>
         <source>Clock</source>
         <translation>Saa</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="157"/>
         <source>Type</source>
-        <translation>Aina</translation>
+        <translation type="vanished">Aina</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="86"/>
         <source>Digital</source>
         <translation>Dijitali</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="160"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="88"/>
         <source>Analog</source>
         <translation>Analogi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="170"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="90"/>
+        <source>Analog + digital</source>
+        <translation>Analogi + dijitali</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="96"/>
+        <source>Signature</source>
+        <translation>Sahihi</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="98"/>
+        <source>Classic</source>
+        <translation>Kawaida</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="104"/>
+        <source>Timer</source>
+        <translation>Kipima Muda</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="108"/>
+        <source>Clock + timer</source>
+        <translation>Saa + kipima muda</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="229"/>
+        <source>Clock face</source>
+        <translation>Uso wa saa</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="244"/>
+        <source>Analog style</source>
+        <translation>Mtindo wa analogi</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="260"/>
         <source>Format</source>
         <translation>Muundo</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>24-hour</source>
         <translation>saa 24</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="173"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="263"/>
         <source>12-hour</source>
         <translation>saa 12</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="184"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="274"/>
         <source>Show seconds</source>
         <translation>Onyesha sekunde</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="195"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="285"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="205"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="295"/>
         <source>Part timer</source>
         <translation>Kipima muda cha sehemu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="209"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="299"/>
+        <source>During parts</source>
+        <translation>Wakati wa sehemu</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="312"/>
         <source>Count direction</source>
         <translation>Mwelekeo wa kuhesabu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count down</source>
         <translation>Hesabu kwenda chini</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="212"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="315"/>
         <source>Count up</source>
         <translation>Hesabu kwenda juu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="220"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="323"/>
         <source>Hold duration when stopped</source>
         <translation>Shikilia muda ukisimamishwa</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>Less</source>
         <translation>Chache</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="224"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="327"/>
         <source>More</source>
         <translation>Zaidi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="232"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="335"/>
         <source>Display</source>
         <translation>Onyesho</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="237"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="340"/>
         <source>Display size</source>
         <translation>Ukubwa wa onyesho</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="269"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="372"/>
         <source>Monitors</source>
         <translation>Skrini</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="271"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="374"/>
         <source>Show timer</source>
         <translation>Onyesha kipima muda</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="324"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="427"/>
         <source>Reserved for the timer · %1</source>
         <translation>Imehifadhiwa kwa kipima muda · %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
         <source>Unreserve</source>
         <translation>Ondoa uhifadhi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="331"/>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="689"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="434"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="792"/>
         <source>Reserve</source>
         <translation>Hifadhi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="334"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Hifadhi monitor hii kwa kipima muda</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="362"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="465"/>
         <source>No secondary monitors detected</source>
         <translation>Hakuna skrini za pili zilizotambuliwa</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="381"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="484"/>
         <source>Previous week</source>
         <translation>Juma lililotangulia</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="404"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="507"/>
         <source>Not the current week</source>
         <translation>Si juma la sasa</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="414"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="517"/>
         <source>Next week</source>
         <translation>Juma linalofuata</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="420"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="523"/>
         <source>Back to this week</source>
         <translation>Rudi kwenye juma hili</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Midweek</source>
         <translation>Katikati ya juma</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="430"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="533"/>
         <source>Weekend</source>
         <translation>Mwisho wa juma</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="437"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="540"/>
         <source>Export PDF</source>
         <translation>Hamisha PDF</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="447"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="550"/>
         <source>Meeting parts</source>
         <translation>Sehemu za mkutano</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="532"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="635"/>
         <source>Parts</source>
         <translation>Sehemu</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>Fewer parts</source>
         <translation>Sehemu chache</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="537"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="640"/>
         <source>More parts</source>
         <translation>Sehemu zaidi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="553"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="656"/>
         <source>%1 total</source>
         <translation>Jumla %1</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="662"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="765"/>
         <source>Monitor in use by media</source>
         <translation>Monitor inatumiwa na media</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="669"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="772"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Media inatumia %1 sasa. Ihifadhi kwa kipima muda na uondoe media kwenye monitor hii?</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="683"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="786"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
@@ -382,6 +422,151 @@
         <location filename="../app/widgets/settings/auto_share_section.py" line="349"/>
         <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
         <translation>Ruhusu Solin katika Ufikivu wa macOS ili mibofyo ya kiotomatiki iweze kufanya kazi.</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongPopup</name>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="103"/>
+        <location filename="../app/widgets/background_song_popup.py" line="324"/>
+        <source>Background Song</source>
+        <translation>Wimbo wa Mandharinyuma</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="142"/>
+        <location filename="../app/widgets/background_song_popup.py" line="325"/>
+        <source>Next song</source>
+        <translation>Wimbo unaofuata</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="178"/>
+        <location filename="../app/widgets/background_song_popup.py" line="326"/>
+        <source>Meeting timing</source>
+        <translation>Wakati wa mkutano</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="186"/>
+        <location filename="../app/widgets/background_song_popup.py" line="331"/>
+        <source>At start</source>
+        <translation>Wakati wa kuanza</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="188"/>
+        <location filename="../app/widgets/background_song_popup.py" line="327"/>
+        <source>Stop before meeting</source>
+        <translation>Simamisha kabla ya mkutano</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="193"/>
+        <location filename="../app/widgets/background_song_popup.py" line="329"/>
+        <source>Stops playback before the scheduled meeting time.</source>
+        <translation>Husimamisha uchezaji kabla ya wakati uliopangwa wa mkutano.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="199"/>
+        <location filename="../app/widgets/background_song_popup.py" line="332"/>
+        <source>Fade duration</source>
+        <translation>Muda wa kufifia</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="204"/>
+        <location filename="../app/widgets/background_song_popup.py" line="333"/>
+        <source>Lowers the volume before playback stops.</source>
+        <translation>Hupunguza sauti hatua kwa hatua kabla ya kusimamisha uchezaji.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="244"/>
+        <source>No song playing</source>
+        <translation>Hakuna wimbo unaochezwa</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="271"/>
+        <source>Stop</source>
+        <translation>Simamisha</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/background_song_popup.py" line="275"/>
+        <source>Start</source>
+        <translation>Anza</translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongService</name>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="225"/>
+        <source>Automatic background song is disabled.</source>
+        <translation>Wimbo wa mandharinyuma wa kiotomatiki umezimwa.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="259"/>
+        <source>Enable automatic background song in Settings.</source>
+        <translation>Washa wimbo wa mandharinyuma wa kiotomatiki katika Mipangilio.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="294"/>
+        <location filename="../app/core/jw/background_song_service.py" line="538"/>
+        <source>Stopping background song...</source>
+        <translation>Inasimamisha wimbo wa mandharinyuma...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="305"/>
+        <source>Configure the meeting day/time in Settings.</source>
+        <translation>Weka siku na wakati wa mkutano katika Mipangilio.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="314"/>
+        <source>Waiting for the next configured meeting.</source>
+        <translation>Inasubiri mkutano unaofuata uliowekwa.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="321"/>
+        <source>Stopped for this meeting.</source>
+        <translation>Imesimamishwa kwa ajili ya mkutano huu.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="336"/>
+        <location filename="../app/core/jw/background_song_service.py" line="492"/>
+        <location filename="../app/core/jw/background_song_service.py" line="515"/>
+        <location filename="../app/core/jw/background_song_service.py" line="532"/>
+        <source>Stopped before the meeting.</source>
+        <translation>Imesimamishwa kabla ya mkutano.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="373"/>
+        <source>Audio songs are unavailable for sign-language media.</source>
+        <translation>Nyimbo za sauti hazipatikani kwa video za lugha ya ishara.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="391"/>
+        <location filename="../app/core/jw/background_song_service.py" line="442"/>
+        <location filename="../app/core/jw/background_song_service.py" line="464"/>
+        <source>Loading audio songs...</source>
+        <translation>Inapakia nyimbo za sauti...</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="427"/>
+        <source>Ready.</source>
+        <translation>Tayari.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="434"/>
+        <source>Could not load audio songs.</source>
+        <translation>Haikuwezekana kupakia nyimbo za sauti.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="462"/>
+        <source>No audio songs available.</source>
+        <translation>Hakuna nyimbo za sauti zinazopatikana.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="482"/>
+        <source>Playing background song.</source>
+        <translation>Inacheza wimbo wa mandharinyuma.</translation>
+    </message>
+    <message>
+        <location filename="../app/core/jw/background_song_service.py" line="627"/>
+        <source>Background song stopped.</source>
+        <translation>Wimbo wa mandharinyuma umesimamishwa.</translation>
     </message>
 </context>
 <context>
@@ -781,22 +966,22 @@
 <context>
     <name>JWMediaCatalogBridge</name>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="410"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="453"/>
         <source>Catalog loaded</source>
         <translation>Katalogi imepakiwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="412"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="455"/>
         <source>Loading {done}/{total}</source>
         <translation>Inapakia {done}/{total}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="415"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="458"/>
         <source>Loading</source>
         <translation>Inapakia</translation>
     </message>
     <message>
-        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="885"/>
+        <location filename="../app/widgets/jw_media_catalog_bridge.py" line="889"/>
         <source>{title} added</source>
         <translation>{title} imeongezwa</translation>
     </message>
@@ -851,12 +1036,12 @@
         <translation>Hakuna video zilizopatikana</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1327"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="85"/>
         <source>Where to add?</source>
         <translation>Iongezwe wapi?</translation>
     </message>
     <message>
-        <location filename="../app/qml/JWMediaCatalogModal.qml" line="1454"/>
+        <location filename="../app/qml/JWMediaPlacementOverlay.qml" line="206"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
@@ -870,19 +1055,62 @@
     </message>
 </context>
 <context>
+    <name>JWSongsBridge</name>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="142"/>
+        <source>Add video song</source>
+        <translation>Ongeza wimbo wa video</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="149"/>
+        <source>Songs from JW.org</source>
+        <translation>Nyimbo kutoka JW.org</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="255"/>
+        <source>Search by number or title...</source>
+        <translation>Tafuta kwa nambari au kichwa...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="330"/>
+        <source>No results</source>
+        <translation>Hakuna matokeo</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="331"/>
+        <source>songs</source>
+        <translation>nyimbo</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/JWSongsModal.qml" line="406"/>
+        <source>No songs found</source>
+        <translation>Hakuna nyimbo zilizopatikana</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="404"/>
+        <source>Loading songs...</source>
+        <translation>Inapakia nyimbo...</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/jw_songs_bridge.py" line="459"/>
+        <source>{title} added</source>
+        <translation>{title} imeongezwa</translation>
+    </message>
+</context>
+<context>
     <name>LanguageSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="18"/>
+        <location filename="../app/widgets/settings/language_section.py" line="19"/>
         <source>Interface</source>
         <translation>Kiolesura</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="27"/>
+        <location filename="../app/widgets/settings/language_section.py" line="28"/>
         <source>JW Media</source>
         <translation>Media ya JW</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/language_section.py" line="61"/>
+        <location filename="../app/widgets/settings/language_section.py" line="62"/>
         <source>(same as interface)</source>
         <translation>(sawa na kiolesura)</translation>
     </message>
@@ -890,7 +1118,7 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../app/main_window.py" line="101"/>
+        <location filename="../app/main_window.py" line="104"/>
         <location filename="../app/controllers/main_window_nav.py" line="9"/>
         <source>Solin</source>
         <translation>Solin</translation>
@@ -1204,94 +1432,113 @@ na faili %2!</translation>
 <context>
     <name>MediaLibraryWidget</name>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Songs</source>
         <translation>Nyimbo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="550"/>
+        <location filename="../app/widgets/media_library_widget.py" line="558"/>
         <source>Original Songs</source>
         <translation>Nyimbo Zilizotungwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search song...</source>
         <translation>Tafuta wimbo...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="551"/>
+        <location filename="../app/widgets/media_library_widget.py" line="559"/>
         <source>Search clip...</source>
         <translation>Tafuta klipu...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="552"/>
+        <location filename="../app/widgets/media_library_widget.py" line="560"/>
         <source>Refresh</source>
         <translation>Onyesha upya</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="553"/>
+        <location filename="../app/widgets/media_library_widget.py" line="561"/>
         <source>Play all (in order)</source>
         <translation>Cheza zote (kwa mpangilio)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="554"/>
+        <location filename="../app/widgets/media_library_widget.py" line="562"/>
         <source>Play in random order</source>
         <translation>Cheza bila mpangilio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="555"/>
-        <location filename="../app/widgets/media_library_widget.py" line="727"/>
-        <location filename="../app/widgets/media_library_widget.py" line="780"/>
+        <location filename="../app/widgets/media_library_widget.py" line="798"/>
         <source>Download all video songs</source>
         <translation>Pakua nyimbo zote za video</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="556"/>
+        <location filename="../app/widgets/media_library_widget.py" line="564"/>
         <source>Video songs</source>
         <translation>Nyimbo za video</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="557"/>
+        <location filename="../app/widgets/media_library_widget.py" line="565"/>
         <source>Audio songs</source>
         <translation>Nyimbo za sauti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
+        <location filename="../app/widgets/media_library_widget.py" line="642"/>
         <source>Loading songs...</source>
         <translation>Inapakia nyimbo...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="580"/>
+        <location filename="../app/widgets/media_library_widget.py" line="589"/>
         <source>Loading clips...</source>
         <translation>Inapakia klipu...</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="635"/>
+        <location filename="../app/widgets/media_library_widget.py" line="658"/>
         <source>Updated on {date}</source>
         <translation>Imesasishwa mnamo {date}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading songs. Check your connection.</source>
         <translation>Hitilafu kupakia nyimbo. Angalia muunganisho wako.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="650"/>
+        <location filename="../app/widgets/media_library_widget.py" line="673"/>
         <source>Error loading clips. Check your connection.</source>
         <translation>Hitilafu kupakia klipu. Angalia muunganisho wako.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="729"/>
+        <location filename="../app/widgets/media_library_widget.py" line="797"/>
+        <source>Download all audio songs</source>
+        <translation>Pakua nyimbo zote za sauti</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="803"/>
+        <source>Download {count} audio songs for offline playback?</source>
+        <translation>Pakua nyimbo {count} za sauti kwa ajili ya kucheza bila intaneti?</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="806"/>
         <source>Download {count} video songs for offline playback?</source>
         <translation>Pakua nyimbo {count} za video kwa ajili ya kucheza nje ya mtandao?</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="778"/>
+        <location filename="../app/widgets/media_library_widget.py" line="811"/>
+        <source>All audio songs downloaded</source>
+        <translation>Nyimbo zote za sauti zimepakuliwa</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="816"/>
+        <source>Could not finish downloading all audio songs.</source>
+        <translation>Haikuwezekana kumaliza kupakua nyimbo zote za sauti.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/media_library_widget.py" line="839"/>
         <source>Cancel downloads</source>
         <translation>Ghairi upakuaji</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="782"/>
+        <location filename="../app/widgets/media_library_widget.py" line="812"/>
         <source>All video songs downloaded</source>
         <translation>Nyimbo zote za video zimepakuliwa</translation>
     </message>
@@ -1301,17 +1548,17 @@ na faili %2!</translation>
         <translation>Haikuwezekana kukamilisha upakuaji wa nyimbo zote za video.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="822"/>
+        <location filename="../app/widgets/media_library_widget.py" line="885"/>
         <source>Download failed</source>
         <translation>Upakuaji umeshindwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="892"/>
+        <location filename="../app/widgets/media_library_widget.py" line="955"/>
         <source>{count} songs available</source>
         <translation>Nyimbo {count} zinapatikana</translation>
     </message>
     <message>
-        <location filename="../app/widgets/media_library_widget.py" line="893"/>
+        <location filename="../app/widgets/media_library_widget.py" line="956"/>
         <source>{count} clips available</source>
         <translation>Klipu {count} zinapatikana</translation>
     </message>
@@ -1319,44 +1566,59 @@ na faili %2!</translation>
 <context>
     <name>MediaSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="22"/>
+        <location filename="../app/widgets/settings/media_section.py" line="23"/>
         <source>Auto-download on play</source>
         <translation>Pakua kiotomatiki wakati wa kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="23"/>
+        <location filename="../app/widgets/settings/media_section.py" line="24"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Inapakua media inayochezwa ili itumike nje ya mtandao.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="35"/>
+        <location filename="../app/widgets/settings/media_section.py" line="36"/>
         <source>Auto-download weekly study</source>
         <translation>Pakua kiotomatiki funzo la kila juma</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="36"/>
+        <location filename="../app/widgets/settings/media_section.py" line="37"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Inapakua media za mikutano za juma hili na juma linalofuata.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="48"/>
+        <location filename="../app/widgets/settings/media_section.py" line="49"/>
         <source>Song Announcement Mode</source>
         <translation>Hali ya Kutangaza Wimbo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="49"/>
+        <location filename="../app/widgets/settings/media_section.py" line="50"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Wimbo unaanza ukiwa umenyamazishwa ili kuonyesha kichwa. Bonyeza cheza ili kuanza.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="61"/>
+        <location filename="../app/widgets/settings/media_section.py" line="64"/>
+        <source>Automatic background song</source>
+        <translation>Wimbo wa mandharinyuma wa kiotomatiki</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="77"/>
         <source>Start videos paused</source>
         <translation>Anzisha video zikiwa zimesitishwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/media_section.py" line="62"/>
+        <location filename="../app/widgets/settings/media_section.py" line="78"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Video hufunguka zikiwa zimesitishwa ili uweze kuzianzisha wewe mwenyewe.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="105"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation>Weka siku na wakati wa mkutano kabla ya uchezaji wa kiotomatiki kuanza.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/media_section.py" line="106"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation>Hucheza nyimbo za sauti kabla ya mikutano iliyowekwa na kufifisha sauti kabla ya kuanza.</translation>
     </message>
 </context>
 <context>
@@ -1395,6 +1657,79 @@ na faili %2!</translation>
         <location filename="../app/qml/MeetingPartRow.qml" line="208"/>
         <source>Start</source>
         <translation>Anza</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingScheduleSectionMixin</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="390"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="536"/>
+        <source>Used by automatic features that depend on the meeting start time.</source>
+        <translation>Hutumiwa na vipengele vya kiotomatiki vinavyotegemea wakati wa kuanza kwa mkutano.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="401"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="538"/>
+        <source>Midweek meeting</source>
+        <translation>Mkutano wa katikati ya juma</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="402"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="540"/>
+        <source>Day and time for the midweek meeting.</source>
+        <translation>Siku na wakati wa mkutano wa katikati ya juma.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="410"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="542"/>
+        <source>Weekend meeting</source>
+        <translation>Mkutano wa mwisho wa juma</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="411"/>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="544"/>
+        <source>Day and time for the weekend meeting.</source>
+        <translation>Siku na wakati wa mkutano wa mwisho wa juma.</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="527"/>
+        <source>Not configured</source>
+        <translation>Haijasanidiwa</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="557"/>
+        <source>Monday</source>
+        <translation>Jumatatu</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="558"/>
+        <source>Tuesday</source>
+        <translation>Jumanne</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="559"/>
+        <source>Wednesday</source>
+        <translation>Jumatano</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="560"/>
+        <source>Thursday</source>
+        <translation>Alhamisi</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="561"/>
+        <source>Friday</source>
+        <translation>Ijumaa</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="562"/>
+        <source>Saturday</source>
+        <translation>Jumamosi</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="563"/>
+        <source>Sunday</source>
+        <translation>Jumapili</translation>
     </message>
 </context>
 <context>
@@ -2405,36 +2740,47 @@ Tengeneza mpya:</translation>
         <source>Expand toolbar</source>
         <translation type="vanished">Panua upau wa zana</translation>
     </message>
+    <message>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="355"/>
+        <location filename="../app/widgets/quick_access_toolbar.py" line="362"/>
+        <source>Background Song</source>
+        <translation>Wimbo wa Mandharinyuma</translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="330"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="367"/>
         <source>Manage monitors</source>
         <translation>Simamia skrini</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="331"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="368"/>
+        <source>Background Song</source>
+        <translation>Wimbo wa Mandharinyuma</translation>
+    </message>
+    <message>
+        <location filename="../app/quick_toolbar_bridge.py" line="369"/>
         <source>OBS Scenes</source>
         <translation>Maonyesho ya OBS</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="332"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="370"/>
         <source>Zoom Settings</source>
         <translation>Mipangilio ya Zoom</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="333"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="371"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="334"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="372"/>
         <source>Minimize</source>
         <translation>Punguza ukubwa</translation>
     </message>
     <message>
-        <location filename="../app/quick_toolbar_bridge.py" line="335"/>
+        <location filename="../app/quick_toolbar_bridge.py" line="373"/>
         <source>Expand toolbar</source>
         <translation>Panua upau wa zana</translation>
     </message>
@@ -2542,60 +2888,66 @@ Tengeneza mpya:</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="82"/>
-        <location filename="../app/widgets/settings_widget.py" line="163"/>
+        <location filename="../app/widgets/settings_widget.py" line="86"/>
+        <location filename="../app/widgets/settings_widget.py" line="173"/>
         <source>Settings</source>
         <translation>Mipangilio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="97"/>
-        <location filename="../app/widgets/settings_widget.py" line="164"/>
+        <location filename="../app/widgets/settings_widget.py" line="101"/>
+        <location filename="../app/widgets/settings_widget.py" line="174"/>
         <source>Language</source>
         <translation>Lugha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="103"/>
-        <location filename="../app/widgets/settings_widget.py" line="165"/>
+        <location filename="../app/widgets/settings_widget.py" line="107"/>
+        <location filename="../app/widgets/settings_widget.py" line="175"/>
         <source>Media</source>
         <translation>Media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="109"/>
-        <location filename="../app/widgets/settings_widget.py" line="166"/>
+        <location filename="../app/widgets/settings_widget.py" line="113"/>
+        <location filename="../app/widgets/settings_widget.py" line="176"/>
+        <source>Meetings</source>
+        <translation>Mikutano</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="119"/>
+        <location filename="../app/widgets/settings_widget.py" line="177"/>
         <source>Folders</source>
         <translation>Folda</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="115"/>
-        <location filename="../app/widgets/settings_widget.py" line="167"/>
+        <location filename="../app/widgets/settings_widget.py" line="125"/>
+        <location filename="../app/widgets/settings_widget.py" line="178"/>
         <source>Integrations</source>
         <translation>Miunganisho</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="133"/>
-        <location filename="../app/widgets/settings_widget.py" line="168"/>
+        <location filename="../app/widgets/settings_widget.py" line="143"/>
+        <location filename="../app/widgets/settings_widget.py" line="179"/>
         <source>Annual Text</source>
         <translation>Andiko la Mwaka</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="139"/>
-        <location filename="../app/widgets/settings_widget.py" line="169"/>
+        <location filename="../app/widgets/settings_widget.py" line="149"/>
+        <location filename="../app/widgets/settings_widget.py" line="180"/>
         <source>Screens</source>
         <translation>Skrini</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="147"/>
-        <location filename="../app/widgets/settings_widget.py" line="170"/>
+        <location filename="../app/widgets/settings_widget.py" line="157"/>
+        <location filename="../app/widgets/settings_widget.py" line="181"/>
         <source>About</source>
         <translation>Kuhusu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="171"/>
+        <location filename="../app/widgets/settings_widget.py" line="182"/>
         <source>Interface</source>
         <translation>Kiolesura</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="172"/>
+        <location filename="../app/widgets/settings_widget.py" line="183"/>
         <source>JW Media</source>
         <translation>Media ya JW</translation>
     </message>
@@ -2604,52 +2956,57 @@ Tengeneza mpya:</translation>
         <translation type="vanished">(sawa na kiolesura)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="175"/>
+        <location filename="../app/widgets/settings_widget.py" line="186"/>
         <source>Auto-download on play</source>
         <translation>Pakua kiotomatiki wakati wa kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="177"/>
+        <location filename="../app/widgets/settings_widget.py" line="188"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Inapakua media inayochezwa ili itumike nje ya mtandao.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="179"/>
+        <location filename="../app/widgets/settings_widget.py" line="190"/>
         <source>Auto-download weekly study</source>
         <translation>Pakua kiotomatiki funzo la kila juma</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="181"/>
+        <location filename="../app/widgets/settings_widget.py" line="192"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Inapakua media za mikutano za juma hili na juma linalofuata.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="183"/>
+        <location filename="../app/widgets/settings_widget.py" line="194"/>
         <source>Song Announcement Mode</source>
         <translation>Hali ya Kutangaza Wimbo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="185"/>
+        <location filename="../app/widgets/settings_widget.py" line="196"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation>Wimbo unaanza ukiwa umenyamazishwa ili kuonyesha kichwa. Bonyeza cheza ili kuanza.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="187"/>
+        <location filename="../app/widgets/settings_widget.py" line="198"/>
+        <source>Automatic background song</source>
+        <translation>Wimbo wa mandharinyuma wa kiotomatiki</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings_widget.py" line="200"/>
         <source>Start videos paused</source>
         <translation>Anzisha video zikiwa zimesitishwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="189"/>
+        <location filename="../app/widgets/settings_widget.py" line="202"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation>Video hufunguka zikiwa zimesitishwa ili uweze kuzianzisha wewe mwenyewe.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="191"/>
+        <location filename="../app/widgets/settings_widget.py" line="204"/>
         <source>Link Folder</source>
         <translation>Unganisha Folda</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="193"/>
+        <location filename="../app/widgets/settings_widget.py" line="206"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation>Folda ya usawazishaji (Dropbox, OneDrive, n.k.) inayoonyeshwa kama orodha za kucheza.</translation>
     </message>
@@ -2658,7 +3015,7 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Hakuna folda iliyochaguliwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="196"/>
+        <location filename="../app/widgets/settings_widget.py" line="209"/>
         <source>Choose…</source>
         <translation>Chagua…</translation>
     </message>
@@ -2671,12 +3028,12 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Chagua folda ya kuunganisha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="197"/>
+        <location filename="../app/widgets/settings_widget.py" line="210"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="199"/>
+        <location filename="../app/widgets/settings_widget.py" line="212"/>
         <source>Automatically switches scenes during projection</source>
         <translation>Inabadilisha maonyesho kiotomatiki wakati wa kuonyesha kwenye skrini</translation>
     </message>
@@ -2685,17 +3042,17 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Imeondolewa muunganisho</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="201"/>
+        <location filename="../app/widgets/settings_widget.py" line="214"/>
         <source>WebSocket Port</source>
         <translation>Bandari (Port) ya WebSocket</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="202"/>
+        <location filename="../app/widgets/settings_widget.py" line="215"/>
         <source>Password (optional)</source>
         <translation>Nenosiri (hiari)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="204"/>
+        <location filename="../app/widgets/settings_widget.py" line="217"/>
         <source>Leave blank if no password is set</source>
         <translation>Acha wazi ikiwa hakuna nenosiri lililowekwa</translation>
     </message>
@@ -2704,22 +3061,22 @@ Tengeneza mpya:</translation>
         <translation type="vanished">● Mabadiliko yanahifadhiwa kiotomatiki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="215"/>
+        <location filename="../app/widgets/settings_widget.py" line="228"/>
         <source>Program stream (NDI)</source>
         <translation>Utiririshaji wa programu (NDI)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="217"/>
+        <location filename="../app/widgets/settings_widget.py" line="230"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation>Pokea matokeo ya DistroAV/NDI kutoka OBS kama onyesho la moja kwa moja.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="220"/>
+        <location filename="../app/widgets/settings_widget.py" line="233"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
         <translation>Washa Matokeo Makuu (Main Output) katika DistroAV, kisha uchague chanzo cha NDI kinachoonyeshwa na OBS.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="222"/>
+        <location filename="../app/widgets/settings_widget.py" line="235"/>
         <source>Available NDI sources</source>
         <translation>Vyanzo vya NDI vinavyopatikana</translation>
     </message>
@@ -2728,27 +3085,27 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Hakuna vyanzo vilivyopakiwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="223"/>
+        <location filename="../app/widgets/settings_widget.py" line="236"/>
         <source>Find sources</source>
         <translation>Tafuta vyanzo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="206"/>
+        <location filename="../app/widgets/settings_widget.py" line="219"/>
         <source>Default scene (idle)</source>
         <translation>Mandhari ya kawaida (bila kazi)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="208"/>
+        <location filename="../app/widgets/settings_widget.py" line="221"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation>Mandhari yanayoonyeshwa wakati hakuna kinachokadiriwa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="210"/>
+        <location filename="../app/widgets/settings_widget.py" line="223"/>
         <source>Media window scene</source>
         <translation>Mandhari ya dirisha la midia</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="212"/>
+        <location filename="../app/widgets/settings_widget.py" line="225"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation>Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
     </message>
@@ -2776,27 +3133,27 @@ Tengeneza mpya:</translation>
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="244"/>
+        <location filename="../app/widgets/settings_widget.py" line="258"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Vidhibiti vya sauti na idadi ya waliohudhuria wakati wa mikutano.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="246"/>
+        <location filename="../app/widgets/settings_widget.py" line="260"/>
         <source>Auto Screen Share</source>
         <translation>Kushiriki Skrini Kiotomatiki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="247"/>
+        <location filename="../app/widgets/settings_widget.py" line="261"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation>Hushiriki skrini kiotomatiki kupitia mikato ya kibodi wakati wa kuonyesha midia.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="248"/>
+        <location filename="../app/widgets/settings_widget.py" line="262"/>
         <source>Share hotkey</source>
         <translation>Mkato wa kushiriki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="249"/>
+        <location filename="../app/widgets/settings_widget.py" line="263"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
         <translation>Hutumia mkato mmoja wa Zoom wa kuanza/kusimamisha kushiriki skrini.</translation>
     </message>
@@ -2805,22 +3162,22 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Haijasanidiwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="257"/>
+        <location filename="../app/widgets/settings_widget.py" line="271"/>
         <source>Accessibility permission</source>
         <translation>Ruhusa ya Ufikivu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="258"/>
+        <location filename="../app/widgets/settings_widget.py" line="272"/>
         <source>Open Settings</source>
         <translation>Fungua Mipangilio</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="251"/>
+        <location filename="../app/widgets/settings_widget.py" line="265"/>
         <source>Click Position</source>
         <translation>Mahali pa Kubofya</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="253"/>
+        <location filename="../app/widgets/settings_widget.py" line="267"/>
         <source>Position to click after the share dialog opens to select the target.</source>
         <translation>Mahali pa kubofya baada ya kidirisha cha kushiriki kufunguka ili kuchagua lengwa.</translation>
     </message>
@@ -2829,7 +3186,7 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Mahali: {x}, {y}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="255"/>
+        <location filename="../app/widgets/settings_widget.py" line="269"/>
         <source>Configure</source>
         <translation>Sanidi</translation>
     </message>
@@ -2882,37 +3239,37 @@ Tengeneza mpya:</translation>
         <translation type="vanished">— Chagua mandhari —</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="226"/>
+        <location filename="../app/widgets/settings_widget.py" line="239"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="228"/>
+        <location filename="../app/widgets/settings_widget.py" line="241"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation>Inaonyesha kitufe cha kamera kwenye upau wa zana za moja kwa moja.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="230"/>
+        <location filename="../app/widgets/settings_widget.py" line="243"/>
         <source>Automatic Shortcuts</source>
         <translation>Njia za Mkato za Kiotomatiki</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="232"/>
+        <location filename="../app/widgets/settings_widget.py" line="245"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation>Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="235"/>
+        <location filename="../app/widgets/settings_widget.py" line="248"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation>Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="237"/>
+        <location filename="../app/widgets/settings_widget.py" line="250"/>
         <source>No shortcuts configured.</source>
         <translation>Hakuna njia za mkato zilizosanidiwa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="238"/>
+        <location filename="../app/widgets/settings_widget.py" line="251"/>
         <source>Add shortcut</source>
         <translation>Ongeza njia ya mkato</translation>
     </message>
@@ -2925,7 +3282,7 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Imezimwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="250"/>
+        <location filename="../app/widgets/settings_widget.py" line="264"/>
         <source>Edit</source>
         <translation>Hariri</translation>
     </message>
@@ -2934,7 +3291,7 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Futa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="243"/>
+        <location filename="../app/widgets/settings_widget.py" line="257"/>
         <source>Zoom Meetings</source>
         <translation>Mikutano ya Zoom</translation>
     </message>
@@ -2971,7 +3328,7 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Inaonyesha idadi ya washiriki kwenye kidirisha cha Zoom. Zima ili kuokoa rasilimali.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="263"/>
+        <location filename="../app/widgets/settings_widget.py" line="277"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Maandishi yatakayoonyeshwa kwenye skrini ya projekta wakati haitumiki.</translation>
     </message>
@@ -2980,32 +3337,32 @@ Tengeneza mpya:</translation>
         <translation type="vanished">Inachukua andiko la mwaka…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="265"/>
+        <location filename="../app/widgets/settings_widget.py" line="279"/>
         <source>Update</source>
         <translation>Sasisha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="267"/>
+        <location filename="../app/widgets/settings_widget.py" line="281"/>
         <source>Scripture:</source>
         <translation>Andiko:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="269"/>
+        <location filename="../app/widgets/settings_widget.py" line="283"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="271"/>
+        <location filename="../app/widgets/settings_widget.py" line="285"/>
         <source>Bible reference:</source>
         <translation>Rejeo la Biblia:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="272"/>
+        <location filename="../app/widgets/settings_widget.py" line="286"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Mfn.: Mathayo 5:3.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="273"/>
+        <location filename="../app/widgets/settings_widget.py" line="287"/>
         <source>Save changes</source>
         <translation>Hifadhi mabadiliko</translation>
     </message>
@@ -3050,22 +3407,22 @@ Tengeneza mpya:</translation>
         <translation type="vanished">PROJEKTA</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="275"/>
+        <location filename="../app/widgets/settings_widget.py" line="289"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Programu ya Sauti na Video kwa ajili ya mikutano ya Jumba la Ufalme.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="282"/>
+        <location filename="../app/widgets/settings_widget.py" line="296"/>
         <source>Official Website</source>
         <translation>Tovuti Rasmi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="283"/>
+        <location filename="../app/widgets/settings_widget.py" line="297"/>
         <source>Changelog</source>
         <translation>Changelog</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings_widget.py" line="278"/>
+        <location filename="../app/widgets/settings_widget.py" line="292"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation>Programu hii inajitegemea na haishirikiani na wala kuidhinishwa na Watch Tower Bible and Tract Society of Pennsylvania au mashirika yake yoyote yanayohusiana.</translation>
     </message>
@@ -3139,53 +3496,141 @@ Tengeneza mpya:</translation>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="304"/>
+        <location filename="../app/widgets/timer_bridge.py" line="311"/>
         <source>Export PDF</source>
         <translation>Hamisha PDF</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="306"/>
+        <location filename="../app/widgets/timer_bridge.py" line="313"/>
         <source>PDF files (*.pdf)</source>
         <translation>Faili za PDF (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="317"/>
+        <location filename="../app/widgets/timer_bridge.py" line="324"/>
         <source>Weekend</source>
         <translation>Mwisho wa juma</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="318"/>
+        <location filename="../app/widgets/timer_bridge.py" line="325"/>
         <source>Midweek</source>
         <translation>Katikati ya juma</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="332"/>
+        <location filename="../app/widgets/timer_bridge.py" line="339"/>
         <source>Export failed</source>
         <translation>Uhamishaji umeshindwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="333"/>
+        <location filename="../app/widgets/timer_bridge.py" line="340"/>
         <source>Could not export the timer PDF:
 {error}</source>
         <translation>Haikuweza kuhamisha PDF ya kipima muda:
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="339"/>
+        <location filename="../app/widgets/timer_bridge.py" line="346"/>
         <source>PDF exported</source>
         <translation>PDF imehamishwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="340"/>
+        <location filename="../app/widgets/timer_bridge.py" line="347"/>
         <source>Saved to:
 {path}</source>
         <translation>Imehifadhiwa kwenye:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/timer_bridge.py" line="462"/>
+        <location filename="../app/widgets/timer_bridge.py" line="496"/>
         <source>this monitor</source>
         <translation>monitor hii</translation>
+    </message>
+</context>
+<context>
+    <name>TimerPdfExport</name>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="35"/>
+        <source>Meeting timer report</source>
+        <translation>Ripoti ya kipima muda cha mkutano</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="36"/>
+        <source>{meeting_type} - {week}</source>
+        <translation>{meeting_type} - {week}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="37"/>
+        <source>Total {time}</source>
+        <translation>Jumla {time}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="38"/>
+        <source>In progress</source>
+        <translation>Inaendelea</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="39"/>
+        <source>Running</source>
+        <translation>Inaendelea</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="40"/>
+        <source>Completed</source>
+        <translation>Imekamilika</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="41"/>
+        <source>Not started</source>
+        <translation>Haijaanza</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="42"/>
+        <source>Page {page}</source>
+        <translation>Ukurasa {page}</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="43"/>
+        <source>Part</source>
+        <translation>Sehemu</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="44"/>
+        <source>Planned</source>
+        <translation>Iliyopangwa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="45"/>
+        <source>Started</source>
+        <translation>Imeanza</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="46"/>
+        <source>Finished</source>
+        <translation>Imemalizika</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="47"/>
+        <source>Duration</source>
+        <translation>Muda</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="48"/>
+        <source>Status</source>
+        <translation>Hali</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="49"/>
+        <source>Generated</source>
+        <translation>Imetengenezwa</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="50"/>
+        <source>Within time</source>
+        <translation>Ndani ya muda</translation>
+    </message>
+    <message>
+        <location filename="../app/core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Over time</source>
+        <translation>Zaidi ya muda</translation>
     </message>
 </context>
 <context>
@@ -3382,118 +3827,118 @@ Bofya &apos;Pakua&apos; ili kufungua ukurasa wa kupakua.</translation>
 <context>
     <name>WifiReceiveWidget</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="606"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="607"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1358"/>
         <source>Receive via Wi-Fi</source>
         <translation>Pokea kupitia Wi-Fi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="621"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="622"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1359"/>
         <source>Starting server…</source>
         <translation>Inaanzisha seva…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="665"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="666"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1360"/>
         <source>Scan the QR code with your phone.
 Both devices must be on the same Wi-Fi network.</source>
         <translation>Changanua msimbo wa QR kwa kutumia simu yako.
 Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="675"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="695"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1370"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="676"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="696"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
         <source>Copy link</source>
         <translation>Nakili kiungo</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="707"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="708"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1361"/>
         <source>The server stops automatically after 15 minutes outside this screen.</source>
         <translation>Seva inasimama kiotomatiki baada ya dakika 15 ukiwa nje ya skrini hii.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="720"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1366"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="721"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1362"/>
         <source>  Stop server</source>
         <translation>  Simamisha seva</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="740"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1371"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="741"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
         <source>Received media</source>
         <translation>Media zilizopokewa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="754"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1372"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="755"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
         <source>  Send all to playlist</source>
         <translation>  Tuma zote kwenye orodha ya kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="795"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1373"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="796"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
         <source>Files sent from your phone will appear here.</source>
         <translation>Mafaili yaliyotumwa kutoka kwenye simu yako yataonekana hapa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="836"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1367"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="837"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1363"/>
         <source>Receive media via Wi-Fi</source>
         <translation>Pokea media kupitia Wi-Fi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="845"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="907"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1368"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="846"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="908"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1364"/>
         <source>Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio.</source>
         <translation>Unganisha kwenye Wi-Fi hiyohiyo na ufungue kiungo kwenye simu yako ili kutuma picha, video au sauti.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="859"/>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1369"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="860"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1365"/>
         <source>  Start server</source>
         <translation>  Anzisha seva</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="879"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
         <source>Send Media</source>
         <translation>Tuma Media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="880"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
         <source>Select or drag photos, videos or audio files</source>
         <translation>Chagua au buruta picha, video au faili za sauti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="881"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
         <source>Send media</source>
         <translation>Tuma media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="882"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
         <source>Drag files here</source>
         <translation>Buruta mafaili hapa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="883"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
         <source>✓ File sent!</source>
         <translation>✓ Faili limetumwa!</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="884"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="885"/>
         <source>Upload error</source>
         <translation>Hitilafu ya kupakia</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1120"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1116"/>
         <source>Could not start the server.</source>
         <translation>Haikuweza kuanzisha seva.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="1125"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="1121"/>
         <source>Server stopped due to inactivity.</source>
         <translation>Seva imesimama kutokana na kutotumika.</translation>
     </message>
@@ -3501,75 +3946,75 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
 <context>
     <name>YearlyTextSectionMixin</name>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="57"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="58"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation>Maandishi yatakayoonyeshwa kwenye skrini ya projekta wakati haitumiki.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="75"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="219"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="292"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="76"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="222"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="295"/>
         <source>Fetching annual text…</source>
         <translation>Inachukua andiko la mwaka…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="89"/>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="275"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="90"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="278"/>
         <source>Update</source>
         <translation>Sasisha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="127"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="128"/>
         <source>Scripture:</source>
         <translation>Andiko:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="136"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="137"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation>Mfn.: Wenye furaha ni wale wanaotambua uhitaji wao wa kiroho.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="147"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="148"/>
         <source>Bible reference:</source>
         <translation>Rejeo la Biblia:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="155"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="156"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation>Mfn.: Mathayo 5:3.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="164"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="165"/>
         <source>Save changes</source>
         <translation>Hifadhi mabadiliko</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="267"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="270"/>
         <source>Annual text updated for {year}</source>
         <translation>Andiko la mwaka limesasishwa kwa {year}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="298"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="301"/>
         <source>Loading…</source>
         <translation>Inapakia…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="305"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="308"/>
         <source>Could not fetch annual text</source>
         <translation>Haikuweza kuchukua andiko la mwaka</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="312"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="315"/>
         <source>Retry</source>
         <translation>Jaribu tena</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="335"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="338"/>
         <source>▲  Edit text manually</source>
         <translation>▲  Badili maandishi wewe mwenyewe</translation>
     </message>
     <message>
-        <location filename="../app/widgets/settings/yearly_text_section.py" line="337"/>
+        <location filename="../app/widgets/settings/yearly_text_section.py" line="340"/>
         <source>▼  Edit text manually</source>
         <translation>▼  Badili maandishi wewe mwenyewe</translation>
     </message>
@@ -4087,22 +4532,22 @@ Mfano: &apos;Felipe &amp; Julia&apos; → watu 2</translation>
 <context>
     <name>_MediaCard</name>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="423"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
         <source>video</source>
         <translation>video</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="424"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
         <source>audio</source>
         <translation>sauti</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="425"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="426"/>
         <source>image</source>
         <translation>picha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/wifi_receive_widget.py" line="453"/>
+        <location filename="../app/widgets/wifi_receive_widget.py" line="454"/>
         <source>Add to playlist</source>
         <translation>Ongeza kwenye orodha ya kucheza</translation>
     </message>
@@ -4279,79 +4724,79 @@ Mfano: &apos;Felipe &amp; Julia&apos; → watu 2</translation>
 <context>
     <name>_PlaylistEditActionsMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>item</source>
         <translation>kipengee</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="43"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="44"/>
         <source>items</source>
         <translation>vipengee</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="142"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="143"/>
         <source>✓  1 file added</source>
         <translation>✓  faili 1 limeongezwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="144"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="145"/>
         <source>✓  {count} files added</source>
         <translation>✓  faili {count} zimeongezwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="146"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="147"/>
         <source>({count} duplicate skipped)</source>
         <translation>(iliyojirudia {count} imerukwa)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="148"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="149"/>
         <source>({count} duplicates skipped)</source>
         <translation>(zilizojirudia {count} zimerukwa)</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="155"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="156"/>
         <source>⚠  File already in playlist</source>
         <translation>⚠  Faili tayari lipo kwenye orodha ya kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="157"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="158"/>
         <source>⚠  Files already in playlist</source>
         <translation>⚠  Faili tayari zipo kwenye orodha ya kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="237"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="243"/>
         <source>Add Media</source>
         <translation>Ongeza Media</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="307"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="313"/>
         <source>Export .jwlplaylist</source>
         <translation>Hamisha .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="321"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="333"/>
         <source>Export complete</source>
         <translation>Kusafirisha kumekamilika</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="322"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="334"/>
         <source>Exported:
 {path}</source>
         <translation>Imehamishwa:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="325"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="337"/>
         <source>Export error</source>
         <translation>Hitilafu ya kuhamisha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="336"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="348"/>
         <source>Current playback</source>
         <translation>Uchezaji wa sasa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/edit_actions.py" line="350"/>
+        <location filename="../app/widgets/playlist/edit_actions.py" line="362"/>
         <source>Save playlist</source>
         <translation>Hifadhi orodha ya kucheza</translation>
     </message>
@@ -4359,70 +4804,70 @@ Mfano: &apos;Felipe &amp; Julia&apos; → watu 2</translation>
 <context>
     <name>_PlaylistEditImportMixin</name>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="35"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="36"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="214"/>
         <source>🔄  Converting PDF: {name}…</source>
         <translation>🔄  Inabadilisha PDF: {name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="42"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="228"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="43"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="221"/>
         <source>🔄  {name} — page {current}/{total}…</source>
         <translation>🔄  {name} — ukurasa {current}/{total}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="86"/>
-        <location filename="../app/widgets/playlist/import_export.py" line="272"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="87"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="265"/>
         <source>✓  {name} opened ({pages} pages)</source>
         <translation>✓  {name} imefunguliwa (kurasa {pages})</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="93"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="94"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Hitilafu kubadilisha PDF: {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="127"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="120"/>
         <source>🔄  Opening {name}…</source>
         <translation>🔄  Inafungua {name}…</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="166"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="159"/>
         <source>⚠  No media found in {name}</source>
         <translation>⚠  Hakuna media iliyopatikana kwenye {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="182"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="175"/>
         <source>images</source>
         <translation>picha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="184"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="177"/>
         <source>videos</source>
         <translation>video</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="187"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="180"/>
         <source>unresolved</source>
         <translation>haikutatuliwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="193"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="186"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  Haikuweza kufungua .jwpub: {err}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="335"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="320"/>
         <source>⚠  Could not import: {name}</source>
         <translation>⚠  Imeshindwa kuingiza: {name}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="343"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="328"/>
         <source>✓  1 item imported</source>
         <translation>✓  Kitu 1 kimeingizwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/import_export.py" line="346"/>
+        <location filename="../app/widgets/playlist/import_export.py" line="331"/>
         <source>✓  {count} items imported</source>
         <translation>✓  Vitu {count} vimeingizwa</translation>
     </message>
@@ -4469,24 +4914,30 @@ Mfano: &apos;Felipe &amp; Julia&apos; → watu 2</translation>
         <translation>Tafuta kwenye JW.org...</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="175"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="148"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="159"/>
+        <source>Add Song...</source>
+        <translation>Ongeza wimbo...</translation>
+    </message>
+    <message>
+        <location filename="../app/qml/PlaylistEditView.qml" line="183"/>
         <source>Play all (in order)</source>
         <translation>Cheza zote (kwa mpangilio)</translation>
     </message>
     <message>
-        <location filename="../app/qml/PlaylistEditView.qml" line="180"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="188"/>
         <source>Play in random order</source>
         <translation>Cheza bila mpangilio</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="151"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="185"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="159"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="193"/>
         <source>Section</source>
         <translation>Sehemu</translation>
     </message>
     <message>
-        <location filename="../app/qml/MeetingDetailView.qml" line="152"/>
-        <location filename="../app/qml/PlaylistEditView.qml" line="186"/>
+        <location filename="../app/qml/MeetingDetailView.qml" line="160"/>
+        <location filename="../app/qml/PlaylistEditView.qml" line="194"/>
         <source>Add a new section</source>
         <translation>Ongeza sehemu mpya</translation>
     </message>
@@ -4502,7 +4953,7 @@ Bofya kipengee ili kukionyesha · Buruta mshiko ⠿ ili kupanga upya</translatio
         <translation type="vanished">Inachakata faili {n}...</translation>
     </message>
     <message numerus="yes">
-        <location filename="../app/widgets/playlist/widget.py" line="327"/>
+        <location filename="../app/widgets/playlist/widget.py" line="332"/>
         <source>Processing %n file(s)...</source>
         <translation>
             <numerusform>Inachakata faili %n...</numerusform>
@@ -4510,7 +4961,7 @@ Bofya kipengee ili kukionyesha · Buruta mshiko ⠿ ili kupanga upya</translatio
         </translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="342"/>
+        <location filename="../app/widgets/playlist/widget.py" line="352"/>
         <source>All files processed</source>
         <translation>Faili zote zimechakatwa</translation>
     </message>
@@ -4523,40 +4974,40 @@ Bofya kipengee ili kukionyesha · Buruta mshiko ⠿ ili kupanga upya</translatio
         <translation type="vanished">vipengee</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>Section name:</source>
         <translation>Jina la sehemu:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="566"/>
-        <location filename="../app/widgets/playlist/widget.py" line="676"/>
+        <location filename="../app/widgets/playlist/widget.py" line="576"/>
+        <location filename="../app/widgets/playlist/widget.py" line="686"/>
         <source>E.g.: Introduction</source>
         <translation>Mfn.: Utangulizi</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="567"/>
+        <location filename="../app/widgets/playlist/widget.py" line="577"/>
         <source>New Section</source>
         <translation>Sehemu Mpya</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>Subsection name:</source>
         <translation>Jina la sehemu ndogo:</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="589"/>
+        <location filename="../app/widgets/playlist/widget.py" line="599"/>
         <source>E.g.: Part 1</source>
         <translation>Mfn.: Sehemu ya 1</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="590"/>
+        <location filename="../app/widgets/playlist/widget.py" line="600"/>
         <source>New Subsection</source>
         <translation>Sehemu ndogo mpya</translation>
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1525"/>
-        <location filename="../app/widgets/playlist/widget.py" line="677"/>
+        <location filename="../app/widgets/playlist/widget.py" line="687"/>
         <source>Rename section</source>
         <translation>Badili jina la sehemu</translation>
     </message>
@@ -4567,31 +5018,31 @@ Bofya kipengee ili kukionyesha · Buruta mshiko ⠿ ili kupanga upya</translatio
     </message>
     <message>
         <location filename="../app/qml/PlaylistTreeView.qml" line="1562"/>
-        <location filename="../app/widgets/playlist/widget.py" line="693"/>
+        <location filename="../app/widgets/playlist/widget.py" line="703"/>
         <source>Delete section</source>
         <translation>Futa sehemu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="694"/>
+        <location filename="../app/widgets/playlist/widget.py" line="704"/>
         <source>Delete section &quot;{name}&quot;?
 Items inside will be kept.</source>
         <translation>Je, ufute sehemu ya &quot;{name}&quot;?
 Vitu vilivyomo ndani vitahifadhiwa.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="767"/>
+        <location filename="../app/widgets/playlist/widget.py" line="777"/>
         <source>Media is playing</source>
         <translation>Media inachezwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="768"/>
+        <location filename="../app/widgets/playlist/widget.py" line="778"/>
         <source>Cannot remove &quot;{title}&quot; while it is currently playing.
 Stop the projection and try again.</source>
         <translation>Haiwezi kuondoa &quot;{title}&quot; wakati inachezwa.
 Acha kuonyesha na ujaribu tena.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/widget.py" line="789"/>
+        <location filename="../app/widgets/playlist/widget.py" line="799"/>
         <source>Rename media</source>
         <translation>Badili jina la media</translation>
     </message>
@@ -4728,120 +5179,120 @@ Acha kuonyesha na ujaribu tena.</translation>
 <context>
     <name>_PlaylistListView</name>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="90"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="253"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="91"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
         <source>Playlists</source>
         <translation>Orodha za Kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="98"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="254"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="99"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
         <source>Import</source>
         <translation>Ingiza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="102"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="255"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="370"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="103"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="377"/>
         <source>Import .jwlplaylist</source>
         <translation>Ingiza .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="109"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="256"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="110"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="257"/>
         <source>New Playlist</source>
         <translation>Orodha Mpya ya Kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="135"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="260"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="136"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
         <source>My Playlists</source>
         <translation>Orodha Zangu za Kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="148"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="258"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="149"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="259"/>
         <source>No playlists yet.
 Click &apos;＋ New Playlist&apos; to create one.</source>
         <translation>Hakuna orodha za kucheza bado.
 Bofya &apos;＋ Orodha Mpya ya Kucheza&apos; ili kutengeneza.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="157"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="261"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="158"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="262"/>
         <source>Link Folder</source>
         <translation>Unganisha Folda</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="171"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="263"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="172"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="264"/>
         <source>No subfolders found.
 Create subfolders inside the linked folder to use as playlists.</source>
         <translation>Hakuna folda ndogo zilizopatikana.
 Tengeneza folda ndogo ndani ya folda iliyounganishwa ili kutumia kama orodha za kucheza.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="295"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="296"/>
         <source>Rename playlist</source>
         <translation>Badili jina la orodha ya kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="320"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="321"/>
         <source>Media is playing</source>
         <translation>Media inachezwa</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="322"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="323"/>
         <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
 Stop the projection and try again.</source>
         <translation>Haiwezi kufuta orodha ya kucheza &quot;{name}&quot; kwa sababu moja ya vitu vyake inachezwa.
 Acha kuonyesha na ujaribu tena.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="328"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
         <source>Delete Playlist</source>
         <translation>Futa Orodha ya Kucheza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="329"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="330"/>
         <source>Delete playlist &quot;{name}&quot;?
 This action cannot be undone.</source>
         <translation>Futa orodha ya kucheza &quot;{name}&quot;?
 Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="347"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="486"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="348"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="485"/>
         <source>Export .jwlplaylist</source>
         <translation>Hamisha .jwlplaylist</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="361"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="497"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="368"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="502"/>
         <source>Export complete</source>
         <translation>Kusafirisha kumekamilika</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="362"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="498"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="369"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="503"/>
         <source>Exported:
 {path}</source>
         <translation>Imehamishwa:
 {path}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="365"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="501"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="372"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="506"/>
         <source>Export error</source>
         <translation>Hitilafu ya kuhamisha</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="419"/>
         <source>Import error</source>
         <translation>Hitilafu ya kuingiza</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="421"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="420"/>
         <source>Could not import:
 {name}
 
@@ -4852,35 +5303,35 @@ Hutaweza kurudisha hatua hii.</translation>
 {error}</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="435"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="434"/>
         <source>Rename folder</source>
         <translation>Badili jina la folda</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="445"/>
-        <location filename="../app/widgets/playlist/list_view.py" line="467"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="444"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="466"/>
         <source>Error</source>
         <translation>Hitilafu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="453"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="452"/>
         <source>Delete folder</source>
         <translation>Futa folda</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="455"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="454"/>
         <source>Delete folder &quot;{name}&quot; and all its contents from disk?
 This action cannot be undone.</source>
         <translation>Futa folda &quot;{name}&quot; na yaliyomo yote kwenye diski?
 Hutaweza kurudisha hatua hii.</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="479"/>
         <source>Empty folder</source>
         <translation>Folda haina kitu</translation>
     </message>
     <message>
-        <location filename="../app/widgets/playlist/list_view.py" line="481"/>
+        <location filename="../app/widgets/playlist/list_view.py" line="480"/>
         <source>No media files found in &quot;{name}&quot;.</source>
         <translation>Hakuna faili za media zilizopatikana kwenye &quot;{name}&quot;.</translation>
     </message>
@@ -4978,17 +5429,17 @@ Hutaweza kurudisha hatua hii.</translation>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="42"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="114"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>HAZINA ZA NENO LA MUNGU</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="43"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="115"/>
         <source>APPLY YOURSELF TO THE FIELD MINISTRY</source>
         <translation>BORESHA HUDUMA YAKO</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="44"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="116"/>
         <source>LIVING AS CHRISTIANS</source>
         <translation>MAISHA YA MKRISTO</translation>
     </message>
@@ -4997,12 +5448,12 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation type="vanished">Funzo la Biblia la Kutaniko</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="46"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="118"/>
         <source>Watchtower Study</source>
         <translation>Funzo la Mnara wa Mlinzi</translation>
     </message>
     <message>
-        <location filename="../app/qml/AdvancedTimerPage.qml" line="45"/>
+        <location filename="../app/qml/AdvancedTimerPage.qml" line="117"/>
         <source>PUBLIC TALK</source>
         <translation>HOTUBA YA WATU WOTE</translation>
     </message>
@@ -5014,6 +5465,42 @@ Hutaweza kurudisha hatua hii.</translation>
         <location filename="../app/widgets/settings/auto_key_dialog.py" line="94"/>
         <source>Click to record</source>
         <translation>Bofya ili kurekodi</translation>
+    </message>
+</context>
+<context>
+    <name>_TimePickerPopup</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="275"/>
+        <source>Hour</source>
+        <translation>Saa</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="276"/>
+        <source>Minute</source>
+        <translation>Dakika</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="286"/>
+        <source>Cancel</source>
+        <translation>Ghairi</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="289"/>
+        <source>Apply</source>
+        <translation>Tumia</translation>
+    </message>
+</context>
+<context>
+    <name>_TimeStepper</name>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="198"/>
+        <source>Increase</source>
+        <translation>Ongeza</translation>
+    </message>
+    <message>
+        <location filename="../app/widgets/settings/meeting_schedule_section.py" line="199"/>
+        <source>Decrease</source>
+        <translation>Punguza</translation>
     </message>
 </context>
 <context>
@@ -5270,68 +5757,68 @@ Hutaweza kurudisha hatua hii.</translation>
         <translation>Inaonyesha picha</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="98"/>
-        <location filename="../app/controllers/open_media_controller.py" line="304"/>
-        <location filename="../app/controllers/open_media_controller.py" line="314"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="112"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="122"/>
+        <location filename="../app/controllers/open_media_controller.py" line="102"/>
+        <location filename="../app/controllers/open_media_controller.py" line="311"/>
+        <location filename="../app/controllers/open_media_controller.py" line="321"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="116"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="126"/>
         <source>Unsupported file</source>
         <translation>Faili halitegemezwi</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="101"/>
+        <location filename="../app/controllers/open_media_controller.py" line="105"/>
         <source>File format not supported. Use videos (mp4, mkv, mov…) or images (jpg, png, webp…).</source>
         <translation>Muundo wa faili hautumiki. Tumia video (mp4, mkv, mov…) au picha (jpg, png, webp…).</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="143"/>
-        <location filename="../app/controllers/open_media_controller.py" line="265"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="248"/>
+        <location filename="../app/controllers/open_media_controller.py" line="147"/>
+        <location filename="../app/controllers/open_media_controller.py" line="269"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="252"/>
         <source>Error opening PDF</source>
         <translation>Hitilafu kufungua PDF</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="144"/>
-        <location filename="../app/controllers/open_media_controller.py" line="266"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="249"/>
+        <location filename="../app/controllers/open_media_controller.py" line="148"/>
+        <location filename="../app/controllers/open_media_controller.py" line="270"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="253"/>
         <source>⚠  Error converting PDF: {error}</source>
         <translation>⚠  Hitilafu kubadilisha PDF: {error}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="221"/>
+        <location filename="../app/controllers/open_media_controller.py" line="225"/>
         <source>No media found</source>
         <translation>Hakuna media iliyopatikana</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="222"/>
+        <location filename="../app/controllers/open_media_controller.py" line="226"/>
         <source>No media items found in {name}.</source>
         <translation>Hakuna vitu vya media vilivyopatikana katika {name}.</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="238"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="312"/>
+        <location filename="../app/controllers/open_media_controller.py" line="242"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="316"/>
         <source>Error opening .jwpub</source>
         <translation>Hitilafu kufungua .jwpub</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="305"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="113"/>
+        <location filename="../app/controllers/open_media_controller.py" line="312"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="117"/>
         <source>Invalid or corrupted .jwlplaylist file:
 %1</source>
         <translation>Faili la .jwlplaylist ni batili au limeharibika:
 %1</translation>
     </message>
     <message>
-        <location filename="../app/controllers/open_media_controller.py" line="315"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="123"/>
+        <location filename="../app/controllers/open_media_controller.py" line="322"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="127"/>
         <source>Error reading %1:
 %2</source>
         <translation>Hitilafu kusoma %1:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="39"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="189"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="43"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="193"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="287"/>
         <source>Playlist &quot;%1&quot;
 created successfully!</source>
@@ -5339,7 +5826,7 @@ created successfully!</source>
 imetengenezwa kikamilifu!</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="52"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="56"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="257"/>
         <source>Added to playlist
 &quot;%1&quot;</source>
@@ -5347,8 +5834,8 @@ imetengenezwa kikamilifu!</translation>
 &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="59"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="209"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="63"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="213"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="264"/>
         <source>This media is already in
 playlist &quot;%1&quot;</source>
@@ -5356,24 +5843,24 @@ playlist &quot;%1&quot;</source>
 kwenye orodha ya kucheza &quot;%1&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="69"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="73"/>
         <source>Download failed</source>
         <translation>Upakuaji umeshindwa</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="70"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="74"/>
         <source>Could not download %1:
 %2</source>
         <translation>Imeshindwa kupakua %1:
 %2</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="177"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="181"/>
         <source>No media found in {name}</source>
         <translation>Hakuna midia iliyopatikana katika {name}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="203"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="207"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="307"/>
         <source>%1 file(s) added
 to playlist &quot;%2&quot;</source>
@@ -5381,18 +5868,18 @@ to playlist &quot;%2&quot;</source>
 kwenye orodha ya kucheza &quot;%2&quot;</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="230"/>
-        <location filename="../app/controllers/playlist_import_controller.py" line="271"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="234"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="275"/>
         <source>Opening {name}...</source>
         <translation>Inafungua {name}...</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="313"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="317"/>
         <source>⚠  Could not open .jwpub: {err}</source>
         <translation>⚠  Haikuweza kufungua .jwpub: {err}</translation>
     </message>
     <message>
-        <location filename="../app/controllers/playlist_import_controller.py" line="335"/>
+        <location filename="../app/controllers/playlist_import_controller.py" line="339"/>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="73"/>
         <source>Add to Playlist</source>
         <translation>Ongeza kwenye Orodha ya Kucheza</translation>
@@ -5465,77 +5952,6 @@ na faili %2!</translation>
         <location filename="../app/controllers/wifi_playlist_controller.py" line="420"/>
         <source>Close</source>
         <translation>Funga</translation>
-    </message>
-</context>
-<context>
-    <name>TimerPdfExport</name>
-    <message>
-        <source>Meeting timer report</source>
-        <translation>Ripoti ya kipima muda cha mkutano</translation>
-    </message>
-    <message>
-        <source>{meeting_type} - {week}</source>
-        <translation>{meeting_type} - {week}</translation>
-    </message>
-    <message>
-        <source>Total {time}</source>
-        <translation>Jumla {time}</translation>
-    </message>
-    <message>
-        <source>In progress</source>
-        <translation>Inaendelea</translation>
-    </message>
-    <message>
-        <source>Running</source>
-        <translation>Inaendelea</translation>
-    </message>
-    <message>
-        <source>Completed</source>
-        <translation>Imekamilika</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>Haijaanza</translation>
-    </message>
-    <message>
-        <source>Page {page}</source>
-        <translation>Ukurasa {page}</translation>
-    </message>
-    <message>
-        <source>Part</source>
-        <translation>Sehemu</translation>
-    </message>
-    <message>
-        <source>Planned</source>
-        <translation>Iliyopangwa</translation>
-    </message>
-    <message>
-        <source>Started</source>
-        <translation>Imeanza</translation>
-    </message>
-    <message>
-        <source>Finished</source>
-        <translation>Imemalizika</translation>
-    </message>
-    <message>
-        <source>Duration</source>
-        <translation>Muda</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Hali</translation>
-    </message>
-    <message>
-        <source>Generated</source>
-        <translation>Imetengenezwa</translation>
-    </message>
-    <message>
-        <source>Within time</source>
-        <translation>Ndani ya muda</translation>
-    </message>
-    <message>
-        <source>Over time</source>
-        <translation>Zaidi ya muda</translation>
     </message>
 </context>
 <context>
