@@ -50,6 +50,7 @@ from app.core.foundation.constants import (
     QSETTINGS_ORG_NAME,
     QSETTINGS_PREFS_APP,
     QSETTINGS_PROFILE_ORG_PREFIX,
+    QSETTINGS_PROFILE_SCOPED_APPS,
 )
 from app.core.foundation.settings_keys import SettingsKey
 from app.core.storage.migration import (
@@ -61,11 +62,10 @@ log = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 _PROFILES_FILENAME = "profiles.json"
-_BASE_ORG          = QSETTINGS_ORG_NAME
-_PREFS_APP         = QSETTINGS_PREFS_APP
-_APP_APP           = QSETTINGS_APP_APP
-_GLOBAL_APP        = QSETTINGS_GLOBAL_APP   # settings que não pertencem a nenhum perfil
-_BASE_APP_GLOBAL_KEYS = {"install_id", "pending_patch_cleanup"}
+_BASE_APP_GLOBAL_KEYS = {
+    SettingsKey.INSTALL_ID,
+    SettingsKey.PENDING_PATCH_CLEANUP,
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -178,20 +178,24 @@ class ProfileManager(QObject):
 
     def has_legacy_settings(self) -> bool:
         """True se existirem dados legados (sem perfil) no QSettings."""
-        s = QSettings(_BASE_ORG, _PREFS_APP)
+        s = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_PREFS_APP)
         return bool(s.allKeys())
 
     # ── QSettings com escopo de perfil ────────────────────────────────────
 
     def active_org(self) -> str:
         """Org do QSettings para o perfil ativo. Ex: 'Solin_default' ou 'SolinDev_default'."""
-        return f"{QSETTINGS_PROFILE_ORG_PREFIX}{self._active_id}" if self._active_id else _BASE_ORG
+        return (
+            f"{QSETTINGS_PROFILE_ORG_PREFIX}{self._active_id}"
+            if self._active_id
+            else QSETTINGS_ORG_NAME
+        )
 
-    def prefs(self, base: str = _PREFS_APP) -> QSettings:
+    def prefs(self, base: str = QSETTINGS_PREFS_APP) -> QSettings:
         """QSettings com namespace isolado do perfil ativo."""
         return QSettings(self.active_org(), base)
 
-    def prefs_for(self, profile_id: str, base: str = _PREFS_APP) -> QSettings:
+    def prefs_for(self, profile_id: str, base: str = QSETTINGS_PREFS_APP) -> QSettings:
         """QSettings para um perfil específico."""
         return QSettings(f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}", base)
 
@@ -278,12 +282,7 @@ class ProfileManager(QObject):
 
         # Remove configs isoladas do perfil no QSettings.
         profile_org = f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}"
-        for app_name in (
-            _PREFS_APP,
-            _APP_APP,
-            "MainWindowGeometry",
-            "Notifications",
-        ):
+        for app_name in QSETTINGS_PROFILE_SCOPED_APPS:
             try:
                 s = QSettings(profile_org, app_name)
                 s.clear()
@@ -297,7 +296,7 @@ class ProfileManager(QObject):
         if was_active and self._profiles:
             self.set_active(self._profiles[0].id)
         else:
-            gs = QSettings(_BASE_ORG, _GLOBAL_APP)
+            gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
             last = gs.value(SettingsKey.LAST_ACTIVE_PROFILE, "", str)
             if last == profile_id:
                 gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, self._profiles[0].id)
@@ -329,7 +328,7 @@ class ProfileManager(QObject):
         _ps.set_org(self.active_org())
 
         # Persistir escolha
-        gs = QSettings(_BASE_ORG, _GLOBAL_APP)
+        gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
         gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, profile_id)
         gs.sync()
 
@@ -343,7 +342,7 @@ class ProfileManager(QObject):
         """
         if not self._profiles:
             return None
-        gs = QSettings(_BASE_ORG, _GLOBAL_APP)
+        gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
         last = gs.value(SettingsKey.LAST_ACTIVE_PROFILE, "", str)
         if last and any(p.id == last for p in self._profiles):
             return last
@@ -389,17 +388,17 @@ class ProfileManager(QObject):
             log.info("[Migration] embedded/ -> %s", dst_emb)
 
         # ── QSettings ────────────────────────────────────────────────────
-        for base in (_PREFS_APP, _APP_APP):
-            src_s = QSettings(_BASE_ORG, base)
+        for base in (QSETTINGS_PREFS_APP, QSETTINGS_APP_APP):
+            src_s = QSettings(QSETTINGS_ORG_NAME, base)
             dst_s = QSettings(f"{QSETTINGS_PROFILE_ORG_PREFIX}{pid}", base)
             migrated_keys: list[str] = []
             for key in src_s.allKeys():
-                if base == _APP_APP and key in _BASE_APP_GLOBAL_KEYS:
+                if base == QSETTINGS_APP_APP and key in _BASE_APP_GLOBAL_KEYS:
                     continue
                 dst_s.setValue(key, src_s.value(key))
                 migrated_keys.append(key)
             dst_s.sync()
-            if base == _PREFS_APP:
+            if base == QSETTINGS_PREFS_APP:
                 src_s.clear()
             else:
                 for key in migrated_keys:
@@ -407,7 +406,7 @@ class ProfileManager(QObject):
             src_s.sync()
             log.info(
                 "[Migration] QSettings %s/%s -> %s%s/%s; legado limpo",
-                _BASE_ORG, base, QSETTINGS_PROFILE_ORG_PREFIX, pid, base,
+                QSETTINGS_ORG_NAME, base, QSETTINGS_PROFILE_ORG_PREFIX, pid, base,
             )
 
         log.info("[Migration] Concluída para perfil %r (%s)", profile_name, pid)

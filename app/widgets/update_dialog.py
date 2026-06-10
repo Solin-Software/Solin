@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
 from app.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_ORG_NAME
+from app.core.foundation.settings_keys import SettingsKey
 
 if TYPE_CHECKING:
     from app.core.remote.updates import UpdateInfo
@@ -127,11 +128,6 @@ QProgressBar::chunk {{
 }}
 """
 
-_QSETTINGS_ORG = QSETTINGS_ORG_NAME
-_QSETTINGS_APP = QSETTINGS_APP_APP
-_CLEANUP_KEY   = "pending_patch_cleanup"
-
-
 # ── Pending-patch cleanup (called at boot in main.py) ─────────────────────────
 
 def cleanup_pending_patch() -> None:
@@ -139,10 +135,10 @@ def cleanup_pending_patch() -> None:
     Deletes the patch file downloaded in the previous session.
     Called at the start of main(), after the app has restarted post-update.
     """
-    prefs = QSettings(_QSETTINGS_ORG, _QSETTINGS_APP)
-    path = prefs.value(_CLEANUP_KEY, "", str)
+    prefs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)
+    path = prefs.value(SettingsKey.PENDING_PATCH_CLEANUP, "", str)
     if path:
-        prefs.remove(_CLEANUP_KEY)
+        prefs.remove(SettingsKey.PENDING_PATCH_CLEANUP)
         prefs.sync()
         try:
             if os.path.isfile(path):
@@ -153,8 +149,8 @@ def cleanup_pending_patch() -> None:
 
 
 def _save_cleanup_path(path: str) -> None:
-    prefs = QSettings(_QSETTINGS_ORG, _QSETTINGS_APP)
-    prefs.setValue(_CLEANUP_KEY, path)
+    prefs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)
+    prefs.setValue(SettingsKey.PENDING_PATCH_CLEANUP, path)
     prefs.sync()
 
 

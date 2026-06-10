@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...core.foundation.settings_keys import SettingsKey
 from ...core.jw.language_context import jw_media_language_context
 from ...core.jw.yeartext import YeartextService
 from ...styles.icons import (
@@ -181,8 +182,8 @@ class YearlyTextSectionMixin:
         inner_lay.addWidget(self._manual_container)
         self._manual_container.setVisible(True)
 
-        saved_quote = self._prefs.value("yearly_quote", "", str)
-        saved_ref = self._prefs.value("yearly_ref", "", str)
+        saved_quote = self._prefs.value(SettingsKey.YEARLY_QUOTE, "", str)
+        saved_ref = self._prefs.value(SettingsKey.YEARLY_REFERENCE, "", str)
         if saved_quote:
             self._yearly_quote_edit.setPlainText(saved_quote)
         if saved_ref:
@@ -284,8 +285,8 @@ class YearlyTextSectionMixin:
         self._yearly_ref_edit.setText(ref)
         self._yearly_quote_edit.blockSignals(False)
         self._yearly_ref_edit.blockSignals(False)
-        self._prefs.setValue("yearly_quote", quote)
-        self._prefs.setValue("yearly_ref", ref)
+        self._prefs.setValue(SettingsKey.YEARLY_QUOTE, quote)
+        self._prefs.setValue(SettingsKey.YEARLY_REFERENCE, ref)
         self.yearly_text_changed.emit(quote, ref, api_code)
 
     def _set_status_loading(self):
@@ -342,8 +343,8 @@ class YearlyTextSectionMixin:
     def _save_yearly_text(self):
         quote = self._yearly_quote_edit.toPlainText().strip()
         ref = self._yearly_ref_edit.text().strip()
-        self._prefs.setValue("yearly_quote", quote)
-        self._prefs.setValue("yearly_ref", ref)
+        self._prefs.setValue(SettingsKey.YEARLY_QUOTE, quote)
+        self._prefs.setValue(SettingsKey.YEARLY_REFERENCE, ref)
         self._yt_service.override_cache(
             self._current_api_code(), self._current_year(), quote, ref
         )
@@ -355,6 +356,6 @@ class YearlyTextSectionMixin:
         cached = self._yt_service.get_cached(api_code, year)
         if cached:
             return cached
-        quote = self._prefs.value("yearly_quote", "", str)
-        ref = self._prefs.value("yearly_ref", "", str)
+        quote = self._prefs.value(SettingsKey.YEARLY_QUOTE, "", str)
+        ref = self._prefs.value(SettingsKey.YEARLY_REFERENCE, "", str)
         return quote, ref

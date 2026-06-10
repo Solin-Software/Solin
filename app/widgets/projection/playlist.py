@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.foundation.settings_keys import SettingsKey
+
 import os
 
 from PySide6.QtCore import QTimer
@@ -28,7 +30,11 @@ class ProjectionPlaylistMixin:
         if playback_order and playback_order in (ORDER_OFF, ORDER_NEXT, ORDER_RANDOM):
             self._playback_order = playback_order
         else:
-            self._playback_order = self._prefs.value("playback_order", ORDER_OFF, str)
+            self._playback_order = self._prefs.value(
+                SettingsKey.PLAYBACK_ORDER,
+                ORDER_OFF,
+                str,
+            )
 
         self._live_thumb_timer.stop()
         self._thumb_queue.clear()

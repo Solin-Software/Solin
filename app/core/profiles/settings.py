@@ -4,10 +4,11 @@ profile_settings.py — Solin
 Wrapper fino sobre QSettings que sempre usa o org do perfil ativo.
 
 Uso nos módulos:
+    from app.core.foundation.constants import QSETTINGS_APP_APP
     from app.core.profiles import settings as _ps
     ...
     self._prefs = _ps.prefs()          # → QSettings("<org>_{slug}", "ProjectionPrefs")
-    s = _ps.prefs("App")               # → QSettings("<org>_{slug}", "App")
+    s = _ps.prefs(QSETTINGS_APP_APP)    # → QSettings("<org>_{slug}", "App")
 
 A variável _ORG é atualizada automaticamente pelo ProfileManager.set_active().
 """
