@@ -15,12 +15,10 @@ import uuid
 
 from PySide6.QtCore import QCoreApplication, QObject, QTimer, QT_TRANSLATE_NOOP
 
+from app.core.foundation.settings_keys import SettingsKey
 from app.core.profiles import settings as _ps
 
 log = logging.getLogger(__name__)
-
-PREF_ENABLED = "auto_keys/enabled"
-PREF_ACTIONS = "auto_keys/actions"
 
 EVENT_MEDIA_STARTED = "media_started"
 EVENT_MEDIA_ENDED = "media_ended"
@@ -94,7 +92,7 @@ class AutoKeyAction:
 
 def load_actions(prefs=None) -> list[AutoKeyAction]:
     prefs = prefs or _ps.prefs()
-    raw = prefs.value(PREF_ACTIONS, "[]", str)
+    raw = prefs.value(SettingsKey.AUTO_KEYS_ACTIONS, "[]", str)
     try:
         parsed = json.loads(raw) if raw else []
     except (TypeError, json.JSONDecodeError):
@@ -111,7 +109,7 @@ def load_actions(prefs=None) -> list[AutoKeyAction]:
 
 def save_actions(actions: list[AutoKeyAction], prefs=None) -> None:
     prefs = prefs or _ps.prefs()
-    prefs.setValue(PREF_ACTIONS, json.dumps([a.to_dict() for a in actions]))
+    prefs.setValue(SettingsKey.AUTO_KEYS_ACTIONS, json.dumps([a.to_dict() for a in actions]))
 
 
 def action_count_for_event(event: str, prefs=None) -> int:
@@ -128,7 +126,7 @@ class AutoKeyDispatcher(QObject):
     def dispatch(self, event: str) -> None:
         if event not in AUTO_KEY_EVENTS:
             return
-        if not self._prefs.value(PREF_ENABLED, False, bool):
+        if not self._prefs.value(SettingsKey.AUTO_KEYS_ENABLED, False, bool):
             return
         actions = [
             action for action in load_actions(self._prefs)

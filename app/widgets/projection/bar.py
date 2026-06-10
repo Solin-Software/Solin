@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from app.core.foundation import paths as _paths
 from app.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
+from app.core.foundation.settings_keys import SettingsKey
 from app.core.foundation.time_utils import ceil_remaining_seconds
 from app.core.profiles import settings as _ps
 from app.core.media.playback import MediaController
@@ -186,10 +187,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Prefs (carregadas do QSettings) ──────────────────────────────
         self._prefs = _ps.prefs()
-        self._loop:           bool  = self._prefs.value("loop",            False, bool)
-        self._playback_order: str   = self._prefs.value("playback_order",  ORDER_OFF, str)
-        self._speed:          float = self._prefs.value("speed",           1.0,   float)
-        self._volume:         float = self._prefs.value("volume",          0.80,  float)
+        self._loop: bool = self._prefs.value(SettingsKey.PLAYBACK_LOOP, False, bool)
+        self._playback_order: str = self._prefs.value(
+            SettingsKey.PLAYBACK_ORDER,
+            ORDER_OFF,
+            str,
+        )
+        self._speed: float = self._prefs.value(SettingsKey.PLAYBACK_SPEED, 1.0, float)
+        self._volume: float = self._prefs.value(SettingsKey.PLAYBACK_VOLUME, 0.80, float)
 
         # ── Song Announcement Mode state machine ─────────────────────────
         # States: "off" | "gate" | "ready"
@@ -1173,16 +1178,16 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _set_speed(self, rate: float):
         self._speed = rate
-        self._prefs.setValue("speed", rate)
+        self._prefs.setValue(SettingsKey.PLAYBACK_SPEED, rate)
         self.media.set_playback_rate(rate)
 
     def _toggle_loop(self):
         self._loop = not self._loop
-        self._prefs.setValue("loop", self._loop)
+        self._prefs.setValue(SettingsKey.PLAYBACK_LOOP, self._loop)
 
     def _set_playback_order(self, order: str):
         self._playback_order = order
-        self._prefs.setValue("playback_order", order)
+        self._prefs.setValue(SettingsKey.PLAYBACK_ORDER, order)
         # Reinicia rastreamento de aleatório ao mudar de modo
         self._played_indices = {self._playlist_index}
 
@@ -1191,7 +1196,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _on_volume_slider(self, value: int):
         vol = value / 100.0
         self._volume = vol
-        self._prefs.setValue("volume", vol)
+        self._prefs.setValue(SettingsKey.PLAYBACK_VOLUME, vol)
         self.volume_changed.emit(vol)
         # Atualiza ícone
         if value == 0:

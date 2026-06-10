@@ -53,18 +53,15 @@ from PySide6.QtCore import QObject, QThread, Signal
 if TYPE_CHECKING:
     from app.core.i18n.manager import LanguageManager
     
-from app.core.foundation.constants import NOTIFICATION_API_URL
+from app.core.foundation.constants import NOTIFICATION_API_URL, QSETTINGS_NOTIFICATIONS_APP
+from app.core.foundation.settings_keys import SettingsKey
+from app.core.profiles import settings as _ps
 
 log = logging.getLogger(__name__)
 
 # ── Configuração ───────────────────────────────────────────────────────────────
 FETCH_TIMEOUT_S: int = 8        # timeout total da requisição HTTP
 FALLBACK_LANG: str = "E"        # api_code de fallback (English)
-
-# QSettings namespace — separado das preferências gerais para isolamento
-_SETTINGS_APP = "Notifications"
-from app.core.profiles import settings as _ps
-_SEEN_KEY = "seen_ids"
 
 # Schema mínimo obrigatório em cada notificação
 _REQUIRED_FIELDS = {"id", "type", "content"}
@@ -98,8 +95,8 @@ class Notification:
 
 def _load_seen_ids() -> set[str]:
     """Carrega a lista de IDs já exibidos do QSettings."""
-    prefs = _ps.prefs(_SETTINGS_APP)
-    raw = prefs.value(_SEEN_KEY, "[]", str)
+    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
     try:
         data = json.loads(raw)
         if isinstance(data, list):
@@ -111,8 +108,8 @@ def _load_seen_ids() -> set[str]:
 
 def mark_seen(notif_id: str) -> None:
     """Marca uma notificação como exibida. Thread-safe via QSettings."""
-    prefs = _ps.prefs(_SETTINGS_APP)
-    raw = prefs.value(_SEEN_KEY, "[]", str)
+    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
     try:
         data = json.loads(raw)
         if not isinstance(data, list):
@@ -125,13 +122,13 @@ def mark_seen(notif_id: str) -> None:
         # Limita o histórico a 500 entradas para evitar crescimento ilimitado
         if len(data) > 500:
             data = data[-500:]
-        prefs.setValue(_SEEN_KEY, json.dumps(data))
+        prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, json.dumps(data))
 
 
 def reset_seen_ids() -> None:
     """Utilitário de diagnóstico: limpa o histórico de IDs vistos."""
-    prefs = _ps.prefs(_SETTINGS_APP)
-    prefs.setValue(_SEEN_KEY, "[]")
+    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]")
 
 
 # ── Worker assíncrono ──────────────────────────────────────────────────────────

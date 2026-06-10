@@ -35,6 +35,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from app.core.foundation import paths as _paths
+from app.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from app.core.foundation.settings_keys import SettingsKey
 from app.core.profiles import settings as _ps
 from app.core.network.http import urlopen as _urlopen
@@ -46,8 +47,6 @@ log = logging.getLogger(__name__)
 _LANGUAGES_URL  = "https://b.jw-cdn.org/apis/mediator/v1/languages/E/all"
 _CACHE_TTL_DAYS = 30
 _FETCH_TIMEOUT  = 15
-_SETTINGS_KEY   = SettingsKey.MEDIA_LANGUAGE_CODE
-
 # Resolvido sob demanda — paths.init() deve ter sido chamado antes do primeiro uso.
 def _cache_file() -> str:
     return os.path.join(_paths.CACHE_DIR, "jw_languages.json")
@@ -159,8 +158,8 @@ class JWLanguageService(QObject):
 
     @property
     def media_api_code(self) -> str:
-        s = _ps.prefs("App")
-        code = _settings_str(s.value(_SETTINGS_KEY, "", str))
+        s = _ps.prefs(QSETTINGS_APP_APP)
+        code = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
         if code:
             return code
 
@@ -168,17 +167,17 @@ class JWLanguageService(QObject):
         # idioma de mídia em ProjectionPrefs/jw_language, enquanto o serviço
         # real sempre lê App/media_language_code.
         legacy = _settings_str(
-            _ps.prefs("ProjectionPrefs").value(SettingsKey.LEGACY_JW_LANGUAGE, "", str)
+            _ps.prefs(QSETTINGS_PREFS_APP).value(SettingsKey.LEGACY_JW_LANGUAGE, "", str)
         )
         if legacy:
-            s.setValue(_SETTINGS_KEY, legacy)
+            s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, legacy)
             s.sync()
         return legacy
 
     def set_media_api_code(self, code: str) -> None:
-        s = _ps.prefs("App")
-        old = _settings_str(s.value(_SETTINGS_KEY, "", str))
-        s.setValue(_SETTINGS_KEY, code)
+        s = _ps.prefs(QSETTINGS_APP_APP)
+        old = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
+        s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, code)
         s.sync()
         log.debug("[JWLanguageService] Idioma de mídia: %s", code)
         if code != old:

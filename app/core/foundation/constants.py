@@ -34,6 +34,18 @@ QSETTINGS_PROFILE_ORG_PREFIX: str = f"{QSETTINGS_ORG_NAME}_"
 QSETTINGS_PREFS_APP: str = "ProjectionPrefs"
 QSETTINGS_APP_APP: str = "App"
 QSETTINGS_GLOBAL_APP: str = "GlobalApp"
+QSETTINGS_MAIN_WINDOW_GEOMETRY_APP: str = "MainWindowGeometry"
+QSETTINGS_TIMER_APP: str = "Timer"
+QSETTINGS_MONITORS_APP: str = "Monitors"
+QSETTINGS_NOTIFICATIONS_APP: str = "Notifications"
+QSETTINGS_PROFILE_SCOPED_APPS: tuple[str, ...] = (
+    QSETTINGS_PREFS_APP,
+    QSETTINGS_APP_APP,
+    QSETTINGS_MAIN_WINDOW_GEOMETRY_APP,
+    QSETTINGS_TIMER_APP,
+    QSETTINGS_MONITORS_APP,
+    QSETTINGS_NOTIFICATIONS_APP,
+)
 
 # ── Versão do aplicativo ────────────────────────────────────────────────────────
 # Fonte única de verdade para comparações de update.

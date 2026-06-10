@@ -7,16 +7,28 @@ from typing import Final
 
 class SettingsKey:
     INSTALL_ID: Final = "install_id"
+    PENDING_PATCH_CLEANUP: Final = "pending_patch_cleanup"
     LAST_ACTIVE_PROFILE: Final = "last_active_profile"
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"
     MEDIA_LANGUAGE_CODE: Final = "media_language_code"
     LEGACY_JW_LANGUAGE: Final = "jw_language"
 
+    WINDOW_WIDTH: Final = "size/width"
+    WINDOW_HEIGHT: Final = "size/height"
+
+    PLAYBACK_LOOP: Final = "loop"
+    PLAYBACK_ORDER: Final = "playback_order"
+    PLAYBACK_SPEED: Final = "speed"
+    PLAYBACK_VOLUME: Final = "volume"
+
     AUTO_DOWNLOAD_ON_PLAY: Final = "auto_download_on_play"
     MEETINGS_AUTO_DOWNLOAD: Final = "meetings_auto_download"
     SJJM_ANNOUNCE_MODE: Final = "sjjm_announce_mode"
     START_VIDEOS_PAUSED: Final = "start_videos_paused"
+    WATCHED_FOLDER_PATH: Final = "watched_folder/path"
+    YEARLY_QUOTE: Final = "yearly_quote"
+    YEARLY_REFERENCE: Final = "yearly_ref"
 
     MEETING_MIDWEEK_DAY: Final = "meeting_schedule/midweek_day"
     MEETING_MIDWEEK_TIME: Final = "meeting_schedule/midweek_time"
@@ -49,3 +61,13 @@ class SettingsKey:
 
     ZOOM_ENABLED: Final = "zoom/enabled"
     ZOOM_SHOW_PARTICIPANTS: Final = "zoom/show_participants"
+
+    AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"
+    AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"
+
+    TIMER_CLOCK_CONFIG: Final = "clock_config"
+    TIMER_VISIBLE: Final = "timer_visible"
+    TIMER_LAST_MEETING_TYPE: Final = "last_meeting_type"
+
+    MONITOR_ALLOCATION: Final = "allocation"
+    NOTIFICATIONS_SEEN_IDS: Final = "seen_ids"

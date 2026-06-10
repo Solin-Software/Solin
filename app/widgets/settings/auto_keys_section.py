@@ -3,8 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
+from ...core.foundation.settings_keys import SettingsKey
 from ...core.integrations.automation.shortcuts import (
-    PREF_ENABLED,
     AutoKeyAction,
     event_label,
     load_actions,
@@ -71,7 +71,7 @@ class AutoKeysSectionMixin:
         text_col.addWidget(self._auto_keys_header_desc)
         header_layout.addLayout(text_col, stretch=1)
 
-        enabled = self._prefs.value(PREF_ENABLED, False, bool)
+        enabled = self._prefs.value(SettingsKey.AUTO_KEYS_ENABLED, False, bool)
         self._auto_keys_toggle = _ToggleSwitch(checked=enabled)
         self._auto_keys_toggle.toggled.connect(self._on_auto_keys_toggled)
         header_layout.addWidget(self._auto_keys_toggle)
@@ -126,7 +126,7 @@ class AutoKeysSectionMixin:
         return card
 
     def _on_auto_keys_toggled(self, checked: bool):
-        self._prefs.setValue(PREF_ENABLED, checked)
+        self._prefs.setValue(SettingsKey.AUTO_KEYS_ENABLED, checked)
         self._auto_keys_expanded = checked
         if self._auto_keys_anim is not None:
             self._auto_keys_anim.stop()

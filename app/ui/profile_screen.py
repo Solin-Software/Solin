@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu, QDialog, QMessageBox,
 )
 
+from ..core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from ..core.foundation.settings_keys import SettingsKey
 from ..core.ui.helpers import fade_in as _fade_in
 from ..core.profiles.manager import get as _get_pm
@@ -1254,13 +1255,13 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         iface_code = getattr(self, "_ob_iface_selected_code", self._lang.current_code if self._lang else "en")
         if self._lang:
             self._lang.set_language(iface_code)
-        s = self._pm.prefs("App")
+        s = self._pm.prefs(QSETTINGS_APP_APP)
         s.setValue(SettingsKey.APP_LANGUAGE, iface_code)
         s.sync()
 
         media_code = getattr(self, "_ob_media_selected_code", "") or self._interface_api_code(iface_code)
         if media_code:
-            s2 = self._pm.prefs("App")
+            s2 = self._pm.prefs(QSETTINGS_APP_APP)
             s2.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, media_code)
             s2.sync()
 
@@ -1276,7 +1277,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             default_scene = self._ob_obs_default_combo.currentText()
             media_scene   = self._ob_obs_media_combo.currentText()
 
-            s3 = self._pm.prefs("ProjectionPrefs")
+            s3 = self._pm.prefs(QSETTINGS_PREFS_APP)
             s3.setValue(SettingsKey.OBS_ENABLED, True)
             s3.setValue(SettingsKey.OBS_PORT, port)
             s3.setValue(SettingsKey.OBS_PASSWORD, pwd)
@@ -1293,7 +1294,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._pm.set_active(profile_id)
 
         # Restaura idioma do perfil se houver
-        s = self._pm.prefs("App")
+        s = self._pm.prefs(QSETTINGS_APP_APP)
         saved_lang = s.value(SettingsKey.APP_LANGUAGE, "", str)
         if saved_lang and self._lang:
             self._lang.set_language(saved_lang)

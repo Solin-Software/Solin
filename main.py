@@ -15,6 +15,7 @@ from app.core.foundation.constants import (
     IPC_SERVER_NAME,
     IPC_TIMEOUT_MS,
     APP_VERSION,
+    QSETTINGS_APP_APP,
     QT_APPLICATION_NAME,
     QT_ORGANIZATION_NAME,
 )
@@ -290,7 +291,11 @@ def _relaunch_to_profile_creator(app, window) -> None:
         from PySide6.QtCore import QSettings
 
         pm = _get_pm()
-        current_lang = pm.prefs("App").value(SettingsKey.APP_LANGUAGE, "", str) if pm.active_id else ""
+        current_lang = (
+            pm.prefs(QSETTINGS_APP_APP).value(SettingsKey.APP_LANGUAGE, "", str)
+            if pm.active_id
+            else ""
+        )
         if current_lang:
             gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
             gs.setValue(SettingsKey.BOOTSTRAP_LANGUAGE, current_lang)
@@ -464,7 +469,7 @@ def main():
         _pm.set_active(requested_profile_id)
 
         from app.core.profiles import settings as _ps
-        s = _ps.prefs("App")
+        s = _ps.prefs(QSETTINGS_APP_APP)
         saved_lang = s.value(SettingsKey.APP_LANGUAGE, "", str)
         if saved_lang:
             lang_manager.set_language(saved_lang)
@@ -480,7 +485,7 @@ def main():
 
         # Restaura idioma do perfil
         from app.core.profiles import settings as _ps
-        s = _ps.prefs("App")
+        s = _ps.prefs(QSETTINGS_APP_APP)
         saved_lang = s.value(SettingsKey.APP_LANGUAGE, "", str)
         if saved_lang:
             lang_manager.set_language(saved_lang)

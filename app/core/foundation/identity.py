@@ -39,12 +39,6 @@ from .settings_keys import SettingsKey
 
 log = logging.getLogger(__name__)
 
-# ── GLOBAL: fixo, independente do perfil ativo ────────────────────────────────
-_GLOBAL_ORG = QSETTINGS_ORG_NAME
-_GLOBAL_APP = QSETTINGS_APP_APP
-_KEY        = SettingsKey.INSTALL_ID
-
-
 def get_install_id() -> str:
     """
     Retorna o install_id persistido. Gera um novo se ainda não existir.
@@ -52,8 +46,8 @@ def get_install_id() -> str:
 
     Usa sempre QSettings("<base>", "App") — namespace global, não por perfil.
     """
-    prefs    = QSettings(_GLOBAL_ORG, _GLOBAL_APP)
-    stored = prefs.value(_KEY, "", str)
+    prefs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)
+    stored = prefs.value(SettingsKey.INSTALL_ID, "", str)
     existing = stored if isinstance(stored, str) else ""
 
     if existing and len(existing) >= 32:
@@ -61,7 +55,7 @@ def get_install_id() -> str:
 
     # Primeira execução: gera e persiste um UUID aleatório.
     new_id = uuid.uuid4().hex   # 32 chars hex sem separadores
-    prefs.setValue(_KEY, new_id)
+    prefs.setValue(SettingsKey.INSTALL_ID, new_id)
     prefs.sync()
     log.debug("[DeviceID] novo install_id gerado: %s…", new_id[:8])
     return new_id

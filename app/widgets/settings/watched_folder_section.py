@@ -5,6 +5,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
+from ...core.foundation.settings_keys import SettingsKey
 from ...styles.icons import ICON_FOLDER_LINK, make_icon
 from ._shared import _BORDER, _BORDER2, _DIM, _MUTED, _RED, _TEXT
 
@@ -43,7 +44,7 @@ class WatchedFolderSectionMixin:
         )
         self._watched_folder_desc_lbl.setWordWrap(True)
         col.addWidget(self._watched_folder_desc_lbl)
-        saved = self._prefs.value("watched_folder/path", "", str)
+        saved = self._prefs.value(SettingsKey.WATCHED_FOLDER_PATH, "", str)
         self._watched_folder_path_lbl = QLabel()
         self._watched_folder_path_lbl.setStyleSheet(
             f"font-size: 11px; color: {_MUTED}; background: transparent; border: none;"
@@ -85,27 +86,27 @@ class WatchedFolderSectionMixin:
 
     def _sync_watched_folder_path_label(self, path: str | None = None) -> None:
         if path is None:
-            path = self._prefs.value("watched_folder/path", "", str)
+            path = self._prefs.value(SettingsKey.WATCHED_FOLDER_PATH, "", str)
         self._watched_folder_path_lbl.setText(path or self.tr("No folder selected"))
 
     def _pick_watched_folder(self):
         from PySide6.QtWidgets import QFileDialog as _QFD
 
-        current = self._prefs.value("watched_folder/path", "", str)
+        current = self._prefs.value(SettingsKey.WATCHED_FOLDER_PATH, "", str)
         start = current if current else os.path.expanduser("~")
         path = _QFD.getExistingDirectory(self, self.tr("Select folder to link"), start)
         if not path:
             return
-        self._prefs.setValue("watched_folder/path", path)
+        self._prefs.setValue(SettingsKey.WATCHED_FOLDER_PATH, path)
         self._sync_watched_folder_path_label(path)
         self._watched_folder_clear_btn.setVisible(True)
         self.watched_folder_changed.emit(path)
 
     def _clear_watched_folder(self):
-        self._prefs.remove("watched_folder/path")
+        self._prefs.remove(SettingsKey.WATCHED_FOLDER_PATH)
         self._sync_watched_folder_path_label("")
         self._watched_folder_clear_btn.setVisible(False)
         self.watched_folder_changed.emit("")
 
     def get_watched_folder(self):
-        return self._prefs.value("watched_folder/path", "", str)
+        return self._prefs.value(SettingsKey.WATCHED_FOLDER_PATH, "", str)

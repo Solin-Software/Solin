@@ -20,17 +20,12 @@ from __future__ import annotations
 import json
 from datetime import date
 
+from app.core.foundation.constants import QSETTINGS_TIMER_APP
+from app.core.foundation.settings_keys import SettingsKey
 from app.core.profiles import settings as _ps
 
 from .models import ClockConfig, MeetingSchedule, MeetingType
 from .schedule_factory import normalize_schedule
-
-_SETTINGS_APP = "Timer"
-
-_KEY_CLOCK_CONFIG = "clock_config"
-_KEY_TIMER_VISIBLE = "timer_visible"
-_KEY_LAST_MEETING_TYPE = "last_meeting_type"
-
 
 def _schedule_key(week_monday: str, meeting_type: MeetingType) -> str:
     return f"schedule/{week_monday}/{meeting_type.value}"
@@ -44,12 +39,12 @@ class TimerStore:
     """Thin persistence facade. Stateless — reads the active profile each call."""
 
     def _prefs(self):
-        return _ps.prefs(_SETTINGS_APP)
+        return _ps.prefs(QSETTINGS_TIMER_APP)
 
     # ── ClockConfig ───────────────────────────────────────────────────────────
 
     def load_clock_config(self) -> ClockConfig:
-        raw = _settings_str(self._prefs().value(_KEY_CLOCK_CONFIG, "", str))
+        raw = _settings_str(self._prefs().value(SettingsKey.TIMER_CLOCK_CONFIG, "", str))
         if not raw:
             return ClockConfig()
         try:
@@ -59,24 +54,28 @@ class TimerStore:
 
     def save_clock_config(self, config: ClockConfig) -> None:
         s = self._prefs()
-        s.setValue(_KEY_CLOCK_CONFIG, json.dumps(config.clamped().to_dict()))
+        s.setValue(SettingsKey.TIMER_CLOCK_CONFIG, json.dumps(config.clamped().to_dict()))
         s.sync()
 
     # ── Visibility flag (reserve vs. show) ────────────────────────────────────
 
     def get_timer_visible(self) -> bool:
-        return bool(self._prefs().value(_KEY_TIMER_VISIBLE, True, bool))
+        return bool(self._prefs().value(SettingsKey.TIMER_VISIBLE, True, bool))
 
     def set_timer_visible(self, visible: bool) -> None:
         s = self._prefs()
-        s.setValue(_KEY_TIMER_VISIBLE, bool(visible))
+        s.setValue(SettingsKey.TIMER_VISIBLE, bool(visible))
         s.sync()
 
     # ── Last-selected meeting type ────────────────────────────────────────────
 
     def load_last_meeting_type(self) -> MeetingType:
         raw = _settings_str(
-            self._prefs().value(_KEY_LAST_MEETING_TYPE, MeetingType.MIDWEEK.value, str),
+            self._prefs().value(
+                SettingsKey.TIMER_LAST_MEETING_TYPE,
+                MeetingType.MIDWEEK.value,
+                str,
+            ),
             MeetingType.MIDWEEK.value,
         )
         try:
@@ -86,7 +85,7 @@ class TimerStore:
 
     def save_last_meeting_type(self, meeting_type: MeetingType) -> None:
         s = self._prefs()
-        s.setValue(_KEY_LAST_MEETING_TYPE, meeting_type.value)
+        s.setValue(SettingsKey.TIMER_LAST_MEETING_TYPE, meeting_type.value)
         s.sync()
 
     # ── Schedules ─────────────────────────────────────────────────────────────

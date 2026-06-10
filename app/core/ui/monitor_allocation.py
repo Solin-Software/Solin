@@ -27,6 +27,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from app.core.foundation.constants import QSETTINGS_MONITORS_APP
+from app.core.foundation.settings_keys import SettingsKey
 from app.core.profiles import settings as _ps
 
 # ── Owner constants ───────────────────────────────────────────────────────────
@@ -35,10 +37,6 @@ OWNER_MEDIA = "media"
 OWNER_TIMER = "timer"
 OWNER_OFF = "off"
 _DEFAULT_OWNER = OWNER_MEDIA
-
-_SETTINGS_APP = "Monitors"
-_KEY_ALLOCATION = "allocation"
-
 
 # ── Stable screen identity ────────────────────────────────────────────────────
 
@@ -108,10 +106,10 @@ class MonitorAllocationStore:
     """
 
     def _prefs(self):
-        return _ps.prefs(_SETTINGS_APP)
+        return _ps.prefs(QSETTINGS_MONITORS_APP)
 
     def _load(self) -> dict[str, str]:
-        raw = self._prefs().value(_KEY_ALLOCATION, "", str)
+        raw = self._prefs().value(SettingsKey.MONITOR_ALLOCATION, "", str)
         if not raw:
             return {}
         try:
@@ -124,7 +122,7 @@ class MonitorAllocationStore:
         s = self._prefs()
         # Don't persist defaults — keep the map compact.
         compact = {k: v for k, v in mapping.items() if v != _DEFAULT_OWNER}
-        s.setValue(_KEY_ALLOCATION, json.dumps(compact))
+        s.setValue(SettingsKey.MONITOR_ALLOCATION, json.dumps(compact))
         s.sync()
 
     # ── Queries ───────────────────────────────────────────────────────────────
