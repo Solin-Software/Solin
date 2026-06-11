@@ -147,5 +147,155 @@ def test_watched_folder_cancellation_terminates_libreoffice(monkeypatch, tmp_pat
     assert process.terminated is True
 
 
+def _install_fake_pdf_renderer(monkeypatch):
+    from app.core.rendering import pdf as pdf_module
+
+    def fake_render(
+        _pdf_path,
+        output_dir,
+        *,
+        page_name_format,
+        page_stem,
+        progress_cb,
+        **_kwargs,
+    ):
+        paths = []
+        for page_number in range(1, 3):
+            if progress_cb is not None:
+                progress_cb(page_number, 2)
+            path = Path(output_dir) / page_name_format.format(
+                stem=page_stem,
+                n=page_number,
+            )
+            path.write_bytes(f"page-{page_number}".encode())
+            paths.append(str(path))
+        return paths
+
+    monkeypatch.setattr(pdf_module, "render_pdf_pages_sync", fake_render)
+
+
+def _sync_thread(tmp_path):
+    return WatchedFolderSyncThread(
+        str(tmp_path),
+        media_lang="E",
+        fallback_lang_code="E",
+    )
+
+
+def test_cancelled_pdf_render_does_not_publish_partial_cache(monkeypatch, tmp_path):
+    _install_fake_pdf_renderer(monkeypatch)
+    source = tmp_path / "slides.pdf"
+    source.write_bytes(b"pdf")
+    cache = tmp_path / ".solin_cache"
+    checks = 0
+
+    def interruption_requested(_self):
+        nonlocal checks
+        checks += 1
+        return checks >= 2
+
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        interruption_requested,
+    )
+    thread = _sync_thread(tmp_path)
+
+    with pytest.raises(InterruptedError):
+        thread._process_pdf(source, cache)
+
+    assert list(cache.glob("slides-page_*.jpg")) == []
+    assert watched_folder_module.pages_already_exist(source, cache) == []
+
+
+def test_cancelled_libreoffice_render_does_not_publish_partial_cache(
+    monkeypatch,
+    tmp_path,
+):
+    from app.core.rendering import libreoffice as libreoffice_module
+
+    _install_fake_pdf_renderer(monkeypatch)
+    source = tmp_path / "deck.pptx"
+    source.write_bytes(b"presentation")
+    cache = tmp_path / ".solin_cache"
+    checks = 0
+
+    def interruption_requested(_self):
+        nonlocal checks
+        checks += 1
+        return checks >= 2
+
+    def fake_libreoffice(args):
+        output_dir = Path(args[args.index("--outdir") + 1])
+        (output_dir / "deck.pdf").write_bytes(b"pdf")
+        return watched_folder_module.subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(libreoffice_module, "libreoffice_path", lambda: "soffice")
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        interruption_requested,
+    )
+    thread = _sync_thread(tmp_path)
+    monkeypatch.setattr(thread, "_run_libreoffice", fake_libreoffice)
+
+    with pytest.raises(InterruptedError):
+        thread._process_lo(source, cache)
+
+    assert list(cache.glob("deck-page_*.jpg")) == []
+    assert watched_folder_module.pages_already_exist(source, cache) == []
+
+
+def test_completed_page_cache_is_reused_only_while_source_matches(
+    monkeypatch,
+    tmp_path,
+):
+    _install_fake_pdf_renderer(monkeypatch)
+    source = tmp_path / "slides.pdf"
+    source.write_bytes(b"pdf")
+    cache = tmp_path / ".solin_cache"
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        lambda _self: False,
+    )
+    thread = _sync_thread(tmp_path)
+
+    paths, virtual_items = thread._process_pdf(source, cache)
+
+    assert virtual_items == []
+    assert watched_folder_module.pages_already_exist(source, cache) == paths
+
+    source.write_bytes(b"changed-pdf")
+
+    assert watched_folder_module.pages_already_exist(source, cache) == []
+
+
+def test_partial_legacy_page_cache_is_scheduled_for_reprocessing(tmp_path):
+    source = tmp_path / "slides.pdf"
+    source.write_bytes(b"pdf")
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    partial_page = cache / "slides-page_001.jpg"
+    partial_page.write_bytes(b"partial")
+    fingerprint = watched_folder_module._file_fingerprint(source)
+    watched_folder_module._save_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {
+                source.name: {
+                    "type": "pdf",
+                    **fingerprint,
+                    "outputs": [partial_page.name],
+                    "virtual_items": [],
+                },
+            },
+        },
+    )
+
+    assert watched_folder_module.get_pending_files(str(tmp_path)) == [str(source)]
+
+
 if __name__ == "__main__":
     unittest.main()

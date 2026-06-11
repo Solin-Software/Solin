@@ -40,7 +40,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 
@@ -125,6 +125,7 @@ CACHE_DIR_NAME = ".solin_cache"
 
 _DPI = 150
 _PAGE_FMT = "{stem}-page_{n:03d}.jpg"
+_PAGE_CACHE_VERSION = 1
 
 
 # ── Utilitários ────────────────────────────────────────────────────────────────
@@ -469,7 +470,16 @@ def get_pending_files(subfolder_path: str) -> list[str]:
             pending.append(str(f))
         else:
             fp = _file_fingerprint(f)
-            if not _fingerprint_matches(entry, fp):
+            fingerprint_changed = not _fingerprint_matches(entry, fp)
+            document_cache_invalid = (
+                ext in WATCHED_DOC_EXTS
+                and [
+                    Path(page).name
+                    for page in pages_already_exist(f, sub / CACHE_DIR_NAME)
+                ]
+                != entry.get("outputs", [])
+            )
+            if fingerprint_changed or document_cache_invalid:
                 pending.append(str(f))
     return pending
 
@@ -687,18 +697,129 @@ def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
     return changed
 
 
+def _page_cache_marker(doc_path: str | Path, dest_dir: str | Path) -> Path:
+    return Path(dest_dir) / f".{Path(doc_path).stem}.pages.json"
+
+
+def _page_cache_signature(doc_path: str | Path) -> dict[str, int | str]:
+    path = Path(doc_path)
+    stat = path.stat()
+    return {
+        "source": path.name,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
 def pages_already_exist(doc_path: str | Path, dest_dir: str | Path) -> list[str]:
-    """
-    Retorna lista de JPEGs já gerados para este documento em dest_dir, ou [] se não existem.
-    Verifica pela presença de {stem}-page_001.jpg.
-    """
-    p = Path(doc_path)
-    dest = Path(dest_dir)
-    first = dest / _PAGE_FMT.format(stem=p.stem, n=1)
-    if not first.exists():
+    """Return a complete page cache matching the current source document."""
+    marker = _page_cache_marker(doc_path, dest_dir)
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        if data.get("version") != _PAGE_CACHE_VERSION:
+            return []
+        if data.get("source") != _page_cache_signature(doc_path):
+            return []
+
+        page_names = data.get("pages")
+        if not isinstance(page_names, list) or not page_names:
+            return []
+
+        stem = Path(doc_path).stem
+        expected_names = [
+            _PAGE_FMT.format(stem=stem, n=index)
+            for index in range(1, len(page_names) + 1)
+        ]
+        if page_names != expected_names:
+            return []
+
+        pages = [Path(dest_dir) / name for name in page_names]
+        if not all(page.is_file() for page in pages):
+            return []
+        return [str(page) for page in pages]
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return []
-    pages = sorted(dest.glob(f"{p.stem}-page_*.jpg"), key=lambda x: x.name)
-    return [str(pg) for pg in pages]
+
+
+def _render_document_pages(
+    source_path: Path,
+    pdf_path: Path,
+    dest_dir: Path,
+    *,
+    page_stem: str,
+    progress_cb: Callable[[int, int], None] | None = None,
+    before_publish: Callable[[], None] | None = None,
+) -> list[str]:
+    """Render and publish a complete page set without exposing partial output."""
+    from app.core.rendering.pdf import render_pdf_pages_sync
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    source_signature = _page_cache_signature(source_path)
+
+    with tempfile.TemporaryDirectory(
+        prefix=f".{page_stem}-render-",
+        dir=dest_dir,
+        ignore_cleanup_errors=True,
+    ) as tmp:
+        staging_dir = Path(tmp)
+        staged_paths = [
+            Path(path)
+            for path in render_pdf_pages_sync(
+                pdf_path,
+                staging_dir,
+                dpi=_DPI,
+                page_name_format=_PAGE_FMT,
+                page_stem=page_stem,
+                image_format="JPEG",
+                quality=None,
+                progress_cb=progress_cb,
+            )
+        ]
+
+        if before_publish is not None:
+            before_publish()
+        if _page_cache_signature(source_path) != source_signature:
+            raise RuntimeError(f"Source changed during conversion: '{source_path.name}'")
+        if not staged_paths:
+            raise RuntimeError(f"Renderer produced no pages for '{source_path.name}'")
+
+        expected_names = [
+            _PAGE_FMT.format(stem=page_stem, n=index)
+            for index in range(1, len(staged_paths) + 1)
+        ]
+        staged_set_is_valid = all(
+            path.parent == staging_dir and path.is_file()
+            for path in staged_paths
+        )
+        if [path.name for path in staged_paths] != expected_names or not staged_set_is_valid:
+            raise RuntimeError(
+                f"Renderer produced an invalid page set for '{source_path.name}'"
+            )
+
+        marker = _page_cache_marker(source_path, dest_dir)
+        marker_payload = {
+            "version": _PAGE_CACHE_VERSION,
+            "source": source_signature,
+            "pages": expected_names,
+        }
+        staged_marker = staging_dir / marker.name
+        staged_marker.write_text(
+            json.dumps(marker_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        marker.unlink(missing_ok=True)
+        final_paths = [dest_dir / name for name in expected_names]
+        for staged_path, final_path in zip(staged_paths, final_paths, strict=True):
+            os.replace(staged_path, final_path)
+
+        expected_set = set(expected_names)
+        for stale_page in dest_dir.glob(f"{page_stem}-page_*.jpg"):
+            if stale_page.name not in expected_set:
+                stale_page.unlink(missing_ok=True)
+
+        os.replace(staged_marker, marker)
+        return [str(path) for path in final_paths]
 
 
 # ── Thread de conversão de documentos ─────────────────────────────────────────
@@ -752,16 +873,11 @@ class WatchedFolderDocConverter(QThread):
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
     def _convert_pdf(self, pdf_path: Path, dest_dir: Path, stem: str) -> list[str]:
-        from app.core.rendering.pdf import render_pdf_pages_sync
-
-        return render_pdf_pages_sync(
+        return _render_document_pages(
+            pdf_path,
             pdf_path,
             dest_dir,
-            dpi=_DPI,
-            page_name_format=_PAGE_FMT,
             page_stem=stem,
-            image_format="JPEG",
-            quality=None,
             progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
         )
 
@@ -803,7 +919,13 @@ class WatchedFolderDocConverter(QThread):
                     raise RuntimeError(f"LibreOffice não gerou PDF para '{lo_path.name}'.")
                 pdf_out = pdfs[0]
 
-            return self._convert_pdf(pdf_out, dest_dir, stem)
+            return _render_document_pages(
+                lo_path,
+                pdf_out,
+                dest_dir,
+                page_stem=stem,
+                progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
+            )
 
 # ── Thread de sincronização (processa arquivos pendentes) ─────────────────────
 
@@ -909,27 +1031,22 @@ class WatchedFolderSyncThread(QThread):
         existing = pages_already_exist(pdf_path, cache)
         if existing:
             return existing, []
-        from app.core.rendering.pdf import render_pdf_pages_sync
-
-        paths = render_pdf_pages_sync(
+        paths = _render_document_pages(
+            pdf_path,
             pdf_path,
             cache,
-            dpi=_DPI,
-            page_name_format=_PAGE_FMT,
             page_stem=stem,
-            image_format="JPEG",
-            quality=None,
             progress_cb=lambda cur, tot: self._emit_render_progress(
                 pdf_path.name,
                 cur,
                 tot,
             ),
+            before_publish=self._check_interrupted,
         )
         return paths, []
 
     def _process_lo(self, lo_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         from app.core.rendering.libreoffice import libreoffice_path
-        from app.core.rendering.pdf import render_pdf_pages_sync
 
         soffice = libreoffice_path()
         if not soffice:
@@ -959,19 +1076,17 @@ class WatchedFolderSyncThread(QThread):
                     raise RuntimeError(f"LibreOffice produced no PDF for '{lo_path.name}'")
                 pdf_out = pdfs[0]
 
-            paths = render_pdf_pages_sync(
+            paths = _render_document_pages(
+                lo_path,
                 pdf_out,
                 cache,
-                dpi=_DPI,
-                page_name_format=_PAGE_FMT,
                 page_stem=stem,
-                image_format="JPEG",
-                quality=None,
                 progress_cb=lambda cur, tot: self._emit_render_progress(
                     lo_path.name,
                     cur,
                     tot,
                 ),
+                before_publish=self._check_interrupted,
             )
             return paths, []
 
