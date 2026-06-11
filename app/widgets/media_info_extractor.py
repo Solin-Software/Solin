@@ -330,10 +330,79 @@ def _ogg_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RemoteAudioInfoExtractor — HTTP Range (512 KB) → cover + title, sem download
+# Remote extractors — network I/O in workers, QPixmap creation in GUI thread
 # ─────────────────────────────────────────────────────────────────────────────
 
-class RemoteAudioInfoExtractor(QObject):
+class _ThreadedRemoteInfoExtractor(QObject):
+    info_ready = Signal(int, QPixmap, str)
+    thumbnail_failed = Signal(int)
+
+    _worker_ready = Signal(bytes, str)
+    _worker_failed = Signal()
+
+    def __init__(self, index: int, url: str, parent=None):
+        super().__init__(parent)
+        self._index = index
+        self._url = url
+        self._cancelled = threading.Event()
+        cancelled = self._cancelled
+        self.destroyed.connect(lambda *_: cancelled.set())
+        self._worker_ready.connect(self._deliver_worker_result)
+        self._worker_failed.connect(self._deliver_worker_failure)
+        QTimer.singleShot(0, self._start)
+
+    def _start(self) -> None:
+        threading.Thread(
+            target=self._run,
+            daemon=True,
+            name=type(self).__name__,
+        ).start()
+
+    def _run(self) -> None:
+        try:
+            image_bytes, title = self._fetch_info()
+        except Exception as exc:
+            log.debug("%s failed for %s: %s", type(self).__name__, self._url, exc)
+            self._emit_worker_failure()
+            return
+
+        if self._cancelled.is_set():
+            return
+        try:
+            if image_bytes or title:
+                self._worker_ready.emit(image_bytes or b"", title)
+            else:
+                self._worker_failed.emit()
+        except RuntimeError:
+            return
+
+    def _emit_worker_failure(self) -> None:
+        if self._cancelled.is_set():
+            return
+        try:
+            self._worker_failed.emit()
+        except RuntimeError:
+            return
+
+    def _fetch_info(self) -> tuple[bytes | None, str]:
+        raise NotImplementedError
+
+    def _deliver_worker_result(self, image_bytes: bytes, title: str) -> None:
+        pixmap = QPixmap()
+        if image_bytes:
+            pixmap.loadFromData(image_bytes)
+        if not pixmap.isNull() or title:
+            self.info_ready.emit(self._index, pixmap, title)
+        else:
+            self.thumbnail_failed.emit(self._index)
+        self.deleteLater()
+
+    def _deliver_worker_failure(self) -> None:
+        self.thumbnail_failed.emit(self._index)
+        self.deleteLater()
+
+
+class RemoteAudioInfoExtractor(_ThreadedRemoteInfoExtractor):
     """
     Extrai cover art e título de áudio remoto sem baixar o arquivo completo.
 
@@ -343,48 +412,27 @@ class RemoteAudioInfoExtractor(QObject):
     Nenhum byte além dos necessários é transferido.
     """
 
-    info_ready       = Signal(int, QPixmap, str)   # (index, pixmap, title)
-    thumbnail_failed = Signal(int)
-
     _MAX_BYTES = 3_145_728  # 3 MB (3 * 1024 * 1024)
     _TIMEOUT_S = 10
 
     def __init__(self, index: int, url: str, parent=None):
-        super().__init__(parent)
-        self._index = index
-        self._url   = url
-        self._ext   = Path(url.split("?")[0]).suffix.lower()
-        QTimer.singleShot(0, self._start)
+        self._ext = Path(url.split("?")[0]).suffix.lower()
+        super().__init__(index, url, parent)
 
-    def _start(self):
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self):
-        try:
-            req = _UrlRequest(
-                self._url,
-                headers={"Range": f"bytes=0-{self._MAX_BYTES - 1}",
-                         "User-Agent": "Mozilla/5.0"}
-            )
-            with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-                data = resp.read(self._MAX_BYTES)
-
-            cover_bytes, title = _audio_info_from_bytes(data, self._ext)
-            px = QPixmap()
-            if cover_bytes:
-                px.loadFromData(cover_bytes)
-
-            if not px.isNull() or title:
-                self.info_ready.emit(self._index, px, title)
-                QTimer.singleShot(0, self.deleteLater)
-                return
-        except Exception as exc:
-            log.debug("Remote audio metadata extraction failed for %s: %s", self._url, exc)
-        self.thumbnail_failed.emit(self._index)
-        QTimer.singleShot(0, self.deleteLater)
+    def _fetch_info(self) -> tuple[bytes | None, str]:
+        req = _UrlRequest(
+            self._url,
+            headers={
+                "Range": f"bytes=0-{self._MAX_BYTES - 1}",
+                "User-Agent": "Mozilla/5.0",
+            },
+        )
+        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
+            data = resp.read(self._MAX_BYTES)
+        return _audio_info_from_bytes(data, self._ext)
 
 
-class RemoteImageInfoExtractor(QObject):
+class RemoteImageInfoExtractor(_ThreadedRemoteInfoExtractor):
     """
     Downloads a remote image thumbnail with a bounded read.
 
@@ -392,43 +440,20 @@ class RemoteImageInfoExtractor(QObject):
     small, derived UI assets and callers decide where/how to persist them.
     """
 
-    info_ready       = Signal(int, QPixmap, str)
-    thumbnail_failed = Signal(int)
-
     _MAX_BYTES = 2 * 1024 * 1024
     _TIMEOUT_S = 12
 
-    def __init__(self, index: int, url: str, parent=None):
-        super().__init__(parent)
-        self._index = index
-        self._url = url
-        QTimer.singleShot(0, self._start)
-
-    def _start(self):
-        threading.Thread(target=self._run, daemon=True).start()
-
-    def _run(self):
-        try:
-            req = _UrlRequest(
-                self._url,
-                headers={
-                    "Range": f"bytes=0-{self._MAX_BYTES - 1}",
-                    "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
-                    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-                },
-            )
-            with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-                data = resp.read(self._MAX_BYTES)
-            px = QPixmap()
-            px.loadFromData(data)
-            if not px.isNull():
-                self.info_ready.emit(self._index, px, "")
-                QTimer.singleShot(0, self.deleteLater)
-                return
-        except Exception as exc:
-            log.debug("Remote image thumbnail extraction failed for %s: %s", self._url, exc)
-        self.thumbnail_failed.emit(self._index)
-        QTimer.singleShot(0, self.deleteLater)
+    def _fetch_info(self) -> tuple[bytes | None, str]:
+        req = _UrlRequest(
+            self._url,
+            headers={
+                "Range": f"bytes=0-{self._MAX_BYTES - 1}",
+                "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            },
+        )
+        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
+            return resp.read(self._MAX_BYTES), ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -659,7 +684,7 @@ def _extract_og_meta(data: bytes) -> "tuple[str, str]":
     return thumb_url, title
 
 
-class RemotePageMetaExtractor(QObject):
+class RemotePageMetaExtractor(_ThreadedRemoteInfoExtractor):
     """
     Extrai thumbnail e título de qualquer URL remota (vídeo, página web)
     de forma independente, sem API externa e sem baixar a mídia completa.
@@ -675,70 +700,36 @@ class RemotePageMetaExtractor(QObject):
     Completamente independente da API JW.org.
     """
 
-    info_ready       = Signal(int, QPixmap, str)   # (index, pixmap, title)
-    thumbnail_failed = Signal(int)
-
     _MAX_HTML_BYTES  = 98_304   # 96 KB — suficiente para a maioria dos <head>
     _MAX_IMG_BYTES   = 524_288  # 512 KB para imagem og:image
     _TIMEOUT_S       = 12
 
-    def __init__(self, index: int, url: str, parent=None):
-        super().__init__(parent)
-        self._index = index
-        self._url   = url
-        QTimer.singleShot(0, self._start)
+    def _fetch_info(self) -> tuple[bytes | None, str]:
+        req = _UrlRequest(
+            self._url,
+            headers={
+                "Range": f"bytes=0-{self._MAX_HTML_BYTES - 1}",
+                "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
+                "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+            },
+        )
+        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
+            content_type = resp.headers.get("Content-Type", "").lower()
+            data = resp.read(self._MAX_HTML_BYTES)
 
-    def _start(self):
-        threading.Thread(target=self._run, daemon=True).start()
+        if "html" in content_type or data.lstrip()[:5].lower() in (b"<!doc", b"<html"):
+            thumb_url, title = _extract_og_meta(data)
+            image_bytes = self._fetch_image_bytes(thumb_url) if thumb_url else None
+            return image_bytes, title
 
-    def _run(self):
-        try:
-            req = _UrlRequest(
-                self._url,
-                headers={
-                    "Range": f"bytes=0-{self._MAX_HTML_BYTES - 1}",
-                    "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
-                    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-                    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                }
-            )
-            with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-                content_type = resp.headers.get("Content-Type", "").lower()
-                data = resp.read(self._MAX_HTML_BYTES)
+        if any(t in content_type for t in ("audio/", "mpeg")):
+            ext = Path(self._url.split("?")[0]).suffix.lower()
+            return _audio_info_from_bytes(data, ext)
 
-            # ── Resposta HTML → extrai og:image + og:title ─────────────────
-            if "html" in content_type or data.lstrip()[:5].lower() in (b"<!doc", b"<html"):
-                thumb_url, title = _extract_og_meta(data)
+        return None, ""
 
-                px = QPixmap()
-                if thumb_url:
-                    px = self._fetch_image(thumb_url)
-
-                if not px.isNull() or title:
-                    self.info_ready.emit(self._index, px, title)
-                    QTimer.singleShot(0, self.deleteLater)
-                    return
-
-            # ── Resposta de áudio direto → tenta parsear bytes ─────────────
-            elif any(t in content_type for t in ("audio/", "mpeg")):
-                ext = Path(self._url.split("?")[0]).suffix.lower()
-                cover_bytes, title = _audio_info_from_bytes(data, ext)
-                px = QPixmap()
-                if cover_bytes:
-                    px.loadFromData(cover_bytes)
-                if not px.isNull() or title:
-                    self.info_ready.emit(self._index, px, title)
-                    QTimer.singleShot(0, self.deleteLater)
-                    return
-
-        except Exception as exc:
-            log.debug("Remote page metadata extraction failed for %s: %s", self._url, exc)
-
-        self.thumbnail_failed.emit(self._index)
-        QTimer.singleShot(0, self.deleteLater)
-
-    def _fetch_image(self, img_url: str) -> QPixmap:
-        """Baixa imagem (Range parcial) e retorna QPixmap. Retorna QPixmap() em erro."""
+    def _fetch_image_bytes(self, img_url: str) -> bytes | None:
         try:
             req = _UrlRequest(
                 img_url,
@@ -748,13 +739,10 @@ class RemotePageMetaExtractor(QObject):
                 }
             )
             with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-                img_data = resp.read(self._MAX_IMG_BYTES)
-            px = QPixmap()
-            px.loadFromData(img_data)
-            return px
+                return resp.read(self._MAX_IMG_BYTES)
         except Exception as exc:
             log.debug("Remote og:image fetch failed for %s: %s", img_url, exc)
-            return QPixmap()
+            return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

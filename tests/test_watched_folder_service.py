@@ -5,7 +5,11 @@ import unittest
 import os
 from pathlib import Path
 
+import pytest
+
+from app.core.ingest import watched_folder as watched_folder_module
 from app.core.ingest.watched_folder import (
+    WatchedFolderSyncThread,
     local_file_availability_signature,
     meeting_folder_source_needs_processing,
     scan_meeting_folder_sources,
@@ -102,6 +106,45 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
         )
         self.assertFalse(meeting_folder_source_needs_processing(source, failed_same_file))
         self.assertTrue(meeting_folder_source_needs_processing(source, changed_file))
+
+
+def test_watched_folder_cancellation_terminates_libreoffice(monkeypatch, tmp_path):
+    process = type(
+        "_Process",
+        (),
+        {
+            "returncode": None,
+            "terminated": False,
+            "poll": lambda self: self.returncode,
+            "terminate": lambda self: (
+                setattr(self, "terminated", True),
+                setattr(self, "returncode", -15),
+            ),
+            "wait": lambda self, timeout=None: self.returncode,
+            "kill": lambda self: setattr(self, "returncode", -9),
+            "communicate": lambda self: ("", ""),
+        },
+    )()
+    monkeypatch.setattr(
+        watched_folder_module.subprocess,
+        "Popen",
+        lambda *args, **kwargs: process,
+    )
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        lambda self: True,
+    )
+    thread = WatchedFolderSyncThread(
+        str(tmp_path),
+        media_lang="E",
+        fallback_lang_code="E",
+    )
+
+    with pytest.raises(InterruptedError):
+        thread._run_libreoffice(["soffice"])
+
+    assert process.terminated is True
 
 
 if __name__ == "__main__":

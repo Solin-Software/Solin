@@ -1,0 +1,208 @@
+from __future__ import annotations
+
+import threading
+import time
+
+from PySide6.QtCore import QCoreApplication
+
+from app.core.ingest.wifi_server import WifiReceiveServer
+from app.core.integrations.automation.obs import OBSWebSocketService
+from app.core.integrations.automation.zoom import service as zoom_module
+from app.core.integrations.automation.zoom.service import ZoomService
+from app.core.integrations.ndi import NDIReceiverService
+from app.core.media.downloader import SongDownloader
+
+
+def _app() -> QCoreApplication:
+    return QCoreApplication.instance() or QCoreApplication([])
+
+
+def _wait_until(predicate, timeout: float = 3.0) -> bool:
+    app = _app()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if predicate():
+            return True
+        time.sleep(0.01)
+    app.processEvents()
+    return bool(predicate())
+
+
+def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
+    _app()
+    jobs = []
+    job_started = threading.Event()
+
+    def _capture_job(_self, job):
+        jobs.append(job)
+        job_started.set()
+
+    monkeypatch.setattr(SongDownloader, "_worker", _capture_job)
+    downloader = SongDownloader()
+    finished: list[str] = []
+    progress: list[tuple[int, int]] = []
+    downloader.finished.connect(finished.append)
+    downloader.progress.connect(lambda current, total: progress.append((current, total)))
+
+    first_id = downloader.start("https://example.test/old.mp3", persist=False)
+    assert job_started.wait(1)
+    first_job = jobs[-1]
+    job_started.clear()
+
+    second_id = downloader.start("https://example.test/new.mp3", persist=True)
+    assert job_started.wait(1)
+    assert first_job.cancel_event.is_set()
+    assert first_id != second_id
+
+    stale_temp = tmp_path / "stale.tmp"
+    stale_temp.write_bytes(b"old")
+    downloader._deliver_progress(first_id, 10, 100)
+    downloader._deliver_finished(first_id, str(stale_temp), False)
+
+    assert progress == []
+    assert finished == []
+    assert not stale_temp.exists()
+
+    current_path = str(tmp_path / "current.mp3")
+    downloader._deliver_progress(second_id, 100, 100)
+    downloader._deliver_finished(second_id, current_path, True)
+
+    assert progress == [(100, 100)]
+    assert finished == [current_path]
+
+
+def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
+    _app()
+    monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
+    service = ZoomService()
+    service._active = True
+    service._stop_evt.clear()
+    service._generation = 1
+
+    gate = threading.Event()
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+    calls: list[str] = []
+
+    def _worker(name):
+        def _run(_generation):
+            nonlocal active, max_active
+            with lock:
+                active += 1
+                max_active = max(max_active, active)
+                calls.append(name)
+            gate.wait(2)
+            with lock:
+                active -= 1
+
+        return _run
+
+    service._launch_worker("connection", _worker("connection"))
+    service._launch_worker("connection", _worker("duplicate"))
+    service._launch_worker("participants", _worker("participants"))
+
+    assert _wait_until(lambda: calls == ["connection"])
+    gate.set()
+    assert _wait_until(lambda: len(calls) == 2)
+    service.stop(wait=True)
+
+    assert calls == ["connection", "participants"]
+    assert max_active == 1
+
+
+def test_zoom_rejects_callback_from_stopped_generation(monkeypatch):
+    _app()
+    monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
+    service = ZoomService()
+    service.start()
+    generation = service._generation
+
+    service.stop()
+    service._on_connected_main(generation, True)
+    service._on_sharing_main(generation, True)
+
+    assert service.is_connected is False
+    assert service.is_sharing is False
+    assert not service._part_timer.isActive()
+    assert not service._share_timer.isActive()
+
+
+def test_ndi_restart_waits_for_previous_worker():
+    _app()
+    service = NDIReceiverService()
+    lock = threading.Lock()
+    sources: list[str] = []
+    active = 0
+    max_active = 0
+
+    def _worker(generation, stop_event, source_name, _max_fps):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            sources.append(source_name)
+        stop_event.wait(2)
+        with lock:
+            active -= 1
+        service._worker_stopped.emit(generation)
+
+    service._worker = _worker
+    service.start("Source A")
+    assert _wait_until(lambda: sources == ["Source A"])
+
+    service.start("Source B")
+    assert _wait_until(lambda: sources == ["Source A", "Source B"])
+    service.stop(wait=True)
+
+    assert max_active == 1
+
+
+def test_obs_restart_waits_for_previous_worker(monkeypatch):
+    _app()
+    service = OBSWebSocketService()
+    monkeypatch.setattr(service, "_config_ok", lambda: True)
+    lock = threading.Lock()
+    generations: list[int] = []
+    active = 0
+    max_active = 0
+
+    def _worker(generation, stop_event):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            generations.append(generation)
+        stop_event.wait(2)
+        with lock:
+            active -= 1
+
+    service._worker_connect = _worker
+    service.start()
+    assert _wait_until(lambda: len(generations) == 1)
+
+    service.stop()
+    service.start()
+    assert _wait_until(lambda: len(generations) == 2)
+    service.stop(wait=True)
+
+    assert max_active == 1
+    assert generations[1] > generations[0]
+
+
+def test_wifi_server_reports_stopped_after_threads_exit():
+    _app()
+    service = WifiReceiveServer()
+    stopped: list[bool] = []
+    service.server_stopped.connect(lambda: stopped.append(True))
+
+    assert service.start({})
+    server_thread = service._thread
+    assert server_thread is not None and server_thread.is_alive()
+
+    service.stop(wait=True)
+
+    assert stopped == [True]
+    assert service._thread is None
+    assert not server_thread.is_alive()

@@ -21,6 +21,7 @@ import tempfile
 import threading
 import time
 import requests
+from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
 from app.core.foundation import paths as _paths
@@ -83,6 +84,15 @@ def _safe_remove(path) -> None:
         _release_lock(path)
 
 
+@dataclass
+class _DownloadJob:
+    job_id: int
+    url: str
+    persist: bool
+    cancel_event: threading.Event
+    writing_tmp: str | None = None
+
+
 class SongDownloader(QObject):
     """
     Sinais:
@@ -94,14 +104,21 @@ class SongDownloader(QObject):
     finished = Signal(str)
     error    = Signal(str)
 
+    _worker_progress = Signal(int, int, int)
+    _worker_finished = Signal(int, str, bool)
+    _worker_error = Signal(int, str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._cancel: bool = False
-        self._thread = None
-        self._persist: bool = True
         self._lock = threading.Lock()
-        self._writing_tmp = None   # .tmp em escrita (cleanup em cancel)
-        self._finished_temp = None # temp entregue ao player (cleanup posterior)
+        self._next_job_id = 0
+        self._job: _DownloadJob | None = None
+        self._thread: threading.Thread | None = None
+        self._finished_temp: str | None = None
+        self._worker_progress.connect(self._deliver_progress)
+        self._worker_finished.connect(self._deliver_finished)
+        self._worker_error.connect(self._deliver_error)
+        self.destroyed.connect(lambda *_: self.cancel())
 
     # -- API publica ----------------------------------------------------------
 
@@ -112,26 +129,44 @@ class SongDownloader(QObject):
             return path
         return None
 
-    def start(self, url: str, persist: bool = True) -> None:
+    def start(self, url: str, persist: bool = True) -> int:
         """
         Inicia download em background.
         persist=True  -> salva permanentemente em MEDIA_CACHE_DIR
         persist=False -> salva em tempfile (apagado em cleanup_temp/cancel)
         """
         self.cancel()
-        self._cancel  = False
-        self._persist = persist
-        self._thread  = threading.Thread(
-            target=self._worker, args=(url, persist), daemon=True
-        )
-        self._thread.start()
+        with self._lock:
+            self._next_job_id += 1
+            job = _DownloadJob(
+                job_id=self._next_job_id,
+                url=url,
+                persist=persist,
+                cancel_event=threading.Event(),
+            )
+            self._job = job
+            thread = threading.Thread(
+                target=self._worker,
+                args=(job,),
+                daemon=True,
+                name=f"media-download-{job.job_id}",
+            )
+            self._thread = thread
+        thread.start()
+        return job.job_id
 
     def cancel(self) -> None:
-        """Cancela download ativo e remove arquivo .tmp de escrita."""
-        self._cancel = True
+        """Cancela o job atual e invalida todos os callbacks ainda enfileirados."""
         with self._lock:
-            tmp = self._writing_tmp
-            self._writing_tmp = None
+            job = self._job
+            self._job = None
+            self._thread = None
+            if job is not None:
+                job.cancel_event.set()
+                tmp = job.writing_tmp
+                job.writing_tmp = None
+            else:
+                tmp = None
         _safe_remove(tmp)
 
     def cleanup_temp(self) -> None:
@@ -153,23 +188,29 @@ class SongDownloader(QObject):
 
     # -- Worker ---------------------------------------------------------------
 
-    def _worker(self, url: str, persist: bool) -> None:
+    def _worker(self, job: _DownloadJob) -> None:
+        url = job.url
+        persist = job.persist
         if persist:
             final_path = _url_to_path(url)
             if os.path.exists(final_path) and os.path.exists(final_path + ".done"):
                 size = os.path.getsize(final_path)
-                self.progress.emit(size, size)
-                self.finished.emit(final_path)
+                try:
+                    self._worker_progress.emit(job.job_id, size, size)
+                    self._worker_finished.emit(job.job_id, final_path, True)
+                except RuntimeError:
+                    return
                 return
             write_tmp = final_path + ".tmp"
         else:
-            write_tmp  = _make_temp_path(url)
-            final_path = write_tmp   # sem rename - temp e destino final
-            _acquire_lock(write_tmp)  # registra imediatamente como "em uso"
+            write_tmp = _make_temp_path(url)
+            final_path = write_tmp
+            _acquire_lock(write_tmp)
 
         with self._lock:
-            self._writing_tmp = write_tmp
+            job.writing_tmp = write_tmp
 
+        succeeded = False
         try:
             resp = requests.get(url, stream=True, timeout=30)
             resp.raise_for_status()
@@ -181,7 +222,7 @@ class SongDownloader(QObject):
 
             def emit_progress(force: bool = False) -> None:
                 nonlocal last_progress_at, last_progress_pct, last_progress_bytes
-                if downloaded <= 0:
+                if downloaded <= 0 or job.cancel_event.is_set():
                     return
                 now = time.monotonic()
                 if total > 0:
@@ -190,7 +231,7 @@ class SongDownloader(QObject):
                         last_progress_pct = pct
                         last_progress_at = now
                         last_progress_bytes = downloaded
-                        self.progress.emit(downloaded, total)
+                        self._worker_progress.emit(job.job_id, downloaded, total)
                     return
                 if (
                     force
@@ -200,40 +241,78 @@ class SongDownloader(QObject):
                 ):
                     last_progress_at = now
                     last_progress_bytes = downloaded
-                    self.progress.emit(downloaded, total)
+                    self._worker_progress.emit(job.job_id, downloaded, total)
 
             with open(write_tmp, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=131_072):
-                    if self._cancel:
+                    if job.cancel_event.is_set():
                         return
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
                         emit_progress()
 
-            if self._cancel:
+            if job.cancel_event.is_set():
                 return
             emit_progress(force=True)
-
-            with self._lock:
-                self._writing_tmp = None
 
             if persist:
                 os.replace(write_tmp, final_path)
                 with open(final_path + ".done", "w") as _f:
                     _f.write(url)
-            else:
-                with self._lock:
-                    self._finished_temp = final_path
 
-            self.finished.emit(final_path)
+            succeeded = True
+            try:
+                self._worker_finished.emit(job.job_id, final_path, persist)
+            except RuntimeError:
+                if not persist:
+                    _safe_remove(final_path)
 
         except Exception as exc:
-            with self._lock:
-                self._writing_tmp = None
-            if not self._cancel:
+            if not job.cancel_event.is_set():
+                try:
+                    self._worker_error.emit(job.job_id, str(exc))
+                except RuntimeError:
+                    log.debug("Downloader was destroyed before error delivery")
+        finally:
+            if not succeeded:
+                with self._lock:
+                    if job.writing_tmp == write_tmp:
+                        job.writing_tmp = None
                 _safe_remove(write_tmp)
-                self.error.emit(str(exc))
+
+    def _is_current_job(self, job_id: int) -> bool:
+        with self._lock:
+            return self._job is not None and self._job.job_id == job_id
+
+    def _deliver_progress(self, job_id: int, downloaded: int, total: int) -> None:
+        if self._is_current_job(job_id):
+            self.progress.emit(downloaded, total)
+
+    def _deliver_finished(self, job_id: int, local_path: str, persist: bool) -> None:
+        with self._lock:
+            if self._job is None or self._job.job_id != job_id:
+                stale = True
+            else:
+                stale = False
+                self._job.writing_tmp = None
+                self._job = None
+                self._thread = None
+                if not persist:
+                    self._finished_temp = local_path
+        if stale:
+            if not persist:
+                _safe_remove(local_path)
+            return
+        self.finished.emit(local_path)
+
+    def _deliver_error(self, job_id: int, message: str) -> None:
+        with self._lock:
+            if self._job is None or self._job.job_id != job_id:
+                return
+            self._job = None
+            self._thread = None
+        self.error.emit(message)
 
 
 # ── Limpeza de órfãos na inicialização ────────────────────────────────────────

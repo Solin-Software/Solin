@@ -219,7 +219,7 @@ def _rounded_pixmap(src: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
 # ── QR worker ─────────────────────────────────────────────────────────────────
 
 class _QrWorker(QObject):
-    done   = Signal(QPixmap)
+    done   = Signal(bytes)
     failed = Signal()
 
     def __init__(self, url: str) -> None:
@@ -228,11 +228,11 @@ class _QrWorker(QObject):
 
     @Slot()
     def run(self) -> None:
-        pix = _generate_qr(self._url, _QR_SIZE)
-        self.done.emit(pix) if (pix and not pix.isNull()) else self.failed.emit()
+        png_data = _generate_qr_png(self._url)
+        self.done.emit(png_data) if png_data else self.failed.emit()
 
 
-def _generate_qr(url: str, size: int) -> Optional[QPixmap]:
+def _generate_qr_png(url: str) -> bytes | None:
     try:
         import qrcode  # type: ignore[import]
         import io as _io
@@ -242,12 +242,7 @@ def _generate_qr(url: str, size: int) -> Optional[QPixmap]:
         qr.add_data(url); qr.make(fit=True)
         buf = _io.BytesIO()
         qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
-        pix = QPixmap()
-        pix.loadFromData(buf.getvalue())
-        if pix.isNull(): return None
-        return pix.scaled(size, size,
-                          Qt.AspectRatioMode.KeepAspectRatio,
-                          Qt.TransformationMode.SmoothTransformation)
+        return buf.getvalue()
     except Exception:
         log_ignored_exception(__name__, "Could not generate Wi-Fi QR code")
         return None
@@ -1280,6 +1275,8 @@ class WifiReceiveWidget(QWidget):
         worker.failed.connect(self._on_qr_failed)
         thread.started.connect(worker.run)
         thread.finished.connect(thread.deleteLater)
+        worker.done.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
         worker.done.connect(thread.quit)
         worker.failed.connect(thread.quit)
         thread.start()
@@ -1293,8 +1290,18 @@ class WifiReceiveWidget(QWidget):
                 self._qr_thread.finished.connect(self._qr_thread.deleteLater)
         self._qr_thread = None; self._qr_worker = None
 
-    @Slot(QPixmap)
-    def _on_qr_done(self, pix: QPixmap) -> None:
+    @Slot(bytes)
+    def _on_qr_done(self, png_data: bytes) -> None:
+        pix = QPixmap()
+        if not pix.loadFromData(png_data):
+            self._on_qr_failed()
+            return
+        pix = pix.scaled(
+            _QR_SIZE,
+            _QR_SIZE,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         self._qr_lbl.setStyleSheet("background:transparent;border:none;")
         self._qr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._qr_lbl.setWordWrap(False)
@@ -1375,7 +1382,7 @@ class WifiReceiveWidget(QWidget):
     def cleanup(self) -> None:
         """Para servidor e threads auxiliares antes da janela ser destruída."""
         try:
-            self._server.stop()
+            self._server.stop(wait=True)
         except Exception:
             log_ignored_exception(__name__, "Could not stop Wi-Fi receive server")
         self._cancel_qr_generation()

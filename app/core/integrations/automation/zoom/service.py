@@ -16,6 +16,7 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -66,10 +67,11 @@ class ZoomService(QObject):
     share_error           = Signal(str)          # non-modal error message
 
     # ── Internal bridge signals (worker thread → main thread) ─────────────
-    _sig_connected    = Signal(bool)
-    _sig_participants = Signal(int, list)
-    _sig_sharing      = Signal(bool)
-    _sig_share_error  = Signal(str)
+    _sig_connected = Signal(int, bool)
+    _sig_participants = Signal(int, int, list)
+    _sig_sharing = Signal(int, bool)
+    _sig_share_error = Signal(int, str)
+    _sig_worker_done = Signal(str, int)
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -81,6 +83,12 @@ class ZoomService(QObject):
         self._participant_names: list[str] = []
 
         self._stop_evt = threading.Event()
+        self._operation_lock = threading.Lock()
+        self._generation = 0
+        self._active = False
+        self._inflight: set[str] = set()
+        self._threads_lock = threading.Lock()
+        self._threads: set[threading.Thread] = set()
 
         # ── Timers ────────────────────────────────────────────────────────
         # Connection poller: 5s until connected, then 20s keep-alive
@@ -100,6 +108,7 @@ class ZoomService(QObject):
         self._sig_participants.connect(self._on_participants_main)
         self._sig_sharing.connect(self._on_sharing_main)
         self._sig_share_error.connect(self._on_share_error_main)
+        self._sig_worker_done.connect(self._on_worker_done)
 
     # ── Properties ────────────────────────────────────────────────────────
 
@@ -130,12 +139,18 @@ class ZoomService(QObject):
         """Start connection polling.  Safe to call on any platform."""
         if not _HAS_ZOOM:
             return
+        if self._active:
+            return
+        self._generation += 1
+        self._active = True
         self._stop_evt.clear()
         self._conn_timer.start(5000)
         self._poll_connection()  # immediate first attempt
 
-    def stop(self):
+    def stop(self, *, wait: bool = False, timeout: float = 8.0):
         """Stop all polling and disconnect."""
+        self._active = False
+        self._generation += 1
         self._stop_evt.set()
         self._conn_timer.stop()
         self._part_timer.stop()
@@ -146,6 +161,19 @@ class ZoomService(QObject):
         if self._sharing:
             self._sharing = False
             self.sharing_state_changed.emit(False)
+        if wait:
+            deadline = time.monotonic() + max(0.0, timeout)
+            with self._threads_lock:
+                threads = list(self._threads)
+            for thread in threads:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                if thread is not threading.current_thread():
+                    thread.join(timeout=remaining)
+            alive = [thread.name for thread in threads if thread.is_alive()]
+            if alive:
+                log.warning("Zoom workers still running during shutdown: %s", alive)
 
     def start_participant_polling(self):
         """Enable participant count updates (every 5s)."""
@@ -166,31 +194,62 @@ class ZoomService(QObject):
         """
         if not _HAS_ZOOM or not self._connected:
             return
-        threading.Thread(
-            target=self._worker_open_audio,
-            daemon=True, name="zoom-open-audio"
-        ).start()
+        self._launch_worker("open-audio", self._worker_open_audio)
 
     def request_stop_share(self):
         """Click Zoom's Stop Share button. Works even if we don't know we're sharing."""
         if not _HAS_ZOOM or not self._connected:
             return
-        threading.Thread(
-            target=self._worker_stop_share,
-            daemon=True, name="zoom-stop-share"
-        ).start()
+        self._launch_worker("stop-share", self._worker_stop_share)
+
+    def _launch_worker(self, kind: str, worker: Callable[[int], None]) -> None:
+        if not self._active or self._stop_evt.is_set() or kind in self._inflight:
+            return
+        generation = self._generation
+        self._inflight.add(kind)
+
+        def _run() -> None:
+            try:
+                with self._operation_lock:
+                    if self._is_current_generation(generation):
+                        worker(generation)
+            finally:
+                with self._threads_lock:
+                    self._threads.discard(threading.current_thread())
+                try:
+                    self._sig_worker_done.emit(kind, generation)
+                except RuntimeError:
+                    return
+
+        thread = threading.Thread(
+            target=_run,
+            daemon=True,
+            name=f"zoom-{kind}",
+        )
+        with self._threads_lock:
+            self._threads.add(thread)
+        thread.start()
+
+    def _is_current_generation(self, generation: int) -> bool:
+        return (
+            self._active
+            and not self._stop_evt.is_set()
+            and generation == self._generation
+        )
+
+    def _on_worker_done(self, kind: str, generation: int) -> None:
+        self._inflight.discard(kind)
+        if kind == "connection" and self._active and generation != self._generation:
+            QTimer.singleShot(0, self._poll_connection)
 
     # ── Connection polling ────────────────────────────────────────────────
 
     def _poll_connection(self):
         if self._stop_evt.is_set() or not _HAS_ZOOM:
             return
-        threading.Thread(
-            target=self._worker_check_connection,
-            daemon=True, name="zoom-conn-check"
-        ).start()
+        self._launch_worker("connection", self._worker_check_connection)
 
-    def _worker_check_connection(self):
+    def _worker_check_connection(self, generation: int) -> None:
         from . import controls as _zc
         _init_com()
         try:
@@ -200,7 +259,7 @@ class ZoomService(QObject):
         except Exception:
             connected = False
             windows = []
-        self._sig_connected.emit(connected)
+        self._sig_connected.emit(generation, connected)
 
         # Also detect sharing state (check for ZPFloatToolbarClass)
         if connected:
@@ -208,11 +267,13 @@ class ZoomService(QObject):
                 is_sharing = any(
                     w["class_name"] == "ZPFloatToolbarClass" for w in windows
                 )
-                self._sig_sharing.emit(is_sharing)
+                self._sig_sharing.emit(generation, is_sharing)
             except Exception:
                 log.debug("Failed to detect Zoom sharing state", exc_info=True)
 
-    def _on_connected_main(self, connected: bool):
+    def _on_connected_main(self, generation: int, connected: bool) -> None:
+        if not self._is_current_generation(generation):
+            return
         if connected == self._connected:
             return
         self._connected = connected
@@ -240,12 +301,9 @@ class ZoomService(QObject):
             return
         if self._sharing:
             return  # pause during sharing
-        threading.Thread(
-            target=self._worker_get_participants,
-            daemon=True, name="zoom-parts"
-        ).start()
+        self._launch_worker("participants", self._worker_get_participants)
 
-    def _worker_get_participants(self):
+    def _worker_get_participants(self, generation: int) -> None:
         """
         Get participant names from Zoom.
         Opens the participant panel if closed and KEEPS IT OPEN
@@ -279,18 +337,20 @@ class ZoomService(QObject):
             except Exception:
                 log.debug("Failed to warm Zoom toolbar cache during participant poll", exc_info=True)
 
-            self._sig_participants.emit(count, names)
+            self._sig_participants.emit(generation, count, names)
         except Exception as exc:
             log.debug("Zoom participant poll failed: %s", exc)
 
-    def _on_participants_main(self, count: int, names: list):
+    def _on_participants_main(self, generation: int, count: int, names: list) -> None:
+        if not self._is_current_generation(generation):
+            return
         self._participant_count = count
         self._participant_names = names
         self.participants_updated.emit(count, names)
 
     # ── Share state ─────────────────────────────────────────────────────────
 
-    def _worker_stop_share(self):
+    def _worker_stop_share(self, generation: int) -> None:
         """
         Click Zoom's Stop Share button using the public API.
         Uses the fast Win32 FindWindowW check (~0ms) instead of full UIA scan.
@@ -306,11 +366,11 @@ class ZoomService(QObject):
             log.info(f"[ZStop] FindWindowW() check levou: {(time.perf_counter()-t0)*1000:.1f}ms")
             
             if not is_sharing_fast:
-                self._sig_sharing.emit(False)
+                self._sig_sharing.emit(generation, False)
                 return
 
             # OTIMISTA: Emitimos o sinal de parada AGORA para a UI reagir instantaneamente (igual ao start_share)
-            self._sig_sharing.emit(False)
+            self._sig_sharing.emit(generation, False)
             
             log.info("[ZStop] Chamando stop_screen_share()...")
             t0 = time.perf_counter()
@@ -322,11 +382,11 @@ class ZoomService(QObject):
             log.warning("Zoom stop share failed: %s", exc)
             if not _zc._find_float_toolbar_hwnd():
                 return
-            self._sig_share_error.emit(str(exc))
-            self._sig_sharing.emit(False)
+            self._sig_share_error.emit(generation, str(exc))
+            self._sig_sharing.emit(generation, False)
         except Exception as exc:
             log.warning("Zoom stop share failed: %s", exc)
-            self._sig_share_error.emit(str(exc))
+            self._sig_share_error.emit(generation, str(exc))
 
     def _poll_share_state(self):
         """While sharing, check if user manually stopped or sharing ended."""
@@ -335,12 +395,9 @@ class ZoomService(QObject):
         if not self._sharing:
             self._share_timer.stop()
             return
-        threading.Thread(
-            target=self._worker_check_share,
-            daemon=True, name="zoom-share-check"
-        ).start()
+        self._launch_worker("share-state", self._worker_check_share)
 
-    def _worker_check_share(self):
+    def _worker_check_share(self, generation: int) -> None:
         """Check if sharing is still active. Uses fast Win32 check + cache refresh."""
         from . import controls as _zc
         import ctypes
@@ -354,11 +411,13 @@ class ZoomService(QObject):
                 # Não queremos desarmar o poller se ele só estiver escolhendo a tela.
                 is_dialog_open = ctypes.windll.user32.FindWindowW("ZPShareEntranceClass", None)
                 if not is_dialog_open:
-                    self._sig_sharing.emit(False)
+                    self._sig_sharing.emit(generation, False)
         except Exception:
             log.debug("Failed to poll Zoom sharing state", exc_info=True)
 
-    def _on_sharing_main(self, sharing: bool):
+    def _on_sharing_main(self, generation: int, sharing: bool) -> None:
+        if not self._is_current_generation(generation):
+            return
         was_sharing = self._sharing
         self._sharing = sharing
         self.sharing_state_changed.emit(sharing)
@@ -373,12 +432,14 @@ class ZoomService(QObject):
             if show_parts and self._connected:
                 self._part_timer.start(5000)
 
-    def _on_share_error_main(self, message: str):
+    def _on_share_error_main(self, generation: int, message: str) -> None:
+        if not self._is_current_generation(generation):
+            return
         self.share_error.emit(message)
 
     # ── Open Audio for All ────────────────────────────────────────────────
 
-    def _worker_open_audio(self):
+    def _worker_open_audio(self, _generation: int) -> None:
         """Leave computer audio + unmute all."""
         from . import controls as _zc
         _init_com()

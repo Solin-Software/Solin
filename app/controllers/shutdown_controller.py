@@ -62,10 +62,10 @@ class ShutdownController:
     def stop_media_services(self) -> None:
         self._window._background_song_service.shutdown()
         self._window.media_ctrl.stop()
-        self._window._ndi_service.stop()
+        self._window._ndi_service.stop(wait=True)
         self._window._camera_service.stop()
-        self._window._obs_service.stop()
-        self._window._zoom_service.stop()
+        self._window._obs_service.stop(wait=True)
+        self._window._zoom_service.stop(wait=True)
 
     def stop_conversion_threads(self) -> None:
         for attr in self._CONVERSION_THREAD_ATTRS:

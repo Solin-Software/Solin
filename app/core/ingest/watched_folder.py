@@ -36,6 +36,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -840,8 +841,10 @@ class WatchedFolderSyncThread(QThread):
             return
 
         try:
+            self._check_interrupted()
             # Reconcile first (remove orphans)
             reconcile_manifest(self._subfolder)
+            self._check_interrupted()
 
             pending = get_pending_files(self._subfolder)
             if not pending:
@@ -852,12 +855,14 @@ class WatchedFolderSyncThread(QThread):
             cache = _cache_dir(sub)
 
             for file_path in pending:
+                self._check_interrupted()
                 fp = Path(file_path)
                 ext = fp.suffix.lower()
                 self.progress.emit(fp.name, f"Processing {fp.name}…")
 
                 try:
                     outputs, virtuals = self._process_file(fp, cache, ext)
+                    self._check_interrupted()
 
                     # Update manifest
                     fingerprint = _file_fingerprint(fp)
@@ -869,13 +874,18 @@ class WatchedFolderSyncThread(QThread):
                         "virtual_items": virtuals,
                         "processed_at": datetime.now(timezone.utc).isoformat(),
                     }
+                except InterruptedError:
+                    raise
                 except Exception as exc:
                     log.error("Sync failed for %s: %s", fp.name, exc)
                     self.progress.emit(fp.name, f"⚠ Error: {str(exc)[:60]}")
 
+            self._check_interrupted()
             _save_manifest(sub, manifest)
             self.sync_complete.emit()
 
+        except InterruptedError:
+            log.info("Watched-folder sync cancelled for %s", self._subfolder)
         except Exception as exc:
             log.error("Sync thread error: %s", exc)
             self.sync_failed.emit(str(exc))
@@ -883,6 +893,7 @@ class WatchedFolderSyncThread(QThread):
     def _process_file(self, fp: Path, cache: Path,
                       ext: str) -> tuple[list[str], list[dict]]:
         """Process a single file. Returns (output_paths, virtual_items)."""
+        self._check_interrupted()
         if ext in PDF_EXTS:
             return self._process_pdf(fp, cache)
         elif ext in (PPTX_EXTS | DOCX_EXTS):
@@ -908,7 +919,11 @@ class WatchedFolderSyncThread(QThread):
             page_stem=stem,
             image_format="JPEG",
             quality=None,
-            progress_cb=lambda cur, tot: self.progress.emit(pdf_path.name, f"Page {cur}/{tot}"),
+            progress_cb=lambda cur, tot: self._emit_render_progress(
+                pdf_path.name,
+                cur,
+                tot,
+            ),
         )
         return paths, []
 
@@ -928,12 +943,11 @@ class WatchedFolderSyncThread(QThread):
         with tempfile.TemporaryDirectory(prefix="solin_wf_", ignore_cleanup_errors=True) as tmp:
             tmp_path = Path(tmp)
             lo_profile_uri = (tmp_path / "lo_profile").as_uri()
-            result = subprocess.run(
+            result = self._run_libreoffice(
                 [soffice, "--headless", "--norestore", "--nolockcheck",
                  "--nofirststartwizard",
                  f"-env:UserInstallation={lo_profile_uri}",
                  "--convert-to", "pdf", "--outdir", tmp, str(lo_path)],
-                capture_output=True, text=True, timeout=120,
             )
             if result.returncode != 0:
                 raise RuntimeError(f"LibreOffice failed: {result.stderr.strip()[:100]}")
@@ -953,11 +967,16 @@ class WatchedFolderSyncThread(QThread):
                 page_stem=stem,
                 image_format="JPEG",
                 quality=None,
-                progress_cb=lambda cur, tot: self.progress.emit(lo_path.name, f"Page {cur}/{tot}"),
+                progress_cb=lambda cur, tot: self._emit_render_progress(
+                    lo_path.name,
+                    cur,
+                    tot,
+                ),
             )
             return paths, []
 
     def _process_jwpub(self, jwpub_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
+        self._check_interrupted()
         from app.core.jw.publication_reader import read_jwpub_for_playlist
         items, stem = read_jwpub_for_playlist(
             str(jwpub_path), lang=self._media_lang,
@@ -966,6 +985,7 @@ class WatchedFolderSyncThread(QThread):
         outputs = []
         virtuals = []
         for item in items:
+            self._check_interrupted()
             if item.get("type") == "image" and item.get("url"):
                 url = item["url"]
                 # If image was saved to cache, track the basename
@@ -989,11 +1009,13 @@ class WatchedFolderSyncThread(QThread):
         return outputs, virtuals
 
     def _process_jwlplaylist(self, jwl_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
+        self._check_interrupted()
         from app.core.playlists.reader import read_jwlplaylist
         data = read_jwlplaylist(str(jwl_path), fallback_lang_code=self._fallback_lang)
         outputs = []
         virtuals = []
         for raw in data.get("items", []):
+            self._check_interrupted()
             url = raw.get("url") or raw.get("jworg_url") or ""
             if raw.get("data") and not url:
                 # Embedded media — save to cache
@@ -1019,6 +1041,47 @@ class WatchedFolderSyncThread(QThread):
                     "meps_language": raw.get("language", 0),
                 })
         return outputs, virtuals
+
+    def _check_interrupted(self) -> None:
+        if self.isInterruptionRequested():
+            raise InterruptedError("Watched-folder sync cancelled")
+
+    def _emit_render_progress(self, filename: str, current: int, total: int) -> None:
+        self._check_interrupted()
+        self.progress.emit(filename, f"Page {current}/{total}")
+
+    def _run_libreoffice(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        deadline = time.monotonic() + 120
+        while process.poll() is None:
+            if self.isInterruptionRequested():
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+                raise InterruptedError("LibreOffice conversion cancelled")
+            if time.monotonic() >= deadline:
+                process.kill()
+                stdout, stderr = process.communicate()
+                raise RuntimeError(
+                    "LibreOffice timed out: "
+                    + (stderr.strip() or stdout.strip())[:100]
+                )
+            time.sleep(0.05)
+        stdout, stderr = process.communicate()
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=process.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
 
 # ── Observador de pasta ────────────────────────────────────────────────────────
