@@ -136,6 +136,30 @@ class PlaylistReadError(ValueError):
     """A playlist archive exists but its internal data cannot be read."""
 
 
+def _database_text(
+    value: object,
+    field_name: str,
+    *,
+    default: str | None = None,
+    required: bool = False,
+) -> str:
+    """Validate a SQLite value that the playlist format defines as text."""
+    if value is None:
+        if required:
+            raise PlaylistReadError(f"Missing required playlist field: {field_name}")
+        return default or ""
+    if not isinstance(value, str):
+        raise PlaylistReadError(
+            f"Invalid playlist field {field_name}: expected text, got {type(value).__name__}"
+        )
+    if not value:
+        if required:
+            raise PlaylistReadError(f"Empty required playlist field: {field_name}")
+        if default is not None:
+            return default
+    return value
+
+
 class JWLPlaylistReader:
     """Lê um .jwlplaylist e retorna a estrutura de playlist normalizada."""
 
@@ -236,9 +260,12 @@ class JWLPlaylistReader:
         mem.row_factory = sqlite3.Row
         try:
             return self._extract(mem)
-        except sqlite3.Error as exc:
-            log.error("Falha ao consultar userData.db: %s", exc)
-            raise PlaylistReadError("Invalid playlist database schema") from exc
+        except PlaylistReadError:
+            log.warning("Invalid playlist database contents", exc_info=True)
+            raise
+        except (sqlite3.Error, TypeError, ValueError, OverflowError) as exc:
+            log.warning("Invalid playlist database contents", exc_info=True)
+            raise PlaylistReadError("Invalid playlist database contents") from exc
         finally:
             try:
                 mem.close()
@@ -382,7 +409,7 @@ class JWLPlaylistReader:
 
             if label_col:
                 try:
-                    lbl = r[label_col] or ""
+                    lbl = _database_text(r[label_col], f"PlaylistItem.{label_col}")
                 except (IndexError, KeyError):
                     lbl = ""
             else:
@@ -440,9 +467,25 @@ class JWLPlaylistReader:
             return result
 
         for row in rows:
-            file_path  = row["FilePath"]
-            mime_type  = row["MimeType"] or "image/jpeg"
-            orig_name  = row["OriginalFilename"] or file_path
+            file_path = _database_text(
+                row["FilePath"],
+                "IndependentMedia.FilePath",
+                required=True,
+            )
+            mime_type = _database_text(
+                row["MimeType"],
+                "IndependentMedia.MimeType",
+                default="image/jpeg",
+            )
+            orig_name = _database_text(
+                row["OriginalFilename"],
+                "IndependentMedia.OriginalFilename",
+                default=file_path,
+            )
+            hash_value = _database_text(
+                row["Hash"],
+                "IndependentMedia.Hash",
+            )
 
             # Tenta ler os bytes do ZIP (busca exata e parcial)
             data = self._read_zip_entry(file_path)
@@ -454,7 +497,7 @@ class JWLPlaylistReader:
                 filepath      = file_path,
                 original_name = orig_name,
                 mime_type     = mime_type,
-                hash_         = row["Hash"],
+                hash_         = hash_value,
                 data          = data,
             )
 
@@ -489,7 +532,10 @@ class JWLPlaylistReader:
         for row in rows:
             result[row["PlaylistItemId"]] = _Location(
                 location_id           = row["LocationId"],
-                key_symbol            = row["KeySymbol"],
+                key_symbol            = _database_text(
+                    row["KeySymbol"],
+                    "Location.KeySymbol",
+                ),
                 track                 = row["Track"],
                 issue_tag             = row["IssueTagNumber"],
                 doc_id                = row["DocumentId"],
