@@ -21,6 +21,7 @@ class ProjectionIntegrationController:
     def __init__(self, window) -> None:
         self._window = window
         self._auto_share_active = False
+        self._auto_share_generation = 0
 
     def update_status(
         self,
@@ -117,17 +118,21 @@ class ProjectionIntegrationController:
 
         share_enabled = self._window._zoom_prefs.value(SettingsKey.SHARE_ENABLED, False, bool)
         if not share_enabled:
+            self._auto_share_generation += 1
             self._auto_share_active = False
             return
 
         hotkey = self.auto_share_hotkey()
         if not hotkey:
+            self._auto_share_generation += 1
             self._auto_share_active = False
             return
 
         should_share = active and visual and self.has_visible_projection_output()
         if should_share == self._auto_share_active:
             return
+        self._auto_share_generation += 1
+        generation = self._auto_share_generation
 
         if should_share:
             click_x = self._window._zoom_prefs.value(SettingsKey.SHARE_CLICK_X, -1, int)
@@ -135,8 +140,10 @@ class ProjectionIntegrationController:
             from ..core.integrations.automation.screen_share import execute_start_share
 
             def _run_start_share():
-                self._window._auto_share_start_finished.emit(
-                    execute_start_share(hotkey, click_x, click_y)
+                self._window._auto_share_finished.emit(
+                    generation,
+                    True,
+                    execute_start_share(hotkey, click_x, click_y),
                 )
 
             self._auto_share_active = True
@@ -149,8 +156,11 @@ class ProjectionIntegrationController:
             from ..core.integrations.automation.screen_share import execute_stop_share
 
             def _run_stop_share():
-                if not execute_stop_share(hotkey):
-                    self._auto_share_active = True
+                self._window._auto_share_finished.emit(
+                    generation,
+                    False,
+                    execute_stop_share(hotkey),
+                )
 
             self._auto_share_active = False
             threading.Thread(
@@ -159,14 +169,23 @@ class ProjectionIntegrationController:
                 name="share-stop",
             ).start()
 
-    def on_auto_share_start_finished(self, ok: bool) -> None:
-        if not ok:
-            self._auto_share_active = False
+    def on_auto_share_finished(
+        self,
+        generation: int,
+        target_active: bool,
+        ok: bool,
+    ) -> None:
+        if generation != self._auto_share_generation:
             return
-        QTimer.singleShot(
-            AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS,
-            self.raise_visible_projection_windows,
-        )
+        if not ok:
+            self._auto_share_active = not target_active
+            return
+        self._auto_share_active = target_active
+        if target_active:
+            QTimer.singleShot(
+                AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS,
+                self.raise_visible_projection_windows,
+            )
 
     def raise_visible_projection_windows(self) -> None:
         for win in list(self._window.projection_windows):

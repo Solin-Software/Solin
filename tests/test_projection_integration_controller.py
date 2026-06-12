@@ -141,3 +141,25 @@ def test_auto_share_hotkey_falls_back_to_legacy_keys():
 
     assert controller.auto_share_hotkey() == "LegacyStart"
     assert controller.auto_share_configured() is True
+
+
+def test_auto_share_ignores_stale_worker_result():
+    window = _WindowStub()
+    controller = ProjectionIntegrationController(window)
+    controller._auto_share_generation = 2
+    controller._auto_share_active = False
+
+    controller.on_auto_share_finished(1, True, True)
+
+    assert controller._auto_share_active is False
+
+
+def test_auto_share_failed_stop_restores_active_state():
+    window = _WindowStub()
+    controller = ProjectionIntegrationController(window)
+    controller._auto_share_generation = 3
+    controller._auto_share_active = False
+
+    controller.on_auto_share_finished(3, False, False)
+
+    assert controller._auto_share_active is True

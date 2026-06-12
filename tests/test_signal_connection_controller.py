@@ -107,7 +107,7 @@ class _WindowStub:
             set_enabled=_slot("background_song_enabled"),
             reload_settings=_slot("background_song_reload_settings"),
         )
-        self._auto_share_start_finished = _Signal("auto_share_start_finished")
+        self._auto_share_finished = _Signal("auto_share_finished")
 
         self._playlist_imports = SimpleNamespace(
             add_current_to_playlist=_slot("add_current_to_playlist"),
@@ -140,7 +140,7 @@ class _WindowStub:
             on_obs_scene_toggle=_slot("obs_scene_toggle"),
         )
         self._projection_integrations = SimpleNamespace(
-            on_auto_share_start_finished=_slot("auto_share_finished"),
+            on_auto_share_finished=_slot("auto_share_finished"),
         )
 
         self._on_sjjm_project = _slot("on_sjjm_project")
@@ -189,7 +189,7 @@ def test_connect_signals_wires_expected_signal_graph():
     assert window.settings_widget.meeting_schedule_changed.connected == [
         window._background_song_service.reload_settings
     ]
-    assert window._auto_share_start_finished.connected == [
-        window._projection_integrations.on_auto_share_start_finished
+    assert window._auto_share_finished.connected == [
+        window._projection_integrations.on_auto_share_finished
     ]
     assert len(window._obs_service.scenes_updated.connected) == 2

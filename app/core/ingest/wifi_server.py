@@ -465,13 +465,19 @@ class WifiReceiveServer(QObject):
     file_received     = Signal(str, str)         # saved_path, original_filename
     error_occurred    = Signal(str)
     inactivity_stopped = Signal()
+    _shutdown_complete = Signal(int, bool)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._server:        Optional[HTTPServer]      = None
         self._thread:        Optional[threading.Thread] = None
+        self._shutdown_thread: Optional[threading.Thread] = None
         self._token:         str                        = ""
         self._last_activity: float                      = 0.0
+        self._generation:    int                        = 0
+        self._stopping:      bool                       = False
+        self._shutdown_inactivity: bool                 = False
+        self._pending_start: Optional[dict[str, str]]    = None
         # True enquanto a janela de recepção Wi-Fi estiver visível ao usuário.
         # Quando aberta, o contador de inatividade é suspenso; ao fechar, recomeça
         # do zero (i.e. _last_activity é atualizado no momento em que fecha).
@@ -481,6 +487,7 @@ class WifiReceiveServer(QObject):
         self._inactivity_timer = QTimer(self)
         self._inactivity_timer.setInterval(_POLL_INTERVAL_MS)
         self._inactivity_timer.timeout.connect(self._check_inactivity)
+        self._shutdown_complete.connect(self._finish_shutdown)
 
     # ── API pública ───────────────────────────────────────────────────────
 
@@ -521,6 +528,9 @@ class WifiReceiveServer(QObject):
         """
         if self.is_running:
             return True
+        if self._stopping:
+            self._pending_start = dict(html_labels)
+            return True
 
         port = _find_free_port(*_PORT_RANGE)
         if port is None:
@@ -528,13 +538,19 @@ class WifiReceiveServer(QObject):
             return False
 
         self._token = uuid.uuid4().hex[:12]   # token curto mas suficientemente aleatório
+        self._generation += 1
+        generation = self._generation
         html = build_upload_html(html_labels)
 
         handler_cls = _make_handler(
             token       = self._token,
             html        = html,
-            on_file     = self._on_file_received,
-            on_activity = self._on_activity,
+            on_file=lambda path, name: self._on_file_received(
+                generation,
+                path,
+                name,
+            ),
+            on_activity=lambda: self._on_activity(generation),
         )
 
         try:
@@ -556,8 +572,28 @@ class WifiReceiveServer(QObject):
         self.server_started.emit(ip, port, url)
         return True
 
-    def stop(self) -> None:
-        """Para o servidor e a thread de forma limpa."""
+    def stop(self, *, wait: bool = False, timeout: float = 5.0) -> None:
+        """Para o servidor; server_stopped só é emitido após o término real."""
+        self._pending_start = None
+        self._begin_shutdown(inactivity=False, wait=wait, timeout=timeout)
+
+    def _begin_shutdown(
+        self,
+        *,
+        inactivity: bool,
+        wait: bool,
+        timeout: float,
+    ) -> None:
+        if self._stopping:
+            shutdown_thread = self._shutdown_thread
+            if wait and shutdown_thread is not None:
+                shutdown_thread.join(timeout=max(0.0, timeout))
+                if not shutdown_thread.is_alive():
+                    self._finish_shutdown(
+                        self._generation,
+                        self._shutdown_inactivity,
+                    )
+            return
         if not self.is_running:
             return
         timer = self._inactivity_timer
@@ -565,32 +601,59 @@ class WifiReceiveServer(QObject):
             timer.stop()
 
         server = self._server
+        server_thread = self._thread
+        generation = self._generation
         self._server = None
-        self._thread = None
         self._token  = ""
+        self._stopping = True
+        self._shutdown_inactivity = inactivity
 
-        # Shutdown bloqueante — feito em thread auxiliar para não travar a UI
         def _shutdown():
             try:
                 server.shutdown()
                 server.server_close()
+                if server_thread is not None and server_thread is not threading.current_thread():
+                    server_thread.join(timeout=timeout)
             except Exception:
                 log.warning("Failed to shutdown Wi-Fi server cleanly", exc_info=True)
+            finally:
+                try:
+                    self._shutdown_complete.emit(generation, inactivity)
+                except RuntimeError:
+                    return
 
-        threading.Thread(target=_shutdown, daemon=True).start()
-        self.server_stopped.emit()
+        shutdown_thread = threading.Thread(
+            target=_shutdown,
+            daemon=True,
+            name=(
+                "wifi-server-inactivity-shutdown"
+                if inactivity
+                else "wifi-server-shutdown"
+            ),
+        )
+        self._shutdown_thread = shutdown_thread
+        shutdown_thread.start()
+        if wait:
+            shutdown_thread.join(timeout=max(0.0, timeout))
+            if shutdown_thread.is_alive():
+                log.warning("Wi-Fi server did not stop within %.1f seconds", timeout)
+            else:
+                self._finish_shutdown(generation, inactivity)
 
     # ── Callbacks do handler (chamados da thread do servidor) ─────────────
 
-    def _on_activity(self) -> None:
+    def _on_activity(self, generation: int) -> None:
         """Atualiza timestamp de última atividade (GIL garante atomicidade)."""
-        self._last_activity = time.monotonic()
+        if generation == self._generation and self.is_running:
+            self._last_activity = time.monotonic()
 
-    def _on_file_received(self, path: str, orig_name: str) -> None:
+    def _on_file_received(self, generation: int, path: str, orig_name: str) -> None:
         """
         Chamado da thread do servidor após salvar o arquivo.
         PySide6 enfileira o sinal automaticamente para o main thread.
         """
+        if generation != self._generation or not self.is_running:
+            return
         self._last_activity = time.monotonic()
         self.file_received.emit(path, orig_name)
 
@@ -607,5 +670,21 @@ class WifiReceiveServer(QObject):
             return
         elapsed = time.monotonic() - self._last_activity
         if elapsed >= _INACTIVITY_SECS:
-            self.stop()
+            self._stop_for_inactivity()
+
+    def _stop_for_inactivity(self) -> None:
+        self._begin_shutdown(inactivity=True, wait=False, timeout=5.0)
+
+    def _finish_shutdown(self, generation: int, inactivity: bool) -> None:
+        if generation != self._generation or not self._stopping:
+            return
+        self._thread = None
+        self._shutdown_thread = None
+        self._stopping = False
+        self._shutdown_inactivity = False
+        self.server_stopped.emit()
+        if inactivity:
             self.inactivity_stopped.emit()
+        pending, self._pending_start = self._pending_start, None
+        if pending is not None:
+            self.start(pending)

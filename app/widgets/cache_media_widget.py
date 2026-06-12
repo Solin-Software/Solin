@@ -95,6 +95,8 @@ class _CacheScanWorker(QObject):
             self.finished.emit(result)
             return
         for fname in sorted(os.listdir(cache_dir)):
+            if QThread.currentThread().isInterruptionRequested():
+                return
             # Ignora markers e temporários
             if fname.endswith(".done") or fname.endswith(".tmp"):
                 continue
@@ -485,6 +487,7 @@ class CacheMediaWidget(QWidget):
         self._scan_worker.moveToThread(self._scan_thread)
         self._scan_thread.started.connect(self._scan_worker.run)
         self._scan_worker.finished.connect(self._on_scan_done)
+        self._scan_worker.finished.connect(self._scan_worker.deleteLater)
         self._scan_worker.finished.connect(self._scan_thread.quit)
         self._scan_thread.finished.connect(self._scan_thread.deleteLater)
         self._scan_thread.start()
@@ -685,6 +688,16 @@ class CacheMediaWidget(QWidget):
 
     def cleanup(self):
         """Chamar ao fechar o app."""
+        thread = self._scan_thread
+        if thread is not None and thread.isRunning():
+            thread.requestInterruption()
+            thread.quit()
+            thread.wait(2_000)
+            if thread.isRunning():
+                thread.setParent(None)
+                thread.finished.connect(thread.deleteLater)
+        self._scan_thread = None
+        self._scan_worker = None
         self._thumb_service.clear()
 
 

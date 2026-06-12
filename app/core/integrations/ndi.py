@@ -231,11 +231,20 @@ class NDIReceiverService(QObject):
     error = Signal(str)
     sources_ready = Signal(list)
 
+    _worker_frame = Signal(int, QImage)
+    _worker_started = Signal(int, str)
+    _worker_stopped = Signal(int)
+    _worker_error = Signal(int, str)
+    _sources_discovered = Signal(int, object)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._lib: _NDILib | None = None
         self._thread: threading.Thread | None = None
-        self._stop_evt = threading.Event()
+        self._run_stop_evt: threading.Event | None = None
+        self._generation = 0
+        self._pending_start: tuple[str, int] | None = None
+        self._source_refresh_generation = 0
         self._lock = threading.Lock()
         self._active_source = ""
         self._source_name_bytes: bytes | None = None
@@ -244,6 +253,11 @@ class NDIReceiverService(QObject):
         self._warm_stop_timer = QTimer(self)
         self._warm_stop_timer.setSingleShot(True)
         self._warm_stop_timer.timeout.connect(self.stop)
+        self._worker_frame.connect(self._on_worker_frame)
+        self._worker_started.connect(self._on_worker_started)
+        self._worker_stopped.connect(self._on_worker_stopped)
+        self._worker_error.connect(self._on_worker_error)
+        self._sources_discovered.connect(self._on_sources_discovered)
 
     @property
     def is_running(self) -> bool:
@@ -254,14 +268,17 @@ class NDIReceiverService(QObject):
         return self._active_source
 
     def refresh_sources(self, timeout_ms: int = 1500) -> None:
+        self._source_refresh_generation += 1
+        generation = self._source_refresh_generation
+
         def _run():
             try:
                 lib = self._ensure_lib()
                 records = lib.find_source_records(timeout_ms)
-                self._known_sources = {name: url for name, url in records}
-                self.sources_ready.emit([name for name, _url in records])
+                self._sources_discovered.emit(generation, records)
             except Exception as exc:
-                self.error.emit(str(exc))
+                if generation == self._source_refresh_generation:
+                    self.error.emit(str(exc))
         threading.Thread(target=_run, daemon=True, name="ndi-source-refresh").start()
 
     def start(self, source_name: str, *, max_fps: int = 30) -> None:
@@ -273,25 +290,44 @@ class NDIReceiverService(QObject):
         if self.is_running and self._active_source == source_name:
             self.started.emit(source_name)
             return
-        self.stop()
-        self._stop_evt.clear()
+        max_fps = max(1, int(max_fps or 30))
+        if self.is_running:
+            self._pending_start = (source_name, max_fps)
+            self._request_stop()
+            return
+        self._begin_start(source_name, max_fps)
+
+    def _begin_start(self, source_name: str, max_fps: int) -> None:
+        self._generation += 1
+        generation = self._generation
+        stop_event = threading.Event()
+        self._run_stop_evt = stop_event
         self._active_source = source_name
         self._thread = threading.Thread(
             target=self._worker,
-            args=(source_name, max(1, int(max_fps or 30))),
+            args=(generation, stop_event, source_name, max_fps),
             daemon=True,
             name="ndi-receiver",
         )
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, *, wait: bool = False, timeout: float = 4.0) -> None:
         self._warm_stop_timer.stop()
-        self._stop_evt.set()
+        self._pending_start = None
+        self._request_stop()
         thread = self._thread
-        if thread and thread.is_alive() and thread is not threading.current_thread():
-            thread.join(timeout=1.5)
-        self._thread = None
         self._active_source = ""
+        if wait and thread and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=max(0.0, timeout))
+            if thread.is_alive():
+                log.warning("NDI receiver did not stop within %.1f seconds", timeout)
+            else:
+                self._finish_run(self._generation)
+
+    def _request_stop(self) -> None:
+        stop_event = self._run_stop_evt
+        if stop_event is not None:
+            stop_event.set()
 
     def stop_later(self, delay_ms: int = 15_000) -> None:
         if delay_ms <= 0 or not self.is_running:
@@ -305,20 +341,26 @@ class NDIReceiverService(QObject):
                 self._lib = _NDILib()
             return self._lib
 
-    def _worker(self, source_name: str, max_fps: int) -> None:
+    def _worker(
+        self,
+        generation: int,
+        stop_event: threading.Event,
+        source_name: str,
+        max_fps: int,
+    ) -> None:
         recv = None
         try:
             lib = self._ensure_lib()
             recv = self._create_receiver(lib, self._source_from_name(source_name))
 
-            self.started.emit(source_name)
+            self._worker_started.emit(generation, source_name)
             min_interval = 1.0 / max_fps
             last_emit = 0.0
             saw_frame = False
             tried_discovery_fallback = False
             fallback_deadline = time.monotonic() + 0.18
 
-            while not self._stop_evt.is_set():
+            while not stop_event.is_set():
                 frame = _NDIVideoFrameV2()
                 frame_type = lib.dll.NDIlib_recv_capture_v3(
                     recv,
@@ -334,7 +376,7 @@ class NDIReceiverService(QObject):
                         if now - last_emit >= min_interval:
                             image = self._frame_to_image(frame)
                             if image is not None:
-                                self.frame_ready.emit(image)
+                                self._worker_frame.emit(generation, image)
                                 last_emit = now
                     finally:
                         lib.dll.NDIlib_recv_free_video_v2(recv, byref(frame))
@@ -345,23 +387,26 @@ class NDIReceiverService(QObject):
                         and time.monotonic() >= fallback_deadline
                     ):
                         tried_discovery_fallback = True
-                        resolved = self._find_source(lib, source_name)
-                        if resolved is not None and not self._stop_evt.is_set():
+                        resolved = self._find_source(lib, source_name, stop_event)
+                        if resolved is not None and not stop_event.is_set():
                             lib.dll.NDIlib_recv_destroy(recv)
                             recv = self._create_receiver(lib, resolved)
                     continue
                 elif frame_type == _NDI_FRAME_ERROR:
                     raise NDIRuntimeError("NDI receiver lost the stream.")
         except Exception as exc:
-            if not self._stop_evt.is_set():
-                self.error.emit(str(exc))
+            if not stop_event.is_set():
+                self._worker_error.emit(generation, str(exc))
         finally:
             if recv and self._lib:
                 try:
                     self._lib.dll.NDIlib_recv_destroy(recv)
                 except Exception:
                     log.debug("Failed to destroy NDI receiver", exc_info=True)
-            self.stopped.emit()
+            try:
+                self._worker_stopped.emit(generation)
+            except RuntimeError:
+                return
 
     def _source_from_name(self, source_name: str) -> _NDISource:
         self._source_name_bytes = source_name.encode("utf-8")
@@ -382,10 +427,15 @@ class NDIReceiverService(QObject):
             raise NDIRuntimeError("Could not create NDI receiver.")
         return recv
 
-    def _find_source(self, lib: _NDILib, source_name: str) -> _NDISource | None:
+    def _find_source(
+        self,
+        lib: _NDILib,
+        source_name: str,
+        stop_event: threading.Event,
+    ) -> _NDISource | None:
         deadline = time.monotonic() + 3.0
         wanted = source_name.casefold()
-        while time.monotonic() < deadline and not self._stop_evt.is_set():
+        while time.monotonic() < deadline and not stop_event.is_set():
             records = lib.find_source_records(250)
             exact = next((name for name, _url in records if name.casefold() == wanted), "")
             fuzzy = next((name for name, _url in records if wanted in name.casefold()), "")
@@ -397,6 +447,58 @@ class NDIReceiverService(QObject):
                 )
                 return self._source_from_name(chosen)
         return None
+
+    def _is_current_run(self, generation: int) -> bool:
+        return (
+            generation == self._generation
+            and self._run_stop_evt is not None
+            and not self._run_stop_evt.is_set()
+        )
+
+    def _on_worker_frame(self, generation: int, image: QImage) -> None:
+        if self._is_current_run(generation):
+            self.frame_ready.emit(image)
+
+    def _on_worker_started(self, generation: int, source_name: str) -> None:
+        if self._is_current_run(generation):
+            self.started.emit(source_name)
+
+    def _on_worker_error(self, generation: int, message: str) -> None:
+        if self._is_current_run(generation):
+            self.error.emit(message)
+
+    def _on_worker_stopped(self, generation: int) -> None:
+        self._finish_run(generation)
+
+    def _finish_run(self, generation: int) -> None:
+        if (
+            generation != self._generation
+            or (self._thread is None and self._run_stop_evt is None)
+        ):
+            return
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=0.25)
+            if thread.is_alive():
+                QTimer.singleShot(10, lambda: self._finish_run(generation))
+                return
+        self._thread = None
+        self._run_stop_evt = None
+        self._active_source = ""
+        self.stopped.emit()
+        pending, self._pending_start = self._pending_start, None
+        if pending is not None:
+            self._begin_start(*pending)
+
+    def _on_sources_discovered(
+        self,
+        generation: int,
+        records: list[tuple[str, str]],
+    ) -> None:
+        if generation != self._source_refresh_generation:
+            return
+        self._known_sources = {name: url for name, url in records}
+        self.sources_ready.emit([name for name, _url in records])
 
     @staticmethod
     def _frame_to_image(frame: _NDIVideoFrameV2) -> QImage | None:

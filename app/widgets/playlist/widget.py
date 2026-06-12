@@ -5,7 +5,7 @@ Thumbnails persistem através de reordenações; botões com SVG real.
 """
 from __future__ import annotations
 
-import copy, os, uuid
+import copy, logging, os, uuid
 from typing import Optional
 
 from PySide6.QtWidgets import (
@@ -55,6 +55,8 @@ from .thumbnails import (
 )
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
+
+log = logging.getLogger(__name__)
 
 _current_playlists_ref: list[list] = [[]]
 
@@ -134,6 +136,12 @@ class _PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self._stop_owned_thread(self._wf_sync_thread, wait_ms=10_000)
+        self._wf_sync_thread = None
+        for threads in (self._pdf_threads, self._lo_threads):
+            for thread in list(threads):
+                self._stop_owned_thread(thread, wait_ms=3_000)
+            threads.clear()
         try:
             self.catalog_bridge.cleanup()
         except Exception:
@@ -148,6 +156,27 @@ class _PlaylistEditView(
                 svc.media_language_changed.disconnect(self._on_media_language_changed)
             except (RuntimeError, TypeError):
                 pass
+
+    @staticmethod
+    def _stop_owned_thread(thread, *, wait_ms: int) -> None:
+        if thread is None:
+            return
+        try:
+            if not thread.isRunning():
+                return
+            thread.requestInterruption()
+            thread.quit()
+            thread.wait(wait_ms)
+            if thread.isRunning():
+                log.warning(
+                    "Background thread %s did not stop within %d ms",
+                    type(thread).__name__,
+                    wait_ms,
+                )
+                thread.setParent(None)
+                thread.finished.connect(thread.deleteLater)
+        except RuntimeError:
+            return
 
     # ── Centralized save dispatch ──────────────────────────────────────────
     def _save(self) -> None:
@@ -355,6 +384,7 @@ class _PlaylistEditView(
             self._wf_sync_thread = None
             self._toast.show_message("⚠️  " + str(err)[:60])
         thread.finished.connect(lambda: setattr(self, '_wf_sync_thread', None))
+        thread.finished.connect(thread.deleteLater)
         thread.start()
 
     def _watched_playlist_equivalent(self, other: dict) -> bool:

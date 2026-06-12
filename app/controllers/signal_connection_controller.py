@@ -123,6 +123,6 @@ class SignalConnectionController:
         window.proj_bar.set_as_idle_requested.connect(
             window._projection_targets.on_idle_media_changed
         )
-        window._auto_share_start_finished.connect(
-            window._projection_integrations.on_auto_share_start_finished
+        window._auto_share_finished.connect(
+            window._projection_integrations.on_auto_share_finished
         )

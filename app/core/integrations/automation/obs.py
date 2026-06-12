@@ -84,12 +84,13 @@ class OBSWebSocketService(QObject):
     recording_state_changed = Signal(bool) # True = recording, False = stopped
 
     # ── Sinais internos bridge thread → main thread ───────────────────────
-    _sig_connected    = Signal(list)   # scenes list[str]
-    _sig_disconnected = Signal(str)    # reason
-    _sig_error        = Signal(str)    # message
-    _sig_scenes       = Signal(list)   # scenes list[str]  (auto-refresh via event)
-    _sig_scene_changed = Signal(str)   # nome da cena ativa (via CurrentProgramSceneChanged)
-    _sig_record_state  = Signal(bool)  # recording state from OBS event
+    _sig_connected = Signal(int, list)
+    _sig_disconnected = Signal(int, str)
+    _sig_error = Signal(int, str)
+    _sig_scenes = Signal(int, list)
+    _sig_scene_changed = Signal(int, str)
+    _sig_record_state = Signal(int, bool)
+    _sig_worker_stopped = Signal(int)
 
     _BACKOFF_BASE = 2
     _BACKOFF_MAX  = 30
@@ -103,7 +104,11 @@ class OBSWebSocketService(QObject):
         self._is_recording: bool = False
         self._ws       = None
         self._ws_lock  = threading.Lock()
-        self._stop_evt = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._run_stop_evt: threading.Event | None = None
+        self._generation = 0
+        self._active = False
+        self._restart_requested = False
 
         # Flag to request a scene refresh from the event loop thread.
         # This avoids the race condition of two threads calling ws.recv().
@@ -135,6 +140,7 @@ class OBSWebSocketService(QObject):
         self._sig_scenes.connect(self._on_scenes_updated_main)
         self._sig_scene_changed.connect(self._on_scene_changed_main)
         self._sig_record_state.connect(self._on_record_state_main)
+        self._sig_worker_stopped.connect(self._on_worker_stopped)
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -163,16 +169,29 @@ class OBSWebSocketService(QObject):
         """Inicia a integração se port estiver configurada."""
         if not self._config_ok():
             return
-        self._stop_evt.clear()
+        self._active = True
+        if self._thread is not None and self._thread.is_alive():
+            self._restart_requested = True
+            self._request_stop()
+            return
         self._attempt_connect()
 
-    def stop(self):
+    def stop(self, *, wait: bool = False, timeout: float = 7.0):
         """Para completamente; não tenta reconectar."""
+        self._active = False
+        self._restart_requested = False
         self._retry_timer.stop()
         self._scene_timer.stop()
         self._scenes_retry_timer.stop()
-        self._stop_evt.set()
+        self._request_stop()
         self._close_ws()
+        thread = self._thread
+        if wait and thread and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=max(0.0, timeout))
+            if thread.is_alive():
+                log.warning("OBS worker did not stop within %.1f seconds", timeout)
+            else:
+                self._finish_run(self._generation)
         self._current_scene = None
         self._is_recording = False
         self._set_state(OBSConnectionState.DISCONNECTED, "Disconnected")
@@ -219,12 +238,28 @@ class OBSWebSocketService(QObject):
     def _attempt_connect(self):
         if self._state == OBSConnectionState.CONNECTED:
             return
-        if not self._config_ok() or self._stop_evt.is_set():
+        if not self._active or not self._config_ok():
+            return
+        if self._thread is not None and self._thread.is_alive():
             return
         self._set_state(OBSConnectionState.CONNECTING, "Connecting to OBS…")
-        threading.Thread(
-            target=self._worker_connect, daemon=True, name="obs-ws"
-        ).start()
+        self._generation += 1
+        generation = self._generation
+        stop_event = threading.Event()
+        self._run_stop_evt = stop_event
+        self._refresh_scenes_evt.clear()
+        self._thread = threading.Thread(
+            target=self._worker_entry,
+            args=(generation, stop_event),
+            daemon=True,
+            name="obs-ws",
+        )
+        self._thread.start()
+
+    def _request_stop(self) -> None:
+        stop_event = self._run_stop_evt
+        if stop_event is not None:
+            stop_event.set()
 
     def _close_ws(self):
         with self._ws_lock:
@@ -240,7 +275,7 @@ class OBSWebSocketService(QObject):
         self.state_changed.emit(state, msg)
 
     def _schedule_retry(self):
-        if self._stop_evt.is_set():
+        if not self._active:
             return
         self._retry_timer.start(self._backoff * 1000)
         self._backoff = min(self._backoff * 2, self._BACKOFF_MAX)
@@ -269,11 +304,35 @@ class OBSWebSocketService(QObject):
 
     # ── Worker: connect + event loop ──────────────────────────────────────
 
-    def _worker_connect(self):
+    def _worker_entry(
+        self,
+        generation: int,
+        stop_event: threading.Event,
+    ) -> None:
+        try:
+            self._worker_connect(generation, stop_event)
+        except Exception as exc:
+            if not stop_event.is_set():
+                try:
+                    self._sig_error.emit(generation, str(exc))
+                except RuntimeError:
+                    log.debug("OBS service was destroyed before worker error delivery")
+        finally:
+            try:
+                self._sig_worker_stopped.emit(generation)
+            except RuntimeError:
+                return
+
+    def _worker_connect(
+        self,
+        generation: int,
+        stop_event: threading.Event,
+    ) -> None:
         try:
             import websocket
         except ImportError:
             self._sig_error.emit(
+                generation,
                 "websocket-client not installed.\nRun: pip install websocket-client"
             )
             return
@@ -284,54 +343,66 @@ class OBSWebSocketService(QObject):
         try:
             ws = websocket.create_connection(f"ws://localhost:{port}", timeout=6)
         except Exception as exc:
-            self._sig_disconnected.emit(str(exc))
+            self._sig_disconnected.emit(generation, str(exc))
             return
 
+        if stop_event.is_set():
+            ws.close()
+            return
+        with self._ws_lock:
+            self._ws = ws
+
         try:
-            scenes = self._do_handshake(ws, password)
+            scenes = self._do_handshake(ws, password, generation)
         except Exception as exc:
             try:
                 ws.close()
             except Exception:
                 log.debug("Failed to close OBS websocket after handshake error", exc_info=True)
-            self._sig_error.emit(str(exc))
+            with self._ws_lock:
+                if self._ws is ws:
+                    self._ws = None
+            self._sig_error.emit(generation, str(exc))
             return
 
-        with self._ws_lock:
-            self._ws = ws
+        if stop_event.is_set():
+            ws.close()
+            with self._ws_lock:
+                if self._ws is ws:
+                    self._ws = None
+            return
 
-        self._refresh_scenes_evt.clear()
-        self._sig_connected.emit(scenes)
+        self._sig_connected.emit(generation, scenes)
 
         # ── Event loop ────────────────────────────────────────────────────
         ws.settimeout(2.0)
-        while not self._stop_evt.is_set():
+        while not stop_event.is_set():
             # Check if the main thread requested a scene refresh
             if self._refresh_scenes_evt.is_set():
                 self._refresh_scenes_evt.clear()
                 try:
                     fresh = self._request_scenes(ws)
                     if fresh:
-                        self._sig_scenes.emit(fresh)
+                        self._sig_scenes.emit(generation, fresh)
                 except Exception as exc:
                     log.debug("OBS scene refresh failed: %s", exc)
 
             try:
                 raw = ws.recv()
                 if raw:
-                    self._handle_event(json.loads(raw))
+                    self._handle_event(json.loads(raw), generation)
             except websocket.WebSocketTimeoutException:
                 continue
             except Exception as exc:
-                if not self._stop_evt.is_set():
-                    self._sig_disconnected.emit(str(exc))
+                if not stop_event.is_set():
+                    self._sig_disconnected.emit(generation, str(exc))
                 break
 
         with self._ws_lock:
             if self._ws is ws:
                 self._ws = None
 
-    def _handle_event(self, msg: dict):
+    def _handle_event(self, msg: dict, generation: int):
         """
         Processa mensagens recebidas do OBS durante o event loop.
         Trata: SceneListChanged, CurrentProgramSceneChanged.
@@ -349,22 +420,22 @@ class OBSWebSocketService(QObject):
             if ws:
                 try:
                     scenes = self._request_scenes(ws)
-                    self._sig_scenes.emit(scenes)
+                    self._sig_scenes.emit(generation, scenes)
                 except Exception as exc:
                     log.warning("OBS SceneListChanged re-fetch failed: %s", exc)
 
         elif event_type == _EVT_SCENE_CHANGED:
             scene_name = msg.get("d", {}).get("eventData", {}).get("sceneName", "")
             if scene_name:
-                self._sig_scene_changed.emit(scene_name)
+                self._sig_scene_changed.emit(generation, scene_name)
 
         elif event_type == _EVT_RECORD_STATE_CHANGED:
             state = msg.get("d", {}).get("eventData", {}).get("outputState", "")
             # OBS states: OBS_WEBSOCKET_OUTPUT_STARTED, OBS_WEBSOCKET_OUTPUT_STOPPED, etc.
             is_rec = state in ("OBS_WEBSOCKET_OUTPUT_STARTED", "OBS_WEBSOCKET_OUTPUT_RESUMED")
-            self._sig_record_state.emit(is_rec)
+            self._sig_record_state.emit(generation, is_rec)
 
-    def _do_handshake(self, ws, password: str) -> list[str]:
+    def _do_handshake(self, ws, password: str, generation: int) -> list[str]:
         """Executa Hello→Identify→Identified. Retorna lista de cenas."""
         raw = ws.recv()
         msg = json.loads(raw)
@@ -402,11 +473,11 @@ class OBSWebSocketService(QObject):
         if current:
             # Entrega já pelo sig_scene_changed para popular _current_scene
             # antes do sig_connected ser processado na main thread.
-            self._sig_scene_changed.emit(current)
+            self._sig_scene_changed.emit(generation, current)
 
         # Fetch initial recording status
         rec_status = self._request_record_status(ws)
-        self._sig_record_state.emit(rec_status)
+        self._sig_record_state.emit(generation, rec_status)
 
         return scenes
 
@@ -476,7 +547,17 @@ class OBSWebSocketService(QObject):
 
     # ── Main-thread slots (via QueuedConnection) ──────────────────────────
 
-    def _on_connected_main(self, scenes: list):
+    def _accept_generation(self, generation: int) -> bool:
+        return (
+            self._active
+            and generation == self._generation
+            and self._run_stop_evt is not None
+            and not self._run_stop_evt.is_set()
+        )
+
+    def _on_connected_main(self, generation: int, scenes: list):
+        if not self._accept_generation(generation):
+            return
         self._scenes  = list(scenes)
         self._backoff = self._BACKOFF_BASE
         self._set_state(OBSConnectionState.CONNECTED, "Connected to OBS Studio")
@@ -503,7 +584,9 @@ class OBSWebSocketService(QObject):
         if self.is_connected:
             self._refresh_scenes_evt.set()
 
-    def _on_disconnected_main(self, reason: str):
+    def _on_disconnected_main(self, generation: int, reason: str):
+        if not self._accept_generation(generation):
+            return
         if self._state == OBSConnectionState.DISCONNECTED:
             return
         self._is_recording = False
@@ -511,7 +594,9 @@ class OBSWebSocketService(QObject):
         self._set_state(OBSConnectionState.DISCONNECTED, reason)
         self._schedule_retry()
 
-    def _on_error_main(self, message: str):
+    def _on_error_main(self, generation: int, message: str):
+        if not self._accept_generation(generation):
+            return
         self._is_recording = False
         self.recording_state_changed.emit(False)
         self._set_state(OBSConnectionState.ERROR, message)
@@ -520,17 +605,44 @@ class OBSWebSocketService(QObject):
             return
         self._schedule_retry()
 
-    def _on_scenes_updated_main(self, scenes: list):
+    def _on_scenes_updated_main(self, generation: int, scenes: list):
         """Chamado quando OBS emite SceneListChanged."""
+        if not self._accept_generation(generation):
+            return
         self._scenes = list(scenes)
         self.scenes_updated.emit(self._scenes)
 
-    def _on_scene_changed_main(self, scene_name: str):
+    def _on_scene_changed_main(self, generation: int, scene_name: str):
         """Chamado quando OBS troca de cena (CurrentProgramSceneChanged ou handshake)."""
+        if not self._accept_generation(generation):
+            return
         self._current_scene = scene_name
         self.current_scene_changed.emit(scene_name)
 
-    def _on_record_state_main(self, is_recording: bool):
+    def _on_record_state_main(self, generation: int, is_recording: bool):
         """Chamado quando OBS muda estado de gravação."""
+        if not self._accept_generation(generation):
+            return
         self._is_recording = is_recording
         self.recording_state_changed.emit(is_recording)
+
+    def _on_worker_stopped(self, generation: int) -> None:
+        self._finish_run(generation)
+
+    def _finish_run(self, generation: int) -> None:
+        if (
+            generation != self._generation
+            or (self._thread is None and self._run_stop_evt is None)
+        ):
+            return
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=0.25)
+            if thread.is_alive():
+                QTimer.singleShot(10, lambda: self._finish_run(generation))
+                return
+        self._thread = None
+        self._run_stop_evt = None
+        if self._restart_requested and self._active:
+            self._restart_requested = False
+            self._attempt_connect()

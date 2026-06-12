@@ -36,10 +36,12 @@ import logging
 import os
 import subprocess
 import tempfile
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 
@@ -54,6 +56,10 @@ log = logging.getLogger(__name__)
 
 SCAN_EXTS: frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
 WATCHED_DOC_EXTS: frozenset[str] = PDF_EXTS | PPTX_EXTS | DOCX_EXTS
+WATCHED_DOC_TYPES: frozenset[str] = frozenset(
+    ext.lstrip(".")
+    for ext in WATCHED_DOC_EXTS
+)
 PROCESSABLE_EXTS: frozenset[str] = PDF_EXTS | PPTX_EXTS | DOCX_EXTS | JWPUB_EXTS | PLAYLIST_EXTS
 MEETING_FOLDER_SOURCE_EXTS: frozenset[str] = (
     VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS | PDF_EXTS | PPTX_EXTS | DOCX_EXTS
@@ -124,6 +130,8 @@ CACHE_DIR_NAME = ".solin_cache"
 
 _DPI = 150
 _PAGE_FMT = "{stem}-page_{n:03d}.jpg"
+_PAGE_CACHE_VERSION = 1
+_MANIFEST_LOCK = threading.RLock()
 
 
 # ── Utilitários ────────────────────────────────────────────────────────────────
@@ -226,15 +234,66 @@ def _load_manifest(subfolder: Path) -> dict:
         return {"version": 1, "processed": {}}
 
 
-def _save_manifest(subfolder: Path, manifest: dict) -> None:
-    """Save manifest to subfolder."""
+def _save_manifest(subfolder: Path, manifest: dict) -> bool:
+    """Atomically save a manifest, preserving the previous file on failure."""
     mf = subfolder / MANIFEST_FILE
+    temp_path: Path | None = None
     try:
         manifest.setdefault("version", 1)
-        with open(mf, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        with _MANIFEST_LOCK:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=subfolder,
+                prefix=f".{MANIFEST_FILE}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                json.dump(manifest, temp_file, ensure_ascii=False, indent=2)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, mf)
+        return True
     except Exception as exc:
         log.error("Cannot write manifest to %s: %s", mf, exc)
+        return False
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _commit_processed_entry(
+    subfolder: Path,
+    source_name: str,
+    entry: dict,
+) -> dict | None:
+    """Merge and persist one processed entry without overwriting newer fields."""
+    with _MANIFEST_LOCK:
+        manifest = _load_manifest(subfolder)
+        processed = manifest.setdefault("processed", {})
+        previous = processed.get(source_name)
+        if previous and entry.get("type") in WATCHED_DOC_TYPES:
+            replacements = dict(
+                zip(
+                    previous.get("outputs", []),
+                    entry.get("outputs", []),
+                    strict=False,
+                )
+            )
+            for item in manifest.get("playlist", {}).get("items", []):
+                url = item.get("url", "")
+                if not url or url.startswith(("http://", "https://")):
+                    continue
+                separator_index = max(url.rfind("/"), url.rfind("\\"))
+                basename = url[separator_index + 1:]
+                replacement = replacements.get(basename)
+                if replacement:
+                    item["url"] = url[:separator_index + 1] + replacement
+        processed[source_name] = entry
+        if not _save_manifest(subfolder, manifest):
+            raise OSError(f"Could not persist manifest entry for '{source_name}'")
+        return previous
 
 
 def _file_fingerprint(path: Path) -> dict:
@@ -468,7 +527,16 @@ def get_pending_files(subfolder_path: str) -> list[str]:
             pending.append(str(f))
         else:
             fp = _file_fingerprint(f)
-            if not _fingerprint_matches(entry, fp):
+            fingerprint_changed = not _fingerprint_matches(entry, fp)
+            document_cache_invalid = (
+                ext in WATCHED_DOC_EXTS
+                and [
+                    Path(page).name
+                    for page in pages_already_exist(f, sub / CACHE_DIR_NAME)
+                ]
+                != entry.get("outputs", [])
+            )
+            if fingerprint_changed or document_cache_invalid:
                 pending.append(str(f))
     return pending
 
@@ -686,18 +754,165 @@ def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
     return changed
 
 
+def _document_cache_key(doc_path: str | Path) -> str:
+    path = Path(doc_path)
+    safe_name = "".join(
+        char if char.isalnum() or char in "._-" else "_"
+        for char in path.name
+    ).strip("._")[:48]
+    digest = hashlib.sha256(path.name.encode("utf-8")).hexdigest()[:16]
+    return f"{safe_name or 'document'}-{digest}"
+
+
+def _page_cache_marker(doc_path: str | Path, dest_dir: str | Path) -> Path:
+    return Path(dest_dir) / f".{_document_cache_key(doc_path)}.pages.json"
+
+
+def _page_cache_signature(doc_path: str | Path) -> dict[str, int | str]:
+    path = Path(doc_path)
+    stat = path.stat()
+    return {
+        "source": path.name,
+        "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+    }
+
+
 def pages_already_exist(doc_path: str | Path, dest_dir: str | Path) -> list[str]:
-    """
-    Retorna lista de JPEGs já gerados para este documento em dest_dir, ou [] se não existem.
-    Verifica pela presença de {stem}-page_001.jpg.
-    """
-    p = Path(doc_path)
-    dest = Path(dest_dir)
-    first = dest / _PAGE_FMT.format(stem=p.stem, n=1)
-    if not first.exists():
+    """Return a complete page cache matching the current source document."""
+    marker = _page_cache_marker(doc_path, dest_dir)
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        if data.get("version") != _PAGE_CACHE_VERSION:
+            return []
+        if data.get("source") != _page_cache_signature(doc_path):
+            return []
+
+        page_names = data.get("pages")
+        if not isinstance(page_names, list) or not page_names:
+            return []
+
+        cache_key = _document_cache_key(doc_path)
+        expected_names = [
+            _PAGE_FMT.format(stem=cache_key, n=index)
+            for index in range(1, len(page_names) + 1)
+        ]
+        if page_names != expected_names:
+            return []
+
+        pages = [Path(dest_dir) / name for name in page_names]
+        if not all(page.is_file() for page in pages):
+            return []
+        return [str(page) for page in pages]
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return []
-    pages = sorted(dest.glob(f"{p.stem}-page_*.jpg"), key=lambda x: x.name)
-    return [str(pg) for pg in pages]
+
+
+def _render_document_pages(
+    source_path: Path,
+    pdf_path: Path,
+    dest_dir: Path,
+    *,
+    progress_cb: Callable[[int, int], None] | None = None,
+    before_publish: Callable[[], None] | None = None,
+) -> list[str]:
+    """Render and publish a complete page set without exposing partial output."""
+    from app.core.rendering.pdf import render_pdf_pages_sync
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    source_signature = _page_cache_signature(source_path)
+    cache_key = _document_cache_key(source_path)
+
+    with tempfile.TemporaryDirectory(
+        prefix=f".{cache_key}-render-",
+        dir=dest_dir,
+        ignore_cleanup_errors=True,
+    ) as tmp:
+        staging_dir = Path(tmp)
+        staged_paths = [
+            Path(path)
+            for path in render_pdf_pages_sync(
+                pdf_path,
+                staging_dir,
+                dpi=_DPI,
+                page_name_format=_PAGE_FMT,
+                page_stem=cache_key,
+                image_format="JPEG",
+                quality=None,
+                progress_cb=progress_cb,
+            )
+        ]
+
+        if before_publish is not None:
+            before_publish()
+        if _page_cache_signature(source_path) != source_signature:
+            raise RuntimeError(f"Source changed during conversion: '{source_path.name}'")
+        if not staged_paths:
+            raise RuntimeError(f"Renderer produced no pages for '{source_path.name}'")
+
+        expected_names = [
+            _PAGE_FMT.format(stem=cache_key, n=index)
+            for index in range(1, len(staged_paths) + 1)
+        ]
+        staged_set_is_valid = all(
+            path.parent == staging_dir and path.is_file()
+            for path in staged_paths
+        )
+        if [path.name for path in staged_paths] != expected_names or not staged_set_is_valid:
+            raise RuntimeError(
+                f"Renderer produced an invalid page set for '{source_path.name}'"
+            )
+
+        marker = _page_cache_marker(source_path, dest_dir)
+        marker_payload = {
+            "version": _PAGE_CACHE_VERSION,
+            "source": source_signature,
+            "pages": expected_names,
+        }
+        staged_marker = staging_dir / marker.name
+        staged_marker.write_text(
+            json.dumps(marker_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        marker.unlink(missing_ok=True)
+        final_paths = [dest_dir / name for name in expected_names]
+        for staged_path, final_path in zip(staged_paths, final_paths, strict=True):
+            os.replace(staged_path, final_path)
+
+        expected_set = set(expected_names)
+        for stale_page in dest_dir.glob(f"{cache_key}-page_*.jpg"):
+            if stale_page.name not in expected_set:
+                stale_page.unlink(missing_ok=True)
+
+        os.replace(staged_marker, marker)
+        return [str(path) for path in final_paths]
+
+
+def _publish_staged_outputs(
+    staging_dir: Path,
+    dest_dir: Path,
+    output_names: list[str],
+) -> list[str]:
+    """Publish newly generated files and roll back if any move fails."""
+    published: list[Path] = []
+    try:
+        for output_name in output_names:
+            if Path(output_name).name != output_name:
+                raise RuntimeError(f"Invalid staged output name: '{output_name}'")
+            staged_path = staging_dir / output_name
+            if not staged_path.is_file():
+                raise RuntimeError(f"Missing staged output: '{output_name}'")
+            final_path = dest_dir / output_name
+            if final_path.exists():
+                raise RuntimeError(f"Cache output already exists: '{output_name}'")
+            os.replace(staged_path, final_path)
+            published.append(final_path)
+        return [str(path) for path in published]
+    except Exception:
+        for path in published:
+            path.unlink(missing_ok=True)
+        raise
 
 
 # ── Thread de conversão de documentos ─────────────────────────────────────────
@@ -705,7 +920,7 @@ def pages_already_exist(doc_path: str | Path, dest_dir: str | Path) -> list[str]
 class WatchedFolderDocConverter(QThread):
     """
     Converte PDF/PPTX/DOCX em imagens JPEG e salva na pasta de destino.
-    Nomeação: {stem}-page_001.jpg, {stem}-page_002.jpg, …
+    Page names use a stable source-specific cache key to avoid collisions.
 
     Sinais:
         progress(current, total)     — progresso de página
@@ -736,9 +951,9 @@ class WatchedFolderDocConverter(QThread):
         ext = doc_path.suffix.lower()
         try:
             if ext in PDF_EXTS:
-                paths = self._convert_pdf(doc_path, dest_dir, stem)
+                paths = self._convert_pdf(doc_path, dest_dir)
             elif ext in (PPTX_EXTS | DOCX_EXTS):
-                paths = self._convert_lo(doc_path, dest_dir, stem)
+                paths = self._convert_lo(doc_path, dest_dir)
             else:
                 self.conversion_failed.emit(f"Formato não suportado: {ext}")
                 return
@@ -750,21 +965,15 @@ class WatchedFolderDocConverter(QThread):
         except Exception as exc:
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
-    def _convert_pdf(self, pdf_path: Path, dest_dir: Path, stem: str) -> list[str]:
-        from app.core.rendering.pdf import render_pdf_pages_sync
-
-        return render_pdf_pages_sync(
+    def _convert_pdf(self, pdf_path: Path, dest_dir: Path) -> list[str]:
+        return _render_document_pages(
+            pdf_path,
             pdf_path,
             dest_dir,
-            dpi=_DPI,
-            page_name_format=_PAGE_FMT,
-            page_stem=stem,
-            image_format="JPEG",
-            quality=None,
             progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
         )
 
-    def _convert_lo(self, lo_path: Path, dest_dir: Path, stem: str) -> list[str]:
+    def _convert_lo(self, lo_path: Path, dest_dir: Path) -> list[str]:
         from app.core.rendering.libreoffice import libreoffice_path
 
         soffice = libreoffice_path()
@@ -802,7 +1011,12 @@ class WatchedFolderDocConverter(QThread):
                     raise RuntimeError(f"LibreOffice não gerou PDF para '{lo_path.name}'.")
                 pdf_out = pdfs[0]
 
-            return self._convert_pdf(pdf_out, dest_dir, stem)
+            return _render_document_pages(
+                lo_path,
+                pdf_out,
+                dest_dir,
+                progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
+            )
 
 # ── Thread de sincronização (processa arquivos pendentes) ─────────────────────
 
@@ -840,42 +1054,52 @@ class WatchedFolderSyncThread(QThread):
             return
 
         try:
+            self._check_interrupted()
             # Reconcile first (remove orphans)
             reconcile_manifest(self._subfolder)
+            self._check_interrupted()
 
             pending = get_pending_files(self._subfolder)
             if not pending:
                 self.sync_complete.emit()
                 return
 
-            manifest = _load_manifest(sub)
             cache = _cache_dir(sub)
 
             for file_path in pending:
+                self._check_interrupted()
                 fp = Path(file_path)
                 ext = fp.suffix.lower()
                 self.progress.emit(fp.name, f"Processing {fp.name}…")
+                outputs: list[str] = []
+                committed = False
 
                 try:
                     outputs, virtuals = self._process_file(fp, cache, ext)
-
-                    # Update manifest
                     fingerprint = _file_fingerprint(fp)
-                    manifest.setdefault("processed", {})[fp.name] = {
+                    previous = _commit_processed_entry(sub, fp.name, {
                         "type": ext.lstrip("."),
                         "size": fingerprint["size"],
                         "mtime": fingerprint["mtime"],
                         "outputs": [os.path.basename(o) for o in outputs],
                         "virtual_items": virtuals,
                         "processed_at": datetime.now(timezone.utc).isoformat(),
-                    }
+                    })
+                    committed = True
+                    self._remove_replaced_outputs(cache, fp, previous, outputs)
+                except InterruptedError:
+                    raise
                 except Exception as exc:
+                    if outputs and not committed:
+                        self._remove_uncommitted_outputs(cache, fp, outputs)
                     log.error("Sync failed for %s: %s", fp.name, exc)
                     self.progress.emit(fp.name, f"⚠ Error: {str(exc)[:60]}")
 
-            _save_manifest(sub, manifest)
+            self._check_interrupted()
             self.sync_complete.emit()
 
+        except InterruptedError:
+            log.info("Watched-folder sync cancelled for %s", self._subfolder)
         except Exception as exc:
             log.error("Sync thread error: %s", exc)
             self.sync_failed.emit(str(exc))
@@ -883,6 +1107,7 @@ class WatchedFolderSyncThread(QThread):
     def _process_file(self, fp: Path, cache: Path,
                       ext: str) -> tuple[list[str], list[dict]]:
         """Process a single file. Returns (output_paths, virtual_items)."""
+        self._check_interrupted()
         if ext in PDF_EXTS:
             return self._process_pdf(fp, cache)
         elif ext in (PPTX_EXTS | DOCX_EXTS):
@@ -894,33 +1119,29 @@ class WatchedFolderSyncThread(QThread):
         return [], []
 
     def _process_pdf(self, pdf_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
-        stem = pdf_path.stem
         existing = pages_already_exist(pdf_path, cache)
         if existing:
             return existing, []
-        from app.core.rendering.pdf import render_pdf_pages_sync
-
-        paths = render_pdf_pages_sync(
+        paths = _render_document_pages(
+            pdf_path,
             pdf_path,
             cache,
-            dpi=_DPI,
-            page_name_format=_PAGE_FMT,
-            page_stem=stem,
-            image_format="JPEG",
-            quality=None,
-            progress_cb=lambda cur, tot: self.progress.emit(pdf_path.name, f"Page {cur}/{tot}"),
+            progress_cb=lambda cur, tot: self._emit_render_progress(
+                pdf_path.name,
+                cur,
+                tot,
+            ),
+            before_publish=self._check_interrupted,
         )
         return paths, []
 
     def _process_lo(self, lo_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         from app.core.rendering.libreoffice import libreoffice_path
-        from app.core.rendering.pdf import render_pdf_pages_sync
 
         soffice = libreoffice_path()
         if not soffice:
             raise RuntimeError("LibreOffice not found")
 
-        stem = lo_path.stem
         existing = pages_already_exist(lo_path, cache)
         if existing:
             return existing, []
@@ -928,12 +1149,11 @@ class WatchedFolderSyncThread(QThread):
         with tempfile.TemporaryDirectory(prefix="solin_wf_", ignore_cleanup_errors=True) as tmp:
             tmp_path = Path(tmp)
             lo_profile_uri = (tmp_path / "lo_profile").as_uri()
-            result = subprocess.run(
+            result = self._run_libreoffice(
                 [soffice, "--headless", "--norestore", "--nolockcheck",
                  "--nofirststartwizard",
                  f"-env:UserInstallation={lo_profile_uri}",
                  "--convert-to", "pdf", "--outdir", tmp, str(lo_path)],
-                capture_output=True, text=True, timeout=120,
             )
             if result.returncode != 0:
                 raise RuntimeError(f"LibreOffice failed: {result.stderr.strip()[:100]}")
@@ -945,80 +1165,204 @@ class WatchedFolderSyncThread(QThread):
                     raise RuntimeError(f"LibreOffice produced no PDF for '{lo_path.name}'")
                 pdf_out = pdfs[0]
 
-            paths = render_pdf_pages_sync(
+            paths = _render_document_pages(
+                lo_path,
                 pdf_out,
                 cache,
-                dpi=_DPI,
-                page_name_format=_PAGE_FMT,
-                page_stem=stem,
-                image_format="JPEG",
-                quality=None,
-                progress_cb=lambda cur, tot: self.progress.emit(lo_path.name, f"Page {cur}/{tot}"),
+                progress_cb=lambda cur, tot: self._emit_render_progress(
+                    lo_path.name,
+                    cur,
+                    tot,
+                ),
+                before_publish=self._check_interrupted,
             )
             return paths, []
 
     def _process_jwpub(self, jwpub_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
+        self._check_interrupted()
         from app.core.jw.publication_reader import read_jwpub_for_playlist
-        items, stem = read_jwpub_for_playlist(
-            str(jwpub_path), lang=self._media_lang,
-            dest_images_dir=str(cache), resolve_urls=True,
-        )
-        outputs = []
-        virtuals = []
-        for item in items:
-            if item.get("type") == "image" and item.get("url"):
-                url = item["url"]
-                # If image was saved to cache, track the basename
-                if os.path.dirname(url) == str(cache):
-                    outputs.append(os.path.basename(url))
+
+        with tempfile.TemporaryDirectory(
+            prefix=".jwpub-render-",
+            dir=cache,
+            ignore_cleanup_errors=True,
+        ) as tmp:
+            staging_dir = Path(tmp)
+            items, stem = read_jwpub_for_playlist(
+                str(jwpub_path),
+                lang=self._media_lang,
+                dest_images_dir=str(staging_dir),
+                resolve_urls=True,
+            )
+            outputs = []
+            virtuals = []
+            for item in items:
+                self._check_interrupted()
+                if item.get("type") == "image" and item.get("url"):
+                    image_path = Path(item["url"])
+                    if image_path.parent != staging_dir or not image_path.is_file():
+                        raise RuntimeError(
+                            f"JWPUB image was not staged correctly: '{image_path.name}'"
+                        )
+                    outputs.append(image_path.name)
                 else:
-                    outputs.append(os.path.basename(url))
-            else:
-                # Video/audio with URL — store as virtual item
-                virtuals.append({
-                    "id":            str(uuid.uuid4()),
-                    "title":         item.get("title", stem),
-                    "url":           item.get("url", ""),
-                    "type":          item.get("type", "video"),
-                    "key_symbol":    item.get("key_symbol"),
-                    "track":         item.get("track"),
-                    "issue_tag":     item.get("issue_tag"),
-                    "doc_id":        item.get("doc_id"),
-                    "meps_language": item.get("meps_language", 0),
-                })
-        return outputs, virtuals
+                    virtuals.append({
+                        "id":            str(uuid.uuid4()),
+                        "title":         item.get("title", stem),
+                        "url":           item.get("url", ""),
+                        "type":          item.get("type", "video"),
+                        "key_symbol":    item.get("key_symbol"),
+                        "track":         item.get("track"),
+                        "issue_tag":     item.get("issue_tag"),
+                        "doc_id":        item.get("doc_id"),
+                        "meps_language": item.get("meps_language", 0),
+                    })
+            self._check_interrupted()
+            return _publish_staged_outputs(staging_dir, cache, outputs), virtuals
 
     def _process_jwlplaylist(self, jwl_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
+        self._check_interrupted()
         from app.core.playlists.reader import read_jwlplaylist
         data = read_jwlplaylist(str(jwl_path), fallback_lang_code=self._fallback_lang)
-        outputs = []
-        virtuals = []
-        for raw in data.get("items", []):
-            url = raw.get("url") or raw.get("jworg_url") or ""
-            if raw.get("data") and not url:
-                # Embedded media — save to cache
-                ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                fname = f"embedded_{uuid.uuid4().hex[:12]}{ext}"
-                fpath = cache / fname
-                with open(fpath, "wb") as f:
-                    f.write(raw["data"])
-                outputs.append(fname)
-                # This is a physical file item, not virtual — it will be picked
-                # up by scan_subfolder scanning .solin_cache
-            else:
-                # URL-based item (JW.org video, etc.) — virtual
-                virtuals.append({
-                    "id":            str(uuid.uuid4()),
-                    "title":         raw.get("title", jwl_path.stem),
-                    "url":           url,
-                    "type":          raw.get("type", "video"),
-                    "key_symbol":    raw.get("key_symbol"),
-                    "track":         raw.get("track"),
-                    "issue_tag":     raw.get("issue_tag"),
-                    "doc_id":        raw.get("doc_id"),
-                    "meps_language": raw.get("language", 0),
-                })
-        return outputs, virtuals
+
+        with tempfile.TemporaryDirectory(
+            prefix=".jwlplaylist-render-",
+            dir=cache,
+            ignore_cleanup_errors=True,
+        ) as tmp:
+            staging_dir = Path(tmp)
+            outputs = []
+            virtuals = []
+            for raw in data.get("items", []):
+                self._check_interrupted()
+                url = raw.get("url") or raw.get("jworg_url") or ""
+                if raw.get("data") and not url:
+                    ext = Path(raw.get("filename", "media")).suffix or ".mp4"
+                    fname = f"embedded_{uuid.uuid4().hex[:12]}{ext}"
+                    (staging_dir / fname).write_bytes(raw["data"])
+                    outputs.append(fname)
+                else:
+                    virtuals.append({
+                        "id":            str(uuid.uuid4()),
+                        "title":         raw.get("title", jwl_path.stem),
+                        "url":           url,
+                        "type":          raw.get("type", "video"),
+                        "key_symbol":    raw.get("key_symbol"),
+                        "track":         raw.get("track"),
+                        "issue_tag":     raw.get("issue_tag"),
+                        "doc_id":        raw.get("doc_id"),
+                        "meps_language": raw.get("language", 0),
+                    })
+            self._check_interrupted()
+            return _publish_staged_outputs(staging_dir, cache, outputs), virtuals
+
+    @staticmethod
+    def _remove_replaced_outputs(
+        cache: Path,
+        source_path: Path,
+        previous: dict | None,
+        current_outputs: list[str],
+    ) -> None:
+        if previous:
+            current_names = {Path(path).name for path in current_outputs}
+            for old_name in previous.get("outputs", []):
+                if old_name not in current_names:
+                    try:
+                        (cache / old_name).unlink(missing_ok=True)
+                    except OSError:
+                        log.warning(
+                            "Cannot remove replaced cache output %s",
+                            cache / old_name,
+                            exc_info=True,
+                        )
+
+        if source_path.suffix.lower() in WATCHED_DOC_EXTS:
+            legacy_marker = cache / f".{source_path.stem}.pages.json"
+            if legacy_marker != _page_cache_marker(source_path, cache):
+                try:
+                    legacy_marker.unlink(missing_ok=True)
+                except OSError:
+                    log.warning(
+                        "Cannot remove legacy page marker %s",
+                        legacy_marker,
+                        exc_info=True,
+                    )
+
+    @staticmethod
+    def _remove_uncommitted_outputs(
+        cache: Path,
+        source_path: Path,
+        outputs: list[str],
+    ) -> None:
+        manifest = _load_manifest(cache.parent)
+        referenced = {
+            output_name
+            for entry in manifest.get("processed", {}).values()
+            for output_name in entry.get("outputs", [])
+        }
+        for output in outputs:
+            output_path = cache / Path(output).name
+            if output_path.name in referenced:
+                continue
+            try:
+                output_path.unlink(missing_ok=True)
+            except OSError:
+                log.warning(
+                    "Cannot roll back uncommitted cache output %s",
+                    output_path,
+                    exc_info=True,
+                )
+
+        if source_path.suffix.lower() in WATCHED_DOC_EXTS:
+            try:
+                _page_cache_marker(source_path, cache).unlink(missing_ok=True)
+            except OSError:
+                log.warning(
+                    "Cannot roll back page cache marker for %s",
+                    source_path,
+                    exc_info=True,
+                )
+
+    def _check_interrupted(self) -> None:
+        if self.isInterruptionRequested():
+            raise InterruptedError("Watched-folder sync cancelled")
+
+    def _emit_render_progress(self, filename: str, current: int, total: int) -> None:
+        self._check_interrupted()
+        self.progress.emit(filename, f"Page {current}/{total}")
+
+    def _run_libreoffice(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        process = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        deadline = time.monotonic() + 120
+        while process.poll() is None:
+            if self.isInterruptionRequested():
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+                raise InterruptedError("LibreOffice conversion cancelled")
+            if time.monotonic() >= deadline:
+                process.kill()
+                stdout, stderr = process.communicate()
+                raise RuntimeError(
+                    "LibreOffice timed out: "
+                    + (stderr.strip() or stdout.strip())[:100]
+                )
+            time.sleep(0.05)
+        stdout, stderr = process.communicate()
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=process.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
 
 
 # ── Observador de pasta ────────────────────────────────────────────────────────

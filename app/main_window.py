@@ -43,7 +43,7 @@ from .core.foundation.settings_keys import SettingsKey
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
-    _auto_share_start_finished = Signal(bool)
+    _auto_share_finished = Signal(int, bool, bool)
 
     def __init__(self, lang_manager: LanguageManager):
         super().__init__()
