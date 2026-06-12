@@ -206,3 +206,24 @@ def test_wifi_server_reports_stopped_after_threads_exit():
     assert stopped == [True]
     assert service._thread is None
     assert not server_thread.is_alive()
+
+
+def test_wifi_explicit_stop_cancels_queued_restart(monkeypatch):
+    _app()
+    service = WifiReceiveServer()
+    service._generation = 1
+    service._stopping = True
+    service._pending_start = {"title": "restart"}
+    restarted: list[dict[str, str]] = []
+    monkeypatch.setattr(
+        service,
+        "start",
+        lambda labels: restarted.append(labels) or True,
+    )
+
+    service.stop()
+    service._finish_shutdown(1, inactivity=False)
+
+    assert service._pending_start is None
+    assert restarted == []
+    assert service._stopping is False

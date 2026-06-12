@@ -574,6 +574,7 @@ class WifiReceiveServer(QObject):
 
     def stop(self, *, wait: bool = False, timeout: float = 5.0) -> None:
         """Para o servidor; server_stopped só é emitido após o término real."""
+        self._pending_start = None
         self._begin_shutdown(inactivity=False, wait=wait, timeout=timeout)
 
     def _begin_shutdown(
