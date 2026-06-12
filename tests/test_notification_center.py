@@ -139,3 +139,19 @@ def test_synchronized_toast_bar_uses_elapsed_time_instead_of_callback_count():
     assert _SynchronizedToast._remaining_bar_width(360, 4000, 1000) == 270
     assert _SynchronizedToast._remaining_bar_width(360, 4000, 3999) == 1
     assert _SynchronizedToast._remaining_bar_width(360, 4000, 4000) == 0
+
+
+def test_synchronized_toast_bar_stays_inside_rounded_corners():
+    geometry = _SynchronizedToast._duration_bar_geometry(360, 80)
+
+    assert geometry.x() == 10
+    assert geometry.y() == 70
+    assert geometry.width() == 340
+    assert geometry.height() == 4
+
+
+def test_notification_icons_are_vector_assets():
+    from app.core.ui.notifications import _ICONS, NotificationKind
+
+    assert set(_ICONS) == set(NotificationKind)
+    assert all(svg.startswith("<svg") for svg in _ICONS.values())

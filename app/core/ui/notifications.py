@@ -8,11 +8,12 @@ from enum import Enum
 import math
 from time import monotonic
 
-from PySide6.QtCore import QMargins, QSize
+from PySide6.QtCore import QMargins, QRect, QSize
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QWidget
 from pyqttoast import Toast, ToastPosition, ToastPreset
 
+from app.styles.icons import make_icon
 from app.styles.theme import COLORS
 
 
@@ -53,6 +54,34 @@ _STYLES = {
     ),
 }
 
+_ICONS = {
+    NotificationKind.SUCCESS: (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+        ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>'
+        '<path d="m8 12 2.6 2.6L16.5 9"/></svg>'
+    ),
+    NotificationKind.INFORMATION: (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+        ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>'
+        '<path d="M12 11v5"/><path d="M12 8h.01"/></svg>'
+    ),
+    NotificationKind.WARNING: (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+        ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M10.3 4.2 2.4 18a2 2 0 0 0 1.7 3h15.8'
+        'a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/>'
+        '<path d="M12 9v4"/><path d="M12 17h.01"/></svg>'
+    ),
+    NotificationKind.ERROR: (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+        ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>'
+        '<path d="m9 9 6 6M15 9l-6 6"/></svg>'
+    ),
+}
+
 
 class _SynchronizedToast(Toast):
     """Keep the duration bar aligned with the actual close timer.
@@ -63,6 +92,9 @@ class _SynchronizedToast(Toast):
     """
 
     _BAR_UPDATE_INTERVAL_MS = 16
+    _BAR_HEIGHT = 4
+    _BAR_HORIZONTAL_INSET = 10
+    _BAR_BOTTOM_INSET = 6
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -72,8 +104,12 @@ class _SynchronizedToast(Toast):
         bar_timer.timeout.connect(self._sync_duration_bar)
 
     def show(self) -> None:
-        self._duration_started_at = monotonic()
+        self._duration_started_at = None
         super().show()
+        if not self.isVisible():
+            return
+        self._duration_started_at = monotonic()
+        self._configure_duration_bar()
         self._restart_bar_timer()
 
     def hide(self) -> None:
@@ -110,6 +146,54 @@ class _SynchronizedToast(Toast):
 
     def _set_bar_width(self, width: int) -> None:
         self._Toast__duration_bar_chunk.setFixedWidth(max(0, width))
+
+    def _configure_duration_bar(self) -> None:
+        toast_widget = self._Toast__toast_widget
+        geometry = self._duration_bar_geometry(
+            toast_widget.width(),
+            toast_widget.height(),
+        )
+        container = self._Toast__duration_bar_container
+        track = self._Toast__duration_bar
+        chunk = self._Toast__duration_bar_chunk
+        color = self.getDurationBarColor()
+        radius = self._BAR_HEIGHT // 2
+
+        container.setFixedSize(geometry.size())
+        container.move(geometry.topLeft())
+        track.setFixedSize(geometry.size())
+        track.move(0, 0)
+        chunk.setFixedSize(geometry.size())
+        chunk.move(0, 0)
+        container.setStyleSheet("background: transparent;")
+        track.setStyleSheet(
+            f"background: rgba({color.red()}, {color.green()}, {color.blue()}, 70);"
+            f"border-radius: {radius}px;"
+        )
+        chunk.setStyleSheet(
+            f"background: rgba({color.red()}, {color.green()}, {color.blue()}, 255);"
+            f"border-radius: {radius}px;"
+        )
+
+    def set_notification_icon(self, kind: NotificationKind, color: str) -> None:
+        size = QSize(20, 20)
+        self.setIconColor(None)
+        self.setIcon(make_icon(_ICONS[kind], size.width(), color).pixmap(size))
+        self.setIconSize(size)
+        self._Toast__icon_widget.setStyleSheet(
+            "background: transparent; border: none; padding: 0;"
+        )
+
+    @classmethod
+    def _duration_bar_geometry(cls, toast_width: int, toast_height: int) -> QRect:
+        width = max(0, toast_width - cls._BAR_HORIZONTAL_INSET * 2)
+        y = max(0, toast_height - cls._BAR_BOTTOM_INSET - cls._BAR_HEIGHT)
+        return QRect(
+            cls._BAR_HORIZONTAL_INSET,
+            y,
+            width,
+            cls._BAR_HEIGHT,
+        )
 
     @staticmethod
     def _remaining_bar_width(
@@ -228,6 +312,8 @@ class NotificationCenter:
         toast.setText(message if title else "")
         toast.setDuration(duration_ms if duration_ms is not None else style.duration_ms)
         self._apply_theme(toast, style.accent)
+        if isinstance(toast, _SynchronizedToast):
+            toast.set_notification_icon(kind, style.accent)
         toast.show()
         return True
 
