@@ -271,6 +271,62 @@ def test_completed_page_cache_is_reused_only_while_source_matches(
     assert watched_folder_module.pages_already_exist(source, cache) == []
 
 
+def test_same_stem_documents_use_independent_page_caches(monkeypatch, tmp_path):
+    _install_fake_pdf_renderer(monkeypatch)
+    pdf_source = tmp_path / "report.pdf"
+    deck_source = tmp_path / "report.pptx"
+    pdf_source.write_bytes(b"pdf")
+    deck_source.write_bytes(b"presentation")
+    cache = tmp_path / ".solin_cache"
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        lambda _self: False,
+    )
+    thread = _sync_thread(tmp_path)
+
+    pdf_paths, _ = thread._process_pdf(pdf_source, cache)
+    deck_paths, _ = thread._process_pdf(deck_source, cache)
+
+    assert set(pdf_paths).isdisjoint(deck_paths)
+    assert watched_folder_module.pages_already_exist(pdf_source, cache) == pdf_paths
+    assert watched_folder_module.pages_already_exist(deck_source, cache) == deck_paths
+
+
+def test_document_cache_rename_updates_saved_playlist_urls(tmp_path):
+    watched_folder_module._save_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {
+                "report.pdf": {
+                    "type": "pdf",
+                    "outputs": ["report-page_001.jpg"],
+                },
+            },
+            "playlist": {
+                "items": [
+                    {"url": ".solin_cache/report-page_001.jpg"},
+                ],
+            },
+        },
+    )
+
+    watched_folder_module._commit_processed_entry(
+        tmp_path,
+        "report.pdf",
+        {
+            "type": "pdf",
+            "outputs": ["report.pdf-unique-page_001.jpg"],
+        },
+    )
+
+    manifest = watched_folder_module._load_manifest(tmp_path)
+    assert manifest["playlist"]["items"][0]["url"] == (
+        ".solin_cache/report.pdf-unique-page_001.jpg"
+    )
+
+
 def test_partial_legacy_page_cache_is_scheduled_for_reprocessing(tmp_path):
     source = tmp_path / "slides.pdf"
     source.write_bytes(b"pdf")
@@ -295,6 +351,127 @@ def test_partial_legacy_page_cache_is_scheduled_for_reprocessing(tmp_path):
     )
 
     assert watched_folder_module.get_pending_files(str(tmp_path)) == [str(source)]
+
+
+def test_completed_entry_is_committed_before_cancellation(monkeypatch, tmp_path):
+    first = tmp_path / "first.jwlplaylist"
+    second = tmp_path / "second.jwlplaylist"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    watched_folder_module._save_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {},
+            "playlist": {"items": [{"title": "keep me"}]},
+        },
+    )
+    monkeypatch.setattr(
+        watched_folder_module,
+        "get_pending_files",
+        lambda _path: [str(first), str(second)],
+    )
+    interruption_checks = 0
+
+    def interruption_requested(_self):
+        nonlocal interruption_checks
+        interruption_checks += 1
+        return interruption_checks >= 4
+
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        interruption_requested,
+    )
+    thread = _sync_thread(tmp_path)
+    processed = []
+
+    def process_file(fp, cache, _ext):
+        processed.append(fp.name)
+        output = cache / f"{fp.stem}-output.jpg"
+        output.write_bytes(b"complete")
+        return [str(output)], []
+
+    monkeypatch.setattr(thread, "_process_file", process_file)
+
+    thread.run()
+
+    manifest = watched_folder_module._load_manifest(tmp_path)
+    assert processed == [first.name]
+    assert first.name in manifest["processed"]
+    assert second.name not in manifest["processed"]
+    assert manifest["playlist"] == {"items": [{"title": "keep me"}]}
+
+
+def test_manifest_commit_failure_rolls_back_new_outputs(monkeypatch, tmp_path):
+    source = tmp_path / "media.jwlplaylist"
+    source.write_bytes(b"playlist")
+    output_name = "embedded_random.mp4"
+    monkeypatch.setattr(
+        watched_folder_module,
+        "get_pending_files",
+        lambda _path: [str(source)],
+    )
+    monkeypatch.setattr(
+        watched_folder_module,
+        "_commit_processed_entry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        lambda _self: False,
+    )
+    thread = _sync_thread(tmp_path)
+
+    def process_file(_fp, cache, _ext):
+        output = cache / output_name
+        output.write_bytes(b"complete")
+        return [str(output)], []
+
+    monkeypatch.setattr(thread, "_process_file", process_file)
+
+    thread.run()
+
+    assert not (tmp_path / ".solin_cache" / output_name).exists()
+    assert source.name not in watched_folder_module._load_manifest(tmp_path)["processed"]
+
+
+def test_cancelled_embedded_playlist_output_stays_in_staging(monkeypatch, tmp_path):
+    from app.core.playlists import reader as playlist_reader
+
+    source = tmp_path / "media.jwlplaylist"
+    source.write_bytes(b"playlist")
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    monkeypatch.setattr(
+        playlist_reader,
+        "read_jwlplaylist",
+        lambda *_args, **_kwargs: {
+            "items": [
+                {"filename": "first.mp4", "data": b"first"},
+                {"filename": "second.mp4", "data": b"second"},
+            ],
+        },
+    )
+    interruption_checks = 0
+
+    def interruption_requested(_self):
+        nonlocal interruption_checks
+        interruption_checks += 1
+        return interruption_checks >= 3
+
+    monkeypatch.setattr(
+        WatchedFolderSyncThread,
+        "isInterruptionRequested",
+        interruption_requested,
+    )
+    thread = _sync_thread(tmp_path)
+
+    with pytest.raises(InterruptedError):
+        thread._process_jwlplaylist(source, cache)
+
+    assert list(cache.iterdir()) == []
 
 
 if __name__ == "__main__":
