@@ -33,17 +33,6 @@ PROGRESS_EMIT_MIN_BYTES = 512 * 1024
 log = logging.getLogger(__name__)
 
 
-class IncompleteDownloadError(OSError):
-    """The response ended before all declared bytes were received."""
-
-
-def _validate_download_size(downloaded: int, expected: int) -> None:
-    if expected > 0 and downloaded != expected:
-        raise IncompleteDownloadError(
-            f"Incomplete download: received {downloaded} of {expected} bytes"
-        )
-
-
 def _url_to_path(url: str) -> str:
     os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
     filename = url.split("/")[-1].split("?")[0]
@@ -265,7 +254,8 @@ class SongDownloader(QObject):
 
             if job.cancel_event.is_set():
                 return
-            _validate_download_size(downloaded, total)
+            # urllib3 validates the encoded transfer length before requests
+            # transparently decodes Content-Encoding for iter_content().
             emit_progress(force=True)
 
             if persist:
