@@ -6,7 +6,7 @@ Thumbnails persistem através de reordenações; botões com SVG real.
 from __future__ import annotations
 
 import copy, logging, os, uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QDialog, QMessageBox, QStackedWidget,
@@ -39,7 +39,6 @@ from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ..media_info_extractor import MediaInfoQueue, is_filename_title
 from .items import _media_type_from_url
-from .components import _Toast
 from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
@@ -58,6 +57,9 @@ _ITEM_H            = 77   # altura fixa de cada item
 
 log = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from ...core.ui.notifications import NotificationCenter
+
 _current_playlists_ref: list[list] = [[]]
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
@@ -72,10 +74,18 @@ class _PlaylistEditView(
     project_items  = Signal(list, int, str)
     save_temp_as_permanent = Signal(str, dict)  # name, playlist data
 
-    def __init__(self, lang: LanguageManager, media_ctrl=None, parent=None):
+    def __init__(
+        self,
+        lang: LanguageManager,
+        media_ctrl=None,
+        *,
+        notifications: NotificationCenter,
+        parent=None,
+    ):
         super().__init__(parent)
         self.lang = lang
         self._media_ctrl = media_ctrl
+        self._notifications = notifications
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
         self._is_watched: bool = False          # linked folder mode
@@ -222,9 +232,6 @@ class _PlaylistEditView(
 
         root.addWidget(self.qml_widget, stretch=1)
 
-        # Overlay Toast
-        self._toast = _Toast(self)
-
         # Enable Drag and Drop
         self.setAcceptDrops(True)
         self.qml_widget.setAcceptDrops(False)
@@ -261,9 +268,9 @@ class _PlaylistEditView(
         self.model.orderSynced.connect(self._save)
 
         # Catalog bridge connections
-        self.catalog_bridge.itemAddedSuccessfully.connect(self._toast.show_message)
+        self.catalog_bridge.itemAddedSuccessfully.connect(self._notifications.success)
         self.catalog_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
-        self.songs_bridge.itemAddedSuccessfully.connect(self._toast.show_message)
+        self.songs_bridge.itemAddedSuccessfully.connect(self._notifications.success)
         self.songs_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
 
     def _toggle_section_collapse(self, section_id: str) -> None:
@@ -315,12 +322,6 @@ class _PlaylistEditView(
                     self.bridge.emit_cloud_changed_for_url(url)
                 break
 
-    def resizeEvent(self, e):
-        if self._toast.isVisible():
-            self._toast.move((self.width()-self._toast.width())//2,
-                             self.height()-self._toast.height()-68)
-        super().resizeEvent(e)
-
     # ── Carga ──────────────────────────────────────────────────────────────
 
     def load_playlist(self, pl: dict):
@@ -357,8 +358,8 @@ class _PlaylistEditView(
         if not pending:
             return
         context = self._current_media_context()
-        self._toast.show_message(
-            "✨  " + self.tr("Processing %n file(s)...", None, len(pending))
+        self._notifications.information(
+            self.tr("Processing %n file(s)...", None, len(pending))
         )
         thread = WatchedFolderSyncThread(
             self._watched_path,
@@ -367,9 +368,6 @@ class _PlaylistEditView(
             parent=self,
         )
         self._wf_sync_thread = thread
-        thread.progress.connect(
-            lambda fname, msg: self._toast.show_message(fname + ": " + msg)
-        )
         @thread.sync_complete.connect
         def _on_done():
             self._wf_sync_thread = None
@@ -378,11 +376,11 @@ class _PlaylistEditView(
                 self.refresh_watched_folder()
             else:
                 self.refresh_watched_folder()
-            self._toast.show_message("✓  " + self.tr("All files processed"))
+            self._notifications.success(self.tr("All files processed"))
         @thread.sync_failed.connect
         def _on_err(err):
             self._wf_sync_thread = None
-            self._toast.show_message("⚠️  " + str(err)[:60])
+            self._notifications.error(str(err)[:160])
         thread.finished.connect(lambda: setattr(self, '_wf_sync_thread', None))
         thread.finished.connect(thread.deleteLater)
         thread.start()
@@ -865,20 +863,25 @@ class _PlaylistEditView(
         self._qml_pointer_depth = 0
         end_qml_pointer_cursor(self.qml_widget)
 
-    def show_toast(self, msg: str):
-        self._toast.show_message(msg)
-
 # ── Widget principal ───────────────────────────────────────────────────────────
 
 class PlaylistWidget(QWidget):
     project_video_signal = Signal(str, str, object, str)
     project_image_signal = Signal(bytes)
 
-    def __init__(self, lang: LanguageManager, media_ctrl=None,
-                 watched_folder: str = "", parent=None):
+    def __init__(
+        self,
+        lang: LanguageManager,
+        media_ctrl=None,
+        watched_folder: str = "",
+        *,
+        notifications: NotificationCenter,
+        parent=None,
+    ):
         super().__init__(parent)
         self.lang        = lang
         self._media_ctrl = media_ctrl
+        self._notifications = notifications
         self._playlists  = _load_playlists()
         _current_playlists_ref[0] = self._playlists
         self._watched_folder = watched_folder
@@ -901,7 +904,12 @@ class PlaylistWidget(QWidget):
             parent=self,
         )
         # Index 1: playlist edit (also used for watched folders)
-        self._edit_view = _PlaylistEditView(self.lang, media_ctrl=self._media_ctrl, parent=self)
+        self._edit_view = _PlaylistEditView(
+            self.lang,
+            media_ctrl=self._media_ctrl,
+            notifications=self._notifications,
+            parent=self,
+        )
 
         self._stack.addWidget(self._list_view)   # 0
         self._stack.addWidget(self._edit_view)   # 1
@@ -1055,9 +1063,6 @@ class PlaylistWidget(QWidget):
         _save_playlists(self._playlists)
         self._list_view.refresh()
         return pl["id"]
-
-    def show_toast_in_edit(self, msg: str):
-        self._edit_view.show_toast(msg)
 
     # ── i18n ──────────────────────────────────────────────────────────────
 

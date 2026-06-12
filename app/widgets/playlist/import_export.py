@@ -32,20 +32,11 @@ class _PlaylistEditImportMixin:
         if pages:
             self._on_pdf_pages_ready(pages, stem, insert_at, section_id)
             return
-        self._toast.show_message(
-            self.tr("🔄  Converting PDF: {name}…").replace("{name}", str(stem))
+        self._notifications.information(
+            self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
         thread = PdfConvertThread(pdf_path, parent=self)
         self._pdf_threads.append(thread)
-        thread.progress.connect(
-            lambda cur, tot, _s=stem:
-                self._toast.show_message(
-                    self.tr("🔄  {name} — page {current}/{total}…")
-                    .replace("{name}", str(_s))
-                    .replace("{current}", str(cur))
-                    .replace("{total}", str(tot))
-                )
-        )
         thread.pages_ready.connect(
             lambda pages, stem, _pos=insert_at, _sid=section_id:
                 self._on_pdf_pages_ready(pages, stem, _pos, _sid)
@@ -83,15 +74,15 @@ class _PlaylistEditImportMixin:
                 items.insert(insert_at + i, ni)
         self._save()
         self._rebuild_list()
-        self._toast.show_message(
-            self.tr("✓  {name} opened ({pages} pages)")
+        self._notifications.success(
+            self.tr("{name} opened ({pages} pages)")
             .replace("{name}", str(pdf_stem))
             .replace("{pages}", str(len(new_items)))
         )
 
     def _on_pdf_failed(self, error_msg: str) -> None:
-        self._toast.show_message(
-            self.tr("⚠  Error converting PDF: {error}").replace("{error}", str(error_msg))
+        self._notifications.error(
+            self.tr("Error converting PDF: {error}").replace("{error}", str(error_msg))
         )
 
     def _import_jwpubs(
@@ -116,8 +107,8 @@ class _PlaylistEditImportMixin:
         pl_ref = self._pl
         insert_pos = insert_at
         target_section_id = section_id
-        self._toast.show_message(
-            self.tr("🔄  Opening {name}…").replace("{name}", stem)
+        self._notifications.information(
+            self.tr("Opening {name}…").replace("{name}", stem)
         )
         from ...core.jw.publication_reader import JwpubImportThread
 
@@ -155,8 +146,8 @@ class _PlaylistEditImportMixin:
                     it["auto_title"] = False
                 new_items.append(it)
             if not new_items:
-                self._toast.show_message(
-                    self.tr("⚠  No media found in {name}").replace("{name}", file_stem)
+                self._notifications.warning(
+                    self.tr("No media found in {name}").replace("{name}", file_stem)
                 )
                 return
             items_list = pl_ref.setdefault("items", [])
@@ -175,15 +166,17 @@ class _PlaylistEditImportMixin:
                 parts.append(f"{n_img} " + self.tr("images"))
             if n_vid:
                 parts.append(f"{n_vid} " + self.tr("videos"))
-            msg = "✓  " + file_stem + " — " + ", ".join(parts) if parts else "✓  " + file_stem
+            msg = file_stem + " — " + ", ".join(parts) if parts else file_stem
             if n_bad:
                 msg += f"  ({n_bad} " + self.tr("unresolved") + ")"
-            self._toast.show_message(msg)
+                self._notifications.warning(msg)
+            else:
+                self._notifications.success(msg)
 
         @thread.failed.connect
         def _on_fail(err: str):
-            self._toast.show_message(
-                self.tr("⚠  Could not open .jwpub: {err}").replace("{err}", err[:60])
+            self._notifications.error(
+                self.tr("Could not open .jwpub: {err}").replace("{err}", err[:160])
             )
 
         thread.start()
@@ -210,20 +203,11 @@ class _PlaylistEditImportMixin:
         if pages:
             self._on_lo_pages_ready(pages, stem, insert_at, section_id)
             return
-        self._toast.show_message(
-            self.tr("🔄  Converting PDF: {name}…").replace("{name}", str(stem))
+        self._notifications.information(
+            self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
         thread = LoConvertThread(lo_path, parent=self)
         self._lo_threads.append(thread)
-        thread.progress.connect(
-            lambda cur, tot, _s=stem:
-                self._toast.show_message(
-                    self.tr("🔄  {name} — page {current}/{total}…")
-                    .replace("{name}", str(_s))
-                    .replace("{current}", str(cur))
-                    .replace("{total}", str(tot))
-                )
-        )
         thread.pages_ready.connect(
             lambda pages, stem, _pos=insert_at, _sid=section_id:
                 self._on_lo_pages_ready(pages, stem, _pos, _sid)
@@ -261,8 +245,8 @@ class _PlaylistEditImportMixin:
                 items.insert(insert_at + i, ni)
         self._save()
         self._rebuild_list()
-        self._toast.show_message(
-            self.tr("✓  {name} opened ({pages} pages)")
+        self._notifications.success(
+            self.tr("{name} opened ({pages} pages)")
             .replace("{name}", str(stem))
             .replace("{pages}", str(len(new_items)))
         )
@@ -316,8 +300,8 @@ class _PlaylistEditImportMixin:
                         insert_at += len(new_items)
                     total_added += len(new_items)
             except (OSError, ValueError) as exc:
-                self._toast.show_message(
-                    self.tr("⚠  Could not import: {name}").replace(
+                self._notifications.error(
+                    self.tr("Could not import: {name}").replace(
                         "{name}", Path(jwl_path).name
                     ) + f"  ({str(exc)[:50]})"
                 )
@@ -325,10 +309,10 @@ class _PlaylistEditImportMixin:
             self._save()
             self._rebuild_list()
             if total_added == 1:
-                self._toast.show_message(self.tr("✓  1 item imported"))
+                self._notifications.success(self.tr("1 item imported"))
             else:
-                self._toast.show_message(
-                    self.tr("✓  {count} items imported").replace(
+                self._notifications.success(
+                    self.tr("{count} items imported").replace(
                         "{count}", str(total_added)
                     )
                 )

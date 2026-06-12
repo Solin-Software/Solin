@@ -140,22 +140,22 @@ class _PlaylistEditActionsMixin:
             self.bridge.emit_section_counts_changed()
             QTimer.singleShot(0, self._request_missing_thumbnails)
             if added == 1:
-                msg = self.tr("✓  1 file added")
+                msg = self.tr("1 file added")
             else:
-                msg = self.tr("✓  {count} files added").replace("{count}", str(added))
+                msg = self.tr("{count} files added").replace("{count}", str(added))
             if skipped == 1:
-                msg += "  " + self.tr("({count} duplicate skipped)")
+                msg += "  " + self.tr("(1 duplicate skipped)")
             elif skipped > 1:
                 msg += "  " + self.tr("({count} duplicates skipped)").replace(
                     "{count}",
                     str(skipped),
                 )
-            self._toast.show_message(msg)
+            self._notifications.success(msg)
         elif skipped:
             if skipped == 1:
-                self._toast.show_message(self.tr("⚠  File already in playlist"))
+                self._notifications.warning(self.tr("File already in playlist"))
             else:
-                self._toast.show_message(self.tr("⚠  Files already in playlist"))
+                self._notifications.warning(self.tr("Files already in playlist"))
 
     def _on_jw_media_confirmed(self, item_data: dict, target_list_id: str, target_index: int) -> None:
         if not self._pl:

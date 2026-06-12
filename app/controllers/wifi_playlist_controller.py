@@ -89,9 +89,9 @@ class WifiPlaylistController:
         media_lbl.setWordWrap(True)
         root.addWidget(media_lbl)
 
-        def _show_success_toast(message: str):
+        def _show_success_notification(message: str):
             dlg.accept()
-            self._window._success_toast.show_message(message)
+            self._window.notifications.success(message)
             self._discard_wifi_tmp(path)
             self._window.wifi_receive_widget.remove_received_file(path)
 
@@ -106,7 +106,7 @@ class WifiPlaylistController:
                     title,
                     orig_name,
                     entry,
-                    _show_success_toast,
+                    _show_success_notification,
                 ),
             )
         else:
@@ -126,7 +126,7 @@ class WifiPlaylistController:
                 title,
                 orig_name,
                 entry,
-                _show_success_toast,
+                _show_success_notification,
             ),
         )
         self._add_close_button(root, dlg)
@@ -159,9 +159,9 @@ class WifiPlaylistController:
         )
         root.addWidget(summary)
 
-        def _show_success_toast(message: str):
+        def _show_success_notification(message: str):
             dlg.accept()
-            self._window._success_toast.show_message(message)
+            self._window.notifications.success(message)
             self._window.wifi_receive_widget.clear_all_received()
 
         if playlists:
@@ -172,7 +172,7 @@ class WifiPlaylistController:
                     playlist_id,
                     playlist_name,
                     items,
-                    _show_success_toast,
+                    _show_success_notification,
                 ),
             )
         else:
@@ -189,7 +189,7 @@ class WifiPlaylistController:
             lambda name: self._create_playlist_with_all_items(
                 name,
                 items,
-                _show_success_toast,
+                _show_success_notification,
             ),
         )
         self._add_close_button(root, dlg)

@@ -233,7 +233,9 @@ class OpenMediaController:
             playlist.setdefault("items", []).extend(new_items)
             edit_view._rebuild_list()
             loaded_count = sum(1 for item in new_items if item.get("url"))
-            edit_view._toast.show_message(f"✓  {file_stem} — {loaded_count} items")
+            self._window.notifications.success(
+                f"{file_stem} — {loaded_count} items"
+            )
 
         @thread.failed.connect
         def _on_fail(err: str):

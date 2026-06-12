@@ -39,7 +39,7 @@ class PlaylistImportController:
                 target.playlist_name,
                 item,
             )
-            self._window._success_toast.show_message(
+            self._window.notifications.success(
                 self._window.tr('Playlist "%1"\ncreated successfully!').replace(
                     "%1",
                     target.playlist_name,
@@ -52,14 +52,14 @@ class PlaylistImportController:
             item,
         )
         if added:
-            self._window._success_toast.show_message(
+            self._window.notifications.success(
                 self._window.tr('Added to playlist\n"%1"').replace(
                     "%1",
                     target.playlist_name,
                 )
             )
         else:
-            self._window._success_toast.show_message(
+            self._window.notifications.warning(
                 self._window.tr('This media is already in\nplaylist "%1"').replace(
                     "%1",
                     target.playlist_name,
@@ -68,12 +68,12 @@ class PlaylistImportController:
 
     @Slot(str, str)
     def browser_download_failed(self, title: str, error: str) -> None:
-        QMessageBox.warning(
-            self._window,
-            self._window.tr("Download failed"),
+        self._window.notifications.error(
             self._window.tr("Could not download %1:\n%2")
             .replace("%1", title)
             .replace("%2", error),
+            title=self._window.tr("Download failed"),
+            dedupe_key=f"browser-download:{title}:{error}",
         )
 
     @Slot(str, str, str)
@@ -177,7 +177,7 @@ class PlaylistImportController:
 
     def add_items_to_playlist_target(self, target, items: list, source_name: str) -> None:
         if not items:
-            self._window._success_toast.show_message(
+            self._window.notifications.warning(
                 self._window.tr("No media found in {name}").replace("{name}", source_name)
             )
             return
@@ -189,7 +189,7 @@ class PlaylistImportController:
             )
             for item in items[1:]:
                 self._window.playlist_widget.add_item_to_playlist(playlist_id, item)
-            self._window._success_toast.show_message(
+            self._window.notifications.success(
                 self._window.tr('Playlist "%1"\ncreated successfully!').replace(
                     "%1",
                     target.playlist_name,
@@ -203,13 +203,13 @@ class PlaylistImportController:
                 added += 1
 
         if added:
-            self._window._success_toast.show_message(
+            self._window.notifications.success(
                 self._window.tr('%1 file(s) added\nto playlist "%2"')
                 .replace("%1", str(added))
                 .replace("%2", target.playlist_name)
             )
         else:
-            self._window._success_toast.show_message(
+            self._window.notifications.warning(
                 self._window.tr('This media is already in\nplaylist "%1"').replace(
                     "%1",
                     target.playlist_name,
@@ -230,7 +230,7 @@ class PlaylistImportController:
             )
             return
 
-        self._window._success_toast.show_message(
+        self._window.notifications.information(
             self._window.tr("Opening {name}...").replace("{name}", pdf_stem)
         )
 
@@ -247,13 +247,12 @@ class PlaylistImportController:
             )
         )
         thread.conversion_failed.connect(
-            lambda err: QMessageBox.warning(
-                self._window,
-                self._window.tr("Error opening PDF"),
-                self._window.tr("⚠  Error converting PDF: {error}").replace(
+            lambda err: self._window.notifications.error(
+                self._window.tr("Error converting PDF: {error}").replace(
                     "{error}",
                     str(err),
                 ),
+                title=self._window.tr("Error opening PDF"),
             )
         )
         thread.finished.connect(
@@ -271,7 +270,7 @@ class PlaylistImportController:
         stem = Path(jwpub_path).stem
         lang = self._media_language_context().api_code
 
-        self._window._success_toast.show_message(
+        self._window.notifications.information(
             self._window.tr("Opening {name}...").replace("{name}", stem)
         )
 
@@ -311,13 +310,12 @@ class PlaylistImportController:
 
         @thread.failed.connect
         def _on_fail(err: str):
-            QMessageBox.warning(
-                self._window,
-                self._window.tr("Error opening .jwpub"),
-                self._window.tr("⚠  Could not open .jwpub: {err}").replace(
+            self._window.notifications.error(
+                self._window.tr("Could not open .jwpub: {err}").replace(
                     "{err}",
                     err[:120],
                 ),
+                title=self._window.tr("Error opening .jwpub"),
             )
 
         thread.start()

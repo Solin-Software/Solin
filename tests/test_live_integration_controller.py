@@ -88,6 +88,14 @@ class _CameraOptionStub:
         self.is_virtual = is_virtual
 
 
+class _NotificationsStub:
+    def __init__(self):
+        self.errors = []
+
+    def error(self, message, **kwargs):
+        self.errors.append((message, kwargs))
+
+
 class _WindowStub:
     def __init__(self):
         self._obs_prefs = _PrefsStub(
@@ -108,9 +116,13 @@ class _WindowStub:
         self._proj_state = {"type": "idle"}
         self._obs_pre_media_scene = ""
         self.stopped_projection = False
+        self.notifications = _NotificationsStub()
 
     def _stop_projection(self):
         self.stopped_projection = True
+
+    def tr(self, text):
+        return text
 
 
 def test_refresh_obs_btn_availability_requires_connection_and_media_scene():
@@ -195,3 +207,20 @@ def test_camera_disabled_stops_active_camera_stream():
 
     assert window._quick_toolbar.camera_enabled is False
     assert window.stopped_projection is True
+
+
+def test_zoom_share_error_uses_central_notifications():
+    window = _WindowStub()
+    controller = LiveIntegrationController(window)
+
+    controller.on_zoom_share_error("Zoom window not found")
+
+    assert window.notifications.errors == [
+        (
+            "Zoom window not found",
+            {
+                "title": "Zoom sharing failed",
+                "dedupe_key": "zoom-share:Zoom window not found",
+            },
+        )
+    ]

@@ -71,6 +71,7 @@ class LazyPageController:
 
         self._window.wifi_receive_widget = WifiReceiveWidget(
             self._window.lang,
+            notifications=self._window.notifications,
             parent=self._window,
         )
         self._replace_stack_widget(self.WIFI_INDEX, self._window.wifi_receive_widget)

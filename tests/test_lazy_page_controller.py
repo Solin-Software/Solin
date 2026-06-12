@@ -30,6 +30,7 @@ class _WindowStub:
     def __init__(self):
         self.stack = _StackStub()
         self.lang = object()
+        self.notifications = object()
 
 
 class _BrowserStub:
