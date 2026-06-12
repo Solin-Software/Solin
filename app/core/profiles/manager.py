@@ -154,7 +154,7 @@ class ProfileManager(QObject):
         """
         self._data_dir = data_dir
         self._load_profiles()
-        log.debug("[ProfileManager] Inicializado — %d perfil(is)", len(self._profiles))
+        log.debug("[ProfileManager] Initialized - %d profile(s)", len(self._profiles))
 
     # ── Leitura ───────────────────────────────────────────────────────────
 
@@ -233,7 +233,7 @@ class ProfileManager(QObject):
         self._profiles.append(p)
         self.ensure_profile_dirs(slug)
         self._save_profiles()
-        log.info("[ProfileManager] Perfil criado: %r (%s)", name, slug)
+        log.info("[ProfileManager] Profile created: %r (%s)", name, slug)
         return p
 
     def rename_profile(self, profile_id: str, new_name: str) -> None:
@@ -241,7 +241,7 @@ class ProfileManager(QObject):
         if p:
             p.name = new_name
             self._save_profiles()
-            log.info("[ProfileManager] Perfil renomeado: %s → %r", profile_id, new_name)
+            log.info("[ProfileManager] Profile renamed: %s -> %r", profile_id, new_name)
 
     def delete_profile(self, profile_id: str) -> bool:
         """
@@ -283,7 +283,7 @@ class ProfileManager(QObject):
                 s.sync()
             except Exception as exc:  # noqa: BLE001 - Qt settings backend cleanup boundary
                 log.warning(
-                    "[ProfileManager] Falha ao limpar QSettings %s/%s: %s",
+                    "[ProfileManager] Failed to clear QSettings %s/%s: %s",
                     profile_org, app_name, exc,
                 )
 
@@ -296,7 +296,7 @@ class ProfileManager(QObject):
                 gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, self._profiles[0].id)
                 gs.sync()
 
-        log.info("[ProfileManager] Perfil removido: %s", profile_id)
+        log.info("[ProfileManager] Profile removed: %s", profile_id)
         return True
 
     # ── Ativação ──────────────────────────────────────────────────────────
@@ -326,7 +326,7 @@ class ProfileManager(QObject):
         gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, profile_id)
         gs.sync()
 
-        log.info("[ProfileManager] Perfil ativo: %s", profile_id)
+        log.info("[ProfileManager] Active profile: %s", profile_id)
         self.profile_switched.emit(profile_id)
 
     def restore_last_active(self) -> Optional[str]:
@@ -399,11 +399,11 @@ class ProfileManager(QObject):
                     src_s.remove(key)
             src_s.sync()
             log.info(
-                "[Migration] QSettings %s/%s -> %s%s/%s; legado limpo",
+                "[Migration] QSettings %s/%s -> %s%s/%s; legacy cleared",
                 QSETTINGS_ORG_NAME, base, QSETTINGS_PROFILE_ORG_PREFIX, pid, base,
             )
 
-        log.info("[Migration] Concluída para perfil %r (%s)", profile_name, pid)
+        log.info("[Migration] Completed for profile %r (%s)", profile_name, pid)
         return profile
 
     # ── Internos ──────────────────────────────────────────────────────────
@@ -428,7 +428,7 @@ class ProfileManager(QObject):
             TypeError,
             ValueError,
         ) as exc:
-            log.error("[ProfileManager] Falha ao ler profiles.json: %s", exc)
+            log.error("[ProfileManager] Failed to read profiles.json: %s", exc)
             self._profiles = []
 
     def _save_profiles(self) -> None:

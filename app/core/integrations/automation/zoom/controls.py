@@ -61,8 +61,8 @@ try:
     from pywinauto import Desktop
     from pywinauto.keyboard import send_keys
 except ImportError as e:
-    log.error("pywinauto nao instalado. Execute: pip install pywinauto")
-    log.debug("Detalhe do import do pywinauto: %r", e)
+    log.error("pywinauto is not installed. Run: pip install pywinauto")
+    log.debug("pywinauto import details: %r", e)
     sys.exit(1)
 
 # ─────────────────────────────────────────────────────────────────
@@ -1047,13 +1047,13 @@ class _StopShareCache:
         try:
             text = self._btn.window_text() or ""
             if not text.strip():
-                raise ValueError("Botao fantasma no cache (texto vazio)")
+                raise ValueError("Ghost button in cache (empty text)")
             rect = self._btn.rectangle()
             if rect.width() <= 0 or rect.height() <= 0:
-                raise ValueError("Botao invisivel no cache")
+                raise ValueError("Invisible button in cache")
             return self._btn
         except Exception as e:  # noqa: BLE001 - pywinauto/UIA adapter boundary
-            log.debug("[CACHE-POLLER] Cache invalido: %s", e)
+            log.debug("[CACHE-POLLER] Invalid cache: %s", e)
             self._btn = None
             self._float_handle = None
             return None
@@ -1120,16 +1120,16 @@ def _is_sharing() -> bool:
 
     cached = _stop_cache.get()
     if cached and _stop_cache.float_handle == float_handle:
-        log.debug("[CACHE-POLLER] Cache quente e valido!")
+        log.debug("[CACHE-POLLER] Warm and valid cache!")
         return True
 
-    log.debug("[CACHE-POLLER] Cache frio/stale. Fazendo scan da toolbar...")
+    log.debug("[CACHE-POLLER] Cold/stale cache. Scanning toolbar...")
     btn = _scan_stop_btn(float_handle)
     if btn:
         _stop_cache.put(float_handle, btn)
-        log.debug("[CACHE-POLLER] Sucesso! Botao salvo no cache.")
+        log.debug("[CACHE-POLLER] Success! Button saved to cache.")
     else:
-        log.debug("[CACHE-POLLER] Falha! Botao nao encontrado na toolbar.")
+        log.debug("[CACHE-POLLER] Failed! Button not found in toolbar.")
 
     return True
 
@@ -1538,7 +1538,7 @@ def unmute_all() -> None:
     if not more_btn:
         if opened_by_us:
             _close_participants_panel()
-        raise RuntimeError("more_btn (3 pontinhos) not found in participants panel")
+        raise RuntimeError("more_btn (three-dot menu) not found in participants panel")
 
     _safe_invoke(more_btn)
 
@@ -1571,7 +1571,7 @@ def unmute_all() -> None:
             _debug_ignored("Failed to close Zoom participants popup after missing menu item")
         if opened_by_us:
             _close_participants_panel()
-        raise RuntimeError("Nenhum item iterativo (MenuItem/Button) encontrado no popup 3-dot")
+        raise RuntimeError("No interactive item (MenuItem/Button) found in 3-dot popup")
 
     if opened_by_us:
         time.sleep(0.1)
@@ -1810,7 +1810,7 @@ def stop_screen_share() -> None:
                 return
 
     raise RuntimeError(
-        "stop_screen_share falhou -- floating toolbar nao encontrada ou botao nao respondeu"
+        "stop_screen_share failed -- floating toolbar not found or button did not respond"
     )
 
 
@@ -1840,7 +1840,7 @@ def dump_descendants(win, max_items: int = 200) -> None:
             )
             count += 1
             if count >= max_items:
-                log.debug("  ... (truncado em %s itens)", max_items)
+                log.debug("  ... (truncated at %s items)", max_items)
                 break
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue

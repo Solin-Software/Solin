@@ -118,7 +118,7 @@ class LanguageManager(QObject):
                 KeyError,
                 TypeError,
             ) as exc:
-                log.warning("Falha ao carregar metadados de idioma %s: %s", path, exc)
+                log.warning("Failed to load language metadata %s: %s", path, exc)
 
     def _restore_saved_language(self) -> None:
         saved = _ps.prefs(QSETTINGS_APP_APP).value(SettingsKey.APP_LANGUAGE, "", str)
@@ -156,7 +156,7 @@ class LanguageManager(QObject):
     def set_language(self, code: str) -> None:
         """Troca o idioma, instala QTranslators e emite language_changed."""
         if code not in self._meta:
-            log.warning("Idioma desconhecido: %r", code)
+            log.warning("Unknown language: %r", code)
             return
         if code == self.current_code:
             return
@@ -196,7 +196,7 @@ class LanguageManager(QObject):
             app.installTranslator(app_tr)
             self._app_translator = app_tr
         else:
-            log.info("Tradução da aplicação não encontrada: %s", qm_path)
+            log.info("Application translation not found: %s", qm_path)
 
         # 2. Translator nativo do Qt — tenta qtbase_* depois qt_*
         qt_tr = QTranslator(app)

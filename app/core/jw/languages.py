@@ -179,7 +179,7 @@ class JWLanguageService(QObject):
         old = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
         s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, code)
         s.sync()
-        log.debug("[JWLanguageService] Idioma de mídia: %s", code)
+        log.debug("[JWLanguageService] Media language: %s", code)
         if code != old:
             self.media_language_changed.emit(code)
 
@@ -292,4 +292,4 @@ class JWLanguageService(QObject):
                     indent=2,
                 )
         except (OSError, TypeError, ValueError) as exc:
-            log.warning("[JWLanguageService] Falha ao salvar cache: %s", exc)
+            log.warning("[JWLanguageService] Failed to save cache: %s", exc)

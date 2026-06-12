@@ -232,7 +232,7 @@ class JWLPlaylistReader:
             mem = sqlite3.connect(":memory:")
             src.backup(mem)
         except (OSError, sqlite3.Error) as exc:
-            log.error("Falha ao carregar userData.db: %s", exc)
+            log.error("Failed to load userData.db: %s", exc)
             try:
                 if fd >= 0:
                     os.close(fd)
@@ -302,7 +302,7 @@ class JWLPlaylistReader:
                 loc = loc_map[iid]
                 entry = self._build_video_entry(raw, loc)
             else:
-                log.warning("PlaylistItem %d sem midia associada — ignorado.", iid)
+                log.warning("PlaylistItem %d has no associated media - ignored.", iid)
                 continue
 
             items.append(entry)
@@ -463,7 +463,7 @@ class JWLPlaylistReader:
                 """
             ).fetchall()
         except sqlite3.OperationalError as e:
-            log.warning("Tabela de mídia independente não encontrada: %s", e)
+            log.warning("Independent media table not found: %s", e)
             return result
 
         for row in rows:
@@ -490,7 +490,7 @@ class JWLPlaylistReader:
             # Tenta ler os bytes do ZIP (busca exata e parcial)
             data = self._read_zip_entry(file_path)
             if data is None:
-                log.warning("Arquivo %s não encontrado no ZIP — item ignorado.", file_path)
+                log.warning("File %s not found in ZIP - item ignored.", file_path)
                 continue
 
             result[row["PlaylistItemId"]] = _IndependentMedia(
@@ -526,7 +526,7 @@ class JWLPlaylistReader:
                 """
             ).fetchall()
         except sqlite3.OperationalError as e:
-            log.warning("Tabela Location não encontrada: %s", e)
+            log.warning("Location table not found: %s", e)
             return result
 
         for row in rows:
@@ -658,7 +658,7 @@ class JWLPlaylistReader:
             
             db_entry = self._find_db()
             if not db_entry:
-                log.error("userData.db não encontrado no arquivo .jwlplaylist")
+                log.error("userData.db not found in .jwlplaylist file")
                 return
                 
             db_bytes = self._zip.read(db_entry)
@@ -693,7 +693,7 @@ class JWLPlaylistReader:
             for table_row in tables:
                 table_name = table_row["name"]
                 lines.append("")
-                lines.append(f"Tabela: {table_name}")
+                lines.append(f"Table: {table_name}")
                 
                 # Pega as colunas de cada tabela
                 columns = con.execute(f"PRAGMA table_info('{table_name}')").fetchall()
@@ -772,14 +772,14 @@ def resolve_jworg_url(
         params["docid"] = str(doc_id)
 
     api_url = f"{_JWORG_API}?{urllib.parse.urlencode(params)}"
-    log.debug("Resolvendo URL JW.org (%s): %s", fileformat, api_url)
+    log.debug("Resolving JW.org URL (%s): %s", fileformat, api_url)
 
     try:
         req = urllib.request.Request(api_url, headers={"User-Agent": "Solin/1.0"})
         with _urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
-        log.warning("Nao foi possivel resolver URL JW.org para '%s': %s", key_symbol, e)
+        log.warning("Could not resolve JW.org URL for '%s': %s", key_symbol, e)
         return None
 
     result = _extract_best_entry(data, lang_code=lang_code, preferred_quality=quality,
@@ -830,14 +830,14 @@ def resolve_jworg_metadata(
         params["docid"] = str(doc_id)
 
     api_url = f"{_JWORG_API}?{urllib.parse.urlencode(params)}"
-    log.debug("Resolvendo metadados JW.org (%s): %s", fileformat, api_url)
+    log.debug("Resolving JW.org metadata (%s): %s", fileformat, api_url)
 
     try:
         req = urllib.request.Request(api_url, headers={"User-Agent": "Solin/1.0"})
         with _urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
-        log.warning("Não foi possível resolver metadados JW.org para '%s': %s", key_symbol, e)
+        log.warning("Could not resolve JW.org metadata for '%s': %s", key_symbol, e)
         return None
 
     entry = _extract_best_entry(data, lang_code=lang_code, preferred_quality=quality,
@@ -885,7 +885,7 @@ def _extract_best_entry(
                     break
 
     if not entries:
-        log.warning("Nenhum arquivo %s encontrado na resposta da API (lang=%s).", fmt, lang_code)
+        log.warning("No %s file found in API response (lang=%s).", fmt, lang_code)
         return None
 
     def _url_from_entry(e: dict) -> Optional[str]:
@@ -919,7 +919,7 @@ def _extract_best_entry(
                 if isinstance(e, dict) and e.get("label") == bitrate:
                     r = _make_result(e)
                     if r:
-                        log.debug("MP3 selecionado: label=%s  %s", bitrate, r["url"])
+                        log.debug("MP3 selected: label=%s  %s", bitrate, r["url"])
                         return r
         for e in entries:
             if isinstance(e, dict):
@@ -955,7 +955,7 @@ def _extract_best_entry(
             if e.get("label") == q and e.get("subtitled") is False:
                 r = _make_result(e)
                 if r:
-                    log.debug("MP4 selecionado: label=%s subtitled=False  %s", q, r["url"])
+                    log.debug("MP4 selected: label=%s subtitled=False  %s", q, r["url"])
                     return r
 
     for q in quality_order:
@@ -964,10 +964,10 @@ def _extract_best_entry(
             if e.get("label") == q:
                 r = _make_result(e)
                 if r:
-                    log.debug("MP4 selecionado (com legenda): label=%s  %s", q, r["url"])
+                    log.debug("MP4 selected (with subtitles): label=%s  %s", q, r["url"])
                     return r
 
-    log.warning("Nenhuma URL utilizável encontrada nas entradas da API.")
+    log.warning("No usable URL found in API entries.")
     return None
 
 def _meps_to_lang_code(meps_language: int, fallback: str = "E") -> str:
@@ -987,7 +987,7 @@ def _meps_to_lang_code(meps_language: int, fallback: str = "E") -> str:
     code = _LANG_FROM_MEPS.get(meps_language)
     if code is None:
         log.debug(
-            "MEPS ID %d desconhecido — usando fallback de idioma do app: %s",
+            "Unknown MEPS ID %d - using app language fallback: %s",
             meps_language, fallback,
         )
         return fallback

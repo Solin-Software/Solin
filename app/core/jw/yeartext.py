@@ -99,7 +99,7 @@ class _FetchWorker(QThread):
             with _urlopen(req, timeout=_API_TIMEOUT) as resp:
                 raw = resp.read().decode("utf-8")
         except (_url_err.URLError, OSError) as exc:
-            log.warning("[yeartext] Falha na requisicao (%s/%d): %s", api_code, year, exc)
+            log.warning("[yeartext] Request failed (%s/%d): %s", api_code, year, exc)
             self.failed.emit(api_code, year, str(exc))
             return
 
@@ -109,7 +109,7 @@ class _FetchWorker(QThread):
             self.failed.emit(api_code, year, f"JSON invalido: {exc}")
             return
 
-        log.debug("[yeartext] Resposta JSON (%s/%d): %s", api_code, year, data)
+        log.debug("[yeartext] JSON response (%s/%d): %s", api_code, year, data)
 
         if not data.get("exists", False):
             self.failed.emit(api_code, year,
@@ -160,7 +160,7 @@ class YeartextService(QObject):
                 with open(self._cache_path, encoding="utf-8") as f:
                     self._cache = json.load(f)
         except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as exc:
-            log.warning("[yeartext] Falha ao carregar cache: %s", exc)
+            log.warning("[yeartext] Failed to load cache: %s", exc)
             self._cache = {}
 
     def _save_cache(self) -> None:
@@ -169,7 +169,7 @@ class YeartextService(QObject):
             with open(self._cache_path, "w", encoding="utf-8") as f:
                 json.dump(self._cache, f, ensure_ascii=False, indent=2)
         except (OSError, TypeError, ValueError) as exc:
-            log.warning("[yeartext] Falha ao salvar cache: %s", exc)
+            log.warning("[yeartext] Failed to save cache: %s", exc)
 
     def _update_cache(self, api_code: str, year: int,
                       quote: str, reference: str) -> None:

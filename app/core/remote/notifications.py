@@ -201,7 +201,7 @@ class NotificationWorker(QObject):
 
             # Validação de schema mínimo
             if not _REQUIRED_FIELDS.issubset(item.keys()):
-                log.debug("[Notifications] item sem campos obrigatórios: %s", item)
+                log.debug("[Notifications] item missing required fields: %s", item)
                 continue
 
             notif_id = str(item["id"]).strip()
@@ -223,7 +223,7 @@ class NotificationWorker(QObject):
             # Resolve localização: tenta api_code ativo → fallback "E"
             localized = content.get(self._api_code) or content.get(FALLBACK_LANG)
             if not isinstance(localized, dict):
-                log.debug("[Notifications] sem conteúdo para código '%s' nem fallback: %s",
+                log.debug("[Notifications] no content for code '%s' or fallback: %s",
                           self._api_code, notif_id)
                 continue
 
@@ -330,11 +330,11 @@ class NotificationService(QObject):
         if self._stopping:
             return
         if notifications:
-            log.debug("[Notifications] %d nova(s) notificação(ões)", len(notifications))
+            log.debug("[Notifications] %d new notification(s)", len(notifications))
             self.notifications_ready.emit(notifications)
 
     def _on_failed(self, msg: str) -> None:
-        log.debug("[Notifications] falha silenciosa: %s", msg)
+        log.debug("[Notifications] silent failure: %s", msg)
         self._running = False
 
     def _cleanup(self) -> None:

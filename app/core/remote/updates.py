@@ -127,10 +127,10 @@ class UpdateWorker(QObject):
 
         info = self._evaluate(payload)
         if info:
-            log.debug("[Update] disponível: %s %s", info.kind.value, info.version)
+            log.debug("[Update] available: %s %s", info.kind.value, info.version)
             self.update_available.emit(info)
         else:
-            log.debug("[Update] sem atualização")
+            log.debug("[Update] no update")
             self.no_update.emit()
 
     def _evaluate(self, payload: dict) -> UpdateInfo | None:

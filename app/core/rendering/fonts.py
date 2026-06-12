@@ -78,7 +78,7 @@ def _woff2_to_ttf(woff2_data: bytes) -> bytes:
         from fontTools.ttLib import TTFont  # type: ignore[import]
     except ImportError as exc:
         raise RuntimeError(
-            "fontTools não instalado. Execute: pip install fonttools brotli"
+            "fontTools is not installed. Run: pip install fonttools brotli"
         ) from exc
 
     font = TTFont(io.BytesIO(woff2_data))
@@ -113,13 +113,13 @@ class _DownloadWorker(QThread):
         ttf_path   = self._ttf_path
 
         # 1. Download do WOFF2
-        log.debug("[font_manager] Baixando %s", url)
+        log.debug("[font_manager] Downloading %s", url)
         req = _url_req.Request(url, headers={"User-Agent": _USER_AGENT})
         try:
             with _urlopen(req, timeout=_DOWNLOAD_TIMEOUT) as resp:
                 woff2_data = resp.read()
         except (_url_err.URLError, OSError) as exc:
-            log.warning("[font_manager] Falha ao baixar '%s': %s", font_name, exc)
+            log.warning("[font_manager] Failed to download '%s': %s", font_name, exc)
             self.failed.emit(font_name, str(exc))
             return
 
@@ -129,15 +129,15 @@ class _DownloadWorker(QThread):
             with open(woff2_path, "wb") as f:
                 f.write(woff2_data)
         except OSError as exc:
-            log.warning("[font_manager] Não foi possível salvar WOFF2: %s", exc)
+            log.warning("[font_manager] Could not save WOFF2: %s", exc)
 
         # 3. Converte WOFF2 → TTF
-        log.debug("[font_manager] Convertendo WOFF2 → TTF para '%s'", font_name)
+        log.debug("[font_manager] Converting WOFF2 to TTF for '%s'", font_name)
         try:
             ttf_data = _woff2_to_ttf(woff2_data)
         except Exception as exc:  # noqa: BLE001 - fontTools conversion boundary
-            log.exception("[font_manager] Conversão falhou para '%s'", font_name)
-            self.failed.emit(font_name, f"Conversão falhou: {exc}")
+            log.exception("[font_manager] Conversion failed for '%s'", font_name)
+            self.failed.emit(font_name, f"Conversion failed: {exc}")
             return
 
         # 4. Salva .ttf em cache
@@ -145,11 +145,11 @@ class _DownloadWorker(QThread):
             with open(ttf_path, "wb") as f:
                 f.write(ttf_data)
         except OSError as exc:
-            log.warning("[font_manager] Falha ao salvar TTF '%s': %s", font_name, exc)
+            log.warning("[font_manager] Failed to save TTF '%s': %s", font_name, exc)
             self.failed.emit(font_name, str(exc))
             return
 
-        log.info("[font_manager] '%s' pronta: %s (%d bytes TTF)",
+        log.info("[font_manager] '%s' ready: %s (%d bytes TTF)",
                  font_name, ttf_path, len(ttf_data))
         self.succeeded.emit(font_name, ttf_path)
 
@@ -186,7 +186,7 @@ class FontManager(QObject):
 
         url = _FONT_URLS.get(font_name)
         if not url:
-            log.warning("[font_manager] Fonte desconhecida: '%s'", font_name)
+            log.warning("[font_manager] Unknown font: '%s'", font_name)
             return
 
         woff2_path = self._woff2_cache_path(font_name)
@@ -235,17 +235,17 @@ class FontManager(QObject):
             with _urlopen(req, timeout=_HEAD_TIMEOUT) as resp:
                 cl = resp.headers.get("Content-Length")
                 if cl is None:
-                    log.debug("[font_manager] HEAD sem Content-Length; aceitando cache.")
+                    log.debug("[font_manager] HEAD has no Content-Length; accepting cache.")
                     return True
                 match = local_size == int(cl)
                 if not match:
                     log.debug(
-                        "[font_manager] Tamanho diverge (local=%d remote=%s); "
+                        "[font_manager] Size mismatch (local=%d remote=%s); "
                         "re-download.", local_size, cl,
                     )
                 return match
         except (_url_err.URLError, OSError, ValueError):
-            log.debug("[font_manager] HEAD falhou; usando cache existente.")
+            log.debug("[font_manager] HEAD failed; using existing cache.")
             return True
 
     # ── Registro no Qt ────────────────────────────────────────────────────────
@@ -254,8 +254,8 @@ class FontManager(QObject):
         font_id = QFontDatabase.addApplicationFont(ttf_path)
         if font_id < 0:
             log.warning(
-                "[font_manager] QFontDatabase rejeitou '%s' (%s). "
-                "Usando fallback '%s'.",
+                "[font_manager] QFontDatabase rejected '%s' (%s). "
+                "Using fallback '%s'.",
                 font_name, ttf_path, _FONT_FALLBACKS.get(font_name, "serif"),
             )
             self._registered[font_name] = None
@@ -265,7 +265,7 @@ class FontManager(QObject):
         families = QFontDatabase.applicationFontFamilies(font_id)
         registered_name = families[0] if families else font_name
         self._registered[font_name] = registered_name
-        log.info("[font_manager] '%s' registrada como '%s'.", font_name, registered_name)
+        log.info("[font_manager] '%s' registered as '%s'.", font_name, registered_name)
         self.font_ready.emit(font_name)
 
     # ── Download em background ────────────────────────────────────────────────
@@ -275,7 +275,7 @@ class FontManager(QObject):
         if font_name in self._workers:
             return
 
-        log.info("[font_manager] Iniciando download+conversão de '%s'…", font_name)
+        log.info("[font_manager] Starting download+conversion for '%s'...", font_name)
         worker = _DownloadWorker(font_name, url, woff2_path, ttf_path, parent=None)
         worker.succeeded.connect(self._on_download_success)
         worker.failed.connect(self._on_download_failed)
@@ -287,10 +287,10 @@ class FontManager(QObject):
         self._register(font_name, ttf_path)
 
     def _on_download_failed(self, font_name: str, message: str) -> None:
-        log.warning("[font_manager] Falha para '%s': %s", font_name, message)
+        log.warning("[font_manager] Failed for '%s': %s", font_name, message)
         ttf_path = self._ttf_cache_path(font_name)
         if os.path.isfile(ttf_path) and os.path.getsize(ttf_path) > 0:
-            log.info("[font_manager] Usando TTF anterior em cache para '%s'.", font_name)
+            log.info("[font_manager] Using previous cached TTF for '%s'.", font_name)
             self._register(font_name, ttf_path)
         else:
             self._registered[font_name] = None

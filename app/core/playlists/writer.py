@@ -287,7 +287,7 @@ def _read_label_from_local(data: bytes, ext: str) -> Optional[str]:
         if ext == ".mp3":
             return _mp3_read_title(data)
     except (_struct.error, IndexError, TypeError, UnicodeError, ValueError) as exc:
-        log.debug("[writer] Falha ao ler metadado de título (%s): %s", ext, exc)
+        log.debug("[writer] Failed to read title metadata (%s): %s", ext, exc)
     return None
 
 _MIME_FROM_EXT: dict[str, str] = {
@@ -722,7 +722,7 @@ def _write_jwlplaylist(
                 lp = Path(url)
                 if not lp.exists():
                     log.warning(
-                        "[writer] Arquivo local não encontrado: '%s' — item ignorado.", url
+                        "[writer] Local file not found: '%s' - item ignored.", url
                     )
                     playlist_item_id += 1
                     continue
@@ -738,7 +738,7 @@ def _write_jwlplaylist(
                 detected_mime = _MIME_FROM_EXT[ext]
                 if detected_mime != mime_type:
                     log.debug(
-                        "[writer] mime_type corrigido: %r → %r (extensão %r)",
+                        "[writer] mime_type corrected: %r -> %r (extension %r)",
                         mime_type, detected_mime, ext,
                     )
                     mime_type = detected_mime
@@ -810,8 +810,8 @@ def _write_jwlplaylist(
         # ─────────────────────────────────────────────────────────────────────
         else:
             log.warning(
-                "[writer] Item '%s' (pos=%d) não pôde ser exportado: "
-                "URL remota sem cache local e sem referência JW.org. "
+                "[writer] Item '%s' (pos=%d) could not be exported: "
+                "remote URL has no local cache and no JW.org reference. "
                 "url=%r  key_symbol=%r  doc_id=%r",
                 title, position, url, key_symbol, doc_id,
             )

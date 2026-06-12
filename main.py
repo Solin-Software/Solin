@@ -6,6 +6,22 @@ from pathlib import Path
 # Ensure the app root is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+_QT_LOGGING_RULES = (
+    "qt.qpa.mime=false",
+    "qt.multimedia.ffmpeg=false",
+)
+
+
+def _configure_qt_logging_rules() -> None:
+    existing = os.environ.get("QT_LOGGING_RULES", "")
+    entries = [entry.strip() for entry in existing.split(";") if entry.strip()]
+    configured = set(entries)
+    entries.extend(rule for rule in _QT_LOGGING_RULES if rule not in configured)
+    os.environ["QT_LOGGING_RULES"] = ";".join(entries)
+
+
+_configure_qt_logging_rules()
+
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer, QProcess
 from PySide6.QtNetwork import QLocalServer, QLocalSocket

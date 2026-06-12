@@ -144,7 +144,7 @@ def memorial_date_for_year(year: int) -> Optional[date]:
     try:
         import ephem
     except ImportError:
-        log.error("ephem não instalado — não é possível calcular a data do Memorial")
+        log.error("ephem is not installed - cannot calculate the Memorial date")
         return None
 
     LAG_MIN  = 49.0   # crescent lag mínimo (min)
@@ -187,7 +187,7 @@ def memorial_date_for_year(year: int) -> Optional[date]:
             test_day = sunset.datetime() + timedelta(hours=20)
 
     except Exception:  # noqa: BLE001 - ephem exposes implementation-specific exceptions
-        log.exception("Erro ao calcular data do Memorial %d", year)
+        log.exception("Failed to calculate Memorial date %d", year)
 
     return None
 
@@ -291,12 +291,12 @@ def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, boo
         _any_api_response = True
         result = _parse_mi_jwpub_response(data, lang)
         if result[0]:                          # dl_url presente → sucesso
-            log.debug("_get_mi_jwpub_url: URL obtida via API direta para %s/%s", pub, lang)
+            log.debug("_get_mi_jwpub_url: URL obtained from direct API for %s/%s", pub, lang)
             return result[0], result[1], result[2], False
 
     # ── Passo 2: Fallback — browser impersonation via curl_cffi ──────────────
     log.warning(
-        "_get_mi_jwpub_url: API direta falhou para %s/%s — tentando com browser impersonation",
+        "_get_mi_jwpub_url: direct API failed for %s/%s - trying browser impersonation",
         pub, lang,
     )
     import urllib.parse
@@ -306,14 +306,14 @@ def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, boo
         _any_api_response = True
         result = _parse_mi_jwpub_response(data, lang)
         if result[0]:
-            log.debug("_get_mi_jwpub_url: URL obtida via fallback (curl_cffi) para %s/%s", pub, lang)
+            log.debug("_get_mi_jwpub_url: URL obtained via fallback (curl_cffi) for %s/%s", pub, lang)
             return result[0], result[1], result[2], False
 
     # Both strategies failed to return a URL.
     # If at least one strategy got a valid JSON response the API is reachable,
     # meaning the publication simply doesn't exist → not_found=True.
     not_found = _any_api_response
-    log.error("_get_mi_jwpub_url: nenhuma estratégia retornou URL para %s/%s", pub, lang)
+    log.error("_get_mi_jwpub_url: no strategy returned a URL for %s/%s", pub, lang)
     return None, "", "", not_found
 
 
@@ -466,7 +466,7 @@ class _MemorialWorker(QObject):
         memorial_date = memorial_date_for_year(year)
         if not memorial_date:
             md.status = "error"
-            self.error.emit(f"Não foi possível calcular a data do Memorial {year}")
+            self.error.emit(f"Could not calculate the Memorial date for {year}")
             self.memorial_done.emit(md)
             return
 
@@ -526,7 +526,7 @@ class _MemorialWorker(QObject):
                             md.status = "deleted"  # assume deleted if past and we can't confirm
                         else:
                             md.status = "error"
-                            self.error.emit(f"URL não encontrada para {pub} lang={lang}")
+                            self.error.emit(f"URL not found for {pub} lang={lang}")
                     self.memorial_done.emit(md)
                     return
             else:
@@ -550,7 +550,7 @@ class _MemorialWorker(QObject):
                         self.progress.emit(60)
                     else:
                         md.status = "error"
-                        self.error.emit(f"Download falhou: {exc}")
+                        self.error.emit(f"Download failed: {exc}")
                         self.memorial_done.emit(md)
                         return
         else:
@@ -562,7 +562,7 @@ class _MemorialWorker(QObject):
         pub_dir = _extract_jwpub_to_dir(pub, lang, issue, self._cache)
         if not pub_dir:
             md.status = "error"
-            self.error.emit("Extração do JWPUB falhou")
+            self.error.emit("JWPUB extraction failed")
             self.memorial_done.emit(md)
             return
 

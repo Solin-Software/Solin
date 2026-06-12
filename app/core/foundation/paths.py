@@ -103,7 +103,7 @@ def init() -> None:
     _initialized = True
 
     log.debug(
-        "[paths] Inicializado — data=%s  cache=%s",
+        "[paths] Initialized - data=%s  cache=%s",
         _data, _cache,
     )
 
@@ -133,4 +133,4 @@ def ensure_dirs() -> None:
     ):
         Path(directory).mkdir(parents=True, exist_ok=True)
 
-    log.debug("[paths] Diretórios verificados/criados.")
+    log.debug("[paths] Directories verified/created.")

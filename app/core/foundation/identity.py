@@ -57,5 +57,5 @@ def get_install_id() -> str:
     new_id = uuid.uuid4().hex   # 32 chars hex sem separadores
     prefs.setValue(SettingsKey.INSTALL_ID, new_id)
     prefs.sync()
-    log.debug("[DeviceID] novo install_id gerado: %s…", new_id[:8])
+    log.debug("[DeviceID] new install_id generated: %s...", new_id[:8])
     return new_id

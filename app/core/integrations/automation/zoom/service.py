@@ -363,7 +363,7 @@ class ZoomService(QObject):
         try:
             t0 = time.perf_counter()
             is_sharing_fast = _zc._find_float_toolbar_hwnd()
-            log.info(f"[ZStop] FindWindowW() check levou: {(time.perf_counter()-t0)*1000:.1f}ms")
+            log.info(f"[ZStop] FindWindowW() check took: {(time.perf_counter()-t0)*1000:.1f}ms")
             
             if not is_sharing_fast:
                 self._sig_sharing.emit(generation, False)
@@ -372,11 +372,11 @@ class ZoomService(QObject):
             # OTIMISTA: Emitimos o sinal de parada AGORA para a UI reagir instantaneamente (igual ao start_share)
             self._sig_sharing.emit(generation, False)
             
-            log.info("[ZStop] Chamando stop_screen_share()...")
+            log.info("[ZStop] Calling stop_screen_share()...")
             t0 = time.perf_counter()
             _zc.stop_screen_share()
-            log.info(f"[ZStop] stop_screen_share() retornou em {(time.perf_counter()-t0)*1000:.1f}ms")
-            log.info(f"[ZStop] Tempo Total do Worker: {(time.perf_counter()-t_start)*1000:.1f}ms")
+            log.info(f"[ZStop] stop_screen_share() returned in {(time.perf_counter()-t0)*1000:.1f}ms")
+            log.info(f"[ZStop] Total worker time: {(time.perf_counter()-t_start)*1000:.1f}ms")
             
         except RuntimeError as exc:
             log.warning("Zoom stop share failed: %s", exc)

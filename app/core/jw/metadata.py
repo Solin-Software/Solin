@@ -1619,19 +1619,19 @@ def resolve_jworg_meta(
         params["docid"] = str(doc_id)
 
     api_url = f"{JW_API_URL}?{_url_parse.urlencode(params)}"
-    log.debug("[jw_api] Resolvendo metadados JW.org: %s", api_url)
+    log.debug("[jw_api] Resolving JW.org metadata: %s", api_url)
 
     try:
         req = _url_req.Request(api_url, headers={"User-Agent": "Solin/1.0"})
         with _urlopen(req, timeout=JW_API_TIMEOUT) as resp:
             data = _json.loads(resp.read().decode("utf-8"))
     except (_url_err.URLError, _json.JSONDecodeError, OSError) as e:
-        log.debug("[jw_api] API JW.org indisponível (%s/%s): %s", key_symbol, doc_id, e)
+        log.debug("[jw_api] JW.org API unavailable (%s/%s): %s", key_symbol, doc_id, e)
         _RESOLVE_CACHE[cache_key] = None
         return None
 
     result = _extract_best_meta(data, lang_code, fileformat, track)
-    log.debug("[jw_api] Meta resolvida: %s", result)
+    log.debug("[jw_api] Resolved metadata: %s", result)
     _RESOLVE_CACHE[cache_key] = result
     return result
 

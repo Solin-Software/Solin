@@ -71,13 +71,13 @@ def apply_corner_radius(
         import objc  # pyobjc-core, trazido por pyobjc-framework-Quartz
         from ctypes import c_void_p
     except (ImportError, OSError):  # pragma: no cover - só ocorre se pyobjc faltar
-        log.debug("pyobjc indisponível; cantos arredondados no macOS ignorados")
+        log.debug("pyobjc unavailable; rounded corners on macOS ignored")
         return False
 
     try:
         handle = int(widget.winId())  # força criação do NSView nativo
     except Exception:  # noqa: BLE001 - Qt/Cocoa bridge boundary
-        log.debug("winId() indisponível ao arredondar cantos", exc_info=True)
+        log.debug("winId() unavailable while rounding corners", exc_info=True)
         return False
 
     if not handle:
@@ -94,7 +94,7 @@ def apply_corner_radius(
         _apply_layer_border(layer, border_width, border_rgba)
         return True
     except Exception:  # noqa: BLE001 - Objective-C runtime boundary
-        log.debug("Falha ao aplicar cornerRadius na CALayer", exc_info=True)
+        log.debug("Failed to apply cornerRadius on CALayer", exc_info=True)
         return False
 
 
@@ -106,7 +106,7 @@ def _apply_layer_border(layer, border_width: float, border_rgba) -> None:
         try:
             layer.setBorderWidth_(0.0)
         except Exception:  # noqa: BLE001 - Objective-C runtime boundary
-            log.debug("Falha ao remover borda da CALayer", exc_info=True)
+            log.debug("Failed to remove CALayer border", exc_info=True)
         return
     try:
         from Quartz import CGColorCreateGenericRGB
@@ -115,4 +115,4 @@ def _apply_layer_border(layer, border_width: float, border_rgba) -> None:
         layer.setBorderColor_(CGColorCreateGenericRGB(r, g, b, a))
         layer.setBorderWidth_(float(border_width))
     except Exception:  # noqa: BLE001 - Quartz/Objective-C runtime boundary
-        log.debug("Falha ao desenhar borda na CALayer (cantos seguem ok)", exc_info=True)
+        log.debug("Failed to draw CALayer border; rounded corners remain applied", exc_info=True)
