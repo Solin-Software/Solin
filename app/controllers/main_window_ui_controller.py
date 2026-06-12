@@ -35,7 +35,7 @@ from ..widgets.playlist.cleanup import (
     flush_thumbs_dir,
 )
 from ..widgets.playlist.widget import PlaylistWidget
-from ..widgets.common import ProfileAvatarButton, SidebarButton, _SuccessToast
+from ..widgets.common import ProfileAvatarButton, SidebarButton
 from ..widgets.projection import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
 from ..widgets.sermon_theme_widget import SermonThemeWidget
@@ -124,7 +124,6 @@ class MainWindowUiController:
 
         root.addWidget(window.right_col, stretch=1)
 
-        window._success_toast = _SuccessToast(window.right_col)
         self._build_quick_toolbar()
         self._prime_native_cursor_hosts()
         window.right_col.installEventFilter(window)
@@ -211,6 +210,7 @@ class MainWindowUiController:
             window.lang,
             media_ctrl=window.media_ctrl,
             watched_folder=watched_folder,
+            notifications=window.notifications,
             parent=window,
         )
         window.meetings_widget = MeetingsWidget(window.lang, parent=window)

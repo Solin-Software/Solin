@@ -167,6 +167,7 @@ jobs:
             --include-package=ephem `
             --include-package=pywinauto `
             --include-package=comtypes `
+            --include-package-data=pyqttoast `
             --include-data-dir="assets=assets" `
             --include-data-dir="translations\locales=translations/locales" `
             --include-data-dir="$env:BUILD_DIR\qmlcache\app\qml\Solin=app/qml/Solin" `

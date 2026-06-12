@@ -8,6 +8,9 @@ from .controllers.language_controller import LanguageController
 from .controllers.live_integration_controller import LiveIntegrationController
 from .controllers.main_window_bootstrap_controller import MainWindowBootstrapController
 from .controllers.main_window_ui_controller import MainWindowUiController
+from .controllers.media_download_notification_controller import (
+    MediaDownloadNotificationController,
+)
 from .controllers.media_projection_controller import MediaProjectionController
 from .controllers.open_media_controller import OpenMediaController
 from .controllers.playlist_import_controller import PlaylistImportController
@@ -27,6 +30,7 @@ from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
 from .core.media.playback import MediaController
+from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
 from .core.integrations.ndi import NDIReceiverService
@@ -107,6 +111,13 @@ class MainWindow(QMainWindow):
         self._shutdown_controller = ShutdownController(self)
         self._window_state.restore_size()
         self._window_state.apply_icon()
+
+        self.notifications = NotificationCenter(self)
+        self._media_download_notifications = MediaDownloadNotificationController(
+            self.notifications,
+            self,
+        )
+        self._media_download_notifications.start()
 
         self._ui_controller = MainWindowUiController(self, _get_pm)
         self._build_ui()

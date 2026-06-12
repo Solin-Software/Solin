@@ -19,7 +19,7 @@ Sinais públicos:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import (
     Qt, Signal, Slot, QThread, QObject, QTimer, QSize, QEvent,
@@ -46,6 +46,9 @@ from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
 from .media_info_extractor import MediaInfoService
 import os
+
+if TYPE_CHECKING:
+    from ..core.ui.notifications import NotificationCenter
 
 _PDF_EXTS_SET = _PDF_EXTS
 _JWL_EXTS_SET = _JWL_EXTS
@@ -147,14 +150,6 @@ _I_IMAGE = (
     '<polyline points="21,15 16,10 5,21"/>'
     '</svg>'
 )
-_I_X = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-    ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-    '<circle cx="12" cy="12" r="10"/>'
-    '<line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
-    '</svg>'
-)
-
 _I_PDF = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
@@ -246,39 +241,6 @@ def _generate_qr_png(url: str) -> bytes | None:
     except Exception:  # noqa: BLE001 - qrcode/Pillow codec boundary
         log_ignored_exception(__name__, "Could not generate Wi-Fi QR code")
         return None
-
-
-# ── Toast ─────────────────────────────────────────────────────────────────────
-
-class _Toast(QFrame):
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setObjectName("WifiToast")
-        self._timer = QTimer(self); self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.hide)
-        self._ico = QLabel(); self._ico.setStyleSheet("background:transparent;")
-        self._lbl = QLabel()
-        lay = QHBoxLayout(self); lay.setContentsMargins(10, 7, 14, 7); lay.setSpacing(7)
-        lay.addWidget(self._ico); lay.addWidget(self._lbl)
-        self.hide()
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-
-    def show_message(self, text: str, ok: bool = True, ms: int = 3200) -> None:
-        color = _OK if ok else _ERR
-        self.setStyleSheet(
-            f"QFrame#WifiToast{{background:#1c2128;border:1px solid {color};border-radius:10px;}}"
-            f"QLabel{{color:{color};font-size:12px;font-weight:600;background:transparent;}}"
-        )
-        self._ico.setPixmap(make_icon(_I_CHECK if ok else _I_X, 14, color).pixmap(14, 14))
-        self._lbl.setText(text)
-        self.adjustSize(); self._reposition(); self.show(); self._timer.start(ms)
-
-    def _reposition(self) -> None:
-        if p := self.parent():
-            self.move((p.width() - self.width()) // 2, p.height() - self.height() - 16)
-
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev); self._reposition()
 
 
 # ── Clickable frame (URL field) ───────────────────────────────────────────────
@@ -542,9 +504,16 @@ class WifiReceiveWidget(QWidget):
     request_add_all_to_playlist = Signal(list)
     request_play                = Signal(str, str)         # path, title
 
-    def __init__(self, lang: LanguageManager, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        lang: LanguageManager,
+        *,
+        notifications: NotificationCenter,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._lang            = lang
+        self._notifications   = notifications
         self._server          = WifiReceiveServer(self)
         self._session_url     = ""
         self._received_files: list[dict] = []
@@ -581,8 +550,6 @@ class WifiReceiveWidget(QWidget):
         self._stack.addWidget(self._make_idle_page())      # 2
         self._stack.setCurrentIndex(2)
         root.addWidget(self._stack, stretch=1)
-
-        self._toast = _Toast(self)
 
     # ── Header ────────────────────────────────────────────────────────────
 
@@ -923,7 +890,7 @@ class WifiReceiveWidget(QWidget):
         self._received_files.append({"path": path, "title": title, "orig_name": orig_name})
         self._add_card(path, title, orig_name=orig_name)
         short = orig_name if len(orig_name) <= 34 else orig_name[:32] + "…"
-        self._toast.show_message(f"{short}", ok=True)
+        self._notifications.success(short)
         self.media_received.emit(path, orig_name)
 
     # ── Expansão de PDF ────────────────────────────────────────────────────
@@ -943,8 +910,8 @@ class WifiReceiveWidget(QWidget):
             lambda pages, stem, n=orig_name: self._on_pdf_pages_ready(pages, stem, n)
         )
         thread.conversion_failed.connect(
-            lambda err, n=orig_name: self._toast.show_message(
-                f"Erro ao converter PDF: {Path(n).name}", ok=False
+            lambda err, n=orig_name: self._notifications.error(
+                f"Erro ao converter PDF: {Path(n).name}\n{err}"
             )
         )
         # Manter referência viva enquanto roda
@@ -963,7 +930,7 @@ class WifiReceiveWidget(QWidget):
             self._received_files.append({"path": page_path, "title": title, "orig_name": title + ".jpg"})
             self._add_card(page_path, title, orig_name=title + ".jpg")
         short_name = orig_name if len(orig_name) <= 28 else orig_name[:26] + "…"
-        self._toast.show_message(f"{short_name}  ({n} p.)", ok=True)
+        self._notifications.success(f"{short_name}  ({n} p.)")
 
     # ── Expansão de JWPUB ──────────────────────────────────────────────────
 
@@ -977,7 +944,7 @@ class WifiReceiveWidget(QWidget):
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(orig_name).stem or Path(path).stem
-        self._toast.show_message(f"🔄  {stem}…", ok=True)
+        self._notifications.information(f"{stem}…")
         lang = jw_media_language_context(self._lang).api_code
 
         thread = JwpubImportThread.create(
@@ -1008,13 +975,13 @@ class WifiReceiveWidget(QWidget):
                 self._add_card(item_path, item_title, orig_name=item_title)
                 added += 1
             if added:
-                self._toast.show_message(f"{file_stem}  ({added} items)", ok=True)
+                self._notifications.success(f"{file_stem}  ({added} items)")
             else:
-                self._toast.show_message(f"⚠  No media in {file_stem}", ok=False)
+                self._notifications.warning(f"No media in {file_stem}")
 
         @thread.failed.connect
         def _on_fail(err: str):
-            self._toast.show_message(f"⚠  Could not open {stem}", ok=False)
+            self._notifications.error(f"Could not open {stem}\n{err}")
 
         thread.start()
 
@@ -1029,8 +996,10 @@ class WifiReceiveWidget(QWidget):
 
         try:
             parsed = read_jwlplaylist(path, fallback_lang_code=fallback_lang)
-        except (_zipmod.BadZipFile, OSError, ValueError):
-            self._toast.show_message(f"Erro ao ler playlist: {Path(orig_name).name}", ok=False)
+        except (_zipmod.BadZipFile, OSError, ValueError) as exc:
+            self._notifications.error(
+                f"Erro ao ler playlist: {Path(orig_name).name}\n{exc}"
+            )
             return
 
         def _best_ext(item: dict, default_mime: str) -> str:
@@ -1100,16 +1069,21 @@ class WifiReceiveWidget(QWidget):
 
         pl_name = parsed.get("name") or Path(orig_name).stem
         if added:
-            self._toast.show_message(f"{pl_name}  ({added} itens)", ok=True)
+            self._notifications.success(f"{pl_name}  ({added} itens)")
         if skipped:
-            self._toast.show_message(
-                f"{len(skipped)} item(ns) não resolvido(s)", ok=False, ms=4000
+            self._notifications.warning(
+                f"{len(skipped)} item(ns) não resolvido(s)"
             )
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         self._idle_subtitle.setText(self.tr("Could not start the server.") + f"\n{msg}")
         self._stack.setCurrentIndex(2)
+        self._notifications.error(
+            msg,
+            title=self.tr("Could not start the server."),
+            dedupe_key=f"wifi-server:{msg}",
+        )
 
     @Slot()
     def _on_inactivity_stopped(self) -> None:
@@ -1323,8 +1297,6 @@ class WifiReceiveWidget(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if hasattr(self, "_toast"):
-            self._toast._reposition()
         if hasattr(self, "_cards") and self._cards:
             cols = self._cols()
             for i, card in enumerate(self._cards):

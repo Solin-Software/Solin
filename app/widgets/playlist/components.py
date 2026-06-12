@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -151,61 +150,6 @@ class _PlaylistCard(QFrame):
             if not self._mbtn.geometry().contains(event.position().toPoint()):
                 self.clicked.emit(self._id)
         super().mousePressEvent(event)
-
-
-class _Toast(QLabel):
-    def __init__(self, parent: QWidget):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setStyleSheet(
-            "QLabel{background:#1f3a5f;color:#79c0ff;font-size:11px;font-weight:600;"
-            "border:1px solid #388bfd;border-radius:8px;padding:7px 16px;}"
-        )
-        self.setVisible(False)
-        self._fx = QGraphicsOpacityEffect(self)
-        self._fx.setOpacity(1.0)
-        self.setGraphicsEffect(self._fx)
-        self._anim = QPropertyAnimation(self._fx, b"opacity", self)
-        self._timer = QTimer(self)
-        self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._fade)
-        self._anim.finished.connect(self._done)
-        self._fading = False
-
-    def show_message(self, msg: str, duration: int = 2400) -> None:
-        self._fading = False
-        self._anim.stop()
-        self.setText(msg)
-        self.adjustSize()
-        self.setMinimumWidth(200)
-        self._repos()
-        self._fx.setOpacity(1.0)
-        self.raise_()
-        self.setVisible(True)
-        self._timer.start(duration)
-
-    def _repos(self) -> None:
-        p = self.parent()
-        if p:
-            self.move((p.width() - self.width()) // 2, p.height() - self.height() - 68)
-
-    def resizeEvent(self, e) -> None:
-        self._repos()
-        super().resizeEvent(e)
-
-    def _fade(self) -> None:
-        self._fading = True
-        self._anim.setStartValue(1.0)
-        self._anim.setEndValue(0.0)
-        self._anim.setDuration(450)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._anim.start()
-
-    def _done(self) -> None:
-        if self._fading:
-            self.setVisible(False)
-            self._fx.setOpacity(1.0)
-            self._fading = False
 
 
 class _CollapsibleSection(QWidget):

@@ -54,9 +54,12 @@ class LiveIntegrationController:
         if hasattr(toolbar, "_zoom_panel"):
             toolbar._zoom_panel.set_sharing(sharing)
 
-    def on_zoom_share_error(self, _message: str) -> None:
-        pass
-        # self._window._success_toast.show_message(message)
+    def on_zoom_share_error(self, message: str) -> None:
+        self._window.notifications.error(
+            message,
+            title=self._window.tr("Zoom sharing failed"),
+            dedupe_key=f"zoom-share:{message}",
+        )
 
     def on_obs_state_changed(self, _state, _message: str) -> None:
         self.refresh_obs_btn_availability()
@@ -158,7 +161,7 @@ class LiveIntegrationController:
 
         source = window._obs_prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str).strip()
         if not window._obs_prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool) or not source:
-            window._success_toast.show_message(window.tr("OBS stream is not configured."))
+            window.notifications.warning(window.tr("OBS stream is not configured."))
             self.refresh_obs_stream_availability()
             return
 
@@ -191,12 +194,12 @@ class LiveIntegrationController:
             return
 
         if not window._obs_prefs.value(SettingsKey.CAMERA_ENABLED, False, bool):
-            window._success_toast.show_message(window.tr("Camera is not enabled."))
+            window.notifications.warning(window.tr("Camera is not enabled."))
             return
 
         option = self.selected_camera_option()
         if option is None:
-            window._success_toast.show_message(window.tr("No camera selected."))
+            window.notifications.warning(window.tr("No camera selected."))
             return
 
         window._tab_proj_active = False
@@ -235,7 +238,11 @@ class LiveIntegrationController:
     def on_camera_error(self, message: str) -> None:
         window = self._window
         if window._proj_state.get("type") == "camera_stream":
-            window._success_toast.show_message(message, duration_ms=3500)
+            window.notifications.error(
+                message,
+                title=window.tr("Camera error"),
+                dedupe_key=f"camera:{message}",
+            )
             window._stop_projection()
 
     def on_camera_stopped(self) -> None:
@@ -254,7 +261,11 @@ class LiveIntegrationController:
     def on_obs_ndi_error(self, message: str) -> None:
         window = self._window
         if window._proj_state.get("type") == "obs_stream":
-            window._success_toast.show_message(message, duration_ms=3500)
+            window.notifications.error(
+                message,
+                title=window.tr("OBS stream error"),
+                dedupe_key=f"obs-stream:{message}",
+            )
             window._stop_projection()
 
     def on_obs_ndi_stopped(self) -> None:

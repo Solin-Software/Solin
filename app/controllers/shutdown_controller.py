@@ -32,6 +32,7 @@ class ShutdownController:
     def shutdown(self) -> None:
         self.close_projection_targets()
         self.stop_remote_services()
+        self.stop_notifications()
         self.cleanup_widgets()
         self.stop_media_services()
         self.stop_conversion_threads()
@@ -54,6 +55,18 @@ class ShutdownController:
         remote_services = getattr(self._window, "_remote_services", None)
         if remote_services is not None:
             remote_services.stop()
+
+    def stop_notifications(self) -> None:
+        download_notifications = getattr(
+            self._window,
+            "_media_download_notifications",
+            None,
+        )
+        if download_notifications is not None:
+            download_notifications.stop()
+        notifications = getattr(self._window, "notifications", None)
+        if notifications is not None:
+            notifications.shutdown()
 
     def cleanup_widgets(self) -> None:
         for attr in self._CLEANUP_WIDGET_ATTRS:

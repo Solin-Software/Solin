@@ -87,6 +87,7 @@ if %ERRORLEVEL% NEQ 0 (
 	--include-package=ephem ^
     --include-package=pywinauto ^
     --include-package=comtypes ^
+    --include-package-data=pyqttoast ^
     --include-data-dir="%PROJECT_ROOT%translations\locales=translations/locales" ^
     --include-data-dir="%QML_CACHE_DIR%=app/qml/Solin" ^
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^

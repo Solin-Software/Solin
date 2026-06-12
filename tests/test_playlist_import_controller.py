@@ -25,12 +25,21 @@ class _PlaylistWidgetStub:
         self.temp_opened = (items, lang)
 
 
-class _ToastStub:
+class _NotificationsStub:
     def __init__(self):
-        self.messages = []
+        self.events = []
 
-    def show_message(self, message):
-        self.messages.append(message)
+    def success(self, message, **kwargs):
+        self.events.append(("success", message, kwargs))
+
+    def warning(self, message, **kwargs):
+        self.events.append(("warning", message, kwargs))
+
+    def error(self, message, **kwargs):
+        self.events.append(("error", message, kwargs))
+
+    def information(self, message, **kwargs):
+        self.events.append(("information", message, kwargs))
 
 
 class _NavigationStub:
@@ -44,7 +53,7 @@ class _NavigationStub:
 class _WindowStub:
     def __init__(self):
         self.playlist_widget = _PlaylistWidgetStub()
-        self._success_toast = _ToastStub()
+        self.notifications = _NotificationsStub()
         self._navigation = _NavigationStub()
         self.lang = object()
 
@@ -77,7 +86,9 @@ def test_add_current_to_playlist_creates_new_playlist(monkeypatch):
     assert item["url"] == "song.mp3"
     assert item["type"] == "audio"
     assert item["track"] == 3
-    assert window._success_toast.messages == ['Playlist "Target"\ncreated successfully!']
+    assert window.notifications.events == [
+        ("success", 'Playlist "Target"\ncreated successfully!', {})
+    ]
 
 
 def test_add_current_to_playlist_reports_duplicate_when_existing_add_fails(monkeypatch):
@@ -89,8 +100,8 @@ def test_add_current_to_playlist_reports_duplicate_when_existing_add_fails(monke
     controller.add_current_to_playlist("video.mp4", "Video", {})
 
     assert window.playlist_widget.added[0][0] == "playlist-id"
-    assert window._success_toast.messages == [
-        'This media is already in\nplaylist "Target"'
+    assert window.notifications.events == [
+        ("warning", 'This media is already in\nplaylist "Target"', {})
     ]
 
 
@@ -106,8 +117,8 @@ def test_add_items_to_playlist_target_counts_added_items():
     )
 
     assert len(window.playlist_widget.added) == 3
-    assert window._success_toast.messages == [
-        '2 file(s) added\nto playlist "Target"'
+    assert window.notifications.events == [
+        ("success", '2 file(s) added\nto playlist "Target"', {})
     ]
 
 
