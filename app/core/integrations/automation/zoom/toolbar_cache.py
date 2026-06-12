@@ -37,7 +37,7 @@ class _ToolbarCache:
             element.window_text()
             rect = element.rectangle()
             return rect.width() > 0 and rect.height() > 0
-        except Exception:
+        except Exception:  # noqa: BLE001 - stale UIA element probe boundary
             return False
 
     def _reset_for_handle(self, handle: int) -> None:

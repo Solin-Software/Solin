@@ -286,7 +286,7 @@ def _read_label_from_local(data: bytes, ext: str) -> Optional[str]:
             return _mp4_read_title(data)
         if ext == ".mp3":
             return _mp3_read_title(data)
-    except Exception as exc:
+    except (_struct.error, IndexError, TypeError, UnicodeError, ValueError) as exc:
         log.debug("[writer] Falha ao ler metadado de título (%s): %s", ext, exc)
     return None
 
@@ -503,7 +503,7 @@ def _read_duration_ms_from_bytes(data: bytes, ext: str) -> int:
             return _mp4_duration_ms(data)
         if ext in (".webm", ".mkv"):
             return _webm_duration_ms(data)
-    except Exception:
+    except (_struct.error, IndexError, TypeError, ValueError):
         log.debug("Failed to read media duration from embedded bytes", exc_info=True)
     return 0
 
@@ -513,7 +513,11 @@ def _new_uuid() -> str:
     return str(uuid.uuid4())
 
 
-def write_jwlplaylist(
+class PlaylistWriteError(RuntimeError):
+    """The playlist could not be serialized to a JW Library archive."""
+
+
+def _write_jwlplaylist(
     playlist_name: str,
     items: list[dict],
     output_path: str | Path,
@@ -651,7 +655,7 @@ def write_jwlplaylist(
                     )
                     if dur_ms:
                         base_duration = dur_ms * 10_000
-                except Exception:
+                except OSError:
                     log.debug(
                         "Failed to read fallback duration from cached file %s",
                         local_cached_path,
@@ -848,6 +852,24 @@ def write_jwlplaylist(
             zf.writestr(zip_path, data)
 
 
+def write_jwlplaylist(
+    playlist_name: str,
+    items: list[dict],
+    output_path: str | Path,
+    fallback_lang_code: str = "E",
+) -> None:
+    """Write a JW Library playlist and normalize infrastructure failures."""
+    try:
+        _write_jwlplaylist(
+            playlist_name,
+            items,
+            output_path,
+            fallback_lang_code=fallback_lang_code,
+        )
+    except (OSError, sqlite3.Error, zipfile.LargeZipFile, _struct.error) as exc:
+        raise PlaylistWriteError(f"Could not write playlist to {output_path}") from exc
+
+
 # ── Thumbnail padrão (1×1 pixel PNG cinza) ────────────────────────────────────
 #
 # Incluído no ZIP como "default_thumbnail.png" — idêntico ao comportamento
@@ -949,14 +971,21 @@ def _serialize_db(con: sqlite3.Connection) -> bytes:
         return con.serialize()
     import tempfile
     fd, tmp = tempfile.mkstemp(suffix=".db", prefix="solin_export_")
+    dst: sqlite3.Connection | None = None
     try:
         os.close(fd)
         dst = sqlite3.connect(tmp)
         con.backup(dst)
         dst.close()
+        dst = None
         return Path(tmp).read_bytes()
     finally:
+        if dst is not None:
+            try:
+                dst.close()
+            except sqlite3.Error:
+                log.debug("Failed to close temporary export database", exc_info=True)
         try:
             os.unlink(tmp)
         except OSError:
-            pass
+            log.debug("Failed to remove temporary export database %s", tmp, exc_info=True)

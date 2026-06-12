@@ -576,7 +576,7 @@ def _run_ts_auto_translate(
         except json.JSONDecodeError as exc:
             msg = f"Gemini returned invalid JSON on batch {(i//BATCH_SIZE)+1}/{total_batches}: {exc}"
             return False, msg, all_results
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - external translation service boundary
             msg = f"Translation error on batch {(i//BATCH_SIZE)+1}/{total_batches}: {exc}"
             return False, msg, all_results
 
@@ -741,7 +741,7 @@ def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
 
     except subprocess.TimeoutExpired:
         return False, "Timeout (>60s). Tente rodar manualmente no terminal."
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         return False, f"Erro executando o comando: {exc}"
     finally:
         # 4. Exclui o arquivo de lista temporário
@@ -767,7 +767,7 @@ def run_lrelease(ts_path: str) -> tuple[bool, str]:
         return r.returncode == 0, out
     except subprocess.TimeoutExpired:
         return False, "Timeout (>60s)."
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         return False, f"Erro: {exc}"
 
 
@@ -880,6 +880,10 @@ class Entry:
         return sorted(src_vars - tr_vars)
 
 
+class TsFileSaveError(RuntimeError):
+    """The translation file could not be saved atomically."""
+
+
 class TsFile:
     def __init__(self, path: str):
         self.path  = path
@@ -947,16 +951,19 @@ class TsFile:
              re-serialização pelo ET não reintroduza tags inválidas).
           3. Faz rename atômico sobre o arquivo original.
         """
-        ET.indent(self._tree, space="  ")
         tmp_path = self.path + ".tmp"
         try:
+            ET.indent(self._tree, space="  ")
             self._tree.write(tmp_path, encoding="utf-8", xml_declaration=True)
             _sanitize_ts(tmp_path)
             os.replace(tmp_path, self.path)   # atômico em todos os SO modernos
-        except Exception:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            raise
+        except Exception as exc:  # noqa: BLE001 - atomic-save rollback boundary
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                log.warning("Could not remove temporary translation file %s", tmp_path, exc_info=True)
+            raise TsFileSaveError(f"Could not save translation file {self.path}") from exc
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -986,7 +993,7 @@ def load_languages() -> list[dict]:
                 "ts":        None,
                 "qm":        None,
             }
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
             log.debug("Could not read locale metadata from %s", jpath, exc_info=True)
 
     for code, info in langs.items():
@@ -1792,7 +1799,7 @@ class TranslationEditor(QMainWindow):
 
         try:
             self._tsfile = TsFile(ts)
-        except Exception as exc:
+        except (OSError, ET.ParseError, ValueError) as exc:
             self._set_status(f"Erro ao abrir {ts}: {exc}", error=True)
             return
 
@@ -1867,7 +1874,7 @@ class TranslationEditor(QMainWindow):
         v = dlg.values()
         try:
             save_lang_json(**v)
-        except Exception as exc:
+        except (OSError, UnicodeError, TypeError, ValueError) as exc:
             QMessageBox.critical(self, "Erro", f"Não foi possível criar o JSON:\n{exc}")
             return
 
@@ -1942,7 +1949,8 @@ class TranslationEditor(QMainWindow):
             self._tsfile.save()
             self._model.mark_clean()
             self._set_status(f"✓  Salvo: {os.path.basename(self._tsfile.path)}")
-        except Exception as exc:
+        except TsFileSaveError as exc:
+            log.error("Could not save translation file", exc_info=True)
             self._set_status(f"Erro ao salvar: {exc}", error=True)
 
     def _do_lrelease(self):
@@ -2036,7 +2044,7 @@ class TranslationEditor(QMainWindow):
 
         try:
             results: dict = json.loads(json_results)
-        except Exception:
+        except json.JSONDecodeError:
             self._set_status("Erro: não foi possível processar o resultado.", error=True)
             return
 

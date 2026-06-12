@@ -97,7 +97,7 @@ def _audio_info_from_bytes(data: bytes, ext: str) -> "tuple[bytes | None, str]":
             return _flac_info_from_bytes(data)
         if ext in (".ogg", ".opus"):
             return _ogg_info_from_bytes(data)
-    except Exception:
+    except (IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse audio metadata from bytes")
     return None, ""
 
@@ -109,7 +109,7 @@ def _audio_info_from_file(path: str) -> "tuple[bytes | None, str]":
         with open(path, "rb") as f:
             data = f.read(512 * 1024)
         return _audio_info_from_bytes(data, ext)
-    except Exception:
+    except (OSError, IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse audio metadata from file")
     return None, ""
 
@@ -210,10 +210,10 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                     else:
                         title = raw.decode("latin-1", errors="ignore")
                     title = title.strip("\x00").strip()
-                except Exception:
+                except (LookupError, UnicodeError, ValueError):
                     log_ignored_exception(__name__, "Could not decode ID3 title frame")
                     title = ""
-    except Exception:
+    except (IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse ID3 metadata")
     return cover, title
 
@@ -243,7 +243,7 @@ def _mp4_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                 if data[pos+4:pos+8] == b"data" and pos + 16 <= len(data):
                     raw = data[pos+16: pos+atom_sz]
                     title = raw.decode("utf-8", errors="ignore").strip("\x00").strip()
-    except Exception:
+    except (IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse MP4 metadata")
     return cover, title
 
@@ -289,7 +289,7 @@ def _flac_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
 
             if is_last:
                 break
-    except Exception:
+    except (IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse FLAC metadata")
     return cover, title
 
@@ -324,7 +324,7 @@ def _ogg_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
             end = data.find(b"\x00", idx)
             raw = data[idx+6: end if end != -1 else idx + 256]
             title = raw.decode("utf-8", errors="ignore").strip()
-    except Exception:
+    except (IndexError, TypeError, UnicodeError, ValueError):
         log_ignored_exception(__name__, "Could not parse OGG metadata")
     return cover, title
 
@@ -361,7 +361,7 @@ class _ThreadedRemoteInfoExtractor(QObject):
     def _run(self) -> None:
         try:
             image_bytes, title = self._fetch_info()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - media metadata worker boundary
             log.debug("%s failed for %s: %s", type(self).__name__, self._url, exc)
             self._emit_worker_failure()
             return
@@ -740,7 +740,7 @@ class RemotePageMetaExtractor(_ThreadedRemoteInfoExtractor):
             )
             with urlopen(req, timeout=self._TIMEOUT_S) as resp:
                 return resp.read(self._MAX_IMG_BYTES)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             log.debug("Remote og:image fetch failed for %s: %s", img_url, exc)
             return None
 
@@ -899,7 +899,7 @@ class MediaInfoQueue(QObject):
                 data = json.load(f)
                 title = data.get("title", "")
                 has_thumb = data.get("has_thumb", True)
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError) as exc:
             log.debug("Could not read media info cache %s: %s", meta_path, exc)
             
         px = QPixmap()
@@ -917,7 +917,7 @@ class MediaInfoQueue(QObject):
                 pixmap.save(img_path, "JPG", quality=90)
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump({"title": title, "has_thumb": has_thumb}, f, ensure_ascii=False)
-        except Exception as exc:
+        except (OSError, UnicodeError, TypeError, ValueError) as exc:
             log.debug("Could not save media info cache for %s: %s", url, exc)
 
     # ── API pública ───────────────────────────────────────────────────────────

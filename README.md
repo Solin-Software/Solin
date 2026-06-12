@@ -30,11 +30,10 @@ uv pip install -r requirements-dev.txt
 ```
 
 `pyproject.toml` centralizes pytest, Ruff, and Pyright configuration. Ruff
-enforces Pyflakes, bugbear checks, and silent `try`/`except`/`pass` prevention.
-The exception-policy test also keeps a per-file broad-exception baseline: new
-`except Exception` handlers fail CI, while intentional runtime boundaries must
-use a locally justified `# noqa: BLE001`. Updating the baseline is only valid
-when its counts decrease.
+enforces Pyflakes, bugbear checks, silent `try`/`except`/`pass` prevention, and
+`BLE001` globally. Broad catches are allowed only at intentional runtime
+boundaries and must use a locally justified `# noqa: BLE001 - ...`; the
+exception-policy test independently enforces that contract.
 Pyright currently covers core foundation, timer, JW, meetings, and playlist
 domains; controllers/widgets are the next incremental typing frontier because
 they rely heavily on dynamic Qt attributes and mixins.

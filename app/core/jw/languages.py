@@ -93,8 +93,8 @@ class _FetchWorker(QRunnable):
             ]
             self.signals.succeeded.emit(filtered)
 
-        except Exception as exc:
-            log.warning("[JWLanguageService] Falha no fetch: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - QRunnable reports all failures via signal
+            log.exception("[JWLanguageService] Fetch worker failed")
             self.signals.failed.emit(str(exc))
 
 
@@ -270,7 +270,7 @@ class JWLanguageService(QObject):
                 data = json.load(f)
             age_days = (time.time() - data.get("_fetched_at", 0)) / 86400
             return age_days < _CACHE_TTL_DAYS and bool(data.get("languages"))
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
             return False
 
     def _load_cache(self) -> Optional[list]:
@@ -278,7 +278,7 @@ class JWLanguageService(QObject):
             with open(_cache_file(), encoding="utf-8") as f:
                 data = json.load(f)
             return data.get("languages") or None
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError):
             return None
 
     def _save_cache(self, languages: list) -> None:
@@ -291,5 +291,5 @@ class JWLanguageService(QObject):
                     ensure_ascii=False,
                     indent=2,
                 )
-        except Exception as exc:
+        except (OSError, TypeError, ValueError) as exc:
             log.warning("[JWLanguageService] Falha ao salvar cache: %s", exc)

@@ -156,7 +156,7 @@ def find_qt_qml_runtime_dir() -> Path:
             candidates.append(Path(qml_imports_path))
         if prefix_path:
             candidates.append(Path(prefix_path) / "qml")
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt runtime metadata boundary
         log.debug("Could not read QLibraryInfo QML import paths", exc_info=True)
 
     seen = set()
@@ -196,7 +196,7 @@ def qt_library_dir_candidates() -> list[Path]:
             candidates.append(Path(libraries_path))
         if prefix_path:
             candidates.append(Path(prefix_path) / "lib")
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt runtime metadata boundary
         log.debug("Could not read QLibraryInfo library paths", exc_info=True)
 
     seen = set()

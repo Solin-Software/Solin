@@ -658,7 +658,7 @@ class CacheMediaWidget(QWidget):
         for path in paths:
             try:
                 MediaCacheManager.instance().remove_cached_file(path)
-            except Exception:
+            except OSError:
                 log_ignored_exception(__name__, "Could not remove cached media file")
         self._scan()
 

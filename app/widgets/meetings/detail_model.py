@@ -411,11 +411,11 @@ class MeetingDetailModel(QAbstractListModel):
     def cleanup(self):
         try:
             self._queue.info_ready.disconnect(self._on_thumb_ready)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting thumbnail queue")
         try:
             self._svc.video_resolved.disconnect(self._on_video_resolved)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting video resolver")
         try:
             from ...core.media.cache import MediaCacheManager
@@ -423,7 +423,7 @@ class MeetingDetailModel(QAbstractListModel):
             MediaCacheManager.instance().cache_removed.disconnect(self._on_cache_removed)
             MediaCacheManager.instance().prefetch_progress.disconnect(self._on_prefetch_progress)
             MediaCacheManager.instance().prefetch_error.disconnect(self._on_prefetch_error)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting cache signals")
 
 

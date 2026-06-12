@@ -28,7 +28,7 @@ def _save_thumb_to_disk(item_id: str, pixmap: QPixmap) -> None:
     try:
         os.makedirs(_paths.THUMB_CACHE_DIR, exist_ok=True)
         pixmap.save(_thumb_cache_path(item_id), "JPEG", THUMB_JPEG_QUALITY)
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt image codec boundary
         log_ignored_exception(__name__, "Could not save playlist thumbnail")
 
 

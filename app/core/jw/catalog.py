@@ -75,6 +75,14 @@ class _FetchCancelled(Exception):
     """Internal sentinel used to stop cooperative background fetches."""
 
 
+_EXPECTED_FETCH_ERRORS = (
+    OSError,
+    UnicodeError,
+    ValueError,
+    urllib.error.URLError,
+)
+
+
 class _CancelToken:
     """Small thread-safe cancellation token shared with QRunnable workers."""
 
@@ -307,9 +315,9 @@ def fetch_jw_video_catalog(
             _save_catalog_snapshot(lang, sorted_items, completed, categories, fetched_at)
             if progress_callback:
                 progress_callback(sorted_items, idx, total)
-        except Exception as exc:
-            if isinstance(exc, _FetchCancelled):
-                raise
+        except _FetchCancelled:
+            raise
+        except _EXPECTED_FETCH_ERRORS as exc:
             log.debug("[JWMediaCatalog] Skipping category %s: %s", category, exc)
             # Keep going. A single removed/empty category should not break the
             # whole catalog; this also handles transient 404s gracefully.
@@ -346,9 +354,9 @@ def _try_refresh_catalog_from_latest(
             latest_raw,
             JWMediaQuery(language=language, category=_LATEST_CATEGORY_KEY),
         )
-    except Exception as exc:
-        if isinstance(exc, _FetchCancelled):
-            raise
+    except _FetchCancelled:
+        raise
+    except _EXPECTED_FETCH_ERRORS as exc:
         log.debug("[JWMediaCatalog] Latest delta refresh unavailable: %s", exc)
         return None
 
@@ -437,7 +445,7 @@ def ensure_thumbnail_cached(thumbnail_url: str, *, force: bool = False) -> str:
 
         os.replace(temp_path, final_path)
         return final_path
-    except Exception as exc:
+    except _EXPECTED_FETCH_ERRORS as exc:
         try:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -503,8 +511,8 @@ class _FetchWorker(QRunnable):
             )
         except _FetchCancelled:
             return
-        except Exception as exc:
-            log.warning("[JWMediaCatalog] Fetch failed: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - QRunnable reports failures via signal
+            log.exception("[JWMediaCatalog] Fetch worker failed")
             if not self.cancel_token.is_cancelled():
                 self.signals.failed.emit(self.request_id, str(exc))
 
@@ -562,8 +570,8 @@ class _CatalogWorker(QRunnable):
             self.signals.succeeded.emit(self.request_id, emit_items, fetched_at, from_cache)
         except _FetchCancelled:
             return
-        except Exception as exc:
-            log.warning("[JWMediaCatalog] Catalog fetch failed: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - QRunnable reports failures via signal
+            log.exception("[JWMediaCatalog] Catalog worker failed")
             if not self.cancel_token.is_cancelled():
                 self.signals.failed.emit(self.request_id, str(exc))
 
@@ -826,13 +834,13 @@ def _discover_video_categories(
                 raise_if_cancelled()
                 for second in _subcategory_keys(child):
                     add_category(second)
-            except Exception as exc:
-                if isinstance(exc, _FetchCancelled):
-                    raise
+            except _FetchCancelled:
+                raise
+            except _EXPECTED_FETCH_ERRORS as exc:
                 log.debug("[JWMediaCatalog] Could not inspect category %s: %s", first, exc)
-    except Exception as exc:
-        if isinstance(exc, _FetchCancelled):
-            raise
+    except _FetchCancelled:
+        raise
+    except _EXPECTED_FETCH_ERRORS as exc:
         log.debug("[JWMediaCatalog] Could not inspect VideoOnDemand: %s", exc)
 
     return categories
@@ -861,7 +869,7 @@ def _fetch_media_item(
         )
         try:
             data, _, _ = _fetch_json_cached(url, "mediator_item", force=False)
-        except Exception:
+        except _EXPECTED_FETCH_ERRORS:
             continue
         media = data.get("media") if isinstance(data, dict) else None
         if isinstance(media, list) and media:
@@ -1337,7 +1345,13 @@ def _load_json_cache(path: str, *, ignore_ttl: bool = False) -> dict[str, Any] |
         if not isinstance(data, dict):
             return None
         return {"_fetched_at": payload.get("_fetched_at", 0), "data": data}
-    except Exception:
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        TypeError,
+        ValueError,
+    ):
         return None
 
 

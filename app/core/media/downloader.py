@@ -268,7 +268,8 @@ class SongDownloader(QObject):
                 if not persist:
                     _safe_remove(final_path)
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - background download job boundary
+            log.exception("Media download job %s failed", job.job_id)
             if not job.cancel_event.is_set():
                 try:
                     self._worker_error.emit(job.job_id, str(exc))

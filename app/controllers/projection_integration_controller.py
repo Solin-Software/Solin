@@ -226,5 +226,5 @@ class ProjectionIntegrationController:
                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
             )
             user32.SetForegroundWindow(hwnd)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Win32 foreground API boundary
             log.debug("Failed to refocus projection window after auto-share", exc_info=True)

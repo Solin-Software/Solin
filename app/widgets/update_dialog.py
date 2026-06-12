@@ -425,7 +425,7 @@ class UpdateDialog(QDialog):
                 subprocess.Popen(args, creationflags=DETACHED_PROCESS, close_fds=True)
             else:
                 subprocess.Popen(args, close_fds=True)
-        except Exception as exc:
+        except OSError as exc:
             log.error("[Update] failed to launch patch: %s", exc)
             self._status_label.setStyleSheet(f"color:{_C['red']}; background:transparent;")
             self._status_label.setText(self.tr("Failed to launch installer."))

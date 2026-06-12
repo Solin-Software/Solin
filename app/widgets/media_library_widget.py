@@ -204,7 +204,7 @@ class MediaLibraryModel(QAbstractListModel):
             MediaCacheManager.instance().prefetch_error.disconnect(self._on_prefetch_error)
             MediaCacheManager.instance().prefetch_queued.disconnect(self._on_prefetch_queued)
             MediaCacheManager.instance().prefetch_dequeued.disconnect(self._on_prefetch_dequeued)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media cache prefetch signals")
 
     def _cloud_visible(self, item: dict) -> bool:
@@ -614,7 +614,7 @@ class MediaLibraryWidget(QWidget):
                 )
                 pub_name = ""
                 self._loaded_signal.emit(items, pub_name, fetched_at, from_cache)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - media catalog worker boundary
                 self._error_signal.emit(str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -997,7 +997,7 @@ class MediaLibraryWidget(QWidget):
         self._disposed = True
         try:
             self.model.cleanup()
-        except Exception:
+        except Exception:  # noqa: BLE001 - widget cleanup boundary
             log_ignored_exception(__name__, "Could not cleanup media library model")
         if self._songs_store is not None:
             try:
@@ -1006,13 +1006,13 @@ class MediaLibraryWidget(QWidget):
                 self._songs_store.loading_changed.disconnect(
                     self._on_song_store_loading_changed
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
                 log_ignored_exception(__name__, "Could not disconnect JW songs store signals")
         try:
             svc = getattr(self.lang, "jw_lang_service", None)
             if svc is not None:
                 svc.media_language_changed.disconnect(self._on_media_language_changed)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media language signal")
         try:
             mgr = MediaCacheManager.instance()
@@ -1022,12 +1022,12 @@ class MediaLibraryWidget(QWidget):
             mgr.prefetch_dequeued.disconnect(self._on_cache_state_changed)
             mgr.prefetch_batch_changed.disconnect(self._on_prefetch_batch_changed)
             mgr.prefetch_batch_error.disconnect(self._on_prefetch_batch_error)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media cache batch signals")
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 log_ignored_exception(__name__, "Could not remove media library event filter")
             self.qml_widget.setSource(QUrl())
 

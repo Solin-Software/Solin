@@ -172,7 +172,7 @@ class NotificationWorker(QObject):
             )
             resp.raise_for_status()
             payload = resp.json()
-        except Exception as exc:
+        except (requests.RequestException, ValueError) as exc:
             log.debug("[Notifications] fetch failed: %s", exc)
             self.fetch_failed.emit(str(exc))
             return

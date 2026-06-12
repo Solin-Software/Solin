@@ -80,7 +80,7 @@ class WindowStateController:
                 import ctypes
                 hwnd = int(window.winId())
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Win32 foreground API boundary
                 log.debug("Failed to force main window foreground on Windows", exc_info=True)
 
     @staticmethod

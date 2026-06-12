@@ -193,13 +193,10 @@ def convert_pdf_sync(
         marker.touch()
         return paths
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - rendering API normalizes Qt/native failures
         # Remove cache parcial para evitar estado corrompido
         import shutil
-        try:
-            shutil.rmtree(str(cache_dir), ignore_errors=True)
-        except Exception:
-            log.debug("Failed to remove partial PDF cache %s", cache_dir, exc_info=True)
+        shutil.rmtree(str(cache_dir), ignore_errors=True)
         raise RuntimeError(f"Erro ao converter PDF: {exc}") from exc
 
 
@@ -235,7 +232,8 @@ class PdfConvertThread(QThread):
             self.pages_ready.emit(paths, stem)
         except RuntimeError as exc:
             self.conversion_failed.emit(str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - QThread reports unexpected failures via signal
+            log.exception("PDF conversion worker failed")
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
 
@@ -267,7 +265,4 @@ def flush_pdf_pages_dir(referenced_paths: set[str]) -> None:
             continue
         # Órfão — remove
         import shutil
-        try:
-            shutil.rmtree(str(sub), ignore_errors=True)
-        except Exception:
-            log.debug("Failed to remove orphan PDF cache directory %s", sub, exc_info=True)
+        shutil.rmtree(str(sub), ignore_errors=True)

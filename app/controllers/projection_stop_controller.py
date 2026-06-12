@@ -46,7 +46,7 @@ class ProjectionStopController:
         if tolerate_navigation_errors:
             try:
                 window._navigation.stop_browser_tab_projection()
-            except Exception:
+            except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
                 log.debug("Failed to stop browser tab projection during projection stop", exc_info=True)
         else:
             window._navigation.stop_browser_tab_projection()

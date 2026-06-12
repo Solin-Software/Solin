@@ -294,7 +294,7 @@ class _ThumbWorker(QRunnable):
         try:
             local_path = ensure_thumbnail_cached(self.thumbnail_url)
             self.signals.ready.emit(self.item_id, local_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - thumbnail worker boundary
             log.debug(
                 "[CatalogBridge] Thumbnail download failed for %s",
                 self.thumbnail_url,

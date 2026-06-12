@@ -36,7 +36,7 @@ def _exclude_from_aero_peek(hwnd: int) -> None:
             ctypes.byref(value),
             ctypes.c_uint(ctypes.sizeof(value)),
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - Win32 window-manager API boundary
         log_ignored_exception(__name__, "Could not exclude projection window from Aero Peek")
 
 from ..widgets.circular_timer import CircularTimerWidget
@@ -1246,7 +1246,7 @@ class FloatingPreviewWindow(BaseProjectionView):
                 global_pos = obj.mapToGlobal(event.position().toPoint())
                 local_pos  = self.mapFromGlobal(global_pos)
                 self.setCursor(self._cursor_for_edges(self._edge_hits(local_pos)))
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter boundary
                 log_ignored_exception(__name__, "Could not update projection resize cursor")
         return False  # do NOT consume — let the event propagate normally
     

@@ -63,7 +63,7 @@ class _SingleInstanceServer:
         self._app._solin_app_ipc_server_active = True
         try:
             self._app.aboutToQuit.connect(self.close)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt application lifecycle boundary
             _log_ignored_exception("Could not register IPC cleanup hook", warning=True)
         return True
 
@@ -71,7 +71,7 @@ class _SingleInstanceServer:
         try:
             if self._server is not None:
                 self._server.close()
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt IPC cleanup boundary
             _log_ignored_exception("Could not close single-instance IPC server", warning=True)
         QLocalServer.removeServer(IPC_SERVER_NAME)
         self._app._solin_app_ipc_server_active = False
@@ -141,7 +141,7 @@ class _SingleInstanceServer:
             try:
                 import ctypes
                 ctypes.windll.user32.SetForegroundWindow(int(window.winId()))
-            except Exception:
+            except Exception:  # noqa: BLE001 - Win32 foreground API boundary
                 _log_ignored_exception("Could not force foreground window on Windows")
 
 
@@ -151,7 +151,7 @@ def _grant_focus_to_first_instance():
             import ctypes
             ASFW_ANY = -1
             ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Win32 foreground API boundary
             _log_ignored_exception("Could not grant foreground permission to first instance")
 
 
@@ -178,7 +178,7 @@ def _stop_process_ipc(app, window=None):
     try:
         if window is not None and hasattr(window, "_ipc_server"):
             window._ipc_server.close()
-    except Exception:
+    except Exception:  # noqa: BLE001 - legacy Qt IPC cleanup boundary
         _log_ignored_exception("Could not close legacy window IPC server", warning=True)
     QLocalServer.removeServer(IPC_SERVER_NAME)
     return None
@@ -189,7 +189,7 @@ def _restart_process_ipc(app, server, window=None) -> None:
     if server is not None and hasattr(server, "start"):
         try:
             restarted = bool(server.start())
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt IPC lifecycle boundary
             _log_ignored_exception("Could not restart app-owned IPC server", warning=True)
             restarted = False
     if restarted:
@@ -198,7 +198,7 @@ def _restart_process_ipc(app, server, window=None) -> None:
     try:
         if window is not None and hasattr(window, "_start_ipc_server"):
             window._start_ipc_server()
-    except Exception:
+    except Exception:  # noqa: BLE001 - legacy Qt IPC lifecycle boundary
         _log_ignored_exception("Could not restart legacy window IPC server", warning=True)
 
 
@@ -270,14 +270,14 @@ def _relaunch_with_profile(app, profile_id: str, window) -> None:
                 window.setEnabled(True)
                 _restart_process_ipc(app, ipc_server, window)
                 window.show()
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt relaunch recovery boundary
             _log_ignored_exception("Could not restore window after profile relaunch failure", warning=True)
         return
 
     try:
         if window is not None:
             window.close()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt window lifecycle boundary
         _log_ignored_exception("Could not close old window after profile relaunch")
     app.processEvents()
     app.quit()
@@ -300,7 +300,7 @@ def _relaunch_to_profile_creator(app, window) -> None:
             gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
             gs.setValue(SettingsKey.BOOTSTRAP_LANGUAGE, current_lang)
             gs.sync()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt settings adapter boundary
         _log_ignored_exception("Could not persist bootstrap language for profile creation")
 
     ipc_server = _stop_process_ipc(app, window)
@@ -319,14 +319,14 @@ def _relaunch_to_profile_creator(app, window) -> None:
                 window.setEnabled(True)
                 _restart_process_ipc(app, ipc_server, window)
                 window.show()
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt relaunch recovery boundary
             _log_ignored_exception("Could not restore window after profile-creator relaunch failure", warning=True)
         return
 
     try:
         if window is not None:
             window.close()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt window lifecycle boundary
         _log_ignored_exception("Could not close old window after profile-creator relaunch")
     app.processEvents()
     app.quit()
@@ -565,7 +565,7 @@ def _wire_profile_switch(app, lang_manager, file_args, window_ref):
             # Limpa o event filter e destroi o overlay silenciosamente
             try:
                 old_win.removeEventFilter(overlay)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 _log_ignored_exception("Could not remove profile switch event filter on cancel")
             overlay.deleteLater()
 
@@ -573,7 +573,7 @@ def _wire_profile_switch(app, lang_manager, file_args, window_ref):
             # ── Passo 1: fecha o overlay ──────────────────────────────────
             try:
                 old_win.removeEventFilter(overlay)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 _log_ignored_exception("Could not remove profile switch event filter before relaunch")
             overlay.deleteLater()
 
@@ -583,7 +583,7 @@ def _wire_profile_switch(app, lang_manager, file_args, window_ref):
         def _on_create_profile_requested():
             try:
                 old_win.removeEventFilter(overlay)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 _log_ignored_exception("Could not remove profile switch event filter before profile creation")
             overlay.deleteLater()
 

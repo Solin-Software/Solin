@@ -86,6 +86,7 @@ def read_jwpub_for_playlist(
         stem  : filename stem (e.g. "mwb_T_202603") for display purposes
     """
     stem = Path(jwpub_path).stem
+    temporary_dir: tempfile.TemporaryDirectory | None = None
 
     # ── Extract inner zip ──────────────────────────────────────────────────
     try:
@@ -97,14 +98,30 @@ def read_jwpub_for_playlist(
             db_names = [n for n in inner.namelist() if n.endswith(".db")]
             if not db_names:
                 raise ValueError("No SQLite database found inside .jwpub")
-            tmp_dir = tempfile.mkdtemp(prefix="solin_jwpub_")
+            if dest_images_dir:
+                temporary_dir = tempfile.TemporaryDirectory(
+                    prefix="solin_jwpub_",
+                    ignore_cleanup_errors=True,
+                )
+                tmp_dir = temporary_dir.name
+            else:
+                tmp_dir = tempfile.mkdtemp(prefix="solin_jwpub_")
             inner.extractall(tmp_dir)
-    except Exception as exc:
+    except (
+        EOFError,
+        NotImplementedError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        zipfile.BadZipFile,
+        zipfile.LargeZipFile,
+    ) as exc:
         log.error("jwpub_reader: cannot extract %s: %s", jwpub_path, exc)
         raise
 
     # ── Read database ──────────────────────────────────────────────────────
     db_path = os.path.join(tmp_dir, os.path.basename(db_names[0]))
+    conn: sqlite3.Connection | None = None
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -129,10 +146,15 @@ def read_jwpub_for_playlist(
                    )
             ORDER  BY m.MultimediaId
         """).fetchall()
-        conn.close()
-    except Exception as exc:
+    except sqlite3.Error as exc:
         log.error("jwpub_reader: cannot read db %s: %s", db_path, exc)
         raise
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                log.debug("jwpub_reader: could not close db %s", db_path, exc_info=True)
 
     # ── Persistent image destination ────────────────────────────────────────
     if dest_images_dir:
@@ -165,11 +187,7 @@ def read_jwpub_for_playlist(
                 ext      = Path(fp).suffix or ".jpg"
                 dst_name = f"{uuid.uuid4().hex}{ext}"
                 dst      = os.path.join(img_dest, dst_name)
-                try:
-                    shutil.copy2(src, dst)
-                except OSError as exc:
-                    log.warning("jwpub_reader: copy image failed: %s", exc)
-                    dst = src   # fall back to tmp path
+                shutil.copy2(src, dst)
             else:
                 dst = src
 
@@ -215,8 +233,12 @@ def read_jwpub_for_playlist(
                                        vr["meps"], lang)
                 url   = api.get("url", "")
                 title = api.get("title", "") or vr["label"] or vr["sym"] or stem
-            except Exception as exc:
-                log.debug("jwpub_reader: resolve failed sym=%s: %s", vr["sym"], exc)
+            except Exception:  # noqa: BLE001 - per-item external resolver isolation
+                log.debug(
+                    "jwpub_reader: resolve failed sym=%s",
+                    vr["sym"],
+                    exc_info=True,
+                )
                 url   = ""
                 title = vr["label"] or vr["sym"] or stem
 
@@ -245,7 +267,10 @@ def read_jwpub_for_playlist(
                 "meps_language": 0,
             })
 
-    return image_items + video_items, stem
+    result = image_items + video_items, stem
+    if temporary_dir is not None:
+        temporary_dir.cleanup()
+    return result
 
 
 # ── Async QThread API (use this from Qt widgets) ───────────────────────────────
@@ -289,7 +314,8 @@ class JwpubImportThread:
                         resolve_urls=True,
                     )
                     self.items_ready.emit(items, stem)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - QThread error-delivery boundary
+                    log.exception("JWPUB import worker failed")
                     self.failed.emit(str(exc))
 
         return _Thread(jwpub_path, lang, dest_images_dir, parent)

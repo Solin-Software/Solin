@@ -120,7 +120,7 @@ class PlaylistImportController:
                 ),
             )
             return []
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             QMessageBox.warning(
                 self._window,
                 self._window.tr("Unsupported file"),

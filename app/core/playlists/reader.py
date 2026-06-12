@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import urllib.error
@@ -58,7 +59,6 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-import os
 
 from app.core.network.http import urlopen as _urlopen
 from app.core.foundation.constants import (
@@ -132,6 +132,10 @@ class _Location:
 
 # ── Parser principal ──────────────────────────────────────────────────────────
 
+class PlaylistReadError(ValueError):
+    """A playlist archive exists but its internal data cannot be read."""
+
+
 class JWLPlaylistReader:
     """Lê um .jwlplaylist e retorna a estrutura de playlist normalizada."""
 
@@ -147,10 +151,21 @@ class JWLPlaylistReader:
         if not self._path.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {self._path}")
 
-        with zipfile.ZipFile(self._path, "r") as zf:
-            self._zip = zf
-            self._names_in_zip = set(zf.namelist())
-            return self._parse_zip()
+        try:
+            with zipfile.ZipFile(self._path, "r") as zf:
+                self._zip = zf
+                self._names_in_zip = set(zf.namelist())
+                return self._parse_zip()
+        except zipfile.BadZipFile:
+            raise
+        except (
+            EOFError,
+            KeyError,
+            NotImplementedError,
+            RuntimeError,
+            zipfile.LargeZipFile,
+        ) as exc:
+            raise PlaylistReadError("Invalid or unreadable playlist archive") from exc
 
     # ── Internos ──────────────────────────────────────────────────────────────
 
@@ -182,6 +197,8 @@ class JWLPlaylistReader:
         import tempfile as _tmp
 
         fd, tmp_path = _tmp.mkstemp(suffix=".db", prefix="solin_jwl_")
+        src: sqlite3.Connection | None = None
+        mem: sqlite3.Connection | None = None
         try:
             os.write(fd, db_bytes)
             os.close(fd)
@@ -190,23 +207,43 @@ class JWLPlaylistReader:
             src = sqlite3.connect(tmp_path)
             mem = sqlite3.connect(":memory:")
             src.backup(mem)
-            src.close()
-        except Exception as e:
-            log.error("Falha ao carregar userData.db: %s", e)
+        except (OSError, sqlite3.Error) as exc:
+            log.error("Falha ao carregar userData.db: %s", exc)
             try:
                 if fd >= 0:
                     os.close(fd)
             except OSError:
-                pass
-            raise
+                log.debug("Could not close temporary playlist descriptor", exc_info=True)
+            if mem is not None:
+                try:
+                    mem.close()
+                except sqlite3.Error:
+                    log.debug("Could not close in-memory playlist database", exc_info=True)
+            raise PlaylistReadError("Invalid or unreadable userData.db") from exc
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            if src is not None:
+                try:
+                    src.close()
+                except sqlite3.Error:
+                    log.debug("Could not close source playlist database", exc_info=True)
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError:
+                log.warning("Could not remove temporary playlist database %s", tmp_path, exc_info=True)
 
+        if mem is None:
+            raise PlaylistReadError("Could not initialize playlist database")
         mem.row_factory = sqlite3.Row
         try:
             return self._extract(mem)
+        except sqlite3.Error as exc:
+            log.error("Falha ao consultar userData.db: %s", exc)
+            raise PlaylistReadError("Invalid playlist database schema") from exc
         finally:
-            mem.close()
+            try:
+                mem.close()
+            except sqlite3.Error:
+                log.debug("Could not close in-memory playlist database", exc_info=True)
 
     def _extract(self, con: sqlite3.Connection) -> dict:
         # ── Nome da playlist ──────────────────────────────────────────────────

@@ -40,7 +40,7 @@ def is_url_cached(url: str) -> bool:
     try:
         path = cached_path_for(url)
         return os.path.isfile(path) and os.path.isfile(path + ".done")
-    except Exception:
+    except (OSError, ValueError):
         return False
 
 

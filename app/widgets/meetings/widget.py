@@ -334,7 +334,7 @@ class StudyDetailView(QWidget):
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 log_ignored_exception(__name__, "Could not remove meeting overview event filter")
             self.qml_widget.setSource(QUrl())
 
@@ -559,7 +559,7 @@ class _MemorialDetailView(QWidget):
         if hasattr(self, "qml_widget"):
             try:
                 self.qml_widget.removeEventFilter(self)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 log_ignored_exception(__name__, "Could not remove meeting detail event filter")
             self.qml_widget.setSource(QUrl())
 
@@ -1011,9 +1011,9 @@ class MeetingsWidget(QWidget):
         self._clear_details()
         try:
             self._service.shutdown(wait_ms=100, delete_when_stopped=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 - background service shutdown boundary
             log_ignored_exception(__name__, "Could not shut down meeting service")
         try:
             self._memorial_svc.shutdown(wait_ms=100, delete_when_stopped=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 - background service shutdown boundary
             log_ignored_exception(__name__, "Could not shut down memorial service")
