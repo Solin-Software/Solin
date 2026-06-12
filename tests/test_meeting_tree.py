@@ -5,6 +5,7 @@ import unittest
 import zipfile
 import hashlib
 import sqlite3
+import copy
 from datetime import date
 from pathlib import Path
 
@@ -601,6 +602,182 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
                 MeetingTreeController._url_for_node(controller, node),
                 missing_path,
             )
+
+
+class MeetingTreeControllerEditingTests(unittest.TestCase):
+    class _Signal:
+        def __init__(self):
+            self.calls = []
+
+        def emit(self, *args):
+            self.calls.append(args)
+
+    def controller(self, nodes):
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._nodes = nodes
+        controller.saved = 0
+        controller.count_updates = 0
+        controller.chromeChanged = self._Signal()
+        controller._save = lambda: setattr(
+            controller,
+            "saved",
+            controller.saved + 1,
+        )
+        controller._emit_section_counts = lambda: setattr(
+            controller,
+            "count_updates",
+            controller.count_updates + 1,
+        )
+        controller._parse_list_id = lambda list_id: (
+            MeetingTreeController._parse_list_id(controller, list_id)
+        )
+        controller._find_node = lambda node_id, nodes=None: (
+            MeetingTreeController._find_node(controller, node_id, nodes)
+        )
+        controller._children_for_target = lambda kind, node_id: (
+            MeetingTreeController._children_for_target(controller, kind, node_id)
+        )
+        controller._pop_node_with_parent = lambda node_id: (
+            MeetingTreeController._pop_node_with_parent(controller, node_id)
+        )
+        controller._contains_node = lambda node, target_id: (
+            MeetingTreeController._contains_node(controller, node, target_id)
+        )
+        controller._insert_existing_node = (
+            lambda node, kind, target_id, index: (
+                MeetingTreeController._insert_existing_node(
+                    controller,
+                    node,
+                    kind,
+                    target_id,
+                    index,
+                )
+            )
+        )
+        controller.canDrop = lambda node_id, node_type, target: (
+            MeetingTreeController.canDrop(
+                controller,
+                node_id,
+                node_type,
+                target,
+            )
+        )
+        return controller
+
+    def test_placement_playlist_ref_flattens_nested_structure(self):
+        controller = self.controller([
+            {
+                "id": "section",
+                "type": "section",
+                "title": "Section",
+                "color_hue": 210,
+                "children": [
+                    {
+                        "id": "media-1",
+                        "type": "media",
+                        "children": [],
+                    },
+                    {
+                        "id": "subsection",
+                        "type": "subsection",
+                        "title": "Subsection",
+                        "color_hue": 130,
+                        "children": [
+                            {
+                                "id": "media-2",
+                                "type": "media",
+                                "children": [],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+
+        result = MeetingTreeController.placement_playlist_ref(controller)
+
+        self.assertEqual(
+            result["items"],
+            [{"id": "media-1"}, {"id": "media-2"}],
+        )
+        self.assertEqual(
+            result["sections"],
+            [
+                {
+                    "id": "section",
+                    "name": "Section",
+                    "parent_id": None,
+                    "color_hue": 210,
+                },
+                {
+                    "id": "subsection",
+                    "name": "Subsection",
+                    "parent_id": "section",
+                    "color_hue": 130,
+                },
+            ],
+        )
+
+    def test_move_node_reparents_media_and_emits_persistence_updates(self):
+        nodes = [
+            {"id": "media", "type": "media", "children": []},
+            {
+                "id": "section",
+                "type": "section",
+                "children": [],
+            },
+        ]
+        controller = self.controller(nodes)
+
+        moved = MeetingTreeController.moveNode(
+            controller,
+            "media",
+            "section:section",
+            0,
+        )
+
+        self.assertTrue(moved)
+        self.assertEqual([node["id"] for node in controller._nodes], ["section"])
+        self.assertEqual(
+            controller._nodes[0]["children"][0]["id"],
+            "media",
+        )
+        self.assertEqual(controller.saved, 1)
+        self.assertEqual(controller.count_updates, 1)
+        self.assertEqual(controller.chromeChanged.calls, [()])
+
+    def test_invalid_move_into_descendant_preserves_tree(self):
+        nodes = [
+            {
+                "id": "section",
+                "type": "section",
+                "children": [
+                    {
+                        "id": "subsection",
+                        "type": "subsection",
+                        "children": [],
+                    },
+                ],
+            },
+            {"id": "media", "type": "media", "children": []},
+        ]
+        before = copy.deepcopy(nodes)
+        controller = self.controller(nodes)
+
+        moved = MeetingTreeController.moveNode(
+            controller,
+            "section",
+            "subsection:subsection",
+            0,
+        )
+
+        self.assertFalse(moved)
+        self.assertEqual(controller._nodes, before)
+        self.assertEqual(controller.saved, 0)
+        self.assertEqual(controller.count_updates, 0)
 
 
 class _FakeJwpubCache:
