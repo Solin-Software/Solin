@@ -983,6 +983,61 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
 
 class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
+    class _Signal:
+        def __init__(self):
+            self.calls = []
+
+        def emit(self, *args):
+            self.calls.append(args)
+
+    def _wire_remove_item_controller(self, controller) -> None:
+        controller._find_node = (
+            lambda node_id, nodes=None: MeetingTreeController._find_node(
+                controller,
+                node_id,
+                nodes,
+            )
+        )
+        controller._url_for_node = (
+            lambda node: MeetingTreeController._url_for_node(controller, node)
+        )
+        controller._path_is_inside = (
+            lambda path, folder: MeetingTreeController._path_is_inside(
+                controller,
+                path,
+                folder,
+            )
+        )
+        controller._same_local_source = (
+            lambda a, b: MeetingTreeController._same_local_source(controller, a, b)
+        )
+        controller._remember_deleted_sources = (
+            lambda node, *, include_media: MeetingTreeController._remember_deleted_sources(
+                controller,
+                node,
+                include_media=include_media,
+            )
+        )
+        controller._replace_node = (
+            lambda node_id, replacement: MeetingTreeController._replace_node(
+                controller,
+                node_id,
+                replacement,
+            )
+        )
+        controller._cleanup_meeting_folder_import_for_removed_node = (
+            lambda node_id, file_path, *, source_removed: MeetingTreeController._cleanup_meeting_folder_import_for_removed_node(
+                controller,
+                node_id,
+                file_path,
+                source_removed=source_removed,
+            )
+        )
+        controller.saved = False
+        controller._save_and_emit_replace = (
+            lambda _node_id, _replacement: setattr(controller, "saved", True)
+        )
+
     def test_meeting_folder_imported_media_keeps_linked_folder_semantics(self):
         class FakeController:
             pass
@@ -1034,6 +1089,175 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertEqual(controller._linked_folder_files[str(source)], "auto-node")
             self.assertEqual(captured["nodes"], [node])
             self.assertEqual(captured["record_node_ids"], ["auto-node"])
+
+    def test_sync_active_scan_imports_new_root_file_into_midweek_target(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meeting = root / "2026-05-27 MW"
+            meeting.mkdir()
+            source = meeting / "manual.mp4"
+            source.write_bytes(b"video")
+            controller = FakeController()
+            controller._tree_key = "mwb:2026-05-25:T:20260500"
+            controller._sync_enabled = True
+            controller._meeting_folder_pending_sources = set()
+            controller._meeting_folder_imports = {}
+            controller.chromeChanged = self._Signal()
+            captured = {}
+
+            controller.set_sync_root = lambda _path: None
+            controller._meeting_folder_source_supported = lambda _source: True
+            controller._meeting_folder_target_list_id = lambda _pub: "section:lac"
+            controller._meeting_folder_record_for_source = (
+                lambda source_data: MeetingTreeController._meeting_folder_record_for_source(
+                    controller,
+                    source_data,
+                )
+            )
+            controller._same_local_source = lambda a, b: (
+                MeetingTreeController._same_local_source(controller, a, b)
+            )
+            controller._adopt_existing_meeting_folder_source = (
+                lambda _source_data, _folder_path: []
+            )
+            controller._remove_previous_meeting_folder_nodes = lambda _record: None
+            controller._emit_linked_folder_availability_if_changed = lambda: None
+
+            def fake_import(source_data, list_id, insert_index):
+                captured["source"] = source_data
+                captured["list_id"] = list_id
+                captured["insert_index"] = insert_index
+
+            controller._import_meeting_folder_source = fake_import
+
+            MeetingTreeController.inject_linked_folder_media(controller, str(root))
+
+            self.assertEqual(captured["source"]["path"], str(source))
+            self.assertEqual(captured["list_id"], "section:lac")
+            self.assertEqual(captured["insert_index"], 0)
+            self.assertEqual(controller.chromeChanged.calls, [()])
+
+    def test_meeting_folder_record_lookup_matches_same_path_across_source_keys(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "2026-05-27 MW" / "manual.mp4")
+            controller = FakeController()
+            controller._meeting_folder_imports = {
+                "old-machine-key": {
+                    "path": path,
+                    "status": "processed",
+                    "signature": {"size": 5, "mtime_ns": 123},
+                }
+            }
+            controller._same_local_source = lambda a, b: (
+                MeetingTreeController._same_local_source(controller, a, b)
+            )
+
+            record = MeetingTreeController._meeting_folder_record_for_source(
+                controller,
+                {"source_key": "new-machine-key", "path": path},
+            )
+
+            self.assertIs(record, controller._meeting_folder_imports["old-machine-key"])
+
+    def test_remove_linked_root_media_deletes_import_record(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-27 MW"
+            folder.mkdir()
+            source = folder / "manual.mp4"
+            source.write_bytes(b"video")
+            controller = FakeController()
+            controller._nodes = [
+                {
+                    "id": "manual",
+                    "type": "media",
+                    "linked_folder_source": str(folder),
+                    "children": [],
+                    "media_ref": {"file_path": str(source)},
+                    "meeting_generated": False,
+                }
+            ]
+            controller._resolved_urls = {}
+            controller._linked_folder_files = {str(source): "manual"}
+            controller._meeting_folder_imports = {
+                "source-key": {
+                    "source_key": "source-key",
+                    "path": str(source),
+                    "name": "manual.mp4",
+                    "kind": "media",
+                    "signature": {"size": 5, "mtime_ns": 123},
+                    "status": "processed",
+                    "node_ids": ["manual"],
+                }
+            }
+            controller._deleted_source_keys = set()
+            self._wire_remove_item_controller(controller)
+
+            MeetingTreeController.removeItem(controller, "manual")
+
+            self.assertFalse(source.exists())
+            self.assertEqual(controller._nodes, [])
+            self.assertEqual(controller._linked_folder_files, {})
+            self.assertEqual(controller._meeting_folder_imports, {})
+            self.assertTrue(controller.saved)
+
+    def test_remove_linked_derived_output_keeps_source_record(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-27 MW"
+            cache = folder / ".solin_cache"
+            cache.mkdir(parents=True)
+            source = folder / "slides.pdf"
+            source.write_bytes(b"pdf")
+            page = cache / "slides-page_001.jpg"
+            page.write_bytes(b"image")
+            controller = FakeController()
+            controller._nodes = [
+                {
+                    "id": "page-1",
+                    "type": "media",
+                    "linked_folder_source": str(folder),
+                    "children": [],
+                    "media_ref": {"file_path": str(page)},
+                    "meeting_generated": False,
+                }
+            ]
+            controller._resolved_urls = {}
+            controller._linked_folder_files = {str(page): "page-1"}
+            controller._meeting_folder_imports = {
+                "source-key": {
+                    "source_key": "source-key",
+                    "path": str(source),
+                    "name": "slides.pdf",
+                    "kind": "pdf",
+                    "signature": {"size": 3, "mtime_ns": 123},
+                    "status": "processed",
+                    "node_ids": ["page-1", "page-2"],
+                }
+            }
+            controller._deleted_source_keys = set()
+            self._wire_remove_item_controller(controller)
+
+            MeetingTreeController.removeItem(controller, "page-1")
+
+            self.assertFalse(page.exists())
+            self.assertTrue(source.exists())
+            self.assertEqual(controller._nodes, [])
+            self.assertEqual(
+                controller._meeting_folder_imports["source-key"]["node_ids"],
+                ["page-2"],
+            )
+            self.assertTrue(controller.saved)
 
 
 if __name__ == "__main__":

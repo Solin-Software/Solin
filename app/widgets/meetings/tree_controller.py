@@ -40,12 +40,18 @@ from ...core.i18n.strings import (
     tr_offline_downloading,
     tr_offline_downloading_progress,
 )
+from ...core.ingest.manifest import ManifestError, cache_dir
 from ...core.meetings.memorial import MemorialData
+from ...core.meetings.linked_folder_sync import (
+    MeetingLinkedFolderSync,
+    MeetingSyncError,
+    MeetingSyncIdentity,
+)
 from ...core.meetings.publications import MeetingMedia, WeekData
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
-from ...core.meetings.tree_types import Node, count_media, iter_nodes, new_node_id
+from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
 from ...core.rendering.libreoffice import (
     LoConvertThread,
@@ -143,6 +149,7 @@ class MeetingTreeController(QObject):
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)
     cloudChanged = Signal(str, bool, bool, float, str)
+    syncStateChanged = Signal()
 
     def __init__(
         self,
@@ -160,9 +167,17 @@ class MeetingTreeController(QObject):
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = MeetingTreeStore()
         self._builder = MeetingTreeBuilder()
+        self._sync_service = MeetingLinkedFolderSync()
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""
+        self._sync_identity: MeetingSyncIdentity | None = None
+        self._sync_root = ""
+        self._sync_folder = ""
+        self._sync_available = False
+        self._sync_enabled = False
+        self._sync_busy = False
+        self._sync_revision = 0
         self._deleted_source_keys: set[str] = set()
         self._playlist_name = ""
         self._thumb_cache: dict[str, QPixmap] = {}
@@ -200,6 +215,22 @@ class MeetingTreeController(QObject):
     @Property(bool, notify=chromeChanged)
     def isWatched(self):
         return False
+
+    @Property(bool, notify=syncStateChanged)
+    def syncAvailable(self):
+        return self._sync_available
+
+    @Property(bool, notify=syncStateChanged)
+    def syncEnabled(self):
+        return self._sync_enabled
+
+    @Property(bool, notify=syncStateChanged)
+    def syncBusy(self):
+        return self._sync_busy
+
+    @Property(str, notify=syncStateChanged)
+    def syncFolderPath(self):
+        return self._sync_folder
 
     @Property(bool, notify=chromeChanged)
     def hasItems(self):
@@ -240,6 +271,13 @@ class MeetingTreeController(QObject):
         visit(self._nodes)
         return {"items": items, "sections": sections}
 
+    @Slot(str)
+    def set_sync_root(self, watched_folder_path: str) -> None:
+        self._sync_root = watched_folder_path or ""
+        self._refresh_sync_availability()
+        if self._tree_key:
+            self._refresh_sync_from_manifest()
+
     def load_week(self, pub_type: str, wd: WeekData) -> None:
         self._meeting_type = pub_type
         if pub_type == "mwb":
@@ -255,6 +293,12 @@ class MeetingTreeController(QObject):
                 "_PubCard", "Watchtower Study"
             )
         self._tree_key = f"{pub_type}:{wd.monday.isoformat()}:{self._language_code}:{issue}"
+        self._sync_identity = MeetingSyncIdentity(
+            tree_key=self._tree_key,
+            pub_type=pub_type,
+            monday=wd.monday,
+        )
+        self._refresh_sync_availability()
         self._load_canonical(canonical)
 
     def load_memorial(self, md: MemorialData) -> None:
@@ -265,14 +309,39 @@ class MeetingTreeController(QObject):
         date_key = md.memorial_date.isoformat() if md.memorial_date else str(year)
         self._playlist_name = _tr("_MemorialCard", "MEMORIAL")
         self._tree_key = f"memorial:{date_key}:{self._language_code}:{year}"
+        self._sync_identity = None
+        self._sync_enabled = False
+        self._sync_folder = ""
+        self._sync_revision = 0
+        self._refresh_sync_availability()
         self._load_canonical(canonical)
 
     def _load_canonical(self, canonical: list[Node]) -> None:
         self._canonical_hash = self._builder.canonical_hash(canonical)
+        if self._sync_identity is not None:
+            self._sync_identity = MeetingSyncIdentity(
+                tree_key=self._sync_identity.tree_key,
+                pub_type=self._sync_identity.pub_type,
+                monday=self._sync_identity.monday,
+                canonical_hash=self._canonical_hash,
+            )
         saved, _ = self._store.load(self._tree_key)
         self._deleted_source_keys = self._store.load_deleted_source_keys(self._tree_key)
         self._linked_folder_files = self._store.load_linked_folder_files(self._tree_key)
         self._meeting_folder_imports = self._store.load_meeting_folder_imports(self._tree_key)
+        sync_record = self._load_sync_record()
+        if sync_record is not None:
+            saved = sync_record.nodes
+            self._deleted_source_keys = sync_record.deleted_source_keys
+            self._linked_folder_files = sync_record.linked_folder_files
+            self._meeting_folder_imports = sync_record.meeting_folder_imports
+            self._sync_folder = str(sync_record.folder)
+            self._sync_enabled = True
+            self._sync_revision = sync_record.revision
+        else:
+            self._sync_enabled = False
+            self._sync_revision = 0
+            self._sync_folder = self._candidate_sync_folder()
         self._meeting_folder_pending_sources.clear()
         self._nodes = MeetingTreeMerger(
             canonical,
@@ -282,10 +351,81 @@ class MeetingTreeController(QObject):
         self._save()
         self._start_media_requests()
         self.chromeChanged.emit()
+        self.syncStateChanged.emit()
         self.stateChanged.emit()
 
     def refresh_week(self, pub_type: str, wd: WeekData) -> None:
         self.load_week(pub_type, wd)
+
+    def _refresh_sync_availability(self) -> None:
+        available = bool(
+            self._sync_root
+            and Path(self._sync_root).is_dir()
+            and self._sync_identity is not None
+        )
+        if available == self._sync_available:
+            return
+        self._sync_available = available
+        if not available:
+            self._sync_enabled = False
+            self._sync_folder = ""
+            self._sync_revision = 0
+        self.syncStateChanged.emit()
+
+    def _candidate_sync_folder(self) -> str:
+        if not self._sync_root or self._sync_identity is None:
+            return ""
+        folder = self._sync_service.locate_folder(
+            self._sync_root,
+            self._sync_identity,
+            create=False,
+        )
+        return str(folder) if folder else ""
+
+    def _load_sync_record(self):
+        if not self._sync_available or self._sync_identity is None:
+            return None
+        try:
+            return self._sync_service.load_tree(self._sync_root, self._sync_identity)
+        except ManifestError as exc:
+            log_ignored_exception(__name__, "Meeting linked-folder manifest is invalid")
+            QMessageBox.warning(
+                self.parent(),
+                _tr("MeetingSync", "Meeting sync"),
+                str(exc),
+            )
+            return None
+        except MeetingSyncError:
+            log_ignored_exception(__name__, "Could not load meeting linked-folder sync")
+            return None
+
+    def _refresh_sync_from_manifest(self) -> bool:
+        record = self._load_sync_record()
+        if record is None:
+            if self._sync_enabled:
+                self._sync_enabled = False
+                self._sync_revision = 0
+                self._sync_folder = self._candidate_sync_folder()
+                self.syncStateChanged.emit()
+            return False
+        if self._sync_enabled and record.revision == self._sync_revision:
+            return True
+
+        self._nodes = record.nodes
+        self._deleted_source_keys = record.deleted_source_keys
+        self._linked_folder_files = record.linked_folder_files
+        self._meeting_folder_imports = record.meeting_folder_imports
+        self._sync_folder = str(record.folder)
+        self._sync_enabled = True
+        self._sync_revision = record.revision
+        self._meeting_folder_pending_sources.clear()
+        self._linked_folder_availability = self._linked_folder_availability_signature()
+        self._save_local_cache()
+        self._start_media_requests()
+        self.chromeChanged.emit()
+        self.syncStateChanged.emit()
+        self.stateChanged.emit()
+        return True
 
     # ── Meeting-folder autoimport ────────────────────────────────────────────
 
@@ -297,8 +437,10 @@ class MeetingTreeController(QObject):
 
         Sources keep the same linked-folder meeting semantics as direct media:
         local items are tracked for availability and removal deletes their file.
-        Only processing state for special sources lives in ``meeting_trees.json``.
+        Processing state follows the active persistence target: local store when
+        sync is off, linked-folder manifest when sync is on.
         """
+        self.set_sync_root(watched_folder_path)
         if not watched_folder_path or not self._tree_key:
             return
 
@@ -335,7 +477,7 @@ class MeetingTreeController(QObject):
                 source_key = str(source.get("source_key") or "")
                 if not source_key or source_key in self._meeting_folder_pending_sources:
                     continue
-                record = self._meeting_folder_imports.get(source_key)
+                record = self._meeting_folder_record_for_source(source)
                 if not meeting_folder_source_needs_processing(source, record):
                     continue
 
@@ -399,6 +541,25 @@ class MeetingTreeController(QObject):
             return libreoffice_available()
         return False
 
+    def _meeting_folder_record_for_source(
+        self,
+        source: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        source_key = str(source.get("source_key") or "")
+        record = self._meeting_folder_imports.get(source_key)
+        if isinstance(record, dict):
+            return record
+
+        source_path = str(source.get("path") or "")
+        if not source_path:
+            return None
+        for existing in self._meeting_folder_imports.values():
+            if not isinstance(existing, dict):
+                continue
+            if self._same_local_source(str(existing.get("path") or ""), source_path):
+                return existing
+        return None
+
     def _same_local_source(self, a: str, b: str) -> bool:
         if not a or not b:
             return False
@@ -408,6 +569,13 @@ class MeetingTreeController(QObject):
             os.path.normcase(os.path.normpath(os.path.abspath(a)))
             == os.path.normcase(os.path.normpath(os.path.abspath(b)))
         )
+
+    def _path_is_inside(self, path: str, folder: str) -> bool:
+        try:
+            Path(path).resolve().relative_to(Path(folder).resolve())
+            return True
+        except (OSError, ValueError):
+            return False
 
     def _adopt_existing_meeting_folder_source(
         self, source: dict[str, Any], folder_path: str
@@ -471,9 +639,25 @@ class MeetingTreeController(QObject):
         }
         if error:
             record["error"] = str(error)[:500]
+        self._forget_meeting_folder_records_for_path(source_key, record["path"])
         self._meeting_folder_imports[source_key] = record
         self._meeting_folder_pending_sources.discard(source_key)
         self._save()
+
+    def _forget_meeting_folder_records_for_path(
+        self,
+        source_key: str,
+        source_path: str,
+    ) -> None:
+        if not source_path:
+            return
+        for key, record in list(self._meeting_folder_imports.items()):
+            if key == source_key:
+                continue
+            if not isinstance(record, dict):
+                continue
+            if self._same_local_source(str(record.get("path") or ""), source_path):
+                self._meeting_folder_imports.pop(key, None)
 
     def _record_meeting_folder_failure(
         self, source: dict[str, Any], name: str, error: str
@@ -870,7 +1054,7 @@ class MeetingTreeController(QObject):
             thread = JwpubImportThread.create(
                 path,
                 lang=self._language_code,
-                dest_images_dir=_paths.IMAGES_DIR,
+                dest_images_dir=self._jwpub_image_dir(),
                 parent=self,
             )
             self._jwpub_threads.append(thread)
@@ -926,9 +1110,10 @@ class MeetingTreeController(QObject):
         node_id = new_node_id()
         url = str(raw.get("url") or raw.get("jworg_url") or "")
         if raw.get("data") and not url:
-            os.makedirs(_paths.EMBEDDED_DIR, exist_ok=True)
+            embedded_dir = self._embedded_media_dir()
+            os.makedirs(embedded_dir, exist_ok=True)
             ext = Path(str(raw.get("filename") or "media")).suffix or ".mp4"
-            url = os.path.join(_paths.EMBEDDED_DIR, f"{node_id}{ext}")
+            url = os.path.join(embedded_dir, f"{node_id}{ext}")
             with open(url, "wb") as handle:
                 handle.write(raw["data"])
         media_type = str(raw.get("type") or "").lower()
@@ -996,6 +1181,143 @@ class MeetingTreeController(QObject):
         )
         if paths:
             self.add_files(paths)
+
+    @Slot()
+    def toggleSync(self) -> None:
+        if self._sync_busy:
+            return
+        if self._sync_enabled:
+            self._disable_sync()
+        else:
+            self._enable_sync()
+
+    def _enable_sync(self) -> None:
+        if not self._sync_available or self._sync_identity is None:
+            return
+        old_state = self._sync_snapshot()
+        self._set_sync_busy(True)
+        try:
+            folder = self._sync_service.locate_folder(
+                self._sync_root,
+                self._sync_identity,
+                create=True,
+            )
+            if folder is None:
+                raise MeetingSyncError("Linked folder is not available.")
+            record = self._sync_service.load_tree(self._sync_root, self._sync_identity)
+            self._sync_folder = str(folder)
+            self._sync_enabled = True
+            self._sync_revision = record.revision if record is not None else 0
+            self._materialize_current_nodes_for_sync()
+            self._sync_revision = self._sync_service.save_tree(
+                folder,
+                self._sync_identity,
+                nodes=self._nodes,
+                deleted_source_keys=self._deleted_source_keys,
+                linked_folder_files=self._linked_folder_files,
+                meeting_folder_imports=self._meeting_folder_imports,
+                expected_revision=self._sync_revision,
+            )
+            self._save_local_cache()
+            self._linked_folder_availability = self._linked_folder_availability_signature()
+            self.chromeChanged.emit()
+            self.stateChanged.emit()
+        except (ManifestError, MeetingSyncError, OSError) as exc:
+            self._restore_sync_snapshot(old_state)
+            self._save_local_cache()
+            self._warn_sync_failed(str(exc))
+        finally:
+            self._set_sync_busy(False)
+            self.syncStateChanged.emit()
+
+    def _disable_sync(self) -> None:
+        if not self._sync_folder:
+            return
+        reply = QMessageBox.question(
+            self.parent(),
+            _tr("MeetingSync", "Meeting sync"),
+            _tr(
+                "MeetingSync",
+                "Turn off sync for this meeting?\nThe folder files will be kept.",
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        old_state = self._sync_snapshot()
+        self._set_sync_busy(True)
+        folder = Path(self._sync_folder)
+        try:
+            record = self._sync_service.load_tree(self._sync_root, self._sync_identity) if self._sync_identity else None
+            if record is not None:
+                self._nodes = record.nodes
+                self._deleted_source_keys = record.deleted_source_keys
+                self._meeting_folder_imports = record.meeting_folder_imports
+            durable_dir = self._durable_detached_dir()
+            self._nodes = self._sync_service.detach_cache_references(
+                self._nodes,
+                folder,
+                durable_dir,
+            )
+            self._linked_folder_files = {}
+            self._sync_enabled = False
+            self._sync_revision = 0
+            self._save_local_cache()
+            self._sync_service.delete_sync_metadata(folder)
+            self._sync_folder = str(folder)
+            self._linked_folder_availability = self._linked_folder_availability_signature()
+            if self._sync_root:
+                self.inject_linked_folder_media(self._sync_root)
+            self.chromeChanged.emit()
+            self.stateChanged.emit()
+        except (ManifestError, MeetingSyncError, OSError) as exc:
+            self._restore_sync_snapshot(old_state)
+            self._warn_sync_failed(str(exc))
+        finally:
+            self._set_sync_busy(False)
+            self.syncStateChanged.emit()
+
+    def _sync_snapshot(self) -> dict[str, Any]:
+        return {
+            "nodes": clone_nodes(self._nodes),
+            "deleted": set(self._deleted_source_keys),
+            "linked": dict(self._linked_folder_files),
+            "imports": copy.deepcopy(self._meeting_folder_imports),
+            "folder": self._sync_folder,
+            "enabled": self._sync_enabled,
+            "revision": self._sync_revision,
+        }
+
+    def _restore_sync_snapshot(self, snapshot: dict[str, Any]) -> None:
+        self._nodes = snapshot["nodes"]
+        self._deleted_source_keys = snapshot["deleted"]
+        self._linked_folder_files = snapshot["linked"]
+        self._meeting_folder_imports = snapshot["imports"]
+        self._sync_folder = snapshot["folder"]
+        self._sync_enabled = snapshot["enabled"]
+        self._sync_revision = snapshot["revision"]
+
+    def _set_sync_busy(self, value: bool) -> None:
+        if self._sync_busy == value:
+            return
+        self._sync_busy = value
+        self.syncStateChanged.emit()
+
+    def _durable_detached_dir(self) -> Path:
+        base = getattr(_paths, "EMBEDDED_DIR", "")
+        if base:
+            return Path(base) / "meeting_sync"
+        if self._sync_folder:
+            return Path(self._sync_folder).parent / ".solin_detached_meeting_sync"
+        return Path.cwd() / ".solin_detached_meeting_sync"
+
+    def _warn_sync_failed(self, message: str) -> None:
+        QMessageBox.warning(
+            self.parent(),
+            _tr("MeetingSync", "Meeting sync"),
+            message[:500] or _tr("MeetingSync", "Could not update meeting sync."),
+        )
 
     @Slot()
     def newSectionClicked(self):
@@ -1090,18 +1412,65 @@ class MeetingTreeController(QObject):
         # If this item came from a linked folder, physically delete the file
         linked_source = node.get("linked_folder_source", "")
         if linked_source:
-            ref = node.get("media_ref") or {}
-            file_path = ref.get("file_path", "")
-            if file_path and os.path.isfile(file_path):
+            file_path = self._url_for_node(node)
+            removed_physical_file = bool(file_path and not os.path.exists(file_path))
+            if (
+                file_path
+                and os.path.isfile(file_path)
+                and self._path_is_inside(file_path, linked_source)
+            ):
                 try:
                     os.remove(file_path)
+                    removed_physical_file = True
                 except OSError:
                     pass
             # Remove from tracking
             self._linked_folder_files.pop(file_path, None)
+            self._cleanup_meeting_folder_import_for_removed_node(
+                item_id,
+                file_path,
+                source_removed=removed_physical_file,
+            )
         self._remember_deleted_sources(node, include_media=True)
         if self._replace_node(item_id, []):
             self._save_and_emit_replace(item_id, [])
+
+    def _cleanup_meeting_folder_import_for_removed_node(
+        self,
+        node_id: str,
+        file_path: str,
+        *,
+        source_removed: bool,
+    ) -> None:
+        if not node_id and not file_path:
+            return
+        for key, record in list(self._meeting_folder_imports.items()):
+            if not isinstance(record, dict):
+                continue
+            record_path = str(record.get("path") or "")
+            node_ids = [
+                str(value)
+                for value in record.get("node_ids", [])
+                if value
+            ]
+            contains_node = bool(node_id and node_id in node_ids)
+            same_source_file = bool(
+                file_path
+                and record_path
+                and self._same_local_source(record_path, file_path)
+            )
+            source_is_gone = bool(
+                record_path
+                and same_source_file
+                and (source_removed or not os.path.exists(record_path))
+            )
+            if source_is_gone:
+                self._meeting_folder_imports.pop(key, None)
+                continue
+            if contains_node:
+                remaining = [value for value in node_ids if value != node_id]
+                if remaining != node_ids:
+                    record["node_ids"] = remaining
 
     @Slot(str)
     def renameItem(self, item_id: str):
@@ -1259,15 +1628,85 @@ class MeetingTreeController(QObject):
         mgr.prefetch_error.connect(self._on_prefetch_error)
 
     def _save(self) -> None:
-        if self._tree_key:
-            self._store.save(
-                self._tree_key,
-                self._nodes,
-                self._canonical_hash,
-                self._deleted_source_keys,
-                self._linked_folder_files or None,
-                self._meeting_folder_imports or None,
+        if not self._tree_key:
+            return
+        if self._sync_enabled:
+            self._materialize_current_nodes_for_sync()
+            self._save_sync_manifest()
+        self._save_local_cache()
+
+    def _save_local_cache(self) -> None:
+        if not self._tree_key:
+            return
+        self._store.save(
+            self._tree_key,
+            self._nodes,
+            self._canonical_hash,
+            self._deleted_source_keys,
+            self._linked_folder_files or None,
+            self._meeting_folder_imports or None,
+        )
+
+    def _save_sync_manifest(self) -> None:
+        if not self._sync_identity or not self._sync_folder:
+            return
+        try:
+            self._sync_revision = self._sync_service.save_tree(
+                Path(self._sync_folder),
+                self._sync_identity,
+                nodes=self._nodes,
+                deleted_source_keys=self._deleted_source_keys,
+                linked_folder_files=self._linked_folder_files,
+                meeting_folder_imports=self._meeting_folder_imports,
+                expected_revision=self._sync_revision,
             )
+        except (ManifestError, MeetingSyncError):
+            log_ignored_exception(__name__, "Could not save meeting sync manifest")
+
+    def _materialize_current_nodes_for_sync(self) -> None:
+        if not self._sync_folder:
+            return
+        self._nodes, linked_files = self._sync_service.materialize_tree_files(
+            self._nodes,
+            Path(self._sync_folder),
+            generated_roots=self._generated_asset_roots(),
+        )
+        if linked_files:
+            self._linked_folder_files.update(linked_files)
+
+    def _prepare_nodes_for_sync(self, nodes: list[Node]) -> list[Node]:
+        if not self._sync_enabled or not self._sync_folder or not nodes:
+            return nodes
+        prepared, linked_files = self._sync_service.materialize_tree_files(
+            nodes,
+            Path(self._sync_folder),
+            generated_roots=self._generated_asset_roots(),
+        )
+        if linked_files:
+            self._linked_folder_files.update(linked_files)
+        return prepared
+
+    def _jwpub_image_dir(self) -> str:
+        if self._sync_enabled and self._sync_folder:
+            return str(cache_dir(Path(self._sync_folder)))
+        return _paths.IMAGES_DIR
+
+    def _embedded_media_dir(self) -> str:
+        if self._sync_enabled and self._sync_folder:
+            return str(cache_dir(Path(self._sync_folder)))
+        return _paths.EMBEDDED_DIR
+
+    def _generated_asset_roots(self) -> tuple[str, ...]:
+        return tuple(
+            root
+            for root in (
+                getattr(_paths, "CACHE_DIR", ""),
+                getattr(_paths, "IMAGES_DIR", ""),
+                getattr(_paths, "EMBEDDED_DIR", ""),
+                getattr(_paths, "MEETING_THUMB_CACHE_DIR", ""),
+            )
+            if root
+        )
 
     def _manual_media_node(self, path: str, title: str = "") -> Node:
         media_type = _media_type_from_path(path)
@@ -1310,6 +1749,7 @@ class MeetingTreeController(QObject):
         target_children = self._children_for_target(kind, target_id)
         if target_children is None:
             return
+        nodes = self._prepare_nodes_for_sync(nodes)
         index = max(0, min(insert_index, len(target_children)))
         for offset, node in enumerate(nodes):
             target_children.insert(index + offset, node)

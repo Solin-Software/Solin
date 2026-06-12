@@ -36,7 +36,6 @@ import logging
 import os
 import subprocess
 import tempfile
-import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -48,6 +47,15 @@ from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 from app.core.foundation.constants import (
     VIDEO_EXTS, AUDIO_EXTS, IMAGE_EXTS, PDF_EXTS, PPTX_EXTS, DOCX_EXTS,
     JWPUB_EXTS, PLAYLIST_EXTS,
+)
+from app.core.ingest.manifest import (
+    CACHE_DIR_NAME,
+    MANIFEST_LOCK as _MANIFEST_LOCK,
+    cache_dir as _cache_dir,
+    from_manifest_url as _from_manifest_url,
+    load_manifest as _load_manifest,
+    save_manifest as _save_manifest,
+    to_manifest_url as _to_manifest_url,
 )
 
 log = logging.getLogger(__name__)
@@ -66,72 +74,9 @@ MEETING_FOLDER_SOURCE_EXTS: frozenset[str] = (
     | JWPUB_EXTS | PLAYLIST_EXTS
 )
 
-MANIFEST_FILE = "_solin_manifest.json"
-
-
-# ── Path portability helpers ────────────────────────────────────────────────────
-
-def _to_manifest_url(url: str, subfolder: Path) -> str:
-    """Convert an absolute URL to a portable relative path for JSON storage.
-
-    If the file lives inside *subfolder* (root or .solin_cache), we store only
-    the relative portion so the manifest works on any PC sharing the folder via
-    cloud sync (Dropbox, Google Drive, OneDrive, etc.).
-
-    Remote URLs (http/https) and paths outside the subfolder are returned
-    unchanged.
-    """
-    if not url or url.startswith(("http://", "https://")):
-        return url
-    try:
-        rel = Path(url).relative_to(subfolder)
-        # Use forward-slash for cross-OS compat (Windows reads both separators)
-        return rel.as_posix()
-    except ValueError:
-        # File is outside the subfolder (e.g. legacy absolute from another PC)
-        return url
-
-
-def _from_manifest_url(url: str, subfolder: Path) -> str:
-    """Resolve a manifest URL back to an absolute path on this machine.
-
-    Handles three cases:
-      1. Already absolute and valid → return as-is (legacy local data)
-      2. Relative path → join with *subfolder*
-      3. Legacy absolute from another PC (path does not exist but contains
-         the subfolder name) → extract the relative tail and re-root it
-    """
-    if not url or url.startswith(("http://", "https://")):
-        return url
-
-    p = Path(url)
-
-    # Case 1: it's already an absolute path
-    if p.is_absolute():
-        if p.exists():
-            return str(p)
-        # Case 3: legacy absolute from another PC.
-        # Since it's an internal watched folder item, its relative path
-        # MUST be either just the filename, or .solin_cache/filename.
-        # We don't need to heuristically search for the subfolder name;
-        # we just look at the last two parts of the path.
-        parts = p.parts
-        if len(parts) >= 2 and parts[-2] == CACHE_DIR_NAME:
-            tail = Path(parts[-2]) / parts[-1]
-        else:
-            tail = Path(parts[-1])
-        
-        candidate = subfolder / tail
-        return str(candidate)
-
-    # Case 2: relative path → resolve against subfolder
-    return str(subfolder / p)
-CACHE_DIR_NAME = ".solin_cache"
-
 _DPI = 150
 _PAGE_FMT = "{stem}-page_{n:03d}.jpg"
 _PAGE_CACHE_VERSION = 1
-_MANIFEST_LOCK = threading.RLock()
 
 
 # ── Utilitários ────────────────────────────────────────────────────────────────
@@ -207,68 +152,6 @@ def local_file_availability_signature(urls: Iterable[str]) -> tuple[tuple[str, b
         norm = os.path.normcase(os.path.normpath(os.path.abspath(url)))
         states[norm] = os.path.exists(url)
     return tuple(sorted(states.items()))
-
-
-def _cache_dir(subfolder: Path) -> Path:
-    """Return the .solin_cache directory inside a subfolder, creating it if needed."""
-    d = subfolder / CACHE_DIR_NAME
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-# ── Manifesto ──────────────────────────────────────────────────────────────────
-
-def _load_manifest(subfolder: Path) -> dict:
-    """Load manifest from subfolder, return empty dict on error."""
-    mf = subfolder / MANIFEST_FILE
-    if not mf.exists():
-        return {"version": 1, "processed": {}}
-    try:
-        with open(mf, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data.get("processed"), dict):
-            data["processed"] = {}
-        return data
-    except (
-        OSError,
-        UnicodeError,
-        json.JSONDecodeError,
-        TypeError,
-    ):
-        log.warning("Manifest corrupted in %s — will re-process", subfolder)
-        return {"version": 1, "processed": {}}
-
-
-def _save_manifest(subfolder: Path, manifest: dict) -> bool:
-    """Atomically save a manifest, preserving the previous file on failure."""
-    mf = subfolder / MANIFEST_FILE
-    temp_path: Path | None = None
-    try:
-        manifest.setdefault("version", 1)
-        with _MANIFEST_LOCK:
-            with tempfile.NamedTemporaryFile(
-                "w",
-                encoding="utf-8",
-                dir=subfolder,
-                prefix=f".{MANIFEST_FILE}.",
-                suffix=".tmp",
-                delete=False,
-            ) as temp_file:
-                temp_path = Path(temp_file.name)
-                json.dump(manifest, temp_file, ensure_ascii=False, indent=2)
-                temp_file.flush()
-                os.fsync(temp_file.fileno())
-            os.replace(temp_path, mf)
-        return True
-    except (OSError, TypeError, ValueError) as exc:
-        log.error("Cannot write manifest to %s: %s", mf, exc)
-        return False
-    finally:
-        if temp_path is not None:
-            try:
-                temp_path.unlink(missing_ok=True)
-            except OSError:
-                log.warning("Cannot remove temporary manifest %s", temp_path, exc_info=True)
 
 
 def _commit_processed_entry(
