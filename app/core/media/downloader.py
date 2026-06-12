@@ -254,6 +254,8 @@ class SongDownloader(QObject):
 
             if job.cancel_event.is_set():
                 return
+            # urllib3 validates the encoded transfer length before requests
+            # transparently decodes Content-Encoding for iter_content().
             emit_progress(force=True)
 
             if persist:

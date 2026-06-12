@@ -754,7 +754,7 @@ class WifiReceiveWidget(QWidget):
         self._send_all_btn.setStyleSheet(
             f"QPushButton{{background:{_BORDER};border:1px solid {_BORDER2};"
             "border-radius:6px;color:#484f58;font-size:10px;font-weight:600;"
-            "padding:0 10px;}}"
+            "padding:0 10px;}"
             "QPushButton:enabled{color:#8b949e;}"
             f"QPushButton:enabled:hover{{background:{_BORDER2};color:{_TEXT2};"
             f"border-color:{_ACCENT};}}"
@@ -858,7 +858,7 @@ class WifiReceiveWidget(QWidget):
         self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._start_btn.setStyleSheet(
             f"QPushButton{{background:{_ACCENT};border:none;border-radius:12px;"
-            "color:#fff;font-size:13px;font-weight:700;padding:0 28px;}}"
+            "color:#fff;font-size:13px;font-weight:700;padding:0 28px;}"
             "QPushButton:hover{background:#1f6feb;}"
             "QPushButton:pressed{background:#1158c7;}"
         )

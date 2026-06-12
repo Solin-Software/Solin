@@ -24,13 +24,14 @@ diretamente do stream de mídia (QMediaPlayer) ou dos metadados HTML da página.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import os
 import re
 import struct
 import threading
-import hashlib
-import json
-import logging
+import zlib
 from pathlib import Path
 from typing import Callable
 from urllib.request import Request as _UrlRequest
@@ -44,6 +45,10 @@ from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.network.http import urlopen
 
 log = logging.getLogger(__name__)
+
+_DEFAULT_METADATA_READ_BYTES = 512 * 1024
+_MAX_ID3_TAG_BYTES = 8 * 1024 * 1024
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers públicos
@@ -61,6 +66,57 @@ def _get_cached_media_path(url: str) -> str | None:
     if os.path.exists(path) and os.path.exists(path + ".done"):
         return path
     return None
+
+
+def _id3_tag_total_size(header: bytes) -> int | None:
+    """Return the complete ID3v2 tag size, including its 10-byte header."""
+    if len(header) < 10 or header[:3] != b"ID3":
+        return None
+    size_bytes = header[6:10]
+    if any(value & 0x80 for value in size_bytes):
+        return None
+    payload_size = (
+        (size_bytes[0] << 21)
+        | (size_bytes[1] << 14)
+        | (size_bytes[2] << 7)
+        | size_bytes[3]
+    )
+    return 10 + payload_size
+
+
+def _embedded_image_is_complete(data: bytes) -> bool:
+    """Reject truncated common image payloads before invoking native decoders."""
+    if data.startswith(_PNG_SIGNATURE):
+        offset = len(_PNG_SIGNATURE)
+        saw_header = False
+        while offset + 12 <= len(data):
+            chunk_size = struct.unpack(">I", data[offset : offset + 4])[0]
+            chunk_type = data[offset + 4 : offset + 8]
+            chunk_end = offset + 12 + chunk_size
+            if chunk_end > len(data):
+                return False
+            chunk_data = data[offset + 8 : offset + 8 + chunk_size]
+            expected_crc = struct.unpack(
+                ">I", data[offset + 8 + chunk_size : chunk_end]
+            )[0]
+            if zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF != expected_crc:
+                return False
+            if not saw_header:
+                if chunk_type != b"IHDR" or chunk_size != 13:
+                    return False
+                saw_header = True
+            offset = chunk_end
+            if chunk_type == b"IEND":
+                return chunk_size == 0
+        return False
+
+    if data.startswith(b"\xff\xd8\xff"):
+        return data.rfind(b"\xff\xd9") >= 3
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return data.rfind(b"\x3b") >= 6
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return len(data) >= 12 and struct.unpack("<I", data[4:8])[0] + 8 <= len(data)
+    return bool(data)
 
 
 def is_filename_title(title: str) -> bool:
@@ -103,11 +159,20 @@ def _audio_info_from_bytes(data: bytes, ext: str) -> "tuple[bytes | None, str]":
 
 
 def _audio_info_from_file(path: str) -> "tuple[bytes | None, str]":
-    """Wrapper: lê até 512 KB do arquivo e chama _audio_info_from_bytes."""
+    """Read the complete bounded metadata prefix and parse audio information."""
     ext = Path(path).suffix.lower()
     try:
         with open(path, "rb") as f:
-            data = f.read(512 * 1024)
+            header = f.read(10)
+            read_size = _DEFAULT_METADATA_READ_BYTES
+            if ext == ".mp3":
+                tag_size = _id3_tag_total_size(header)
+                if tag_size is not None and tag_size <= _MAX_ID3_TAG_BYTES:
+                    read_size = max(read_size, tag_size)
+                elif tag_size is not None:
+                    log.warning("Ignoring oversized ID3 tag in %s: %d bytes", path, tag_size)
+            f.seek(0)
+            data = f.read(read_size)
         return _audio_info_from_bytes(data, ext)
     except (OSError, IndexError, TypeError, UnicodeError, ValueError, struct.error):
         log_ignored_exception(__name__, "Could not parse audio metadata from file")
@@ -131,27 +196,43 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
             (hdr[8] & 0x7F) <<  7 |
             (hdr[9] & 0x7F)
         )
-        tag = data[10: 10 + sz]
+        tag = data[10 : 10 + sz]
         pos = 0
-        while pos < len(tag) - 10 and not (cover and title):
+        while pos < len(tag) and not (cover and title):
             if ver >= 4:
                 # v2.4 usa Sync-Safe Integer para o tamanho do frame
-                fid  = tag[pos:pos+4].decode("latin-1", errors="ignore")
-                fsz  = (tag[pos+4] << 21) | (tag[pos+5] << 14) | (tag[pos+6] << 7) | tag[pos+7]
-                fdat = tag[pos+10: pos+10+fsz]
-                pos += 10 + fsz
+                if pos + 10 > len(tag):
+                    break
+                fid = tag[pos : pos + 4].decode("latin-1", errors="ignore")
+                fsz = (
+                    (tag[pos + 4] << 21)
+                    | (tag[pos + 5] << 14)
+                    | (tag[pos + 6] << 7)
+                    | tag[pos + 7]
+                )
+                frame_header_size = 10
             elif ver == 3:
                 # v2.3 usa Integer normal de 32-bits
-                fid  = tag[pos:pos+4].decode("latin-1", errors="ignore")
-                fsz  = struct.unpack(">I", tag[pos+4:pos+8])[0]
-                fdat = tag[pos+10: pos+10+fsz]
-                pos += 10 + fsz
+                if pos + 10 > len(tag):
+                    break
+                fid = tag[pos : pos + 4].decode("latin-1", errors="ignore")
+                fsz = struct.unpack(">I", tag[pos + 4 : pos + 8])[0]
+                frame_header_size = 10
             else:
                 # v2.2 usa 24-bits
-                fid  = tag[pos:pos+3].decode("latin-1", errors="ignore")
-                fsz  = struct.unpack(">I", b"\x00" + tag[pos+3:pos+6])[0]
-                fdat = tag[pos+6: pos+6+fsz]
-                pos += 6 + fsz
+                if pos + 6 > len(tag):
+                    break
+                fid = tag[pos : pos + 3].decode("latin-1", errors="ignore")
+                fsz = struct.unpack(">I", b"\x00" + tag[pos + 3 : pos + 6])[0]
+                frame_header_size = 6
+
+            if not fid.strip("\x00") or fsz <= 0:
+                break
+            frame_end = pos + frame_header_size + fsz
+            if frame_end > len(tag):
+                break
+            fdat = tag[pos + frame_header_size : frame_end]
+            pos = frame_end
 
             # Cover art
             if not cover and fid in ("APIC", "PIC") and fdat:
@@ -185,7 +266,7 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                 # Procura a assinatura exata para ignorar qualquer lixo residual do ID3
                 if cover_raw:
                     jpg_idx = cover_raw.find(b'\xff\xd8\xff')
-                    png_idx = cover_raw.find(b'\x89PNG\r\n')
+                    png_idx = cover_raw.find(_PNG_SIGNATURE)
                     gif_idx = cover_raw.find(b'GIF8')
                     
                     starts = [idx for idx in (jpg_idx, png_idx, gif_idx) if idx != -1]
@@ -389,7 +470,7 @@ class _ThreadedRemoteInfoExtractor(QObject):
 
     def _deliver_worker_result(self, image_bytes: bytes, title: str) -> None:
         pixmap = QPixmap()
-        if image_bytes:
+        if image_bytes and _embedded_image_is_complete(image_bytes):
             pixmap.loadFromData(image_bytes)
         if not pixmap.isNull() or title:
             self.info_ready.emit(self._index, pixmap, title)
@@ -956,7 +1037,7 @@ class MediaInfoQueue(QObject):
         # ── Áudio local — bytes brutos (zero player, zero thread) ───────────
         if media_type == "audio" and not is_remote:
             cover_bytes, title = _audio_info_from_file(url)
-            if cover_bytes:
+            if cover_bytes and _embedded_image_is_complete(cover_bytes):
                 px = QPixmap()
                 if px.loadFromData(cover_bytes) and not px.isNull():
                     self._save_to_disk_cache(url, px, title)
