@@ -1207,6 +1207,13 @@ class MeetingTreeController(QObject):
             self._sync_folder = str(folder)
             self._sync_enabled = True
             self._sync_revision = record.revision if record is not None else 0
+            if record is not None:
+                self._apply_sync_record(record)
+                self._save_local_cache()
+                self._linked_folder_availability = self._linked_folder_availability_signature()
+                self.chromeChanged.emit()
+                self.stateChanged.emit()
+                return
             self._materialize_current_nodes_for_sync()
             saved_record = self._sync_service.save_tree(
                 folder,
