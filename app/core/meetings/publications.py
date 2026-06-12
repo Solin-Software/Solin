@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import io
 import hashlib
+import http.client
 import json
 import logging
 import os
@@ -168,7 +169,7 @@ class JwpubCache:
         try:
             shutil.rmtree(ep)
             log.debug("JwpubCache: invalidated extract dir %s", ep)
-        except Exception as exc:
+        except OSError as exc:
             log.error("JwpubCache: could not remove extract dir %s: %s", ep, exc)
 
     def extract(self, pub: str, lang: str, issue: str) -> Optional[Path]:
@@ -185,7 +186,14 @@ class JwpubCache:
             with zipfile.ZipFile(io.BytesIO(inner_bytes), "r") as inner:
                 inner.extractall(ep)
             return ep
-        except Exception as exc:
+        except (
+            EOFError,
+            NotImplementedError,
+            OSError,
+            RuntimeError,
+            zipfile.BadZipFile,
+            zipfile.LargeZipFile,
+        ) as exc:
             log.error("Extract failed %s: %s", jwpub, exc)
             return None
 
@@ -230,7 +238,7 @@ class JwpubChecksumStore:
                 if isinstance(data, dict):
                     return data
                 log.warning("ChecksumStore: unexpected format in %s — resetting", self._path)
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             log.warning("ChecksumStore: could not load %s: %s", self._path, exc)
         return {}
 
@@ -254,7 +262,7 @@ class JwpubChecksumStore:
                     raw = json.loads(self._path.read_text(encoding="utf-8"))
                     if isinstance(raw, dict):
                         on_disk = raw
-            except Exception as exc:
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
                 log.warning("ChecksumStore: re-read before flush failed: %s", exc)
 
             # 2. Merge: disk is the base; our in-memory view overwrites on conflict.
@@ -270,7 +278,7 @@ class JwpubChecksumStore:
                 encoding="utf-8",
             )
             tmp.replace(self._path)
-        except Exception as exc:
+        except OSError as exc:
             log.error("ChecksumStore: could not save %s: %s", self._path, exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -351,7 +359,13 @@ def _get_json(url: str, params: dict | None = None) -> Optional[dict]:
     try:
         with _urlopen(req, timeout=_TIMEOUT) as r:
             return json.loads(r.read().decode())
-    except Exception as exc:
+    except (
+        http.client.HTTPException,
+        OSError,
+        UnicodeError,
+        urllib.error.URLError,
+        json.JSONDecodeError,
+    ) as exc:
         log.warning("GET %s → %s", url, exc)
         return None
 
@@ -429,8 +443,8 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
                 break
         if not result["title"]:
             result["title"] = data.get("pubName", "")
-    except Exception as exc:
-        log.debug("resolve_video: %s", exc)
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        log.debug("Could not parse resolved video metadata", exc_info=True)
     return result
 
 
@@ -468,7 +482,7 @@ def _find_mwb_doc_id(conn, monday: date) -> Optional[int]:
             (target,)
         ).fetchone()
         return r[0] if r else None
-    except Exception:
+    except sqlite3.Error:
         return None
 
 def _find_wt_doc_id(conn, monday: date) -> Optional[int]:
@@ -486,7 +500,7 @@ def _find_wt_doc_id(conn, monday: date) -> Optional[int]:
             (_WT_CLASS, week_nr)
         ).fetchone()
         return row[0] if row else None
-    except Exception:
+    except sqlite3.Error:
         return None
 
 def _is_week_in_dated_text(conn, monday: date) -> bool:
@@ -496,7 +510,7 @@ def _is_week_in_dated_text(conn, monday: date) -> bool:
             "SELECT COUNT(*) FROM DatedText WHERE FirstDateOffset=?", (target,)
         ).fetchone()
         return bool(r and r[0] > 0)
-    except Exception:
+    except sqlite3.Error:
         return False
 
 def _doc_title(conn, doc_id: int) -> str:
@@ -505,7 +519,7 @@ def _doc_title(conn, doc_id: int) -> str:
             "SELECT Title FROM Document WHERE DocumentId=?", (doc_id,)
         ).fetchone()
         return (r[0] or "").strip() if r else ""
-    except Exception:
+    except sqlite3.Error:
         return ""
 
 def _cover_bytes(pub_dir: Path) -> Optional[bytes]:
@@ -524,14 +538,14 @@ def _cover_bytes(pub_dir: Path) -> Optional[bytes]:
                     c.close()
                     return img.read_bytes()
         c.close()
-    except Exception:
+    except (OSError, sqlite3.Error):
         log.debug("Failed to read cover bytes from publication database", exc_info=True)
     return None
 
 def _row_value(row, key: str) -> str:
     try:
         return row[key] or ""
-    except Exception:
+    except (IndexError, KeyError, TypeError):
         return ""
 
 
@@ -566,7 +580,7 @@ def _mwb_song_ordinals(conn, doc_id: int) -> list[int]:
                 (doc_id,)
             ).fetchall()
         ]
-    except Exception:
+    except sqlite3.Error:
         log.debug("Failed to read MWB song ordinals", exc_info=True)
         return []
 
@@ -626,7 +640,7 @@ def _mwb_publication_ref_rows(conn, doc_id: int, include_web: bool = False) -> l
               AND  rp.PublicationType IN ({pub_types})
             ORDER  BY de.BeginParagraphOrdinal ASC
         """, (doc_id,)).fetchall()
-    except Exception:
+    except sqlite3.Error:
         try:
             return conn.execute(f"""
                 SELECT de.BeginParagraphOrdinal AS par,
@@ -648,7 +662,7 @@ def _mwb_publication_ref_rows(conn, doc_id: int, include_web: bool = False) -> l
                   AND  rp.PublicationType IN ({pub_types})
                 ORDER  BY de.BeginParagraphOrdinal ASC
             """, (doc_id,)).fetchall()
-        except Exception:
+        except sqlite3.Error:
             log.debug("Failed to read MWB publication references", exc_info=True)
             return []
 
@@ -1005,8 +1019,8 @@ def _parse_publication_ref_items(
                 r, pub_dir, section, sym in SONG_SYMS, marker_title
             ))
         conn.close()
-    except Exception as exc:
-        log.error("Publication ref parse: %s", exc)
+    except (IndexError, KeyError, OSError, sqlite3.Error, TypeError, ValueError):
+        log.exception("Could not parse publication reference media")
     return result
 
 
@@ -1153,7 +1167,7 @@ class _JwpubWorker(QObject):
                 for chunk in iter(lambda: fh.read(1024 * 1024), b""):
                     digest.update(chunk)
             return digest.hexdigest()
-        except Exception:
+        except OSError:
             return ""
 
     # ── Load week ─────────────────────────────────────────────────────────────
@@ -1294,7 +1308,8 @@ class _JwpubWorker(QObject):
                 cbs_start,
             )
             conn.close()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
+            log.exception("Could not parse MWB publication %s/%s", lang, issue)
             wd.mwb_status = "error"
             self.error.emit(key, "mwb", str(exc))
             return
@@ -1367,7 +1382,7 @@ class _JwpubWorker(QObject):
             conn.close()
             if doc_id is None:
                 return False
-        except Exception:
+        except (OSError, sqlite3.Error):
             return False
         self._parse_wt(wd, monday, issue, lang)
         return True
@@ -1442,7 +1457,8 @@ class _JwpubWorker(QObject):
             title = _doc_title(conn, doc_id)
             items = _parse_wt_media(conn, doc_id, pub_dir)
             conn.close()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
+            log.exception("Could not parse WT publication %s/%s", lang, issue)
             wd.wt_status = "error"
             self.error.emit(key, "wt", str(exc))
             return
@@ -1654,7 +1670,12 @@ class _JwpubWorker(QObject):
             # returning the old x_<issue> directory.
             self._cache.invalidate_extract(pub, lang, issue)
             return True
-        except Exception as exc:
+        except (
+            http.client.HTTPException,
+            OSError,
+            ValueError,
+            urllib.error.URLError,
+        ) as exc:
             if emit_error:
                 self.error.emit(key, pub_ui, str(exc))
             else:
@@ -1756,7 +1777,7 @@ class JwpubService(QObject):
     def __del__(self):
         try:
             self.shutdown(wait_ms=0)
-        except Exception:
+        except Exception:  # noqa: BLE001 - destructors must never raise during interpreter shutdown
             log.debug("Failed to shutdown JwpubService during finalization", exc_info=True)
 
     # ── Public API ────────────────────────────────────────────────────────────

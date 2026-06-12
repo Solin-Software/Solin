@@ -40,6 +40,7 @@ Isso evita que, p. ex., o fallback "T" tente buscar sjj em vez de sjjm.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -53,6 +54,8 @@ from app.core.foundation.constants import (
     VIDEO_QUALITY_FALLBACK_DIR,
     VIDEO_QUALITY_ORDER,
 )
+
+log = logging.getLogger(__name__)
 
 # ── Base URL comum ────────────────────────────────────────────────────────────
 
@@ -171,28 +174,43 @@ def _cache_path(api_code: str, is_sign: bool) -> str:
     return os.path.join(_paths.CACHE_DIR, f"songs_{api_code}{suffix}.json")
 
 
-def _is_cache_valid(api_code: str, is_sign: bool) -> bool:
-    path = _cache_path(api_code, is_sign)
-    if not os.path.exists(path):
+def _read_cache_json(path: str) -> dict | None:
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        log.debug("Could not read JW media cache %s", path, exc_info=True)
+        return None
+
+    if not isinstance(data, dict):
+        log.debug("Ignoring JW media cache with non-object root: %s", path)
+        return None
+    return data
+
+
+def _is_cache_payload_fresh(data: dict | None, content_key: str) -> bool:
+    if not data or not data.get(content_key):
         return False
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not data.get("songs"):
-            return False
-        age_days = (time.time() - data.get("_fetched_at", 0)) / 86400
-        return age_days < CACHE_TTL_DAYS
-    except Exception:
+        fetched_at = float(data.get("_fetched_at", 0))
+    except (TypeError, ValueError):
         return False
+    age_days = (time.time() - fetched_at) / 86400
+    return age_days < CACHE_TTL_DAYS
+
+
+def _is_cache_valid(api_code: str, is_sign: bool) -> bool:
+    path = _cache_path(api_code, is_sign)
+    return _is_cache_payload_fresh(_read_cache_json(path), "songs")
 
 
 def _load_cache(api_code: str, is_sign: bool) -> tuple:
-    try:
-        with open(_cache_path(api_code, is_sign), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
-    except Exception:
+    data = _read_cache_json(_cache_path(api_code, is_sign))
+    if data is None:
         return None, "", 0
+    return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
 
 
 def _save_cache(api_code: str, is_sign: bool, songs: list, pub_name: str) -> None:
@@ -301,7 +319,7 @@ def fetch_songs(
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
-    except Exception:
+    except requests.RequestException:
         # Fallback: idioma da interface — nunca é gestual
         if fallback_code and fallback_code != api_code:
             return fetch_songs(fallback_code, force=force, fallback_code=None,
@@ -331,26 +349,14 @@ def _songs_audio_cache_path(api_code: str, is_sign: bool) -> str:
 
 def _is_songs_audio_cache_valid(api_code: str, is_sign: bool) -> bool:
     path = _songs_audio_cache_path(api_code, is_sign)
-    if not os.path.exists(path):
-        return False
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not data.get("songs"):
-            return False
-        age_days = (time.time() - data.get("_fetched_at", 0)) / 86400
-        return age_days < CACHE_TTL_DAYS
-    except Exception:
-        return False
+    return _is_cache_payload_fresh(_read_cache_json(path), "songs")
 
 
 def _load_songs_audio_cache(api_code: str, is_sign: bool) -> tuple:
-    try:
-        with open(_songs_audio_cache_path(api_code, is_sign), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
-    except Exception:
+    data = _read_cache_json(_songs_audio_cache_path(api_code, is_sign))
+    if data is None:
         return None, "", 0
+    return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
 
 
 def _save_songs_audio_cache(api_code: str, is_sign: bool, songs: list, pub_name: str) -> None:
@@ -388,7 +394,7 @@ def fetch_songs_audio(
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
-    except Exception:
+    except requests.RequestException:
         if fallback_code and fallback_code != api_code:
             return fetch_songs_audio(fallback_code, force=force, fallback_code=None,
                                      is_sign_language=False)
@@ -416,26 +422,14 @@ def _clips_cache_path(api_code: str, is_sign: bool) -> str:
 
 def _is_clips_cache_valid(api_code: str, is_sign: bool) -> bool:
     path = _clips_cache_path(api_code, is_sign)
-    if not os.path.exists(path):
-        return False
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not data.get("clips"):
-            return False
-        age_days = (time.time() - data.get("_fetched_at", 0)) / 86400
-        return age_days < CACHE_TTL_DAYS
-    except Exception:
-        return False
+    return _is_cache_payload_fresh(_read_cache_json(path), "clips")
 
 
 def _load_clips_cache(api_code: str, is_sign: bool) -> tuple:
-    try:
-        with open(_clips_cache_path(api_code, is_sign), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("clips"), data.get("_fetched_at", 0)
-    except Exception:
+    data = _read_cache_json(_clips_cache_path(api_code, is_sign))
+    if data is None:
         return None, 0
+    return data.get("clips"), data.get("_fetched_at", 0)
 
 
 def _save_clips_cache(api_code: str, is_sign: bool, clips: list) -> None:
@@ -556,7 +550,7 @@ def fetch_clips(
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
-    except Exception:
+    except requests.RequestException:
         if fallback_code and fallback_code != api_code:
             return fetch_clips(fallback_code, force=force, fallback_code=None,
                                is_sign_language=False)
@@ -583,10 +577,11 @@ def fetch_clips(
 
 def get_cache_date(api_code: str, is_sign_language: bool = False) -> float | None:
     """Retorna o timestamp do cache de cânticos (vídeo) se existir."""
+    data = _read_cache_json(_cache_path(api_code, is_sign_language))
+    if data is None:
+        return None
+    ts = data.get("_fetched_at", 0)
     try:
-        with open(_cache_path(api_code, is_sign_language), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        ts = data.get("_fetched_at", 0)
         return float(ts) if ts else None
-    except Exception:
+    except (TypeError, ValueError):
         return None
