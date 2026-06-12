@@ -11,6 +11,8 @@ from app.core.ingest.manifest import CACHE_DIR_NAME, MANIFEST_FILE
 from app.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncIdentity,
+    MeetingSyncError,
+    MeetingSyncRecord,
 )
 from app.widgets.meetings.tree_controller import MeetingTreeController
 
@@ -21,6 +23,14 @@ class _Prefs:
 
     def value(self, key, default=None, *_args):
         return self._values.get(key, default)
+
+
+class _Signal:
+    def __init__(self):
+        self.calls = []
+
+    def emit(self, *args):
+        self.calls.append(args)
 
 
 def _identity(pub_type: str = "mwb") -> MeetingSyncIdentity:
@@ -88,7 +98,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 "thumbnail_cache_key": "thumb.jpg",
             }]
 
-            revision = service.save_tree(
+            record = service.save_tree(
                 folder,
                 _identity("mwb"),
                 nodes=nodes,
@@ -100,7 +110,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
             saved_node = raw["meeting_tree"]["nodes"][0]
 
-            self.assertEqual(revision, 1)
+            self.assertEqual(record.revision, 1)
             self.assertEqual(saved_node["media_ref"]["file_path"], "talk.mp4")
             self.assertNotIn("thumbnail_local_path", saved_node)
             loaded = service.load_tree(str(root), _identity("mwb"))
@@ -153,6 +163,64 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(
                 loaded.meeting_folder_imports["talk.mp4"]["path"],
                 str(media),
+            )
+
+    def test_stale_save_returns_merged_record_for_next_save(self):
+        service = MeetingLinkedFolderSync(_Prefs())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "2026-05-25 MW"
+            folder.mkdir()
+            first = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[{
+                    "id": "remote",
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": ""},
+                }],
+                deleted_source_keys={"remote-source"},
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=0,
+            )
+
+            merged = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[{
+                    "id": "local",
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": ""},
+                }],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=first.revision - 1,
+            )
+            self.assertEqual(
+                {node["id"] for node in merged.nodes},
+                {"local", "remote"},
+            )
+            self.assertEqual(merged.deleted_source_keys, {"remote-source"})
+
+            service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=merged.nodes,
+                deleted_source_keys=merged.deleted_source_keys,
+                linked_folder_files=merged.linked_folder_files,
+                meeting_folder_imports=merged.meeting_folder_imports,
+                expected_revision=merged.revision,
+            )
+            loaded = service.load_tree(str(root), _identity("mwb"))
+            self.assertIsNotNone(loaded)
+            assert loaded is not None
+            self.assertEqual(
+                {node["id"] for node in loaded.nodes},
+                {"local", "remote"},
             )
 
     def test_materialize_copies_manual_physical_file_to_root_without_deleting_origin(self):
@@ -269,7 +337,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertTrue(manual_root.exists())
             self.assertFalse(cache.exists())
             self.assertNotIn("linked_folder_source", detached[0])
-            self.assertNotIn("linked_folder_source", detached[1])
+            self.assertEqual(detached[1]["linked_folder_source"], str(folder))
 
 
 class MeetingTreeControllerSyncTests(unittest.TestCase):
@@ -304,6 +372,95 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertTrue(copied.exists())
             self.assertEqual(prepared[0]["media_ref"]["file_path"], str(copied))
             self.assertEqual(controller._linked_folder_files[str(copied)], "media")
+
+    def test_save_sync_manifest_adopts_saved_merged_record(self):
+        class FakeController:
+            pass
+
+        class FakeService:
+            def save_tree(self, *_args, **_kwargs):
+                return saved_record
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-25 MW"
+            folder.mkdir()
+            saved_record = MeetingSyncRecord(
+                folder=folder,
+                tree_key=_identity("mwb").tree_key,
+                pub_type="mwb",
+                monday=date(2026, 5, 25),
+                meeting_tag="MW",
+                folder_date=date(2026, 5, 25),
+                canonical_hash="hash",
+                nodes=[{"id": "remote", "type": "media", "children": []}],
+                deleted_source_keys={"remote-source"},
+                linked_folder_files={"remote.mp4": "remote"},
+                meeting_folder_imports={"remote.mp4": {"status": "processed"}},
+                revision=7,
+            )
+            controller = FakeController()
+            controller._sync_identity = _identity("mwb")
+            controller._sync_folder = str(folder)
+            controller._sync_revision = 3
+            controller._nodes = [{"id": "local", "type": "media", "children": []}]
+            controller._deleted_source_keys = set()
+            controller._linked_folder_files = {}
+            controller._meeting_folder_imports = {}
+            controller._sync_service = FakeService()
+            controller._apply_sync_record = (
+                lambda record: MeetingTreeController._apply_sync_record(
+                    controller,
+                    record,
+                )
+            )
+            controller._pause_sync_after_save_failure = (
+                lambda message: MeetingTreeController._pause_sync_after_save_failure(
+                    controller,
+                    message,
+                )
+            )
+
+            MeetingTreeController._save_sync_manifest(controller)
+
+            self.assertEqual(controller._nodes, saved_record.nodes)
+            self.assertEqual(controller._deleted_source_keys, {"remote-source"})
+            self.assertEqual(controller._linked_folder_files, {"remote.mp4": "remote"})
+            self.assertEqual(controller._sync_revision, 7)
+
+    def test_save_sync_manifest_failure_pauses_sync_and_warns(self):
+        class FakeController:
+            pass
+
+        class FailingService:
+            def save_tree(self, *_args, **_kwargs):
+                raise MeetingSyncError("manifest is unavailable")
+
+        controller = FakeController()
+        controller._sync_identity = _identity("mwb")
+        controller._sync_folder = "C:/tmp/2026-05-25 MW"
+        controller._sync_enabled = True
+        controller._sync_revision = 4
+        controller._nodes = []
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._sync_service = FailingService()
+        controller.syncStateChanged = _Signal()
+        warnings = []
+        controller._warn_sync_failed = warnings.append
+        controller._pause_sync_after_save_failure = (
+            lambda message: MeetingTreeController._pause_sync_after_save_failure(
+                controller,
+                message,
+            )
+        )
+
+        MeetingTreeController._save_sync_manifest(controller)
+
+        self.assertFalse(controller._sync_enabled)
+        self.assertEqual(controller._sync_revision, 0)
+        self.assertEqual(warnings, ["manifest is unavailable"])
+        self.assertEqual(controller.syncStateChanged.calls, [()])
 
 
 if __name__ == "__main__":

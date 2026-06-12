@@ -161,7 +161,7 @@ class MeetingLinkedFolderSync:
         linked_folder_files: dict[str, str],
         meeting_folder_imports: dict[str, dict[str, Any]],
         expected_revision: int,
-    ) -> int:
+    ) -> MeetingSyncRecord:
         with MANIFEST_LOCK:
             manifest = load_manifest(folder, strict=True)
             existing = manifest.get(MEETING_TREE_KEY)
@@ -187,7 +187,7 @@ class MeetingLinkedFolderSync:
                 save_imports = {**existing_record.meeting_folder_imports, **save_imports}
 
             revision = max(existing_revision, expected_revision) + 1
-            manifest[MEETING_TREE_KEY] = self._block_from_tree(
+            saved_block = self._block_from_tree(
                 folder,
                 identity,
                 nodes=save_nodes,
@@ -196,9 +196,10 @@ class MeetingLinkedFolderSync:
                 meeting_folder_imports=save_imports,
                 revision=revision,
             )
+            manifest[MEETING_TREE_KEY] = saved_block
             if not save_manifest(folder, manifest):
                 raise MeetingSyncError(f"Could not write {MANIFEST_FILE}.")
-            return revision
+            return self._record_from_block(folder, saved_block, identity)
 
     def delete_sync_metadata(self, folder: Path) -> None:
         manifest_path = folder / MANIFEST_FILE
@@ -270,8 +271,8 @@ class MeetingLinkedFolderSync:
         durable_dir.mkdir(parents=True, exist_ok=True)
 
         for node in iter_nodes(detached):
-            node.pop("linked_folder_source", None)
             if node.get("type") != "media":
+                node.pop("linked_folder_source", None)
                 continue
             for owner, field in self._local_url_fields(node):
                 value = str(owner.get(field) or "")
@@ -288,6 +289,10 @@ class MeetingLinkedFolderSync:
                     node.pop("thumbnail_cache_key", None)
                 else:
                     owner[field] = ""
+            if self._primary_media_file_is_direct_child(node, folder):
+                node["linked_folder_source"] = str(folder)
+            else:
+                node.pop("linked_folder_source", None)
         return detached
 
     def _configured_weekday(self, pub_type: str) -> int:
@@ -555,6 +560,18 @@ class MeetingLinkedFolderSync:
             except OSError:
                 return False
         return self._is_inside(source_path, target_dir)
+
+    def _primary_media_file_is_direct_child(self, node: Node, folder: Path) -> bool:
+        ref = node.get("media_ref")
+        if not isinstance(ref, dict):
+            return False
+        value = str(ref.get("file_path") or "")
+        if not value or value.startswith(("http://", "https://")):
+            return False
+        try:
+            return Path(value).resolve().parent == folder.resolve()
+        except OSError:
+            return False
 
     @staticmethod
     def _copyable_local_url(value: str) -> bool:
