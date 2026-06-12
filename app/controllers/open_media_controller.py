@@ -315,7 +315,7 @@ class OpenMediaController:
                 ),
             )
             return []
-        except Exception as err:
+        except (OSError, ValueError) as err:
             QMessageBox.warning(
                 self._window,
                 self._window.tr("Unsupported file"),

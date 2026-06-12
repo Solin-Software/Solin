@@ -164,7 +164,7 @@ def delete_dev_files() -> list[str]:
     for root in (paths.data_root, paths.cache_root):
         try:
             messages.append(delete_path_tree(root))
-        except Exception as exc:
+        except OSError as exc:
             messages.append(f"Failed to delete {root}: {exc}")
     return messages
 

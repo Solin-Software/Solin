@@ -29,6 +29,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Callable, Optional
+from urllib.parse import unquote
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
@@ -124,11 +125,7 @@ def _parse_multipart(body: bytes, boundary: bytes) -> list[dict]:
         if not cd_match:
             continue
         raw_name = cd_match.group(1).strip().strip("\"'")
-        try:
-            from urllib.parse import unquote
-            raw_name = unquote(raw_name)
-        except Exception:
-            log.debug("Failed to URL-decode uploaded filename", exc_info=True)
+        raw_name = unquote(raw_name)
         filename = _safe_filename(raw_name)
         if not filename:
             continue
@@ -614,7 +611,7 @@ class WifiReceiveServer(QObject):
                 server.server_close()
                 if server_thread is not None and server_thread is not threading.current_thread():
                     server_thread.join(timeout=timeout)
-            except Exception:
+            except Exception:  # noqa: BLE001 - server/thread shutdown boundary
                 log.warning("Failed to shutdown Wi-Fi server cleanly", exc_info=True)
             finally:
                 try:

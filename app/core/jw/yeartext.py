@@ -159,7 +159,7 @@ class YeartextService(QObject):
             if os.path.isfile(self._cache_path):
                 with open(self._cache_path, encoding="utf-8") as f:
                     self._cache = json.load(f)
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as exc:
             log.warning("[yeartext] Falha ao carregar cache: %s", exc)
             self._cache = {}
 
@@ -168,7 +168,7 @@ class YeartextService(QObject):
             os.makedirs(_paths.CACHE_DIR, exist_ok=True)
             with open(self._cache_path, "w", encoding="utf-8") as f:
                 json.dump(self._cache, f, ensure_ascii=False, indent=2)
-        except Exception as exc:
+        except (OSError, TypeError, ValueError) as exc:
             log.warning("[yeartext] Falha ao salvar cache: %s", exc)
 
     def _update_cache(self, api_code: str, year: int,

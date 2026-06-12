@@ -165,14 +165,14 @@ class TimerWidget(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             try:
                 self._qml.engine().retranslate()
-            except Exception:
+            except Exception:  # noqa: BLE001 - QML engine lifecycle boundary
                 log_ignored_exception(__name__, "Could not retranslate timer QML engine")
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
         try:
             self._qml.engine().retranslate()
-        except Exception:
+        except Exception:  # noqa: BLE001 - QML engine lifecycle boundary
             log_ignored_exception(__name__, "Could not refresh timer language")
         if self._bridge is not None:
             self._bridge.refresh_language()
@@ -194,5 +194,5 @@ class TimerWidget(QWidget):
         """
         try:
             self._qml.setSource(QUrl())
-        except Exception:
+        except Exception:  # noqa: BLE001 - QML engine lifecycle boundary
             log_ignored_exception(__name__, "Could not clear timer QML source")

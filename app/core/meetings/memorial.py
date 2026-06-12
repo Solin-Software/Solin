@@ -57,6 +57,10 @@ except ImportError:
     _HAS_CFFI = False
 
 
+class MemorialDownloadError(RuntimeError):
+    """Transport-independent failure while downloading Memorial resources."""
+
+
 def _chrome_headers() -> dict:
     return {
         "Accept": (
@@ -107,18 +111,24 @@ def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
                 req = _urllib_req.Request(url, headers={"User-Agent": _UA})
                 with _urlopen(req, timeout=timeout) as resp:
                     return resp.read()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - curl_cffi/urllib transport boundary
             last = exc
             if attempt < retries:
                 time.sleep(2.0 ** attempt)
-    raise last  # type: ignore[misc]
+    if last is None:
+        raise MemorialDownloadError(f"No download attempt was made for {url}")
+    raise MemorialDownloadError(f"Could not download {url}: {last}") from last
 
 
 def _http_get_json(url: str) -> Optional[dict]:
     try:
         data = _http_get(url, timeout=_TIMEOUT)
         return json.loads(data.decode())
-    except Exception as exc:
+    except (
+        MemorialDownloadError,
+        UnicodeError,
+        json.JSONDecodeError,
+    ) as exc:
         log.warning("GET JSON %s → %s", url, exc)
         return None
 
@@ -176,8 +186,8 @@ def memorial_date_for_year(year: int) -> Optional[date]:
 
             test_day = sunset.datetime() + timedelta(hours=20)
 
-    except Exception as exc:
-        log.error("Erro ao calcular data do Memorial %d: %s", year, exc)
+    except Exception:  # noqa: BLE001 - ephem exposes implementation-specific exceptions
+        log.exception("Erro ao calcular data do Memorial %d", year)
 
     return None
 
@@ -327,7 +337,14 @@ def _extract_jwpub_to_dir(pub: str, lang: str, issue: str,
                 inner.extractall(ep)
         if any(ep.glob("*.db")):
             return ep
-    except Exception as exc:
+    except (
+        EOFError,
+        NotImplementedError,
+        OSError,
+        RuntimeError,
+        zipfile.BadZipFile,
+        zipfile.LargeZipFile,
+    ) as exc:
         log.error("extract_jwpub %s: %s", jwpub_path, exc)
     return None
 
@@ -344,6 +361,7 @@ def _query_memorial_sqlite(pub_dir: Path) -> dict:
 
     db_path = dbs[0]
     result = {"cover": None, "videos": [], "thumb_path": None}
+    conn: sqlite3.Connection | None = None
 
     try:
         conn = sqlite3.connect(str(db_path))
@@ -383,10 +401,14 @@ def _query_memorial_sqlite(pub_dir: Path) -> dict:
             WHERE m.CategoryType = -1{null_cond}
         """).fetchall()
         result["videos"] = [dict(r) for r in rows]
-
-        conn.close()
-    except Exception as exc:
+    except (OSError, sqlite3.Error) as exc:
         log.error("query_memorial_sqlite %s: %s", db_path, exc)
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                log.debug("Could not close memorial database %s", db_path, exc_info=True)
 
     return result
 
@@ -518,7 +540,7 @@ class _MemorialWorker(QObject):
                     # _extract_jwpub_to_dir() below unpacks the fresh content.
                     self._cache.invalidate_extract(pub, lang, issue)
                     self._checksum_store.save(pub, lang, issue, checksum)
-                except Exception as exc:
+                except (MemorialDownloadError, OSError) as exc:
                     if is_cached:
                         # Download failed but stale cache exists → use it.
                         log.warning(
@@ -554,7 +576,7 @@ class _MemorialWorker(QObject):
         if sqlite_data["thumb_path"] and sqlite_data["thumb_path"].exists():
             try:
                 md.cover_bytes = sqlite_data["thumb_path"].read_bytes()
-            except Exception:
+            except OSError:
                 log.debug("Failed to read memorial thumbnail bytes", exc_info=True)
 
         if not md.cover_bytes and sqlite_data["cover"]:
@@ -564,7 +586,7 @@ class _MemorialWorker(QObject):
                 if cover_path.exists():
                     try:
                         md.cover_bytes = cover_path.read_bytes()
-                    except Exception:
+                    except OSError:
                         log.debug("Failed to read memorial cover bytes", exc_info=True)
 
         self.progress.emit(85)
@@ -654,7 +676,7 @@ class MemorialService(QObject):
     def __del__(self):
         try:
             self.shutdown(wait_ms=0)
-        except Exception:
+        except Exception:  # noqa: BLE001 - destructors must never raise during shutdown
             log.debug("Failed to shutdown MemorialService during finalization", exc_info=True)
 
     # ── Public API ────────────────────────────────────────────────────────────

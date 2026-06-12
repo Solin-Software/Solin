@@ -226,7 +226,7 @@ class OBSWebSocketService(QObject):
             if request_data:
                 d["requestData"] = request_data
             ws.send(json.dumps({"op": _OP_REQUEST, "d": d}))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - websocket-client request boundary
             log.warning("OBS %s failed: %s", request_type, exc)
 
     # ── Internals ─────────────────────────────────────────────────────────
@@ -267,7 +267,7 @@ class OBSWebSocketService(QObject):
         if ws:
             try:
                 ws.close()
-            except Exception:
+            except Exception:  # noqa: BLE001 - websocket-client cleanup boundary
                 log.debug("Failed to close OBS websocket", exc_info=True)
 
     def _set_state(self, state: OBSConnectionState, msg: str):
@@ -299,7 +299,7 @@ class OBSWebSocketService(QObject):
                     "requestData": {"sceneName": scene_name},
                 }
             }))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - websocket-client request boundary
             log.warning("OBS SetCurrentProgramScene failed: %s", exc)
 
     # ── Worker: connect + event loop ──────────────────────────────────────
@@ -311,7 +311,7 @@ class OBSWebSocketService(QObject):
     ) -> None:
         try:
             self._worker_connect(generation, stop_event)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - automation worker thread boundary
             if not stop_event.is_set():
                 try:
                     self._sig_error.emit(generation, str(exc))
@@ -342,7 +342,7 @@ class OBSWebSocketService(QObject):
 
         try:
             ws = websocket.create_connection(f"ws://localhost:{port}", timeout=6)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - websocket-client connection boundary
             self._sig_disconnected.emit(generation, str(exc))
             return
 
@@ -354,10 +354,10 @@ class OBSWebSocketService(QObject):
 
         try:
             scenes = self._do_handshake(ws, password, generation)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - OBS websocket protocol boundary
             try:
                 ws.close()
-            except Exception:
+            except Exception:  # noqa: BLE001 - websocket-client cleanup boundary
                 log.debug("Failed to close OBS websocket after handshake error", exc_info=True)
             with self._ws_lock:
                 if self._ws is ws:
@@ -384,7 +384,7 @@ class OBSWebSocketService(QObject):
                     fresh = self._request_scenes(ws)
                     if fresh:
                         self._sig_scenes.emit(generation, fresh)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - OBS websocket protocol boundary
                     log.debug("OBS scene refresh failed: %s", exc)
 
             try:
@@ -393,7 +393,7 @@ class OBSWebSocketService(QObject):
                     self._handle_event(json.loads(raw), generation)
             except websocket.WebSocketTimeoutException:
                 continue
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - websocket-client receive boundary
                 if not stop_event.is_set():
                     self._sig_disconnected.emit(generation, str(exc))
                 break
@@ -421,7 +421,7 @@ class OBSWebSocketService(QObject):
                 try:
                     scenes = self._request_scenes(ws)
                     self._sig_scenes.emit(generation, scenes)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - OBS websocket protocol boundary
                     log.warning("OBS SceneListChanged re-fetch failed: %s", exc)
 
         elif event_type == _EVT_SCENE_CHANGED:

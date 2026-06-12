@@ -104,7 +104,7 @@ def _read_title(path: str, fallback: str) -> str:
         if tags and tags.get("title"):
             val = tags["title"]
             return (val[0] if isinstance(val, list) else str(val)).strip() or fallback
-    except Exception:
+    except Exception:  # noqa: BLE001 - third-party media metadata parser boundary
         log_ignored_exception(__name__, "Could not extract cached media title")
     return fallback
 
@@ -172,7 +172,7 @@ class _ScanWorker(QObject):
                     content = _f.read().strip()
                     if content.startswith("http"):
                         original_url = content
-            except Exception:
+            except (OSError, UnicodeError):
                 log_ignored_exception(__name__, "Could not read cached media origin sidecar")
             items.append(_Item(fpath, fname, title, size, mtype, original_url))
 

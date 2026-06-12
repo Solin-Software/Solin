@@ -1,3 +1,4 @@
+import binascii
 import threading
 import urllib.request
 import sys
@@ -862,7 +863,7 @@ class BrowserWidget(
         if self._pinned_tab:
             try:
                 self._pinned_tab.view.stop_frame_stream()
-            except Exception:
+            except Exception:  # noqa: BLE001 - native webview cleanup boundary
                 log.debug("Could not stop pinned tab frame stream", exc_info=True)
         self._tab_capture_requests.clear()
         self._tab_capture_in_flight = False
@@ -891,7 +892,7 @@ class BrowserWidget(
                 max_height=max(0, tab.view.height()),
                 every_nth_frame=every_nth_frame,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - native webview stream boundary
             log.warning("Native frame stream unavailable: %s", exc)
             return False
 
@@ -929,7 +930,7 @@ class BrowserWidget(
 
         try:
             self._stop_tab_projection_internal()
-        except Exception:
+        except Exception:  # noqa: BLE001 - native webview cleanup boundary
             log.debug("Could not stop tab projection during browser cleanup", exc_info=True)
 
         for i in range(self._stack.count()):
@@ -938,7 +939,7 @@ class BrowserWidget(
                 continue
             try:
                 w.view.dispose()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - native webview cleanup boundary
                 log.debug("cleanup native tab %d: %s", i, exc)
 
     def _update_cast_btn_visual(self, active: bool):
@@ -1089,7 +1090,7 @@ class BrowserWidget(
             user32 = ctypes.windll.user32
             # VK_LBUTTON, VK_RBUTTON, VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2
             return any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x01, 0x02, 0x04, 0x05, 0x06))
-        except Exception:
+        except Exception:  # noqa: BLE001 - Win32 input-state API boundary
             return False
 
     def _grab_pinned_tab(self):
@@ -1108,7 +1109,7 @@ class BrowserWidget(
             return
         try:
             request_id = tab.view.capture_frame_jpeg()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - native webview capture boundary
             log.warning("Tab capture failed to start: %s", exc)
             self._tab_capture_in_flight = False
             return
@@ -1165,7 +1166,7 @@ class BrowserWidget(
             try:
                 _, b64 = data.split(",", 1)
                 self._deliver_image(base64.b64decode(b64))
-            except Exception as e:
+            except (ValueError, binascii.Error) as e:
                 log.warning("Base64 decode error: %s", e)
         else:
             def fetch():
@@ -1174,7 +1175,7 @@ class BrowserWidget(
                         data, headers={"User-Agent": "Mozilla/5.0"})
                     with _urlopen(req, timeout=15) as resp:
                         self._image_fetched_signal.emit(resp.read())
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     log.warning("Image fetch error: %s", e)
             threading.Thread(target=fetch, daemon=True).start()
 
@@ -1231,7 +1232,7 @@ class BrowserWidget(
             if self._tab_frame_stream_active:
                 try:
                     tab.view.stop_frame_stream()
-                except Exception:
+                except Exception:  # noqa: BLE001 - native webview cleanup boundary
                     log.debug("Could not pause tab frame stream for crop mode", exc_info=True)
                 self._tab_frame_stream_active = False
             self._proj_paused_for_crop = True
@@ -1306,7 +1307,7 @@ class BrowserWidget(
         """Captura região selecionada diretamente do WebView nativo."""
         try:
             request_id = tab.view.capture_region(int(x), int(y), int(w), int(h))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - native webview capture boundary
             log.warning("Crop capture failed to start: %s", exc)
             return
         self._crop_capture_requests.add((id(tab.view), request_id))

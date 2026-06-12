@@ -249,7 +249,7 @@ def convert_lo_sync(
                 image_format="JPEG",
                 progress_cb=progress_cb,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - conversion API normalizes subprocess/Qt failures
             shutil.rmtree(str(cache_dir), ignore_errors=True)
             raise RuntimeError(
                 f"Erro ao renderizar páginas de '{lo_path.name}': {exc}"
@@ -292,7 +292,8 @@ class LoConvertThread(QThread):
             self.pages_ready.emit(paths, stem)
         except RuntimeError as exc:
             self.conversion_failed.emit(str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - QThread reports unexpected failures via signal
+            log.exception("LibreOffice conversion worker failed")
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
 
@@ -311,10 +312,7 @@ def _flush_lo_dir(pages_root: Path, referenced_paths: set[str]) -> None:
             continue
         if any(os.path.normpath(str(img)) in norm_ref for img in images):
             continue
-        try:
-            shutil.rmtree(str(sub), ignore_errors=True)
-        except Exception:
-            log.debug("Failed to remove orphan LibreOffice cache directory %s", sub, exc_info=True)
+        shutil.rmtree(str(sub), ignore_errors=True)
 
 
 def flush_pptx_pages_dir(referenced_paths: set[str]) -> None:

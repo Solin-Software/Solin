@@ -45,7 +45,7 @@ def _init_com():
         # S_OK=0, S_FALSE=1 (already initialized) are both fine
         if hr not in (0, 1):
             log.debug("CoInitializeEx returned 0x%08X", hr)
-    except Exception:
+    except Exception:  # noqa: BLE001 - COM initialization boundary
         log.debug("Failed to initialize COM for Zoom worker", exc_info=True)
 
 
@@ -256,7 +256,7 @@ class ZoomService(QObject):
             windows, pids = _zc._find_zoom_windows_fast()
             main, _ = _zc._find_main_window(windows)
             connected = main is not None
-        except Exception:
+        except Exception:  # noqa: BLE001 - Zoom UIA connection boundary
             connected = False
             windows = []
         self._sig_connected.emit(generation, connected)
@@ -268,7 +268,7 @@ class ZoomService(QObject):
                     w["class_name"] == "ZPFloatToolbarClass" for w in windows
                 )
                 self._sig_sharing.emit(generation, is_sharing)
-            except Exception:
+            except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary
                 log.debug("Failed to detect Zoom sharing state", exc_info=True)
 
     def _on_connected_main(self, generation: int, connected: bool) -> None:
@@ -334,11 +334,11 @@ class ZoomService(QObject):
                     reveal=True,
                     include_participants=True,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001 - Zoom UIA cache-warm boundary
                 log.debug("Failed to warm Zoom toolbar cache during participant poll", exc_info=True)
 
             self._sig_participants.emit(generation, count, names)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Zoom UIA polling boundary
             log.debug("Zoom participant poll failed: %s", exc)
 
     def _on_participants_main(self, generation: int, count: int, names: list) -> None:
@@ -384,7 +384,7 @@ class ZoomService(QObject):
                 return
             self._sig_share_error.emit(generation, str(exc))
             self._sig_sharing.emit(generation, False)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom stop share failed: %s", exc)
             self._sig_share_error.emit(generation, str(exc))
 
@@ -412,7 +412,7 @@ class ZoomService(QObject):
                 is_dialog_open = ctypes.windll.user32.FindWindowW("ZPShareEntranceClass", None)
                 if not is_dialog_open:
                     self._sig_sharing.emit(generation, False)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary
             log.debug("Failed to poll Zoom sharing state", exc_info=True)
 
     def _on_sharing_main(self, generation: int, sharing: bool) -> None:
@@ -446,10 +446,10 @@ class ZoomService(QObject):
         try:
             _zc.leave_computer_audio()
             time.sleep(0.3)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom leave_computer_audio failed: %s", e)
 
         try:
             _zc.unmute_all()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom unmute_all failed: %s", e)

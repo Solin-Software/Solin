@@ -6,12 +6,15 @@ song load state and concurrent requests for the same language/mode are coalesced
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
 from .media_api import fetch_songs, fetch_songs_audio
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -78,7 +81,8 @@ class _FetchWorker(QRunnable):
                 float(fetched_at or 0.0),
                 bool(from_cache),
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - QRunnable reports domain failures via signal
+            log.exception("JW songs fetch worker failed")
             self.signals.failed.emit(self.request.key, str(exc))
 
 

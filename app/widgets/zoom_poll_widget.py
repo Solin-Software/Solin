@@ -146,7 +146,7 @@ def parse_zoom_poll_csv(filepath):
     try:
         with open(filepath, "r", encoding="utf-8-sig", newline="") as f:
             raw = f.read()
-    except Exception as e:
+    except (OSError, UnicodeError) as e:
         result.parse_error = str(e)
         return result
 
@@ -328,7 +328,7 @@ def _format_date(raw, date_format):
         py_fmt = py_fmt.replace(token, py_token)
     try:
         return dt.strftime(py_fmt)
-    except Exception:
+    except (ValueError, OSError):
         return raw
 
 

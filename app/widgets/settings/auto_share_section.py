@@ -41,13 +41,10 @@ class AutoShareSectionMixin:
     def _macos_accessibility_trusted(self) -> bool:
         if sys.platform != "darwin":
             return True
-        try:
-            from ...core.integrations.automation.screen_share import (
-                macos_accessibility_trusted,
-            )
-            return bool(macos_accessibility_trusted())
-        except Exception:
-            return False
+        from ...core.integrations.automation.screen_share import (
+            macos_accessibility_trusted,
+        )
+        return bool(macos_accessibility_trusted())
 
     def _build_auto_share_card(self):
         card, lay = self._card()

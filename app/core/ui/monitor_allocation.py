@@ -72,7 +72,7 @@ def _safe_call(obj, attr: str) -> str:
             return ""
         val = fn() if callable(fn) else fn
         return str(val) if val is not None else ""
-    except Exception:
+    except Exception:  # noqa: BLE001 - defensive QScreen capability probe
         return ""
 
 
@@ -80,7 +80,7 @@ def _safe_geometry(screen) -> str:
     try:
         g = screen.geometry()
         return f"{g.x()},{g.y()},{g.width()},{g.height()}"
-    except Exception:
+    except Exception:  # noqa: BLE001 - defensive QScreen geometry probe
         return ""
 
 

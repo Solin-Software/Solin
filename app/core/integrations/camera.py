@@ -185,10 +185,7 @@ class CameraService(QObject):
         name    = (name or "").strip()
 
         if self._known is None:
-            try:
-                self.refresh_cameras()
-            except Exception:
-                self._known = []
+            self.refresh_cameras()
 
         known = self._known or []
 
@@ -233,7 +230,7 @@ class CameraService(QObject):
                 self._qt_camera.stop()
                 self._qt_session.setCamera(None)
                 self._qt_camera.deleteLater()
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt multimedia cleanup boundary
                 _log.debug("Failed to release Qt camera cleanly", exc_info=True)
             self._qt_camera = None
 
@@ -272,7 +269,7 @@ class CameraService(QObject):
                 f"'{option.name}'"
             )
             self.started.emit(option.name)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Qt multimedia startup boundary
             _log.exception("[%s] Failed to start QCamera", option.name)
             self._active = None
             self.error.emit(str(exc))
@@ -283,7 +280,7 @@ class CameraService(QObject):
             return
         try:
             image = frame.toImage()
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt video-frame conversion boundary
             image = QImage()
         if not image.isNull():
             if image.format() != QImage.Format.Format_RGB888:
@@ -320,7 +317,7 @@ def _extract_device_path(qt_device: QCameraDevice) -> str:
             qt_device.description(), raw, path,
         )
         return path
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Qt camera-device metadata boundary
         _log.warning(
             "_extract_device_path failed for %r: %s",
             qt_device.description(), exc,
@@ -388,7 +385,7 @@ def discover_cameras() -> list[CameraOption]:
     try:
         qt_devices = list(QMediaDevices.videoInputs())
         _log.info("QMediaDevices.videoInputs() → %d device(s)", len(qt_devices))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Qt camera enumeration boundary
         _log.warning("QMediaDevices.videoInputs() failed: %s", exc)
         qt_devices = []
 

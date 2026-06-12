@@ -203,6 +203,6 @@ def _meeting_tree_referenced_urls() -> set[str]:
                 url = str(ref.get("file_path") or "")
                 if url:
                     referenced.add(os.path.normpath(url))
-    except Exception:
+    except Exception:  # noqa: BLE001 - meeting model adapter boundary
         log_ignored_exception(__name__, "Could not collect meeting thumbnail references")
     return referenced

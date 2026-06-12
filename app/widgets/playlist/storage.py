@@ -13,7 +13,7 @@ def _load_playlists() -> list[dict]:
         if os.path.exists(_paths.PLAYLISTS_FILE):
             with open(_paths.PLAYLISTS_FILE, "r", encoding="utf-8") as handle:
                 return json.load(handle).get("playlists", [])
-    except Exception:
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
         log_ignored_exception(__name__, "Could not load playlists file")
     return []
 
@@ -23,7 +23,7 @@ def _save_playlists(playlists: list[dict]) -> None:
         os.makedirs(_paths.DATA_DIR, exist_ok=True)
         with open(_paths.PLAYLISTS_FILE, "w", encoding="utf-8") as handle:
             json.dump({"playlists": playlists}, handle, ensure_ascii=False, indent=2)
-    except Exception:
+    except (OSError, UnicodeError, TypeError, ValueError):
         log_ignored_exception(__name__, "Could not save playlists file")
 
 
@@ -32,7 +32,7 @@ def _load_pending_deletions() -> list[str]:
         if os.path.exists(_paths.PENDING_DEL_FILE):
             with open(_paths.PENDING_DEL_FILE, "r", encoding="utf-8") as handle:
                 return json.load(handle).get("pending", [])
-    except Exception:
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
         log_ignored_exception(__name__, "Could not load pending deletions file")
     return []
 
@@ -42,5 +42,5 @@ def _save_pending_deletions(paths: list[str]) -> None:
         os.makedirs(_paths.DATA_DIR, exist_ok=True)
         with open(_paths.PENDING_DEL_FILE, "w", encoding="utf-8") as handle:
             json.dump({"pending": paths}, handle, ensure_ascii=False, indent=2)
-    except Exception:
+    except (OSError, UnicodeError, TypeError, ValueError):
         log_ignored_exception(__name__, "Could not save pending deletions file")

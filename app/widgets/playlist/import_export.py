@@ -315,7 +315,7 @@ class _PlaylistEditImportMixin:
                             items_list.insert(insert_at + i, ni)
                         insert_at += len(new_items)
                     total_added += len(new_items)
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 self._toast.show_message(
                     self.tr("⚠  Could not import: {name}").replace(
                         "{name}", Path(jwl_path).name

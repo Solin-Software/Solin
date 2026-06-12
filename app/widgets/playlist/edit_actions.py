@@ -16,7 +16,7 @@ from ...core.foundation.constants import (
     PDF_EXTS as _PDF_EXTS,
 )
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.writer import write_jwlplaylist
+from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, _media_type_from_url, _new_item
 from .thumbnails import _thumb_cache_path
@@ -203,7 +203,7 @@ class _PlaylistEditActionsMixin:
                 import shutil
 
                 shutil.copy2(thumb_path, _thumb_cache_path(pl_item_id))
-            except Exception as e:
+            except OSError as e:
                 import logging
 
                 logging.getLogger(__name__).warning(
@@ -333,7 +333,7 @@ class _PlaylistEditActionsMixin:
                 self.tr("Export complete"),
                 self.tr("Exported:\n{path}").replace("{path}", str(path)),
             )
-        except Exception as e:
+        except (OSError, ValueError, PlaylistWriteError) as e:
             QMessageBox.critical(self, self.tr("Export error"), str(e))
 
     def _on_back(self) -> None:

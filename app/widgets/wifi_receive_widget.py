@@ -243,7 +243,7 @@ def _generate_qr_png(url: str) -> bytes | None:
         buf = _io.BytesIO()
         qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
         return buf.getvalue()
-    except Exception:
+    except Exception:  # noqa: BLE001 - qrcode/Pillow codec boundary
         log_ignored_exception(__name__, "Could not generate Wi-Fi QR code")
         return None
 
@@ -1029,7 +1029,7 @@ class WifiReceiveWidget(QWidget):
 
         try:
             parsed = read_jwlplaylist(path, fallback_lang_code=fallback_lang)
-        except (_zipmod.BadZipFile, Exception):
+        except (_zipmod.BadZipFile, OSError, ValueError):
             self._toast.show_message(f"Erro ao ler playlist: {Path(orig_name).name}", ok=False)
             return
 
@@ -1383,7 +1383,7 @@ class WifiReceiveWidget(QWidget):
         """Para servidor e threads auxiliares antes da janela ser destruída."""
         try:
             self._server.stop(wait=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 - background server shutdown boundary
             log_ignored_exception(__name__, "Could not stop Wi-Fi receive server")
         self._cancel_qr_generation()
         for attr in ("_jwpub_threads",):
@@ -1392,5 +1392,5 @@ class WifiReceiveWidget(QWidget):
                     if thread.isRunning():
                         thread.quit()
                         thread.wait(3000)
-                except Exception:
+                except Exception:  # noqa: BLE001 - Qt worker-thread shutdown boundary
                     log_ignored_exception(__name__, "Could not stop Wi-Fi helper thread")

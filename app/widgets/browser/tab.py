@@ -95,7 +95,7 @@ class ProjectableWebView(NativeWebView):
     def _on_script_message(self, message: str) -> None:
         try:
             payload = _json.loads(message)
-        except Exception:
+        except _json.JSONDecodeError:
             return
         if not isinstance(payload, dict):
             return
@@ -179,7 +179,7 @@ class ProjectableWebView(NativeWebView):
     def ensure_active(self) -> None:
         try:
             self._ensure_created()
-        except Exception as exc:
+        except NativeWebViewError as exc:
             log.warning("Native view activation failed: %s", exc)
 
     def hideEvent(self, event):

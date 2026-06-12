@@ -70,13 +70,13 @@ def apply_corner_radius(
     try:
         import objc  # pyobjc-core, trazido por pyobjc-framework-Quartz
         from ctypes import c_void_p
-    except Exception:  # pragma: no cover - só ocorre se pyobjc faltar
+    except (ImportError, OSError):  # pragma: no cover - só ocorre se pyobjc faltar
         log.debug("pyobjc indisponível; cantos arredondados no macOS ignorados")
         return False
 
     try:
         handle = int(widget.winId())  # força criação do NSView nativo
-    except Exception:
+    except Exception:  # noqa: BLE001 - Qt/Cocoa bridge boundary
         log.debug("winId() indisponível ao arredondar cantos", exc_info=True)
         return False
 
@@ -93,7 +93,7 @@ def apply_corner_radius(
         layer.setMasksToBounds_(True)
         _apply_layer_border(layer, border_width, border_rgba)
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001 - Objective-C runtime boundary
         log.debug("Falha ao aplicar cornerRadius na CALayer", exc_info=True)
         return False
 
@@ -105,7 +105,7 @@ def _apply_layer_border(layer, border_width: float, border_rgba) -> None:
     if border_rgba is None or border_width <= 0:
         try:
             layer.setBorderWidth_(0.0)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Objective-C runtime boundary
             log.debug("Falha ao remover borda da CALayer", exc_info=True)
         return
     try:
@@ -114,5 +114,5 @@ def _apply_layer_border(layer, border_width: float, border_rgba) -> None:
         r, g, b, a = border_rgba
         layer.setBorderColor_(CGColorCreateGenericRGB(r, g, b, a))
         layer.setBorderWidth_(float(border_width))
-    except Exception:
+    except Exception:  # noqa: BLE001 - Quartz/Objective-C runtime boundary
         log.debug("Falha ao desenhar borda na CALayer (cantos seguem ok)", exc_info=True)

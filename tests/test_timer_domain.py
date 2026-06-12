@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import pytest
 from PySide6.QtCore import QCoreApplication
 
 from app.core.timer.models import (
@@ -281,6 +282,33 @@ def test_format_time_with_seconds_supports_locale_patterns():
     assert format_time_with_seconds(epoch, "") == "05:04:03"
     assert format_datetime(epoch, "dd/MM/yyyy HH:mm") == "01/01/2026 05:04"
     assert format_datetime(epoch, "%Y-%m-%d %H:%M") == "2026-01-01 05:04"
+
+
+def test_time_formatting_falls_back_for_invalid_user_patterns(monkeypatch):
+    import time as _time
+    from app.core.i18n import date as date_i18n
+
+    epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
+
+    def reject_pattern(_epoch, _pattern):
+        raise ValueError("invalid pattern")
+
+    monkeypatch.setattr(date_i18n, "_format_time_java_pattern", reject_pattern)
+
+    assert date_i18n.format_time_with_seconds(epoch, "HH:mm:ss") == "05:04:03"
+    assert date_i18n.format_datetime(epoch, "dd/MM/yyyy HH:mm") == "2026-01-01 05:04"
+
+
+def test_time_formatting_does_not_hide_unexpected_errors(monkeypatch):
+    from app.core.i18n import date as date_i18n
+
+    def fail_unexpectedly(_epoch, _pattern):
+        raise RuntimeError("programming error")
+
+    monkeypatch.setattr(date_i18n, "_format_time_java_pattern", fail_unexpectedly)
+
+    with pytest.raises(RuntimeError, match="programming error"):
+        date_i18n.format_time_with_seconds(0, "HH:mm:ss")
 
 
 # ── Redistribution ────────────────────────────────────────────────────────────

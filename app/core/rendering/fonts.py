@@ -135,8 +135,8 @@ class _DownloadWorker(QThread):
         log.debug("[font_manager] Convertendo WOFF2 → TTF para '%s'", font_name)
         try:
             ttf_data = _woff2_to_ttf(woff2_data)
-        except Exception as exc:
-            log.warning("[font_manager] Conversão falhou para '%s': %s", font_name, exc)
+        except Exception as exc:  # noqa: BLE001 - fontTools conversion boundary
+            log.exception("[font_manager] Conversão falhou para '%s'", font_name)
             self.failed.emit(font_name, f"Conversão falhou: {exc}")
             return
 
@@ -244,7 +244,7 @@ class FontManager(QObject):
                         "re-download.", local_size, cl,
                     )
                 return match
-        except Exception:
+        except (_url_err.URLError, OSError, ValueError):
             log.debug("[font_manager] HEAD falhou; usando cache existente.")
             return True
 

@@ -655,7 +655,7 @@ class MeetingTreeController(QObject):
                 self._node_from_playlist_item(raw, Path(path).stem)
                 for raw in data.get("items", [])
             ]
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             self._record_meeting_folder_failure(source, Path(path).name, str(exc))
             return
         self._insert_meeting_folder_nodes(source, nodes, list_id, insert_index)
@@ -679,11 +679,11 @@ class MeetingTreeController(QObject):
         try:
             self._info_queue.info_ready.disconnect(self._on_info_ready)
             self._info_queue.duration_ready.disconnect(self._on_duration_ready)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting tree info queue")
         try:
             self._svc.video_resolved.disconnect(self._on_video_resolved)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting tree video resolver")
         try:
             mgr = MediaCacheManager.instance()
@@ -691,7 +691,7 @@ class MeetingTreeController(QObject):
             mgr.cache_removed.disconnect(self._on_cache_removed)
             mgr.prefetch_progress.disconnect(self._on_prefetch_progress)
             mgr.prefetch_error.disconnect(self._on_prefetch_error)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting tree cache signals")
 
     def disk_thumbnail(self, item_id: str) -> QPixmap | None:
@@ -782,7 +782,7 @@ class MeetingTreeController(QObject):
                 shutil.copy2(thumb_path, target)
                 node["thumbnail_cache_key"] = _meeting_thumb_cache_key(node_id)
                 node["thumbnail_local_path"] = target
-            except Exception:
+            except OSError:
                 log_ignored_exception(__name__, "Could not copy meeting item thumbnail")
         self._insert_nodes(list_id or "root", insert_index, [node])
 
@@ -901,7 +901,7 @@ class MeetingTreeController(QObject):
                     self._node_from_playlist_item(raw, Path(path).stem)
                     for raw in data.get("items", [])
                 ]
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 self._warn_import_failed(Path(path).name, str(exc))
                 continue
             if nodes:
@@ -1517,7 +1517,8 @@ class MeetingTreeController(QObject):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             if not pixmap.save(path, "JPEG", THUMB_JPEG_QUALITY):
                 return ""
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt image codec boundary
+            log_ignored_exception(__name__, "Could not save meeting thumbnail")
             return ""
         node["thumbnail_cache_key"] = _meeting_thumb_cache_key(item_id)
         node["thumbnail_local_path"] = path

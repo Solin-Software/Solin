@@ -156,7 +156,7 @@ def format_time_with_seconds(epoch: float, pattern: str | None = None) -> str:
         if "%" in fmt:
             return time.strftime(fmt, time.localtime(epoch))
         return _format_time_java_pattern(epoch, fmt)
-    except Exception:
+    except ValueError:
         return time.strftime("%H:%M:%S", time.localtime(epoch))
 
 
@@ -167,7 +167,7 @@ def format_datetime(epoch: float, pattern: str | None = None) -> str:
         if "%" in fmt:
             return time.strftime(fmt, time.localtime(epoch))
         return _format_time_java_pattern(epoch, fmt)
-    except Exception:
+    except ValueError:
         return time.strftime("%Y-%m-%d %H:%M", time.localtime(epoch))
 
 

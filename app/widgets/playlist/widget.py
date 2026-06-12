@@ -144,11 +144,11 @@ class _PlaylistEditView(
             threads.clear()
         try:
             self.catalog_bridge.cleanup()
-        except Exception:
+        except Exception:  # noqa: BLE001 - widget cleanup boundary
             log_ignored_exception(__name__, "Could not cleanup playlist catalog bridge")
         try:
             self.songs_bridge.cleanup()
-        except Exception:
+        except Exception:  # noqa: BLE001 - widget cleanup boundary
             log_ignored_exception(__name__, "Could not cleanup playlist songs bridge")
         svc = getattr(self.lang, "jw_lang_service", None) if self.lang else None
         if svc is not None:
@@ -282,7 +282,7 @@ class _PlaylistEditView(
             MediaCacheManager.instance().cache_removed.disconnect(self._on_cache_removed)
             MediaCacheManager.instance().prefetch_progress.disconnect(self._on_prefetch_progress)
             MediaCacheManager.instance().prefetch_error.disconnect(self._on_prefetch_error)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect playlist cache signals")
 
     def _on_cache_changed(self, url: str):
@@ -1078,5 +1078,5 @@ class PlaylistWidget(QWidget):
         """Stop background work owned by child views."""
         try:
             self._edit_view.cleanup()
-        except Exception:
+        except Exception:  # noqa: BLE001 - widget cleanup boundary
             log_ignored_exception(__name__, "Could not cleanup playlist edit view")

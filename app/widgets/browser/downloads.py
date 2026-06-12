@@ -128,7 +128,7 @@ class _BrowserDownloadsMixin:
                 with open(done_path, "w", encoding="utf-8") as fh:
                     fh.write(url)
                 ready.emit(dest_path, title, kind)
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 log.warning('Download for playlist failed "%s": %s', title, exc)
                 try:
                     if os.path.isfile(tmp_path):
@@ -188,7 +188,7 @@ class _BrowserDownloadsMixin:
                 os.replace(tmp_path, dest_path)
                 with open(done_path, "w") as fh:
                     fh.write(url)
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 log.warning('Cache save failed for "%s": %s', filename, exc)
                 try:
                     if os.path.isfile(tmp_path):
@@ -244,7 +244,7 @@ class _BrowserDownloadsMixin:
                 with open(done_path, "w") as fh:
                     fh.write(url)
                 sig.emit(dest_path, title, "image")
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 log.warning('Image download for playlist failed "%s": %s', raw_name, exc)
                 try:
                     if os.path.isfile(tmp_path):

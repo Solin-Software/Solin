@@ -15,13 +15,13 @@ actual fullscreen windows to the media and timer-output controllers).
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot, QStandardPaths
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.i18n.date import format_time_with_seconds, week_label
 from ..core.meetings.publications import current_monday
 from ..core.meetings.section_meta import SECTION_META
@@ -46,6 +46,8 @@ from ..core.i18n.timer_part_titles import display_part_title
 from ..core.meetings.colors import _section_colors
 from ..core.timer.part_titles import is_indexed_part_title_source
 from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
+
+log = logging.getLogger(__name__)
 
 
 # Stable key per section — used by the QML to translate the header (via the
@@ -333,7 +335,8 @@ class TimerBridge(QObject):
                 date_format=date_format,
                 time_format=time_format,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - PDF export adapter boundary
+            log.exception("Timer PDF export failed")
             QMessageBox.critical(
                 self._window,
                 self.tr("Export failed"),
@@ -476,7 +479,7 @@ class TimerBridge(QObject):
             try:
                 if win.screen() == screen:
                     return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - Qt screen-lifecycle boundary
                 continue
         return False
 
@@ -520,10 +523,7 @@ class TimerBridge(QObject):
         self._allocation.set_owner(screen, OWNER_OFF)
         # Keep the media side's in-memory "hidden" set in sync so its monitor
         # menu shows this screen as available to "Show".
-        try:
-            self._window._deactivated_screens.add(screen.name())
-        except Exception:
-            log_ignored_exception(__name__, "Could not mark timer screen as deactivated")
+        self._window._deactivated_screens.add(screen.name())
         self._output.reconcile()   # fade the clock out
         self.monitorsChanged.emit()
 

@@ -111,7 +111,13 @@ class LanguageManager(QObject):
                     data = json.load(f)
                 code = data["meta"]["code"]
                 self._meta[code] = data["meta"]
-            except Exception as exc:
+            except (
+                OSError,
+                UnicodeError,
+                json.JSONDecodeError,
+                KeyError,
+                TypeError,
+            ) as exc:
                 log.warning("Falha ao carregar metadados de idioma %s: %s", path, exc)
 
     def _restore_saved_language(self) -> None:

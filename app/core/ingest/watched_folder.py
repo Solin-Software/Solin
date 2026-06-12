@@ -229,7 +229,12 @@ def _load_manifest(subfolder: Path) -> dict:
         if not isinstance(data.get("processed"), dict):
             data["processed"] = {}
         return data
-    except Exception:
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        TypeError,
+    ):
         log.warning("Manifest corrupted in %s — will re-process", subfolder)
         return {"version": 1, "processed": {}}
 
@@ -255,12 +260,15 @@ def _save_manifest(subfolder: Path, manifest: dict) -> bool:
                 os.fsync(temp_file.fileno())
             os.replace(temp_path, mf)
         return True
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:
         log.error("Cannot write manifest to %s: %s", mf, exc)
         return False
     finally:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                log.warning("Cannot remove temporary manifest %s", temp_path, exc_info=True)
 
 
 def _commit_processed_entry(
@@ -909,9 +917,12 @@ def _publish_staged_outputs(
             os.replace(staged_path, final_path)
             published.append(final_path)
         return [str(path) for path in published]
-    except Exception:
+    except Exception:  # noqa: BLE001 - transactional rollback must cover every failure
         for path in published:
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                log.warning("Could not roll back published output %s", path, exc_info=True)
         raise
 
 
@@ -962,7 +973,8 @@ class WatchedFolderDocConverter(QThread):
             self.conversion_failed.emit(str(exc))
         except RuntimeError as exc:
             self.conversion_failed.emit(str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - QThread reports unexpected failures via signal
+            log.exception("Document conversion worker failed")
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
     def _convert_pdf(self, pdf_path: Path, dest_dir: Path) -> list[str]:
@@ -1089,7 +1101,7 @@ class WatchedFolderSyncThread(QThread):
                     self._remove_replaced_outputs(cache, fp, previous, outputs)
                 except InterruptedError:
                     raise
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - per-file sync fault isolation
                     if outputs and not committed:
                         self._remove_uncommitted_outputs(cache, fp, outputs)
                     log.error("Sync failed for %s: %s", fp.name, exc)
@@ -1100,8 +1112,8 @@ class WatchedFolderSyncThread(QThread):
 
         except InterruptedError:
             log.info("Watched-folder sync cancelled for %s", self._subfolder)
-        except Exception as exc:
-            log.error("Sync thread error: %s", exc)
+        except Exception as exc:  # noqa: BLE001 - QThread reports terminal failure via signal
+            log.exception("Watched-folder sync thread failed")
             self.sync_failed.emit(str(exc))
 
     def _process_file(self, fp: Path, cache: Path,

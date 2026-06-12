@@ -15,8 +15,8 @@ extend-exclude = [
 
 [tool.ruff.lint]
 # F: Pyflakes correctness, B: bugbear bug-prone patterns,
-# S110: no silent try/except/pass blocks.
-select = ["E9", "F", "B", "S110"]
+# S110: no silent try/except/pass blocks, BLE001: no unreviewed broad catches.
+select = ["E9", "F", "B", "S110", "BLE001"]
 
 [tool.ruff.format]
 quote-style = "double"

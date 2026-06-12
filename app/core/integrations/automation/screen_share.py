@@ -63,7 +63,7 @@ def send_hotkey(shortcut: str) -> bool:
         return False
     try:
         return send_key_sequence(shortcut)
-    except Exception:
+    except Exception:  # noqa: BLE001 - desktop automation backend boundary
         log.exception("send_hotkey failed: %s", shortcut)
         return False
 
@@ -83,7 +83,7 @@ def macos_accessibility_trusted() -> bool | None:
             return bool(Quartz.AXIsProcessTrusted())
         except AttributeError:
             pass
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - PyObjC accessibility boundary
             log.warning("Could not read macOS Accessibility permission via PyObjC: %s", exc)
             return False
 
@@ -394,7 +394,7 @@ def _run_macos_click_sequence(
     def _safe_post(callback, point) -> bool:
         try:
             return bool(callback(point))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Quartz event callback boundary
             log.warning("macOS mouse event post failed: %s", exc)
             return False
 
@@ -653,7 +653,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
                 width=width,
                 height=height,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - Win32 enumeration callback boundary
             log.debug("Skipping Win32 window during Zoom enumeration: %s", exc)
         return True
 
@@ -661,7 +661,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
         callback = WNDENUMPROC(_callback)
         if not user32.EnumWindows(callback, 0):
             return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Win32 API boundary
         log.warning("Win32 Zoom window enumeration failed: %s", exc)
         return None
 
@@ -728,7 +728,7 @@ def _list_zoom_windows_macos() -> dict[str, _ZoomWindowInfo] | None:
             | Quartz.kCGWindowListExcludeDesktopElements,
             Quartz.kCGNullWindowID,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - PyObjC window-server boundary
         log.warning("macOS Zoom window enumeration failed: %s", exc)
         return None
 

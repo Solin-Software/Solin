@@ -28,6 +28,26 @@ from app.core.profiles.manager import ProfileManager
 from app.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
 
 
+class PublicationSqlErrorBoundaryTests(unittest.TestCase):
+    class _Connection:
+        def __init__(self, error):
+            self._error = error
+
+        def execute(self, *_args, **_kwargs):
+            raise self._error
+
+    def test_expected_sqlite_error_uses_absence_fallback(self):
+        conn = self._Connection(sqlite3.OperationalError("missing table"))
+
+        self.assertIsNone(_find_mwb_doc_id(conn, date(2026, 5, 25)))
+
+    def test_unexpected_query_error_is_not_silenced(self):
+        conn = self._Connection(RuntimeError("programming error"))
+
+        with self.assertRaisesRegex(RuntimeError, "programming error"):
+            _find_mwb_doc_id(conn, date(2026, 5, 25))
+
+
 def media(**kwargs) -> MeetingMedia:
     base = {
         "multimedia_id": 1,

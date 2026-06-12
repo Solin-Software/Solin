@@ -266,19 +266,13 @@ class ProfileManager(QObject):
         self._save_profiles()
 
         # Remove dados persistentes do perfil.
-        try:
-            shutil.rmtree(self.profile_dir(profile_id), ignore_errors=True)
-            shutil.rmtree(_native_webview_data_dir(self._data_dir, profile_id), ignore_errors=True)
-        except Exception as exc:
-            log.warning("[ProfileManager] Falha ao remover pasta do perfil %s: %s", profile_id, exc)
+        shutil.rmtree(self.profile_dir(profile_id), ignore_errors=True)
+        shutil.rmtree(_native_webview_data_dir(self._data_dir, profile_id), ignore_errors=True)
 
-        try:
-            from app.core.foundation import paths as _paths
-            if _paths.CACHE_DIR:
-                shutil.rmtree(Path(_paths.CACHE_DIR) / "profiles" / profile_id, ignore_errors=True)
-                shutil.rmtree(_native_webview_cache_dir(_paths.CACHE_DIR, profile_id), ignore_errors=True)
-        except Exception as exc:
-            log.warning("[ProfileManager] Falha ao remover cache do perfil %s: %s", profile_id, exc)
+        from app.core.foundation import paths as _paths
+        if _paths.CACHE_DIR:
+            shutil.rmtree(Path(_paths.CACHE_DIR) / "profiles" / profile_id, ignore_errors=True)
+            shutil.rmtree(_native_webview_cache_dir(_paths.CACHE_DIR, profile_id), ignore_errors=True)
 
         # Remove configs isoladas do perfil no QSettings.
         profile_org = f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}"
@@ -287,7 +281,7 @@ class ProfileManager(QObject):
                 s = QSettings(profile_org, app_name)
                 s.clear()
                 s.sync()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - Qt settings backend cleanup boundary
                 log.warning(
                     "[ProfileManager] Falha ao limpar QSettings %s/%s: %s",
                     profile_org, app_name, exc,
@@ -426,7 +420,14 @@ class ProfileManager(QObject):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             self._profiles = [ProfileInfo.from_dict(d) for d in data.get("profiles", [])]
-        except Exception as exc:
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
             log.error("[ProfileManager] Falha ao ler profiles.json: %s", exc)
             self._profiles = []
 

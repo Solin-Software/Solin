@@ -141,7 +141,7 @@ class AutoKeyDispatcher(QObject):
     def _send(self, sequence: str) -> None:
         try:
             send_key_sequence(sequence)
-        except Exception:
+        except Exception:  # noqa: BLE001 - desktop automation worker boundary
             log.exception("Failed to send automatic key sequence: %s", sequence)
 
 

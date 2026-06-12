@@ -120,7 +120,7 @@ class UpdateWorker(QObject):
             )
             resp.raise_for_status()
             payload = resp.json()
-        except Exception as exc:
+        except (requests.RequestException, ValueError) as exc:
             log.debug("[Update] fetch failed: %s", exc)
             self.fetch_failed.emit(str(exc))
             return

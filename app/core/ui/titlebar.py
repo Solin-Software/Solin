@@ -64,7 +64,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
     try:
         ver = sys.getwindowsversion()           # type: ignore[attr-defined]
         build = ver.build
-    except Exception:
+    except AttributeError:
         build = 0
 
     # DWMWA_CAPTION_COLOR (35) — Windows 11 Build 22000+
@@ -149,6 +149,6 @@ def apply_titlebar_color(window, hex_color: str = "#1A231F") -> bool:
             log.debug("Titlebar color not supported on %s", platform)
             return False
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - platform-native titlebar boundary
         log.debug("apply_titlebar_color failed: %s", exc)
         return False

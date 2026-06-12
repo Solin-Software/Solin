@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from ...core.foundation import paths as _paths
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.reader import read_jwlplaylist
-from ...core.playlists.writer import write_jwlplaylist
+from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from .cleanup import _cleanup_playlist_files
@@ -368,7 +368,7 @@ class _PlaylistListView(QWidget):
                 self.tr("Export complete"),
                 self.tr("Exported:\n{path}").replace("{path}", str(path)),
             )
-        except Exception as e:
+        except (OSError, ValueError, PlaylistWriteError) as e:
             QMessageBox.critical(self, self.tr("Export error"), str(e))
 
     def _import_playlist(self) -> None:
@@ -413,7 +413,7 @@ class _PlaylistListView(QWidget):
                     {"id": str(uuid.uuid4()), "name": pl_name, "items": items}
                 )
                 imported += 1
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 QMessageBox.warning(
                     self,
                     self.tr("Import error"),
@@ -440,7 +440,7 @@ class _PlaylistListView(QWidget):
         new_path = Path(folder_path).parent / new_name
         try:
             Path(folder_path).rename(new_path)
-        except Exception as exc:
+        except OSError as exc:
             QMessageBox.critical(self, self.tr("Error"), str(exc))
             return
         self._rebuild_watched_section()
@@ -462,7 +462,7 @@ class _PlaylistListView(QWidget):
             import shutil as _shutil
 
             _shutil.rmtree(folder_path, ignore_errors=False)
-        except Exception as exc:
+        except OSError as exc:
             QMessageBox.critical(self, self.tr("Error"), str(exc))
             return
         self._rebuild_watched_section()
@@ -502,5 +502,5 @@ class _PlaylistListView(QWidget):
                 self.tr("Export complete"),
                 self.tr("Exported:\n{path}").replace("{path}", str(path)),
             )
-        except Exception as exc:
+        except (OSError, ValueError, PlaylistWriteError) as exc:
             QMessageBox.critical(self, self.tr("Export error"), str(exc))

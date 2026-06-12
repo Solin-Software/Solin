@@ -115,10 +115,7 @@ class LiveIntegrationController:
         if not camera_enabled or ndi_enabled:
             window._quick_toolbar.set_obs_camera_stream_available(False)
             return
-        try:
-            opt = self.selected_camera_option()
-        except Exception:
-            opt = None
+        opt = self.selected_camera_option()
         window._quick_toolbar.set_obs_camera_stream_available(bool(opt and opt.is_virtual))
 
     def set_camera_stream_active(self, active: bool) -> None:
@@ -168,7 +165,7 @@ class LiveIntegrationController:
         window._tab_proj_active = False
         try:
             window._navigation.stop_browser_tab_projection()
-        except Exception:
+        except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before OBS stream", exc_info=True)
         window.media_ctrl.stop()
         window._camera_service.stop()
@@ -205,7 +202,7 @@ class LiveIntegrationController:
         window._tab_proj_active = False
         try:
             window._navigation.stop_browser_tab_projection()
-        except Exception:
+        except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before camera stream", exc_info=True)
         window.media_ctrl.stop()
         window._ndi_service.stop()

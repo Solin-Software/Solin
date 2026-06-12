@@ -91,7 +91,7 @@ class ShutdownController:
             return
         try:
             lazy_pages.cleanup_browser()
-        except Exception:
+        except Exception:  # noqa: BLE001 - application shutdown cleanup boundary
             log.warning("Failed to cleanup lazy browser page during shutdown", exc_info=True)
 
     @staticmethod
@@ -99,7 +99,7 @@ class ShutdownController:
         if widget and hasattr(widget, "cleanup"):
             try:
                 widget.cleanup()
-            except Exception:
+            except Exception:  # noqa: BLE001 - application shutdown cleanup boundary
                 log.warning("Widget cleanup failed during shutdown", exc_info=True)
 
     @staticmethod
@@ -113,7 +113,7 @@ class ShutdownController:
                 thread.finished.connect(thread.deleteLater)
             elif thread in threads:
                 threads.remove(thread)
-        except Exception:
+        except Exception:  # noqa: BLE001 - worker-thread shutdown boundary
             log.warning("Failed to stop conversion thread during shutdown", exc_info=True)
 
     @classmethod

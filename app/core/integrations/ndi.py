@@ -276,7 +276,7 @@ class NDIReceiverService(QObject):
                 lib = self._ensure_lib()
                 records = lib.find_source_records(timeout_ms)
                 self._sources_discovered.emit(generation, records)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - NDI SDK worker-thread boundary
                 if generation == self._source_refresh_generation:
                     self.error.emit(str(exc))
         threading.Thread(target=_run, daemon=True, name="ndi-source-refresh").start()
@@ -394,14 +394,14 @@ class NDIReceiverService(QObject):
                     continue
                 elif frame_type == _NDI_FRAME_ERROR:
                     raise NDIRuntimeError("NDI receiver lost the stream.")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - NDI native receiver boundary
             if not stop_event.is_set():
                 self._worker_error.emit(generation, str(exc))
         finally:
             if recv and self._lib:
                 try:
                     self._lib.dll.NDIlib_recv_destroy(recv)
-                except Exception:
+                except Exception:  # noqa: BLE001 - NDI native cleanup boundary
                     log.debug("Failed to destroy NDI receiver", exc_info=True)
             try:
                 self._worker_stopped.emit(generation)

@@ -51,7 +51,13 @@ class MeetingTreeStore:
             if not isinstance(data["trees"], dict):
                 data["trees"] = {}
             return data
-        except Exception as exc:
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+        ) as exc:
             log.warning("Could not load meeting tree store %s: %s", path, exc)
             return self._empty()
 

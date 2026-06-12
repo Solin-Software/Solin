@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import urllib.error
@@ -58,7 +59,6 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-import os
 
 from app.core.network.http import urlopen as _urlopen
 from app.core.foundation.constants import (
@@ -132,6 +132,34 @@ class _Location:
 
 # ── Parser principal ──────────────────────────────────────────────────────────
 
+class PlaylistReadError(ValueError):
+    """A playlist archive exists but its internal data cannot be read."""
+
+
+def _database_text(
+    value: object,
+    field_name: str,
+    *,
+    default: str | None = None,
+    required: bool = False,
+) -> str:
+    """Validate a SQLite value that the playlist format defines as text."""
+    if value is None:
+        if required:
+            raise PlaylistReadError(f"Missing required playlist field: {field_name}")
+        return default or ""
+    if not isinstance(value, str):
+        raise PlaylistReadError(
+            f"Invalid playlist field {field_name}: expected text, got {type(value).__name__}"
+        )
+    if not value:
+        if required:
+            raise PlaylistReadError(f"Empty required playlist field: {field_name}")
+        if default is not None:
+            return default
+    return value
+
+
 class JWLPlaylistReader:
     """Lê um .jwlplaylist e retorna a estrutura de playlist normalizada."""
 
@@ -147,10 +175,21 @@ class JWLPlaylistReader:
         if not self._path.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {self._path}")
 
-        with zipfile.ZipFile(self._path, "r") as zf:
-            self._zip = zf
-            self._names_in_zip = set(zf.namelist())
-            return self._parse_zip()
+        try:
+            with zipfile.ZipFile(self._path, "r") as zf:
+                self._zip = zf
+                self._names_in_zip = set(zf.namelist())
+                return self._parse_zip()
+        except zipfile.BadZipFile:
+            raise
+        except (
+            EOFError,
+            KeyError,
+            NotImplementedError,
+            RuntimeError,
+            zipfile.LargeZipFile,
+        ) as exc:
+            raise PlaylistReadError("Invalid or unreadable playlist archive") from exc
 
     # ── Internos ──────────────────────────────────────────────────────────────
 
@@ -182,6 +221,8 @@ class JWLPlaylistReader:
         import tempfile as _tmp
 
         fd, tmp_path = _tmp.mkstemp(suffix=".db", prefix="solin_jwl_")
+        src: sqlite3.Connection | None = None
+        mem: sqlite3.Connection | None = None
         try:
             os.write(fd, db_bytes)
             os.close(fd)
@@ -190,23 +231,46 @@ class JWLPlaylistReader:
             src = sqlite3.connect(tmp_path)
             mem = sqlite3.connect(":memory:")
             src.backup(mem)
-            src.close()
-        except Exception as e:
-            log.error("Falha ao carregar userData.db: %s", e)
+        except (OSError, sqlite3.Error) as exc:
+            log.error("Falha ao carregar userData.db: %s", exc)
             try:
                 if fd >= 0:
                     os.close(fd)
             except OSError:
-                pass
-            raise
+                log.debug("Could not close temporary playlist descriptor", exc_info=True)
+            if mem is not None:
+                try:
+                    mem.close()
+                except sqlite3.Error:
+                    log.debug("Could not close in-memory playlist database", exc_info=True)
+            raise PlaylistReadError("Invalid or unreadable userData.db") from exc
         finally:
-            Path(tmp_path).unlink(missing_ok=True)
+            if src is not None:
+                try:
+                    src.close()
+                except sqlite3.Error:
+                    log.debug("Could not close source playlist database", exc_info=True)
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError:
+                log.warning("Could not remove temporary playlist database %s", tmp_path, exc_info=True)
 
+        if mem is None:
+            raise PlaylistReadError("Could not initialize playlist database")
         mem.row_factory = sqlite3.Row
         try:
             return self._extract(mem)
+        except PlaylistReadError:
+            log.warning("Invalid playlist database contents", exc_info=True)
+            raise
+        except (sqlite3.Error, TypeError, ValueError, OverflowError) as exc:
+            log.warning("Invalid playlist database contents", exc_info=True)
+            raise PlaylistReadError("Invalid playlist database contents") from exc
         finally:
-            mem.close()
+            try:
+                mem.close()
+            except sqlite3.Error:
+                log.debug("Could not close in-memory playlist database", exc_info=True)
 
     def _extract(self, con: sqlite3.Connection) -> dict:
         # ── Nome da playlist ──────────────────────────────────────────────────
@@ -345,7 +409,7 @@ class JWLPlaylistReader:
 
             if label_col:
                 try:
-                    lbl = r[label_col] or ""
+                    lbl = _database_text(r[label_col], f"PlaylistItem.{label_col}")
                 except (IndexError, KeyError):
                     lbl = ""
             else:
@@ -403,9 +467,25 @@ class JWLPlaylistReader:
             return result
 
         for row in rows:
-            file_path  = row["FilePath"]
-            mime_type  = row["MimeType"] or "image/jpeg"
-            orig_name  = row["OriginalFilename"] or file_path
+            file_path = _database_text(
+                row["FilePath"],
+                "IndependentMedia.FilePath",
+                required=True,
+            )
+            mime_type = _database_text(
+                row["MimeType"],
+                "IndependentMedia.MimeType",
+                default="image/jpeg",
+            )
+            orig_name = _database_text(
+                row["OriginalFilename"],
+                "IndependentMedia.OriginalFilename",
+                default=file_path,
+            )
+            hash_value = _database_text(
+                row["Hash"],
+                "IndependentMedia.Hash",
+            )
 
             # Tenta ler os bytes do ZIP (busca exata e parcial)
             data = self._read_zip_entry(file_path)
@@ -417,7 +497,7 @@ class JWLPlaylistReader:
                 filepath      = file_path,
                 original_name = orig_name,
                 mime_type     = mime_type,
-                hash_         = row["Hash"],
+                hash_         = hash_value,
                 data          = data,
             )
 
@@ -452,7 +532,10 @@ class JWLPlaylistReader:
         for row in rows:
             result[row["PlaylistItemId"]] = _Location(
                 location_id           = row["LocationId"],
-                key_symbol            = row["KeySymbol"],
+                key_symbol            = _database_text(
+                    row["KeySymbol"],
+                    "Location.KeySymbol",
+                ),
                 track                 = row["Track"],
                 issue_tag             = row["IssueTagNumber"],
                 doc_id                = row["DocumentId"],

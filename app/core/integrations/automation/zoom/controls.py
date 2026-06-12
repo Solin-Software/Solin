@@ -103,7 +103,7 @@ def _extract_control_id(element) -> Optional[str]:
         help_text = element.legacy_properties().get("Help", "")
         if help_text and help_text.startswith("{"):
             return json.loads(help_text).get("controlID")
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to extract Zoom controlID from UIA element")
     return None
 
@@ -132,7 +132,7 @@ def _poll(fn, timeout: float = POPUP_TIMEOUT, interval: float = POLL_INTERVAL):
     while True:
         try:
             result = fn()
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             result = None
         if result or time.monotonic() >= deadline:
             return result
@@ -191,7 +191,7 @@ def _find_zoom_windows_fast() -> tuple[list, set]:
                 title      = w.window_text() or ""
                 class_name = w.class_name() or ""
                 pid        = w.process_id()
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
             title_l = title.lower()
             is_zoom_title = title_l in {"zoom", "zoom workplace"} or title_l.startswith("zoom ")
@@ -206,7 +206,7 @@ def _find_zoom_windows_fast() -> tuple[list, set]:
                     "handle": handle, "title": title,
                     "class_name": class_name, "pid": pid,
                 }
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to enumerate Zoom windows")
     return list(found.values()), pids
 
@@ -258,9 +258,9 @@ def _find_main_window(windows: list) -> tuple[Optional[dict], bool]:
                         break
                     if d_class in {"VideoRenderWndClass", "VideoContainerWndClass"}:
                         score += 40
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to score candidate Zoom window")
         if score:
             scored.append((score, w))
@@ -291,7 +291,7 @@ def _wait_for_window_class(class_name: str, timeout: float = POPUP_TIMEOUT) -> O
                             "handle": el.handle, "title": el.name or "",
                             "class_name": class_name, "pid": el.process_id,
                         }
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 _debug_ignored("Failed to search Zoom popup by class")
         return None
 
@@ -323,9 +323,9 @@ def _find_element_by_cid(win, control_id: str, timeout: float = 0.0,
                         if use_cache and cache_handle:
                             _toolbar_cache.put(cache_handle, control_id, d)
                         return d
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to scan Zoom descendants by controlID")
         return _find_structural_fallback(win, control_id)
 
@@ -360,9 +360,9 @@ def _find_elements_by_cid(win, control_ids: set,
                         _toolbar_cache.put(cache_handle, cid, d)
                     if len(result) == len(control_ids):
                         break
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to scan Zoom descendants by controlID set")
     missing = remaining - set(result)
     for cid in missing:
@@ -378,7 +378,7 @@ def _rect_is_visible(element) -> bool:
     try:
         rect = element.rectangle()
         return rect.width() > 0 and rect.height() > 0
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return False
 
 
@@ -399,9 +399,9 @@ def _find_toolbar_panel(win) -> Optional[object]:
             try:
                 if d.class_name() == "ZPControlPanelClass" and _rect_is_visible(d):
                     panels.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to find Zoom toolbar panel")
     if panels:
         return max(panels, key=lambda p: p.rectangle().bottom)
@@ -424,9 +424,9 @@ def _toolbar_items_by_type(win, friendly_class_name: str) -> list:
                     continue
                 if _rect_inside(rect, panel_rect):
                     items.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return []
     return sorted(items, key=lambda item: (item.rectangle().left, item.rectangle().top))
 
@@ -439,9 +439,9 @@ def _button_has_numeric_badge(button) -> bool:
                     text = (child.window_text() or "").strip()
                     if text.isdigit():
                         return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to inspect Zoom participant badge")
     return False
 
@@ -455,7 +455,7 @@ def _find_toolbar_button_by_action(buttons: list, patterns: list[str]) -> Option
             if score > best_score:
                 best = button
                 best_score = score
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue
     return best
 
@@ -513,9 +513,9 @@ def _find_participants_fallback(win, control_id: str) -> Optional[object]:
             try:
                 if d.friendly_class_name() == "ListBox" and _rect_is_visible(d):
                     listboxes.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
 
     if control_id == "unified_primary_list":
@@ -526,7 +526,7 @@ def _find_participants_fallback(win, control_id: str) -> Optional[object]:
             try:
                 if any(c.friendly_class_name() == "ListItem" for c in box.descendants()):
                     return box
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
         return listboxes[-1]
 
@@ -544,9 +544,9 @@ def _find_participants_fallback(win, control_id: str) -> Optional[object]:
                 rect = d.rectangle()
                 if rect.top >= list_rect.bottom - 5 and rect.left >= list_rect.left - 5:
                     footer_items.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
     footer_items.sort(key=lambda item: item.rectangle().left)
 
@@ -568,7 +568,7 @@ def _find_confirmation_dialog_fallback(win, control_id: str) -> Optional[object]
 
     try:
         class_name = win.class_name() or ""
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
     if class_name not in {"zChangeNameWndClass", "ZGridMultiLevelPopupWndClass", "WCN_ModelessWnd"}:
         return None
@@ -576,7 +576,7 @@ def _find_confirmation_dialog_fallback(win, control_id: str) -> Optional[object]
     try:
         win_rect = win.rectangle()
         descendants = win.descendants()
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
 
     if control_id == "chk_option":
@@ -587,7 +587,7 @@ def _find_confirmation_dialog_fallback(win, control_id: str) -> Optional[object]
                     rect = d.rectangle()
                     if _rect_inside(rect, win_rect, tolerance=12):
                         checkboxes.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
         checkboxes.sort(key=lambda item: (item.rectangle().top, item.rectangle().left))
         return checkboxes[0] if checkboxes else None
@@ -606,7 +606,7 @@ def _find_confirmation_dialog_fallback(win, control_id: str) -> Optional[object]
             if rect.width() < 35 or rect.height() < 24:
                 continue
             buttons.append(d)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue
     buttons.sort(key=lambda item: (item.rectangle().top, item.rectangle().left))
     return buttons[0] if buttons else None
@@ -645,7 +645,7 @@ def _participants_panel_visible(win) -> bool:
     """
     try:
         win_rect = win.rectangle()
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return False
 
     # Busca estrutural: ListBox visível, DENTRO da janela, com ListItem children
@@ -665,9 +665,9 @@ def _participants_panel_visible(win) -> bool:
                 # Confirma que é a lista de participantes (tem ListItem children)
                 if any(c.friendly_class_name() == "ListItem" for c in d.descendants()):
                     return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to determine whether Zoom participants panel is visible")
 
     return False
@@ -698,7 +698,7 @@ def _send_alt_to_reveal_toolbar(win) -> None:
         time.sleep(0.05)
         win.type_keys("%")
         return
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to reveal Zoom toolbar with window focus")
     send_keys("%")
 
@@ -715,9 +715,9 @@ def _find_element_by_text(win, patterns: list[str], timeout: float = 0.0) -> Opt
                     title = d.window_text() or ""
                     if _matches_any(title, patterns):
                         return d
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to find Zoom element by text")
         return None
 
@@ -739,7 +739,7 @@ def _safe_invoke(element, fallback_hwnd: Optional[int] = None) -> bool:
         try:
             getattr(element, method)()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue
 
     if fallback_hwnd:
@@ -761,7 +761,7 @@ def _safe_invoke(element, fallback_hwnd: Optional[int] = None) -> bool:
             time.sleep(0.01)
             ctypes.windll.user32.PostMessageW(fallback_hwnd, 0x0202, 0, lparam) # WM_LBUTTONUP
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             import logging
             logging.getLogger(__name__).warning("PostMessage click failed: %s", e)
 
@@ -781,9 +781,9 @@ def _click_in_popup(popup_win, patterns: list[str]) -> bool:
                     _safe_invoke(d)
                     time.sleep(0.1)
                     return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to click Zoom popup item")
     return False
 
@@ -865,7 +865,7 @@ class ZoomContext:
                 if required:
                     return any(cid in found for cid in required)
                 return bool(found)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 return False
 
         # Verifica primeiro sem tocar no foco. Quando um controle especifico foi
@@ -880,7 +880,7 @@ class ZoomContext:
         for _ in range(2):
             try:
                 _send_alt_to_reveal_toolbar(win)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 last_error = e
                 continue
 
@@ -889,7 +889,7 @@ class ZoomContext:
 
             try:
                 _move_mouse_to_reveal_toolbar(win)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 last_error = e
             if _poll(_has_required_control, timeout=1.0):
                 return
@@ -1052,7 +1052,7 @@ class _StopShareCache:
             if rect.width() <= 0 or rect.height() <= 0:
                 raise ValueError("Botao invisivel no cache")
             return self._btn
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             log.debug("[CACHE-POLLER] Cache invalido: %s", e)
             self._btn = None
             self._float_handle = None
@@ -1101,10 +1101,10 @@ def _scan_stop_btn(float_handle: int) -> Optional[object]:
                     # Garante que o Zoom ja popularizou as strings e coordenadas na UI
                     if text.strip() and rect.width() > 0 and rect.height() > 0:
                         last_button = d
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
         return last_button
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
 
 
@@ -1169,9 +1169,9 @@ def get_meeting_state() -> MeetingState:
                         if video_state != VideoState.UNKNOWN:
                             state.video       = video_state
                             state.video_title = title
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to infer Zoom state from visible toolbar controls")
         return state
 
@@ -1188,7 +1188,7 @@ def get_meeting_state() -> MeetingState:
             title             = audio_el.window_text() or ""
             state.audio_title = title
             state.audio       = _audio_button_state_from_text(title)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom audio button state")
 
     video_el = elements.get("btn_muteVideo")
@@ -1197,7 +1197,7 @@ def get_meeting_state() -> MeetingState:
             title             = video_el.window_text() or ""
             state.video_title = title
             state.video       = _video_button_state_from_text(title)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom video button state")
 
     part_el = elements.get("btn_paticipants")
@@ -1207,7 +1207,7 @@ def get_meeting_state() -> MeetingState:
             m = re.search(r"(\d+)", title)
             if m:
                 state.participant_count = int(m.group(1))
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom participant count from toolbar")
 
     return state
@@ -1254,7 +1254,7 @@ def toggle_audio() -> AudioState:
         el = _find_toolbar_button("btn_muteAudio", timeout=1.0, fresh=True) or el
         title = el.window_text() or ""
         return _audio_button_state_from_text(title)
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to read Zoom audio state after toggle")
     return AudioState.UNKNOWN
 
@@ -1326,7 +1326,7 @@ def toggle_video() -> VideoState:
         el = _find_toolbar_button("btn_muteVideo", timeout=1.0, fresh=True) or el
         title = el.window_text() or ""
         return _video_button_state_from_text(title)
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to read Zoom video state after toggle")
     return VideoState.UNKNOWN
 
@@ -1390,7 +1390,7 @@ def _open_participants_panel() -> bool:
         try:
             w = ctx.get_main_window()
             return _participants_panel_visible(w)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             return None
 
     if not _poll(_panel_appeared, timeout=POPUP_TIMEOUT):
@@ -1405,7 +1405,7 @@ def _open_participants_panel() -> bool:
                 w, PARTICIPANTS_PANEL_CONTROL_IDS,
                 use_cache=True, cache_handle=h,
             )
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to warm Zoom participants panel cache")
 
     return True
@@ -1416,7 +1416,7 @@ def _close_participants_panel() -> None:
     ctx = _get_ctx()
     try:
         win = ctx.get_main_window()
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return
     if not _participants_panel_visible(win):
         return
@@ -1465,7 +1465,7 @@ def mute_all(allow_unmute: bool = False) -> None:
                     chk = _find_element_by_cid(tw, "chk_option")
                     if chk:
                         return tw
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
         return None
 
@@ -1492,7 +1492,7 @@ def mute_all(allow_unmute: bool = False) -> None:
             if needs_toggle:
                 _safe_invoke(chk)
                 time.sleep(0.1)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Could not read Zoom mute-all checkbox state; skipped blind toggle")
 
     # ── Confirma o dialogo ───────────────────────────────────────
@@ -1505,7 +1505,7 @@ def mute_all(allow_unmute: bool = False) -> None:
         try:
             send_keys("{ENTER}")
             time.sleep(0.15)
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to confirm Zoom mute-all dialog with Enter fallback")
 
     if opened_by_us:
@@ -1558,7 +1558,7 @@ def unmute_all() -> None:
                 if (d.window_text() or "").strip():
                     first_item = d
                     break
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue
 
     if first_item:
@@ -1567,7 +1567,7 @@ def unmute_all() -> None:
     else:
         try:
             popup_win.type_keys("{ESC}")
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to close Zoom participants popup after missing menu item")
         if opened_by_us:
             _close_participants_panel()
@@ -1598,12 +1598,12 @@ def _open_audio_dropdown():
     try:
         win.set_focus()
         time.sleep(0.05)
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to focus Zoom window before opening audio dropdown")
 
     try:
         audio_menu.invoke()
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return None
 
     popup_info = _wait_for_window_class("WCN_ModelessWnd", timeout=POPUP_TIMEOUT)
@@ -1626,7 +1626,7 @@ def leave_computer_audio() -> None:
 
     try:
         popup_win.type_keys("{ESC}")
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to close Zoom audio dropdown after missing leave item")
     raise RuntimeError("'Leave Computer Audio' item not found in audio menu")
 
@@ -1650,9 +1650,9 @@ def _click_penultimate_audio_menu_item(popup_win) -> bool:
                 if re.fullmatch(r"\d+\s+of\s+\d+", title, flags=re.IGNORECASE):
                     continue
                 items.append(d)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return False
     items.sort(key=lambda item: (item.rectangle().top, item.rectangle().left))
     if len(items) < 2:
@@ -1685,9 +1685,9 @@ def _find_join_audio_btn_in_popup(popup_win):
                     title = d.window_text() or ""
                     if title and _matches_any(title, _JOIN_AUDIO_BTN_PATTERNS):
                         best_by_text = d
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
-    except Exception:
+    except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         _debug_ignored("Failed to scan Zoom join-audio popup")
     return best_by_cid or best_by_text or best_by_position
 
@@ -1721,7 +1721,7 @@ def join_computer_audio() -> None:
                     return
                 try:
                     popup_win.type_keys("{ESC}")
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     _debug_ignored("Failed to close Zoom join-audio popup after missing button")
                 raise RuntimeError("Join audio button not found in popup (tried controlID + text)")
             return  # reconectou direto sem popup
@@ -1746,7 +1746,7 @@ def join_computer_audio() -> None:
                 return
             try:
                 popup_win.type_keys("{ESC}")
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 _debug_ignored("Failed to close Zoom join-audio popup")
         return  # reconectou direto
 
@@ -1791,7 +1791,7 @@ def stop_screen_share() -> None:
             _stop_cache.invalidate()
             if _poll(_float_gone, timeout=1.0):
                 return
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _stop_cache.invalidate()
 
     time.sleep(4)  # Breve pausa para UI reagir
@@ -1803,7 +1803,7 @@ def stop_screen_share() -> None:
         if btn:
             try:
                 _safe_invoke(btn, fallback_hwnd=float_handle)
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 _debug_ignored("Failed to invoke Zoom stop-share button")
             
             if _poll(_float_gone, timeout=1.0):
@@ -1842,7 +1842,7 @@ def dump_descendants(win, max_items: int = 200) -> None:
             if count >= max_items:
                 log.debug("  ... (truncado em %s itens)", max_items)
                 break
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             continue
 
 
@@ -1877,7 +1877,7 @@ def get_participant_names() -> list[str]:
                     if name.strip():
                         names.append(name.strip())
                         found_by_id = True
-            except Exception:
+            except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 continue
         if found_by_id:
             return names
@@ -1896,7 +1896,7 @@ def get_participant_names() -> list[str]:
                                 text = (child.window_text() or "").strip()
                                 if text and not text.startswith("("):
                                     statics.append(text)
-                        except Exception:
+                        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                             continue
                     if statics:
                         names.append(statics[0])
@@ -1904,9 +1904,9 @@ def get_participant_names() -> list[str]:
                         text = (item.window_text() or "").strip()
                         if text:
                             names.append(text.split(",")[0].strip())
-                except Exception:
+                except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to collect Zoom participant names")
         return names
     finally:
