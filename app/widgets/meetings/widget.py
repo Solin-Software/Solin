@@ -142,6 +142,7 @@ class StudyDetailView(QWidget):
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
+        self.controller.set_sync_root(self._watched_folder)
 
         self.catalog_bridge = JWMediaCatalogBridge(self)
         self.catalog_bridge.set_language_code(lang_code)
@@ -185,6 +186,7 @@ class StudyDetailView(QWidget):
 
     def _populate(self):
         if hasattr(self, "controller"):
+            self.controller.set_sync_root(self._watched_folder)
             self.controller.refresh_week(self._pub, self._wd)
             if self._watched_folder:
                 self.controller.inject_linked_folder_media(self._watched_folder)
@@ -988,6 +990,9 @@ class MeetingsWidget(QWidget):
         self._watched_folder = path or ""
         if hasattr(self, "_folder_watcher"):
             self._folder_watcher.set_root(self._watched_folder)
+        for detail_view in self._details.values():
+            if hasattr(detail_view, "controller"):
+                detail_view.controller.set_sync_root(self._watched_folder)
         self._do_folder_refresh()
 
     def _on_folder_changed(self, *args):

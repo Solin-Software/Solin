@@ -19,7 +19,17 @@ app = QApplication([])
 from app.core.i18n.manager import LanguageManager
 from app.widgets.wifi_receive_widget import WifiReceiveWidget
 
-widget = WifiReceiveWidget(LanguageManager())
+class _Notifications:
+    def success(self, *_args):
+        pass
+    def information(self, *_args):
+        pass
+    def warning(self, *_args):
+        pass
+    def error(self, *_args):
+        pass
+
+widget = WifiReceiveWidget(LanguageManager(), notifications=_Notifications())
 widget.show()
 app.processEvents()
 stylesheet_errors = [

@@ -114,6 +114,20 @@ Rectangle {
                 }
 
                 HeaderButton {
+                    id: syncBtn
+                    visible: root.hasController && controller.syncAvailable
+                    enabled: root.hasController && controller.syncAvailable && !controller.syncBusy
+                    iconName: "folder_link"
+                    iconSize: 14
+                    colorHex: controller.syncEnabled ? "3fb950" : "8b949e"
+                    accentButton: controller.syncEnabled
+                    toolTipText: controller.syncEnabled
+                                 ? qsTranslate("MeetingSync", "Turn off meeting sync")
+                                 : qsTranslate("MeetingSync", "Sync meeting to linked folder")
+                    onClicked: if (root.hasController) controller.toggleSync()
+                }
+
+                HeaderButton {
                     id: plusBtn
                     iconName: "plus"
                     iconSize: 14
