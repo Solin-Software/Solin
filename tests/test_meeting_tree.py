@@ -23,7 +23,6 @@ from solin.core.meetings.publications import (
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
-from solin.core.foundation import paths as app_paths
 from solin.core.profiles.manager import ProfileManager
 from solin.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
 
@@ -860,6 +859,18 @@ class JwpubDownloadGateTests(unittest.TestCase):
 
 
 class MeetingTreeStoreTests(unittest.TestCase):
+    def test_can_use_explicit_store_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "custom_tree_store.json"
+            store = MeetingTreeStore(path=path)
+            nodes = [{"id": "n1", "type": "section", "children": []}]
+
+            store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
+
+            self.assertEqual(store.path, path)
+            self.assertTrue(path.exists())
+            self.assertEqual(store.load("mwb:2026-05-25:T:20260500"), (nodes, "hash"))
+
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
             pm = ProfileManager()
@@ -916,12 +927,10 @@ class MeetingTreeStoreTests(unittest.TestCase):
             pm = ProfileManager()
             old_data_dir = getattr(pm, "_data_dir", "")
             old_active_id = getattr(pm, "_active_id", "")
-            old_thumb_dir = getattr(app_paths, "MEETING_THUMB_CACHE_DIR", "")
             try:
                 pm.init(tmp)
                 thumb_dir = Path(tmp) / "meeting_thumbs"
                 thumb_dir.mkdir()
-                app_paths.MEETING_THUMB_CACHE_DIR = str(thumb_dir)
                 keep = thumb_dir / "keep.jpg"
                 stale = thumb_dir / "stale.jpg"
                 keep.write_bytes(b"keep")
@@ -938,14 +947,13 @@ class MeetingTreeStoreTests(unittest.TestCase):
                     "hash",
                 )
 
-                flush_meeting_thumbs_dir()
+                flush_meeting_thumbs_dir(thumb_dir=thumb_dir)
 
                 self.assertTrue(keep.exists())
                 self.assertFalse(stale.exists())
             finally:
                 pm._data_dir = old_data_dir
                 pm._active_id = old_active_id
-                app_paths.MEETING_THUMB_CACHE_DIR = old_thumb_dir
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
         fixture = Path("tests/fixtures/synthetic_meeting_workbook.jwpub")

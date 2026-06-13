@@ -7,11 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from solin.core.foundation import paths as _paths
+from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.profiles.manager import ProfileManager
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
@@ -19,21 +18,26 @@ from .tree_types import Node, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
 
-_FILENAME = "meeting_trees.json"
-
 
 class MeetingTreeStore:
     """Load/save meeting trees in the active profile directory."""
 
-    def __init__(self, profile_id: str = "") -> None:
-        self._pm = ProfileManager()
+    def __init__(
+        self,
+        profile_id: str = "",
+        *,
+        profile_manager: ProfileManager | None = None,
+        path: str | Path | None = None,
+    ) -> None:
+        self._pm = profile_manager or ProfileManager()
         self._profile_id = profile_id
+        self._path = Path(path) if path is not None else None
 
     @property
     def path(self) -> Path:
-        if hasattr(self._pm, "meeting_trees_file"):
-            return Path(self._pm.meeting_trees_file(self._profile_id))
-        return self._pm.profile_dir(self._profile_id) / _FILENAME
+        if self._path is not None:
+            return self._path
+        return self._pm.paths_for(self._profile_id).meeting_trees_file
 
     def _empty(self) -> dict[str, Any]:
         return {"version": 1, "trees": {}}
@@ -143,19 +147,34 @@ class MeetingTreeStore:
         write_json_atomic(path, data, sort_keys=True, trailing_newline=True)
 
 
-def flush_meeting_thumbs_dir(profile_id: str = "") -> None:
+def _stored_file_name(value: str) -> str:
+    if "\\" in value:
+        return PureWindowsPath(value).name
+    return Path(value).name
+
+
+def flush_meeting_thumbs_dir(
+    profile_id: str = "",
+    *,
+    store: MeetingTreeStore | None = None,
+    thumb_dir: str | Path | None = None,
+) -> None:
     """
     Remove cached meeting thumbnails no longer referenced by meeting_trees.json.
 
     Playlist thumbnails have their own cleanup path; meeting thumbnails live in
     cache/meeting_thumbs so meeting cleanup can use meeting tree state directly.
     """
-    thumb_dir = getattr(_paths, "MEETING_THUMB_CACHE_DIR", "")
-    if not thumb_dir or not os.path.isdir(thumb_dir):
+    target_dir = (
+        Path(thumb_dir)
+        if thumb_dir is not None
+        else RuntimePaths.from_legacy_globals().meeting_thumb_cache_dir
+    )
+    if not target_dir.is_dir():
         return
 
     referenced: set[str] = set()
-    data = MeetingTreeStore(profile_id).load_all()
+    data = (store or MeetingTreeStore(profile_id)).load_all()
     for record in data.get("trees", {}).values():
         if not isinstance(record, dict):
             continue
@@ -170,16 +189,16 @@ def flush_meeting_thumbs_dir(profile_id: str = "") -> None:
                 referenced.add(f"{item_id}.jpg")
             cache_key = str(node.get("thumbnail_cache_key") or "")
             if cache_key:
-                referenced.add(os.path.basename(cache_key))
+                referenced.add(_stored_file_name(cache_key))
             local_path = str(node.get("thumbnail_local_path") or "")
             if local_path:
-                referenced.add(os.path.basename(local_path))
+                referenced.add(_stored_file_name(local_path))
 
-    for fname in os.listdir(thumb_dir):
-        if fname not in referenced:
-            path = os.path.join(thumb_dir, fname)
-            try:
-                if os.path.isfile(path):
-                    os.remove(path)
-            except OSError:
-                pass
+    for path in target_dir.iterdir():
+        if path.name in referenced:
+            continue
+        try:
+            if path.is_file():
+                path.unlink()
+        except OSError:
+            pass
