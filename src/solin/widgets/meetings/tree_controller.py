@@ -49,6 +49,11 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncIdentity,
 )
 from ...core.meetings.publications import MeetingMedia, WeekData
+from ...core.meetings.thumbnails import (
+    meeting_thumb_cache_key,
+    meeting_thumb_dir,
+    meeting_thumb_path,
+)
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
@@ -118,21 +123,6 @@ def _usable_ref_file_path(ref: dict[str, Any]) -> str:
 
 def _ref_title(ref: dict[str, Any]) -> str:
     return _clean_title(str(ref.get("label") or ref.get("caption") or ""))
-
-
-def _meeting_thumb_dir() -> str:
-    configured = getattr(_paths, "MEETING_THUMB_CACHE_DIR", "")
-    if configured:
-        return configured
-    return os.path.join(_paths.CACHE_DIR, "meeting_thumbs")
-
-
-def _meeting_thumb_cache_key(item_id: str) -> str:
-    return f"{item_id}.jpg"
-
-
-def _meeting_thumb_cache_path(item_id: str) -> str:
-    return os.path.join(_meeting_thumb_dir(), _meeting_thumb_cache_key(item_id))
 
 
 class MeetingTreeController(QObject):
@@ -960,10 +950,11 @@ class MeetingTreeController(QObject):
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
             try:
-                target = _meeting_thumb_cache_path(node_id)
-                os.makedirs(os.path.dirname(target), exist_ok=True)
+                target_path = meeting_thumb_path(node_id)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target = os.fspath(target_path)
                 shutil.copy2(thumb_path, target)
-                node["thumbnail_cache_key"] = _meeting_thumb_cache_key(node_id)
+                node["thumbnail_cache_key"] = meeting_thumb_cache_key(node_id)
                 node["thumbnail_local_path"] = target
             except OSError:
                 log_ignored_exception(__name__, "Could not copy meeting item thumbnail")
@@ -1729,7 +1720,7 @@ class MeetingTreeController(QObject):
                 getattr(_paths, "CACHE_DIR", ""),
                 getattr(_paths, "IMAGES_DIR", ""),
                 getattr(_paths, "EMBEDDED_DIR", ""),
-                getattr(_paths, "MEETING_THUMB_CACHE_DIR", ""),
+                os.fspath(meeting_thumb_dir()),
             )
             if root
         )
@@ -1967,7 +1958,7 @@ class MeetingTreeController(QObject):
         stored = str((node or {}).get("thumbnail_local_path") or "")
         if stored:
             return stored
-        return _meeting_thumb_cache_path(item_id) if item_id else ""
+        return os.fspath(meeting_thumb_path(item_id)) if item_id else ""
 
     def _has_local_thumbnail(self, node: Node | None) -> bool:
         item_id = str((node or {}).get("id", ""))
@@ -1978,17 +1969,17 @@ class MeetingTreeController(QObject):
         item_id = str(node.get("id", ""))
         if not item_id or pixmap is None or pixmap.isNull():
             return ""
-        path = _meeting_thumb_cache_path(item_id)
+        path = meeting_thumb_path(item_id)
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            if not pixmap.save(path, "JPEG", THUMB_JPEG_QUALITY):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not pixmap.save(os.fspath(path), "JPEG", THUMB_JPEG_QUALITY):
                 return ""
         except Exception:  # noqa: BLE001 - Qt image codec boundary
             log_ignored_exception(__name__, "Could not save meeting thumbnail")
             return ""
-        node["thumbnail_cache_key"] = _meeting_thumb_cache_key(item_id)
-        node["thumbnail_local_path"] = path
-        return path
+        node["thumbnail_cache_key"] = meeting_thumb_cache_key(item_id)
+        node["thumbnail_local_path"] = os.fspath(path)
+        return os.fspath(path)
 
     def _thumb_source_for(self, item_id: str) -> str:
         node = self._find_node(item_id)

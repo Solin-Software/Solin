@@ -10,10 +10,10 @@ import logging
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.profiles.manager import ProfileManager
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
+from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
 from .tree_types import Node, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
@@ -165,11 +165,7 @@ def flush_meeting_thumbs_dir(
     Playlist thumbnails have their own cleanup path; meeting thumbnails live in
     cache/meeting_thumbs so meeting cleanup can use meeting tree state directly.
     """
-    target_dir = (
-        Path(thumb_dir)
-        if thumb_dir is not None
-        else RuntimePaths.from_legacy_globals().meeting_thumb_cache_dir
-    )
+    target_dir = Path(thumb_dir) if thumb_dir is not None else meeting_thumb_dir()
     if not target_dir.is_dir():
         return
 
@@ -186,7 +182,7 @@ def flush_meeting_thumbs_dir(
                 continue
             item_id = str(node.get("id", "") or "")
             if item_id:
-                referenced.add(f"{item_id}.jpg")
+                referenced.add(meeting_thumb_cache_key(item_id))
             cache_key = str(node.get("thumbnail_cache_key") or "")
             if cache_key:
                 referenced.add(_stored_file_name(cache_key))
