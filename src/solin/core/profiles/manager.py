@@ -297,7 +297,7 @@ class ProfileManager(QObject):
         Ativa um perfil:
           1. Atualiza _active_id
           2. Garante que as pastas existam
-          3. Redireciona paths.PLAYLISTS_FILE, IMAGES_DIR, EMBEDDED_DIR
+          3. Redireciona paths.IMAGES_DIR e EMBEDDED_DIR
           4. Persiste o perfil ativo no QSettings global
           5. Emite profile_switched
         """
@@ -426,7 +426,6 @@ class ProfileManager(QObject):
     def _redirect_global_paths(self) -> None:
         """Aponta os globals de paths.py para o diretório do perfil ativo."""
         from solin.core.foundation import paths
-        paths.PLAYLISTS_FILE = self.playlists_file()
         paths.IMAGES_DIR     = self.images_dir()
         paths.EMBEDDED_DIR   = self.embedded_dir()
         # Garantir que as pastas existam

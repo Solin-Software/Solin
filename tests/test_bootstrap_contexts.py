@@ -15,7 +15,6 @@ from solin.core.foundation.runtime_paths import RuntimePaths
 def _set_legacy_paths(monkeypatch, tmp_path) -> dict[str, str]:
     values = {
         "DATA_DIR": str(tmp_path / "data"),
-        "PLAYLISTS_FILE": str(tmp_path / "data" / "playlists.json"),
         "PENDING_DEL_FILE": str(tmp_path / "data" / "pending_cleanup.json"),
         "IMAGES_DIR": str(tmp_path / "data" / "images"),
         "EMBEDDED_DIR": str(tmp_path / "data" / "embedded"),
