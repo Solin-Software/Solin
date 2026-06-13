@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation import paths as _paths
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.storage import save_playlists
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
@@ -30,7 +31,6 @@ from .cleanup import _cleanup_playlist_files
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, new_playlist_item
-from .storage import _save_playlists
 
 _BTN_STYLE = (
     "QPushButton{border:1px solid #30363d;border-radius:6px;"
@@ -284,7 +284,7 @@ class _PlaylistListView(QWidget):
             return
         pl = {"id": str(uuid.uuid4()), "name": name, "items": []}
         self._playlists.append(pl)
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         self._rebuild_app_cards()
         self.open_playlist.emit(pl["id"])
 
@@ -300,7 +300,7 @@ class _PlaylistListView(QWidget):
         if not name:
             return
         pl["name"] = name
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         self._rebuild_app_cards()
 
     def _delete_playlist(self, pl_id: str) -> None:
@@ -336,7 +336,7 @@ class _PlaylistListView(QWidget):
             return
         _cleanup_playlist_files(pl)
         self._playlists.remove(pl)
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         self._rebuild_app_cards()
 
     def _export_playlist(self, pl_id: str) -> None:
@@ -422,7 +422,7 @@ class _PlaylistListView(QWidget):
                     ).replace("{error}", str(e)),
                 )
         if imported:
-            _save_playlists(self._playlists)
+            save_playlists(self._playlists)
             self._rebuild_app_cards()
 
     def _find(self, pl_id: str) -> Optional[dict]:

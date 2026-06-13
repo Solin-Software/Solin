@@ -46,7 +46,7 @@ from .list_view import _PlaylistListView
 from .cleanup import _cleanup_item_files
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
-from .storage import _load_playlists, _save_playlists
+from ...core.playlists.storage import load_playlists, save_playlists
 from .thumbnails import (
     _load_thumb_from_disk,
     _save_thumb_to_disk,
@@ -197,7 +197,7 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import save_manifest_playlist
             save_manifest_playlist(self._watched_path, self._pl)
         else:
-            _save_playlists(_current_playlists_ref[0])
+            save_playlists(_current_playlists_ref[0])
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -882,7 +882,7 @@ class PlaylistWidget(QWidget):
         self.lang        = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
-        self._playlists  = _load_playlists()
+        self._playlists  = load_playlists()
         _current_playlists_ref[0] = self._playlists
         self._watched_folder = watched_folder
         self._build_ui()
@@ -1010,7 +1010,7 @@ class PlaylistWidget(QWidget):
         pl.pop("_temp", None)
         pl.setdefault("items", [])
         self._playlists.append(pl)
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         self._list_view.refresh()
         self._edit_view.load_playlist(pl)
 
@@ -1045,7 +1045,7 @@ class PlaylistWidget(QWidget):
         if url and any(it.get("url", "") == url for it in pl.get("items", [])):
             return False
         pl.setdefault("items", []).append(item)
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         if (self._stack.currentIndex() == 1
                 and self._edit_view._pl
                 and self._edit_view._pl["id"] == pl_id):
@@ -1060,7 +1060,7 @@ class PlaylistWidget(QWidget):
     def create_playlist_with_item(self, name: str, item: dict) -> str:
         pl = {"id": str(uuid.uuid4()), "name": name, "items": [item]}
         self._playlists.append(pl)
-        _save_playlists(self._playlists)
+        save_playlists(self._playlists)
         self._list_view.refresh()
         return pl["id"]
 

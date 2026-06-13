@@ -24,9 +24,9 @@ from solin.core.foundation.constants import (
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import manager as profile_manager
-from solin.widgets.playlist import storage as playlist_storage
 from solin.widgets.playlist.items import new_playlist_item
 
 
@@ -186,11 +186,12 @@ def test_profile_registry_and_directory_layout_are_stable(
 
 def test_internal_playlist_file_and_item_schema_are_stable(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     playlists_file = tmp_path / "profiles" / "main_hall" / "playlists.json"
-    monkeypatch.setattr(playlist_storage._paths, "DATA_DIR", str(playlists_file.parent))
-    monkeypatch.setattr(playlist_storage._paths, "PLAYLISTS_FILE", str(playlists_file))
+    storage_paths = playlist_storage.PlaylistStoragePaths(
+        playlists_file=playlists_file,
+        pending_deletions_file=tmp_path / "pending.json",
+    )
 
     item = new_playlist_item("Welcome", "C:/media/welcome.mp4")
     playlist = {
@@ -201,12 +202,12 @@ def test_internal_playlist_file_and_item_schema_are_stable(
         "markers": [],
     }
 
-    playlist_storage._save_playlists([playlist])
+    playlist_storage.save_playlists([playlist], storage_paths)
 
     assert json.loads(playlists_file.read_text(encoding="utf-8")) == {
         "playlists": [playlist]
     }
-    assert playlist_storage._load_playlists() == [playlist]
+    assert playlist_storage.load_playlists(storage_paths) == [playlist]
     assert set(item) == {
         "id",
         "title",

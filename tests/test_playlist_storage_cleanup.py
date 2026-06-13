@@ -1,36 +1,35 @@
 from solin.widgets.playlist import cleanup as playlist_cleanup
-from solin.widgets.playlist.storage import (
-    _load_playlists,
-    _save_playlists,
+from solin.core.playlists.storage import (
+    PlaylistStoragePaths,
+    load_playlists,
     load_pending_deletions,
+    save_playlists,
     save_pending_deletions,
 )
 
 
-def test_playlist_storage_roundtrips_playlists(tmp_path, monkeypatch):
+def test_playlist_storage_roundtrips_playlists(tmp_path):
     playlists_file = tmp_path / "playlists.json"
-    monkeypatch.setattr("solin.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        "solin.widgets.playlist.storage._paths.PLAYLISTS_FILE",
-        str(playlists_file),
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=playlists_file,
+        pending_deletions_file=tmp_path / "pending.json",
     )
 
-    _save_playlists([{"id": "p1", "name": "Playlist", "items": []}])
+    save_playlists([{"id": "p1", "name": "Playlist", "items": []}], storage_paths)
 
-    assert _load_playlists() == [{"id": "p1", "name": "Playlist", "items": []}]
+    assert load_playlists(storage_paths) == [{"id": "p1", "name": "Playlist", "items": []}]
 
 
-def test_playlist_storage_roundtrips_pending_deletions(tmp_path, monkeypatch):
+def test_playlist_storage_roundtrips_pending_deletions(tmp_path):
     pending_file = tmp_path / "pending.json"
-    monkeypatch.setattr("solin.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        "solin.widgets.playlist.storage._paths.PENDING_DEL_FILE",
-        str(pending_file),
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=tmp_path / "playlists.json",
+        pending_deletions_file=pending_file,
     )
 
-    save_pending_deletions(["locked.mp4"])
+    save_pending_deletions(["locked.mp4"], storage_paths)
 
-    assert load_pending_deletions() == ["locked.mp4"]
+    assert load_pending_deletions(storage_paths) == ["locked.mp4"]
 
 
 def test_try_remove_file_queues_after_retries(monkeypatch):

@@ -6,8 +6,8 @@ import time
 
 from ...core.foundation import paths as _paths
 from ...core.foundation.exception_logging import log_ignored_exception
-from .storage import (
-    _load_playlists,
+from ...core.playlists.storage import (
+    load_playlists,
     load_pending_deletions,
     save_pending_deletions,
 )
@@ -69,7 +69,7 @@ def flush_thumbs_dir() -> None:
         return
 
     referenced_ids: set[str] = set()
-    for playlist in _load_playlists():
+    for playlist in load_playlists():
         for item in playlist.get("items", []):
             item_id = item.get("id", "")
             if item_id:
@@ -175,7 +175,7 @@ def _cleanup_item_files(item: dict, all_playlists: list) -> None:
 
 def _referenced_playlist_urls(*, normalize: bool = False) -> set[str]:
     referenced: set[str] = set()
-    for playlist in _load_playlists():
+    for playlist in load_playlists():
         for item in playlist.get("items", []):
             url = item.get("url", "")
             if url:
