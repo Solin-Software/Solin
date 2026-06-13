@@ -45,8 +45,6 @@ import os
 import re
 import time
 
-import requests
-
 from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import (
     CACHE_TTL_DAYS,
@@ -54,8 +52,11 @@ from solin.core.foundation.constants import (
     VIDEO_QUALITY_FALLBACK_DIR,
     VIDEO_QUALITY_ORDER,
 )
+from solin.core.network.http import HttpError, get_json as http_get_json
 
 log = logging.getLogger(__name__)
+
+_HTTP_TIMEOUT = 15
 
 # ── Base URL comum ────────────────────────────────────────────────────────────
 
@@ -317,16 +318,14 @@ def fetch_songs(
     fmt = _songs_fmt(is_sign_language, audio=False)
 
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-    except requests.RequestException:
+        data = http_get_json(url, timeout=_HTTP_TIMEOUT)
+    except HttpError:
         # Fallback: idioma da interface — nunca é gestual
         if fallback_code and fallback_code != api_code:
             return fetch_songs(fallback_code, force=force, fallback_code=None,
                                is_sign_language=False)
         raise
 
-    data = response.json()
     songs, pub_name = _parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
@@ -392,15 +391,13 @@ def fetch_songs_audio(
     fmt = _songs_fmt(is_sign_language, audio=True)
 
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-    except requests.RequestException:
+        data = http_get_json(url, timeout=_HTTP_TIMEOUT)
+    except HttpError:
         if fallback_code and fallback_code != api_code:
             return fetch_songs_audio(fallback_code, force=force, fallback_code=None,
                                      is_sign_language=False)
         raise
 
-    data = response.json()
     songs, pub_name = _parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
@@ -548,15 +545,12 @@ def fetch_clips(
     url = _build_clips_url(api_code, is_sign_language)
 
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-    except requests.RequestException:
+        data = http_get_json(url, timeout=_HTTP_TIMEOUT)
+    except HttpError:
         if fallback_code and fallback_code != api_code:
             return fetch_clips(fallback_code, force=force, fallback_code=None,
                                is_sign_language=False)
         raise
-
-    data = response.json()
 
     if is_sign_language:
         clips = _parse_clips_osg(data, api_code)

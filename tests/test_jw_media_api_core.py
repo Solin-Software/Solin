@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import requests
 
 from solin.core.jw import media_api
 from solin.core.jw.media_api import _parse_clips_osg, _parse_songs, _pick_quality
+from solin.core.network.http import HttpTransportError
 
 
 def test_pick_quality_prefers_lower_resolution_before_higher_fallback():
@@ -132,36 +132,29 @@ def test_unexpected_cache_reader_error_is_not_silenced(tmp_path, monkeypatch):
 def test_fetch_songs_falls_back_only_for_request_failures(monkeypatch):
     calls: list[str] = []
 
-    class _Response:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {
-                "pubName": "Songs",
-                "files": {
-                    "T": {
-                        "MP4": [
-                            {
-                                "title": "1. Song",
-                                "track": 1,
-                                "label": "720p",
-                                "subtitled": False,
-                                "file": {"url": "https://example.test/song.mp4"},
-                            }
-                        ]
-                    }
-                },
-            }
-
-    def fake_get(url, *, timeout):
+    def fake_get_json(url, *, timeout):
         assert timeout == 15
         calls.append(url)
         if "langwritten=X" in url:
-            raise requests.ConnectionError("offline")
-        return _Response()
+            raise HttpTransportError("offline")
+        return {
+            "pubName": "Songs",
+            "files": {
+                "T": {
+                    "MP4": [
+                        {
+                            "title": "1. Song",
+                            "track": 1,
+                            "label": "720p",
+                            "subtitled": False,
+                            "file": {"url": "https://example.test/song.mp4"},
+                        }
+                    ]
+                }
+            },
+        }
 
-    monkeypatch.setattr(media_api.requests, "get", fake_get)
+    monkeypatch.setattr(media_api, "http_get_json", fake_get_json)
     monkeypatch.setattr(media_api, "_save_cache", lambda *_args: None)
 
     songs, pub_name, _fetched_at, from_cache = media_api.fetch_songs(
@@ -180,7 +173,7 @@ def test_fetch_songs_does_not_hide_unexpected_request_code_errors(monkeypatch):
     def fail_unexpectedly(*_args, **_kwargs):
         raise RuntimeError("programming error")
 
-    monkeypatch.setattr(media_api.requests, "get", fail_unexpectedly)
+    monkeypatch.setattr(media_api, "http_get_json", fail_unexpectedly)
 
     with pytest.raises(RuntimeError, match="programming error"):
         media_api.fetch_songs("X", force=True, fallback_code="T")
