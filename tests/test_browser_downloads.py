@@ -1,6 +1,6 @@
 from pathlib import Path
+from types import SimpleNamespace
 
-import solin.widgets.browser.downloads as browser_downloads
 import solin.widgets.browser.widget as browser_widget
 from solin.widgets.browser.downloads import _BrowserDownloadsMixin
 
@@ -18,11 +18,12 @@ def test_browser_widget_uses_downloads_mixin():
     )
 
 
-def test_browser_download_cache_path_is_stable_and_sanitized(tmp_path, monkeypatch):
-    monkeypatch.setattr(browser_downloads._paths, "MEDIA_CACHE_DIR", str(tmp_path))
+def test_browser_download_cache_path_is_stable_and_sanitized(tmp_path):
+    owner = _BrowserDownloadsMixin()
+    owner._media_cache_manager = SimpleNamespace(media_cache_dir=tmp_path)
 
     path = _BrowserDownloadsMixin._browser_download_cache_path(
-        object(),
+        owner,
         "https://example.test/files/bad%3Aname.pdf?download=1",
         "ignored title",
         "pdf",
@@ -33,7 +34,7 @@ def test_browser_download_cache_path_is_stable_and_sanitized(tmp_path, monkeypat
     assert result.suffix == ".pdf"
     assert "bad_name-" in result.name
     assert path == _BrowserDownloadsMixin._browser_download_cache_path(
-        object(),
+        owner,
         "https://example.test/files/bad%3Aname.pdf?download=1",
         "ignored title",
         "pdf",

@@ -33,12 +33,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from ...core.meetings.publications import (
-    JwpubService, WeekData,
+    JwpubChecksumStore, JwpubService, WeekData,
     current_monday,
 )
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
-from ...core.foundation.runtime_paths import ProfilePaths
+from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ...core.foundation.constants import (
     DOCX_EXTS as _DOCX_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
@@ -51,10 +51,13 @@ from ...core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
+from ...core.jw.catalog import JWMediaCatalogCachePaths
+from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.memorial import MemorialData, MemorialService
 from ...core.meetings.tree_store import MeetingTreeStore
+from ...core.media.cache import MediaCacheManager
 from ...qml_module import load_qml_type
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
 from ..jw_songs_bridge import JWSongsBridge
@@ -103,6 +106,10 @@ class StudyDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_paths: ProfilePaths,
+                 runtime_paths: RuntimePaths,
+                 cache_manager: MediaCacheManager,
+                 jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+                 jw_songs_store: JWSongsStore,
                  prefs: QSettings,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
@@ -112,6 +119,10 @@ class StudyDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
+        self._cache_manager = cache_manager
+        self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_songs_store = jw_songs_store
         self._prefs = prefs
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
@@ -145,6 +156,8 @@ class StudyDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_paths=self._profile_paths,
+            runtime_paths=self._runtime_paths,
+            cache_manager=self._cache_manager,
             prefs=self._prefs,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
@@ -155,12 +168,12 @@ class StudyDetailView(QWidget):
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.set_sync_root(self._watched_folder)
 
-        self.catalog_bridge = JWMediaCatalogBridge(self)
+        self.catalog_bridge = JWMediaCatalogBridge(self._jw_catalog_cache_paths, self)
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
-        self.songs_bridge = JWSongsBridge(self)
+        self.songs_bridge = JWSongsBridge(self._jw_songs_store, self)
         self._sync_songs_bridge_language()
         self.songs_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
@@ -366,6 +379,10 @@ class _MemorialDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_paths: ProfilePaths,
+                 runtime_paths: RuntimePaths,
+                 cache_manager: MediaCacheManager,
+                 jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+                 jw_songs_store: JWSongsStore,
                  prefs: QSettings,
                  parent=None):
         super().__init__(parent)
@@ -374,6 +391,10 @@ class _MemorialDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
+        self._cache_manager = cache_manager
+        self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_songs_store = jw_songs_store
         self._prefs = prefs
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -405,6 +426,8 @@ class _MemorialDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_paths=self._profile_paths,
+            runtime_paths=self._runtime_paths,
+            cache_manager=self._cache_manager,
             prefs=self._prefs,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
@@ -414,12 +437,12 @@ class _MemorialDetailView(QWidget):
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
 
-        self.catalog_bridge = JWMediaCatalogBridge(self)
+        self.catalog_bridge = JWMediaCatalogBridge(self._jw_catalog_cache_paths, self)
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
         )
-        self.songs_bridge = JWSongsBridge(self)
+        self.songs_bridge = JWSongsBridge(self._jw_songs_store, self)
         self._sync_songs_bridge_language()
         self.songs_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
@@ -604,6 +627,11 @@ class MeetingsWidget(QWidget):
         *,
         meeting_tree_store: MeetingTreeStore,
         profile_paths: ProfilePaths,
+        runtime_paths: RuntimePaths,
+        cache_manager: MediaCacheManager,
+        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_songs_store: JWSongsStore,
+        jwpub_checksum_store: JwpubChecksumStore,
         prefs: QSettings,
         parent=None,
     ):
@@ -616,9 +644,20 @@ class MeetingsWidget(QWidget):
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
+        self._cache_manager = cache_manager
+        self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_songs_store = jw_songs_store
+        self._jwpub_checksum_store = jwpub_checksum_store
         self._prefs = prefs
 
-        self._service = JwpubService(prefs, self)
+        self._service = JwpubService(
+            prefs,
+            cache_manager,
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            self,
+        )
         self._set_lang_from_mgr()
 
         self._service.mwb_ready.connect(self._on_mwb_ready)
@@ -628,7 +667,11 @@ class MeetingsWidget(QWidget):
         self._service.error_sig.connect(self._on_error)
 
         # ── Memorial service ───────────────────────────────────────────────────
-        self._memorial_svc = MemorialService(self)
+        self._memorial_svc = MemorialService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            self,
+        )
         self._set_memorial_lang_from_mgr()
         self._memorial_svc.memorial_ready.connect(self._on_memorial_ready)
         self._memorial_svc.memorial_status.connect(self._on_memorial_status)
@@ -844,6 +887,10 @@ class MeetingsWidget(QWidget):
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
                                 profile_paths=self._profile_paths,
+                                runtime_paths=self._runtime_paths,
+                                cache_manager=self._cache_manager,
+                                jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+                                jw_songs_store=self._jw_songs_store,
                                 prefs=self._prefs,
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
@@ -877,6 +924,10 @@ class MeetingsWidget(QWidget):
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
                 profile_paths=self._profile_paths,
+                runtime_paths=self._runtime_paths,
+                cache_manager=self._cache_manager,
+                jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+                jw_songs_store=self._jw_songs_store,
                 prefs=self._prefs,
             )
             d.back_requested.connect(self._on_detail_back)

@@ -4,7 +4,7 @@ pdf_converter.py — Solin
 Converte páginas de um PDF em imagens JPEG, com cache persistente.
 
 Cache:
-    data/pdf_pages/{sha256_8}_{stem}/page_001.jpg  …  page_NNN.jpg
+    {pdf_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  page_NNN.jpg
 
 Motor:
     PySide6.QtPdf.QPdfDocument — usa o runtime Qt já embarcado com o app.
@@ -24,17 +24,16 @@ from PySide6.QtCore import QSize, QThread, Signal
 from PySide6.QtGui import QColor, QImage, QPainter
 from PySide6.QtPdf import QPdfDocument
 
-from solin.core.foundation import paths as _paths
-
 log = logging.getLogger(__name__)
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
-_DEFAULT_DPI  = 150
+_DEFAULT_DPI = 150
 _JPEG_QUALITY = 85
-_PAGE_FMT     = "page_{n:03d}.jpg"    # page_001.jpg, page_002.jpg …
+_PAGE_FMT = "page_{n:03d}.jpg"  # page_001.jpg, page_002.jpg …
 
 
 # ── Funções utilitárias ────────────────────────────────────────────────────────
+
 
 def _pdf_hash(path: str | Path) -> str:
     """SHA-256 (primeiros 12 chars) do conteúdo do PDF — base do nome do cache."""
@@ -45,23 +44,30 @@ def _pdf_hash(path: str | Path) -> str:
     return h.hexdigest()[:12]
 
 
-def _cache_dir(pdf_path: str | Path) -> Path:
+def _cache_dir(
+    pdf_path: str | os.PathLike[str],
+    pdf_pages_dir: str | os.PathLike[str],
+) -> Path:
     """
     Retorna o diretório de cache para um PDF específico.
-    Exemplo: data/pdf_pages/a3f8c201ee9d_relatorio
+    ``pdf_pages_dir`` é fornecido pelo composition root.
+    Exemplo: cache/pdf_pages/a3f8c201ee9d_relatorio
     """
     pdf_path = Path(pdf_path)
-    stem     = pdf_path.stem[:40]          # limita tamanho do nome
-    h        = _pdf_hash(pdf_path)
-    return Path(_paths.PDF_PAGES_DIR) / f"{h}_{stem}"
+    stem = pdf_path.stem[:40]  # limita tamanho do nome
+    h = _pdf_hash(pdf_path)
+    return Path(pdf_pages_dir) / f"{h}_{stem}"
 
 
-def cached_pages(pdf_path: str | Path) -> list[str] | None:
+def cached_pages(
+    pdf_path: str | os.PathLike[str],
+    pdf_pages_dir: str | os.PathLike[str],
+) -> list[str] | None:
     """
     Retorna lista de caminhos JPEG se o PDF já foi convertido e o cache
     está completo. Retorna None se conversão ainda não foi feita.
     """
-    d = _cache_dir(pdf_path)
+    d = _cache_dir(pdf_path, pdf_pages_dir)
     marker = d / ".done"
     if not marker.exists():
         return None
@@ -125,7 +131,7 @@ def render_pdf_pages_sync(
             raise RuntimeError(f"PDF sem páginas: '{pdf_path.name}'.")
 
         paths: list[str] = []
-        fmt = image_format.upper()
+        fmt = image_format.upper().encode("ascii")
         save_quality = -1 if quality is None else int(quality)
         for idx in range(total):
             if progress_cb:
@@ -146,7 +152,8 @@ def render_pdf_pages_sync(
 
 
 def convert_pdf_sync(
-    pdf_path: str | Path,
+    pdf_path: str | os.PathLike[str],
+    pdf_pages_dir: str | os.PathLike[str],
     dpi: int = _DEFAULT_DPI,
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> list[str]:
@@ -155,6 +162,7 @@ def convert_pdf_sync(
 
     Args:
         pdf_path:    Caminho para o arquivo PDF.
+        pdf_pages_dir: Diretório raiz explícito do cache de páginas PDF.
         dpi:         Resolução de renderização (padrão 150).
         progress_cb: Callback opcional (página_atual, total_páginas).
 
@@ -164,9 +172,9 @@ def convert_pdf_sync(
     Raises:
         RuntimeError: Se o PDF não puder ser aberto ou convertido.
     """
-    pdf_path  = Path(pdf_path)
-    cache_dir = _cache_dir(pdf_path)
-    marker    = cache_dir / ".done"
+    pdf_path = Path(pdf_path)
+    cache_dir = _cache_dir(pdf_path, pdf_pages_dir)
+    marker = cache_dir / ".done"
 
     # Cache hit: retorna imediatamente
     if marker.exists():
@@ -196,11 +204,13 @@ def convert_pdf_sync(
     except Exception as exc:  # noqa: BLE001 - rendering API normalizes Qt/native failures
         # Remove cache parcial para evitar estado corrompido
         import shutil
+
         shutil.rmtree(str(cache_dir), ignore_errors=True)
         raise RuntimeError(f"Erro ao converter PDF: {exc}") from exc
 
 
 # ── Thread assíncrona ──────────────────────────────────────────────────────────
+
 
 class PdfConvertThread(QThread):
     """
@@ -212,19 +222,27 @@ class PdfConvertThread(QThread):
         conversion_failed(error_msg)    — erro de conversão
     """
 
-    progress          = Signal(int, int)   # (página_atual, total)
-    pages_ready       = Signal(list, str)  # (list[str] paths, pdf_stem)
-    conversion_failed = Signal(str)        # mensagem de erro
+    progress = Signal(int, int)  # (página_atual, total)
+    pages_ready = Signal(list, str)  # (list[str] paths, pdf_stem)
+    conversion_failed = Signal(str)  # mensagem de erro
 
-    def __init__(self, pdf_path: str, dpi: int = _DEFAULT_DPI, parent=None):
+    def __init__(
+        self,
+        pdf_path: str | os.PathLike[str],
+        pdf_pages_dir: str | os.PathLike[str],
+        dpi: int = _DEFAULT_DPI,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
-        self._pdf_path = pdf_path
-        self._dpi      = dpi
+        self._pdf_path = Path(pdf_path)
+        self._pdf_pages_dir = Path(pdf_pages_dir)
+        self._dpi = dpi
 
     def run(self) -> None:
         try:
             paths = convert_pdf_sync(
                 self._pdf_path,
+                self._pdf_pages_dir,
                 dpi=self._dpi,
                 progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
             )
@@ -239,16 +257,21 @@ class PdfConvertThread(QThread):
 
 # ── Limpeza de cache órfão ─────────────────────────────────────────────────────
 
-def flush_pdf_pages_dir(referenced_paths: set[str]) -> None:
+
+def flush_pdf_pages_dir(
+    referenced_paths: set[str],
+    pdf_pages_dir: str | os.PathLike[str],
+) -> None:
     """
     Remove subdirectórios de data/pdf_pages cujas imagens não são
     referenciadas por nenhuma playlist.
 
     Args:
-        referenced_paths: conjunto de caminhos de imagem presentes
-                          em pelo menos uma playlist (item["url"]).
+        referenced_paths: Conjunto de caminhos de imagem presentes em pelo
+            menos uma playlist (``item["url"]``).
+        pdf_pages_dir: Diretório raiz explícito do cache de páginas PDF.
     """
-    pages_root = Path(_paths.PDF_PAGES_DIR)
+    pages_root = Path(pdf_pages_dir)
     if not pages_root.is_dir():
         return
 
@@ -265,4 +288,5 @@ def flush_pdf_pages_dir(referenced_paths: set[str]) -> None:
             continue
         # Órfão — remove
         import shutil
+
         shutil.rmtree(str(sub), ignore_errors=True)

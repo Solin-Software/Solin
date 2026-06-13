@@ -5,7 +5,6 @@ import unittest
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
-from solin.core.foundation import paths as app_paths
 from solin.core.media.cache import MediaCacheManager
 from solin.core.i18n.strings import tr_offline_queued
 from solin.widgets.media_library_widget import MediaLibraryModel
@@ -38,17 +37,13 @@ class MediaCacheManagerQueueTests(unittest.TestCase):
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
-        self._old_media_cache_dir = app_paths.MEDIA_CACHE_DIR
-        app_paths.MEDIA_CACHE_DIR = self._tmp.name
         FakeDownloader.created.clear()
-        self.mgr = MediaCacheManager()
+        self.mgr = MediaCacheManager(self._tmp.name)
         self.mgr._downloader_factory = lambda parent: FakeDownloader(parent)
 
     def tearDown(self):
         self.mgr.cancel_all()
-        app_paths.MEDIA_CACHE_DIR = self._old_media_cache_dir
         self._tmp.cleanup()
-        MediaCacheManager._instance = None
 
     def urls(self, count: int) -> list[str]:
         return [f"https://cdn.example/media-{i}.mp4" for i in range(count)]
@@ -177,24 +172,19 @@ class MediaLibraryModelQueueTests(unittest.TestCase):
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
-        self._old_media_cache_dir = app_paths.MEDIA_CACHE_DIR
-        app_paths.MEDIA_CACHE_DIR = self._tmp.name
         FakeDownloader.created.clear()
-        self.mgr = MediaCacheManager()
+        self.mgr = MediaCacheManager(self._tmp.name)
         self.mgr.max_concurrent_prefetches = 1
         self.mgr._downloader_factory = lambda parent: FakeDownloader(parent)
-        MediaCacheManager._instance = self.mgr
 
     def tearDown(self):
         self.mgr.cancel_all()
-        MediaCacheManager._instance = None
-        app_paths.MEDIA_CACHE_DIR = self._old_media_cache_dir
         self._tmp.cleanup()
 
     def test_model_exposes_queued_state_and_tooltip(self):
         active_url = "https://cdn.example/active.mp4"
         queued_url = "https://cdn.example/queued.mp4"
-        model = MediaLibraryModel()
+        model = MediaLibraryModel(self.mgr)
         try:
             model.set_items([
                 {"url": queued_url, "title": "Queued", "duration": 1},

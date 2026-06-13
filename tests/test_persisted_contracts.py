@@ -24,7 +24,7 @@ from solin.core.foundation.constants import (
     QT_APPLICATION_NAME,
     QT_ORGANIZATION_NAME,
 )
-from solin.core.foundation import paths as foundation_paths
+from solin.core.foundation import runtime_paths as runtime_paths_module
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.playlists import storage as playlist_storage
@@ -218,11 +218,13 @@ def test_profile_manager_has_no_singleton_or_service_locator() -> None:
 
 
 def test_profile_storage_paths_are_not_mutable_globals() -> None:
-    paths_source = Path(foundation_paths.__file__).read_text(encoding="utf-8")
+    runtime_paths_source = Path(runtime_paths_module.__file__).read_text(encoding="utf-8")
     manager_source = Path(profile_manager.__file__).read_text(encoding="utf-8")
 
-    assert "IMAGES_DIR" not in paths_source
-    assert "EMBEDDED_DIR" not in paths_source
+    assert not Path(runtime_paths_module.__file__).with_name("paths.py").exists()
+    assert "IMAGES_DIR" not in runtime_paths_source
+    assert "EMBEDDED_DIR" not in runtime_paths_source
+    assert "from_legacy_globals" not in runtime_paths_source
     assert "_redirect_global_paths" not in manager_source
 
 

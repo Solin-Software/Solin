@@ -42,12 +42,14 @@ from solin.core.jw.metadata import (
     resolve_jworg_meta  as _resolve_jworg_meta,
     JW_DOMAINS          as _JW_DOMAINS,
 )
-from solin.core.foundation import paths as _paths
 
 from .schema import create_jwlplaylist_schema
 
 
-def _get_cached_media_path(url: str) -> Optional[str]:
+def _get_cached_media_path(
+    url: str,
+    media_cache_dir: str | os.PathLike[str],
+) -> Optional[str]:
     """
     Retorna o caminho local do arquivo se a URL já foi baixada completamente
     (existe o arquivo + marcador .done). Retorna None se não há cache.
@@ -56,7 +58,7 @@ def _get_cached_media_path(url: str) -> Optional[str]:
     filename = url.split("/")[-1].split("?")[0]
     if not filename:
         return None
-    path = os.path.join(_paths.MEDIA_CACHE_DIR, filename)
+    path = os.path.join(os.fspath(media_cache_dir), filename)
     if os.path.exists(path) and os.path.exists(path + ".done"):
         return path
     return None
@@ -521,6 +523,7 @@ def _write_jwlplaylist(
     playlist_name: str,
     items: list[dict],
     output_path: str | Path,
+    media_cache_dir: str | os.PathLike[str],
     fallback_lang_code: str = "E",
 ) -> None:
     """
@@ -619,7 +622,7 @@ def _write_jwlplaylist(
         is_http = url.startswith(("http://", "https://"))
         local_cached_path: Optional[str] = None
         if is_http:
-            local_cached_path = _get_cached_media_path(url)
+            local_cached_path = _get_cached_media_path(url, media_cache_dir)
 
         # ─────────────────────────────────────────────────────────────────────
         # RAMO A: Item JW.org → Location + PlaylistItemLocationMap
@@ -856,6 +859,7 @@ def write_jwlplaylist(
     playlist_name: str,
     items: list[dict],
     output_path: str | Path,
+    media_cache_dir: str | os.PathLike[str],
     fallback_lang_code: str = "E",
 ) -> None:
     """Write a JW Library playlist and normalize infrastructure failures."""
@@ -864,6 +868,7 @@ def write_jwlplaylist(
             playlist_name,
             items,
             output_path,
+            media_cache_dir,
             fallback_lang_code=fallback_lang_code,
         )
     except (OSError, sqlite3.Error, zipfile.LargeZipFile, _struct.error) as exc:

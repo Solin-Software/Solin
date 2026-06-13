@@ -29,7 +29,6 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
-from ...core.foundation import paths as _paths
 from ...core.foundation.constants import (
     AUDIO_EXTS,
     DOCX_EXTS,
@@ -42,7 +41,8 @@ from ...core.foundation.constants import (
     THUMB_JPEG_QUALITY,
 )
 from ...core.foundation.exception_logging import log_ignored_exception
-from ...core.foundation.runtime_paths import ProfilePaths
+from ...core.foundation.qt_threads import stop_owned_qthread
+from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ...core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,
@@ -158,6 +158,8 @@ class MeetingTreeController(QObject):
         language_code: str,
         store: MeetingTreeStore,
         profile_paths: ProfilePaths,
+        runtime_paths: RuntimePaths,
+        cache_manager: MediaCacheManager,
         prefs: QSettings,
         fallback_language_code: str = "",
         parent=None,
@@ -169,6 +171,8 @@ class MeetingTreeController(QObject):
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = store
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
+        self._media_cache_manager = cache_manager
         self._prefs = prefs
         self._builder = MeetingTreeBuilder()
         self._sync_service = MeetingLinkedFolderSync(prefs)
@@ -186,7 +190,11 @@ class MeetingTreeController(QObject):
         self._playlist_name = ""
         self._thumb_cache: dict[str, QPixmap] = {}
         self._thumb_versions: dict[str, int] = {}
-        self._info_queue = MediaInfoQueue(self)
+        self._info_queue = MediaInfoQueue(
+            cache_manager.media_cache_dir,
+            runtime_paths.thumb_cache_dir,
+            self,
+        )
         self._info_queue.info_ready.connect(self._on_info_ready)
         self._info_queue.duration_ready.connect(self._on_duration_ready)
         self._token_to_node_id: dict[int, str] = {}
@@ -740,13 +748,13 @@ class MeetingTreeController(QObject):
     ) -> None:
         path = str(source.get("path") or "")
         stem = Path(path).stem
-        pages = pdf_cached_pages(path)
+        pages = pdf_cached_pages(path, self._runtime_paths.pdf_pages_dir)
         if pages:
             self._insert_meeting_folder_nodes(
                 source, self._page_nodes(pages, stem), list_id, insert_index
             )
             return
-        thread = PdfConvertThread(path, parent=self)
+        thread = PdfConvertThread(path, self._runtime_paths.pdf_pages_dir, parent=self)
         self._pdf_threads.append(thread)
         thread.pages_ready.connect(
             lambda pages, pdf_stem, _source=dict(source), _list=list_id, _index=insert_index:
@@ -769,13 +777,23 @@ class MeetingTreeController(QObject):
     ) -> None:
         path = str(source.get("path") or "")
         stem = Path(path).stem
-        pages = lo_cached_pages(path)
+        pages = lo_cached_pages(
+            path,
+            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+            docx_pages_dir=self._runtime_paths.docx_pages_dir,
+        )
         if pages:
             self._insert_meeting_folder_nodes(
                 source, self._page_nodes(pages, stem), list_id, insert_index
             )
             return
-        thread = LoConvertThread(path, parent=self)
+        thread = LoConvertThread(
+            path,
+            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+            docx_pages_dir=self._runtime_paths.docx_pages_dir,
+            pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
+            parent=self,
+        )
         self._lo_threads.append(thread)
         thread.pages_ready.connect(
             lambda pages, doc_stem, _source=dict(source), _list=list_id, _index=insert_index:
@@ -862,6 +880,18 @@ class MeetingTreeController(QObject):
         return [self._qml_node(node) for node in self._nodes]
 
     def cleanup(self) -> None:
+        for threads in (
+            self._pdf_threads,
+            self._lo_threads,
+            self._jwpub_threads,
+        ):
+            for thread in list(threads):
+                stop_owned_qthread(
+                    thread,
+                    wait_ms=3_000,
+                    label="Meeting tree",
+                )
+            threads.clear()
         try:
             self._info_queue.info_ready.disconnect(self._on_info_ready)
             self._info_queue.duration_ready.disconnect(self._on_duration_ready)
@@ -872,7 +902,7 @@ class MeetingTreeController(QObject):
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting tree video resolver")
         try:
-            mgr = MediaCacheManager.instance()
+            mgr = self._media_cache_manager
             mgr.cache_changed.disconnect(self._on_cache_changed)
             mgr.cache_removed.disconnect(self._on_cache_removed)
             mgr.prefetch_progress.disconnect(self._on_prefetch_progress)
@@ -963,7 +993,12 @@ class MeetingTreeController(QObject):
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
             try:
-                target_path = meeting_thumb_path(node_id)
+                target_path = meeting_thumb_path(
+                    node_id,
+                    meeting_thumb_cache_dir=(
+                        self._runtime_paths.meeting_thumb_cache_dir
+                    ),
+                )
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 target = os.fspath(target_path)
                 shutil.copy2(thumb_path, target)
@@ -976,13 +1011,13 @@ class MeetingTreeController(QObject):
     def _import_pdfs(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:
             stem = Path(path).stem
-            pages = pdf_cached_pages(path)
+            pages = pdf_cached_pages(path, self._runtime_paths.pdf_pages_dir)
             if pages:
                 self._on_pdf_pages_ready(pages, stem, list_id, insert_index)
                 if insert_index < _BIG_INDEX:
                     insert_index += len(pages)
                 continue
-            thread = PdfConvertThread(path, parent=self)
+            thread = PdfConvertThread(path, self._runtime_paths.pdf_pages_dir, parent=self)
             self._pdf_threads.append(thread)
             thread.pages_ready.connect(
                 lambda pages, pdf_stem, _list=list_id, _index=insert_index:
@@ -1014,13 +1049,23 @@ class MeetingTreeController(QObject):
     def _import_lo_files(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:
             stem = Path(path).stem
-            pages = lo_cached_pages(path)
+            pages = lo_cached_pages(
+                path,
+                pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+                docx_pages_dir=self._runtime_paths.docx_pages_dir,
+            )
             if pages:
                 self._on_lo_pages_ready(pages, stem, list_id, insert_index)
                 if insert_index < _BIG_INDEX:
                     insert_index += len(pages)
                 continue
-            thread = LoConvertThread(path, parent=self)
+            thread = LoConvertThread(
+                path,
+                pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+                docx_pages_dir=self._runtime_paths.docx_pages_dir,
+                pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
+                parent=self,
+            )
             self._lo_threads.append(thread)
             thread.pages_ready.connect(
                 lambda pages, doc_stem, _list=list_id, _index=insert_index:
@@ -1502,7 +1547,7 @@ class MeetingTreeController(QObject):
         url = self._url_for_node_id(item_id)
         if not url:
             return
-        mgr = MediaCacheManager.instance()
+        mgr = self._media_cache_manager
         if not mgr.is_cached(url) and not mgr.is_prefetching(url):
             mgr.prefetch(url, priority=True)
             self._emit_cloud_for_node(item_id)
@@ -1627,7 +1672,7 @@ class MeetingTreeController(QObject):
 
     def _connect_services(self) -> None:
         self._svc.video_resolved.connect(self._on_video_resolved)
-        mgr = MediaCacheManager.instance()
+        mgr = self._media_cache_manager
         mgr.cache_changed.connect(self._on_cache_changed)
         mgr.cache_removed.connect(self._on_cache_removed)
         mgr.prefetch_progress.connect(self._on_prefetch_progress)
@@ -1725,10 +1770,16 @@ class MeetingTreeController(QObject):
         return tuple(
             root
             for root in (
-                getattr(_paths, "CACHE_DIR", ""),
+                os.fspath(self._runtime_paths.cache_dir),
                 os.fspath(self._profile_paths.images_dir),
                 os.fspath(self._profile_paths.embedded_dir),
-                os.fspath(meeting_thumb_dir()),
+                os.fspath(
+                    meeting_thumb_dir(
+                        meeting_thumb_cache_dir=(
+                            self._runtime_paths.meeting_thumb_cache_dir
+                        ),
+                    )
+                ),
             )
             if root
         )
@@ -1966,7 +2017,14 @@ class MeetingTreeController(QObject):
         stored = str((node or {}).get("thumbnail_local_path") or "")
         if stored:
             return stored
-        return os.fspath(meeting_thumb_path(item_id)) if item_id else ""
+        if not item_id:
+            return ""
+        return os.fspath(
+            meeting_thumb_path(
+                item_id,
+                meeting_thumb_cache_dir=self._runtime_paths.meeting_thumb_cache_dir,
+            )
+        )
 
     def _has_local_thumbnail(self, node: Node | None) -> bool:
         item_id = str((node or {}).get("id", ""))
@@ -1977,7 +2035,10 @@ class MeetingTreeController(QObject):
         item_id = str(node.get("id", ""))
         if not item_id or pixmap is None or pixmap.isNull():
             return ""
-        path = meeting_thumb_path(item_id)
+        path = meeting_thumb_path(
+            item_id,
+            meeting_thumb_cache_dir=self._runtime_paths.meeting_thumb_cache_dir,
+        )
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             if not pixmap.save(os.fspath(path), "JPEG", THUMB_JPEG_QUALITY):
@@ -2018,7 +2079,7 @@ class MeetingTreeController(QObject):
     def _cloud_state(self, url: str) -> tuple[bool, bool, float, str]:
         if not MediaCacheManager.is_remote(url):
             return False, False, -1.0, ""
-        mgr = MediaCacheManager.instance()
+        mgr = self._media_cache_manager
         if mgr.is_cached(url):
             return False, False, 1.0, ""
         active = mgr.is_prefetching(url)
@@ -2187,7 +2248,11 @@ class MeetingTreeController(QObject):
             url = self._url_for_node(node)
             if not MediaCacheManager.is_remote(url):
                 continue
-            if os.path.normcase(os.path.abspath(cached_path_for(url))) == removed:
+            cached_path = cached_path_for(
+                url,
+                self._media_cache_manager.media_cache_dir,
+            )
+            if os.path.normcase(os.path.abspath(cached_path)) == removed:
                 self._emit_cloud_for_node(str(node.get("id", "")))
 
     @Slot(str, int, int)

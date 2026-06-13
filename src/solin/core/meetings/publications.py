@@ -53,6 +53,7 @@ from solin.core.jw.publication_links import (
     fetch_pub_media_json,
     select_pub_media_file,
 )
+from solin.core.media.cache import MediaCacheManager, is_url_cached
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 log = logging.getLogger(__name__)
@@ -67,15 +68,6 @@ _WT_CLASS  = 40
 _MWB_AYFM  = 18
 _SKIP_MEETING_REF_PUBS = {"th", "lmd"}
 _MWB_STUDY_REF_TYPES = {"Book", "Brochure", "Watchtower", "Article"}
-
-
-# ── Cache directory ───────────────────────────────────────────────────────────
-
-def _cache_root() -> Path:
-    base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    p = base / "Solin" / "jwpub_cache"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
 
 
 # ── Data model ────────────────────────────────────────────────────────────────
@@ -136,8 +128,9 @@ class WeekData:
 # ── Filesystem cache ──────────────────────────────────────────────────────────
 
 class JwpubCache:
-    def __init__(self):
-        self._root = _cache_root()
+    def __init__(self, root: str | os.PathLike[str]) -> None:
+        self._root = Path(root)
+        self._root.mkdir(parents=True, exist_ok=True)
 
     def jwpub_path(self, pub: str, lang: str, issue: str) -> Path:
         d = self._root / f"{pub}_{lang}"
@@ -208,16 +201,15 @@ class JwpubChecksumStore:
     Persists the MD5 checksums returned by the JW API alongside each .jwpub
     so that we can detect server-side content changes without re-downloading.
 
-    Storage : <cache_root>/checksums.json  (atomic write via tmp+replace)
+    Storage : the explicitly configured JSON file (atomic write via tmp+replace)
     Key     : "<pub>_<lang>_<issue>"  e.g. "mwb_T_202503", "w_T_202501"
     Value   : MD5 hex string from the API  e.g. "dcf8a1d77e8c804aece4efd0d47baa80"
 
     Thread safety
     -------------
-    A single process-wide instance is shared across every worker thread via
-    get_checksum_store() (see below).  All public methods are guarded by a
-    re-entrant lock, so concurrent saves from JwpubServiceWorker and
-    MemorialWorker are serialised and never overwrite each other.
+    The application container shares one instance across every worker thread.
+    All public methods are guarded by a lock, so concurrent saves from the
+    meetings and Memorial workers are serialised and never overwrite each other.
 
     _flush() uses a read-merge-write strategy: it re-reads the file from disk
     inside the lock before writing, so that any entry persisted by a previous
@@ -225,10 +217,9 @@ class JwpubChecksumStore:
     instances exist within the same process (e.g. during hot-reload in dev).
     """
 
-    _FILENAME = "checksums.json"
-
-    def __init__(self) -> None:
-        self._path  = _cache_root() / self._FILENAME
+    def __init__(self, path: str | os.PathLike[str]) -> None:
+        self._path = Path(path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._lock  = threading.Lock()
         self._data: dict[str, str] = self._load()
 
@@ -317,34 +308,6 @@ class JwpubChecksumStore:
                 pub, lang, issue, stored or "<none>", remote_checksum,
             )
         return changed
-
-
-# ── Process-wide singleton ────────────────────────────────────────────────────
-
-_checksum_store_instance: Optional["JwpubChecksumStore"] = None
-_checksum_store_lock = threading.Lock()
-
-
-def get_checksum_store() -> JwpubChecksumStore:
-    """
-    Return the process-wide singleton JwpubChecksumStore.
-
-    All workers (JwpubServiceWorker, MemorialWorker, …) must obtain the store
-    via this factory instead of calling JwpubChecksumStore() directly.  Sharing
-    a single instance guarantees that concurrent save() calls from different
-    worker threads are serialised through one lock and one in-memory dict, so
-    no entry written by one worker can be silently overwritten by another
-    worker's flush.
-    """
-    global _checksum_store_instance
-    if _checksum_store_instance is None:          # fast path (no lock)
-        with _checksum_store_lock:
-            if _checksum_store_instance is None:  # re-check under lock
-                _checksum_store_instance = JwpubChecksumStore()
-                log.debug("ChecksumStore: singleton created at %s",
-                          _checksum_store_instance._path)
-    return _checksum_store_instance
-
 
 def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str, bool]:
     """
@@ -1079,10 +1042,17 @@ class _JwpubWorker(QObject):
     video_resolved    = Signal(str, str, str, str)   # request_id, url, title, thumb
     prefetch_requested = Signal(str)                  # url para prefetch
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        media_cache_dir: str | os.PathLike[str],
+        jwpub_cache_dir: str | os.PathLike[str],
+        checksum_store: JwpubChecksumStore,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
-        self._cache           = JwpubCache()
-        self._checksum_store  = get_checksum_store()   # process-wide singleton
+        self._media_cache_dir = os.fspath(media_cache_dir)
+        self._cache           = JwpubCache(jwpub_cache_dir)
+        self._checksum_store  = checksum_store
         self._lang            = "T"
         self._is_sign_language = False
 
@@ -1585,8 +1555,6 @@ class _JwpubWorker(QObject):
     @Slot(object)
     def prefetch_week_media(self, wd: WeekData):
         """Resolve URLs e emite prefetch_requested para cada item não cacheado."""
-        from solin.core.media.cache import MediaCacheManager as _MCM
-        mgr = _MCM.instance()
         all_items = list(wd.mwb_all_media) + list(wd.wt_all_media)
         ref_items: list[MeetingMedia] = []
         for ref in getattr(wd, "mwb_publication_refs", []):
@@ -1601,7 +1569,7 @@ class _JwpubWorker(QObject):
                 is_sign_language=self._is_sign_language,
             )
             url = resolved.get("url", "")
-            if url and not mgr.is_cached(url) and not mgr.is_prefetching(url):
+            if url and not is_url_cached(url, self._media_cache_dir):
                 self.prefetch_requested.emit(url)
 
     # ── Internal download helper ───────────────────────────────────────────────
@@ -1693,17 +1661,30 @@ class JwpubService(QObject):
     _sig_resolve           = Signal(str, str, int, int, int, str)
     _sig_prefetch_wd       = Signal(object)
 
-    def __init__(self, prefs: QSettings, parent=None):
+    def __init__(
+        self,
+        prefs: QSettings,
+        cache_manager: MediaCacheManager,
+        jwpub_cache_dir: str | os.PathLike[str],
+        checksum_store: JwpubChecksumStore,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._prefs  = prefs
+        self._cache_manager = cache_manager
         self._active: dict[str, WeekData] = {}
         self._lang   = "T"
         self._is_sign_language = False
 
         # Cria worker + thread dedicada
         self._thread = QThread(self)
-        self._worker = _JwpubWorker()
+        self._worker = _JwpubWorker(
+            cache_manager.media_cache_dir,
+            jwpub_cache_dir,
+            checksum_store,
+        )
         self._worker.moveToThread(self._thread)
+        self._thread.finished.connect(self._worker.deleteLater)
 
         # Worker → JwpubService (main thread, QueuedConnection automática)
         self._worker.mwb_done.connect(self._on_mwb_done)
@@ -1922,8 +1903,7 @@ class JwpubService(QObject):
     @Slot(str)
     def _on_prefetch_requested(self, url: str):
         """Recebe pedido de prefetch do worker — já estamos na main thread."""
-        from solin.core.media.cache import MediaCacheManager
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         if not mgr.is_cached(url) and not mgr.is_prefetching(url):
             mgr.prefetch(url)
 

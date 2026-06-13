@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import random
-import threading
 import uuid
 from datetime import datetime
 
@@ -15,6 +14,7 @@ from PySide6.QtCore import (
     QByteArray,
     QUrl,
     QTimer,
+    QThread,
     Qt,
     Signal,
     Slot,
@@ -29,6 +29,7 @@ from ..core.jw.language_context import jw_media_language_context
 from ..core.jw.media_api import fetch_clips
 from ..core.jw.songs import JWSongsStore
 from ..core.foundation.exception_logging import log_ignored_exception
+from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.media.cache import MediaCacheManager, cached_path_for
 from ..core.i18n.strings import (
     tr_offline_download,
@@ -112,6 +113,50 @@ class MediaLibraryIconProvider(QQuickImageProvider):
         return fallback
 
 
+class _ClipFetchThread(QThread):
+    items_ready = Signal(int, list, float, bool)
+    failed = Signal(int, str)
+
+    def __init__(
+        self,
+        generation: int,
+        *,
+        api_code: str,
+        fallback_code: str,
+        is_sign_language: bool,
+        force: bool,
+        cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._generation = generation
+        self._api_code = api_code
+        self._fallback_code = fallback_code
+        self._is_sign_language = is_sign_language
+        self._force = force
+        self._cache_dir = cache_dir
+
+    def run(self) -> None:
+        try:
+            items, fetched_at, from_cache = fetch_clips(
+                self._api_code,
+                self._force,
+                fallback_code=self._fallback_code,
+                is_sign_language=self._is_sign_language,
+                cache_dir=self._cache_dir,
+            )
+            if not self.isInterruptionRequested():
+                self.items_ready.emit(
+                    self._generation,
+                    items,
+                    fetched_at,
+                    from_cache,
+                )
+        except Exception as exc:  # noqa: BLE001 - worker reports transport failures via signal
+            if not self.isInterruptionRequested():
+                self.failed.emit(self._generation, str(exc))
+
+
 class MediaLibraryModel(QAbstractListModel):
     NumberTextRole = Qt.ItemDataRole.UserRole + 1
     TitleRole = Qt.ItemDataRole.UserRole + 2
@@ -123,17 +168,22 @@ class MediaLibraryModel(QAbstractListModel):
     CloudProgressRole = Qt.ItemDataRole.UserRole + 8
     CloudQueuedRole = Qt.ItemDataRole.UserRole + 9
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        cache_manager: MediaCacheManager,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self._cache_manager = cache_manager
         self._items: list[dict] = []
         self._url_rows: dict[str, list[int]] = {}
         self._audio_mode = False
-        MediaCacheManager.instance().cache_changed.connect(self._on_cache_changed)
-        MediaCacheManager.instance().cache_removed.connect(self._on_cache_removed)
-        MediaCacheManager.instance().prefetch_progress.connect(self._on_prefetch_progress)
-        MediaCacheManager.instance().prefetch_error.connect(self._on_prefetch_error)
-        MediaCacheManager.instance().prefetch_queued.connect(self._on_prefetch_queued)
-        MediaCacheManager.instance().prefetch_dequeued.connect(self._on_prefetch_dequeued)
+        cache_manager.cache_changed.connect(self._on_cache_changed)
+        cache_manager.cache_removed.connect(self._on_cache_removed)
+        cache_manager.prefetch_progress.connect(self._on_prefetch_progress)
+        cache_manager.prefetch_error.connect(self._on_prefetch_error)
+        cache_manager.prefetch_queued.connect(self._on_prefetch_queued)
+        cache_manager.prefetch_dequeued.connect(self._on_prefetch_dequeued)
 
     def roleNames(self):
         return {
@@ -167,10 +217,10 @@ class MediaLibraryModel(QAbstractListModel):
         if role == self.CloudVisibleRole:
             return self._cloud_visible(item)
         if role == self.CloudDownloadingRole:
-            return MediaCacheManager.instance().is_prefetching(item.get("url", ""))
+            return self._cache_manager.is_prefetching(item.get("url", ""))
         if role == self.CloudTooltipRole:
             url = item.get("url", "")
-            mgr = MediaCacheManager.instance()
+            mgr = self._cache_manager
             if mgr.is_queued(url):
                 return tr_offline_queued()
             if mgr.is_prefetching(url):
@@ -181,7 +231,7 @@ class MediaLibraryModel(QAbstractListModel):
         if role == self.CloudProgressRole:
             return float(item.get("_cloud_progress", -1.0))
         if role == self.CloudQueuedRole:
-            return MediaCacheManager.instance().is_queued(item.get("url", ""))
+            return self._cache_manager.is_queued(item.get("url", ""))
         return None
 
     def set_items(self, items: list[dict], audio_mode: bool) -> None:
@@ -198,12 +248,12 @@ class MediaLibraryModel(QAbstractListModel):
 
     def cleanup(self) -> None:
         try:
-            MediaCacheManager.instance().cache_changed.disconnect(self._on_cache_changed)
-            MediaCacheManager.instance().cache_removed.disconnect(self._on_cache_removed)
-            MediaCacheManager.instance().prefetch_progress.disconnect(self._on_prefetch_progress)
-            MediaCacheManager.instance().prefetch_error.disconnect(self._on_prefetch_error)
-            MediaCacheManager.instance().prefetch_queued.disconnect(self._on_prefetch_queued)
-            MediaCacheManager.instance().prefetch_dequeued.disconnect(self._on_prefetch_dequeued)
+            self._cache_manager.cache_changed.disconnect(self._on_cache_changed)
+            self._cache_manager.cache_removed.disconnect(self._on_cache_removed)
+            self._cache_manager.prefetch_progress.disconnect(self._on_prefetch_progress)
+            self._cache_manager.prefetch_error.disconnect(self._on_prefetch_error)
+            self._cache_manager.prefetch_queued.disconnect(self._on_prefetch_queued)
+            self._cache_manager.prefetch_dequeued.disconnect(self._on_prefetch_dequeued)
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media cache prefetch signals")
 
@@ -211,7 +261,7 @@ class MediaLibraryModel(QAbstractListModel):
         url = item.get("url", "")
         if not MediaCacheManager.is_remote(url):
             return False
-        if MediaCacheManager.instance().is_cached(url):
+        if self._cache_manager.is_cached(url):
             return False
         return True
 
@@ -232,7 +282,15 @@ class MediaLibraryModel(QAbstractListModel):
         removed_path = os.path.normcase(os.path.abspath(path))
         for row, item in enumerate(self._items):
             url = item.get("url", "")
-            cached_path = os.path.normcase(os.path.abspath(cached_path_for(url))) if url else ""
+            cached_path = (
+                os.path.normcase(
+                    os.path.abspath(
+                        cached_path_for(url, self._cache_manager.media_cache_dir)
+                    )
+                )
+                if url
+                else ""
+            )
             if cached_path == removed_path:
                 item.pop("_cloud_tooltip", None)
                 item.pop("_cloud_progress", None)
@@ -464,13 +522,23 @@ class MediaLibraryBridge(QObject):
 
 class MediaLibraryWidget(QWidget):
     project_video_signal = Signal(str, str, object, str)
-    _loaded_signal = Signal(list, str, float, bool)
-    _error_signal = Signal(str)
 
-    def __init__(self, kind: str, lang_manager: LanguageManager, media_ctrl=None, parent=None):
+    def __init__(
+        self,
+        kind: str,
+        lang_manager: LanguageManager,
+        cache_manager: MediaCacheManager,
+        media_ctrl=None,
+        *,
+        songs_store: JWSongsStore | None = None,
+        jw_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.kind = kind
         self.lang = lang_manager
+        self._cache_manager = cache_manager
+        self._jw_cache_dir = jw_cache_dir
         self.items: list[dict] = []
         self.filtered_items: list[dict] = []
         if self.kind == "songs":
@@ -482,9 +550,13 @@ class MediaLibraryWidget(QWidget):
         self._query = ""
         self._audio_mode = False
         self._song_request_key = ""
-        self._songs_store = JWSongsStore.instance() if self.kind == "songs" else None
+        self._songs_store = songs_store if self.kind == "songs" else None
+        if self.kind == "songs" and self._songs_store is None:
+            raise ValueError("Songs media library requires a JWSongsStore")
         self._qml_pointer_depth = 0
         self._disposed = False
+        self._clip_generation = 0
+        self._clip_threads: list[_ClipFetchThread] = []
         self._download_all_batch_ids: dict[str, str] = {"video": "", "audio": ""}
         self._download_all_error_batches: set[str] = set()
         self._download_all_refresh_timer = QTimer(self)
@@ -492,7 +564,7 @@ class MediaLibraryWidget(QWidget):
         self._download_all_refresh_timer.setInterval(120)
         self._download_all_refresh_timer.timeout.connect(self._refresh_download_all_state)
 
-        self.model = MediaLibraryModel(self)
+        self.model = MediaLibraryModel(cache_manager, self)
         self.bridge = MediaLibraryBridge(self)
         self._connect_signals()
         self._build_qml()
@@ -524,8 +596,6 @@ class MediaLibraryWidget(QWidget):
         root.addWidget(self.qml_widget, stretch=1)
 
     def _connect_signals(self) -> None:
-        self._loaded_signal.connect(self._on_items_loaded)
-        self._error_signal.connect(self._on_items_error)
         if self._songs_store is not None:
             self._songs_store.songs_ready.connect(self._on_song_store_ready)
             self._songs_store.songs_failed.connect(self._on_song_store_failed)
@@ -545,7 +615,7 @@ class MediaLibraryWidget(QWidget):
         if svc is not None:
             svc.media_language_changed.connect(self._on_media_language_changed)
 
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         mgr.cache_changed.connect(self._on_cache_state_changed)
         mgr.cache_removed.connect(self._on_cache_state_changed)
         mgr.prefetch_queued.connect(self._on_cache_state_changed)
@@ -604,20 +674,44 @@ class MediaLibraryWidget(QWidget):
             self._song_request_key = self._songs_store.ensure_loaded(request, force=force)
             return
 
-        def worker():
-            try:
-                items, fetched_at, from_cache = fetch_clips(
-                    context.api_code,
-                    force,
-                    fallback_code=context.fallback_code,
-                    is_sign_language=context.is_sign_language,
-                )
-                pub_name = ""
-                self._loaded_signal.emit(items, pub_name, fetched_at, from_cache)
-            except Exception as exc:  # noqa: BLE001 - media catalog worker boundary
-                self._error_signal.emit(str(exc))
+        self._clip_generation += 1
+        generation = self._clip_generation
+        for thread in self._clip_threads:
+            thread.requestInterruption()
+        thread = _ClipFetchThread(
+            generation,
+            api_code=context.api_code,
+            fallback_code=context.fallback_code,
+            is_sign_language=context.is_sign_language,
+            force=force,
+            cache_dir=self._jw_cache_dir,
+            parent=self,
+        )
+        thread.items_ready.connect(self._on_clip_items_loaded)
+        thread.failed.connect(self._on_clip_items_error)
+        thread.finished.connect(
+            lambda current=thread: self._clip_threads.remove(current)
+            if current in self._clip_threads
+            else None
+        )
+        self._clip_threads.append(thread)
+        thread.start()
 
-        threading.Thread(target=worker, daemon=True).start()
+    @Slot(int, list, float, bool)
+    def _on_clip_items_loaded(
+        self,
+        generation: int,
+        items: list,
+        fetched_at: float,
+        from_cache: bool,
+    ) -> None:
+        if not self._disposed and generation == self._clip_generation:
+            self._on_items_loaded(items, "", fetched_at, from_cache)
+
+    @Slot(int, str)
+    def _on_clip_items_error(self, generation: int, error_msg: str) -> None:
+        if not self._disposed and generation == self._clip_generation:
+            self._on_items_error(error_msg)
 
     @Slot(str, list, str, float, bool)
     def _on_song_store_ready(
@@ -727,7 +821,7 @@ class MediaLibraryWidget(QWidget):
         if not item:
             return
         url = item.get("url", "")
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         if url and not mgr.is_cached(url):
             mgr.prefetch(url, priority=True)
             idx = self.model.index(row_index, 0)
@@ -735,7 +829,7 @@ class MediaLibraryWidget(QWidget):
         self._refresh_download_all_state()
 
     def _download_all_current_mode(self) -> None:
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         mode = self._download_all_mode()
         batch_id = self._download_all_batch_ids.get(mode, "")
         if batch_id and mgr.batch_is_active(batch_id):
@@ -773,7 +867,7 @@ class MediaLibraryWidget(QWidget):
             return []
         if self._audio_mode and not self.bridge.supports_audio:
             return []
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         urls: list[str] = []
         seen: set[str] = set()
         for item in self._ordered_items(self.items):
@@ -825,7 +919,7 @@ class MediaLibraryWidget(QWidget):
     def _refresh_download_all_state(self) -> None:
         if not hasattr(self, "bridge"):
             return
-        mgr = MediaCacheManager.instance()
+        mgr = self._cache_manager
         mode = self._download_all_mode()
         batch_id = self._download_all_batch_ids.get(mode, "")
         active = bool(
@@ -995,6 +1089,14 @@ class MediaLibraryWidget(QWidget):
         if self._disposed:
             return
         self._disposed = True
+        self._clip_generation += 1
+        for thread in list(self._clip_threads):
+            stop_owned_qthread(
+                thread,
+                wait_ms=3_000,
+                label="Clip catalog",
+            )
+        self._clip_threads.clear()
         try:
             self.model.cleanup()
         except Exception:  # noqa: BLE001 - widget cleanup boundary
@@ -1015,7 +1117,7 @@ class MediaLibraryWidget(QWidget):
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media language signal")
         try:
-            mgr = MediaCacheManager.instance()
+            mgr = self._cache_manager
             mgr.cache_changed.disconnect(self._on_cache_state_changed)
             mgr.cache_removed.disconnect(self._on_cache_state_changed)
             mgr.prefetch_queued.disconnect(self._on_cache_state_changed)

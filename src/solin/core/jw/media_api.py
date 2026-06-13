@@ -45,7 +45,6 @@ import os
 import re
 import time
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import (
     CACHE_TTL_DAYS,
     VIDEO_PREFERRED_QUALITY,
@@ -169,10 +168,15 @@ def _pick_quality(
 # Cânticos — vídeo (MP4 / sjjm ou sjj)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _cache_path(api_code: str, is_sign: bool) -> str:
-    os.makedirs(_paths.CACHE_DIR, exist_ok=True)
+def _cache_path(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> str:
+    root = os.fspath(cache_dir)
+    os.makedirs(root, exist_ok=True)
     suffix = "_sl" if is_sign else ""
-    return os.path.join(_paths.CACHE_DIR, f"songs_{api_code}{suffix}.json")
+    return os.path.join(root, f"songs_{api_code}{suffix}.json")
 
 
 def _read_cache_json(path: str) -> dict | None:
@@ -202,20 +206,34 @@ def _is_cache_payload_fresh(data: dict | None, content_key: str) -> bool:
     return age_days < CACHE_TTL_DAYS
 
 
-def _is_cache_valid(api_code: str, is_sign: bool) -> bool:
-    path = _cache_path(api_code, is_sign)
+def _is_cache_valid(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> bool:
+    path = _cache_path(api_code, is_sign, cache_dir)
     return _is_cache_payload_fresh(_read_cache_json(path), "songs")
 
 
-def _load_cache(api_code: str, is_sign: bool) -> tuple:
-    data = _read_cache_json(_cache_path(api_code, is_sign))
+def _load_cache(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> tuple:
+    data = _read_cache_json(_cache_path(api_code, is_sign, cache_dir))
     if data is None:
         return None, "", 0
     return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
 
 
-def _save_cache(api_code: str, is_sign: bool, songs: list, pub_name: str) -> None:
-    path = _cache_path(api_code, is_sign)
+def _save_cache(
+    api_code: str,
+    is_sign: bool,
+    songs: list,
+    pub_name: str,
+    cache_dir: str | os.PathLike[str],
+) -> None:
+    path = _cache_path(api_code, is_sign, cache_dir)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"_fetched_at": time.time(), "pub_name": pub_name, "songs": songs},
@@ -295,6 +313,8 @@ def fetch_songs(
     force: bool = False,
     fallback_code: str | None = None,
     is_sign_language: bool = False,
+    *,
+    cache_dir: str | os.PathLike[str],
 ) -> tuple[list, str, float, bool]:
     """
     Busca cânticos JW (vídeo MP4).
@@ -309,8 +329,12 @@ def fetch_songs(
 
     Retorna (songs, pub_name, fetched_at_timestamp, from_cache).
     """
-    if not force and _is_cache_valid(api_code, is_sign_language):
-        songs, pub_name, fetched_at = _load_cache(api_code, is_sign_language)
+    if not force and _is_cache_valid(api_code, is_sign_language, cache_dir):
+        songs, pub_name, fetched_at = _load_cache(
+            api_code,
+            is_sign_language,
+            cache_dir,
+        )
         if songs is not None:
             return songs, pub_name, float(fetched_at), True
 
@@ -322,17 +346,27 @@ def fetch_songs(
     except HttpError:
         # Fallback: idioma da interface — nunca é gestual
         if fallback_code and fallback_code != api_code:
-            return fetch_songs(fallback_code, force=force, fallback_code=None,
-                               is_sign_language=False)
+            return fetch_songs(
+                fallback_code,
+                force=force,
+                fallback_code=None,
+                is_sign_language=False,
+                cache_dir=cache_dir,
+            )
         raise
 
     songs, pub_name = _parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
-        return fetch_songs(fallback_code, force=force, fallback_code=None,
-                           is_sign_language=False)
+        return fetch_songs(
+            fallback_code,
+            force=force,
+            fallback_code=None,
+            is_sign_language=False,
+            cache_dir=cache_dir,
+        )
 
-    _save_cache(api_code, is_sign_language, songs, pub_name)
+    _save_cache(api_code, is_sign_language, songs, pub_name, cache_dir)
     return songs, pub_name, time.time(), False
 
 
@@ -340,26 +374,45 @@ def fetch_songs(
 # Cânticos — áudio (MP3 ou MP4 para gestuais, sjjm ou sjj)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _songs_audio_cache_path(api_code: str, is_sign: bool) -> str:
-    os.makedirs(_paths.CACHE_DIR, exist_ok=True)
+def _songs_audio_cache_path(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> str:
+    root = os.fspath(cache_dir)
+    os.makedirs(root, exist_ok=True)
     suffix = "_sl" if is_sign else ""
-    return os.path.join(_paths.CACHE_DIR, f"songs_audio_{api_code}{suffix}.json")
+    return os.path.join(root, f"songs_audio_{api_code}{suffix}.json")
 
 
-def _is_songs_audio_cache_valid(api_code: str, is_sign: bool) -> bool:
-    path = _songs_audio_cache_path(api_code, is_sign)
+def _is_songs_audio_cache_valid(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> bool:
+    path = _songs_audio_cache_path(api_code, is_sign, cache_dir)
     return _is_cache_payload_fresh(_read_cache_json(path), "songs")
 
 
-def _load_songs_audio_cache(api_code: str, is_sign: bool) -> tuple:
-    data = _read_cache_json(_songs_audio_cache_path(api_code, is_sign))
+def _load_songs_audio_cache(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> tuple:
+    data = _read_cache_json(_songs_audio_cache_path(api_code, is_sign, cache_dir))
     if data is None:
         return None, "", 0
     return data.get("songs"), data.get("pub_name", ""), data.get("_fetched_at", 0)
 
 
-def _save_songs_audio_cache(api_code: str, is_sign: bool, songs: list, pub_name: str) -> None:
-    path = _songs_audio_cache_path(api_code, is_sign)
+def _save_songs_audio_cache(
+    api_code: str,
+    is_sign: bool,
+    songs: list,
+    pub_name: str,
+    cache_dir: str | os.PathLike[str],
+) -> None:
+    path = _songs_audio_cache_path(api_code, is_sign, cache_dir)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"_fetched_at": time.time(), "pub_name": pub_name, "songs": songs},
@@ -372,6 +425,8 @@ def fetch_songs_audio(
     force: bool = False,
     fallback_code: str | None = None,
     is_sign_language: bool = False,
+    *,
+    cache_dir: str | os.PathLike[str],
 ) -> tuple[list, str, float, bool]:
     """
     Busca cânticos JW em modo áudio.
@@ -382,8 +437,12 @@ def fetch_songs_audio(
 
     Parâmetros idênticos a fetch_songs.
     """
-    if not force and _is_songs_audio_cache_valid(api_code, is_sign_language):
-        songs, pub_name, fetched_at = _load_songs_audio_cache(api_code, is_sign_language)
+    if not force and _is_songs_audio_cache_valid(api_code, is_sign_language, cache_dir):
+        songs, pub_name, fetched_at = _load_songs_audio_cache(
+            api_code,
+            is_sign_language,
+            cache_dir,
+        )
         if songs is not None:
             return songs, pub_name, float(fetched_at), True
 
@@ -394,16 +453,26 @@ def fetch_songs_audio(
         data = http_get_json(url, timeout=_HTTP_TIMEOUT)
     except HttpError:
         if fallback_code and fallback_code != api_code:
-            return fetch_songs_audio(fallback_code, force=force, fallback_code=None,
-                                     is_sign_language=False)
+            return fetch_songs_audio(
+                fallback_code,
+                force=force,
+                fallback_code=None,
+                is_sign_language=False,
+                cache_dir=cache_dir,
+            )
         raise
 
     songs, pub_name = _parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
-        return fetch_songs_audio(fallback_code, force=force, fallback_code=None,
-                                 is_sign_language=False)
-    _save_songs_audio_cache(api_code, is_sign_language, songs, pub_name)
+        return fetch_songs_audio(
+            fallback_code,
+            force=force,
+            fallback_code=None,
+            is_sign_language=False,
+            cache_dir=cache_dir,
+        )
+    _save_songs_audio_cache(api_code, is_sign_language, songs, pub_name, cache_dir)
     return songs, pub_name, time.time(), False
 
 
@@ -411,26 +480,44 @@ def fetch_songs_audio(
 # Clipes musicais (Original Songs — pub=osg)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _clips_cache_path(api_code: str, is_sign: bool) -> str:
-    os.makedirs(_paths.CACHE_DIR, exist_ok=True)
+def _clips_cache_path(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> str:
+    root = os.fspath(cache_dir)
+    os.makedirs(root, exist_ok=True)
     suffix = "_sl" if is_sign else ""
-    return os.path.join(_paths.CACHE_DIR, f"clips_{api_code}{suffix}.json")
+    return os.path.join(root, f"clips_{api_code}{suffix}.json")
 
 
-def _is_clips_cache_valid(api_code: str, is_sign: bool) -> bool:
-    path = _clips_cache_path(api_code, is_sign)
+def _is_clips_cache_valid(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> bool:
+    path = _clips_cache_path(api_code, is_sign, cache_dir)
     return _is_cache_payload_fresh(_read_cache_json(path), "clips")
 
 
-def _load_clips_cache(api_code: str, is_sign: bool) -> tuple:
-    data = _read_cache_json(_clips_cache_path(api_code, is_sign))
+def _load_clips_cache(
+    api_code: str,
+    is_sign: bool,
+    cache_dir: str | os.PathLike[str],
+) -> tuple:
+    data = _read_cache_json(_clips_cache_path(api_code, is_sign, cache_dir))
     if data is None:
         return None, 0
     return data.get("clips"), data.get("_fetched_at", 0)
 
 
-def _save_clips_cache(api_code: str, is_sign: bool, clips: list) -> None:
-    path = _clips_cache_path(api_code, is_sign)
+def _save_clips_cache(
+    api_code: str,
+    is_sign: bool,
+    clips: list,
+    cache_dir: str | os.PathLike[str],
+) -> None:
+    path = _clips_cache_path(api_code, is_sign, cache_dir)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
             {"_fetched_at": time.time(), "clips": clips},
@@ -524,6 +611,8 @@ def fetch_clips(
     force: bool = False,
     fallback_code: str | None = None,
     is_sign_language: bool = False,
+    *,
+    cache_dir: str | os.PathLike[str],
 ) -> tuple[list, float, bool]:
     """
     Busca clipes musicais originais (Original Songs).
@@ -537,8 +626,8 @@ def fetch_clips(
     Fallback para idioma da interface sempre com is_sign_language=False.
     Retorna (clips, fetched_at_timestamp, from_cache).
     """
-    if not force and _is_clips_cache_valid(api_code, is_sign_language):
-        clips, fetched_at = _load_clips_cache(api_code, is_sign_language)
+    if not force and _is_clips_cache_valid(api_code, is_sign_language, cache_dir):
+        clips, fetched_at = _load_clips_cache(api_code, is_sign_language, cache_dir)
         if clips is not None:
             return clips, float(fetched_at), True
 
@@ -548,8 +637,13 @@ def fetch_clips(
         data = http_get_json(url, timeout=_HTTP_TIMEOUT)
     except HttpError:
         if fallback_code and fallback_code != api_code:
-            return fetch_clips(fallback_code, force=force, fallback_code=None,
-                               is_sign_language=False)
+            return fetch_clips(
+                fallback_code,
+                force=force,
+                fallback_code=None,
+                is_sign_language=False,
+                cache_dir=cache_dir,
+            )
         raise
 
     if is_sign_language:
@@ -558,10 +652,15 @@ def fetch_clips(
         clips = _parse_clips_mediator(data)
 
     if not clips and fallback_code and fallback_code != api_code:
-        return fetch_clips(fallback_code, force=force, fallback_code=None,
-                           is_sign_language=False)
+        return fetch_clips(
+            fallback_code,
+            force=force,
+            fallback_code=None,
+            is_sign_language=False,
+            cache_dir=cache_dir,
+        )
 
-    _save_clips_cache(api_code, is_sign_language, clips)
+    _save_clips_cache(api_code, is_sign_language, clips, cache_dir)
     return clips, time.time(), False
 
 
@@ -569,9 +668,14 @@ def fetch_clips(
 # Utilitários de cache (usados por settings_widget, etc.)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def get_cache_date(api_code: str, is_sign_language: bool = False) -> float | None:
+def get_cache_date(
+    api_code: str,
+    is_sign_language: bool = False,
+    *,
+    cache_dir: str | os.PathLike[str],
+) -> float | None:
     """Retorna o timestamp do cache de cânticos (vídeo) se existir."""
-    data = _read_cache_json(_cache_path(api_code, is_sign_language))
+    data = _read_cache_json(_cache_path(api_code, is_sign_language, cache_dir))
     if data is None:
         return None
     ts = data.get("_fetched_at", 0)

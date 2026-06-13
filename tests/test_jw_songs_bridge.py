@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
-from solin.core.jw import songs as songs_module
 from solin.core.jw.songs import JWSongsStore
 from solin.widgets.jw_songs_bridge import JWSongsBridge
 
@@ -11,9 +10,9 @@ def _app():
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-def test_songs_bridge_filters_by_number_prefix_and_title():
+def test_songs_bridge_filters_by_number_prefix_and_title(tmp_path):
     _app()
-    bridge = JWSongsBridge()
+    bridge = JWSongsBridge(JWSongsStore(tmp_path))
     try:
         bridge._all_items = [
             {"number": 2, "title": "Good Song", "url": "https://example.test/2.mp4"},
@@ -35,9 +34,9 @@ def test_songs_bridge_filters_by_number_prefix_and_title():
         bridge.cleanup()
 
 
-def test_songs_bridge_emits_playlist_ready_song_metadata():
+def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
     _app()
-    bridge = JWSongsBridge()
+    bridge = JWSongsBridge(JWSongsStore(tmp_path))
     try:
         bridge.set_language_context(
             api_code="T",
@@ -71,20 +70,16 @@ def test_songs_bridge_emits_playlist_ready_song_metadata():
         bridge.cleanup()
 
 
-def test_songs_store_coalesces_matching_inflight_requests(monkeypatch):
+def test_songs_store_coalesces_matching_inflight_requests(tmp_path):
     _app()
-    store = JWSongsStore()
+    store = JWSongsStore(tmp_path)
     starts = []
 
     class _Pool:
         def start(self, worker):
             starts.append(worker)
 
-    monkeypatch.setattr(
-        songs_module.QThreadPool,
-        "globalInstance",
-        staticmethod(lambda: _Pool()),
-    )
+    store._thread_pool = _Pool()
 
     request = store.request_for(
         api_code="T",

@@ -29,6 +29,7 @@ def media_type_from_url(url: str) -> str:
 def _enrich_items_for_export(
     items: list[dict],
     thumb_cache: "dict[str, QPixmap]",
+    thumb_cache_dir: str | Path,
 ) -> list[dict]:
     result = []
     for item in items:
@@ -38,7 +39,7 @@ def _enrich_items_for_export(
         if not enriched.get("thumbnail_data"):
             pixmap = thumb_cache.get(item_id)
             if pixmap is None or pixmap.isNull():
-                pixmap = _load_thumb_from_disk(item_id)
+                pixmap = _load_thumb_from_disk(item_id, thumb_cache_dir)
             if pixmap is not None and not pixmap.isNull():
                 enriched["thumbnail_data"] = _thumb_to_bytes(pixmap)
 

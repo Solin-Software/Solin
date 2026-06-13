@@ -5,7 +5,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QVideoFrame
 
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.rendering.fonts import font_manager as _font_manager
+from ..core.rendering.fonts import FontManager
 
 _WT_CLEAR_TEXT = "Wt-ClearText-Bold"
 
@@ -47,16 +47,21 @@ from .sermon_theme import SermonThemeProjectionWidget
 class YearlyTextWidget(QWidget):
     """Widget that displays the yearly Bible text with responsive font sizing."""
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        font_manager: FontManager,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self._font_manager = font_manager
         self.setStyleSheet("background-color: black;")
         self._quote = ""
         self._reference = ""
         self._api_code = ""
 
         # Kick off the font download/registration in background.
-        _font_manager.font_ready.connect(self._on_font_ready)
-        _font_manager.ensure(_WT_CLEAR_TEXT)
+        self._font_manager.font_ready.connect(self._on_font_ready)
+        self._font_manager.ensure(_WT_CLEAR_TEXT)
 
     def _on_font_ready(self, font_name: str) -> None:
         """Triggered once Wt-ClearText-Bold is registered; repaint if visible."""
@@ -89,7 +94,9 @@ class YearlyTextWidget(QWidget):
 
         # ── Typography & Auto-Scaling ─────────────────────────────────────
         font = QFont()
-        font.setFamilies([_font_manager.family(_WT_CLEAR_TEXT), "Georgia", "Noto Serif"])
+        font.setFamilies(
+            [self._font_manager.family(_WT_CLEAR_TEXT), "Georgia", "Noto Serif"]
+        )
         font.setWeight(QFont.Weight.Normal)
 
         if self._api_code == "J":
@@ -673,7 +680,7 @@ class BaseProjectionView(QWidget):
         self._timer_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
         # Page 2 — yearly text (idle screen)
-        self._yearly_widget = YearlyTextWidget()
+        self._yearly_widget = YearlyTextWidget(self._font_manager)
         self._stack.addWidget(self._yearly_widget)  # index 2
 
         # Opacity / fade effect on the yearly text widget
@@ -967,13 +974,19 @@ class BaseProjectionView(QWidget):
 class ProjectionWindow(BaseProjectionView):
     """Fullscreen window displayed on a secondary monitor."""
 
-    def __init__(self, screen, monitor_index: int = 1):
+    def __init__(
+        self,
+        screen,
+        monitor_index: int,
+        font_manager: FontManager,
+    ) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
+        self._font_manager = font_manager
         self.monitor_index = monitor_index
 
         # Window setup
@@ -1131,10 +1144,12 @@ class FloatingPreviewWindow(BaseProjectionView):
     _ZOOM_BREAK_MS        = 80      # ms to stay hidden for Zoom-break
 
     def __init__(self,
+                 font_manager: FontManager,
                  yearly_text_quote: str = "",
                  yearly_text_ref:   str = "",
                  api_code:          str = ""):
         super().__init__(None)      # no Qt parent → proper top-level window
+        self._font_manager = font_manager
 
         # ── Window flags ──────────────────────────────────────────────────
         # Qt.WindowType.Window  → registered with the OS window manager,

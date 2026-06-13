@@ -1,6 +1,14 @@
 import copy
 
+from solin.core.media.cache import MediaCacheManager
 from solin.widgets.playlist.edit_model import PlaylistEditModel
+
+
+def _model(tmp_path) -> PlaylistEditModel:
+    return PlaylistEditModel(
+        MediaCacheManager(tmp_path / "media"),
+        tmp_path / "thumbs",
+    )
 
 
 def _nested_playlist():
@@ -56,8 +64,8 @@ def _nested_playlist():
     }
 
 
-def test_playlist_edit_model_builds_flat_rows_and_tree_data():
-    model = PlaylistEditModel()
+def test_playlist_edit_model_builds_flat_rows_and_tree_data(tmp_path):
+    model = _model(tmp_path)
     model.rebuild(
         {
             "sections": [
@@ -93,8 +101,8 @@ def test_playlist_edit_model_builds_flat_rows_and_tree_data():
     assert tree[0]["children"][0]["id"] == "media-1"
 
 
-def test_tree_data_preserves_nested_marker_and_media_order():
-    model = PlaylistEditModel()
+def test_tree_data_preserves_nested_marker_and_media_order(tmp_path):
+    model = _model(tmp_path)
     model.rebuild(_nested_playlist())
 
     tree = model.tree_data()
@@ -113,9 +121,9 @@ def test_tree_data_preserves_nested_marker_and_media_order():
     ]
 
 
-def test_move_media_to_subsection_updates_storage_and_marker_positions():
+def test_move_media_to_subsection_updates_storage_and_marker_positions(tmp_path):
     playlist = _nested_playlist()
-    model = PlaylistEditModel()
+    model = _model(tmp_path)
     model.rebuild(playlist)
 
     assert model.move_node("root-media", "subsection:subsection-1", 0)
@@ -136,10 +144,10 @@ def test_move_media_to_subsection_updates_storage_and_marker_positions():
     ]
 
 
-def test_invalid_section_drop_into_descendant_preserves_storage():
+def test_invalid_section_drop_into_descendant_preserves_storage(tmp_path):
     playlist = _nested_playlist()
     before = copy.deepcopy(playlist)
-    model = PlaylistEditModel()
+    model = _model(tmp_path)
     model.rebuild(playlist)
 
     assert not model.move_node("section-1", "subsection:subsection-1", 0)
@@ -147,7 +155,7 @@ def test_invalid_section_drop_into_descendant_preserves_storage():
     assert playlist == before
 
 
-def test_marker_can_only_move_inside_its_own_subsection():
+def test_marker_can_only_move_inside_its_own_subsection(tmp_path):
     playlist = _nested_playlist()
     playlist["sections"].extend([
         {
@@ -165,7 +173,7 @@ def test_marker_can_only_move_inside_its_own_subsection():
             "position": 3,
         },
     ])
-    model = PlaylistEditModel()
+    model = _model(tmp_path)
     model.rebuild(playlist)
 
     assert model.can_drop_node("marker-1", "marker", "subsection:subsection-1")
@@ -177,7 +185,7 @@ def test_marker_can_only_move_inside_its_own_subsection():
     assert not model.can_drop_node("marker-1", "marker", "section:section-1")
 
 
-def test_rebuild_repairs_orphaned_item_section_reference():
+def test_rebuild_repairs_orphaned_item_section_reference(tmp_path):
     playlist = {
         "sections": [],
         "items": [
@@ -191,7 +199,7 @@ def test_rebuild_repairs_orphaned_item_section_reference():
         ],
         "markers": [],
     }
-    model = PlaylistEditModel()
+    model = _model(tmp_path)
 
     model.rebuild(playlist)
 

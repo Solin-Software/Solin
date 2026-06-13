@@ -18,6 +18,7 @@ Sinais públicos:
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -33,7 +34,8 @@ from PySide6.QtWidgets import (
 
 from ..core.i18n.manager import LanguageManager
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.foundation.runtime_paths import ProfilePaths
+from ..core.foundation.qt_threads import stop_owned_qthread
+from ..core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ..core.foundation.constants import (
     AUDIO_EXTS as _AUDIO_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
@@ -46,7 +48,6 @@ from ..core.media.mime import mime_to_ext
 from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
 from .media_info_extractor import MediaInfoService
-import os
 
 if TYPE_CHECKING:
     from ..core.ui.notifications import NotificationCenter
@@ -511,12 +512,18 @@ class WifiReceiveWidget(QWidget):
         *,
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
+        runtime_paths: RuntimePaths,
+        media_cache_dir: str | os.PathLike[str],
+        thumb_cache_dir: str | os.PathLike[str],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._lang            = lang
         self._notifications   = notifications
         self._profile_paths   = profile_paths
+        self._runtime_paths   = runtime_paths
+        self._media_cache_dir = media_cache_dir
+        self._thumb_cache_dir = thumb_cache_dir
         self._server          = WifiReceiveServer(
             embedded_dir=profile_paths.embedded_dir,
             parent=self,
@@ -524,7 +531,11 @@ class WifiReceiveWidget(QWidget):
         self._session_url     = ""
         self._received_files: list[dict] = []
         self._cards:          list[_MediaCard] = []
-        self._thumb_service   = MediaInfoService(self)
+        self._thumb_service = MediaInfoService(
+            media_cache_dir,
+            thumb_cache_dir,
+            self,
+        )
         self._wifi_tmp_files: set[str] = set()   # temp files criados por PDF/JWL expansion
         self._qr_thread:      Optional[QThread]   = None
         self._qr_worker:      Optional[_QrWorker] = None
@@ -906,12 +917,16 @@ class WifiReceiveWidget(QWidget):
         from ..core.rendering.pdf import PdfConvertThread, cached_pages
         pdf_stem = Path(orig_name).stem or Path(path).stem
 
-        pages = cached_pages(path)
+        pages = cached_pages(path, self._runtime_paths.pdf_pages_dir)
         if pages:
             self._on_pdf_pages_ready(pages, pdf_stem, orig_name)
             return
 
-        thread = PdfConvertThread(path, parent=self)
+        thread = PdfConvertThread(
+            path,
+            self._runtime_paths.pdf_pages_dir,
+            parent=self,
+        )
         thread.pages_ready.connect(
             lambda pages, stem, n=orig_name: self._on_pdf_pages_ready(pages, stem, n)
         )
@@ -1366,11 +1381,11 @@ class WifiReceiveWidget(QWidget):
         except Exception:  # noqa: BLE001 - background server shutdown boundary
             log_ignored_exception(__name__, "Could not stop Wi-Fi receive server")
         self._cancel_qr_generation()
-        for attr in ("_jwpub_threads",):
+        for attr in ("_pdf_threads", "_jwpub_threads"):
             for thread in list(getattr(self, attr, [])):
-                try:
-                    if thread.isRunning():
-                        thread.quit()
-                        thread.wait(3000)
-                except Exception:  # noqa: BLE001 - Qt worker-thread shutdown boundary
-                    log_ignored_exception(__name__, "Could not stop Wi-Fi helper thread")
+                stop_owned_qthread(
+                    thread,
+                    wait_ms=3_000,
+                    label="Wi-Fi helper",
+                )
+            getattr(self, attr, []).clear()

@@ -40,7 +40,6 @@ from PySide6.QtCore import QObject, Signal, QTimer, QUrl
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
-from ..core.foundation import paths as _paths
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.network.http import urlopen
 
@@ -54,7 +53,10 @@ _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # Helpers públicos
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_cached_media_path(url: str) -> str | None:
+def _get_cached_media_path(
+    url: str,
+    media_cache_dir: str | os.PathLike[str],
+) -> str | None:
     """
     Retorna o caminho local do arquivo se a URL já foi baixada completamente
     (existe o arquivo + marcador .done). Retorna None se não há cache.
@@ -62,7 +64,7 @@ def _get_cached_media_path(url: str) -> str | None:
     filename = url.split("/")[-1].split("?")[0]
     if not filename:
         return None
-    path = os.path.join(_paths.MEDIA_CACHE_DIR, filename)
+    path = os.path.join(os.fspath(media_cache_dir), filename)
     if os.path.exists(path) and os.path.exists(path + ".done"):
         return path
     return None
@@ -947,8 +949,15 @@ class MediaInfoQueue(QObject):
 
     _MAX_CONCURRENT = 2
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        media_cache_dir: str | os.PathLike[str],
+        thumb_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self._media_cache_dir = os.fspath(media_cache_dir)
+        self._thumb_cache_dir = os.fspath(thumb_cache_dir)
         self._cache:   dict[int, tuple[QPixmap, str]] = {}   # index → (pixmap, title)
         self._pending: list[tuple[int, str, str]]     = []   # (index, url, type)
         self._active:  dict[int, str]                 = {}   # index → url
@@ -962,7 +971,7 @@ class MediaInfoQueue(QObject):
         else:
             url_to_hash = url
         h = hashlib.md5(url_to_hash.encode("utf-8")).hexdigest()
-        base_dir = os.path.join(_paths.THUMB_CACHE_DIR, "extracted")
+        base_dir = os.path.join(self._thumb_cache_dir, "extracted")
         base_path = os.path.join(base_dir, h)
         return f"{base_path}.jpg", f"{base_path}.json"
 
@@ -1020,7 +1029,11 @@ class MediaInfoQueue(QObject):
 
         # ── Imagem ──────────────────────────────────────────────────────────
         if media_type == "image":
-            target = _get_cached_media_path(url) if is_remote else url
+            target = (
+                _get_cached_media_path(url, self._media_cache_dir)
+                if is_remote
+                else url
+            )
             if target:
                 px = QPixmap(target)
                 self._cache[index] = (px if not px.isNull() else QPixmap(), "")
@@ -1048,7 +1061,7 @@ class MediaInfoQueue(QObject):
 
         # ── Remoto: verifica cache local antes de qualquer rede ─────────────
         if is_remote:
-            cached_path = _get_cached_media_path(url)
+            cached_path = _get_cached_media_path(url, self._media_cache_dir)
             target = cached_path if cached_path else url
             self._pending.append((index, target, media_type))
             self._pump()
@@ -1166,12 +1179,17 @@ class MediaInfoService(QObject):
 
     info_ready = Signal(str, QPixmap, str)   # (path, pixmap, title)
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        media_cache_dir: str | os.PathLike[str],
+        thumb_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._path_to_idx: dict[str, int] = {}
         self._idx_to_path: dict[int, str] = {}
         self._next_idx    = 0
-        self._queue       = MediaInfoQueue(self)
+        self._queue = MediaInfoQueue(media_cache_dir, thumb_cache_dir, self)
         self._queue.info_ready.connect(self._on_queue_ready)
 
     def request(self, path: str, media_type: str = "video"):
@@ -1201,12 +1219,3 @@ class MediaInfoService(QObject):
         path = self._idx_to_path.get(idx)
         if path:
             self.info_ready.emit(path, pixmap, title)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Aliases de retrocompatibilidade (facilitam migração gradual)
-# ─────────────────────────────────────────────────────────────────────────────
-
-"""ThumbnailExtractor  = MediaInfoExtractor   # nome antigo
-ThumbnailQueue      = MediaInfoQueue       # nome antigo
-MediaThumbService   = MediaInfoService     # nome antigo"""

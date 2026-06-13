@@ -221,8 +221,9 @@ class PlaylistImportController:
         from ..core.rendering.pdf import PdfConvertThread, cached_pages
 
         pdf_stem = os.path.splitext(os.path.basename(pdf_path))[0]
+        runtime_paths = self._window.runtime_paths
 
-        pages = cached_pages(pdf_path)
+        pages = cached_pages(pdf_path, runtime_paths.pdf_pages_dir)
         if pages:
             self.add_items_to_playlist_target(
                 target,
@@ -235,7 +236,11 @@ class PlaylistImportController:
             self._window.tr("Opening {name}...").replace("{name}", pdf_stem)
         )
 
-        thread = PdfConvertThread(pdf_path, parent=self._window)
+        thread = PdfConvertThread(
+            pdf_path,
+            runtime_paths.pdf_pages_dir,
+            parent=self._window,
+        )
         if not hasattr(self._window, "_browser_pdf_threads"):
             self._window._browser_pdf_threads = []
         self._window._browser_pdf_threads.append(thread)

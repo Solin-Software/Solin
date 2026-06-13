@@ -30,7 +30,11 @@ from .core.ui.monitor_allocation import MonitorAllocationStore
 from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
+from .core.jw.catalog import JWMediaCatalogCachePaths
+from .core.jw.songs import JWSongsStore
 from .core.media.playback import MediaController
+from .core.media.cache import MediaCacheManager
+from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
@@ -42,6 +46,7 @@ from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
+from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.manager import ProfileManager
 from .core.foundation.constants import (
     AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
@@ -61,6 +66,11 @@ class MainWindow(QMainWindow):
         runtime_paths: RuntimePaths,
         profile_paths: ProfilePaths,
         profile_settings: ProfileSettings,
+        media_cache_manager: MediaCacheManager,
+        font_manager: FontManager,
+        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_songs_store: JWSongsStore,
+        jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
         meeting_tree_store: MeetingTreeStore,
         profile_manager: ProfileManager,
@@ -70,13 +80,22 @@ class MainWindow(QMainWindow):
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
         self.profile_settings = profile_settings
+        self.media_cache_manager = media_cache_manager
+        self.font_manager = font_manager
+        self.jw_catalog_cache_paths = jw_catalog_cache_paths
+        self.jw_songs_store = jw_songs_store
+        self.jwpub_checksum_store = jwpub_checksum_store
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
         self.profile_manager = profile_manager
         profile_prefs = profile_settings.prefs()
         self.profile_prefs = profile_prefs
         self.screen_mgr = ScreenManager(self)
-        self.media_ctrl = MediaController(profile_prefs, self)
+        self.media_ctrl = MediaController(
+            profile_prefs,
+            media_cache_manager,
+            self,
+        )
         self._auto_keys = AutoKeyDispatcher(profile_prefs, self)
         self._profile_switch = ProfileSwitchController(self, profile_manager)
         self._projection_targets = ProjectionWindowController(self)
@@ -127,6 +146,8 @@ class MainWindow(QMainWindow):
         self._background_song_service = BackgroundSongService(
             self.lang,
             profile_prefs,
+            jw_songs_store,
+            media_cache_manager,
             self,
         )
 
@@ -143,6 +164,7 @@ class MainWindow(QMainWindow):
         self.notifications = NotificationCenter(self)
         self._media_download_notifications = MediaDownloadNotificationController(
             self.notifications,
+            media_cache_manager,
             self,
         )
         self._media_download_notifications.start()

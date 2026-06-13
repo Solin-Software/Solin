@@ -13,28 +13,42 @@ class RuntimePaths:
     media_cache_dir: Path
     thumb_cache_dir: Path
     meeting_thumb_cache_dir: Path
+    jwpub_cache_dir: Path
     pdf_pages_dir: Path
     pptx_pages_dir: Path
     docx_pages_dir: Path
 
     @classmethod
-    def from_legacy_globals(cls) -> RuntimePaths:
-        from solin.core.foundation import paths
-
-        if not paths.DATA_DIR or not paths.CACHE_DIR:
-            raise RuntimeError("Runtime paths requested before paths.init().")
-
+    def from_roots(
+        cls,
+        *,
+        data_dir: str | Path,
+        cache_dir: str | Path,
+    ) -> RuntimePaths:
+        data_root = Path(data_dir)
+        cache_root = Path(cache_dir)
         return cls(
-            data_dir=Path(paths.DATA_DIR),
-            pending_del_file=Path(paths.PENDING_DEL_FILE),
-            log_dir=Path(paths.LOG_DIR),
-            cache_dir=Path(paths.CACHE_DIR),
-            media_cache_dir=Path(paths.MEDIA_CACHE_DIR),
-            thumb_cache_dir=Path(paths.THUMB_CACHE_DIR),
-            meeting_thumb_cache_dir=Path(paths.MEETING_THUMB_CACHE_DIR),
-            pdf_pages_dir=Path(paths.PDF_PAGES_DIR),
-            pptx_pages_dir=Path(paths.PPTX_PAGES_DIR),
-            docx_pages_dir=Path(paths.DOCX_PAGES_DIR),
+            data_dir=data_root,
+            pending_del_file=data_root / "pending_cleanup.json",
+            log_dir=data_root / "logs",
+            cache_dir=cache_root,
+            media_cache_dir=cache_root / "media",
+            thumb_cache_dir=cache_root / "thumbs",
+            meeting_thumb_cache_dir=cache_root / "meeting_thumbs",
+            jwpub_cache_dir=cache_root / "jwpub",
+            pdf_pages_dir=cache_root / "pdf_pages",
+            pptx_pages_dir=cache_root / "pptx_pages",
+            docx_pages_dir=cache_root / "docx_pages",
+        )
+
+    @classmethod
+    def from_standard_locations(cls) -> RuntimePaths:
+        from PySide6.QtCore import QStandardPaths
+
+        location = QStandardPaths.StandardLocation
+        return cls.from_roots(
+            data_dir=QStandardPaths.writableLocation(location.AppDataLocation),
+            cache_dir=QStandardPaths.writableLocation(location.CacheLocation),
         )
 
     def ensure_dirs(self) -> None:
@@ -45,6 +59,7 @@ class RuntimePaths:
             self.media_cache_dir,
             self.thumb_cache_dir,
             self.meeting_thumb_cache_dir,
+            self.jwpub_cache_dir,
             self.pdf_pages_dir,
             self.pptx_pages_dir,
             self.docx_pages_dir,

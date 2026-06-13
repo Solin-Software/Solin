@@ -47,6 +47,7 @@ class LazyPageController:
         self._window.browser_widget = BrowserWidget(
             self._window.lang,
             profile_paths=self._window.profile_paths,
+            media_cache_manager=self._window.media_cache_manager,
         )
         self._replace_stack_widget(self.BROWSER_INDEX, self._window.browser_widget)
         self._connect_browser_signals()
@@ -60,6 +61,8 @@ class LazyPageController:
 
         self._window.cache_manager_widget = CacheManagerWidget(
             self._window.lang,
+            self._window.media_cache_manager,
+            self._window.runtime_paths.thumb_cache_dir,
             parent=self._window,
         )
         self._replace_stack_widget(self.CACHE_INDEX, self._window.cache_manager_widget)
@@ -76,6 +79,9 @@ class LazyPageController:
             self._window.lang,
             notifications=self._window.notifications,
             profile_paths=self._window.profile_paths,
+            runtime_paths=self._window.runtime_paths,
+            media_cache_dir=self._window.media_cache_manager.media_cache_dir,
+            thumb_cache_dir=self._window.runtime_paths.thumb_cache_dir,
             parent=self._window,
         )
         self._replace_stack_widget(self.WIFI_INDEX, self._window.wifi_receive_widget)

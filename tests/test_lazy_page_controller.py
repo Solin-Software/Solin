@@ -1,5 +1,6 @@
 from solin.controllers.lazy_page_controller import LazyPageController
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.media.cache import MediaCacheManager
 
 
 class _WidgetStub:
@@ -32,6 +33,7 @@ class _WindowStub:
         self.stack = _StackStub()
         self.lang = object()
         self.notifications = object()
+        self.media_cache_manager = MediaCacheManager("cache/media")
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
             cache_dir="cache",
@@ -120,9 +122,17 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     import solin.widgets.browser.widget as browser_module
 
     class _BrowserFactory:
-        def __init__(self, lang_manager, *, profile_paths, parent=None):
+        def __init__(
+            self,
+            lang_manager,
+            *,
+            profile_paths,
+            media_cache_manager,
+            parent=None,
+        ):
             self.lang_manager = lang_manager
             self.profile_paths = profile_paths
+            self.media_cache_manager = media_cache_manager
             self.parent = parent
 
     window = _WindowStub()
@@ -135,4 +145,5 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser is window.browser_widget
     assert browser.lang_manager is window.lang
     assert browser.profile_paths is window.profile_paths
+    assert browser.media_cache_manager is window.media_cache_manager
     assert browser.parent is None

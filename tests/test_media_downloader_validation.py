@@ -5,13 +5,11 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from solin.core.foundation import paths as app_paths
 from solin.core.media.downloader import SongDownloader, _DownloadJob
 
 
 def _download_from_server(
     tmp_path: Path,
-    monkeypatch,
     *,
     body: bytes,
     content_length: int,
@@ -31,13 +29,12 @@ def _download_from_server(
         def log_message(self, _format, *_args):
             return
 
-    monkeypatch.setattr(app_paths, "MEDIA_CACHE_DIR", str(tmp_path))
     server = HTTPServer(("127.0.0.1", 0), Handler)
     server_thread = threading.Thread(target=server.handle_request, daemon=True)
     server_thread.start()
 
     url = f"http://127.0.0.1:{server.server_port}/media.mp3"
-    downloader = SongDownloader()
+    downloader = SongDownloader(tmp_path)
     job = _DownloadJob(
         job_id=1,
         url=url,
@@ -59,13 +56,12 @@ def _download_from_server(
     return finished, errors
 
 
-def test_downloader_accepts_transparently_decoded_response(tmp_path, monkeypatch):
+def test_downloader_accepts_transparently_decoded_response(tmp_path):
     decoded_body = b"media payload" * 1024
     encoded_body = gzip.compress(decoded_body)
 
     finished, errors = _download_from_server(
         tmp_path,
-        monkeypatch,
         body=encoded_body,
         content_length=len(encoded_body),
         content_encoding="gzip",
@@ -78,12 +74,11 @@ def test_downloader_accepts_transparently_decoded_response(tmp_path, monkeypatch
     assert cached_file.with_name("media.mp3.done").is_file()
 
 
-def test_downloader_rejects_truncated_encoded_transfer(tmp_path, monkeypatch):
+def test_downloader_rejects_truncated_encoded_transfer(tmp_path):
     body = b"partial payload"
 
     finished, errors = _download_from_server(
         tmp_path,
-        monkeypatch,
         body=body,
         content_length=len(body) * 2,
     )

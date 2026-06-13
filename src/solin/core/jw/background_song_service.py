@@ -12,6 +12,7 @@ from PySide6.QtMultimedia import QMediaPlayer
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
+from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 from solin.core.meetings.schedule import MeetingOccurrence, load_meeting_schedule
 
@@ -70,14 +71,16 @@ class BackgroundSongService(QObject):
         self,
         lang_manager: object,
         prefs: QSettings,
+        songs_store: JWSongsStore,
+        cache_manager: MediaCacheManager,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._lang = lang_manager
         self._prefs = prefs
-        self._store = JWSongsStore.instance()
+        self._store = songs_store
 
-        self._media = MediaController(prefs, self)
+        self._media = MediaController(prefs, cache_manager, self)
 
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME

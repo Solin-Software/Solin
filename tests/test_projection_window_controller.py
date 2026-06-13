@@ -157,7 +157,7 @@ def _patch_projection_window(monkeypatch):
     that records every instance created (in construction order)."""
     created: list[_ProjectionWindowStub] = []
 
-    def _factory(screen, index):
+    def _factory(screen, index, _font_manager):
         win = _ProjectionWindowStub(screen, index)
         created.append(win)
         return win
@@ -188,6 +188,7 @@ class _WindowStub:
         self._idle_media_path = ""
         self._monitor_popup = _MonitorPopupStub()
         self._deactivated_screens = set()
+        self.font_manager = object()
 
 
 def test_all_windows_includes_floating_preview_when_present():

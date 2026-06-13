@@ -18,7 +18,7 @@ qInstallMessageHandler(lambda _mode, _context, message: messages.append(message)
 app = QApplication([])
 
 from solin.core.i18n.manager import LanguageManager
-from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
@@ -32,6 +32,10 @@ class _Notifications:
     def error(self, *_args):
         pass
 
+runtime_paths = RuntimePaths.from_roots(
+    data_dir=Path("data"),
+    cache_dir=Path("cache"),
+)
 widget = WifiReceiveWidget(
     LanguageManager(
         global_settings=GlobalSettingsStore.create(),
@@ -43,6 +47,9 @@ widget = WifiReceiveWidget(
         cache_dir=Path("cache"),
         profile_id="test",
     ),
+    runtime_paths=runtime_paths,
+    media_cache_dir=runtime_paths.media_cache_dir,
+    thumb_cache_dir=runtime_paths.thumb_cache_dir,
 )
 widget.show()
 app.processEvents()

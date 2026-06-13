@@ -5,14 +5,11 @@ Fonte única de verdade para constantes estáticas compartilhadas do projeto.
 Importe daqui em vez de redefinir em cada módulo.
 
 ATENÇÃO — caminhos de dados/cache:
-    Os caminhos de dados (DATA_DIR, CACHE_DIR, etc.) foram movidos para
-    src/solin/core/foundation/paths.py e são resolvidos em runtime via QStandardPaths.
-    Isso garante compatibilidade com macOS .app bundles (Nuitka), Windows
-    e Linux, onde os dados nunca devem ficar dentro do bundle/executável.
+    Caminhos de runtime pertencem a RuntimePaths/ProfilePaths e devem ser
+    injetados pelo bootstrap. Constantes neste módulo devem permanecer puras.
 
 Uso:
     from solin.core.foundation.constants import VIDEO_EXTS, AUDIO_EXTS, APP_VERSION, ...
-    from solin.core.foundation import paths  # para DATA_DIR, CACHE_DIR, etc.
 """
 from __future__ import annotations
 

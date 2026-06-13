@@ -10,6 +10,7 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
+from ...core.media.cache import MediaCacheManager
 from ...core.network.http import urlopen as _urlopen
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
 from .crop_overlay import _CropOverlay
@@ -714,11 +715,13 @@ class BrowserWidget(
         lang_manager: LanguageManager,
         *,
         profile_paths: ProfilePaths,
+        media_cache_manager: MediaCacheManager,
         parent=None,
         projection_fps: int | None = None,
     ):
         super().__init__(parent)
         self.lang = lang_manager
+        self._media_cache_manager = media_cache_manager
 
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root

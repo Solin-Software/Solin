@@ -19,38 +19,35 @@ Dependências extras:
   pip install fonttools brotli
 
 Uso:
-    from solin.core.rendering.fonts import font_manager
+    from solin.core.rendering.fonts import FontManager
+    font_manager = FontManager(runtime_paths.cache_dir)
     font_manager.font_ready.connect(lambda name: widget.update())
     font_manager.ensure('Wt-ClearText-Bold')
     family = font_manager.family('Wt-ClearText-Bold')  # fallback automático
 """
+
 from __future__ import annotations
 
 import io
+import hashlib
 import logging
 import os
+import threading
 import urllib.error as _url_err
 import urllib.request as _url_req
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QFontDatabase
 
-from solin.core.foundation import paths as _paths
 from solin.core.network.http import urlopen as _urlopen
 
 log = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-# _FONTS_CACHE_DIR é resolvido sob demanda para garantir que paths.init()
-# já foi chamado antes do primeiro acesso (crítico para Nuitka/.app bundles).
-def _fonts_cache_dir() -> str:
-    return os.path.join(_paths.CACHE_DIR, "fonts")
-
 _FONT_URLS: dict[str, str] = {
-    "Wt-ClearText-Bold": (
-        "https://b.jw-cdn.org/fonts/wt-clear-text/1.029/Wt-ClearText-Bold.woff2"
-    ),
+    "Wt-ClearText-Bold": ("https://b.jw-cdn.org/fonts/wt-clear-text/1.029/Wt-ClearText-Bold.woff2"),
 }
 
 # Fallback por fonte: usado se download ou conversão falharem
@@ -59,7 +56,6 @@ _FONT_FALLBACKS: dict[str, str] = {
 }
 
 _DOWNLOAD_TIMEOUT = 30
-_HEAD_TIMEOUT     = 5
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -77,12 +73,10 @@ def _woff2_to_ttf(woff2_data: bytes) -> bytes:
     try:
         from fontTools.ttLib import TTFont  # type: ignore[import]
     except ImportError as exc:
-        raise RuntimeError(
-            "fontTools is not installed. Run: pip install fonttools brotli"
-        ) from exc
+        raise RuntimeError("fontTools is not installed. Run: pip install fonttools brotli") from exc
 
     font = TTFont(io.BytesIO(woff2_data))
-    font.flavor = None   # remove wrapper WOFF2 → TTF/OTF puro
+    font.flavor = None  # remove wrapper WOFF2 → TTF/OTF puro
     buf = io.BytesIO()
     font.save(buf)
     return buf.getvalue()
@@ -95,32 +89,66 @@ class _DownloadWorker(QThread):
     Emite succeeded com o caminho do .ttf final.
     """
 
-    succeeded = Signal(str, str)   # font_name, local_ttf_path
-    failed    = Signal(str, str)   # font_name, error_message
+    succeeded = Signal(str, str)  # font_name, local_ttf_path
+    failed = Signal(str, str)  # font_name, error_message
 
-    def __init__(self, font_name: str, url: str, woff2_path: str,
-                 ttf_path: str, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        font_name: str,
+        url: str,
+        woff2_path: str,
+        ttf_path: str,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
-        self._font_name  = font_name
-        self._url        = url
+        self._font_name = font_name
+        self._url = url
         self._woff2_path = woff2_path
-        self._ttf_path   = ttf_path
+        self._ttf_path = ttf_path
+        self._response_lock = threading.Lock()
+        self._response = None
+
+    def cancel(self) -> None:
+        self.requestInterruption()
+        with self._response_lock:
+            response = self._response
+        if response is not None:
+            try:
+                response.close()
+            except OSError:
+                pass
 
     def run(self) -> None:
-        font_name  = self._font_name
-        url        = self._url
+        font_name = self._font_name
+        url = self._url
         woff2_path = self._woff2_path
-        ttf_path   = self._ttf_path
+        ttf_path = self._ttf_path
 
         # 1. Download do WOFF2
         log.debug("[font_manager] Downloading %s", url)
         req = _url_req.Request(url, headers={"User-Agent": _USER_AGENT})
         try:
             with _urlopen(req, timeout=_DOWNLOAD_TIMEOUT) as resp:
-                woff2_data = resp.read()
+                with self._response_lock:
+                    self._response = resp
+                chunks: list[bytes] = []
+                while not self.isInterruptionRequested():
+                    chunk = resp.read(131_072)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                woff2_data = b"".join(chunks)
         except (_url_err.URLError, OSError) as exc:
+            if self.isInterruptionRequested():
+                return
             log.warning("[font_manager] Failed to download '%s': %s", font_name, exc)
             self.failed.emit(font_name, str(exc))
+            return
+        finally:
+            with self._response_lock:
+                self._response = None
+
+        if self.isInterruptionRequested():
             return
 
         # 2. Salva .woff2 em cache (referência de tamanho para HEAD futuro)
@@ -140,6 +168,9 @@ class _DownloadWorker(QThread):
             self.failed.emit(font_name, f"Conversion failed: {exc}")
             return
 
+        if self.isInterruptionRequested():
+            return
+
         # 4. Salva .ttf em cache
         try:
             with open(ttf_path, "wb") as f:
@@ -149,15 +180,14 @@ class _DownloadWorker(QThread):
             self.failed.emit(font_name, str(exc))
             return
 
-        log.info("[font_manager] '%s' ready: %s (%d bytes TTF)",
-                 font_name, ttf_path, len(ttf_data))
+        log.info("[font_manager] '%s' ready: %s (%d bytes TTF)", font_name, ttf_path, len(ttf_data))
         self.succeeded.emit(font_name, ttf_path)
 
 
 # ── FontManager principal ──────────────────────────────────────────────────────
 class FontManager(QObject):
     """
-    Singleton que gerencia fontes externas para uso no Qt.
+    Gerencia fontes externas para uso no Qt com cache explicitamente injetado.
 
     Signals
     -------
@@ -165,11 +195,16 @@ class FontManager(QObject):
     font_failed(font_name)  — falha total; family() retorna o fallback
     """
 
-    font_ready  = Signal(str)
+    font_ready = Signal(str)
     font_failed = Signal(str)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        cache_dir: str | os.PathLike[str],
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
+        self._fonts_cache_dir = Path(cache_dir) / "fonts"
         self._registered: dict[str, Optional[str]] = {}
         self._workers: dict[str, _DownloadWorker] = {}
 
@@ -190,9 +225,9 @@ class FontManager(QObject):
             return
 
         woff2_path = self._woff2_cache_path(font_name)
-        ttf_path   = self._ttf_cache_path(font_name)
+        ttf_path = self._ttf_cache_path(font_name)
 
-        if os.path.isfile(ttf_path) and self._woff2_size_matches(woff2_path, url):
+        if os.path.isfile(ttf_path) and os.path.getsize(ttf_path) > 0:
             self._register(font_name, ttf_path)
         else:
             self._start_download(font_name, url, woff2_path, ttf_path)
@@ -212,41 +247,16 @@ class FontManager(QObject):
 
     # ── Caminhos de cache ─────────────────────────────────────────────────────
 
+    def _cache_key(self, font_name: str) -> str:
+        url = _FONT_URLS.get(font_name, "")
+        version = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
+        return f"{font_name}-{version}"
+
     def _woff2_cache_path(self, font_name: str) -> str:
-        return os.path.join(_fonts_cache_dir(), f"{font_name}.woff2")
+        return str(self._fonts_cache_dir / f"{self._cache_key(font_name)}.woff2")
 
     def _ttf_cache_path(self, font_name: str) -> str:
-        return os.path.join(_fonts_cache_dir(), f"{font_name}.ttf")
-
-    # ── Verificação de cache via HEAD ─────────────────────────────────────────
-
-    def _woff2_size_matches(self, woff2_path: str, url: str) -> bool:
-        """
-        True se o .woff2 local tem o mesmo Content-Length que o remoto.
-        Se não há rede, aceita o cache existente.
-        """
-        if not os.path.isfile(woff2_path) or os.path.getsize(woff2_path) == 0:
-            return False
-
-        local_size = os.path.getsize(woff2_path)
-        req = _url_req.Request(url, method="HEAD",
-                               headers={"User-Agent": _USER_AGENT})
-        try:
-            with _urlopen(req, timeout=_HEAD_TIMEOUT) as resp:
-                cl = resp.headers.get("Content-Length")
-                if cl is None:
-                    log.debug("[font_manager] HEAD has no Content-Length; accepting cache.")
-                    return True
-                match = local_size == int(cl)
-                if not match:
-                    log.debug(
-                        "[font_manager] Size mismatch (local=%d remote=%s); "
-                        "re-download.", local_size, cl,
-                    )
-                return match
-        except (_url_err.URLError, OSError, ValueError):
-            log.debug("[font_manager] HEAD failed; using existing cache.")
-            return True
+        return str(self._fonts_cache_dir / f"{self._cache_key(font_name)}.ttf")
 
     # ── Registro no Qt ────────────────────────────────────────────────────────
 
@@ -254,9 +264,10 @@ class FontManager(QObject):
         font_id = QFontDatabase.addApplicationFont(ttf_path)
         if font_id < 0:
             log.warning(
-                "[font_manager] QFontDatabase rejected '%s' (%s). "
-                "Using fallback '%s'.",
-                font_name, ttf_path, _FONT_FALLBACKS.get(font_name, "serif"),
+                "[font_manager] QFontDatabase rejected '%s' (%s). Using fallback '%s'.",
+                font_name,
+                ttf_path,
+                _FONT_FALLBACKS.get(font_name, "serif"),
             )
             self._registered[font_name] = None
             self.font_failed.emit(font_name)
@@ -270,13 +281,12 @@ class FontManager(QObject):
 
     # ── Download em background ────────────────────────────────────────────────
 
-    def _start_download(self, font_name: str, url: str,
-                        woff2_path: str, ttf_path: str) -> None:
+    def _start_download(self, font_name: str, url: str, woff2_path: str, ttf_path: str) -> None:
         if font_name in self._workers:
             return
 
         log.info("[font_manager] Starting download+conversion for '%s'...", font_name)
-        worker = _DownloadWorker(font_name, url, woff2_path, ttf_path, parent=None)
+        worker = _DownloadWorker(font_name, url, woff2_path, ttf_path, parent=self)
         worker.succeeded.connect(self._on_download_success)
         worker.failed.connect(self._on_download_failed)
         worker.finished.connect(lambda: self._cleanup_worker(font_name))
@@ -301,6 +311,10 @@ class FontManager(QObject):
         if worker:
             worker.deleteLater()
 
-
-# ── Instância singleton ────────────────────────────────────────────────────────
-font_manager = FontManager()
+    def shutdown(self) -> None:
+        """Cancel and join every active font worker before application teardown."""
+        workers = list(self._workers.values())
+        for worker in workers:
+            worker.cancel()
+        for worker in workers:
+            worker.wait()

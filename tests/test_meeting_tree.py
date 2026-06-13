@@ -827,9 +827,12 @@ class _FakeChecksumStore:
 
 class JwpubDownloadGateTests(unittest.TestCase):
     def worker(self, *, cached: bool, archive: Path, stored: str = ""):
-        worker = _JwpubWorker()
+        worker = _JwpubWorker(
+            archive.parent,
+            archive.parent / "jwpub",
+            _FakeChecksumStore(stored),
+        )
         worker._cache = _FakeJwpubCache(cached=cached, archive=archive)
-        worker._checksum_store = _FakeChecksumStore(stored)
         return worker
 
     def test_force_does_not_redownload_valid_local_archive(self):

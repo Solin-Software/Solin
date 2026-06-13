@@ -146,6 +146,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         *,
         prefs: QSettings,
         profile_paths: ProfilePaths,
+        media_cache_dir: str | os.PathLike[str],
+        thumb_cache_dir: str | os.PathLike[str],
         lang_manager=None,
         container: QWidget = None,
         parent=None,
@@ -154,6 +156,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.media      = media_ctrl
         self._prefs = prefs
         self._profile_paths = profile_paths
+        self._media_cache_dir = media_cache_dir
+        self._thumb_cache_dir = thumb_cache_dir
         self.lang       = lang_manager
         self._container = container
         self._expanded  = False
@@ -218,7 +222,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._announce_timer.timeout.connect(self._on_announce_gate_expired)
 
         # ── Thumbnail queue para o painel de playlist ─────────────────────
-        self._thumb_queue = MediaInfoQueue(self)
+        self._thumb_queue = MediaInfoQueue(
+            media_cache_dir,
+            thumb_cache_dir,
+            self,
+        )
         self._panel_populated = False
         # Timer one-shot: captura thumbnail da mídia atual ao vivo (uma vez por faixa)
         self._live_thumb_captured: bool = False

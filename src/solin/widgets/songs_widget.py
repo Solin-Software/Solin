@@ -91,5 +91,21 @@ class BufferedSlider(QWidget):
 
 
 class SongsWidget(MediaLibraryWidget):
-    def __init__(self, lang_manager, media_ctrl=None, parent=None):
-        super().__init__("songs", lang_manager, media_ctrl, parent)
+    def __init__(
+        self,
+        lang_manager,
+        cache_manager,
+        songs_store,
+        jw_cache_dir,
+        media_ctrl=None,
+        parent=None,
+    ):
+        super().__init__(
+            "songs",
+            lang_manager,
+            cache_manager,
+            media_ctrl,
+            songs_store=songs_store,
+            jw_cache_dir=jw_cache_dir,
+            parent=parent,
+        )

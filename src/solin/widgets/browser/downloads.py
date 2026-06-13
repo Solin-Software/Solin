@@ -11,7 +11,6 @@ from pathlib import Path
 
 from PySide6.QtCore import Slot
 
-from ...core.foundation import paths as _paths
 from ...core.foundation.constants import (
     AUDIO_EXTS,
     IMAGE_EXTS,
@@ -25,6 +24,9 @@ log = logging.getLogger(__name__)
 
 
 class _BrowserDownloadsMixin:
+    def _media_cache_dir(self) -> str:
+        return os.fspath(self._media_cache_manager.media_cache_dir)
+
     @Slot(str)
     def _on_download_requested(self, url: str):
         """
@@ -94,7 +96,7 @@ class _BrowserDownloadsMixin:
 
         import requests as _req
 
-        os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
+        os.makedirs(self._media_cache_dir(), exist_ok=True)
         dest_path = self._browser_download_cache_path(url, title, kind)
         done_path = dest_path + ".done"
 
@@ -127,6 +129,7 @@ class _BrowserDownloadsMixin:
                 os.replace(tmp_path, dest_path)
                 with open(done_path, "w", encoding="utf-8") as fh:
                     fh.write(url)
+                self._media_cache_manager.notify_cached_threadsafe(url)
                 ready.emit(dest_path, title, kind)
             except (OSError, ValueError) as exc:
                 log.warning('Download for playlist failed "%s": %s', title, exc)
@@ -154,7 +157,7 @@ class _BrowserDownloadsMixin:
             stem = "download"
         digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
         filename = f"{stem[:80]}-{digest}{suffix}"
-        return os.path.join(_paths.MEDIA_CACHE_DIR, filename)
+        return os.path.join(self._media_cache_dir(), filename)
 
     @Slot(str, str)
     def _on_save_media(self, url: str, media_type: str):
@@ -163,9 +166,9 @@ class _BrowserDownloadsMixin:
 
         import requests as _req
 
-        os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
+        os.makedirs(self._media_cache_dir(), exist_ok=True)
         filename = url.split("/")[-1].split("?")[0] or "media_file"
-        dest_path = os.path.join(_paths.MEDIA_CACHE_DIR, filename)
+        dest_path = os.path.join(self._media_cache_dir(), filename)
         done_path = dest_path + ".done"
 
         if os.path.isfile(dest_path) and os.path.isfile(done_path):
@@ -188,6 +191,7 @@ class _BrowserDownloadsMixin:
                 os.replace(tmp_path, dest_path)
                 with open(done_path, "w") as fh:
                     fh.write(url)
+                self._media_cache_manager.notify_cached_threadsafe(url)
             except (OSError, ValueError) as exc:
                 log.warning('Cache save failed for "%s": %s', filename, exc)
                 try:
@@ -210,14 +214,14 @@ class _BrowserDownloadsMixin:
     def _download_image_then_playlist(self, url: str, title: str):
         import requests as _req
 
-        os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
+        os.makedirs(self._media_cache_dir(), exist_ok=True)
         raw_name = url.split("/")[-1].split("?")[0] or "image"
         if not any(
             raw_name.lower().endswith(e)
             for e in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")
         ):
             raw_name += ".jpg"
-        dest_path = os.path.join(_paths.MEDIA_CACHE_DIR, raw_name)
+        dest_path = os.path.join(self._media_cache_dir(), raw_name)
         done_path = dest_path + ".done"
 
         if os.path.isfile(dest_path) and os.path.isfile(done_path):
@@ -243,6 +247,7 @@ class _BrowserDownloadsMixin:
                 os.replace(tmp_path, dest_path)
                 with open(done_path, "w") as fh:
                     fh.write(url)
+                self._media_cache_manager.notify_cached_threadsafe(url)
                 sig.emit(dest_path, title, "image")
             except (OSError, ValueError) as exc:
                 log.warning('Image download for playlist failed "%s": %s', raw_name, exc)

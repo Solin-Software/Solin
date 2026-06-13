@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from solin.core.jw import catalog as svc
-from solin.core.jw.catalog import JWMediaItem
+from solin.core.jw.catalog import JWMediaCatalogCachePaths, JWMediaItem
+
+
+def cache_paths() -> JWMediaCatalogCachePaths:
+    return JWMediaCatalogCachePaths(Path("cache"), Path("thumbs"))
 
 
 def item(
@@ -59,7 +64,10 @@ class JWMediaCatalogLatestDeltaTests(unittest.TestCase):
             patch.object(svc, "_parse_category_media", return_value=latest_items),
             patch.object(svc, "_save_catalog_snapshot") as save_snapshot,
         ):
-            items, _fetched_at, from_cache = svc.fetch_jw_video_catalog("E")
+            items, _fetched_at, from_cache = svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
 
         self.assertTrue(from_cache)
         self.assertEqual(fetched_categories, ["LatestVideos"])
@@ -87,7 +95,10 @@ class JWMediaCatalogLatestDeltaTests(unittest.TestCase):
             patch.object(svc, "_parse_category_media", return_value=[old_1, old_2]),
             patch.object(svc, "_save_catalog_snapshot") as save_snapshot,
         ):
-            items, _fetched_at, from_cache = svc.fetch_jw_video_catalog("E")
+            items, _fetched_at, from_cache = svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
 
         self.assertTrue(from_cache)
         self.assertEqual(fetched_categories, ["LatestVideos"])
@@ -126,7 +137,10 @@ class JWMediaCatalogLatestDeltaTests(unittest.TestCase):
             patch.object(svc, "_parse_category_media", side_effect=parse_category_media),
             patch.object(svc, "_save_catalog_snapshot"),
         ):
-            items, _fetched_at, _from_cache = svc.fetch_jw_video_catalog("E")
+            items, _fetched_at, _from_cache = svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
 
         self.assertEqual(discover_force_values, [False, True])
         self.assertEqual(fetched_categories, ["LatestVideos", "LatestVideos", "CatA"])
@@ -162,7 +176,10 @@ class JWMediaCatalogLatestDeltaTests(unittest.TestCase):
             patch.object(svc, "_parse_category_media", side_effect=parse_category_media),
             patch.object(svc, "_save_catalog_snapshot"),
         ):
-            items, _fetched_at, _from_cache = svc.fetch_jw_video_catalog("E")
+            items, _fetched_at, _from_cache = svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
 
         self.assertEqual(discover_force_values, [False, True])
         self.assertEqual(fetched_categories, ["LatestVideos", "CatA"])

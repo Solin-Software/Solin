@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
@@ -51,9 +52,16 @@ class _FetchSignals(QObject):
 
 
 class _FetchWorker(QRunnable):
-    def __init__(self, request: JWSongsRequest, *, force: bool) -> None:
+    def __init__(
+        self,
+        request: JWSongsRequest,
+        *,
+        cache_dir: Path,
+        force: bool,
+    ) -> None:
         super().__init__()
         self.request = request
+        self.cache_dir = cache_dir
         self.force = force
         self.signals = _FetchSignals()
         self.setAutoDelete(True)
@@ -66,6 +74,7 @@ class _FetchWorker(QRunnable):
                     self.force,
                     fallback_code=self.request.fallback_code,
                     is_sign_language=self.request.is_sign_language,
+                    cache_dir=self.cache_dir,
                 )
             else:
                 items, pub_name, fetched_at, from_cache = fetch_songs(
@@ -73,6 +82,7 @@ class _FetchWorker(QRunnable):
                     self.force,
                     fallback_code=self.request.fallback_code,
                     is_sign_language=self.request.is_sign_language,
+                    cache_dir=self.cache_dir,
                 )
             self.signals.succeeded.emit(
                 self.request.key,
@@ -87,24 +97,18 @@ class _FetchWorker(QRunnable):
 
 
 class JWSongsStore(QObject):
-    """Process-wide JW song state shared by Songs tab and add-song modals."""
+    """JW song state shared by Songs tab and add-song modals."""
 
     songs_ready = Signal(str, list, str, float, bool)
     songs_failed = Signal(str, str)
     loading_changed = Signal(str, bool)
 
-    _instance: "JWSongsStore | None" = None
-
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, cache_dir: str | Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self._cache_dir = Path(cache_dir)
         self._states: dict[str, JWSongsSnapshot] = {}
         self._workers: dict[str, _FetchWorker] = {}
-
-    @classmethod
-    def instance(cls) -> "JWSongsStore":
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        self._thread_pool = QThreadPool(self)
 
     def request_for(
         self,
@@ -155,11 +159,11 @@ class JWSongsStore(QObject):
         state.is_loading = True
         self.loading_changed.emit(key, True)
 
-        worker = _FetchWorker(request, force=force)
+        worker = _FetchWorker(request, cache_dir=self._cache_dir, force=force)
         worker.signals.succeeded.connect(self._on_success)
         worker.signals.failed.connect(self._on_failed)
         self._workers[key] = worker
-        QThreadPool.globalInstance().start(worker)
+        self._thread_pool.start(worker)
         return key
 
     def _emit_ready_later(self, key: str, state: JWSongsSnapshot) -> None:
@@ -205,6 +209,12 @@ class JWSongsStore(QObject):
         state.is_loading = False
         self.loading_changed.emit(key, False)
         self.songs_failed.emit(key, error)
+
+    def shutdown(self) -> None:
+        """Stop queued work and wait for active song fetches before teardown."""
+        self._thread_pool.clear()
+        self._thread_pool.waitForDone()
+        self._workers.clear()
 
 
 __all__ = ["JWSongsRequest", "JWSongsSnapshot", "JWSongsStore"]

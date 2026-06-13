@@ -11,7 +11,10 @@ from solin.core.integrations.automation.zoom import service as zoom_module
 from solin.core.integrations.automation.zoom.service import ZoomService
 from solin.core.integrations.ndi import NDIReceiverService
 from solin.core.media.downloader import SongDownloader
+from solin.core.media.cache import MediaCacheManager
+from solin.core.jw.songs import JWSongsStore
 from solin.core.profiles.settings import ProfileSettings
+from solin.core.rendering.fonts import FontManager
 
 
 def _app() -> QCoreApplication:
@@ -44,7 +47,7 @@ def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
         job_started.set()
 
     monkeypatch.setattr(SongDownloader, "_worker", _capture_job)
-    downloader = SongDownloader()
+    downloader = SongDownloader(tmp_path)
     finished: list[str] = []
     progress: list[tuple[int, int]] = []
     downloader.finished.connect(finished.append)
@@ -75,6 +78,63 @@ def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
 
     assert progress == [(100, 100)]
     assert finished == [current_path]
+
+
+def test_media_cache_notification_from_python_thread_runs_on_qt_thread(tmp_path):
+    app = _app()
+    manager = MediaCacheManager(tmp_path)
+    callback_threads = []
+    manager.cache_changed.connect(
+        lambda _url: callback_threads.append(QCoreApplication.instance().thread())
+    )
+
+    worker = threading.Thread(
+        target=manager.notify_cached_threadsafe,
+        args=("https://example.test/media.mp4",),
+    )
+    worker.start()
+    worker.join()
+
+    assert _wait_until(lambda: len(callback_threads) == 1)
+    assert callback_threads == [app.thread()]
+
+
+def test_font_manager_shutdown_cancels_and_joins_workers(tmp_path):
+    manager = FontManager(tmp_path)
+    events = []
+
+    class _Worker:
+        def cancel(self):
+            events.append("cancel")
+
+        def wait(self):
+            events.append("wait")
+
+    manager._workers["font"] = _Worker()
+
+    manager.shutdown()
+
+    assert events == ["cancel", "wait"]
+
+
+def test_jw_songs_store_owns_and_drains_its_thread_pool(tmp_path):
+    store = JWSongsStore(tmp_path)
+    events = []
+
+    class _Pool:
+        def clear(self):
+            events.append("clear")
+
+        def waitForDone(self):
+            events.append("wait")
+
+    store._thread_pool = _Pool()
+    store._workers["request"] = object()
+
+    store.shutdown()
+
+    assert events == ["clear", "wait"]
+    assert store._workers == {}
 
 
 def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):

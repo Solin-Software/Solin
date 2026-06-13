@@ -26,6 +26,7 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoF
 from PySide6.QtGui import QPixmap, QImage
 
 from .downloader import SongDownloader
+from .cache import MediaCacheManager
 
 log = logging.getLogger(__name__)
 
@@ -47,9 +48,15 @@ class MediaController(QObject):
     # False -> reproduzindo via stream HTTP ou inativo
     playback_source_changed = Signal(bool)
 
-    def __init__(self, prefs: QSettings, parent=None):
+    def __init__(
+        self,
+        prefs: QSettings,
+        cache_manager: MediaCacheManager,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._prefs = prefs
+        self._cache_manager = cache_manager
 
         self.player = QMediaPlayer(self)
         self.audio_output = QAudioOutput(self)
@@ -58,7 +65,7 @@ class MediaController(QObject):
         self.video_sink = QVideoSink(self)
         self.player.setVideoSink(self.video_sink)
 
-        self._downloader = SongDownloader(self)
+        self._downloader = SongDownloader(cache_manager.media_cache_dir, self)
         self._current_url: str = ""
         self._local_path: str | None = None
         # True quando _local_path e um tempfile (persist=False)
@@ -118,8 +125,7 @@ class MediaController(QObject):
 
         # Cancela prefetch ativo para esta URL
         if url and url.startswith("http"):
-            from .cache import MediaCacheManager
-            MediaCacheManager.instance().cancel_prefetch(url)
+            self._cache_manager.cancel_prefetch(url)
 
         self.player.stop()
         self.player.setSource(QUrl())
@@ -288,8 +294,7 @@ class MediaController(QObject):
             self._pending_local_switch = (local_path, self._local_is_temp)
             self._pending_local_notified = False
             if self._stream_persist and self._current_url:
-                from .cache import MediaCacheManager
-                MediaCacheManager.instance().notify_cached(self._current_url)
+                self._cache_manager.notify_cached(self._current_url)
                 self._pending_local_notified = True
             self.playback_source_changed.emit(self._stream_persist)
             return
@@ -368,8 +373,7 @@ class MediaController(QObject):
 
         # Notifica CacheManager apenas em downloads persistentes
         if notify_cache and self._stream_persist and self._current_url:
-            from .cache import MediaCacheManager
-            MediaCacheManager.instance().notify_cached(self._current_url)
+            self._cache_manager.notify_cached(self._current_url)
 
         # Badge offline (ícone verde)
         self.playback_source_changed.emit(self._stream_persist)

@@ -14,8 +14,8 @@ Fluxo (igual para todos os formatos):
             └─► rendering.pdf.render_pdf_pages_sync()  (JPEG por página/slide)
 
 Cache:
-    data/pptx_pages/{sha256_12}_{stem}/page_001.jpg  …  (apresentações)
-    data/docx_pages/{sha256_12}_{stem}/page_001.jpg  …  (documentos)
+    {pptx_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  (apresentações)
+    {docx_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  (documentos)
     (mesmo esquema do pipeline central de PDF — .done como marker)
 
 Disponibilidade:
@@ -41,13 +41,12 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, Signal
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import DOCX_EXTS
 
 log = logging.getLogger(__name__)
 
 # ── Constantes ─────────────────────────────────────────────────────────────────
-_DEFAULT_DPI  = 150
+_DEFAULT_DPI = 150
 
 # Nomes possíveis do executável do LibreOffice por plataforma
 _SOFFICE_CANDIDATES: list[str] = [
@@ -63,6 +62,7 @@ _SOFFICE_CANDIDATES: list[str] = [
 
 # ── Detecção de disponibilidade ────────────────────────────────────────────────
 
+
 def libreoffice_path() -> str | None:
     """
     Retorna o caminho do executável soffice/libreoffice se encontrado,
@@ -74,9 +74,7 @@ def libreoffice_path() -> str | None:
 
     result: str | None = None
     for candidate in _SOFFICE_CANDIDATES:
-        found = shutil.which(candidate) or (
-            Path(candidate).exists() and candidate or None
-        )
+        found = shutil.which(candidate) or (Path(candidate).exists() and candidate or None)
         if found:
             result = found
             break
@@ -92,6 +90,7 @@ def libreoffice_available() -> bool:
 
 # ── Funções utilitárias ────────────────────────────────────────────────────────
 
+
 def _file_hash(path: str | Path) -> str:
     """SHA-256 (primeiros 12 chars) do conteúdo do arquivo."""
     h = hashlib.sha256()
@@ -101,19 +100,29 @@ def _file_hash(path: str | Path) -> str:
     return h.hexdigest()[:12]
 
 
-def _pages_dir_root(path: str | Path) -> str:
+def _pages_dir_root(
+    path: str | os.PathLike[str],
+    *,
+    pptx_pages_dir: str | os.PathLike[str],
+    docx_pages_dir: str | os.PathLike[str],
+) -> Path:
     """
     Retorna o diretório raiz de cache adequado ao tipo de arquivo:
-      - Apresentações (.pptx/.ppt/.odp) → _paths.PPTX_PAGES_DIR
-      - Documentos (.docx/.doc/.odt/.rtf) → _paths.DOCX_PAGES_DIR
+      - Apresentações (.pptx/.ppt/.odp) → ``pptx_pages_dir``
+      - Documentos (.docx/.doc/.odt/.rtf) → ``docx_pages_dir``
     """
     ext = Path(path).suffix.lower()
     if ext in DOCX_EXTS:
-        return _paths.DOCX_PAGES_DIR
-    return _paths.PPTX_PAGES_DIR  # default para apresentações
+        return Path(docx_pages_dir)
+    return Path(pptx_pages_dir)  # default para apresentações
 
 
-def _cache_dir(lo_path: str | Path) -> Path:
+def _cache_dir(
+    lo_path: str | os.PathLike[str],
+    *,
+    pptx_pages_dir: str | os.PathLike[str],
+    docx_pages_dir: str | os.PathLike[str],
+) -> Path:
     """
     Retorna o diretório de cache para um arquivo específico.
     Exemplos:
@@ -121,18 +130,31 @@ def _cache_dir(lo_path: str | Path) -> Path:
         data/docx_pages/b7e1d903cc21_roteiro
     """
     lo_path = Path(lo_path)
-    stem    = lo_path.stem[:40]
-    h       = _file_hash(lo_path)
-    root    = _pages_dir_root(lo_path)
-    return Path(root) / f"{h}_{stem}"
+    stem = lo_path.stem[:40]
+    h = _file_hash(lo_path)
+    root = _pages_dir_root(
+        lo_path,
+        pptx_pages_dir=pptx_pages_dir,
+        docx_pages_dir=docx_pages_dir,
+    )
+    return root / f"{h}_{stem}"
 
 
-def cached_pages(lo_path: str | Path) -> list[str] | None:
+def cached_pages(
+    lo_path: str | os.PathLike[str],
+    *,
+    pptx_pages_dir: str | os.PathLike[str],
+    docx_pages_dir: str | os.PathLike[str],
+) -> list[str] | None:
     """
     Retorna lista de caminhos JPEG se o arquivo já foi convertido e o cache
     está completo. Retorna None se a conversão ainda não foi feita.
     """
-    d      = _cache_dir(lo_path)
+    d = _cache_dir(
+        lo_path,
+        pptx_pages_dir=pptx_pages_dir,
+        docx_pages_dir=docx_pages_dir,
+    )
     marker = d / ".done"
     if not marker.exists():
         return None
@@ -143,7 +165,11 @@ def cached_pages(lo_path: str | Path) -> list[str] | None:
 
 
 def convert_lo_sync(
-    lo_path: str | Path,
+    lo_path: str | os.PathLike[str],
+    *,
+    pptx_pages_dir: str | os.PathLike[str],
+    docx_pages_dir: str | os.PathLike[str],
+    pdf_pages_dir: str | os.PathLike[str],
     dpi: int = _DEFAULT_DPI,
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> list[str]:
@@ -159,6 +185,10 @@ def convert_lo_sync(
 
     Args:
         lo_path:     Caminho para o arquivo.
+        pptx_pages_dir: Diretório raiz explícito do cache de apresentações.
+        docx_pages_dir: Diretório raiz explícito do cache de documentos.
+        pdf_pages_dir: Diretório raiz explícito que hospeda o workspace
+            temporário do PDF intermediário.
         dpi:         Resolução de renderização (padrão 150).
         progress_cb: Callback opcional (página_atual, total_páginas).
 
@@ -177,9 +207,13 @@ def convert_lo_sync(
             "arquivos de apresentação ou documento (.pptx, .ppt, .odp, .docx, .doc, .odt, .rtf)."
         )
 
-    lo_path   = Path(lo_path)
-    cache_dir = _cache_dir(lo_path)
-    marker    = cache_dir / ".done"
+    lo_path = Path(lo_path)
+    cache_dir = _cache_dir(
+        lo_path,
+        pptx_pages_dir=pptx_pages_dir,
+        docx_pages_dir=docx_pages_dir,
+    )
+    marker = cache_dir / ".done"
 
     # Cache hit
     if marker.exists():
@@ -189,8 +223,14 @@ def convert_lo_sync(
 
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="solin_lo_", ignore_cleanup_errors=True) as tmp_dir:
-        tmp_path       = Path(tmp_dir)
+    pdf_pages_root = Path(pdf_pages_dir)
+    pdf_pages_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="solin_lo_",
+        dir=pdf_pages_root,
+        ignore_cleanup_errors=True,
+    ) as tmp_dir:
+        tmp_path = Path(tmp_dir)
         lo_profile_uri = (tmp_path / "lo_profile").as_uri()
         try:
             result = subprocess.run(
@@ -201,8 +241,10 @@ def convert_lo_sync(
                     "--nolockcheck",
                     "--nofirststartwizard",
                     f"-env:UserInstallation={lo_profile_uri}",
-                    "--convert-to", "pdf",
-                    "--outdir", tmp_dir,
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    tmp_dir,
                     str(lo_path),
                 ],
                 capture_output=True,
@@ -217,9 +259,7 @@ def convert_lo_sync(
             ) from exc
         except FileNotFoundError as exc:
             shutil.rmtree(str(cache_dir), ignore_errors=True)
-            raise RuntimeError(
-                f"Executável do LibreOffice não encontrado: {soffice}"
-            ) from exc
+            raise RuntimeError(f"Executável do LibreOffice não encontrado: {soffice}") from exc
 
         if result.returncode != 0:
             shutil.rmtree(str(cache_dir), ignore_errors=True)
@@ -233,9 +273,7 @@ def convert_lo_sync(
             pdfs = list(Path(tmp_dir).glob("*.pdf"))
             if not pdfs:
                 shutil.rmtree(str(cache_dir), ignore_errors=True)
-                raise RuntimeError(
-                    f"LibreOffice não gerou PDF para '{lo_path.name}'."
-                )
+                raise RuntimeError(f"LibreOffice não gerou PDF para '{lo_path.name}'.")
             pdf_out = pdfs[0]
 
         for stale_page in cache_dir.glob("page_*.jpg"):
@@ -251,15 +289,14 @@ def convert_lo_sync(
             )
         except Exception as exc:  # noqa: BLE001 - conversion API normalizes subprocess/Qt failures
             shutil.rmtree(str(cache_dir), ignore_errors=True)
-            raise RuntimeError(
-                f"Erro ao renderizar páginas de '{lo_path.name}': {exc}"
-            ) from exc
+            raise RuntimeError(f"Erro ao renderizar páginas de '{lo_path.name}': {exc}") from exc
 
     marker.touch()
     return pdf_pages
 
 
 # ── Thread assíncrona ──────────────────────────────────────────────────────────
+
 
 class LoConvertThread(QThread):
     """
@@ -272,19 +309,34 @@ class LoConvertThread(QThread):
         conversion_failed(error_msg)   — erro ou LibreOffice ausente
     """
 
-    progress          = Signal(int, int)   # (página_atual, total)
-    pages_ready       = Signal(list, str)  # (list[str] paths, stem)
-    conversion_failed = Signal(str)        # mensagem de erro
+    progress = Signal(int, int)  # (página_atual, total)
+    pages_ready = Signal(list, str)  # (list[str] paths, stem)
+    conversion_failed = Signal(str)  # mensagem de erro
 
-    def __init__(self, lo_path: str, dpi: int = _DEFAULT_DPI, parent=None):
+    def __init__(
+        self,
+        lo_path: str | os.PathLike[str],
+        *,
+        pptx_pages_dir: str | os.PathLike[str],
+        docx_pages_dir: str | os.PathLike[str],
+        pdf_pages_dir: str | os.PathLike[str],
+        dpi: int = _DEFAULT_DPI,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
-        self._lo_path = lo_path
-        self._dpi     = dpi
+        self._lo_path = Path(lo_path)
+        self._pptx_pages_dir = Path(pptx_pages_dir)
+        self._docx_pages_dir = Path(docx_pages_dir)
+        self._pdf_pages_dir = Path(pdf_pages_dir)
+        self._dpi = dpi
 
     def run(self) -> None:
         try:
             paths = convert_lo_sync(
                 self._lo_path,
+                pptx_pages_dir=self._pptx_pages_dir,
+                docx_pages_dir=self._docx_pages_dir,
+                pdf_pages_dir=self._pdf_pages_dir,
                 dpi=self._dpi,
                 progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
             )
@@ -298,6 +350,7 @@ class LoConvertThread(QThread):
 
 
 # ── Limpeza de cache órfão ─────────────────────────────────────────────────────
+
 
 def _flush_lo_dir(pages_root: Path, referenced_paths: set[str]) -> None:
     """Remove subdiretórios órfãos de um diretório de cache LO."""
@@ -315,19 +368,17 @@ def _flush_lo_dir(pages_root: Path, referenced_paths: set[str]) -> None:
         shutil.rmtree(str(sub), ignore_errors=True)
 
 
-def flush_pptx_pages_dir(referenced_paths: set[str]) -> None:
-    """Remove subdiretórios órfãos de data/pptx_pages."""
-    _flush_lo_dir(Path(_paths.PPTX_PAGES_DIR), referenced_paths)
+def flush_pptx_pages_dir(
+    referenced_paths: set[str],
+    pptx_pages_dir: str | os.PathLike[str],
+) -> None:
+    """Remove subdiretórios órfãos do cache explícito de apresentações."""
+    _flush_lo_dir(Path(pptx_pages_dir), referenced_paths)
 
 
-def flush_docx_pages_dir(referenced_paths: set[str]) -> None:
-    """Remove subdiretórios órfãos de data/docx_pages."""
-    _flush_lo_dir(Path(_paths.DOCX_PAGES_DIR), referenced_paths)
-
-
-# ── Aliases de retrocompatibilidade ───────────────────────────────────────────
-# Mantém compatibilidade com código que ainda importe pelo nome antigo.
-# Podem ser removidos quando todas as referências forem atualizadas.
-
-convert_pptx_sync   = convert_lo_sync
-PptxConvertThread   = LoConvertThread
+def flush_docx_pages_dir(
+    referenced_paths: set[str],
+    docx_pages_dir: str | os.PathLike[str],
+) -> None:
+    """Remove subdiretórios órfãos do cache explícito de documentos."""
+    _flush_lo_dir(Path(docx_pages_dir), referenced_paths)

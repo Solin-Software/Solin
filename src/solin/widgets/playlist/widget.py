@@ -6,6 +6,7 @@ Thumbnails persistem através de reordenações; botões com SVG real.
 from __future__ import annotations
 
 import copy, logging, os, uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
@@ -30,12 +31,15 @@ from ..jw_songs_bridge import JWSongsBridge
 
 from ...qml_module import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
-from ...core.foundation.runtime_paths import ProfilePaths
+from ...core.foundation.qt_threads import stop_owned_qthread
+from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ...core.i18n.manager import LanguageManager
 from ...core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
+from ...core.jw.catalog import JWMediaCatalogCachePaths
+from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ..media_info_extractor import MediaInfoQueue, is_filename_title
@@ -84,7 +88,12 @@ class _PlaylistEditView(
         *,
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
+        runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
+        media_cache_manager: MediaCacheManager,
+        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_songs_store: JWSongsStore,
+        thumb_cache_dir: str | os.PathLike[str],
         all_playlists: list[dict],
         parent=None,
     ):
@@ -93,7 +102,12 @@ class _PlaylistEditView(
         self._media_ctrl = media_ctrl
         self._notifications = notifications
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
+        self._media_cache_manager = media_cache_manager
+        self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_songs_store = jw_songs_store
+        self._thumb_cache_dir = Path(thumb_cache_dir)
         self._all_playlists = all_playlists
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
@@ -105,7 +119,11 @@ class _PlaylistEditView(
         self._thumb_pending_item_ids: set[str] = set()
         self._thumb_request_token: int = 0
         self._qml_pointer_depth = 0
-        self._thumb_queue = MediaInfoQueue(self)
+        self._thumb_queue = MediaInfoQueue(
+            media_cache_manager.media_cache_dir,
+            self._thumb_cache_dir,
+            self,
+        )
         self._thumb_queue.info_ready.connect(self._on_info)
         self._thumb_queue.duration_ready.connect(self._on_duration_from_extractor)
         self._pdf_threads:  list[object] = []
@@ -114,11 +132,15 @@ class _PlaylistEditView(
         self._wf_file_availability: tuple[tuple[str, bool], ...] = ()
 
         # QML Integration
-        self.model = PlaylistEditModel(self)
+        self.model = PlaylistEditModel(
+            media_cache_manager,
+            self._thumb_cache_dir,
+            self,
+        )
         self.bridge = PlaylistEditBridge(self)
         self.bridge.attach_model(self.model)
-        self.catalog_bridge = JWMediaCatalogBridge(self)
-        self.songs_bridge = JWSongsBridge(self)
+        self.catalog_bridge = JWMediaCatalogBridge(jw_catalog_cache_paths, self)
+        self.songs_bridge = JWSongsBridge(jw_songs_store, self)
 
         self._apply_media_language_context()
         self._connect_media_language_signal()
@@ -178,24 +200,7 @@ class _PlaylistEditView(
 
     @staticmethod
     def _stop_owned_thread(thread, *, wait_ms: int) -> None:
-        if thread is None:
-            return
-        try:
-            if not thread.isRunning():
-                return
-            thread.requestInterruption()
-            thread.quit()
-            thread.wait(wait_ms)
-            if thread.isRunning():
-                log.warning(
-                    "Background thread %s did not stop within %d ms",
-                    type(thread).__name__,
-                    wait_ms,
-                )
-                thread.setParent(None)
-                thread.finished.connect(thread.deleteLater)
-        except RuntimeError:
-            return
+        stop_owned_qthread(thread, wait_ms=wait_ms, logger=log)
 
     # ── Centralized save dispatch ──────────────────────────────────────────
     def _save(self) -> None:
@@ -225,7 +230,13 @@ class _PlaylistEditView(
         # Set image providers
         self.qml_widget.engine().addImageProvider(
             "playlistthumbs",
-            PlaylistThumbnailProvider(self._id_to_thumb, disk_loader_cb=_load_thumb_from_disk)
+            PlaylistThumbnailProvider(
+                self._id_to_thumb,
+                disk_loader_cb=lambda item_id: _load_thumb_from_disk(
+                    item_id,
+                    self._thumb_cache_dir,
+                ),
+            )
         )
         self.qml_widget.engine().addImageProvider("playlisticons", PlaylistIconProvider())
 
@@ -287,17 +298,17 @@ class _PlaylistEditView(
         self._save()
 
     def _connect_cache_signals(self):
-        MediaCacheManager.instance().cache_changed.connect(self._on_cache_changed)
-        MediaCacheManager.instance().cache_removed.connect(self._on_cache_removed)
-        MediaCacheManager.instance().prefetch_progress.connect(self._on_prefetch_progress)
-        MediaCacheManager.instance().prefetch_error.connect(self._on_prefetch_error)
+        self._media_cache_manager.cache_changed.connect(self._on_cache_changed)
+        self._media_cache_manager.cache_removed.connect(self._on_cache_removed)
+        self._media_cache_manager.prefetch_progress.connect(self._on_prefetch_progress)
+        self._media_cache_manager.prefetch_error.connect(self._on_prefetch_error)
 
     def _disconnect_cache_signals(self):
         try:
-            MediaCacheManager.instance().cache_changed.disconnect(self._on_cache_changed)
-            MediaCacheManager.instance().cache_removed.disconnect(self._on_cache_removed)
-            MediaCacheManager.instance().prefetch_progress.disconnect(self._on_prefetch_progress)
-            MediaCacheManager.instance().prefetch_error.disconnect(self._on_prefetch_error)
+            self._media_cache_manager.cache_changed.disconnect(self._on_cache_changed)
+            self._media_cache_manager.cache_removed.disconnect(self._on_cache_removed)
+            self._media_cache_manager.prefetch_progress.disconnect(self._on_prefetch_progress)
+            self._media_cache_manager.prefetch_error.disconnect(self._on_prefetch_error)
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect playlist cache signals")
 
@@ -325,8 +336,8 @@ class _PlaylistEditView(
         for item in self._pl.get("items", []):
             if item.get("id") == item_id:
                 url = item.get("url", "")
-                if url and not MediaCacheManager.instance().is_cached(url):
-                    MediaCacheManager.instance().prefetch(url, priority=True)
+                if url and not self._media_cache_manager.is_cached(url):
+                    self._media_cache_manager.prefetch(url, priority=True)
                     self.model.update_cloud_state(url)
                     self.bridge.emit_cloud_changed_for_url(url)
                 break
@@ -530,7 +541,10 @@ class _PlaylistEditView(
                     self._request_thumbnail(item_id, url, media_type)
                 continue
 
-            has_disk = playlist_thumb_path(item_id).exists()
+            has_disk = playlist_thumb_path(
+                item_id,
+                thumb_cache_dir=self._thumb_cache_dir,
+            ).exists()
             if has_disk:
                 if needs_title:
                     self._request_thumbnail(item_id, url, media_type)
@@ -556,7 +570,7 @@ class _PlaylistEditView(
         media_changed = False
         if pixmap and not pixmap.isNull():
             self._id_to_thumb[item_id] = pixmap
-            _save_thumb_to_disk(item_id, pixmap)
+            _save_thumb_to_disk(item_id, pixmap, self._thumb_cache_dir)
             self.model.update_thumb(item_id)
             media_changed = True
 
@@ -827,6 +841,7 @@ class _PlaylistEditView(
                 self._all_playlists,
                 self._storage_paths,
                 self._profile_paths,
+                self._thumb_cache_dir,
             )
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
@@ -891,7 +906,12 @@ class PlaylistWidget(QWidget):
         *,
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
+        runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
+        media_cache_manager: MediaCacheManager,
+        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_songs_store: JWSongsStore,
+        thumb_cache_dir: str | os.PathLike[str],
         parent=None,
     ):
         super().__init__(parent)
@@ -899,7 +919,12 @@ class PlaylistWidget(QWidget):
         self._media_ctrl = media_ctrl
         self._notifications = notifications
         self._profile_paths = profile_paths
+        self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
+        self._media_cache_manager = media_cache_manager
+        self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_songs_store = jw_songs_store
+        self._thumb_cache_dir = Path(thumb_cache_dir)
         self._playlists = load_playlists(storage_paths)
         self._watched_folder = watched_folder
         self._build_ui()
@@ -920,6 +945,8 @@ class PlaylistWidget(QWidget):
             watched_folder=self._watched_folder,
             profile_paths=self._profile_paths,
             storage_paths=self._storage_paths,
+            media_cache_manager=self._media_cache_manager,
+            thumb_cache_dir=self._thumb_cache_dir,
             parent=self,
         )
         # Index 1: playlist edit (also used for watched folders)
@@ -928,7 +955,12 @@ class PlaylistWidget(QWidget):
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
             profile_paths=self._profile_paths,
+            runtime_paths=self._runtime_paths,
             storage_paths=self._storage_paths,
+            media_cache_manager=self._media_cache_manager,
+            jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+            jw_songs_store=self._jw_songs_store,
+            thumb_cache_dir=self._thumb_cache_dir,
             all_playlists=self._playlists,
             parent=self,
         )

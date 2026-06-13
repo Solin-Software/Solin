@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
+from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 
 
@@ -36,9 +37,12 @@ class _Downloader:
         self.cleanup_count += 1
 
 
-def _controller_with_downloader(monkeypatch, *, auto_download: bool):
+def _controller_with_downloader(tmp_path, *, auto_download: bool):
     _app()
-    controller = MediaController(_Prefs(auto_download))
+    controller = MediaController(
+        _Prefs(auto_download),
+        MediaCacheManager(tmp_path),
+    )
     downloader = _Downloader()
     played: list[str] = []
     controller._downloader = downloader
@@ -46,9 +50,9 @@ def _controller_with_downloader(monkeypatch, *, auto_download: bool):
     return controller, downloader, played
 
 
-def test_play_url_uses_auto_download_setting_by_default(monkeypatch):
+def test_play_url_uses_auto_download_setting_by_default(tmp_path):
     controller, downloader, played = _controller_with_downloader(
-        monkeypatch,
+        tmp_path,
         auto_download=True,
     )
 
@@ -60,9 +64,9 @@ def test_play_url_uses_auto_download_setting_by_default(monkeypatch):
     controller.stop()
 
 
-def test_play_url_can_force_temporary_download(monkeypatch):
+def test_play_url_can_force_temporary_download(tmp_path):
     controller, downloader, played = _controller_with_downloader(
-        monkeypatch,
+        tmp_path,
         auto_download=True,
     )
 

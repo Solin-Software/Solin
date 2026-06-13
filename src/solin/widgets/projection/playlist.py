@@ -141,7 +141,7 @@ class ProjectionPlaylistMixin:
                 self._request_thumbnail(i, item)
                 continue
 
-            if _get_cached_media_path(url):
+            if _get_cached_media_path(url, self._media_cache_dir):
                 self._request_thumbnail(i, item)
                 continue
 

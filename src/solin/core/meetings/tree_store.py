@@ -148,7 +148,7 @@ def _stored_file_name(value: str) -> str:
 def flush_meeting_thumbs_dir(
     *,
     store: MeetingTreeStore,
-    thumb_dir: str | Path | None = None,
+    thumb_dir: str | Path,
 ) -> None:
     """
     Remove cached meeting thumbnails no longer referenced by meeting_trees.json.
@@ -156,7 +156,7 @@ def flush_meeting_thumbs_dir(
     Playlist thumbnails have their own cleanup path; meeting thumbnails live in
     cache/meeting_thumbs so meeting cleanup can use meeting tree state directly.
     """
-    target_dir = Path(thumb_dir) if thumb_dir is not None else meeting_thumb_dir()
+    target_dir = meeting_thumb_dir(meeting_thumb_cache_dir=thumb_dir)
     if not target_dir.is_dir():
         return
 

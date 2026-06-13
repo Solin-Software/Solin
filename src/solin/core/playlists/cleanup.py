@@ -5,7 +5,6 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.playlists.storage import (
@@ -80,8 +79,12 @@ def flush_images_dir(
                 pass
 
 
-def flush_thumbs_dir(storage_paths: PlaylistStoragePaths) -> None:
-    if not os.path.isdir(_paths.THUMB_CACHE_DIR):
+def flush_thumbs_dir(
+    storage_paths: PlaylistStoragePaths,
+    thumb_cache_dir: str | os.PathLike[str],
+) -> None:
+    thumb_dir = os.fspath(thumb_cache_dir)
+    if not os.path.isdir(thumb_dir):
         return
 
     referenced_ids: set[str] = set()
@@ -91,8 +94,8 @@ def flush_thumbs_dir(storage_paths: PlaylistStoragePaths) -> None:
             if item_id:
                 referenced_ids.add(item_id)
 
-    for fname in os.listdir(_paths.THUMB_CACHE_DIR):
-        fpath = os.path.join(_paths.THUMB_CACHE_DIR, fname)
+    for fname in os.listdir(thumb_dir):
+        fpath = os.path.join(thumb_dir, fname)
         if not os.path.isfile(fpath):
             continue
         stem = os.path.splitext(fname)[0]
@@ -106,25 +109,28 @@ def flush_thumbs_dir(storage_paths: PlaylistStoragePaths) -> None:
 def flush_pdf_pages(
     storage_paths: PlaylistStoragePaths,
     meeting_tree_store: MeetingTreeStore,
+    pdf_pages_dir: str | os.PathLike[str],
 ) -> None:
     from solin.core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
 
     referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
-    _flush_pdf(referenced)
+    _flush_pdf(referenced, pdf_pages_dir)
 
 
 def flush_pptx_pages(
     storage_paths: PlaylistStoragePaths,
     meeting_tree_store: MeetingTreeStore,
+    pptx_pages_dir: str | os.PathLike[str],
+    docx_pages_dir: str | os.PathLike[str],
 ) -> None:
     from solin.core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
     from solin.core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
 
     referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
-    _flush_pptx(referenced)
-    _flush_docx(referenced)
+    _flush_pptx(referenced, pptx_pages_dir)
+    _flush_docx(referenced, docx_pages_dir)
 
 
 def flush_embedded_dir(
@@ -164,12 +170,16 @@ def cleanup_playlist_files(
     playlist: dict,
     storage_paths: PlaylistStoragePaths,
     profile_paths: ProfilePaths,
+    thumb_cache_dir: str | os.PathLike[str],
 ) -> None:
     embedded_dir = os.fspath(profile_paths.embedded_dir)
     for item in playlist.get("items", []):
         item_id = item.get("id", "")
         if item_id:
-            thumb = playlist_thumb_path(item_id)
+            thumb = playlist_thumb_path(
+                item_id,
+                thumb_cache_dir=os.fspath(thumb_cache_dir),
+            )
             if thumb.exists():
                 try_remove_file(os.fspath(thumb), storage_paths)
 
@@ -186,6 +196,7 @@ def cleanup_item_files(
     all_playlists: list,
     storage_paths: PlaylistStoragePaths,
     profile_paths: ProfilePaths,
+    thumb_cache_dir: str | os.PathLike[str],
 ) -> None:
     embedded_dir = os.fspath(profile_paths.embedded_dir)
     item_id = item.get("id", "")
@@ -201,7 +212,10 @@ def cleanup_item_files(
                 all_urls.add(other["url"])
 
     if item_id and item_id not in all_ids:
-        thumb = playlist_thumb_path(item_id)
+        thumb = playlist_thumb_path(
+            item_id,
+            thumb_cache_dir=os.fspath(thumb_cache_dir),
+        )
         if thumb.exists():
             try_remove_file(os.fspath(thumb), storage_paths)
 

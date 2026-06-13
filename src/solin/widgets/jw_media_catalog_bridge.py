@@ -41,6 +41,7 @@ from PySide6.QtCore import (
 )
 
 from ..core.jw.catalog import (
+    JWMediaCatalogCachePaths,
     JWMediaCatalogService,
     ensure_thumbnail_cached,
 )
@@ -282,17 +283,26 @@ class _ThumbSignals(QObject):
 class _ThumbWorker(QRunnable):
     """Download a single thumbnail in a background thread."""
 
-    def __init__(self, item_id: str, thumbnail_url: str) -> None:
+    def __init__(
+        self,
+        item_id: str,
+        thumbnail_url: str,
+        cache_paths: JWMediaCatalogCachePaths,
+    ) -> None:
         super().__init__()
         self.item_id = item_id
         self.thumbnail_url = thumbnail_url
+        self.cache_paths = cache_paths
         self.signals = _ThumbSignals()
         self.setAutoDelete(True)
 
     def run(self) -> None:
         """Execute the download and emit ``ready``."""
         try:
-            local_path = ensure_thumbnail_cached(self.thumbnail_url)
+            local_path = ensure_thumbnail_cached(
+                self.thumbnail_url,
+                cache_paths=self.cache_paths,
+            )
             self.signals.ready.emit(self.item_id, local_path)
         except Exception:  # noqa: BLE001 - thumbnail worker boundary
             log.debug(
@@ -343,11 +353,16 @@ class JWMediaCatalogBridge(QObject):
     modalShouldClose      = Signal()               # hide modal
     jwMediaConfirmed      = Signal(dict, str, int)  # item_data, list_id, index
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        cache_paths: JWMediaCatalogCachePaths,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
+        self._cache_paths = cache_paths
 
         # Catalog service (async fetch backend)
-        self._catalog_service = JWMediaCatalogService(self)
+        self._catalog_service = JWMediaCatalogService(cache_paths, self)
         self._catalog_service.videos_progress.connect(self._on_videos_progress)
         self._catalog_service.videos_ready.connect(self._on_videos_ready)
         self._catalog_service.fetch_failed.connect(self._on_fetch_failed)
@@ -675,7 +690,7 @@ class JWMediaCatalogBridge(QObject):
 
     def cleanup(self) -> None:
         """Stop background work owned by this bridge before teardown."""
-        self._catalog_service.cancel_all()
+        self._catalog_service.cancel_all(wait_ms=-1)
         self._active_catalog_request_id = ""
         self._progress_apply_timer.stop()
         self._pending_progress = None
@@ -683,7 +698,7 @@ class JWMediaCatalogBridge(QObject):
         self._thumb_queue.clear()
         self._thumb_active = 0
         self._thumb_pool.clear()
-        self._thumb_pool.waitForDone(100)
+        self._thumb_pool.waitForDone()
 
     # ── Python-facing setters (called by host view) ───────────────────────
 
@@ -836,7 +851,7 @@ class JWMediaCatalogBridge(QObject):
         """Start workers up to the concurrency limit."""
         while self._thumb_active < _MAX_CONCURRENT_THUMBS and self._thumb_queue:
             item_id, thumb_url = self._thumb_queue.popleft()
-            worker = _ThumbWorker(item_id, thumb_url)
+            worker = _ThumbWorker(item_id, thumb_url, self._cache_paths)
             worker.signals.ready.connect(self._on_thumb_ready)
             self._thumb_active += 1
             self._thumb_pool.start(worker)

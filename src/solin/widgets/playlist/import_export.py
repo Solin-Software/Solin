@@ -27,14 +27,21 @@ class _PlaylistEditImportMixin:
         section_id: str = "",
     ) -> None:
         stem = Path(pdf_path).stem
-        pages = pdf_cached_pages(pdf_path)
+        pages = pdf_cached_pages(
+            pdf_path,
+            self._runtime_paths.pdf_pages_dir,
+        )
         if pages:
             self._on_pdf_pages_ready(pages, stem, insert_at, section_id)
             return
         self._notifications.information(
             self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
-        thread = PdfConvertThread(pdf_path, parent=self)
+        thread = PdfConvertThread(
+            pdf_path,
+            self._runtime_paths.pdf_pages_dir,
+            parent=self,
+        )
         self._pdf_threads.append(thread)
         thread.pages_ready.connect(
             lambda pages, stem, _pos=insert_at, _sid=section_id:
@@ -198,14 +205,24 @@ class _PlaylistEditImportMixin:
         section_id: str = "",
     ) -> None:
         stem = Path(lo_path).stem
-        pages = lo_cached_pages(lo_path)
+        pages = lo_cached_pages(
+            lo_path,
+            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+            docx_pages_dir=self._runtime_paths.docx_pages_dir,
+        )
         if pages:
             self._on_lo_pages_ready(pages, stem, insert_at, section_id)
             return
         self._notifications.information(
             self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
-        thread = LoConvertThread(lo_path, parent=self)
+        thread = LoConvertThread(
+            lo_path,
+            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
+            docx_pages_dir=self._runtime_paths.docx_pages_dir,
+            pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
+            parent=self,
+        )
         self._lo_threads.append(thread)
         thread.pages_ready.connect(
             lambda pages, stem, _pos=insert_at, _sid=section_id:

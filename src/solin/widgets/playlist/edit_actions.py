@@ -202,7 +202,10 @@ class _PlaylistEditActionsMixin:
             try:
                 import shutil
 
-                target_path = playlist_thumb_path(pl_item_id)
+                target_path = playlist_thumb_path(
+                    pl_item_id,
+                    thumb_cache_dir=self._thumb_cache_dir,
+                )
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(thumb_path, target_path)
             except OSError as e:
@@ -322,12 +325,17 @@ class _PlaylistEditActionsMixin:
         if not path:
             return
         try:
-            items = _enrich_items_for_export(self._pl.get("items", []), self._id_to_thumb)
+            items = _enrich_items_for_export(
+                self._pl.get("items", []),
+                self._id_to_thumb,
+                self._thumb_cache_dir,
+            )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(
                 self._pl["name"],
                 items,
                 path,
+                self._media_cache_manager.media_cache_dir,
                 fallback_lang_code=fallback_lang,
             )
             QMessageBox.information(

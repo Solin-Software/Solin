@@ -4,6 +4,8 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+from ..core.foundation.qt_threads import stop_owned_qthread
+
 if TYPE_CHECKING:
     from solin.main_window import MainWindow
 
@@ -24,6 +26,8 @@ class ShutdownController:
         "_pdf_argv_threads",
         "_jwpub_argv_threads",
         "_lo_argv_threads",
+        "_browser_pdf_threads",
+        "_browser_jwpub_threads",
     )
 
     def __init__(self, window: MainWindow) -> None:
@@ -117,17 +121,14 @@ class ShutdownController:
 
     @staticmethod
     def _stop_conversion_thread(thread, threads) -> None:
-        try:
-            if thread.isRunning():
-                thread.quit()
-                thread.wait(3000)
-            if thread.isRunning():
-                thread.setParent(None)
-                thread.finished.connect(thread.deleteLater)
-            elif thread in threads:
-                threads.remove(thread)
-        except Exception:  # noqa: BLE001 - worker-thread shutdown boundary
-            log.warning("Failed to stop conversion thread during shutdown", exc_info=True)
+        stopped = stop_owned_qthread(
+            thread,
+            wait_ms=3_000,
+            logger=log,
+            label="Conversion",
+        )
+        if stopped and thread in threads:
+            threads.remove(thread)
 
     def _remove_or_queue_tmp_file(self, tmp_path: str) -> None:
         try:

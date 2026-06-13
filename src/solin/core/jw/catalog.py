@@ -36,7 +36,6 @@ from typing import Any, Callable, Iterable, Optional
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import (
     CACHE_TTL_DAYS,
     VIDEO_PREFERRED_QUALITY,
@@ -69,6 +68,26 @@ _MIME_EXT = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+
+
+@dataclass(frozen=True)
+class JWMediaCatalogCachePaths:
+    """Filesystem roots used by the JW media catalog cache."""
+
+    cache_dir: Path
+    thumb_cache_dir: Path
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "cache_dir", Path(self.cache_dir))
+        object.__setattr__(self, "thumb_cache_dir", Path(self.thumb_cache_dir))
+
+    @property
+    def catalog_dir(self) -> Path:
+        return self.cache_dir / "jw_media_catalog"
+
+    @property
+    def thumbnail_dir(self) -> Path:
+        return self.thumb_cache_dir / "jw_catalog"
 
 
 class _FetchCancelled(Exception):
@@ -166,6 +185,7 @@ class JWMediaItem:
 def fetch_jw_videos(
     query: JWMediaQuery,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool = False,
     cache_thumbnails: bool = True,
 ) -> tuple[list[JWMediaItem], float, bool]:
@@ -178,19 +198,27 @@ def fetch_jw_videos(
 
     normalized = query.normalized()
     if normalized.category:
-        raw, fetched_at, from_cache = _fetch_category(normalized, force=force)
+        raw, fetched_at, from_cache = _fetch_category(
+            normalized,
+            cache_paths=cache_paths,
+            force=force,
+        )
         items = _parse_category_media(raw, normalized)
     else:
-        raw, fetched_at, from_cache = _fetch_pub_media_links(normalized, force=force)
-        items = _parse_pub_media_links(raw, normalized)
+        raw, fetched_at, from_cache = _fetch_pub_media_links(
+            normalized,
+            cache_paths=cache_paths,
+            force=force,
+        )
+        items = _parse_pub_media_links(raw, normalized, cache_paths)
 
     if normalized.max_items is not None:
         items = items[: max(0, normalized.max_items)]
 
     if cache_thumbnails:
-        items = [_with_cached_thumbnail(item) for item in items]
+        items = [_with_cached_thumbnail(item, cache_paths) for item in items]
     else:
-        items = [_with_existing_thumbnail(item) for item in items]
+        items = [_with_existing_thumbnail(item, cache_paths) for item in items]
 
     return items, fetched_at, from_cache
 
@@ -198,6 +226,7 @@ def fetch_jw_videos(
 def fetch_jw_video_catalog(
     language: str,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool = False,
     progress_callback: Callable[[list[JWMediaItem], int, int], None] | None = None,
     should_cancel: Callable[[], bool] | None = None,
@@ -223,7 +252,7 @@ def fetch_jw_video_catalog(
 
     raise_if_cancelled()
 
-    snapshot = None if force else _load_catalog_snapshot(lang)
+    snapshot = None if force else _load_catalog_snapshot(lang, cache_paths)
     items_by_id: dict[str, JWMediaItem] = {}
     completed: set[str] = set()
     fetched_at = time.time()
@@ -246,7 +275,12 @@ def fetch_jw_video_catalog(
         loaded_completed = set(snapshot.get("completed_categories", []))
 
     raise_if_cancelled()
-    categories = _discover_video_categories(lang, force=force, should_cancel=should_cancel)
+    categories = _discover_video_categories(
+        lang,
+        cache_paths=cache_paths,
+        force=force,
+        should_cancel=should_cancel,
+    )
     total = len(categories)
     required_categories = set(categories)
     snapshot_complete = bool(required_categories) and required_categories.issubset(loaded_completed)
@@ -262,6 +296,7 @@ def fetch_jw_video_catalog(
             items_by_id=items_by_id,
             loaded_completed=loaded_completed,
             categories=categories,
+            cache_paths=cache_paths,
             should_cancel=should_cancel,
         )
         if latest_refresh is not None:
@@ -272,7 +307,12 @@ def fetch_jw_video_catalog(
 
     if refresh_required:
         raise_if_cancelled()
-        categories = _discover_video_categories(lang, force=True, should_cancel=should_cancel)
+        categories = _discover_video_categories(
+            lang,
+            cache_paths=cache_paths,
+            force=True,
+            should_cancel=should_cancel,
+        )
         total = len(categories)
         required_categories = set(categories)
         snapshot_complete = bool(required_categories) and required_categories.issubset(loaded_completed)
@@ -302,6 +342,7 @@ def fetch_jw_video_catalog(
             raw, category_fetched_at, cached = _fetch_category_media(
                 lang,
                 category,
+                cache_paths=cache_paths,
                 force=force or refresh_required,
                 should_cancel=should_cancel,
             )
@@ -312,7 +353,14 @@ def fetch_jw_video_catalog(
                 items_by_id[item.guid or item.id] = item
             completed.add(category)
             sorted_items = _sort_catalog_items(items_by_id.values())
-            _save_catalog_snapshot(lang, sorted_items, completed, categories, fetched_at)
+            _save_catalog_snapshot(
+                lang,
+                sorted_items,
+                completed,
+                categories,
+                fetched_at,
+                cache_paths,
+            )
             if progress_callback:
                 progress_callback(sorted_items, idx, total)
         except _FetchCancelled:
@@ -325,7 +373,14 @@ def fetch_jw_video_catalog(
 
     raise_if_cancelled()
     sorted_items = _sort_catalog_items(items_by_id.values())
-    _save_catalog_snapshot(lang, sorted_items, completed, categories, time.time())
+    _save_catalog_snapshot(
+        lang,
+        sorted_items,
+        completed,
+        categories,
+        time.time(),
+        cache_paths,
+    )
     return sorted_items, time.time(), from_cache
 
 
@@ -335,6 +390,7 @@ def _try_refresh_catalog_from_latest(
     items_by_id: dict[str, JWMediaItem],
     loaded_completed: set[str],
     categories: list[str],
+    cache_paths: JWMediaCatalogCachePaths,
     should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[list[JWMediaItem], float] | None:
     def raise_if_cancelled() -> None:
@@ -346,6 +402,7 @@ def _try_refresh_catalog_from_latest(
         latest_raw, latest_fetched_at, latest_from_cache = _fetch_category_media(
             language,
             _LATEST_CATEGORY_KEY,
+            cache_paths=cache_paths,
             force=True,
             should_cancel=should_cancel,
         )
@@ -388,6 +445,7 @@ def _try_refresh_catalog_from_latest(
         loaded_completed,
         categories,
         checked_at,
+        cache_paths,
     )
     log.debug(
         "[JWMediaCatalog] Latest delta refresh added %s new items",
@@ -396,17 +454,22 @@ def _try_refresh_catalog_from_latest(
     return sorted_items, checked_at
 
 
-def ensure_thumbnail_cached(thumbnail_url: str, *, force: bool = False) -> str:
+def ensure_thumbnail_cached(
+    thumbnail_url: str,
+    *,
+    cache_paths: JWMediaCatalogCachePaths,
+    force: bool = False,
+) -> str:
     """Return a local cached thumbnail path, downloading it if needed."""
 
     if not thumbnail_url:
         return ""
 
-    existing = cached_thumbnail_path(thumbnail_url)
+    existing = cached_thumbnail_path(thumbnail_url, cache_paths=cache_paths)
     if existing and not force:
         return existing
 
-    cache_dir = _thumbnail_cache_dir()
+    cache_dir = os.fspath(_thumbnail_cache_dir(cache_paths))
     os.makedirs(cache_dir, exist_ok=True)
 
     guessed_ext = _guess_image_ext(thumbnail_url, "")
@@ -455,12 +518,16 @@ def ensure_thumbnail_cached(thumbnail_url: str, *, force: bool = False) -> str:
         return ""
 
 
-def cached_thumbnail_path(thumbnail_url: str) -> str:
+def cached_thumbnail_path(
+    thumbnail_url: str,
+    *,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> str:
     """Return an existing thumbnail cache path, or an empty string."""
 
     if not thumbnail_url:
         return ""
-    cache_dir = _thumbnail_cache_dir()
+    cache_dir = os.fspath(_thumbnail_cache_dir(cache_paths))
     cache_key = hashlib.sha256(thumbnail_url.encode("utf-8")).hexdigest()
     for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
         path = os.path.join(cache_dir, f"{cache_key}{ext}")
@@ -481,6 +548,7 @@ class _FetchWorker(QRunnable):
         request_id: str,
         query: JWMediaQuery,
         *,
+        cache_paths: JWMediaCatalogCachePaths,
         force: bool,
         cache_thumbnails: bool,
         cancel_token: _CancelToken,
@@ -488,6 +556,7 @@ class _FetchWorker(QRunnable):
         super().__init__()
         self.request_id = request_id
         self.query = query
+        self.cache_paths = cache_paths
         self.force = force
         self.cache_thumbnails = cache_thumbnails
         self.cancel_token = cancel_token
@@ -499,6 +568,7 @@ class _FetchWorker(QRunnable):
             self.cancel_token.raise_if_cancelled()
             items, fetched_at, from_cache = fetch_jw_videos(
                 self.query,
+                cache_paths=self.cache_paths,
                 force=self.force,
                 cache_thumbnails=self.cache_thumbnails,
             )
@@ -523,6 +593,7 @@ class _CatalogWorker(QRunnable):
         request_id: str,
         language: str,
         *,
+        cache_paths: JWMediaCatalogCachePaths,
         force: bool,
         cache_thumbnails: bool,
         cancel_token: _CancelToken,
@@ -530,6 +601,7 @@ class _CatalogWorker(QRunnable):
         super().__init__()
         self.request_id = request_id
         self.language = language
+        self.cache_paths = cache_paths
         self.force = force
         self.cache_thumbnails = cache_thumbnails
         self.cancel_token = cancel_token
@@ -553,7 +625,14 @@ class _CatalogWorker(QRunnable):
                 if not should_emit:
                     return
                 last_progress_emit = now
-                emit_items = [_item_for_emit(item, self.cache_thumbnails).to_dict() for item in items]
+                emit_items = [
+                    _item_for_emit(
+                        item,
+                        self.cache_thumbnails,
+                        self.cache_paths,
+                    ).to_dict()
+                    for item in items
+                ]
                 if self.cancel_token.is_cancelled():
                     raise _FetchCancelled()
                 self.signals.progress.emit(self.request_id, emit_items, completed, total)
@@ -561,12 +640,20 @@ class _CatalogWorker(QRunnable):
             self.cancel_token.raise_if_cancelled()
             items, fetched_at, from_cache = fetch_jw_video_catalog(
                 self.language,
+                cache_paths=self.cache_paths,
                 force=self.force,
                 progress_callback=_progress,
                 should_cancel=self.cancel_token.is_cancelled,
             )
             self.cancel_token.raise_if_cancelled()
-            emit_items = [_item_for_emit(item, self.cache_thumbnails).to_dict() for item in items]
+            emit_items = [
+                _item_for_emit(
+                    item,
+                    self.cache_thumbnails,
+                    self.cache_paths,
+                ).to_dict()
+                for item in items
+            ]
             self.signals.succeeded.emit(self.request_id, emit_items, fetched_at, from_cache)
         except _FetchCancelled:
             return
@@ -584,8 +671,13 @@ class JWMediaCatalogService(QObject):
     videos_progress = Signal(str, list, int, int)  # request_id, items, completed, total
     fetch_failed = Signal(str, str)             # request_id, error
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        cache_paths: JWMediaCatalogCachePaths,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
+        self._cache_paths = cache_paths
         self._active: set[str] = set()
         self._cancel_tokens: dict[str, _CancelToken] = {}
         self._workers: dict[str, QRunnable] = {}
@@ -611,6 +703,7 @@ class JWMediaCatalogService(QObject):
         worker = _FetchWorker(
             rid,
             q,
+            cache_paths=self._cache_paths,
             force=force,
             cache_thumbnails=cache_thumbnails,
             cancel_token=token,
@@ -644,6 +737,7 @@ class JWMediaCatalogService(QObject):
         worker = _CatalogWorker(
             rid,
             lang,
+            cache_paths=self._cache_paths,
             force=force,
             cache_thumbnails=cache_thumbnails,
             cancel_token=token,
@@ -674,7 +768,9 @@ class JWMediaCatalogService(QObject):
         for request_id in list(self._active):
             self.cancel(request_id)
         self._thread_pool.clear()
-        if wait_ms > 0:
+        if wait_ms < 0:
+            self._thread_pool.waitForDone()
+        elif wait_ms > 0:
             self._thread_pool.waitForDone(wait_ms)
 
     def stop(self, wait_ms: int = 0) -> None:
@@ -712,6 +808,7 @@ def _coerce_query(query: JWMediaQuery | dict[str, Any]) -> JWMediaQuery:
 def _fetch_pub_media_links(
     query: JWMediaQuery,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
 ) -> tuple[dict[str, Any], float, bool]:
     if not query.pub and not query.docid:
@@ -740,12 +837,18 @@ def _fetch_pub_media_links(
         params["track"] = str(query.track)
 
     url = f"{_PUB_MEDIA_URL}?{urllib.parse.urlencode(params)}"
-    return _fetch_json_cached(url, "pub_media", force=force)
+    return _fetch_json_cached(
+        url,
+        "pub_media",
+        cache_paths=cache_paths,
+        force=force,
+    )
 
 
 def _fetch_category(
     query: JWMediaQuery,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
 ) -> tuple[dict[str, Any], float, bool]:
     if not query.category:
@@ -753,13 +856,19 @@ def _fetch_category(
     category = urllib.parse.quote(query.category, safe="")
     lang = urllib.parse.quote(query.language, safe="")
     url = f"{_MEDIATOR_BASE_URL}/v1/categories/{lang}/{category}?detailed=1&clientType=www"
-    return _fetch_json_cached(url, "mediator_category", force=force)
+    return _fetch_json_cached(
+        url,
+        "mediator_category",
+        cache_paths=cache_paths,
+        force=force,
+    )
 
 
 def _fetch_category_media(
     language: str,
     category: str,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
     should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[dict[str, Any], float, bool]:
@@ -769,6 +878,7 @@ def _fetch_category_media(
     return _fetch_json_cached(
         url,
         "mediator_category_media",
+        cache_paths=cache_paths,
         force=force,
         should_cancel=should_cancel,
     )
@@ -778,6 +888,7 @@ def _fetch_category_tree(
     language: str,
     category: str,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
     should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[dict[str, Any], float, bool]:
@@ -790,6 +901,7 @@ def _fetch_category_tree(
     return _fetch_json_cached(
         url,
         "mediator_category_tree",
+        cache_paths=cache_paths,
         force=force,
         should_cancel=should_cancel,
     )
@@ -798,6 +910,7 @@ def _fetch_category_tree(
 def _discover_video_categories(
     language: str,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
     should_cancel: Callable[[], bool] | None = None,
 ) -> list[str]:
@@ -816,6 +929,7 @@ def _discover_video_categories(
         root, _, _ = _fetch_category_tree(
             language,
             "VideoOnDemand",
+            cache_paths=cache_paths,
             force=force,
             should_cancel=should_cancel,
         )
@@ -828,6 +942,7 @@ def _discover_video_categories(
                 child, _, _ = _fetch_category_tree(
                     language,
                     first,
+                    cache_paths=cache_paths,
                     force=force,
                     should_cancel=should_cancel,
                 )
@@ -860,6 +975,7 @@ def _subcategory_keys(data: dict[str, Any]) -> list[str]:
 def _fetch_media_item(
     query: JWMediaQuery,
     track: str,
+    cache_paths: JWMediaCatalogCachePaths,
 ) -> dict[str, Any] | None:
     for item_id in _media_item_ids(query, track):
         url = (
@@ -868,7 +984,12 @@ def _fetch_media_item(
             f"{urllib.parse.quote(item_id, safe='')}"
         )
         try:
-            data, _, _ = _fetch_json_cached(url, "mediator_item", force=False)
+            data, _, _ = _fetch_json_cached(
+                url,
+                "mediator_item",
+                cache_paths=cache_paths,
+                force=False,
+            )
         except _EXPECTED_FETCH_ERRORS:
             continue
         media = data.get("media") if isinstance(data, dict) else None
@@ -917,7 +1038,11 @@ def _normalize_issue(issue: int | str | None) -> str:
     return re.sub(r"(\d{6})00$", r"\1", raw)
 
 
-def _parse_pub_media_links(data: dict[str, Any], query: JWMediaQuery) -> list[JWMediaItem]:
+def _parse_pub_media_links(
+    data: dict[str, Any],
+    query: JWMediaQuery,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> list[JWMediaItem]:
     entries = _pub_media_entries(data, query.language, query.fileformat)
     if not entries:
         return []
@@ -937,7 +1062,7 @@ def _parse_pub_media_links(data: dict[str, Any], query: JWMediaQuery) -> list[JW
         best = _select_best_entry(track_entries, query.fileformat)
         if not best:
             continue
-        media_info = _fetch_media_item(query, track) if track else None
+        media_info = _fetch_media_item(query, track, cache_paths) if track else None
         items.append(_make_item_from_pub_entry(best, query, track, media_info))
     return items
 
@@ -1208,10 +1333,14 @@ def _stable_item_id(*parts: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def _item_for_emit(item: JWMediaItem, cache_thumbnails: bool) -> JWMediaItem:
+def _item_for_emit(
+    item: JWMediaItem,
+    cache_thumbnails: bool,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> JWMediaItem:
     if cache_thumbnails:
-        return _with_cached_thumbnail(item)
-    return _with_existing_thumbnail(item)
+        return _with_cached_thumbnail(item, cache_paths)
+    return _with_existing_thumbnail(item, cache_paths)
 
 
 def _catalog_identity_index(items: Iterable[JWMediaItem]) -> set[str]:
@@ -1242,13 +1371,20 @@ def _sort_catalog_items(items: Iterable[JWMediaItem]) -> list[JWMediaItem]:
     )
 
 
-def _catalog_snapshot_path(language: str) -> str:
-    cache_dir = os.path.join(_cache_root(), "jw_media_catalog")
-    return os.path.join(cache_dir, f"all_videos_{language.upper()}.json")
+def _catalog_snapshot_path(
+    language: str,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> str:
+    return os.fspath(
+        cache_paths.catalog_dir / f"all_videos_{language.upper()}.json"
+    )
 
 
-def _load_catalog_snapshot(language: str) -> dict[str, Any] | None:
-    path = _catalog_snapshot_path(language)
+def _load_catalog_snapshot(
+    language: str,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> dict[str, Any] | None:
+    path = _catalog_snapshot_path(language, cache_paths)
     payload = _load_json_cache(path)
     return payload["data"] if payload else None
 
@@ -1259,6 +1395,7 @@ def _save_catalog_snapshot(
     completed_categories: set[str],
     all_categories: list[str],
     fetched_at: float,
+    cache_paths: JWMediaCatalogCachePaths,
 ) -> None:
     data = {
         "_fetched_at": fetched_at,
@@ -1266,11 +1403,18 @@ def _save_catalog_snapshot(
         "all_categories": list(all_categories),
         "items": [item.to_dict() for item in items],
     }
-    _save_json_cache(_catalog_snapshot_path(language), data, fetched_at)
+    _save_json_cache(_catalog_snapshot_path(language, cache_paths), data, fetched_at)
 
 
-def _with_cached_thumbnail(item: JWMediaItem) -> JWMediaItem:
-    path = ensure_thumbnail_cached(item.thumbnail_url) if item.thumbnail_url else ""
+def _with_cached_thumbnail(
+    item: JWMediaItem,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> JWMediaItem:
+    path = (
+        ensure_thumbnail_cached(item.thumbnail_url, cache_paths=cache_paths)
+        if item.thumbnail_url
+        else ""
+    )
     if not path:
         return item
     data = item.to_dict()
@@ -1278,8 +1422,15 @@ def _with_cached_thumbnail(item: JWMediaItem) -> JWMediaItem:
     return JWMediaItem(**data)
 
 
-def _with_existing_thumbnail(item: JWMediaItem) -> JWMediaItem:
-    path = cached_thumbnail_path(item.thumbnail_url) if item.thumbnail_url else ""
+def _with_existing_thumbnail(
+    item: JWMediaItem,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> JWMediaItem:
+    path = (
+        cached_thumbnail_path(item.thumbnail_url, cache_paths=cache_paths)
+        if item.thumbnail_url
+        else ""
+    )
     if not path:
         return item
     data = item.to_dict()
@@ -1291,6 +1442,7 @@ def _fetch_json_cached(
     url: str,
     namespace: str,
     *,
+    cache_paths: JWMediaCatalogCachePaths,
     force: bool,
     should_cancel: Callable[[], bool] | None = None,
 ) -> tuple[dict[str, Any], float, bool]:
@@ -1299,7 +1451,7 @@ def _fetch_json_cached(
             raise _FetchCancelled()
 
     raise_if_cancelled()
-    cache_path = _json_cache_path(namespace, url)
+    cache_path = _json_cache_path(namespace, url, cache_paths)
     if not force:
         cached = _load_json_cache(cache_path)
         if cached is not None:
@@ -1363,26 +1515,18 @@ def _save_json_cache(path: str, data: dict[str, Any], fetched_at: float) -> None
     os.replace(temp_path, path)
 
 
-def _json_cache_path(namespace: str, url: str) -> str:
-    cache_dir = os.path.join(_cache_root(), "jw_media_catalog", namespace)
+def _json_cache_path(
+    namespace: str,
+    url: str,
+    cache_paths: JWMediaCatalogCachePaths,
+) -> str:
+    cache_dir = cache_paths.catalog_dir / namespace
     digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
-    return os.path.join(cache_dir, f"{digest}.json")
+    return os.fspath(cache_dir / f"{digest}.json")
 
 
-def _thumbnail_cache_dir() -> str:
-    return os.path.join(_thumb_root(), "jw_catalog")
-
-
-def _cache_root() -> str:
-    if not _paths.CACHE_DIR:
-        raise RuntimeError("paths.init() must be called before JWMediaCatalogService is used")
-    return _paths.CACHE_DIR
-
-
-def _thumb_root() -> str:
-    if not _paths.THUMB_CACHE_DIR:
-        raise RuntimeError("paths.init() must be called before JWMediaCatalogService is used")
-    return _paths.THUMB_CACHE_DIR
+def _thumbnail_cache_dir(cache_paths: JWMediaCatalogCachePaths) -> Path:
+    return cache_paths.thumbnail_dir
 
 
 def _guess_image_ext(url: str, content_type: str) -> str:

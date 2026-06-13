@@ -34,7 +34,6 @@ from PySide6.QtWidgets import (
     QButtonGroup, QGridLayout,
 )
 
-from ..core.foundation import paths as _paths
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.media.cache import MediaCacheManager
 from ..core.foundation.constants import (
@@ -128,13 +127,14 @@ class _Item:
 
 class _ScanWorker(QObject):
     """
-    Escaneia _paths.MEDIA_CACHE_DIR e extrai títulos via mutagen.
+    Scans the explicit media cache directory and extracts titles via mutagen.
     Não carrega thumbs — isso é feito pelo MediaThumbService na main thread.
     """
     results_ready = Signal(list)   # list[_Item]
 
-    def __init__(self):
+    def __init__(self, media_cache_dir: str | os.PathLike[str]) -> None:
         super().__init__()
+        self._media_cache_dir = os.fspath(media_cache_dir)
         self._cancelled = False
 
     def cancel(self):
@@ -142,16 +142,16 @@ class _ScanWorker(QObject):
 
     def run(self):
         items: list[_Item] = []
-        if not os.path.isdir(_paths.MEDIA_CACHE_DIR):
+        if not os.path.isdir(self._media_cache_dir):
             self.results_ready.emit([])
             return
 
-        for fname in sorted(os.listdir(_paths.MEDIA_CACHE_DIR)):
+        for fname in sorted(os.listdir(self._media_cache_dir)):
             if self._cancelled:
                 break
             if fname.endswith(".done") or fname.endswith(".tmp"):
                 continue
-            fpath = os.path.join(_paths.MEDIA_CACHE_DIR, fname)
+            fpath = os.path.join(self._media_cache_dir, fname)
             if not os.path.isfile(fpath):
                 continue
             if not os.path.isfile(fpath + ".done"):
@@ -417,9 +417,17 @@ class CacheManagerWidget(QWidget):
     """
     play_media_requested = Signal(str, str, str, str)  # path, media_type, original_url, display_title
 
-    def __init__(self, lang: LanguageManager, parent=None):
+    def __init__(
+        self,
+        lang: LanguageManager,
+        cache_manager: MediaCacheManager,
+        thumb_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._lang         = lang
+        self._cache_manager = cache_manager
+        self._thumb_cache_dir = thumb_cache_dir
         self._all_cards:   list[MediaCard] = []
         self._vis_cards:   list[MediaCard] = []
         self._selected:    set[str]        = set()
@@ -427,7 +435,11 @@ class CacheManagerWidget(QWidget):
         self._type_counts: dict[str, int]  = {}
         self._scan_thread: QThread | None  = None
         self._scan_worker: _ScanWorker | None = None
-        self._thumb_service = MediaInfoService(self)
+        self._thumb_service = MediaInfoService(
+            cache_manager.media_cache_dir,
+            thumb_cache_dir,
+            self,
+        )
         self._thumb_service.info_ready.connect(self._on_thumb_ready)
         self._build_ui()
 
@@ -649,7 +661,7 @@ class CacheManagerWidget(QWidget):
         self._size_badge.setVisible(False)
         self._stack.setCurrentIndex(0)
 
-        worker = _ScanWorker()
+        worker = _ScanWorker(self._cache_manager.media_cache_dir)
         thread = QThread(self)
         worker.moveToThread(thread)
         worker.results_ready.connect(self._on_results)
@@ -867,7 +879,7 @@ class CacheManagerWidget(QWidget):
         deleted, failed = [], []
         for path in list(self._selected):
             try:
-                MediaCacheManager.instance().remove_cached_file(path)
+                self._cache_manager.remove_cached_file(path)
                 deleted.append(path)
             except OSError:
                 failed.append(path)

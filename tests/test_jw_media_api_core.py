@@ -106,19 +106,17 @@ def test_parse_clips_osg_selects_best_quality_and_newest_first():
     assert clips[0]["url"] == "https://example.test/newer.mp4"
 
 
-def test_corrupt_cache_is_treated_as_a_cache_miss(tmp_path, monkeypatch):
-    monkeypatch.setattr(media_api._paths, "CACHE_DIR", tmp_path)
-    cache_path = Path(media_api._cache_path("T", False))
+def test_corrupt_cache_is_treated_as_a_cache_miss(tmp_path):
+    cache_path = Path(media_api._cache_path("T", False, tmp_path))
     cache_path.write_text("{invalid", encoding="utf-8")
 
-    assert media_api._is_cache_valid("T", False) is False
-    assert media_api._load_cache("T", False) == (None, "", 0)
-    assert media_api.get_cache_date("T") is None
+    assert media_api._is_cache_valid("T", False, tmp_path) is False
+    assert media_api._load_cache("T", False, tmp_path) == (None, "", 0)
+    assert media_api.get_cache_date("T", cache_dir=tmp_path) is None
 
 
 def test_unexpected_cache_reader_error_is_not_silenced(tmp_path, monkeypatch):
-    monkeypatch.setattr(media_api._paths, "CACHE_DIR", tmp_path)
-    Path(media_api._cache_path("T", False)).write_text("{}", encoding="utf-8")
+    Path(media_api._cache_path("T", False, tmp_path)).write_text("{}", encoding="utf-8")
 
     def fail_unexpectedly(_file):
         raise RuntimeError("programming error")
@@ -126,10 +124,10 @@ def test_unexpected_cache_reader_error_is_not_silenced(tmp_path, monkeypatch):
     monkeypatch.setattr(media_api.json, "load", fail_unexpectedly)
 
     with pytest.raises(RuntimeError, match="programming error"):
-        media_api._load_cache("T", False)
+        media_api._load_cache("T", False, tmp_path)
 
 
-def test_fetch_songs_falls_back_only_for_request_failures(monkeypatch):
+def test_fetch_songs_falls_back_only_for_request_failures(tmp_path, monkeypatch):
     calls: list[str] = []
 
     def fake_get_json(url, *, timeout):
@@ -161,6 +159,7 @@ def test_fetch_songs_falls_back_only_for_request_failures(monkeypatch):
         "X",
         force=True,
         fallback_code="T",
+        cache_dir=tmp_path,
     )
 
     assert [song["number"] for song in songs] == [1]
@@ -169,11 +168,16 @@ def test_fetch_songs_falls_back_only_for_request_failures(monkeypatch):
     assert len(calls) == 2
 
 
-def test_fetch_songs_does_not_hide_unexpected_request_code_errors(monkeypatch):
+def test_fetch_songs_does_not_hide_unexpected_request_code_errors(tmp_path, monkeypatch):
     def fail_unexpectedly(*_args, **_kwargs):
         raise RuntimeError("programming error")
 
     monkeypatch.setattr(media_api, "http_get_json", fail_unexpectedly)
 
     with pytest.raises(RuntimeError, match="programming error"):
-        media_api.fetch_songs("X", force=True, fallback_code="T")
+        media_api.fetch_songs(
+            "X",
+            force=True,
+            fallback_code="T",
+            cache_dir=tmp_path,
+        )

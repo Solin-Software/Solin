@@ -48,6 +48,11 @@ def test_write_jwlplaylist_normalizes_sqlite_failures(monkeypatch, tmp_path):
     monkeypatch.setattr(writer, "_write_jwlplaylist", _fail)
 
     with pytest.raises(writer.PlaylistWriteError) as exc_info:
-        writer.write_jwlplaylist("Playlist", [], tmp_path / "playlist.jwlplaylist")
+        writer.write_jwlplaylist(
+            "Playlist",
+            [],
+            tmp_path / "playlist.jwlplaylist",
+            tmp_path / "media_cache",
+        )
 
     assert isinstance(exc_info.value.__cause__, sqlite3.OperationalError)

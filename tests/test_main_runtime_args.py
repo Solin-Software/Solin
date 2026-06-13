@@ -51,6 +51,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         meeting_trees_file="meeting_trees.json",
     )
     profile_settings = object()
+    media_cache_manager = object()
+    font_manager = object()
+    jw_catalog_cache_paths = object()
+    jw_songs_store = object()
+    jwpub_checksum_store = object()
     profile_manager = object()
 
     class _MainWindow:
@@ -60,6 +65,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_runtime_paths,
             received_profile_paths,
             received_profile_settings,
+            received_media_cache_manager,
+            received_font_manager,
+            received_jw_catalog_cache_paths,
+            received_jw_songs_store,
+            received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
             received_profile_manager,
@@ -68,6 +78,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.profile_settings = received_profile_settings
+            self.media_cache_manager = received_media_cache_manager
+            self.font_manager = received_font_manager
+            self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
+            self.jw_songs_store = received_jw_songs_store
+            self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
             self.profile_manager = received_profile_manager
@@ -102,6 +117,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
+        media_cache_manager=media_cache_manager,
+        font_manager=font_manager,
+        jw_catalog_cache_paths=jw_catalog_cache_paths,
+        jw_songs_store=jw_songs_store,
+        jwpub_checksum_store=jwpub_checksum_store,
         profile_manager=profile_manager,
     )
 
@@ -109,6 +129,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.runtime_paths is runtime_paths
     assert window.profile_paths is profile_paths
     assert window.profile_settings is profile_settings
+    assert window.media_cache_manager is media_cache_manager
+    assert window.font_manager is font_manager
+    assert window.jw_catalog_cache_paths is jw_catalog_cache_paths
+    assert window.jw_songs_store is jw_songs_store
+    assert window.jwpub_checksum_store is jwpub_checksum_store
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
@@ -129,6 +154,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         meeting_trees_file="meeting_trees.json",
     )
     profile_settings = object()
+    media_cache_manager = object()
+    font_manager = object()
+    jw_catalog_cache_paths = object()
+    jw_songs_store = object()
+    jwpub_checksum_store = object()
     profile_manager = object()
 
     class _MainWindow:
@@ -138,6 +168,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_runtime_paths,
             received_profile_paths,
             received_profile_settings,
+            received_media_cache_manager,
+            received_font_manager,
+            received_jw_catalog_cache_paths,
+            received_jw_songs_store,
+            received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
             received_profile_manager,
@@ -146,6 +181,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.profile_settings = received_profile_settings
+            self.media_cache_manager = received_media_cache_manager
+            self.font_manager = received_font_manager
+            self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
+            self.jw_songs_store = received_jw_songs_store
+            self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
             self.profile_manager = received_profile_manager
@@ -177,6 +217,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
+        media_cache_manager=media_cache_manager,
+        font_manager=font_manager,
+        jw_catalog_cache_paths=jw_catalog_cache_paths,
+        jw_songs_store=jw_songs_store,
+        jwpub_checksum_store=jwpub_checksum_store,
         profile_manager=profile_manager,
     )
 

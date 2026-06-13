@@ -15,13 +15,12 @@ class MediaDownloadNotificationController(QObject):
     def __init__(
         self,
         notifications: NotificationCenter,
+        cache_manager: MediaCacheManager,
         parent: QObject | None = None,
-        *,
-        cache_manager: MediaCacheManager | None = None,
     ) -> None:
         super().__init__(parent)
         self._notifications = notifications
-        self._cache_manager = cache_manager or MediaCacheManager.instance()
+        self._cache_manager = cache_manager
         self._started = False
 
     def start(self) -> None:

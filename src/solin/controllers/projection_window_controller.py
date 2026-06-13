@@ -67,7 +67,7 @@ class ProjectionWindowController:
             if not self._media_eligible(screen):
                 continue
             idx += 1
-            win = ProjectionWindow(screen, idx)
+            win = ProjectionWindow(screen, idx, window.font_manager)
             window.projection_windows.append(win)
 
         for win in window.projection_windows:
@@ -204,7 +204,7 @@ class ProjectionWindowController:
                 continue
             if not self._media_eligible(screen):
                 continue
-            win = ProjectionWindow(screen, i + 1)
+            win = ProjectionWindow(screen, i + 1, self._window.font_manager)
             self.apply_full_state_to_window(win)
             window.projection_windows.append(win)
 
@@ -264,6 +264,7 @@ class ProjectionWindowController:
     def create_floating_window(self) -> FloatingPreviewWindow:
         quote, ref, api_code = self._yearly_text()
         win = FloatingPreviewWindow(
+            self._window.font_manager,
             yearly_text_quote=quote,
             yearly_text_ref=ref,
             api_code=api_code,
@@ -340,7 +341,11 @@ class ProjectionWindowController:
                 self._persist_media_owner(screen, active=True)
                 already = any(win.screen() == screen for win in window.projection_windows)
                 if not already:
-                    win = ProjectionWindow(screen, screen_index + 1)
+                    win = ProjectionWindow(
+                        screen,
+                        screen_index + 1,
+                        self._window.font_manager,
+                    )
                     window.projection_windows.append(win)
                     self.apply_full_state_to_window(win)
                     self._set_screen_count(len(window.projection_windows))

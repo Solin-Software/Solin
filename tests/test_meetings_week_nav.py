@@ -10,7 +10,9 @@ def test_meeting_section_icons_stay_embedded_in_python():
 
 def test_meetings_qml_pointer_bridge_remains_wired():
     source = Path("src/solin/widgets/meetings/widget.py").read_text(encoding="utf-8")
-    detail_model_source = Path("src/solin/widgets/meetings/detail_model.py").read_text(
+    controller_source = Path(
+        "src/solin/widgets/meetings/tree_controller.py"
+    ).read_text(
         encoding="utf-8"
     )
 
@@ -22,5 +24,6 @@ def test_meetings_qml_pointer_bridge_remains_wired():
     ) == 2
     assert "begin_qml_pointer_cursor(self.qml_widget)" in source
     assert "end_qml_pointer_cursor(self.qml_widget)" in source
-    assert "parent.begin_qml_pointer_cursor()" in detail_model_source
-    assert "parent.end_qml_pointer_cursor()" in detail_model_source
+    assert "self.pointerEntered.emit()" in controller_source
+    assert "self.pointerExited.emit()" in controller_source
+    assert not Path("src/solin/widgets/meetings/detail_model.py").exists()

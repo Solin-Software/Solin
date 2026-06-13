@@ -10,10 +10,9 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 import os
+from pathlib import Path
 import time
 from PySide6.QtCore import QObject, Signal, Slot
-
-from solin.core.foundation import paths as _paths
 
 MAX_CONCURRENT_PREFETCHES = 3
 PREFETCH_RETRY_LIMIT = 1
@@ -27,24 +26,23 @@ def _url_to_filename(url: str) -> str:
     return url.split("/")[-1].split("?")[0]
 
 
-def cached_path_for(url: str) -> str:
+def cached_path_for(url: str, media_cache_dir: str | os.PathLike[str]) -> str:
     """Retorna o caminho local esperado para a URL (arquivo pode não existir)."""
-    os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
-    return os.path.join(_paths.MEDIA_CACHE_DIR, _url_to_filename(url))
+    cache_dir = os.fspath(media_cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, _url_to_filename(url))
 
 
-def is_url_cached(url: str) -> bool:
+def is_url_cached(url: str, media_cache_dir: str | os.PathLike[str]) -> bool:
     """True se o arquivo local existe E o marcador .done está presente."""
     if not url or not url.startswith("http"):
         return False
     try:
-        path = cached_path_for(url)
+        path = cached_path_for(url, media_cache_dir)
         return os.path.isfile(path) and os.path.isfile(path + ".done")
     except (OSError, ValueError):
         return False
 
-
-# ── Singleton ─────────────────────────────────────────────────────────────────
 
 @dataclass
 class _QueuedPrefetch:
@@ -76,11 +74,9 @@ class _BatchState:
 
 
 class MediaCacheManager(QObject):
-    """
-    Singleton Qt-thread-safe.
-    Deve ser criado (ou acessado via instance()) na thread principal.
-    """
+    """Owns the application media-cache queue on the Qt main thread."""
 
+    _notify_cached_requested = Signal(str)
     # url que agora está em cache (por prefetch ou notificação do player)
     cache_changed      = Signal(str)
     # caminho local removido do cache (arquivo principal; .done também é removido)
@@ -98,10 +94,13 @@ class MediaCacheManager(QObject):
     # erro de lote emitido uma vez quando o restante e abortado
     prefetch_batch_error = Signal(str, str)
 
-    _instance: "MediaCacheManager | None" = None
-
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        media_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self.media_cache_dir = Path(media_cache_dir)
         self.max_concurrent_prefetches = MAX_CONCURRENT_PREFETCHES
         self._queue: deque[_QueuedPrefetch] = deque()
         self._queued: dict[str, _QueuedPrefetch] = {}
@@ -110,21 +109,12 @@ class MediaCacheManager(QObject):
         self._downloader_factory = None
         self._batch_signal_suppressed = 0
         self._dirty_batches: set[str] = set()
-
-    # ── Acesso ao singleton ───────────────────────────────────────────────
-
-    @classmethod
-    def instance(cls) -> "MediaCacheManager":
-        """Retorna (criando se necessário) o singleton global."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        self._notify_cached_requested.connect(self.notify_cached)
 
     # ── API pública ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def is_cached(url: str) -> bool:
-        return is_url_cached(url)
+    def is_cached(self, url: str) -> bool:
+        return is_url_cached(url, self.media_cache_dir)
 
     @staticmethod
     def is_remote(url: str) -> bool:
@@ -284,6 +274,10 @@ class MediaCacheManager(QObject):
             self.cache_changed.emit(url)
         self._pump_queue()
 
+    def notify_cached_threadsafe(self, url: str) -> None:
+        """Queue a cache notification onto the manager's owning Qt thread."""
+        self._notify_cached_requested.emit(url)
+
     def remove_cached_file(self, path: str) -> bool:
         """
         Remove um arquivo do cache e seu marcador .done, emitindo cache_removed.
@@ -317,7 +311,7 @@ class MediaCacheManager(QObject):
         from .downloader import SongDownloader
         from PySide6.QtCore import QCoreApplication
 
-        dl = SongDownloader(self)
+        dl = SongDownloader(self.media_cache_dir, self)
         dl.moveToThread(QCoreApplication.instance().thread())
         return dl
 

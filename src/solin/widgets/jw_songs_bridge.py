@@ -156,9 +156,13 @@ class JWSongsBridge(QObject):
     modalShouldClose = Signal()
     jwMediaConfirmed = Signal(dict, str, int)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        store: JWSongsStore,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
-        self._store = JWSongsStore.instance()
+        self._store = store
         self._store.songs_ready.connect(self._on_songs_ready)
         self._store.songs_failed.connect(self._on_songs_failed)
         self._store.loading_changed.connect(self._on_loading_changed)

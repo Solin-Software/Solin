@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import unittest
+import tempfile
+from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication
 
+from solin.core.jw.catalog import JWMediaCatalogCachePaths
 from solin.widgets.jw_media_catalog_bridge import (
     JWMediaCatalogBridge,
     JWMediaCatalogModel,
@@ -99,12 +102,21 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
     def setUpClass(cls):
         cls._app = QCoreApplication.instance() or QCoreApplication([])
 
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.cache_paths = JWMediaCatalogCachePaths(
+            root / "cache",
+            root / "thumbs",
+        )
+
     def tearDown(self):
         if hasattr(self, "bridge"):
             self.bridge.cleanup()
+        self._tmp.cleanup()
 
     def test_first_progress_applies_immediately(self):
-        self.bridge = JWMediaCatalogBridge()
+        self.bridge = JWMediaCatalogBridge(self.cache_paths)
         self.bridge._active_catalog_request_id = "request"
 
         self.bridge._on_videos_progress("request", [item("a")], 1, 5)
@@ -113,7 +125,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.assertEqual([entry["id"] for entry in self.bridge._all_items], ["id-a"])
 
     def test_progress_is_coalesced_when_page_is_already_visible(self):
-        self.bridge = JWMediaCatalogBridge()
+        self.bridge = JWMediaCatalogBridge(self.cache_paths)
         self.bridge._active_catalog_request_id = "request"
         self.bridge._model.set_items([item("visible")])
 

@@ -49,7 +49,7 @@ from solin.core.jw.publication_links import (
 
 # ── Reutiliza constantes e helpers de publications.py ─────────────────────────
 from .publications import (
-    JwpubCache, get_checksum_store,
+    JwpubCache, JwpubChecksumStore,
     MeetingMedia,
 )
 
@@ -427,10 +427,15 @@ class _MemorialWorker(QObject):
     progress       = Signal(int)      # 0-100
     error          = Signal(str)      # mensagem
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        jwpub_cache_dir: str | Path,
+        checksum_store: JwpubChecksumStore,
+        parent=None,
+    ):
         super().__init__(parent)
-        self._cache           = JwpubCache()
-        self._checksum_store  = get_checksum_store()   # process-wide singleton
+        self._cache           = JwpubCache(jwpub_cache_dir)
+        self._checksum_store  = checksum_store
         self._lang            = "T"
 
     @Slot(str)
@@ -615,15 +620,21 @@ class MemorialService(QObject):
     _sig_load     = Signal(int)
     _sig_set_lang = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        jwpub_cache_dir: str | Path,
+        checksum_store: JwpubChecksumStore,
+        parent=None,
+    ):
         super().__init__(parent)
         self._lang   = "T"
         self._year   = date.today().year
         self._data:  Optional[MemorialData] = None
 
         self._thread = QThread(self)
-        self._worker = _MemorialWorker()
+        self._worker = _MemorialWorker(jwpub_cache_dir, checksum_store)
         self._worker.moveToThread(self._thread)
+        self._thread.finished.connect(self._worker.deleteLater)
 
         self._worker.memorial_done.connect(self._on_done)
         self._worker.progress.connect(self.memorial_progress)

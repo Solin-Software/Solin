@@ -129,15 +129,20 @@ class OpenMediaController:
         from ..core.rendering.pdf import PdfConvertThread, cached_pages
 
         pdf_stem = os.path.splitext(os.path.basename(pdf_path))[0]
+        runtime_paths = self._window.runtime_paths
 
-        pages = cached_pages(pdf_path)
+        pages = cached_pages(pdf_path, runtime_paths.pdf_pages_dir)
         if pages:
             self.on_pdf_ready(pages, pdf_stem)
             return
 
         self._window._navigation.switch_page(7)
 
-        thread = PdfConvertThread(pdf_path, parent=self._window)
+        thread = PdfConvertThread(
+            pdf_path,
+            runtime_paths.pdf_pages_dir,
+            parent=self._window,
+        )
         if not hasattr(self._window, "_pdf_argv_threads"):
             self._window._pdf_argv_threads = []
         self._window._pdf_argv_threads.append(thread)
@@ -252,15 +257,26 @@ class OpenMediaController:
         from ..core.rendering.libreoffice import LoConvertThread, cached_pages
 
         lo_stem = os.path.splitext(os.path.basename(lo_path))[0]
+        runtime_paths = self._window.runtime_paths
 
-        pages = cached_pages(lo_path)
+        pages = cached_pages(
+            lo_path,
+            pptx_pages_dir=runtime_paths.pptx_pages_dir,
+            docx_pages_dir=runtime_paths.docx_pages_dir,
+        )
         if pages:
             self.on_lo_ready(pages, lo_stem)
             return
 
         self._window._navigation.switch_page(7)
 
-        thread = LoConvertThread(lo_path, parent=self._window)
+        thread = LoConvertThread(
+            lo_path,
+            pptx_pages_dir=runtime_paths.pptx_pages_dir,
+            docx_pages_dir=runtime_paths.docx_pages_dir,
+            pdf_pages_dir=runtime_paths.pdf_pages_dir,
+            parent=self._window,
+        )
         if not hasattr(self._window, "_lo_argv_threads"):
             self._window._lo_argv_threads = []
         self._window._lo_argv_threads.append(thread)

@@ -11,7 +11,12 @@ from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 
 if TYPE_CHECKING:
+    from solin.core.jw.catalog import JWMediaCatalogCachePaths
+    from solin.core.jw.songs import JWSongsStore
+    from solin.core.media.cache import MediaCacheManager
+    from solin.core.meetings.publications import JwpubChecksumStore
     from solin.core.profiles.manager import ProfileManager
+    from solin.core.rendering.fonts import FontManager
 
 log = logging.getLogger(__name__)
 
@@ -22,18 +27,26 @@ class ApplicationContainer:
     config: AppConfig
     runtime_paths: RuntimePaths
     global_settings: GlobalSettingsStore
+    media_cache_manager: MediaCacheManager
+    font_manager: FontManager
+    jw_catalog_cache_paths: JWMediaCatalogCachePaths
+    jw_songs_store: JWSongsStore
+    jwpub_checksum_store: JwpubChecksumStore
     profile_manager: ProfileManager
     lifecycle: ApplicationLifecycle
     window_ref: list[Any | None] = field(default_factory=lambda: [None])
 
 
 def initialize_application_container(app, config: AppConfig) -> ApplicationContainer:
-    from solin.core.foundation import paths as legacy_paths
     from solin.core.foundation.logging_config import configure_logging
+    from solin.core.jw.catalog import JWMediaCatalogCachePaths
+    from solin.core.jw.songs import JWSongsStore
+    from solin.core.media.cache import MediaCacheManager
+    from solin.core.meetings.publications import JwpubChecksumStore
     from solin.core.profiles.manager import ProfileManager
+    from solin.core.rendering.fonts import FontManager
 
-    legacy_paths.init()
-    runtime_paths = RuntimePaths.from_legacy_globals()
+    runtime_paths = RuntimePaths.from_standard_locations()
     runtime_paths.ensure_dirs()
 
     configure_logging(os.fspath(runtime_paths.log_dir))
@@ -44,15 +57,33 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         cache_dir=os.fspath(runtime_paths.cache_dir),
     )
     global_settings = GlobalSettingsStore.create()
+    media_cache_manager = MediaCacheManager(runtime_paths.media_cache_dir)
+    font_manager = FontManager(runtime_paths.cache_dir)
+    jw_catalog_cache_paths = JWMediaCatalogCachePaths(
+        runtime_paths.cache_dir,
+        runtime_paths.thumb_cache_dir,
+    )
+    jw_songs_store = JWSongsStore(runtime_paths.cache_dir)
+    jwpub_checksum_store = JwpubChecksumStore(
+        runtime_paths.jwpub_cache_dir / "checksums.json"
+    )
 
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()
+    lifecycle.register_cleanup(media_cache_manager.cancel_all)
+    lifecycle.register_cleanup(font_manager.shutdown)
+    lifecycle.register_cleanup(jw_songs_store.shutdown)
 
     return ApplicationContainer(
         app=app,
         config=config,
         runtime_paths=runtime_paths,
         global_settings=global_settings,
+        media_cache_manager=media_cache_manager,
+        font_manager=font_manager,
+        jw_catalog_cache_paths=jw_catalog_cache_paths,
+        jw_songs_store=jw_songs_store,
+        jwpub_checksum_store=jwpub_checksum_store,
         profile_manager=profile_manager,
         lifecycle=lifecycle,
     )

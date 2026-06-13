@@ -181,6 +181,8 @@ class MainWindowUiController:
             window.media_ctrl,
             prefs=window.profile_prefs,
             profile_paths=window.profile_paths,
+            media_cache_dir=window.media_cache_manager.media_cache_dir,
+            thumb_cache_dir=window.runtime_paths.thumb_cache_dir,
             lang_manager=window.lang,
             container=window.right_col,
         )
@@ -197,7 +199,14 @@ class MainWindowUiController:
 
     def _build_pages(self) -> None:
         window = self._window
-        window.songs_widget = SongsWidget(window.lang, window.media_ctrl, parent=window)
+        window.songs_widget = SongsWidget(
+            window.lang,
+            window.media_cache_manager,
+            window.jw_songs_store,
+            window.runtime_paths.cache_dir,
+            window.media_ctrl,
+            parent=window,
+        )
         window.settings_widget = SettingsWidget(
             window.lang,
             window.screen_mgr,
@@ -210,7 +219,13 @@ class MainWindowUiController:
             parent=window,
         )
         window.timer_widget = TimerWidget(window.lang, parent=window)
-        window.clips_widget = ClipsWidget(window.lang, window.media_ctrl, parent=window)
+        window.clips_widget = ClipsWidget(
+            window.lang,
+            window.media_cache_manager,
+            window.runtime_paths.cache_dir,
+            window.media_ctrl,
+            parent=window,
+        )
         window.sermon_theme_widget = SermonThemeWidget(window.lang, parent=window)
         watched_folder = window.settings_widget.get_watched_folder()
         window.playlist_widget = PlaylistWidget(
@@ -219,13 +234,23 @@ class MainWindowUiController:
             watched_folder=watched_folder,
             notifications=window.notifications,
             profile_paths=window.profile_paths,
+            runtime_paths=window.runtime_paths,
             storage_paths=window.playlist_storage_paths,
+            media_cache_manager=window.media_cache_manager,
+            jw_catalog_cache_paths=window.jw_catalog_cache_paths,
+            jw_songs_store=window.jw_songs_store,
+            thumb_cache_dir=window.runtime_paths.thumb_cache_dir,
             parent=window,
         )
         window.meetings_widget = MeetingsWidget(
             window.lang,
             meeting_tree_store=window.meeting_tree_store,
             profile_paths=window.profile_paths,
+            runtime_paths=window.runtime_paths,
+            cache_manager=window.media_cache_manager,
+            jw_catalog_cache_paths=window.jw_catalog_cache_paths,
+            jw_songs_store=window.jw_songs_store,
+            jwpub_checksum_store=window.jwpub_checksum_store,
             prefs=window.profile_prefs,
             parent=window,
         )
@@ -337,12 +362,21 @@ class MainWindowUiController:
 
     def _flush_orphaned_media_files(self) -> None:
         storage_paths = self._window.playlist_storage_paths
+        runtime_paths = self._window.runtime_paths
         flush_pending_deletions(storage_paths)
         meeting_tree_store = self._window.meeting_tree_store
         profile_paths = self._window.profile_paths
         flush_images_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_thumbs_dir(storage_paths)
-        flush_meeting_thumbs_dir(store=meeting_tree_store)
+        flush_thumbs_dir(storage_paths, runtime_paths.thumb_cache_dir)
+        flush_meeting_thumbs_dir(
+            store=meeting_tree_store,
+            thumb_dir=runtime_paths.meeting_thumb_cache_dir,
+        )
         flush_embedded_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_pdf_pages(storage_paths, meeting_tree_store)
-        flush_pptx_pages(storage_paths, meeting_tree_store)
+        flush_pdf_pages(storage_paths, meeting_tree_store, runtime_paths.pdf_pages_dir)
+        flush_pptx_pages(
+            storage_paths,
+            meeting_tree_store,
+            runtime_paths.pptx_pages_dir,
+            runtime_paths.docx_pages_dir,
+        )

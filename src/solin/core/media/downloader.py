@@ -24,7 +24,6 @@ import requests
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import TEMP_STREAM_PREFIX
 
 PROGRESS_EMIT_MIN_INTERVAL_SECONDS = 0.20
@@ -33,10 +32,11 @@ PROGRESS_EMIT_MIN_BYTES = 512 * 1024
 log = logging.getLogger(__name__)
 
 
-def _url_to_path(url: str) -> str:
-    os.makedirs(_paths.MEDIA_CACHE_DIR, exist_ok=True)
+def _url_to_path(url: str, media_cache_dir: str | os.PathLike[str]) -> str:
+    cache_dir = os.fspath(media_cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
     filename = url.split("/")[-1].split("?")[0]
-    return os.path.join(_paths.MEDIA_CACHE_DIR, filename)
+    return os.path.join(cache_dir, filename)
 
 
 def _make_temp_path(url: str) -> str:
@@ -108,8 +108,13 @@ class SongDownloader(QObject):
     _worker_finished = Signal(int, str, bool)
     _worker_error = Signal(int, str)
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        media_cache_dir: str | os.PathLike[str],
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self._media_cache_dir = os.fspath(media_cache_dir)
         self._lock = threading.Lock()
         self._next_job_id = 0
         self._job: _DownloadJob | None = None
@@ -124,7 +129,7 @@ class SongDownloader(QObject):
 
     def get_cached_path(self, url: str):
         """Retorna caminho local se arquivo persistente ja existe."""
-        path = _url_to_path(url)
+        path = _url_to_path(url, self._media_cache_dir)
         if os.path.exists(path) and os.path.exists(path + ".done"):
             return path
         return None
@@ -192,7 +197,7 @@ class SongDownloader(QObject):
         url = job.url
         persist = job.persist
         if persist:
-            final_path = _url_to_path(url)
+            final_path = _url_to_path(url, self._media_cache_dir)
             if os.path.exists(final_path) and os.path.exists(final_path + ".done"):
                 size = os.path.getsize(final_path)
                 try:
@@ -365,7 +370,9 @@ def cleanup_orphan_temps() -> int:
     return removed
 
 
-def cleanup_incomplete_cache() -> int:
+def cleanup_incomplete_cache(
+    media_cache_dir: str | os.PathLike[str],
+) -> int:
     """
     Varre MEDIA_CACHE_DIR em busca de arquivos de mídia sem marcador .done —
     resíduos de downloads interrompidos (crash, kill, queda de energia).
@@ -377,13 +384,14 @@ def cleanup_incomplete_cache() -> int:
 
     Retorna o número de arquivos removidos.
     """
-    if not os.path.isdir(_paths.MEDIA_CACHE_DIR):
+    cache_dir = os.fspath(media_cache_dir)
+    if not os.path.isdir(cache_dir):
         return 0
 
     removed = 0
 
     try:
-        entries = os.listdir(_paths.MEDIA_CACHE_DIR)
+        entries = os.listdir(cache_dir)
     except OSError:
         return 0
 
@@ -392,7 +400,7 @@ def cleanup_incomplete_cache() -> int:
         if name.endswith(".done"):
             continue
 
-        path = os.path.join(_paths.MEDIA_CACHE_DIR, name)
+        path = os.path.join(cache_dir, name)
         if not os.path.isfile(path):
             continue
 

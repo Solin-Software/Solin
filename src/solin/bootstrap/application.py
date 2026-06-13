@@ -38,6 +38,11 @@ def _launch_main_window(
     runtime_paths,
     profile_paths,
     profile_settings,
+    media_cache_manager,
+    font_manager,
+    jw_catalog_cache_paths,
+    jw_songs_store,
+    jwpub_checksum_store,
     profile_manager,
 ):
     """
@@ -59,6 +64,11 @@ def _launch_main_window(
         runtime_paths,
         profile_paths,
         profile_settings,
+        media_cache_manager,
+        font_manager,
+        jw_catalog_cache_paths,
+        jw_songs_store,
+        jwpub_checksum_store,
         playlist_storage_paths,
         meeting_tree_store,
         profile_manager,
@@ -145,7 +155,7 @@ def main():
 
     from solin.core.media.downloader import cleanup_orphan_temps, cleanup_incomplete_cache
     cleanup_orphan_temps()
-    cleanup_incomplete_cache()
+    cleanup_incomplete_cache(container.runtime_paths.media_cache_dir)
 
     # ── Decisão: perfil direto ou tela de seleção ─────────────────────────────
     #
@@ -180,6 +190,11 @@ def main():
                 container.runtime_paths,
                 _pm.paths_for(),
                 _pm.settings_for(),
+                container.media_cache_manager,
+                container.font_manager,
+                container.jw_catalog_cache_paths,
+                container.jw_songs_store,
+                container.jwpub_checksum_store,
                 _pm,
             )
             _main_window_ref[0] = window
@@ -203,6 +218,11 @@ def main():
             container.runtime_paths,
             _pm.paths_for(),
             profile_settings,
+            container.media_cache_manager,
+            container.font_manager,
+            container.jw_catalog_cache_paths,
+            container.jw_songs_store,
+            container.jwpub_checksum_store,
             _pm,
         )
         _main_window_ref[0] = window
@@ -223,6 +243,11 @@ def main():
             container.runtime_paths,
             _pm.paths_for(),
             profile_settings,
+            container.media_cache_manager,
+            container.font_manager,
+            container.jw_catalog_cache_paths,
+            container.jw_songs_store,
+            container.jwpub_checksum_store,
             _pm,
         )
         _main_window_ref[0] = window
@@ -256,6 +281,11 @@ def main():
                 container.runtime_paths,
                 _pm.paths_for(),
                 _pm.settings_for(),
+                container.media_cache_manager,
+                container.font_manager,
+                container.jw_catalog_cache_paths,
+                container.jw_songs_store,
+                container.jwpub_checksum_store,
                 _pm,
             )
             _main_window_ref[0] = window

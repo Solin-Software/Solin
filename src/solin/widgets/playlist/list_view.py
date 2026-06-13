@@ -28,6 +28,7 @@ from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.playlists.cleanup import cleanup_playlist_files
+from ...core.media.cache import MediaCacheManager
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, new_playlist_item
@@ -65,6 +66,8 @@ class _PlaylistListView(QWidget):
         *,
         profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
+        media_cache_manager: MediaCacheManager,
+        thumb_cache_dir: str | os.PathLike[str],
         parent=None,
     ):
         super().__init__(parent)
@@ -74,6 +77,8 @@ class _PlaylistListView(QWidget):
         self._watched_folder = watched_folder
         self._profile_paths = profile_paths
         self._storage_paths = storage_paths
+        self._media_cache_manager = media_cache_manager
+        self._thumb_cache_dir = thumb_cache_dir
         self._pl_cards: list[_PlaylistCard] = []
         self._wf_cards: list[_WatchedFolderCard] = []
         self._build_ui()
@@ -339,7 +344,12 @@ class _PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        cleanup_playlist_files(pl, self._storage_paths, self._profile_paths)
+        cleanup_playlist_files(
+            pl,
+            self._storage_paths,
+            self._profile_paths,
+            self._thumb_cache_dir,
+        )
         self._playlists.remove(pl)
         save_playlists(self._playlists, self._storage_paths)
         self._rebuild_app_cards()
@@ -360,12 +370,17 @@ class _PlaylistListView(QWidget):
         if not path:
             return
         try:
-            items = _enrich_items_for_export(pl.get("items", []), {})
+            items = _enrich_items_for_export(
+                pl.get("items", []),
+                {},
+                self._thumb_cache_dir,
+            )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(
                 pl["name"],
                 items,
                 path,
+                self._media_cache_manager.media_cache_dir,
                 fallback_lang_code=fallback_lang,
             )
             QMessageBox.information(
@@ -497,12 +512,17 @@ class _PlaylistListView(QWidget):
         if not path:
             return
         try:
-            enriched = _enrich_items_for_export(items, {})
+            enriched = _enrich_items_for_export(
+                items,
+                {},
+                self._thumb_cache_dir,
+            )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(
                 name,
                 enriched,
                 path,
+                self._media_cache_manager.media_cache_dir,
                 fallback_lang_code=fallback_lang,
             )
             QMessageBox.information(

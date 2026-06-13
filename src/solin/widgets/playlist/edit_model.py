@@ -5,6 +5,7 @@ This module owns the flat/tree model used by PlaylistEditView.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
@@ -32,10 +33,16 @@ from .edit_visuals import (
 _MARKER_POSITION_FALLBACK = 1_000_000_000
 
 
-def _playlist_thumb_exists(item_id: str) -> bool:
+def _playlist_thumb_exists(
+    item_id: str,
+    thumb_cache_dir: str | Path,
+) -> bool:
     try:
-        return playlist_thumb_path(item_id).exists()
-    except RuntimeError:
+        return playlist_thumb_path(
+            item_id,
+            thumb_cache_dir=thumb_cache_dir,
+        ).exists()
+    except OSError:
         return False
 
 
@@ -155,8 +162,15 @@ class PlaylistEditModel(QAbstractListModel):
 
     orderSynced = Signal()  # emitted after finalizeDrag to trigger save
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        cache_manager: MediaCacheManager,
+        thumb_cache_dir: str | Path,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
+        self._cache_manager = cache_manager
+        self._thumb_cache_dir = Path(thumb_cache_dir)
         self._entries: list[dict] = []
         self._pl: Optional[dict] = None
         self._thumb_versions: dict[str, int] = {}
@@ -354,7 +368,7 @@ class PlaylistEditModel(QAbstractListModel):
     def _media_node(self, item: dict) -> dict:
         url = item.get("url", "")
         is_remote = MediaCacheManager.is_remote(url)
-        cm = MediaCacheManager.instance()
+        cm = self._cache_manager
         cached = cm.is_cached(url) if is_remote else True
         prefetching = cm.is_prefetching(url) if is_remote else False
         media_type = item.get("type", "video")
@@ -395,7 +409,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def _thumb_source_for(self, item_id: str) -> str:
         version = self._thumb_versions.get(item_id, 0)
-        if version > 0 or _playlist_thumb_exists(item_id):
+        if version > 0 or _playlist_thumb_exists(item_id, self._thumb_cache_dir):
             return f"image://playlistthumbs/{item_id}/{version}"
         return ""
 
@@ -897,7 +911,7 @@ class PlaylistEditModel(QAbstractListModel):
         # Cloud state
         url = item.get("url", "")
         is_remote = MediaCacheManager.is_remote(url)
-        cm = MediaCacheManager.instance()
+        cm = self._cache_manager
         cached = cm.is_cached(url) if is_remote else True
         prefetching = cm.is_prefetching(url) if is_remote else False
         cloud_visible = is_remote and not cached
@@ -1475,7 +1489,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def update_cloud_state(self, url: str) -> None:
         """Refresh cloud download state for all items with this URL."""
-        cm = MediaCacheManager.instance()
+        cm = self._cache_manager
         is_remote = MediaCacheManager.is_remote(url)
         cached = cm.is_cached(url) if is_remote else True
         prefetching = cm.is_prefetching(url) if is_remote else False
