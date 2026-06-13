@@ -10,7 +10,6 @@ import logging
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from solin.core.profiles.manager import ProfileManager
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
@@ -24,20 +23,13 @@ class MeetingTreeStore:
 
     def __init__(
         self,
-        profile_id: str = "",
-        *,
-        profile_manager: ProfileManager | None = None,
-        path: str | Path | None = None,
+        path: str | Path,
     ) -> None:
-        self._pm = profile_manager or ProfileManager()
-        self._profile_id = profile_id
-        self._path = Path(path) if path is not None else None
+        self._path = Path(path)
 
     @property
     def path(self) -> Path:
-        if self._path is not None:
-            return self._path
-        return self._pm.paths_for(self._profile_id).meeting_trees_file
+        return self._path
 
     def _empty(self) -> dict[str, Any]:
         return {"version": 1, "trees": {}}
@@ -154,9 +146,8 @@ def _stored_file_name(value: str) -> str:
 
 
 def flush_meeting_thumbs_dir(
-    profile_id: str = "",
     *,
-    store: MeetingTreeStore | None = None,
+    store: MeetingTreeStore,
     thumb_dir: str | Path | None = None,
 ) -> None:
     """
@@ -170,7 +161,7 @@ def flush_meeting_thumbs_dir(
         return
 
     referenced: set[str] = set()
-    data = (store or MeetingTreeStore(profile_id)).load_all()
+    data = store.load_all()
     for record in data.get("trees", {}).values():
         if not isinstance(record, dict):
             continue

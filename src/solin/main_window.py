@@ -41,6 +41,7 @@ from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.profiles import settings as _ps
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.playlists.storage import PlaylistStoragePaths
+from .core.meetings.tree_store import MeetingTreeStore
 from .core.profiles.manager import get as _get_pm
 from .core.foundation.constants import (
     AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
@@ -58,12 +59,14 @@ class MainWindow(QMainWindow):
         runtime_paths: RuntimePaths,
         profile_paths: ProfilePaths,
         playlist_storage_paths: PlaylistStoragePaths,
+        meeting_tree_store: MeetingTreeStore,
     ):
         super().__init__()
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
         self.playlist_storage_paths = playlist_storage_paths
+        self.meeting_tree_store = meeting_tree_store
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(self)
         self._auto_keys = AutoKeyDispatcher(self)

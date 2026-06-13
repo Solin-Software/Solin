@@ -218,7 +218,11 @@ class MainWindowUiController:
             storage_paths=window.playlist_storage_paths,
             parent=window,
         )
-        window.meetings_widget = MeetingsWidget(window.lang, parent=window)
+        window.meetings_widget = MeetingsWidget(
+            window.lang,
+            meeting_tree_store=window.meeting_tree_store,
+            parent=window,
+        )
         window.meetings_widget.set_watched_folder(watched_folder)
 
         self._flush_orphaned_media_files()
@@ -327,9 +331,10 @@ class MainWindowUiController:
     def _flush_orphaned_media_files(self) -> None:
         storage_paths = self._window.playlist_storage_paths
         flush_pending_deletions(storage_paths)
-        flush_images_dir(storage_paths)
+        meeting_tree_store = self._window.meeting_tree_store
+        flush_images_dir(storage_paths, meeting_tree_store)
         flush_thumbs_dir(storage_paths)
-        flush_meeting_thumbs_dir()
-        flush_embedded_dir(storage_paths)
-        flush_pdf_pages(storage_paths)
-        flush_pptx_pages(storage_paths)
+        flush_meeting_thumbs_dir(store=meeting_tree_store)
+        flush_embedded_dir(storage_paths, meeting_tree_store)
+        flush_pdf_pages(storage_paths, meeting_tree_store)
+        flush_pptx_pages(storage_paths, meeting_tree_store)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from typing import TYPE_CHECKING
 
 from solin.core.foundation import paths as _paths
 from solin.core.foundation.exception_logging import log_ignored_exception
@@ -13,6 +14,9 @@ from solin.core.playlists.storage import (
     save_pending_deletions,
 )
 from solin.core.playlists.thumbnails import playlist_thumb_path
+
+if TYPE_CHECKING:
+    from solin.core.meetings.tree_store import MeetingTreeStore
 
 
 def try_remove_file(
@@ -52,12 +56,15 @@ def flush_pending_deletions(storage_paths: PlaylistStoragePaths) -> None:
     save_pending_deletions(still_pending, storage_paths)
 
 
-def flush_images_dir(storage_paths: PlaylistStoragePaths) -> None:
+def flush_images_dir(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+) -> None:
     if not os.path.isdir(_paths.IMAGES_DIR):
         return
 
     referenced = _referenced_playlist_urls(storage_paths, normalize=True)
-    referenced.update(_meeting_tree_referenced_urls())
+    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
 
     for fname in os.listdir(_paths.IMAGES_DIR):
         fpath = os.path.join(_paths.IMAGES_DIR, fname)
@@ -93,30 +100,39 @@ def flush_thumbs_dir(storage_paths: PlaylistStoragePaths) -> None:
                 pass
 
 
-def flush_pdf_pages(storage_paths: PlaylistStoragePaths) -> None:
+def flush_pdf_pages(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+) -> None:
     from solin.core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
 
     referenced = _referenced_playlist_urls(storage_paths)
-    referenced.update(_meeting_tree_referenced_urls())
+    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
     _flush_pdf(referenced)
 
 
-def flush_pptx_pages(storage_paths: PlaylistStoragePaths) -> None:
+def flush_pptx_pages(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+) -> None:
     from solin.core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
     from solin.core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
 
     referenced = _referenced_playlist_urls(storage_paths)
-    referenced.update(_meeting_tree_referenced_urls())
+    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
     _flush_pptx(referenced)
     _flush_docx(referenced)
 
 
-def flush_embedded_dir(storage_paths: PlaylistStoragePaths) -> None:
+def flush_embedded_dir(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+) -> None:
     if not os.path.isdir(_paths.EMBEDDED_DIR):
         return
 
     referenced = _referenced_playlist_urls(storage_paths, normalize=True)
-    referenced.update(_meeting_tree_referenced_urls())
+    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
 
     for fname in os.listdir(_paths.EMBEDDED_DIR):
         fpath = os.path.join(_paths.EMBEDDED_DIR, fname)
@@ -203,13 +219,14 @@ def _referenced_playlist_urls(
     return referenced
 
 
-def _meeting_tree_referenced_urls() -> set[str]:
+def _meeting_tree_referenced_urls(
+    meeting_tree_store: MeetingTreeStore,
+) -> set[str]:
     referenced: set[str] = set()
     try:
-        from solin.core.meetings.tree_store import MeetingTreeStore
         from solin.core.meetings.tree_types import iter_nodes
 
-        data = MeetingTreeStore().load_all()
+        data = meeting_tree_store.load_all()
         for record in data.get("trees", {}).values():
             if not isinstance(record, dict):
                 continue

@@ -47,7 +47,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace(pending_del_file="pending.json")
-    profile_paths = SimpleNamespace(playlists_file="playlists.json")
+    profile_paths = SimpleNamespace(
+        playlists_file="playlists.json",
+        meeting_trees_file="meeting_trees.json",
+    )
 
     class _MainWindow:
         def __init__(
@@ -56,11 +59,13 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_runtime_paths,
             received_profile_paths,
             playlist_storage_paths,
+            meeting_tree_store,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.playlist_storage_paths = playlist_storage_paths
+            self.meeting_tree_store = meeting_tree_store
 
         def show(self):
             events.append("show")
@@ -98,6 +103,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.profile_paths is profile_paths
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
+    assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
     assert events == [
         "show",
         ("titlebar", window, "#1A231F"),
@@ -109,7 +115,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
 def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):
     events = []
     runtime_paths = SimpleNamespace(pending_del_file="pending.json")
-    profile_paths = SimpleNamespace(playlists_file="playlists.json")
+    profile_paths = SimpleNamespace(
+        playlists_file="playlists.json",
+        meeting_trees_file="meeting_trees.json",
+    )
 
     class _MainWindow:
         def __init__(
@@ -118,11 +127,13 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_runtime_paths,
             received_profile_paths,
             playlist_storage_paths,
+            meeting_tree_store,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.playlist_storage_paths = playlist_storage_paths
+            self.meeting_tree_store = meeting_tree_store
 
         def show(self):
             events.append("show")

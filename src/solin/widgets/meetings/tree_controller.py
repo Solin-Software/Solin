@@ -148,6 +148,7 @@ class MeetingTreeController(QObject):
         *,
         meeting_type: str,
         language_code: str,
+        store: MeetingTreeStore,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -156,7 +157,7 @@ class MeetingTreeController(QObject):
         self._meeting_type = meeting_type
         self._language_code = language_code or "E"
         self._fallback_language_code = fallback_language_code or self._language_code
-        self._store = MeetingTreeStore()
+        self._store = store
         self._builder = MeetingTreeBuilder()
         self._sync_service = MeetingLinkedFolderSync()
         self._nodes: list[Node] = []

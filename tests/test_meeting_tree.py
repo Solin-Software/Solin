@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import copy
+import hashlib
+import inspect
+import sqlite3
 import tempfile
 import unittest
 import zipfile
-import hashlib
-import sqlite3
-import copy
 from datetime import date
 from pathlib import Path
 
+import solin.core.meetings.tree_store as tree_store_module
 from solin.core.meetings.publications import (
     MeetingMedia,
     MeetingPublicationRef,
@@ -23,7 +25,6 @@ from solin.core.meetings.publications import (
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
-from solin.core.profiles.manager import ProfileManager
 from solin.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
 
 
@@ -859,6 +860,17 @@ class JwpubDownloadGateTests(unittest.TestCase):
 
 
 class MeetingTreeStoreTests(unittest.TestCase):
+    def test_store_requires_an_explicit_path(self):
+        path_param = inspect.signature(MeetingTreeStore).parameters["path"]
+
+        self.assertIs(path_param.default, inspect.Parameter.empty)
+        source = tree_store_module.__file__
+        self.assertIsNotNone(source)
+        self.assertNotIn(
+            "ProfileManager",
+            Path(source).read_text(encoding="utf-8"),
+        )
+
     def test_can_use_explicit_store_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "custom_tree_store.json"
@@ -873,93 +885,63 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
-            pm = ProfileManager()
-            old_data_dir = getattr(pm, "_data_dir", "")
-            old_cache_dir = getattr(pm, "_cache_dir", "")
-            old_active_id = getattr(pm, "_active_id", "")
-            try:
-                pm.init(tmp)
-                store = MeetingTreeStore()
-                nodes = [{"id": "n1", "type": "section", "children": []}]
-                store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
-                loaded, digest = store.load("mwb:2026-05-25:T:20260500")
-                self.assertEqual(loaded, nodes)
-                self.assertEqual(digest, "hash")
-            finally:
-                pm._data_dir = old_data_dir
-                pm._cache_dir = old_cache_dir
-                pm._active_id = old_active_id
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            nodes = [{"id": "n1", "type": "section", "children": []}]
+            store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
+            loaded, digest = store.load("mwb:2026-05-25:T:20260500")
+            self.assertEqual(loaded, nodes)
+            self.assertEqual(digest, "hash")
 
     def test_round_trip_meeting_folder_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
-            pm = ProfileManager()
-            old_data_dir = getattr(pm, "_data_dir", "")
-            old_cache_dir = getattr(pm, "_cache_dir", "")
-            old_active_id = getattr(pm, "_active_id", "")
-            try:
-                pm.init(tmp)
-                store = MeetingTreeStore()
-                imports = {
-                    "source-key": {
-                        "source_key": "source-key",
-                        "path": str(Path(tmp) / "2026-05-26 MW" / "slides.pdf"),
-                        "name": "slides.pdf",
-                        "kind": "pdf",
-                        "signature": {"size": 100, "mtime_ns": 123456},
-                        "status": "processed",
-                        "node_ids": ["page-1", "page-2"],
-                    }
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            imports = {
+                "source-key": {
+                    "source_key": "source-key",
+                    "path": str(Path(tmp) / "2026-05-26 MW" / "slides.pdf"),
+                    "name": "slides.pdf",
+                    "kind": "pdf",
+                    "signature": {"size": 100, "mtime_ns": 123456},
+                    "status": "processed",
+                    "node_ids": ["page-1", "page-2"],
                 }
-                store.save(
-                    "mwb:2026-05-25:T:20260500",
-                    [{"id": "n1", "type": "section", "children": []}],
-                    "hash",
-                    meeting_folder_imports=imports,
-                )
+            }
+            store.save(
+                "mwb:2026-05-25:T:20260500",
+                [{"id": "n1", "type": "section", "children": []}],
+                "hash",
+                meeting_folder_imports=imports,
+            )
 
-                self.assertEqual(
-                    store.load_meeting_folder_imports("mwb:2026-05-25:T:20260500"),
-                    imports,
-                )
-            finally:
-                pm._data_dir = old_data_dir
-                pm._cache_dir = old_cache_dir
-                pm._active_id = old_active_id
+            self.assertEqual(
+                store.load_meeting_folder_imports("mwb:2026-05-25:T:20260500"),
+                imports,
+            )
 
     def test_flush_meeting_thumbs_keeps_referenced_files(self):
         with tempfile.TemporaryDirectory() as tmp:
-            pm = ProfileManager()
-            old_data_dir = getattr(pm, "_data_dir", "")
-            old_cache_dir = getattr(pm, "_cache_dir", "")
-            old_active_id = getattr(pm, "_active_id", "")
-            try:
-                pm.init(tmp)
-                thumb_dir = Path(tmp) / "meeting_thumbs"
-                thumb_dir.mkdir()
-                keep = thumb_dir / "keep.jpg"
-                stale = thumb_dir / "stale.jpg"
-                keep.write_bytes(b"keep")
-                stale.write_bytes(b"stale")
-                store = MeetingTreeStore()
-                store.save(
-                    "wt:2026-05-25:T:20260400",
-                    [{
-                        "id": "keep",
-                        "type": "media",
-                        "children": [],
-                        "thumbnail_local_path": str(keep),
-                    }],
-                    "hash",
-                )
+            thumb_dir = Path(tmp) / "meeting_thumbs"
+            thumb_dir.mkdir()
+            keep = thumb_dir / "keep.jpg"
+            stale = thumb_dir / "stale.jpg"
+            keep.write_bytes(b"keep")
+            stale.write_bytes(b"stale")
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            store.save(
+                "wt:2026-05-25:T:20260400",
+                [{
+                    "id": "keep",
+                    "type": "media",
+                    "children": [],
+                    "thumbnail_local_path": str(keep),
+                }],
+                "hash",
+            )
 
-                flush_meeting_thumbs_dir(thumb_dir=thumb_dir)
+            flush_meeting_thumbs_dir(store=store, thumb_dir=thumb_dir)
 
-                self.assertTrue(keep.exists())
-                self.assertFalse(stale.exists())
-            finally:
-                pm._data_dir = old_data_dir
-                pm._cache_dir = old_cache_dir
-                pm._active_id = old_active_id
+            self.assertTrue(keep.exists())
+            self.assertFalse(stale.exists())
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
         fixture = Path("tests/fixtures/synthetic_meeting_workbook.jwpub")
