@@ -4,58 +4,8 @@ from datetime import date
 
 from solin.core.meetings.memorial import (
     _monday_of,
-    _parse_mi_jwpub_response,
     memorial_date_for_year,
 )
-
-
-def test_parse_mi_jwpub_response_uses_requested_language_payload():
-    data = {
-        "files": {
-            "T": {
-                "JWPUB": [
-                    {
-                        "file": {
-                            "url": "https://example.test/mi26_T.jwpub",
-                            "checksum": "abc123",
-                        },
-                        "images": {
-                            "sqr": {
-                                "sm": {"url": "https://example.test/thumb.jpg"},
-                            }
-                        },
-                    }
-                ]
-            }
-        }
-    }
-
-    assert _parse_mi_jwpub_response(data, "T") == (
-        "https://example.test/mi26_T.jwpub",
-        "https://example.test/thumb.jpg",
-        "abc123",
-    )
-
-
-def test_parse_mi_jwpub_response_falls_back_to_english_payload():
-    data = {
-        "files": {
-            "E": {
-                "JWPUB": [
-                    {
-                        "file": {"url": "https://example.test/mi26_E.jwpub"},
-                        "images": {"wss": {"md": {"url": "https://example.test/wss.jpg"}}},
-                    }
-                ]
-            }
-        }
-    }
-
-    assert _parse_mi_jwpub_response(data, "T") == (
-        "https://example.test/mi26_E.jwpub",
-        "https://example.test/wss.jpg",
-        "",
-    )
 
 
 def test_monday_of_returns_week_start():

@@ -34,7 +34,6 @@ import shutil
 import sqlite3
 import threading
 import urllib.error
-import urllib.parse
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
@@ -49,14 +48,18 @@ from PySide6.QtCore import (
 from solin.core.profiles import settings as _ps
 from solin.core.network.http import urlopen as _urlopen
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.jw.publication_links import (
+    DEFAULT_USER_AGENT,
+    VIDEO_FORMATS,
+    fetch_pub_media_json,
+    select_pub_media_file,
+)
 
 log = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-MEDIA_API = "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
-_UA       = "Mozilla/5.0"
-_TIMEOUT  = 20
+_UA       = DEFAULT_USER_AGENT
 
 SONG_SYMS  = {"sjj", "sjjm"}
 _EXCL_CAT  = {9, 10, 15, 25}
@@ -350,26 +353,6 @@ def get_checksum_store() -> JwpubChecksumStore:
     return _checksum_store_instance
 
 
-# ── Pure HTTP helpers (safe to call from any thread) ─────────────────────────
-
-def _get_json(url: str, params: dict | None = None) -> Optional[dict]:
-    if params:
-        url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    try:
-        with _urlopen(req, timeout=_TIMEOUT) as r:
-            return json.loads(r.read().decode())
-    except (
-        http.client.HTTPException,
-        OSError,
-        UnicodeError,
-        urllib.error.URLError,
-        json.JSONDecodeError,
-    ) as exc:
-        log.warning("GET %s → %s", url, exc)
-        return None
-
-
 def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str, bool]:
     """
     Query the JW pub-media API and return (download_url, checksum, not_found).
@@ -383,20 +366,17 @@ def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str
     Both url and checksum come from the same API call; checksum is '' when the
     server does not supply one.  Returns (None, '', False) on any network error.
     """
-    data = _get_json(MEDIA_API, {
+    data = fetch_pub_media_json({
         "pub": pub, "issue": issue, "langwritten": lang,
         "fileformat": "JWPUB", "output": "json",
         "alllangs": "0", "txtCMSLang": "E",
     })
     if not data:
         return None, "", False   # network / parse error — cannot determine existence
-    files = data.get("files", {}).get(lang, {}).get("JWPUB", [])
-    if not files:
+    media_file = select_pub_media_file(data, lang, ("JWPUB",))
+    if media_file is None:
         return None, "", True    # API replied but has no files → pub absent (404-equivalent)
-    file_obj  = files[0].get("file", {})
-    url       = file_obj.get("url") or None
-    checksum  = file_obj.get("checksum", "") or ""
-    return url, checksum, False
+    return media_file.url, media_file.checksum, False
 
 
 def _resolve_video(key_symbol: str, track: int, issue_tag: int,
@@ -429,20 +409,19 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
             }
         else:
             return result
-        data = _get_json(MEDIA_API, params)
+        data = fetch_pub_media_json(params)
         if not data:
             return result
-        lang_files = data.get("files", {}).get(lang, {})
-        for fmt in ["MP4", "M4V", "mp4", "m4v"]:
-            items = lang_files.get(fmt, [])
-            if items:
-                best = sorted(items, key=lambda x: x.get("label", "0"), reverse=True)[0]
-                result["url"]       = best.get("file", {}).get("url", "")
-                result["title"]     = best.get("title", "") or data.get("pubName", "")
-                result["thumbnail"] = best.get("images", {}).get("sm", {}).get("url", "")
-                break
-        if not result["title"]:
-            result["title"] = data.get("pubName", "")
+        media_file = select_pub_media_file(
+            data,
+            lang,
+            VIDEO_FORMATS,
+            prefer_highest_label=True,
+        )
+        if media_file is not None:
+            result["url"] = media_file.url
+            result["title"] = media_file.title
+            result["thumbnail"] = media_file.thumbnail_url
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         log.debug("Could not parse resolved video metadata", exc_info=True)
     return result

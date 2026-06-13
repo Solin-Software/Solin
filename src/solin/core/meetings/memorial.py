@@ -38,13 +38,19 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 log = logging.getLogger(__name__)
 
 from solin.core.network.http import urlopen as _urlopen
+from solin.core.jw.publication_links import (
+    DEFAULT_TIMEOUT,
+    DEFAULT_USER_AGENT,
+    PUB_MEDIA_URL,
+    build_pub_media_url,
+    fetch_pub_media_json,
+    select_pub_media_file,
+)
 
 # ── Reutiliza constantes e helpers de publications.py ─────────────────────────
 from .publications import (
-    MEDIA_API, _UA, _TIMEOUT,
     JwpubCache, get_checksum_store,
     MeetingMedia,
-    _get_json as _jwpub_get_json,   # urllib simples — API pública não precisa de UA spoofing
 )
 
 # ── HTTP com curl_cffi (browser-friendly) ──────────────────────────────────────
@@ -108,7 +114,10 @@ def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
                 r.raise_for_status()
                 return r.content
             else:
-                req = _urllib_req.Request(url, headers={"User-Agent": _UA})
+                req = _urllib_req.Request(
+                    url,
+                    headers={"User-Agent": DEFAULT_USER_AGENT},
+                )
                 with _urlopen(req, timeout=timeout) as resp:
                     return resp.read()
         except Exception as exc:  # noqa: BLE001 - curl_cffi/urllib transport boundary
@@ -122,7 +131,7 @@ def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
 
 def _http_get_json(url: str) -> Optional[dict]:
     try:
-        data = _http_get(url, timeout=_TIMEOUT)
+        data = _http_get(url, timeout=DEFAULT_TIMEOUT)
         return json.loads(data.decode())
     except (
         MemorialDownloadError,
@@ -224,40 +233,6 @@ def _mi_pub(year: int) -> str:
     return f"mi{str(year)[2:]}"
 
 
-def _parse_mi_jwpub_response(data: dict, lang: str) -> tuple[Optional[str], str, str]:
-    """
-    Extrai (download_url, thumb_url, checksum) de uma resposta da GETPUBMEDIALINKS.
-    Aceita o idioma solicitado ou faz fallback para "E" se necessário.
-    checksum é '' quando a API não o fornece.
-    """
-    files_root = data.get("files", {})
-    # Tenta o idioma pedido; se vazio, tenta inglês como fallback
-    lang_files = files_root.get(lang) or files_root.get("E") or {}
-    jwpub_list: list = lang_files.get("JWPUB", [])
-    if not jwpub_list:
-        return None, "", ""
-
-    item      = jwpub_list[0]
-    file_obj  = item.get("file", {})
-    dl_url    = file_obj.get("url", "")
-    checksum  = file_obj.get("checksum", "") or ""
-    images    = item.get("images", {})
-
-    # Thumb quadrado — estrutura típica: images.sqr/wss/lsr.{sm,md,lg}.url
-    thumb = ""
-    for key in ("sqr", "wss", "lsr"):
-        section = images.get(key, {})
-        for size in ("sm", "md", "lg"):
-            candidate = section.get(size, {}).get("url", "")
-            if candidate:
-                thumb = candidate
-                break
-        if thumb:
-            break
-
-    return (dl_url or None), thumb, checksum
-
-
 def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, bool]:
     """
     Busca URL de download + thumbnail quadrado + checksum para o pub mi<YY>.
@@ -286,28 +261,37 @@ def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, boo
     _any_api_response = False   # tracks whether any attempt got a valid JSON reply
 
     # ── Passo 1: API direta (urllib — sem UA spoofing) ────────────────────────
-    data = _jwpub_get_json(MEDIA_API, params)
+    data = fetch_pub_media_json(params)
     if data:
         _any_api_response = True
-        result = _parse_mi_jwpub_response(data, lang)
-        if result[0]:                          # dl_url presente → sucesso
+        media_file = select_pub_media_file(
+            data,
+            lang,
+            ("JWPUB",),
+            fallback_languages=("E",),
+        )
+        if media_file is not None:
             log.debug("_get_mi_jwpub_url: URL obtained from direct API for %s/%s", pub, lang)
-            return result[0], result[1], result[2], False
+            return media_file.url, media_file.thumbnail_url, media_file.checksum, False
 
     # ── Passo 2: Fallback — browser impersonation via curl_cffi ──────────────
     log.warning(
         "_get_mi_jwpub_url: direct API failed for %s/%s - trying browser impersonation",
         pub, lang,
     )
-    import urllib.parse
-    url  = MEDIA_API + "?" + urllib.parse.urlencode(params)
+    url = build_pub_media_url(params, PUB_MEDIA_URL)
     data = _http_get_json(url)
     if data:
         _any_api_response = True
-        result = _parse_mi_jwpub_response(data, lang)
-        if result[0]:
+        media_file = select_pub_media_file(
+            data,
+            lang,
+            ("JWPUB",),
+            fallback_languages=("E",),
+        )
+        if media_file is not None:
             log.debug("_get_mi_jwpub_url: URL obtained via fallback (curl_cffi) for %s/%s", pub, lang)
-            return result[0], result[1], result[2], False
+            return media_file.url, media_file.thumbnail_url, media_file.checksum, False
 
     # Both strategies failed to return a URL.
     # If at least one strategy got a valid JSON response the API is reachable,
