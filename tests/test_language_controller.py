@@ -1,5 +1,5 @@
-from app.controllers.language_controller import LanguageController
-from app.controllers.main_window_nav import NAV_LABELS
+from solin.controllers.language_controller import LanguageController
+from solin.controllers.main_window_nav import NAV_LABELS
 
 
 class _LabelStub:

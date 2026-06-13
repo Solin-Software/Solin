@@ -8,7 +8,7 @@ from datetime import date
 import pytest
 from PySide6.QtCore import QCoreApplication
 
-from app.core.timer.models import (
+from solin.core.timer.models import (
     AnalogClockStyle,
     ClockConfig,
     ClockMode,
@@ -22,7 +22,7 @@ from app.core.timer.models import (
     Section,
     FIXED_TOTAL_SECONDS,
 )
-from app.core.timer.schedule_factory import (
+from solin.core.timer.schedule_factory import (
     adjust_part,
     build_default_schedule,
     configurable_count_for,
@@ -32,7 +32,7 @@ from app.core.timer.schedule_factory import (
     schedule_has_timing_data,
     set_section_part_count,
 )
-from app.core.timer.part_titles import (
+from solin.core.timer.part_titles import (
     BIBLE_READING_TITLE,
     CBS_TITLE,
     CONCLUDING_COMMENTS_TITLE,
@@ -47,9 +47,9 @@ from app.core.timer.part_titles import (
     WATCHTOWER_STUDY_TITLE,
     PART_TITLE_SOURCES,
 )
-from app.core.timer.engine import TimerEngine
-from app.core.timer.store import TimerStore
-from app.core.profiles import settings as _ps
+from solin.core.timer.engine import TimerEngine
+from solin.core.timer.store import TimerStore
+from solin.core.profiles import settings as _ps
 
 
 _WEEK = date(2026, 6, 1)
@@ -114,9 +114,9 @@ def test_weekend_default_parts():
 
 
 def test_timer_section_palette_uses_meeting_section_hues():
-    from app.core.meetings.section_meta import SECTION_META
-    from app.core.meetings.colors import section_colors
-    from app.widgets.timer_bridge import _section_palette
+    from solin.core.meetings.section_meta import SECTION_META
+    from solin.core.meetings.colors import section_colors
+    from solin.widgets.timer_bridge import _section_palette
 
     section_codes = {
         Section.OPENING_COMMENTS: "opening_comments",
@@ -139,7 +139,7 @@ def test_timer_section_palette_uses_meeting_section_hues():
 
 def test_timer_parts_model_uses_global_display_numbers():
     _app()
-    from app.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.widgets.timer_bridge import _parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     rows = _parts_model_for_schedule(sch)
@@ -173,7 +173,7 @@ def test_timer_parts_model_uses_global_display_numbers():
 
 def test_timer_parts_model_formats_default_timer_part_titles():
     _app()
-    from app.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.widgets.timer_bridge import _parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     set_section_part_count(sch, Section.TREASURES, 4)
@@ -191,14 +191,14 @@ def test_timer_parts_model_formats_default_timer_part_titles():
 
 
 def test_timer_part_i18n_sources_cover_canonical_titles():
-    from app.core.i18n.timer_part_titles import TIMER_PART_TITLE_SOURCES
+    from solin.core.i18n.timer_part_titles import TIMER_PART_TITLE_SOURCES
 
     assert set(TIMER_PART_TITLE_SOURCES) == set(PART_TITLE_SOURCES)
 
 
 def test_timer_parts_model_formats_started_time_with_locale_pattern():
     import time as _time
-    from app.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.widgets.timer_bridge import _parts_model_for_schedule
 
     epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
@@ -211,7 +211,7 @@ def test_timer_parts_model_formats_started_time_with_locale_pattern():
 
 def test_timer_pdf_rows_include_finished_time_from_started_plus_duration():
     import time as _time
-    from app.core.rendering.timer_report_pdf import build_timer_pdf_rows
+    from solin.core.rendering.timer_report_pdf import build_timer_pdf_rows
 
     epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.WEEKEND)
@@ -230,7 +230,7 @@ def test_timer_pdf_rows_include_finished_time_from_started_plus_duration():
 
 
 def test_timer_pdf_rows_hide_section_headers_for_standalone_midweek_comments():
-    from app.core.rendering.timer_report_pdf import build_timer_pdf_rows
+    from solin.core.rendering.timer_report_pdf import build_timer_pdf_rows
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
 
@@ -245,7 +245,7 @@ def test_timer_pdf_rows_hide_section_headers_for_standalone_midweek_comments():
 
 
 def test_timer_pdf_summary_counts_completed_parts_by_time_accuracy():
-    from app.core.rendering.timer_report_pdf import build_timer_pdf_summary
+    from solin.core.rendering.timer_report_pdf import build_timer_pdf_summary
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     on_time = sch.parts[0]
@@ -272,7 +272,7 @@ def test_timer_pdf_summary_counts_completed_parts_by_time_accuracy():
 
 def test_format_time_with_seconds_supports_locale_patterns():
     import time as _time
-    from app.core.i18n.date import format_datetime, format_time_with_seconds
+    from solin.core.i18n.date import format_datetime, format_time_with_seconds
 
     epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
 
@@ -286,7 +286,7 @@ def test_format_time_with_seconds_supports_locale_patterns():
 
 def test_time_formatting_falls_back_for_invalid_user_patterns(monkeypatch):
     import time as _time
-    from app.core.i18n import date as date_i18n
+    from solin.core.i18n import date as date_i18n
 
     epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
 
@@ -300,7 +300,7 @@ def test_time_formatting_falls_back_for_invalid_user_patterns(monkeypatch):
 
 
 def test_time_formatting_does_not_hide_unexpected_errors(monkeypatch):
-    from app.core.i18n import date as date_i18n
+    from solin.core.i18n import date as date_i18n
 
     def fail_unexpectedly(_epoch, _pattern):
         raise RuntimeError("programming error")
@@ -729,7 +729,7 @@ def test_schedule_has_timing_data_detects_live_and_historical_state():
 
 
 def test_snapshot_roundtrip_preserves_canonical_display_fields():
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
         active=True,
@@ -754,8 +754,8 @@ def test_snapshot_roundtrip_preserves_canonical_display_fields():
 
 def test_render_idle_digital_matches_wall_clock():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = 1_700_000_000.0
     snap = TimerSnapshot(active=False, wall_clock_epoch=epoch, direction=Direction.DOWN)
@@ -770,8 +770,8 @@ def test_render_idle_digital_matches_wall_clock():
 
 
 def test_render_idle_analog_sets_hand_angles():
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(active=False, wall_clock_epoch=1_700_000_000.0, direction=Direction.DOWN)
     cfg = ClockConfig(mode=ClockMode.ANALOG)
@@ -785,8 +785,8 @@ def test_render_idle_analog_sets_hand_angles():
 
 def test_render_idle_analog_digital_sets_hands_and_clock_text():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(active=False, wall_clock_epoch=epoch, direction=Direction.DOWN)
@@ -805,8 +805,8 @@ def test_render_idle_analog_digital_sets_hands_and_clock_text():
 
 def test_render_idle_analog_second_hand_ticks_once_per_second():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     base = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     cfg = ClockConfig(mode=ClockMode.ANALOG)
@@ -830,8 +830,8 @@ def test_render_idle_analog_second_hand_ticks_once_per_second():
 
 
 def test_render_active_countdown_and_overrun():
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
@@ -854,8 +854,8 @@ def test_render_active_countdown_and_overrun():
 
 def test_render_active_can_show_clock_only_with_configured_clock_face():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
@@ -882,8 +882,8 @@ def test_render_active_can_show_clock_only_with_configured_clock_face():
 
 def test_render_active_can_show_configured_clock_with_timer():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
@@ -907,8 +907,8 @@ def test_render_active_can_show_configured_clock_with_timer():
 
 def test_render_active_analog_clock_sector_marks_remaining_time():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
@@ -933,8 +933,8 @@ def test_render_active_analog_clock_sector_marks_remaining_time():
 
 def test_render_active_analog_clock_sector_marks_overrun_trail():
     import time as _time
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
@@ -958,8 +958,8 @@ def test_render_active_analog_clock_sector_marks_overrun_trail():
 
 
 def test_render_active_analog_clock_sector_stays_hidden_when_clock_is_not_visible():
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
@@ -977,8 +977,8 @@ def test_render_active_analog_clock_sector_stays_hidden_when_clock_is_not_visibl
 
 
 def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
@@ -993,8 +993,8 @@ def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
 
 
 def test_render_stopped_countdown_shows_elapsed_result():
-    from app.core.timer.render import build_render_model
-    from app.core.timer.models import TimerSnapshot
+    from solin.core.timer.render import build_render_model
+    from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,

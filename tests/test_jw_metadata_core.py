@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.jw.metadata import _extract_best_meta, meps_to_lang, parse_jworg_url
+from solin.core.jw.metadata import _extract_best_meta, meps_to_lang, parse_jworg_url
 
 
 def test_parse_jworg_url_handles_cdn_track_url():

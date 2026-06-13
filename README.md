@@ -11,15 +11,19 @@ with `uv` as the environment and installer frontend.
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -e .
 ```
 
 Equivalent `uv` flow:
 
 ```powershell
 uv venv
-uv pip install -r requirements-dev.txt
+uv pip install -r requirements-dev.txt -e .
 ```
+
+The importable application package lives under `src/solin`. Use the installed
+`solin` GUI entry point after editable installation, or `python main.py` as the
+thin local launcher during development.
 
 ## Quality Checks
 

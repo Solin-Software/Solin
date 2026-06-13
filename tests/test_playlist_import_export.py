@@ -1,5 +1,5 @@
-from app.widgets.playlist import widget as playlist_widget
-from app.widgets.playlist.import_export import _PlaylistEditImportMixin
+from solin.widgets.playlist import widget as playlist_widget
+from solin.widgets.playlist.import_export import _PlaylistEditImportMixin
 
 
 def test_playlist_edit_view_uses_import_export_mixin():

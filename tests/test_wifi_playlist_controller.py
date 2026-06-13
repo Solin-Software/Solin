@@ -1,4 +1,4 @@
-from app.controllers.wifi_playlist_controller import WifiPlaylistController
+from solin.controllers.wifi_playlist_controller import WifiPlaylistController
 
 
 class _MediaProjectionStub:

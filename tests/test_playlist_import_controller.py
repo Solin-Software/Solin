@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.controllers.playlist_import_controller import PlaylistImportController
+from solin.controllers.playlist_import_controller import PlaylistImportController
 
 
 class _PlaylistWidgetStub:
@@ -127,7 +127,7 @@ def test_add_browser_downloaded_file_routes_by_kind(monkeypatch):
     controller = PlaylistImportController(window)
     calls = []
     monkeypatch.setattr(
-        "app.controllers.playlist_import_controller.os.path.isfile",
+        "solin.controllers.playlist_import_controller.os.path.isfile",
         lambda path: True,
     )
     monkeypatch.setattr(controller, "_choose_target", lambda title: _target())

@@ -1,4 +1,4 @@
-from app.controllers.media_download_notification_controller import (
+from solin.controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
 )
 

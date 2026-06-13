@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from app.core.foundation.logging_config import (
+from solin.core.foundation.logging_config import (
     LOG_FILENAME,
     LOG_HANDLER_NAME,
     configure_logging,

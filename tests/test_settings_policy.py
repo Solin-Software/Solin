@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from app.core.foundation.constants import (
+from solin.core.foundation.constants import (
     QSETTINGS_APP_APP,
     QSETTINGS_GLOBAL_APP,
     QSETTINGS_MAIN_WINDOW_GEOMETRY_APP,
@@ -14,8 +14,8 @@ from app.core.foundation.constants import (
     QSETTINGS_PROFILE_SCOPED_APPS,
     QSETTINGS_TIMER_APP,
 )
-from app.core.foundation.settings_keys import SettingsKey
-from app.core.profiles import manager as profile_manager
+from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.profiles import manager as profile_manager
 
 
 EXPECTED_SETTINGS_KEYS = {
@@ -119,7 +119,7 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
 
     monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
     monkeypatch.setattr(profile_manager, "QSettings", FakeSettings)
-    monkeypatch.setattr("app.core.foundation.paths.CACHE_DIR", "")
+    monkeypatch.setattr("solin.core.foundation.paths.CACHE_DIR", "")
 
     manager = profile_manager.ProfileManager()
     manager._data_dir = str(tmp_path)
@@ -185,7 +185,7 @@ def _local_settings_aliases(tree: ast.AST) -> set[str]:
 
 
 def test_qsettings_accesses_use_canonical_keys_and_namespaces():
-    paths = [Path("main.py"), *sorted(Path("app").rglob("*.py"))]
+    paths = [Path("main.py"), *sorted(Path("src/solin").rglob("*.py"))]
     offenders: list[str] = []
 
     for path in paths:

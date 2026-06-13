@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import app.widgets.browser.downloads as browser_downloads
-import app.widgets.browser.widget as browser_widget
-from app.widgets.browser.downloads import _BrowserDownloadsMixin
+import solin.widgets.browser.downloads as browser_downloads
+import solin.widgets.browser.widget as browser_widget
+from solin.widgets.browser.downloads import _BrowserDownloadsMixin
 
 
 def test_browser_widget_uses_downloads_mixin():

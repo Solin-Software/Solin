@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
-from app.core.media import playback as playback_module
-from app.core.media.playback import MediaController
+from solin.core.media import playback as playback_module
+from solin.core.media.playback import MediaController
 
 
 def _app():

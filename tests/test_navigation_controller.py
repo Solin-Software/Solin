@@ -1,4 +1,4 @@
-from app.controllers.navigation_controller import NavigationController
+from solin.controllers.navigation_controller import NavigationController
 
 
 class _LazyPagesStub:

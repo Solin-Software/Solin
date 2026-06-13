@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.core.jw.background_song_service import BackgroundSongService
+from solin.core.jw.background_song_service import BackgroundSongService
 
 
 class _TimerStub:

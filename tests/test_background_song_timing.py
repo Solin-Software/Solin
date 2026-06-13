@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.core.jw.background_song_service import (
+from solin.core.jw.background_song_service import (
     DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
     _scheduled_stop_delays_ms,
 )
-from app.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
+from solin.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
 
 
 def _occurrence(seconds_until_start: int) -> tuple[MeetingOccurrence, datetime]:

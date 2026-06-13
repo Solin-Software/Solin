@@ -1,7 +1,7 @@
 from PySide6.QtMultimedia import QMediaPlayer
 
-from app.controllers.auto_key_projection_controller import AutoKeyProjectionController
-from app.core.integrations.automation.shortcuts import (
+from solin.controllers.auto_key_projection_controller import AutoKeyProjectionController
+from solin.core.integrations.automation.shortcuts import (
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,

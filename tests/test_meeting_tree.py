@@ -9,7 +9,7 @@ import copy
 from datetime import date
 from pathlib import Path
 
-from app.core.meetings.publications import (
+from solin.core.meetings.publications import (
     MeetingMedia,
     MeetingPublicationRef,
     WeekData,
@@ -20,12 +20,12 @@ from app.core.meetings.publications import (
     _JwpubWorker,
     _make_media_item,
 )
-from app.core.meetings.tree_builder import MeetingTreeBuilder
-from app.core.meetings.tree_store import MeetingTreeStore
-from app.core.meetings.tree_store import flush_meeting_thumbs_dir
-from app.core.foundation import paths as app_paths
-from app.core.profiles.manager import ProfileManager
-from app.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
+from solin.core.meetings.tree_builder import MeetingTreeBuilder
+from solin.core.meetings.tree_store import MeetingTreeStore
+from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
+from solin.core.foundation import paths as app_paths
+from solin.core.profiles.manager import ProfileManager
+from solin.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
 
 
 class PublicationSqlErrorBoundaryTests(unittest.TestCase):

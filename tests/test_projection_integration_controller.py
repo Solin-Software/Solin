@@ -1,4 +1,4 @@
-from app.controllers.projection_integration_controller import ProjectionIntegrationController
+from solin.controllers.projection_integration_controller import ProjectionIntegrationController
 
 
 class _PrefsStub:

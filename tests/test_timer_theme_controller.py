@@ -1,6 +1,6 @@
 from PySide6.QtCore import QDateTime
 
-from app.controllers.timer_theme_controller import TimerThemeController
+from solin.controllers.timer_theme_controller import TimerThemeController
 
 
 class _NavigationStub:

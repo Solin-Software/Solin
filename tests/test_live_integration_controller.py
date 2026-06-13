@@ -1,4 +1,4 @@
-from app.controllers.live_integration_controller import LiveIntegrationController
+from solin.controllers.live_integration_controller import LiveIntegrationController
 
 
 class _PrefsStub:

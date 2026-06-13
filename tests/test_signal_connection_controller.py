@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from app.controllers.signal_connection_controller import SignalConnectionController
+from solin.controllers.signal_connection_controller import SignalConnectionController
 
 
 class _Signal:

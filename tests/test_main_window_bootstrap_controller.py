@@ -1,4 +1,4 @@
-from app.controllers.main_window_bootstrap_controller import MainWindowBootstrapController
+from solin.controllers.main_window_bootstrap_controller import MainWindowBootstrapController
 
 
 class _Signal:

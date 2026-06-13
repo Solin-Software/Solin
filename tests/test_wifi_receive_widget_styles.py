@@ -16,8 +16,8 @@ messages = []
 qInstallMessageHandler(lambda _mode, _context, message: messages.append(message))
 app = QApplication([])
 
-from app.core.i18n.manager import LanguageManager
-from app.widgets.wifi_receive_widget import WifiReceiveWidget
+from solin.core.i18n.manager import LanguageManager
+from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:
     def success(self, *_args):
@@ -42,6 +42,7 @@ if stylesheet_errors:
 """
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYTHONPATH"] = str(repo_root / "src")
 
     result = subprocess.run(
         [sys.executable, "-c", script],

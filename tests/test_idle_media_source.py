@@ -8,8 +8,8 @@ state comparisons in the method run exactly as in production.
 
 from PySide6.QtMultimedia import QMediaPlayer
 
-from app.projection import idle_source
-from app.projection.idle_source import IdleMediaSource
+from solin.projection import idle_source
+from solin.projection.idle_source import IdleMediaSource
 
 _PLAYING = QMediaPlayer.PlaybackState.PlayingState
 _PAUSED = QMediaPlayer.PlaybackState.PausedState

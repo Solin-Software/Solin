@@ -1,16 +1,16 @@
-from app.widgets.settings.about_section import AboutSectionMixin
-from app.widgets.settings.auto_keys_section import AutoKeysSectionMixin
-from app.widgets.settings.auto_share_section import AutoShareSectionMixin
-from app.widgets.settings.camera_section import CameraSectionMixin
-from app.widgets.settings.language_section import LanguageSectionMixin
-from app.widgets.settings.layout_helpers import SettingsLayoutMixin
-from app.widgets.settings.media_section import MediaSectionMixin
-from app.widgets.settings.obs_section import ObsSectionMixin
-from app.widgets.settings.screens_section import ScreensSectionMixin
-from app.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
-from app.widgets.settings.yearly_text_section import YearlyTextSectionMixin
-from app.widgets.settings.zoom_section import ZoomSectionMixin
-from app.widgets.settings_widget import SettingsWidget
+from solin.widgets.settings.about_section import AboutSectionMixin
+from solin.widgets.settings.auto_keys_section import AutoKeysSectionMixin
+from solin.widgets.settings.auto_share_section import AutoShareSectionMixin
+from solin.widgets.settings.camera_section import CameraSectionMixin
+from solin.widgets.settings.language_section import LanguageSectionMixin
+from solin.widgets.settings.layout_helpers import SettingsLayoutMixin
+from solin.widgets.settings.media_section import MediaSectionMixin
+from solin.widgets.settings.obs_section import ObsSectionMixin
+from solin.widgets.settings.screens_section import ScreensSectionMixin
+from solin.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
+from solin.widgets.settings.yearly_text_section import YearlyTextSectionMixin
+from solin.widgets.settings.zoom_section import ZoomSectionMixin
+from solin.widgets.settings_widget import SettingsWidget
 
 
 def test_settings_widget_uses_shared_layout_helpers():

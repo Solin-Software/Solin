@@ -1,5 +1,5 @@
-import app.widgets.browser.widget as browser_widget
-from app.widgets.browser.navigation import _BrowserNavigationMixin
+import solin.widgets.browser.widget as browser_widget
+from solin.widgets.browser.navigation import _BrowserNavigationMixin
 
 
 def test_browser_widget_uses_navigation_mixin():

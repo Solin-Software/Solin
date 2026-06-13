@@ -41,7 +41,7 @@ class Codebase:
 
 CODEBASES = tuple(
     codebase
-    for root in (PROJECT_ROOT / "app", PROJECT_ROOT / "src" / "solin")
+    for root in (PROJECT_ROOT / "src" / "solin",)
     if (codebase := Codebase.discover(root)) is not None
 )
 
@@ -100,7 +100,7 @@ def _imports(path: Path):
 
 def test_application_source_layout_is_discoverable():
     assert CODEBASES, (
-        "No application source root found. Expected either app/ or src/solin/ "
+        "No application source root found. Expected src/solin/ "
         "relative to the repository root."
     )
 

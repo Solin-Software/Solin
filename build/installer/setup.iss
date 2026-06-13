@@ -20,17 +20,20 @@
 ;                --output-dir=dist --output-filename=Solin main.py
 ;       (output directory must be named "main.dist" — or adjust MyDistDir below)
 ;    2. The executable must be "Solin.exe" inside MyDistDir.
-;    3. Open this file in Inno Setup IDE → Build > Compile.
+;    3. Compile with ISCC.exe /DMyAppVersion=<version> setup.iss.
 ; =============================================================================
 
 #define MyAppName        "Solin"
-#define MyAppVersion     "26.17.1.0"
 #define MyAppPublisher   "Solin Software"
 #define MyAppURL         "https://solinav.vercel.app"
 #define MyAppExeName     "Solin.exe"
 #define MyAppMutex       "Solin_SingleInstance_Mutex"
 #define MyRegSubkey      "Software\Solin\Solin"
 #define MyDistDir        "..\main.dist"
+
+#ifndef MyAppVersion
+  #error MyAppVersion must be supplied by the build pipeline.
+#endif
 
 ; =============================================================================
 [Setup]

@@ -7,7 +7,7 @@ re-copied) by both window classes, so the ~400 lines of duplication that used
 to exist can never silently creep back in.
 """
 
-from app.projection.window import (
+from solin.projection.window import (
     BaseProjectionView,
     FloatingPreviewWindow,
     ProjectionWindow,

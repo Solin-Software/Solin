@@ -21,7 +21,7 @@
 ;  HOW TO BUILD A PATCH:
 ;    - Place the full main.dist output in MyDistDir (or list only changed files
 ;      using Option B in [Files] for a smaller download).
-;    - Increment MyPatchVersion below.
+;    - Compile with ISCC.exe /DMyPatchVersion=<version> patch.iss.
 ;    - Compile this .iss → distribute the generated .exe.
 ;
 ;  IMPORTANT:
@@ -38,8 +38,11 @@
 #define MyAppMutex      "Solin_SingleInstance_Mutex"
 #define MyRegSubkey     "Software\Solin\Solin"
 #define MyPatchFromVer  "1.0.0.0"   ; minimum installed version this patch accepts
-#define MyPatchVersion  "26.17.1.0"  ; new version being installed
 #define MyDistDir       "..\diff" ; Nuitka/PyInstaller output directory
+
+#ifndef MyPatchVersion
+  #error MyPatchVersion must be supplied by the build pipeline.
+#endif
 
 ; =============================================================================
 [Setup]

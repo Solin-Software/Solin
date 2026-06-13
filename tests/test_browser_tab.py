@@ -1,6 +1,6 @@
 import inspect
 
-from app.widgets.browser.tab import BrowserTab
+from solin.widgets.browser.tab import BrowserTab
 import native_webview_widget.widget as native_widget
 
 

@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from app.core.playlists.reader import PlaylistReadError, read_jwlplaylist
+from solin.core.playlists.reader import PlaylistReadError, read_jwlplaylist
 
 
 def _write_playlist_archive(tmp_path, schema_and_data: str, *, entries=None):

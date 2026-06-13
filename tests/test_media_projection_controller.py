@@ -1,4 +1,4 @@
-from app.controllers.media_projection_controller import MediaProjectionController
+from solin.controllers.media_projection_controller import MediaProjectionController
 
 
 class _NavigationStub:

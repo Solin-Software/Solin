@@ -1,4 +1,4 @@
-from app.controllers.shutdown_controller import ShutdownController
+from solin.controllers.shutdown_controller import ShutdownController
 
 
 class _CleanupWidget:
@@ -89,11 +89,11 @@ def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
     queued = []
 
     monkeypatch.setattr(
-        "app.controllers.shutdown_controller.os.path.isfile",
+        "solin.controllers.shutdown_controller.os.path.isfile",
         lambda path: True,
     )
     monkeypatch.setattr(
-        "app.controllers.shutdown_controller.os.remove",
+        "solin.controllers.shutdown_controller.os.remove",
         lambda path: (_ for _ in ()).throw(OSError()),
     )
     monkeypatch.setattr(

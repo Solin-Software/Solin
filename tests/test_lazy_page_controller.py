@@ -1,4 +1,4 @@
-from app.controllers.lazy_page_controller import LazyPageController
+from solin.controllers.lazy_page_controller import LazyPageController
 
 
 class _WidgetStub:
@@ -111,7 +111,7 @@ def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
 
 
 def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
-    import app.widgets.browser.widget as browser_module
+    import solin.widgets.browser.widget as browser_module
 
     class _BrowserFactory:
         def __init__(self, lang_manager, parent=None):

@@ -1,4 +1,4 @@
-from app.widgets.playlist.items import (
+from solin.widgets.playlist.items import (
     media_type_from_url,
     new_playlist_item,
 )

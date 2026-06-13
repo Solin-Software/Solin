@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.core.meetings.memorial import (
+from solin.core.meetings.memorial import (
     _monday_of,
     _parse_mi_jwpub_response,
     memorial_date_for_year,

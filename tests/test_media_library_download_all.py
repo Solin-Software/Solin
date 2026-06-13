@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 from PySide6.QtCore import QCoreApplication
 
-from app.core.foundation import paths as app_paths
-from app.core.media.cache import MediaCacheManager, cached_path_for
-from app.widgets.media_library_widget import MediaLibraryWidget
+from solin.core.foundation import paths as app_paths
+from solin.core.media.cache import MediaCacheManager, cached_path_for
+from solin.widgets.media_library_widget import MediaLibraryWidget
 
 
 def _app():

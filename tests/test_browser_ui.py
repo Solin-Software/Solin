@@ -1,5 +1,5 @@
-import app.widgets.browser.widget as browser_widget
-from app.widgets.browser.ui import _BrowserUiMixin
+import solin.widgets.browser.widget as browser_widget
+from solin.widgets.browser.ui import _BrowserUiMixin
 
 
 def test_browser_widget_uses_ui_mixin():

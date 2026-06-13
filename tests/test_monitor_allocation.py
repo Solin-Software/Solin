@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from app.core.ui.monitor_allocation import (
+from solin.core.ui.monitor_allocation import (
     MonitorAllocationStore,
     OWNER_MEDIA,
     OWNER_OFF,
     OWNER_TIMER,
     ScreenIdentity,
 )
-from app.core.profiles import settings as _ps
+from solin.core.profiles import settings as _ps
 
 
 class _Geo:

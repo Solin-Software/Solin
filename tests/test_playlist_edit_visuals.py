@@ -1,5 +1,5 @@
-from app.core.meetings.colors import _hsl_to_hex
-from app.widgets.playlist.edit_visuals import (
+from solin.core.meetings.colors import _hsl_to_hex
+from solin.widgets.playlist.edit_visuals import (
     PlaylistIconProvider,
     PlaylistThumbnailProvider,
     _ICON_MAP,

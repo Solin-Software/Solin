@@ -52,20 +52,20 @@ def check_locales(json_files):
         
     return is_identical, all_keys
 
-def find_unused_keys(all_keys, app_dir, detailed=False):
+def find_unused_keys(all_keys, source_dir, detailed=False):
     """
-    Procura as chaves recursivamente em TODOS os arquivos .py dentro de app/.
+    Procura as chaves recursivamente em TODOS os arquivos .py dentro de src/solin/.
     Usa 'ast' (Abstract Syntax Tree) como método principal.
     Fallback para regex caso o arquivo tenha SyntaxError no AST.
 
     Se detailed=True, exibe ao final todos os locais (arquivo:linha) onde
     cada chave foi encontrada no código.
     """
-    if not os.path.exists(app_dir):
-        print(f"❌ Diretório '{app_dir}' não encontrado.")
+    if not os.path.exists(source_dir):
+        print(f"❌ Diretório '{source_dir}' não encontrado.")
         return
 
-    print(f"🔍 Fase 2: Varrendo código-fonte em '{app_dir}' e TODAS as suas subpastas...")
+    print(f"🔍 Fase 2: Varrendo código-fonte em '{source_dir}' e TODAS as suas subpastas...")
     
     scanned_files = 0
     skipped_files = []
@@ -74,7 +74,7 @@ def find_unused_keys(all_keys, app_dir, detailed=False):
     # Mapeia string -> lista de (filepath, linha) — preenchido sempre que detailed=True
     string_locations: dict = {} if detailed else None
     
-    for root, dirs, files in os.walk(app_dir):
+    for root, dirs, files in os.walk(source_dir):
         dirs[:] = [d for d in dirs if not d.startswith('__') and not d.startswith('.')]
         
         for file in files:
@@ -119,7 +119,7 @@ def find_unused_keys(all_keys, app_dir, detailed=False):
                     print(f"⚠ Aviso: Não foi possível ler {filepath}: {e}")
 
     if scanned_files == 0:
-        print("❌ Nenhum arquivo .py encontrado na pasta app/ ou subpastas.")
+        print("❌ Nenhum arquivo .py encontrado na pasta src/solin ou subpastas.")
         return
 
     if skipped_files:
@@ -181,7 +181,7 @@ def find_unused_keys(all_keys, app_dir, detailed=False):
                 locations = string_locations[matched_as]
                 print(f"\n  🔑 {key}")
                 for filepath, lineno in locations:
-                    rel_path = os.path.relpath(filepath, os.path.dirname(app_dir))
+                    rel_path = os.path.relpath(filepath, os.path.dirname(source_dir))
                     print(f"     📄 {rel_path}:{lineno}")
             else:
                 print(f"\n  ❌ {key}  ← não encontrada no código")
@@ -201,9 +201,9 @@ def main():
 
     if is_identical:
         project_root = os.path.dirname(os.path.dirname(current_dir))
-        app_dir = os.path.join(project_root, 'app')
+        source_dir = os.path.join(project_root, 'src', 'solin')
         
-        find_unused_keys(all_keys, app_dir, detailed=detailed)
+        find_unused_keys(all_keys, source_dir, detailed=detailed)
     else:
         print("\n🛑 Verificação de uso no código cancelada. Corrija as traduções faltantes primeiro.")
 

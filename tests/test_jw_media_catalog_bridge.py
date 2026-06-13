@@ -4,7 +4,7 @@ import unittest
 
 from PySide6.QtCore import QCoreApplication
 
-from app.widgets.jw_media_catalog_bridge import (
+from solin.widgets.jw_media_catalog_bridge import (
     JWMediaCatalogBridge,
     JWMediaCatalogModel,
     build_jw_media_placement_options,

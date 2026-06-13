@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from app.core.jw import publication_reader
+from solin.core.jw import publication_reader
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_meeting_workbook.jwpub"
 

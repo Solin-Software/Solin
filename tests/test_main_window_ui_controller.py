@@ -1,6 +1,6 @@
 import inspect
 
-from app.controllers.main_window_ui_controller import MainWindowUiController
+from solin.controllers.main_window_ui_controller import MainWindowUiController
 
 
 def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable():

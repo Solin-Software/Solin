@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 import zlib
 
-from app.widgets.media_info_extractor import (
+from solin.widgets.media_info_extractor import (
     _audio_info_from_file,
     _embedded_image_is_complete,
     _id3v2_info_from_bytes,

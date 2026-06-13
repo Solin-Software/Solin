@@ -1,6 +1,6 @@
-import app.core.profiles.manager as profile_manager
-import main
-from app.controllers.profile_switch_controller import ProfileSwitchController
+import solin.core.profiles.manager as profile_manager
+from solin.bootstrap import application as main
+from solin.controllers.profile_switch_controller import ProfileSwitchController
 
 
 class _SignalStub:
@@ -108,7 +108,7 @@ def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatc
     manager.active_profile.id = "profile-a"
 
     monkeypatch.setattr(profile_manager, "get", lambda: manager)
-    monkeypatch.setattr("app.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
+    monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
         main,
         "_relaunch_with_profile",
@@ -164,7 +164,7 @@ def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
     manager.active_profile.id = "profile-a"
 
     monkeypatch.setattr(profile_manager, "get", lambda: manager)
-    monkeypatch.setattr("app.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
+    monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
         main,
         "_relaunch_with_profile",

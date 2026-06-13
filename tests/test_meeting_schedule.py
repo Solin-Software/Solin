@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.core.foundation.settings_keys import SettingsKey
-from app.core.meetings.schedule import (
+from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.meetings.schedule import (
     MIDWEEK,
     UNCONFIGURED_WEEKDAY,
     WEEKEND,

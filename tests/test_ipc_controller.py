@@ -1,5 +1,5 @@
-from app.controllers.ipc_controller import IpcController
-import main
+from solin.controllers.ipc_controller import IpcController
+from solin.bootstrap import application as main
 
 
 class _Raw:

@@ -1,5 +1,5 @@
-import app.widgets.projection.bar as projection_bar
-from app.widgets.projection.playlist import ProjectionPlaylistMixin
+import solin.widgets.projection.bar as projection_bar
+from solin.widgets.projection.playlist import ProjectionPlaylistMixin
 
 
 def test_projection_bar_uses_playlist_mixin():

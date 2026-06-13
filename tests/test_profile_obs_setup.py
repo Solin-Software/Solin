@@ -1,5 +1,5 @@
-from app.ui.profile_obs_setup import ProfileOBSSetupMixin
-from app.ui.profile_screen import ProfileScreen
+from solin.ui.profile_obs_setup import ProfileOBSSetupMixin
+from solin.ui.profile_screen import ProfileScreen
 
 
 def test_profile_screen_uses_obs_setup_mixin():

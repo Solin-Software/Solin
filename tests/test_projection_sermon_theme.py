@@ -1,8 +1,8 @@
-from app.projection.sermon_theme import SermonThemeProjectionWidget, _THEME_BG_SVG
+from solin.projection.sermon_theme import SermonThemeProjectionWidget, _THEME_BG_SVG
 
 
 def test_sermon_theme_projection_widget_lives_in_theme_module():
-    assert SermonThemeProjectionWidget.__module__ == "app.projection.sermon_theme"
+    assert SermonThemeProjectionWidget.__module__ == "solin.projection.sermon_theme"
 
 
 def test_sermon_theme_svg_stays_embedded_in_python():

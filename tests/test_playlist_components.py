@@ -1,4 +1,4 @@
-from app.widgets.playlist.components import _MENU_STYLE
+from solin.widgets.playlist.components import _MENU_STYLE
 
 
 def test_playlist_menu_style_lives_with_cards():

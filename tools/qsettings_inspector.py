@@ -12,7 +12,7 @@ Windows QSettings live under:
     HKEY_CURRENT_USER\\Software\\SolinDev
     HKEY_CURRENT_USER\\Software\\SolinDev_<profile>
 
-Dev files are resolved with the same QStandardPaths policy used by app/core/foundation/paths.py.
+Dev files are resolved with the same QStandardPaths policy used by src/solin/core/foundation/paths.py.
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def delete_dev_registry() -> list[str]:
 
 
 def dev_paths() -> DevPaths:
-    """Resolve the same dev locations that app/core/foundation/paths.py resolves."""
+    """Resolve the same dev locations that src/solin/core/foundation/paths.py resolves."""
     loc = QStandardPaths.StandardLocation
     data_dir = Path(QStandardPaths.writableLocation(loc.AppDataLocation))
     cache_dir = Path(QStandardPaths.writableLocation(loc.CacheLocation))

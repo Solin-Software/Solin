@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.widgets.meetings.visuals import _SEC_ICONS
+from solin.widgets.meetings.visuals import _SEC_ICONS
 
 
 def test_meeting_section_icons_stay_embedded_in_python():
@@ -9,8 +9,8 @@ def test_meeting_section_icons_stay_embedded_in_python():
 
 
 def test_meetings_qml_pointer_bridge_remains_wired():
-    source = Path("app/widgets/meetings/widget.py").read_text(encoding="utf-8")
-    detail_model_source = Path("app/widgets/meetings/detail_model.py").read_text(
+    source = Path("src/solin/widgets/meetings/widget.py").read_text(encoding="utf-8")
+    detail_model_source = Path("src/solin/widgets/meetings/detail_model.py").read_text(
         encoding="utf-8"
     )
 

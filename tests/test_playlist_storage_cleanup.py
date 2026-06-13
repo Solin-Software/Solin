@@ -1,5 +1,5 @@
-from app.widgets.playlist import cleanup as playlist_cleanup
-from app.widgets.playlist.storage import (
+from solin.widgets.playlist import cleanup as playlist_cleanup
+from solin.widgets.playlist.storage import (
     _load_playlists,
     _save_playlists,
     load_pending_deletions,
@@ -9,9 +9,9 @@ from app.widgets.playlist.storage import (
 
 def test_playlist_storage_roundtrips_playlists(tmp_path, monkeypatch):
     playlists_file = tmp_path / "playlists.json"
-    monkeypatch.setattr("app.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("solin.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
     monkeypatch.setattr(
-        "app.widgets.playlist.storage._paths.PLAYLISTS_FILE",
+        "solin.widgets.playlist.storage._paths.PLAYLISTS_FILE",
         str(playlists_file),
     )
 
@@ -22,9 +22,9 @@ def test_playlist_storage_roundtrips_playlists(tmp_path, monkeypatch):
 
 def test_playlist_storage_roundtrips_pending_deletions(tmp_path, monkeypatch):
     pending_file = tmp_path / "pending.json"
-    monkeypatch.setattr("app.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
+    monkeypatch.setattr("solin.widgets.playlist.storage._paths.DATA_DIR", str(tmp_path))
     monkeypatch.setattr(
-        "app.widgets.playlist.storage._paths.PENDING_DEL_FILE",
+        "solin.widgets.playlist.storage._paths.PENDING_DEL_FILE",
         str(pending_file),
     )
 

@@ -10,7 +10,7 @@ _BROAD_EXCEPTION_NOQA = "noqa: BLE001"
 def _python_sources() -> list[Path]:
     return [
         _REPO_ROOT / "main.py",
-        *sorted((_REPO_ROOT / "app").rglob("*.py")),
+        *sorted((_REPO_ROOT / "src" / "solin").rglob("*.py")),
         *sorted((_REPO_ROOT / "tools").rglob("*.py")),
     ]
 

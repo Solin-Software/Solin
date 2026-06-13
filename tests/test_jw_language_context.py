@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.core.jw.language_context import jw_media_language_context
+from solin.core.jw.language_context import jw_media_language_context
 
 
 def test_jw_media_language_context_keeps_ui_language_as_fallback() -> None:

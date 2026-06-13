@@ -4,8 +4,8 @@ import http.client
 import threading
 from http.server import HTTPServer
 
-from app.core.foundation import paths as app_paths
-from app.core.ingest.wifi_server import _make_handler, _parse_multipart, _safe_filename
+from solin.core.foundation import paths as app_paths
+from solin.core.ingest.wifi_server import _make_handler, _parse_multipart, _safe_filename
 
 
 def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:

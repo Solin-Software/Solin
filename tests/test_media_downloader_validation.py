@@ -5,8 +5,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from app.core.foundation import paths as app_paths
-from app.core.media.downloader import SongDownloader, _DownloadJob
+from solin.core.foundation import paths as app_paths
+from solin.core.media.downloader import SongDownloader, _DownloadJob
 
 
 def _download_from_server(

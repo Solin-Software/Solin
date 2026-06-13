@@ -13,8 +13,8 @@ set OUTPUT_DIR=%PROJECT_ROOT%build
 set APP_NAME=Solin
 set ICON=%PROJECT_ROOT%assets\icon.ico
 set PYTHON=%PROJECT_ROOT%.venv\Scripts\python.exe
-set QML_SOURCE_DIR=%PROJECT_ROOT%app\qml
-set QML_MODULE_ROOT=%PROJECT_ROOT%build\qmlcache\app\qml
+set QML_SOURCE_DIR=%PROJECT_ROOT%src\solin\qml
+set QML_MODULE_ROOT=%PROJECT_ROOT%build\qmlcache\solin\qml
 set QML_CACHE_DIR=%QML_MODULE_ROOT%\Solin
 set QT_QML_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\PySide6\qml
 set QT_LIBRARY_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\qt-libs
@@ -26,7 +26,12 @@ rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
 :: "%PYTHON%" -m nuitka --clean-cache=all
 
 :: ── Metadados do executavel ───────────────────────────────
-set VERSION=26.17.1.0
+for /f "usebackq delims=" %%V in (`"%PYTHON%" -c "import pathlib; ns={}; exec(pathlib.Path(r'%PROJECT_ROOT%src\solin\version.py').read_text(encoding='utf-8'), ns); print(ns['__version__'])"`) do set "VERSION=%%V"
+if not defined VERSION (
+    echo  [ERRO] Nao foi possivel ler a versao em src\solin\version.py.
+    pause
+    exit /b 1
+)
 set PRODUCT_NAME=Solin
 set COMPANY_NAME=Solin Software
 set DESCRIPTION=Solin - Audio and Video for Kingdom Hall meetings
@@ -68,18 +73,18 @@ if %ERRORLEVEL% NEQ 0 (
     --windows-company-name="%COMPANY_NAME%" ^
     --windows-file-description="%DESCRIPTION%" ^
     --copyright="%COPYRIGHT%" ^
-    --follow-import-to=app ^
-    --follow-import-to=app.core ^
-    --follow-import-to=app.styles ^
-    --follow-import-to=app.widgets ^
+    --follow-import-to=solin ^
+    --follow-import-to=solin.core ^
+    --follow-import-to=solin.styles ^
+    --follow-import-to=solin.widgets ^
     --nofollow-import-to=PySide6.QtTranslations ^
 	--nofollow-import-to=win32com.gen_py ^
 	--nofollow-import-to=comtypes.gen ^
 	--noinclude-setuptools-mode=nofollow ^
-    --include-package=app ^
-    --include-package=app.core ^
-    --include-package=app.styles ^
-    --include-package=app.widgets ^
+    --include-package=solin ^
+    --include-package=solin.core ^
+    --include-package=solin.styles ^
+    --include-package=solin.widgets ^
     --include-package=native_webview_widget ^
 	--include-module=websocket ^
 	--include-module=websocket._core ^
@@ -89,7 +94,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-package=comtypes ^
     --include-package-data=pyqttoast ^
     --include-data-dir="%PROJECT_ROOT%translations\locales=translations/locales" ^
-    --include-data-dir="%QML_CACHE_DIR%=app/qml/Solin" ^
+    --include-data-dir="%QML_CACHE_DIR%=solin/qml/Solin" ^
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
     --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
@@ -124,36 +129,36 @@ if exist "%DIST%\qtwebengine_devtools_resources.debug.pak" (
     echo  [OK] qtwebengine_devtools_resources.debug.pak removido
 )
 
-del /f /q "%DIST%\app\qml\*.qmlc" 2>nul
-del /f /q "%DIST%\app\qml\*.qml" 2>nul
-del /f /q "%DIST%\app\qml\qmldir" 2>nul
+del /f /q "%DIST%\solin\qml\*.qmlc" 2>nul
+del /f /q "%DIST%\solin\qml\*.qml" 2>nul
+del /f /q "%DIST%\solin\qml\qmldir" 2>nul
 
-if not exist "%DIST%\app\qml\Solin\*.qmlc" (
-    echo  [ERRO] Nenhum cache QML .qmlc foi empacotado em %DIST%\app\qml\Solin.
+if not exist "%DIST%\solin\qml\Solin\*.qmlc" (
+    echo  [ERRO] Nenhum cache QML .qmlc foi empacotado em %DIST%\solin\qml\Solin.
     pause
     exit /b 1
 )
 
-for %%F in ("%DIST%\app\qml\Solin\*.qml") do (
+for %%F in ("%DIST%\solin\qml\Solin\*.qml") do (
     if exist "%%~fF" if /I "%%~xF"==".qml" (
         del /f /q "%%~fF"
         echo  [OK] QML fonte removido: %%~nxF
     )
 )
 
-if not exist "%DIST%\app\qml\Solin\qmldir" (
+if not exist "%DIST%\solin\qml\Solin\qmldir" (
     echo  [ERRO] Metadados qmldir dos QML compilados nao foram empacotados.
     pause
     exit /b 1
 )
 
 set RAW_QML_FOUND=
-for %%F in ("%DIST%\app\qml\Solin\*.qml") do (
+for %%F in ("%DIST%\solin\qml\Solin\*.qml") do (
     if exist "%%~fF" if /I "%%~xF"==".qml" set RAW_QML_FOUND=1
 )
 
 if defined RAW_QML_FOUND (
-    echo  [ERRO] Arquivos QML fonte permaneceram em %DIST%\app\qml\Solin.
+    echo  [ERRO] Arquivos QML fonte permaneceram em %DIST%\solin\qml\Solin.
     pause
     exit /b 1
 )

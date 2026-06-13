@@ -1,5 +1,5 @@
-from app.widgets.playlist import widget as playlist_widget
-from app.widgets.playlist.edit_actions import _PlaylistEditActionsMixin
+from solin.widgets.playlist import widget as playlist_widget
+from solin.widgets.playlist.edit_actions import _PlaylistEditActionsMixin
 
 
 def test_playlist_edit_view_uses_actions_mixin():

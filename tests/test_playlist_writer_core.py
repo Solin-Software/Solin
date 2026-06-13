@@ -4,8 +4,8 @@ import sqlite3
 
 import pytest
 
-from app.core.playlists import writer
-from app.core.playlists.writer import _parse_jw_filename
+from solin.core.playlists import writer
+from solin.core.playlists.writer import _parse_jw_filename
 
 
 def test_parse_jw_filename_handles_standard_cdn_filename():

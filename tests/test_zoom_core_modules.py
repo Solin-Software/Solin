@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.core.integrations.automation.zoom.i18n_labels import (
+from solin.core.integrations.automation.zoom.i18n_labels import (
     AUDIO_MUTED_TEXT,
     AUDIO_UNMUTED_TEXT,
     CONNECT_AUDIO_TEXT,
@@ -9,19 +9,19 @@ from app.core.integrations.automation.zoom.i18n_labels import (
     VIDEO_STARTED_TEXT,
     VIDEO_STOPPED_TEXT,
 )
-from app.core.integrations.automation.zoom.toolbar_cache import (
+from solin.core.integrations.automation.zoom.toolbar_cache import (
     PARTICIPANTS_PANEL_CONTROL_IDS,
     TOOLBAR_CORE_CONTROL_IDS,
     _ToolbarCache,
 )
-from app.core.integrations.automation.zoom.text_match import (
+from solin.core.integrations.automation.zoom.text_match import (
     _audio_button_state_from_text,
     _matches_toolbar_action,
     _normalize_toolbar_text,
     _toolbar_action_match_score,
     _video_button_state_from_text,
 )
-from app.core.integrations.automation.zoom.types import (
+from solin.core.integrations.automation.zoom.types import (
     AudioState,
     MeetingState,
     ShareState,
@@ -95,7 +95,7 @@ def test_zoom_text_match_handles_toolbar_suffixes_and_states():
 
 
 def test_zoom_controls_uses_package_local_zoom_modules():
-    source = Path("app/core/integrations/automation/zoom/controls.py").read_text(
+    source = Path("src/solin/core/integrations/automation/zoom/controls.py").read_text(
         encoding="utf-8"
     )
 

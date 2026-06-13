@@ -63,18 +63,14 @@ jobs:
         shell: bash
         run: |
           python - <<'PY' | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
-          import re
           from pathlib import Path
 
-          constants_path = Path("app/core/foundation/constants.py")
-          text = constants_path.read_text(encoding="utf-8")
-          match = re.search(r'APP_VERSION:\s*str\s*=\s*"([^"]+)"', text)
-          if not match:
-              raise SystemExit(f"APP_VERSION was not found in {constants_path}")
-          internal_version = match.group(1)
+          namespace = {}
+          exec(Path("src/solin/version.py").read_text(encoding="utf-8"), namespace)
+          internal_version = namespace["__version__"]
           parts = internal_version.split(".")
           if len(parts) != 4 or not all(part.isdigit() for part in parts):
-              raise SystemExit(f"APP_VERSION must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
+              raise SystemExit(f"Version must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
           macos_version = ".".join(parts[:3])
           print(f"APP_VERSION={macos_version}")
           print(f"app_version={macos_version}")
@@ -86,7 +82,7 @@ jobs:
         run: |
           test -f main.py
           test -f assets/icon.icns
-          test -d app/qml
+          test -d src/solin/qml
           test -d translations/locales
           test -d translations
           test -f native_webview_widget/__init__.py
@@ -121,15 +117,16 @@ jobs:
             --no-index \
             --find-links .pip-wheels \
             --requirement requirements.txt
+          python -m pip install --no-deps -e .
           python -m pip install --upgrade --retries 10 --timeout 120 --prefer-binary nuitka ordered-set zstandard
 
       - name: Generate compiled QML cache
         shell: bash
         run: |
-          rm -rf "${BUILD_DIR}/qmlcache/app/qml"
+          rm -rf "${BUILD_DIR}/qmlcache/solin/qml"
           python tools/compile_qml_cache.py \
-            --source-dir app/qml \
-            --output-dir "${BUILD_DIR}/qmlcache/app/qml/Solin" \
+            --source-dir src/solin/qml \
+            --output-dir "${BUILD_DIR}/qmlcache/solin/qml/Solin" \
             --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \
             --qt-framework-output-dir "${BUILD_DIR}/qmlcache/qt-libs"
 
@@ -159,16 +156,15 @@ jobs:
             --macos-app-icon="assets/icon.icns" \
             --assume-yes-for-downloads \
             --follow-imports \
-            --follow-import-to=app \
-            --follow-import-to=app.core \
-            --follow-import-to=app.styles \
-            --follow-import-to=app.widgets \
+            --follow-import-to=solin \
+            --follow-import-to=solin.core \
+            --follow-import-to=solin.styles \
+            --follow-import-to=solin.widgets \
             --nofollow-import-to=PySide6.QtTranslations \
-            --nofollow-import-to=app.core.zoom_controls \
-            --include-package=app \
-            --include-package=app.core \
-            --include-package=app.styles \
-            --include-package=app.widgets \
+            --include-package=solin \
+            --include-package=solin.core \
+            --include-package=solin.styles \
+            --include-package=solin.widgets \
             --include-package=native_webview_widget \
             --include-module=websocket \
             --include-module=websocket._core \
@@ -177,7 +173,7 @@ jobs:
             --include-package-data=pyqttoast \
             --include-data-dir=assets=assets \
             --include-data-dir=translations/locales=translations/locales \
-            --include-data-dir="${BUILD_DIR}/qmlcache/app/qml/Solin=app/qml/Solin" \
+            --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
             --include-data-files="translations/*.qm=translations/" \
@@ -263,19 +259,19 @@ jobs:
         shell: bash
         run: |
           BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
-          find "$BUNDLE" -path "*/app/qml/*.qmlc" -not -path "*/app/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/app/qml/*.qml" -not -path "*/app/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/app/qml/qmldir" -delete
-          if ! find "$BUNDLE" -path "*/app/qml/Solin/*.qmlc" -print -quit | grep -q .; then
+          find "$BUNDLE" -path "*/solin/qml/*.qmlc" -not -path "*/solin/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/solin/qml/*.qml" -not -path "*/solin/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/solin/qml/qmldir" -delete
+          if ! find "$BUNDLE" -path "*/solin/qml/Solin/*.qmlc" -print -quit | grep -q .; then
             echo "::error::Compiled QML cache files were not packaged in the app bundle."
             exit 1
           fi
-          find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -delete
-          if ! find "$BUNDLE" -path "*/app/qml/Solin/qmldir" -print -quit | grep -q .; then
+          find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -delete
+          if ! find "$BUNDLE" -path "*/solin/qml/Solin/qmldir" -print -quit | grep -q .; then
             echo "::error::Compiled QML qmldir metadata was not packaged in the app bundle."
             exit 1
           fi
-          if find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -print -quit | grep -q .; then
+          if find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -print -quit | grep -q .; then
             echo "::error::Raw QML source files remained in the app bundle."
             exit 1
           fi

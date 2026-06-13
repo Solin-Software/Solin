@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-import app.widgets.projection.bar as projection_bar
+import solin.widgets.projection.bar as projection_bar
 
 
 class _Timer:

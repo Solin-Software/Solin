@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.controllers.open_media_controller import OpenMediaController
-from app.core.media.mime import mime_to_ext
+from solin.controllers.open_media_controller import OpenMediaController
+from solin.core.media.mime import mime_to_ext
 
 
 class _NavigationStub:
@@ -93,7 +93,7 @@ def test_open_media_files_projects_single_local_media_and_expands(
     media_path = str(tmp_path / filename)
     timers = []
     monkeypatch.setattr(
-        "app.controllers.open_media_controller.QTimer",
+        "solin.controllers.open_media_controller.QTimer",
         SimpleNamespace(
             singleShot=lambda ms, callback: timers.append(ms) or callback()
         ),
@@ -157,7 +157,7 @@ def test_open_media_files_classifies_http_audio_by_url_extension(monkeypatch):
     window = _WindowStub()
     controller = OpenMediaController(window)
     monkeypatch.setattr(
-        "app.controllers.open_media_controller.QTimer",
+        "solin.controllers.open_media_controller.QTimer",
         SimpleNamespace(singleShot=lambda _ms, callback: callback()),
     )
 
@@ -247,7 +247,7 @@ def test_expand_jwlplaylist_returns_jworg_and_local_items(monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("app.core.playlists.reader.read_jwlplaylist", _fake_read)
+    monkeypatch.setattr("solin.core.playlists.reader.read_jwlplaylist", _fake_read)
 
     assert controller.expand_jwlplaylist("playlist.jwlplaylist") == [
         {
@@ -264,7 +264,7 @@ def test_expand_jwlplaylist_writes_embedded_media(monkeypatch):
     controller = OpenMediaController(window)
 
     monkeypatch.setattr(
-        "app.core.playlists.reader.read_jwlplaylist",
+        "solin.core.playlists.reader.read_jwlplaylist",
         lambda _path, fallback_lang_code: {
             "items": [
                 {

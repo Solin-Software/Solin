@@ -136,7 +136,7 @@ jobs:
             requirements-dev.txt
 
       - name: Install dependencies
-        run: uv pip install --system -r requirements-dev.txt
+        run: uv pip install --system -r requirements-dev.txt -e .
 
       - name: Pyright typecheck
         run: python -m pyright --pythonpath "$(command -v python)"

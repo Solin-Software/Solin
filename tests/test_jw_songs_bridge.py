@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
-from app.core.jw import songs as songs_module
-from app.core.jw.songs import JWSongsStore
-from app.widgets.jw_songs_bridge import JWSongsBridge
+from solin.core.jw import songs as songs_module
+from solin.core.jw.songs import JWSongsStore
+from solin.widgets.jw_songs_bridge import JWSongsBridge
 
 
 def _app():

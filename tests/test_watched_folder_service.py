@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core.ingest import watched_folder as watched_folder_module
-from app.core.ingest.watched_folder import (
+from solin.core.ingest import watched_folder as watched_folder_module
+from solin.core.ingest.watched_folder import (
     WatchedFolderSyncThread,
     local_file_availability_signature,
     meeting_folder_source_needs_processing,
@@ -148,7 +148,7 @@ def test_watched_folder_cancellation_terminates_libreoffice(monkeypatch, tmp_pat
 
 
 def _install_fake_pdf_renderer(monkeypatch):
-    from app.core.rendering import pdf as pdf_module
+    from solin.core.rendering import pdf as pdf_module
 
     def fake_render(
         _pdf_path,
@@ -212,7 +212,7 @@ def test_cancelled_libreoffice_render_does_not_publish_partial_cache(
     monkeypatch,
     tmp_path,
 ):
-    from app.core.rendering import libreoffice as libreoffice_module
+    from solin.core.rendering import libreoffice as libreoffice_module
 
     _install_fake_pdf_renderer(monkeypatch)
     source = tmp_path / "deck.pptx"
@@ -438,7 +438,7 @@ def test_manifest_commit_failure_rolls_back_new_outputs(monkeypatch, tmp_path):
 
 
 def test_cancelled_embedded_playlist_output_stays_in_staging(monkeypatch, tmp_path):
-    from app.core.playlists import reader as playlist_reader
+    from solin.core.playlists import reader as playlist_reader
 
     source = tmp_path / "media.jwlplaylist"
     source.write_bytes(b"playlist")

@@ -5,10 +5,10 @@ import unittest
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
-from app.core.foundation import paths as app_paths
-from app.core.media.cache import MediaCacheManager
-from app.core.i18n.strings import tr_offline_queued
-from app.widgets.media_library_widget import MediaLibraryModel
+from solin.core.foundation import paths as app_paths
+from solin.core.media.cache import MediaCacheManager
+from solin.core.i18n.strings import tr_offline_queued
+from solin.widgets.media_library_widget import MediaLibraryModel
 
 
 class FakeDownloader(QObject):

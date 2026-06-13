@@ -5,12 +5,12 @@ import time
 
 from PySide6.QtCore import QCoreApplication
 
-from app.core.ingest.wifi_server import WifiReceiveServer
-from app.core.integrations.automation.obs import OBSWebSocketService
-from app.core.integrations.automation.zoom import service as zoom_module
-from app.core.integrations.automation.zoom.service import ZoomService
-from app.core.integrations.ndi import NDIReceiverService
-from app.core.media.downloader import SongDownloader
+from solin.core.ingest.wifi_server import WifiReceiveServer
+from solin.core.integrations.automation.obs import OBSWebSocketService
+from solin.core.integrations.automation.zoom import service as zoom_module
+from solin.core.integrations.automation.zoom.service import ZoomService
+from solin.core.integrations.ndi import NDIReceiverService
+from solin.core.media.downloader import SongDownloader
 
 
 def _app() -> QCoreApplication:

@@ -1,4 +1,4 @@
-from app.controllers.window_state_controller import WindowStateController
+from solin.controllers.window_state_controller import WindowStateController
 
 
 def test_clamped_size_uses_minimums_for_invalid_saved_values():

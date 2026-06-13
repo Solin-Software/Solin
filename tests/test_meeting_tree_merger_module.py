@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.core.meetings.tree_merger import MeetingTreeMerger, _media_identity_signature
+from solin.core.meetings.tree_merger import MeetingTreeMerger, _media_identity_signature
 
 
 def test_meeting_tree_merger_lives_in_core_module():
-    assert MeetingTreeMerger.__module__ == "app.core.meetings.tree_merger"
+    assert MeetingTreeMerger.__module__ == "solin.core.meetings.tree_merger"
 
 
 def test_media_identity_signature_uses_media_ref_fields():

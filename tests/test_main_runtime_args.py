@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 from PySide6 import QtCore
 
-import app.core.profiles.manager as profile_manager
-import main
-from main import _split_runtime_args
+import solin.core.profiles.manager as profile_manager
+from solin.bootstrap import application as main
+from solin.bootstrap.application import _split_runtime_args
 
 
 def test_split_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
@@ -59,11 +59,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
 
     monkeypatch.setitem(
         sys.modules,
-        "app.main_window",
+        "solin.main_window",
         SimpleNamespace(MainWindow=_MainWindow),
     )
     monkeypatch.setattr(
-        "app.core.ui.titlebar.apply_titlebar_color",
+        "solin.core.ui.titlebar.apply_titlebar_color",
         lambda window, color: events.append(("titlebar", window, color)),
     )
     monkeypatch.setattr(
@@ -101,11 +101,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
 
     monkeypatch.setitem(
         sys.modules,
-        "app.main_window",
+        "solin.main_window",
         SimpleNamespace(MainWindow=_MainWindow),
     )
     monkeypatch.setattr(
-        "app.core.ui.titlebar.apply_titlebar_color",
+        "solin.core.ui.titlebar.apply_titlebar_color",
         lambda window, color: events.append(("titlebar", color)),
     )
     monkeypatch.setattr(

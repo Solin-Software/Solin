@@ -1,5 +1,5 @@
-import app.widgets.projection.bar as projection_bar
-from app.widgets.projection.audio import ProjectionAudioMixin
+import solin.widgets.projection.bar as projection_bar
+from solin.widgets.projection.audio import ProjectionAudioMixin
 
 
 def test_projection_bar_uses_audio_mixin():

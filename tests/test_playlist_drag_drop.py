@@ -1,5 +1,5 @@
-from app.widgets.playlist import widget as playlist_widget
-from app.widgets.playlist.drag_drop import _PlaylistDragDropMixin
+from solin.widgets.playlist import widget as playlist_widget
+from solin.widgets.playlist.drag_drop import _PlaylistDragDropMixin
 
 
 def test_playlist_edit_view_uses_drag_drop_mixin():

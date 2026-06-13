@@ -1,4 +1,4 @@
-from app.ui import profile_widgets
+from solin.ui import profile_widgets
 
 
 def test_profile_widget_styles_live_with_visual_widgets():

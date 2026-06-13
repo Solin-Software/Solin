@@ -1,6 +1,6 @@
 from PySide6.QtCore import QDateTime
 
-from app.controllers.projection_window_controller import ProjectionWindowController
+from solin.controllers.projection_window_controller import ProjectionWindowController
 
 
 class _ProjectionIntegrationsStub:
@@ -163,7 +163,7 @@ def _patch_projection_window(monkeypatch):
         return win
 
     monkeypatch.setattr(
-        "app.controllers.projection_window_controller.ProjectionWindow",
+        "solin.controllers.projection_window_controller.ProjectionWindow",
         _factory,
     )
     return created
@@ -171,7 +171,7 @@ def _patch_projection_window(monkeypatch):
 
 def _patch_secondary_screens(monkeypatch, screens):
     monkeypatch.setattr(
-        "app.controllers.projection_window_controller.ScreenManager.secondary_screens",
+        "solin.controllers.projection_window_controller.ScreenManager.secondary_screens",
         staticmethod(lambda: screens),
     )
 
@@ -390,7 +390,7 @@ def test_on_monitor_manager_requested_populates_active_screens(monkeypatch):
     window._idle_media_path = "idle.png"
     controller = ProjectionWindowController(window)
     monkeypatch.setattr(
-        "app.controllers.projection_window_controller.ScreenManager.secondary_screens",
+        "solin.controllers.projection_window_controller.ScreenManager.secondary_screens",
         staticmethod(lambda: screens),
     )
 
@@ -410,7 +410,7 @@ def test_on_monitor_all_false_deactivates_every_screen(monkeypatch):
     window.projection_windows = [win]
     controller = ProjectionWindowController(window)
     monkeypatch.setattr(
-        "app.controllers.projection_window_controller.ScreenManager.secondary_screens",
+        "solin.controllers.projection_window_controller.ScreenManager.secondary_screens",
         staticmethod(lambda: screens),
     )
 

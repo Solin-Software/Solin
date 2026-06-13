@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-import app.core.jw.background_song_service as service_module
-from app.core.jw.background_song_service import BackgroundSongService
-from app.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
+import solin.core.jw.background_song_service as service_module
+from solin.core.jw.background_song_service import BackgroundSongService
+from solin.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
 
 
 class _TimerStub:

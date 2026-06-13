@@ -1,4 +1,4 @@
-from app.controllers.remote_services_controller import RemoteServicesController
+from solin.controllers.remote_services_controller import RemoteServicesController
 
 
 class _TimerStub:

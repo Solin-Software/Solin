@@ -6,15 +6,15 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from app.core.foundation.settings_keys import SettingsKey
-from app.core.ingest.manifest import CACHE_DIR_NAME, MANIFEST_FILE
-from app.core.meetings.linked_folder_sync import (
+from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.ingest.manifest import CACHE_DIR_NAME, MANIFEST_FILE
+from solin.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncIdentity,
     MeetingSyncError,
     MeetingSyncRecord,
 )
-from app.widgets.meetings.tree_controller import MeetingTreeController
+from solin.widgets.meetings.tree_controller import MeetingTreeController
 
 
 class _Prefs:

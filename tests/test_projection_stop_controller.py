@@ -1,6 +1,6 @@
 import pytest
 
-from app.controllers.projection_stop_controller import ProjectionStopController
+from solin.controllers.projection_stop_controller import ProjectionStopController
 
 
 class _NavigationStub:

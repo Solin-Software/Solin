@@ -52,5 +52,4 @@ build/*
 !build/installer/
 !build/installer/setup.iss
 !build/installer/patch.iss
-!app/core/search.py
 !tools/debug_flash.py

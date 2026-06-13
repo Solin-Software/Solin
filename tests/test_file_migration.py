@@ -1,4 +1,4 @@
-from app.core.storage.migration import (
+from solin.core.storage.migration import (
     merge_dirs,
     move_dir_if_exists,
     move_file_if_exists,

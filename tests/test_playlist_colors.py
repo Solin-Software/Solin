@@ -1,4 +1,4 @@
-from app.core.meetings.colors import (
+from solin.core.meetings.colors import (
     accent_from_hue,
     badge_bg_from_hue,
     card_bg_from_hue,
@@ -39,7 +39,7 @@ def test_section_color_helpers_share_the_same_hsl_formula():
 
 def test_generate_section_hue_avoids_existing_hues(monkeypatch):
     monkeypatch.setattr(
-        "app.core.meetings.colors.random.randint",
+        "solin.core.meetings.colors.random.randint",
         lambda _start, _end: 215,
     )
 

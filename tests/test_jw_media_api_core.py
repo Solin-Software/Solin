@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from app.core.jw import media_api
-from app.core.jw.media_api import _parse_clips_osg, _parse_songs, _pick_quality
+from solin.core.jw import media_api
+from solin.core.jw.media_api import _parse_clips_osg, _parse_songs, _pick_quality
 
 
 def test_pick_quality_prefers_lower_resolution_before_higher_fallback():

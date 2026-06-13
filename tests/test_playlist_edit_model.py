@@ -1,6 +1,6 @@
 import copy
 
-from app.widgets.playlist.edit_model import PlaylistEditModel
+from solin.widgets.playlist.edit_model import PlaylistEditModel
 
 
 def _nested_playlist():

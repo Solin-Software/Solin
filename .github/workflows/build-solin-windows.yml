@@ -64,6 +64,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install --no-deps -e .
           pip install --upgrade nuitka ordered-set zstandard
 
       - name: Install Inno Setup
@@ -74,30 +75,17 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $constantsPath = "app\core\foundation\constants.py"
-          $constants = Get-Content $constantsPath -Raw
-          if ($constants -notmatch 'APP_VERSION:\s*str\s*=\s*"([^"]+)"') {
-            throw "APP_VERSION was not found in $constantsPath"
+          $versionPath = "src\solin\version.py"
+          $versionSource = Get-Content $versionPath -Raw
+          if ($versionSource -notmatch '__version__\s*=\s*"([^"]+)"') {
+            throw "__version__ was not found in $versionPath"
           }
           $version = $Matches[1]
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Version must use MAJOR.MINOR.PATCH.BUILD format. Got: $version"
+          }
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "app_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-          $buildScript = Get-Content "build\scripts\build_solin.bat" -Raw
-          if ($buildScript -notmatch "set VERSION=$([regex]::Escape($version))") {
-            throw "build\scripts\build_solin.bat VERSION does not match APP_VERSION=$version"
-          }
-
-          $setup = Get-Content "build\installer\setup.iss" -Raw
-          if ($setup -notmatch "#define MyAppVersion\s+`"$([regex]::Escape($version))`"") {
-            throw "build\installer\setup.iss MyAppVersion does not match APP_VERSION=$version"
-          }
-
-          $patch = Get-Content "build\installer\patch.iss" -Raw
-          if ($patch -notmatch "#define MyPatchVersion\s+`"$([regex]::Escape($version))`"") {
-            throw "build\installer\patch.iss MyPatchVersion does not match APP_VERSION=$version"
-          }
-
           Write-Host "APP_VERSION=$version"
 
       - name: Verify required build inputs
@@ -106,7 +94,7 @@ jobs:
           $required = @(
             "main.py",
             "assets\icon.ico",
-            "app\qml",
+            "src\solin\qml",
             "translations\locales",
             "translations",
             "native_webview_widget\__init__.py",
@@ -125,10 +113,10 @@ jobs:
       - name: Generate compiled QML cache
         shell: pwsh
         run: |
-          Remove-Item -LiteralPath "$env:BUILD_DIR\qmlcache\app\qml" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "$env:BUILD_DIR\qmlcache\solin\qml" -Recurse -Force -ErrorAction SilentlyContinue
           python tools\compile_qml_cache.py `
-            --source-dir "app\qml" `
-            --output-dir "$env:BUILD_DIR\qmlcache\app\qml\Solin" `
+            --source-dir "src\solin\qml" `
+            --output-dir "$env:BUILD_DIR\qmlcache\solin\qml\Solin" `
             --qt-qml-output-dir "$env:BUILD_DIR\qmlcache\PySide6\qml" `
             --qt-library-output-dir "$env:BUILD_DIR\qmlcache\qt-libs" `
             --qt-qml-module "QtQuick/Controls/impl" `
@@ -151,15 +139,15 @@ jobs:
             --windows-file-description="$env:FILE_DESCRIPTION" `
             --copyright="$env:COPYRIGHT" `
             --follow-imports `
-            --follow-import-to=app `
-            --follow-import-to=app.core `
-            --follow-import-to=app.styles `
-            --follow-import-to=app.widgets `
+            --follow-import-to=solin `
+            --follow-import-to=solin.core `
+            --follow-import-to=solin.styles `
+            --follow-import-to=solin.widgets `
             --nofollow-import-to=PySide6.QtTranslations `
-            --include-package=app `
-            --include-package=app.core `
-            --include-package=app.styles `
-            --include-package=app.widgets `
+            --include-package=solin `
+            --include-package=solin.core `
+            --include-package=solin.styles `
+            --include-package=solin.widgets `
             --include-package=native_webview_widget `
             --include-module=websocket `
             --include-module=websocket._core `
@@ -170,7 +158,7 @@ jobs:
             --include-package-data=pyqttoast `
             --include-data-dir="assets=assets" `
             --include-data-dir="translations\locales=translations/locales" `
-            --include-data-dir="$env:BUILD_DIR\qmlcache\app\qml\Solin=app/qml/Solin" `
+            --include-data-dir="$env:BUILD_DIR\qmlcache\solin\qml\Solin=solin/qml/Solin" `
             --include-data-dir="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml" `
             --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
@@ -200,13 +188,13 @@ jobs:
             }
           }
 
-          Get-ChildItem -LiteralPath (Join-Path $dist "app\qml") -Filter "*.qmlc" -File -ErrorAction SilentlyContinue |
+          Get-ChildItem -LiteralPath (Join-Path $dist "solin\qml") -Filter "*.qmlc" -File -ErrorAction SilentlyContinue |
             Remove-Item -Force
-          Get-ChildItem -LiteralPath (Join-Path $dist "app\qml") -Filter "*.qml" -File -ErrorAction SilentlyContinue |
+          Get-ChildItem -LiteralPath (Join-Path $dist "solin\qml") -Filter "*.qml" -File -ErrorAction SilentlyContinue |
             Remove-Item -Force
-          Remove-Item -LiteralPath (Join-Path $dist "app\qml\qmldir") -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath (Join-Path $dist "solin\qml\qmldir") -Force -ErrorAction SilentlyContinue
 
-          $qmlDir = Join-Path $dist "app\qml\Solin"
+          $qmlDir = Join-Path $dist "solin\qml\Solin"
           if (-not (Test-Path (Join-Path $qmlDir "*.qmlc"))) {
             throw "Compiled QML cache files were not packaged in $qmlDir"
           }
@@ -276,7 +264,7 @@ jobs:
 
           Push-Location "build\installer"
           try {
-            & $iscc setup.iss
+            & $iscc "/DMyAppVersion=$env:APP_VERSION" setup.iss
           }
           finally {
             Pop-Location

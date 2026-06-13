@@ -4,8 +4,8 @@ import time
 import unittest
 from unittest.mock import patch
 
-from app.core.jw import catalog as svc
-from app.core.jw.catalog import JWMediaItem
+from solin.core.jw import catalog as svc
+from solin.core.jw.catalog import JWMediaItem
 
 
 def item(

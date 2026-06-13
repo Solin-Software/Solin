@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QDateTime
 
-from app.core.foundation.time_utils import ceil_remaining_seconds
+from solin.core.foundation.time_utils import ceil_remaining_seconds
 
 
 def _target_in_ms(ms: int) -> QDateTime:
