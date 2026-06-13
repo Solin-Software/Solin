@@ -215,6 +215,7 @@ class MainWindowUiController:
             media_ctrl=window.media_ctrl,
             watched_folder=watched_folder,
             notifications=window.notifications,
+            storage_paths=window.playlist_storage_paths,
             parent=window,
         )
         window.meetings_widget = MeetingsWidget(window.lang, parent=window)
@@ -323,12 +324,12 @@ class MainWindowUiController:
         sep.setStyleSheet("background:#21262d; border:none; margin: 4px 0;")
         return sep
 
-    @staticmethod
-    def _flush_orphaned_media_files() -> None:
-        flush_pending_deletions()
-        flush_images_dir()
-        flush_thumbs_dir()
+    def _flush_orphaned_media_files(self) -> None:
+        storage_paths = self._window.playlist_storage_paths
+        flush_pending_deletions(storage_paths)
+        flush_images_dir(storage_paths)
+        flush_thumbs_dir(storage_paths)
         flush_meeting_thumbs_dir()
-        flush_embedded_dir()
-        flush_pdf_pages()
-        flush_pptx_pages()
+        flush_embedded_dir(storage_paths)
+        flush_pdf_pages(storage_paths)
+        flush_pptx_pages(storage_paths)

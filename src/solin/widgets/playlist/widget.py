@@ -46,7 +46,11 @@ from .list_view import _PlaylistListView
 from ...core.playlists.cleanup import cleanup_item_files
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
-from ...core.playlists.storage import load_playlists, save_playlists
+from ...core.playlists.storage import (
+    PlaylistStoragePaths,
+    load_playlists,
+    save_playlists,
+)
 from ...core.playlists.thumbnails import playlist_thumb_path
 from .thumbnails import (
     _load_thumb_from_disk,
@@ -59,8 +63,6 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.ui.notifications import NotificationCenter
-
-_current_playlists_ref: list[list] = [[]]
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
@@ -80,12 +82,16 @@ class _PlaylistEditView(
         media_ctrl=None,
         *,
         notifications: NotificationCenter,
+        storage_paths: PlaylistStoragePaths,
+        all_playlists: list[dict],
         parent=None,
     ):
         super().__init__(parent)
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
+        self._storage_paths = storage_paths
+        self._all_playlists = all_playlists
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
         self._is_watched: bool = False          # linked folder mode
@@ -197,7 +203,7 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import save_manifest_playlist
             save_manifest_playlist(self._watched_path, self._pl)
         else:
-            save_playlists(_current_playlists_ref[0])
+            save_playlists(self._all_playlists, self._storage_paths)
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -813,7 +819,11 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import remove_item_from_manifest
             remove_item_from_manifest(self._watched_path, item)
         elif item:
-            cleanup_item_files(item, _current_playlists_ref[0])
+            cleanup_item_files(
+                item,
+                self._all_playlists,
+                self._storage_paths,
+            )
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
         self.bridge.emit_node_replaced(item_id, [])
@@ -876,14 +886,15 @@ class PlaylistWidget(QWidget):
         watched_folder: str = "",
         *,
         notifications: NotificationCenter,
+        storage_paths: PlaylistStoragePaths,
         parent=None,
     ):
         super().__init__(parent)
         self.lang        = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
-        self._playlists  = load_playlists()
-        _current_playlists_ref[0] = self._playlists
+        self._storage_paths = storage_paths
+        self._playlists = load_playlists(storage_paths)
         self._watched_folder = watched_folder
         self._build_ui()
         self._setup_watcher()
@@ -901,6 +912,7 @@ class PlaylistWidget(QWidget):
             self._playlists, self.lang,
             media_ctrl=self._media_ctrl,
             watched_folder=self._watched_folder,
+            storage_paths=self._storage_paths,
             parent=self,
         )
         # Index 1: playlist edit (also used for watched folders)
@@ -908,6 +920,8 @@ class PlaylistWidget(QWidget):
             self.lang,
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
+            storage_paths=self._storage_paths,
+            all_playlists=self._playlists,
             parent=self,
         )
 
@@ -1010,7 +1024,7 @@ class PlaylistWidget(QWidget):
         pl.pop("_temp", None)
         pl.setdefault("items", [])
         self._playlists.append(pl)
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         self._list_view.refresh()
         self._edit_view.load_playlist(pl)
 
@@ -1045,7 +1059,7 @@ class PlaylistWidget(QWidget):
         if url and any(it.get("url", "") == url for it in pl.get("items", [])):
             return False
         pl.setdefault("items", []).append(item)
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         if (self._stack.currentIndex() == 1
                 and self._edit_view._pl
                 and self._edit_view._pl["id"] == pl_id):
@@ -1060,7 +1074,7 @@ class PlaylistWidget(QWidget):
     def create_playlist_with_item(self, name: str, item: dict) -> str:
         pl = {"id": str(uuid.uuid4()), "name": name, "items": [item]}
         self._playlists.append(pl)
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         self._list_view.refresh()
         return pl["id"]
 

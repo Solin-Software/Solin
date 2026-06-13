@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation import paths as _paths
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.storage import save_playlists
+from ...core.playlists.storage import PlaylistStoragePaths, save_playlists
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
@@ -62,6 +62,8 @@ class _PlaylistListView(QWidget):
         lang: LanguageManager,
         media_ctrl=None,
         watched_folder: str = "",
+        *,
+        storage_paths: PlaylistStoragePaths,
         parent=None,
     ):
         super().__init__(parent)
@@ -69,6 +71,7 @@ class _PlaylistListView(QWidget):
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._watched_folder = watched_folder
+        self._storage_paths = storage_paths
         self._pl_cards: list[_PlaylistCard] = []
         self._wf_cards: list[_WatchedFolderCard] = []
         self._build_ui()
@@ -284,7 +287,7 @@ class _PlaylistListView(QWidget):
             return
         pl = {"id": str(uuid.uuid4()), "name": name, "items": []}
         self._playlists.append(pl)
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         self._rebuild_app_cards()
         self.open_playlist.emit(pl["id"])
 
@@ -300,7 +303,7 @@ class _PlaylistListView(QWidget):
         if not name:
             return
         pl["name"] = name
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         self._rebuild_app_cards()
 
     def _delete_playlist(self, pl_id: str) -> None:
@@ -334,9 +337,9 @@ class _PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        cleanup_playlist_files(pl)
+        cleanup_playlist_files(pl, self._storage_paths)
         self._playlists.remove(pl)
-        save_playlists(self._playlists)
+        save_playlists(self._playlists, self._storage_paths)
         self._rebuild_app_cards()
 
     def _export_playlist(self, pl_id: str) -> None:
@@ -422,7 +425,7 @@ class _PlaylistListView(QWidget):
                     ).replace("{error}", str(e)),
                 )
         if imported:
-            save_playlists(self._playlists)
+            save_playlists(self._playlists, self._storage_paths)
             self._rebuild_app_cards()
 
     def _find(self, pl_id: str) -> Optional[dict]:

@@ -129,22 +129,21 @@ class ShutdownController:
         except Exception:  # noqa: BLE001 - worker-thread shutdown boundary
             log.warning("Failed to stop conversion thread during shutdown", exc_info=True)
 
-    @classmethod
-    def _remove_or_queue_tmp_file(cls, tmp_path: str) -> None:
+    def _remove_or_queue_tmp_file(self, tmp_path: str) -> None:
         try:
             if os.path.isfile(tmp_path):
                 os.remove(tmp_path)
         except OSError:
-            cls._queue_pending_deletion(tmp_path)
+            self._queue_pending_deletion(tmp_path)
 
-    @staticmethod
-    def _queue_pending_deletion(tmp_path: str) -> None:
+    def _queue_pending_deletion(self, tmp_path: str) -> None:
         from ..core.playlists.storage import (
             load_pending_deletions,
             save_pending_deletions,
         )
 
-        pending = load_pending_deletions()
+        storage_paths = self._window.playlist_storage_paths
+        pending = load_pending_deletions(storage_paths)
         if tmp_path not in pending:
             pending.append(tmp_path)
-            save_pending_deletions(pending)
+            save_pending_deletions(pending, storage_paths)

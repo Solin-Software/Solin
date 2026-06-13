@@ -7,6 +7,7 @@ import time
 from solin.core.foundation import paths as _paths
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.playlists.storage import (
+    PlaylistStoragePaths,
     load_playlists,
     load_pending_deletions,
     save_pending_deletions,
@@ -14,7 +15,12 @@ from solin.core.playlists.storage import (
 from solin.core.playlists.thumbnails import playlist_thumb_path
 
 
-def try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
+def try_remove_file(
+    path: str,
+    storage_paths: PlaylistStoragePaths,
+    retries: int = 3,
+    delay: float = 0.5,
+) -> bool:
     for attempt in range(retries):
         try:
             if os.path.isfile(path):
@@ -24,15 +30,15 @@ def try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
 
-    pending = load_pending_deletions()
+    pending = load_pending_deletions(storage_paths)
     if path not in pending:
         pending.append(path)
-        save_pending_deletions(pending)
+        save_pending_deletions(pending, storage_paths)
     return False
 
 
-def flush_pending_deletions() -> None:
-    pending = load_pending_deletions()
+def flush_pending_deletions(storage_paths: PlaylistStoragePaths) -> None:
+    pending = load_pending_deletions(storage_paths)
     if not pending:
         return
 
@@ -43,14 +49,14 @@ def flush_pending_deletions() -> None:
                 os.remove(path)
         except OSError:
             still_pending.append(path)
-    save_pending_deletions(still_pending)
+    save_pending_deletions(still_pending, storage_paths)
 
 
-def flush_images_dir() -> None:
+def flush_images_dir(storage_paths: PlaylistStoragePaths) -> None:
     if not os.path.isdir(_paths.IMAGES_DIR):
         return
 
-    referenced = _referenced_playlist_urls(normalize=True)
+    referenced = _referenced_playlist_urls(storage_paths, normalize=True)
     referenced.update(_meeting_tree_referenced_urls())
 
     for fname in os.listdir(_paths.IMAGES_DIR):
@@ -64,12 +70,12 @@ def flush_images_dir() -> None:
                 pass
 
 
-def flush_thumbs_dir() -> None:
+def flush_thumbs_dir(storage_paths: PlaylistStoragePaths) -> None:
     if not os.path.isdir(_paths.THUMB_CACHE_DIR):
         return
 
     referenced_ids: set[str] = set()
-    for playlist in load_playlists():
+    for playlist in load_playlists(storage_paths):
         for item in playlist.get("items", []):
             item_id = item.get("id", "")
             if item_id:
@@ -87,29 +93,29 @@ def flush_thumbs_dir() -> None:
                 pass
 
 
-def flush_pdf_pages() -> None:
+def flush_pdf_pages(storage_paths: PlaylistStoragePaths) -> None:
     from solin.core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
 
-    referenced = _referenced_playlist_urls()
+    referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls())
     _flush_pdf(referenced)
 
 
-def flush_pptx_pages() -> None:
+def flush_pptx_pages(storage_paths: PlaylistStoragePaths) -> None:
     from solin.core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
     from solin.core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
 
-    referenced = _referenced_playlist_urls()
+    referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls())
     _flush_pptx(referenced)
     _flush_docx(referenced)
 
 
-def flush_embedded_dir() -> None:
+def flush_embedded_dir(storage_paths: PlaylistStoragePaths) -> None:
     if not os.path.isdir(_paths.EMBEDDED_DIR):
         return
 
-    referenced = _referenced_playlist_urls(normalize=True)
+    referenced = _referenced_playlist_urls(storage_paths, normalize=True)
     referenced.update(_meeting_tree_referenced_urls())
 
     for fname in os.listdir(_paths.EMBEDDED_DIR):
@@ -123,31 +129,41 @@ def flush_embedded_dir() -> None:
                 pass
 
 
-def try_remove_file_async(path: str) -> None:
+def try_remove_file_async(
+    path: str,
+    storage_paths: PlaylistStoragePaths,
+) -> None:
     def _worker() -> None:
-        try_remove_file(path, retries=4, delay=0.6)
+        try_remove_file(path, storage_paths, retries=4, delay=0.6)
 
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def cleanup_playlist_files(playlist: dict) -> None:
+def cleanup_playlist_files(
+    playlist: dict,
+    storage_paths: PlaylistStoragePaths,
+) -> None:
     embedded_dir = _paths.EMBEDDED_DIR
     for item in playlist.get("items", []):
         item_id = item.get("id", "")
         if item_id:
             thumb = playlist_thumb_path(item_id)
             if thumb.exists():
-                try_remove_file(os.fspath(thumb))
+                try_remove_file(os.fspath(thumb), storage_paths)
 
         url = item.get("url", "")
         if url and os.path.isabs(url):
             norm = os.path.normpath(url)
             norm_embedded = os.path.normpath(embedded_dir)
             if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-                try_remove_file(norm)
+                try_remove_file(norm, storage_paths)
 
 
-def cleanup_item_files(item: dict, all_playlists: list) -> None:
+def cleanup_item_files(
+    item: dict,
+    all_playlists: list,
+    storage_paths: PlaylistStoragePaths,
+) -> None:
     embedded_dir = _paths.EMBEDDED_DIR
     item_id = item.get("id", "")
     url = item.get("url", "")
@@ -164,18 +180,22 @@ def cleanup_item_files(item: dict, all_playlists: list) -> None:
     if item_id and item_id not in all_ids:
         thumb = playlist_thumb_path(item_id)
         if thumb.exists():
-            try_remove_file(os.fspath(thumb))
+            try_remove_file(os.fspath(thumb), storage_paths)
 
     if url and os.path.isabs(url) and url not in all_urls:
         norm = os.path.normpath(url)
         norm_embedded = os.path.normpath(embedded_dir)
         if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-            try_remove_file_async(norm)
+            try_remove_file_async(norm, storage_paths)
 
 
-def _referenced_playlist_urls(*, normalize: bool = False) -> set[str]:
+def _referenced_playlist_urls(
+    storage_paths: PlaylistStoragePaths,
+    *,
+    normalize: bool = False,
+) -> set[str]:
     referenced: set[str] = set()
-    for playlist in load_playlists():
+    for playlist in load_playlists(storage_paths):
         for item in playlist.get("items", []):
             url = item.get("url", "")
             if url:

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from solin.controllers.shutdown_controller import ShutdownController
 
 
@@ -99,9 +101,10 @@ def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
     monkeypatch.setattr(
         ShutdownController,
         "_queue_pending_deletion",
-        staticmethod(lambda path: queued.append(path)),
+        lambda _self, path: queued.append(path),
     )
 
-    ShutdownController._remove_or_queue_tmp_file("temp.jwlplaylist")
+    controller = ShutdownController(SimpleNamespace())
+    controller._remove_or_queue_tmp_file("temp.jwlplaylist")
 
     assert queued == ["temp.jwlplaylist"]

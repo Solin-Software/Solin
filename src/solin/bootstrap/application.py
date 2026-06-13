@@ -43,9 +43,19 @@ def _launch_main_window(
     Retorna a instância do MainWindow.
     """
     from solin.main_window import MainWindow
+    from solin.core.playlists.storage import PlaylistStoragePaths
     from solin.core.ui.titlebar import apply_titlebar_color
 
-    window = MainWindow(lang_manager, runtime_paths, profile_paths)
+    playlist_storage_paths = PlaylistStoragePaths(
+        playlists_file=profile_paths.playlists_file,
+        pending_deletions_file=runtime_paths.pending_del_file,
+    )
+    window = MainWindow(
+        lang_manager,
+        runtime_paths,
+        profile_paths,
+        playlist_storage_paths,
+    )
     window.show()
 
     apply_titlebar_color(window, "#1A231F")
