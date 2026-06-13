@@ -147,8 +147,8 @@ def test_application_container_initializes_runtime_services(
         def __init__(self):
             self.init_calls = []
 
-        def init(self, data_dir):
-            self.init_calls.append(data_dir)
+        def init(self, data_dir, cache_dir=None):
+            self.init_calls.append((data_dir, cache_dir))
 
     profile_manager = _ProfileManager()
 
@@ -177,7 +177,9 @@ def test_application_container_initializes_runtime_services(
         "paths.init",
         ("logging", os.fspath(tmp_path / "data" / "logs")),
     ]
-    assert profile_manager.init_calls == [os.fspath(tmp_path / "data")]
+    assert profile_manager.init_calls == [
+        (os.fspath(tmp_path / "data"), os.fspath(tmp_path / "cache"))
+    ]
     assert container.config is config
     assert container.app is app
     assert container.profile_manager is profile_manager

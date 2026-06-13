@@ -875,6 +875,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             pm = ProfileManager()
             old_data_dir = getattr(pm, "_data_dir", "")
+            old_cache_dir = getattr(pm, "_cache_dir", "")
             old_active_id = getattr(pm, "_active_id", "")
             try:
                 pm.init(tmp)
@@ -886,12 +887,14 @@ class MeetingTreeStoreTests(unittest.TestCase):
                 self.assertEqual(digest, "hash")
             finally:
                 pm._data_dir = old_data_dir
+                pm._cache_dir = old_cache_dir
                 pm._active_id = old_active_id
 
     def test_round_trip_meeting_folder_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
             pm = ProfileManager()
             old_data_dir = getattr(pm, "_data_dir", "")
+            old_cache_dir = getattr(pm, "_cache_dir", "")
             old_active_id = getattr(pm, "_active_id", "")
             try:
                 pm.init(tmp)
@@ -920,12 +923,14 @@ class MeetingTreeStoreTests(unittest.TestCase):
                 )
             finally:
                 pm._data_dir = old_data_dir
+                pm._cache_dir = old_cache_dir
                 pm._active_id = old_active_id
 
     def test_flush_meeting_thumbs_keeps_referenced_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             pm = ProfileManager()
             old_data_dir = getattr(pm, "_data_dir", "")
+            old_cache_dir = getattr(pm, "_cache_dir", "")
             old_active_id = getattr(pm, "_active_id", "")
             try:
                 pm.init(tmp)
@@ -953,6 +958,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
                 self.assertFalse(stale.exists())
             finally:
                 pm._data_dir = old_data_dir
+                pm._cache_dir = old_cache_dir
                 pm._active_id = old_active_id
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):

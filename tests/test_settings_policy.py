@@ -120,10 +120,10 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
 
     monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
     monkeypatch.setattr(settings_store, "QSettings", FakeSettings)
-    monkeypatch.setattr("solin.core.foundation.paths.CACHE_DIR", "")
 
     manager = profile_manager.ProfileManager()
     manager._data_dir = str(tmp_path)
+    manager._cache_dir = ""
     manager._active_id = "kept"
     manager._profiles = [
         profile_manager.ProfileInfo("kept", "Kept"),

@@ -38,7 +38,10 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     log.info("Starting %s %s", config.display_name, config.version)
 
     profile_manager = get_profile_manager()
-    profile_manager.init(os.fspath(runtime_paths.data_dir))
+    profile_manager.init(
+        os.fspath(runtime_paths.data_dir),
+        cache_dir=os.fspath(runtime_paths.cache_dir),
+    )
 
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()

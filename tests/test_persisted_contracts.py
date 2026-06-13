@@ -133,10 +133,10 @@ def test_profile_registry_and_directory_layout_are_stable(
     monkeypatch,
 ) -> None:
     cache_dir = tmp_path / "cache"
-    monkeypatch.setattr("solin.core.foundation.paths.CACHE_DIR", str(cache_dir))
     monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
     manager = profile_manager.ProfileManager()
     manager._data_dir = str(tmp_path)
+    manager._cache_dir = str(cache_dir)
     manager._active_id = "main_hall"
     manager._profiles = [
         profile_manager.ProfileInfo(

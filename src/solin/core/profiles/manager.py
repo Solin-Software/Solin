@@ -145,16 +145,18 @@ class ProfileManager(QObject):
         super().__init__(parent)
         self._ready     = True
         self._data_dir  = ""
+        self._cache_dir = ""
         self._active_id = ""
         self._profiles: list[ProfileInfo] = []
 
     # ── Inicialização ─────────────────────────────────────────────────────
 
-    def init(self, data_dir: str) -> None:
+    def init(self, data_dir: str, cache_dir: str | Path | None = None) -> None:
         """
         Deve ser chamado UMA VEZ após paths.init(), antes de qualquer uso.
         """
         self._data_dir = data_dir
+        self._cache_dir = str(cache_dir or "")
         self._load_profiles()
         log.debug("[ProfileManager] Initialized - %d profile(s)", len(self._profiles))
 
@@ -205,11 +207,10 @@ class ProfileManager(QObject):
 
     def paths_for(self, profile_id: str = "") -> ProfilePaths:
         pid = profile_id or self._active_id
-        from solin.core.foundation import paths as _paths
 
         return ProfilePaths.from_roots(
             data_dir=self._data_dir,
-            cache_dir=_paths.CACHE_DIR or None,
+            cache_dir=self._cache_dir or None,
             profile_id=pid,
         )
 
@@ -277,9 +278,8 @@ class ProfileManager(QObject):
         shutil.rmtree(profile_paths.profile_dir, ignore_errors=True)
         shutil.rmtree(profile_paths.native_webview_data_dir, ignore_errors=True)
 
-        from solin.core.foundation import paths as _paths
-        if _paths.CACHE_DIR:
-            shutil.rmtree(Path(_paths.CACHE_DIR) / "profiles" / profile_id, ignore_errors=True)
+        if self._cache_dir:
+            shutil.rmtree(Path(self._cache_dir) / "profiles" / profile_id, ignore_errors=True)
             if profile_paths.native_webview_cache_dir is not None:
                 shutil.rmtree(profile_paths.native_webview_cache_dir, ignore_errors=True)
 
