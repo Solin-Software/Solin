@@ -31,7 +31,7 @@ from solin.bootstrap.single_instance import (
     try_forward_to_running,
 )
 
-def _launch_main_window(app, lang_manager, file_args):
+def _launch_main_window(app, lang_manager, file_args, runtime_paths):
     """
     Cria e exibe o MainWindow para o perfil já ativo.
     Retorna a instância do MainWindow.
@@ -39,7 +39,7 @@ def _launch_main_window(app, lang_manager, file_args):
     from solin.main_window import MainWindow
     from solin.core.ui.titlebar import apply_titlebar_color
 
-    window = MainWindow(lang_manager)
+    window = MainWindow(lang_manager, runtime_paths)
     window.show()
 
     apply_titlebar_color(window, "#1A231F")
@@ -93,7 +93,9 @@ def main():
     _main_window_ref = container.window_ref
 
     # ── LanguageManager ───────────────────────────────────────────────────────
-    lang_manager = LanguageManager()
+    lang_manager = LanguageManager(
+        jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json"
+    )
 
     # ── CSV do Zoom: janela standalone ────────────────────────────────────────
     csv_args = [
@@ -147,7 +149,12 @@ def main():
 
         def _on_profile_ready(profile_id: str):
             screen.hide()
-            window = _launch_main_window(app, lang_manager, file_args)
+            window = _launch_main_window(
+                app,
+                lang_manager,
+                file_args,
+                container.runtime_paths,
+            )
             _main_window_ref[0] = window
             wire_profile_switch(app, _main_window_ref)
             QTimer.singleShot(400, screen.close)
@@ -165,7 +172,12 @@ def main():
         if saved_lang:
             lang_manager.set_language(saved_lang)
 
-        window = _launch_main_window(app, lang_manager, file_args)
+        window = _launch_main_window(
+            app,
+            lang_manager,
+            file_args,
+            container.runtime_paths,
+        )
         _main_window_ref[0] = window
         wire_profile_switch(app, _main_window_ref)
 
@@ -181,7 +193,12 @@ def main():
         if saved_lang:
             lang_manager.set_language(saved_lang)
 
-        window = _launch_main_window(app, lang_manager, file_args)
+        window = _launch_main_window(
+            app,
+            lang_manager,
+            file_args,
+            container.runtime_paths,
+        )
         _main_window_ref[0] = window
         wire_profile_switch(app, _main_window_ref)
 
@@ -206,7 +223,12 @@ def main():
 
         def _on_profile_ready(profile_id: str):
             screen.hide()
-            window = _launch_main_window(app, lang_manager, file_args)
+            window = _launch_main_window(
+                app,
+                lang_manager,
+                file_args,
+                container.runtime_paths,
+            )
             _main_window_ref[0] = window
             wire_profile_switch(app, _main_window_ref)
             # Fecha a tela de perfil de vez depois da animação

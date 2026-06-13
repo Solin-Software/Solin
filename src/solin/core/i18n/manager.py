@@ -97,14 +97,22 @@ class LanguageManager(QObject):
     _app_translator: Optional[object] = None  # QTranslator
     _qt_translator:  Optional[object] = None  # QTranslator (qtbase_*.qm)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        *,
+        jw_languages_cache_file: str | Path,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
         self._meta:        dict[str, dict] = {}
         self.current_code: str = "pt_BR"
 
         # Serviço de idiomas JW.org (lista completa para mídia)
         JWLanguageService  = _get_jw_language_service_class()
-        self._jw_lang_svc  = JWLanguageService(parent=self)
+        self._jw_lang_svc = JWLanguageService(
+            cache_file=jw_languages_cache_file,
+            parent=self,
+        )
 
         self._load_meta()
         self._restore_saved_language()

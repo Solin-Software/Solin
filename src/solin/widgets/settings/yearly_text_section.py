@@ -40,7 +40,10 @@ class YearlyTextSectionMixin:
     """Builds and manages the annual text settings section."""
 
     def _init_yearly_text_section(self) -> None:
-        self._yt_service = YeartextService(self)
+        self._yt_service = YeartextService(
+            cache_file=self._yeartext_cache_file,
+            parent=self,
+        )
         self._yt_service.fetched.connect(self._on_yeartext_fetched)
         self._yt_service.fetch_failed.connect(self._on_yeartext_failed)
         self._yt_service.fetch_started.connect(self._on_fetch_started)

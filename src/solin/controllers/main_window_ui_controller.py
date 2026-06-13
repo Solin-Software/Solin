@@ -201,6 +201,9 @@ class MainWindowUiController:
             window.screen_mgr,
             obs_service=window._obs_service,
             ndi_service=window._ndi_service,
+            yeartext_cache_file=(
+                window.runtime_paths.cache_dir / "yeartext_cache.json"
+            ),
             parent=window,
         )
         window.timer_widget = TimerWidget(window.lang, parent=window)

@@ -10,7 +10,10 @@ Formato  : { "languages": [ {code, locale, vernacular, name, script,
 
 Uso
 ───
-    svc = JWLanguageService(parent=self)
+    svc = JWLanguageService(
+        cache_file=runtime_paths.cache_dir / "jw_languages.json",
+        parent=self,
+    )
     svc.languages_ready.connect(self._on_langs)
     svc.fetch_if_needed()
 
@@ -27,16 +30,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import urllib.request
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 from solin.core.profiles import settings as _ps
 from solin.core.network.http import urlopen as _urlopen
 
@@ -47,9 +50,6 @@ log = logging.getLogger(__name__)
 _LANGUAGES_URL  = "https://b.jw-cdn.org/apis/mediator/v1/languages/E/all"
 _CACHE_TTL_DAYS = 30
 _FETCH_TIMEOUT  = 15
-# Resolvido sob demanda — paths.init() deve ter sido chamado antes do primeiro uso.
-def _cache_file() -> str:
-    return os.path.join(_paths.CACHE_DIR, "jw_languages.json")
 
 
 def _settings_str(value: object, default: str = "") -> str:
@@ -117,8 +117,14 @@ class JWLanguageService(QObject):
     fetch_failed    = Signal(str)
     media_language_changed = Signal(str)   # emitido quando o código de mídia muda
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        *,
+        cache_file: str | Path,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
+        self._cache_file = Path(cache_file)
         self._languages: list[dict]  = []
         self._is_loading: bool       = False
         self._by_code: dict[str, dict] = {}
@@ -263,33 +269,40 @@ class JWLanguageService(QObject):
     # ── Cache em disco ──────────────────────────────────────────────────────────
 
     def _is_cache_valid(self) -> bool:
-        if not os.path.exists(_cache_file()):
+        if not self._cache_file.is_file():
             return False
         try:
-            with open(_cache_file(), encoding="utf-8") as f:
-                data = json.load(f)
+            data = read_json_file(self._cache_file)
             age_days = (time.time() - data.get("_fetched_at", 0)) / 86400
             return age_days < _CACHE_TTL_DAYS and bool(data.get("languages"))
-        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            AttributeError,
+            TypeError,
+            ValueError,
+        ):
             return False
 
     def _load_cache(self) -> Optional[list]:
         try:
-            with open(_cache_file(), encoding="utf-8") as f:
-                data = json.load(f)
+            data = read_json_file(self._cache_file)
             return data.get("languages") or None
-        except (OSError, UnicodeError, json.JSONDecodeError, TypeError):
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            AttributeError,
+            TypeError,
+        ):
             return None
 
     def _save_cache(self, languages: list) -> None:
-        os.makedirs(_paths.CACHE_DIR, exist_ok=True)
         try:
-            with open(_cache_file(), "w", encoding="utf-8") as f:
-                json.dump(
-                    {"_fetched_at": time.time(), "languages": languages},
-                    f,
-                    ensure_ascii=False,
-                    indent=2,
-                )
+            write_json_atomic(
+                self._cache_file,
+                {"_fetched_at": time.time(), "languages": languages},
+            )
         except (OSError, TypeError, ValueError) as exc:
             log.warning("[JWLanguageService] Failed to save cache: %s", exc)

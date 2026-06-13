@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import (
     Qt, Signal, QEvent,
 )
+from pathlib import Path
+
 from ..core.profiles import settings as _ps
 
 from ..core.i18n.manager import LanguageManager
@@ -59,12 +61,14 @@ class SettingsWidget(
 
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
-                 ndi_service: NDIReceiverService | None = None, parent=None):
+                 ndi_service: NDIReceiverService | None = None, *,
+                 yeartext_cache_file: str | Path, parent=None):
         super().__init__(parent)
         self.lang       = lang_manager
         self.screen_mgr = screen_manager
         self._obs       = obs_service
         self._ndi       = ndi_service
+        self._yeartext_cache_file = Path(yeartext_cache_file)
         self._prefs     = _ps.prefs()
         self._init_yearly_text_section()
         self._build_ui()

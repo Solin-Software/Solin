@@ -3,24 +3,23 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import urllib.error as _url_err
 import urllib.parse as _url_parse
 import urllib.request as _url_req
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from solin.core.foundation import paths as _paths
 from solin.core.network.http import urlopen as _urlopen
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 log = logging.getLogger(__name__)
 
 _WOL_API_URL    = "https://wol.jw.org/wol/finder"
 _API_TIMEOUT    = 12
-_CACHE_FILENAME = "yeartext_cache.json"
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -147,27 +146,29 @@ class YeartextService(QObject):
     fetch_failed  = Signal(str, int, str)
     fetch_started = Signal(str, int)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(
+        self,
+        *,
+        cache_file: str | Path,
+        parent: Optional[QObject] = None,
+    ) -> None:
         super().__init__(parent)
         self._cache:   dict = {}
         self._workers: dict[str, _FetchWorker] = {}
-        self._cache_path = os.path.join(_paths.CACHE_DIR, _CACHE_FILENAME)
+        self._cache_path = Path(cache_file)
         self._load_cache()
 
     def _load_cache(self) -> None:
         try:
-            if os.path.isfile(self._cache_path):
-                with open(self._cache_path, encoding="utf-8") as f:
-                    self._cache = json.load(f)
+            if self._cache_path.is_file():
+                self._cache = read_json_file(self._cache_path)
         except (OSError, UnicodeError, json.JSONDecodeError, TypeError) as exc:
             log.warning("[yeartext] Failed to load cache: %s", exc)
             self._cache = {}
 
     def _save_cache(self) -> None:
         try:
-            os.makedirs(_paths.CACHE_DIR, exist_ok=True)
-            with open(self._cache_path, "w", encoding="utf-8") as f:
-                json.dump(self._cache, f, ensure_ascii=False, indent=2)
+            write_json_atomic(self._cache_path, self._cache)
         except (OSError, TypeError, ValueError) as exc:
             log.warning("[yeartext] Failed to save cache: %s", exc)
 

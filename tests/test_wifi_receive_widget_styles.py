@@ -11,6 +11,7 @@ def test_wifi_receive_button_styles_parse_without_qt_warnings():
     script = """
 from PySide6.QtCore import qInstallMessageHandler
 from PySide6.QtWidgets import QApplication
+from pathlib import Path
 
 messages = []
 qInstallMessageHandler(lambda _mode, _context, message: messages.append(message))
@@ -29,7 +30,10 @@ class _Notifications:
     def error(self, *_args):
         pass
 
-widget = WifiReceiveWidget(LanguageManager(), notifications=_Notifications())
+widget = WifiReceiveWidget(
+    LanguageManager(jw_languages_cache_file=Path("jw_languages.json")),
+    notifications=_Notifications(),
+)
 widget.show()
 app.processEvents()
 stylesheet_errors = [

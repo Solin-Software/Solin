@@ -46,10 +46,12 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
 def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkeypatch):
     events = []
     file_args = ["clip.mp4", "song.mp3"]
+    runtime_paths = object()
 
     class _MainWindow:
-        def __init__(self, lang_manager):
+        def __init__(self, lang_manager, received_runtime_paths):
             self.lang_manager = lang_manager
+            self.runtime_paths = received_runtime_paths
 
         def show(self):
             events.append("show")
@@ -78,9 +80,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         app=object(),
         lang_manager="lang",
         file_args=file_args,
+        runtime_paths=runtime_paths,
     )
 
     assert window.lang_manager == "lang"
+    assert window.runtime_paths is runtime_paths
     assert events == [
         "show",
         ("titlebar", window, "#1A231F"),
@@ -91,10 +95,12 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
 
 def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):
     events = []
+    runtime_paths = object()
 
     class _MainWindow:
-        def __init__(self, lang_manager):
+        def __init__(self, lang_manager, received_runtime_paths):
             self.lang_manager = lang_manager
+            self.runtime_paths = received_runtime_paths
 
         def show(self):
             events.append("show")
@@ -116,7 +122,12 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         ),
     )
 
-    main._launch_main_window(app=object(), lang_manager="lang", file_args=[])
+    main._launch_main_window(
+        app=object(),
+        lang_manager="lang",
+        file_args=[],
+        runtime_paths=runtime_paths,
+    )
 
     assert events == ["show", ("titlebar", "#1A231F")]
 

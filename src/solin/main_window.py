@@ -39,6 +39,7 @@ from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
 from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.profiles import settings as _ps
+from .core.foundation.runtime_paths import RuntimePaths
 from .core.profiles.manager import get as _get_pm
 from .core.foundation.constants import (
     AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
@@ -50,9 +51,14 @@ from .core.foundation.settings_keys import SettingsKey
 class MainWindow(QMainWindow):
     _auto_share_finished = Signal(int, bool, bool)
 
-    def __init__(self, lang_manager: LanguageManager):
+    def __init__(
+        self,
+        lang_manager: LanguageManager,
+        runtime_paths: RuntimePaths,
+    ):
         super().__init__()
         self.lang = lang_manager
+        self.runtime_paths = runtime_paths
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(self)
         self._auto_keys = AutoKeyDispatcher(self)
