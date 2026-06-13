@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ...core.foundation import paths as _paths
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.rendering.libreoffice import LoConvertThread, cached_pages as lo_cached_pages
@@ -115,7 +114,7 @@ class _PlaylistEditImportMixin:
         thread = JwpubImportThread.create(
             jwpub_path,
             lang=lang,
-            dest_images_dir=_paths.IMAGES_DIR,
+            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self,
         )
         if not hasattr(self, "_jwpub_threads"):
@@ -279,15 +278,15 @@ class _PlaylistEditImportMixin:
                         section_id=section_id,
                     )
                     if raw.get("data") and not url:
-                        os.makedirs(_paths.EMBEDDED_DIR, exist_ok=True)
-                        ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                        fpath = os.path.join(
-                            _paths.EMBEDDED_DIR,
-                            f"{item['id']}{ext}",
+                        self._profile_paths.embedded_dir.mkdir(
+                            parents=True,
+                            exist_ok=True,
                         )
-                        with open(fpath, "wb") as f:
+                        ext = Path(raw.get("filename", "media")).suffix or ".mp4"
+                        fpath = self._profile_paths.embedded_dir / f"{item['id']}{ext}"
+                        with fpath.open("wb") as f:
                             f.write(raw["data"])
-                        item["url"] = fpath
+                        item["url"] = os.fspath(fpath)
                         item["type"] = raw.get("type", "video")
                     new_items.append(item)
                 if new_items:

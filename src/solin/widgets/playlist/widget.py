@@ -30,6 +30,7 @@ from ..jw_songs_bridge import JWSongsBridge
 
 from ...qml_module import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
+from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...core.jw.language_context import (
     JWMediaLanguageContext,
@@ -82,6 +83,7 @@ class _PlaylistEditView(
         media_ctrl=None,
         *,
         notifications: NotificationCenter,
+        profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
         all_playlists: list[dict],
         parent=None,
@@ -90,6 +92,7 @@ class _PlaylistEditView(
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
+        self._profile_paths = profile_paths
         self._storage_paths = storage_paths
         self._all_playlists = all_playlists
         self._pl: Optional[dict] = None
@@ -823,6 +826,7 @@ class _PlaylistEditView(
                 item,
                 self._all_playlists,
                 self._storage_paths,
+                self._profile_paths,
             )
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
@@ -886,6 +890,7 @@ class PlaylistWidget(QWidget):
         watched_folder: str = "",
         *,
         notifications: NotificationCenter,
+        profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
         parent=None,
     ):
@@ -893,6 +898,7 @@ class PlaylistWidget(QWidget):
         self.lang        = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
+        self._profile_paths = profile_paths
         self._storage_paths = storage_paths
         self._playlists = load_playlists(storage_paths)
         self._watched_folder = watched_folder
@@ -912,6 +918,7 @@ class PlaylistWidget(QWidget):
             self._playlists, self.lang,
             media_ctrl=self._media_ctrl,
             watched_folder=self._watched_folder,
+            profile_paths=self._profile_paths,
             storage_paths=self._storage_paths,
             parent=self,
         )
@@ -920,6 +927,7 @@ class PlaylistWidget(QWidget):
             self.lang,
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
+            profile_paths=self._profile_paths,
             storage_paths=self._storage_paths,
             all_playlists=self._playlists,
             parent=self,

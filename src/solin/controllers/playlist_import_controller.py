@@ -6,8 +6,8 @@ import zipfile
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QMessageBox
 
-from ..core.foundation import paths as _paths
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
+from ..core.foundation.runtime_paths import ProfilePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -19,8 +19,9 @@ from ..widgets.playlist.items import media_type_from_url, new_playlist_item
 class PlaylistImportController:
     """Handles adding projected, downloaded, and imported media to playlists."""
 
-    def __init__(self, window) -> None:
+    def __init__(self, window, profile_paths: ProfilePaths) -> None:
         self._window = window
+        self._profile_paths = profile_paths
 
     def add_current_to_playlist(self, url: str, title: str, meta: object) -> None:
         if not url:
@@ -146,18 +147,18 @@ class PlaylistImportController:
             )
 
             if raw.get("data") and not url:
-                os.makedirs(_paths.EMBEDDED_DIR, exist_ok=True)
+                self._profile_paths.embedded_dir.mkdir(parents=True, exist_ok=True)
                 ext = os.path.splitext(raw.get("filename", ""))[1].lower()
                 if not ext:
                     ext = mime_to_ext(raw.get("mime_type", ""))
-                embedded_path = os.path.join(_paths.EMBEDDED_DIR, f"{item['id']}{ext}")
+                embedded_path = self._profile_paths.embedded_dir / f"{item['id']}{ext}"
                 try:
-                    with open(embedded_path, "wb") as fh:
+                    with embedded_path.open("wb") as fh:
                         fh.write(raw["data"])
                 except OSError:
                     skipped.append(item.get("title", "Item"))
                     continue
-                item["url"] = embedded_path
+                item["url"] = os.fspath(embedded_path)
                 item["type"] = raw.get("type", "video")
             elif not url:
                 skipped.append(item.get("title", "Item"))
@@ -264,7 +265,6 @@ class PlaylistImportController:
     def add_jwpub_file_to_playlist_target(self, jwpub_path: str, target) -> None:
         from pathlib import Path
 
-        from ..core.foundation import paths as _paths_local
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(jwpub_path).stem
@@ -277,7 +277,7 @@ class PlaylistImportController:
         thread = JwpubImportThread.create(
             jwpub_path,
             lang=lang,
-            dest_images_dir=_paths_local.IMAGES_DIR,
+            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self._window,
         )
         if not hasattr(self._window, "_browser_jwpub_threads"):

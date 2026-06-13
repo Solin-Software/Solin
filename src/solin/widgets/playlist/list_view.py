@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...core.foundation import paths as _paths
+from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.storage import PlaylistStoragePaths, save_playlists
 from ...core.playlists.reader import read_jwlplaylist
@@ -63,6 +63,7 @@ class _PlaylistListView(QWidget):
         media_ctrl=None,
         watched_folder: str = "",
         *,
+        profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
         parent=None,
     ):
@@ -71,6 +72,7 @@ class _PlaylistListView(QWidget):
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._watched_folder = watched_folder
+        self._profile_paths = profile_paths
         self._storage_paths = storage_paths
         self._pl_cards: list[_PlaylistCard] = []
         self._wf_cards: list[_WatchedFolderCard] = []
@@ -337,7 +339,7 @@ class _PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        cleanup_playlist_files(pl, self._storage_paths)
+        cleanup_playlist_files(pl, self._storage_paths, self._profile_paths)
         self._playlists.remove(pl)
         save_playlists(self._playlists, self._storage_paths)
         self._rebuild_app_cards()
@@ -404,12 +406,15 @@ class _PlaylistListView(QWidget):
                         meps_language=raw.get("language", 0),
                     )
                     if raw.get("data") and not url:
-                        os.makedirs(_paths.EMBEDDED_DIR, exist_ok=True)
+                        self._profile_paths.embedded_dir.mkdir(
+                            parents=True,
+                            exist_ok=True,
+                        )
                         ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                        fpath = os.path.join(_paths.EMBEDDED_DIR, f"{item['id']}{ext}")
-                        with open(fpath, "wb") as f:
+                        fpath = self._profile_paths.embedded_dir / f"{item['id']}{ext}"
+                        with fpath.open("wb") as f:
                             f.write(raw["data"])
-                        item["url"] = fpath
+                        item["url"] = os.fspath(fpath)
                         item["type"] = raw.get("type", "video")
                     items.append(item)
                 self._playlists.append(

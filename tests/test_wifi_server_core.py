@@ -3,8 +3,8 @@ from __future__ import annotations
 import http.client
 import threading
 from http.server import HTTPServer
+from pathlib import Path
 
-from solin.core.foundation import paths as app_paths
 from solin.core.ingest.wifi_server import _make_handler, _parse_multipart, _safe_filename
 
 
@@ -39,14 +39,14 @@ def test_safe_filename_rejects_path_traversal_shape():
     assert _safe_filename("...") == "upload"
 
 
-def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path, monkeypatch):
+def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path):
     received: list[tuple[str, str]] = []
-    monkeypatch.setattr(app_paths, "EMBEDDED_DIR", str(tmp_path))
     handler = _make_handler(
         token="token",
         html="ok",
         on_file=lambda path, name: received.append((path, name)),
         on_activity=lambda: None,
+        embedded_dir=tmp_path,
     )
     server = HTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -71,3 +71,41 @@ def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path, monkeypa
     assert response.status == 422
     assert received == []
     assert list(tmp_path.iterdir()) == []
+
+
+def test_wifi_upload_saves_allowed_media_in_injected_directory(tmp_path):
+    embedded_dir = tmp_path / "profile" / "embedded"
+    received: list[tuple[str, str]] = []
+    handler = _make_handler(
+        token="token",
+        html="ok",
+        on_file=lambda path, name: received.append((path, name)),
+        on_activity=lambda: None,
+        embedded_dir=embedded_dir,
+    )
+    server = HTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body, boundary = _multipart("clip.mp4", b"media-bytes")
+        conn = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+        conn.request(
+            "POST",
+            "/token",
+            body=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        response = conn.getresponse()
+        response.read()
+        conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == 200
+    assert len(received) == 1
+    saved_path, original_name = received[0]
+    assert original_name == "clip.mp4"
+    assert Path(saved_path).parent == embedded_dir
+    assert Path(saved_path).read_bytes() == b"media-bytes"

@@ -24,6 +24,7 @@ from solin.core.foundation.constants import (
     QT_APPLICATION_NAME,
     QT_ORGANIZATION_NAME,
 )
+from solin.core.foundation import paths as foundation_paths
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.playlists import storage as playlist_storage
@@ -211,6 +212,15 @@ def test_profile_manager_has_no_singleton_or_service_locator() -> None:
     assert "_instance" not in text
     assert "def __new__(" not in text
     assert "\ndef get()" not in text
+
+
+def test_profile_storage_paths_are_not_mutable_globals() -> None:
+    paths_source = Path(foundation_paths.__file__).read_text(encoding="utf-8")
+    manager_source = Path(profile_manager.__file__).read_text(encoding="utf-8")
+
+    assert "IMAGES_DIR" not in paths_source
+    assert "EMBEDDED_DIR" not in paths_source
+    assert "_redirect_global_paths" not in manager_source
 
 
 def test_internal_playlist_file_and_item_schema_are_stable(

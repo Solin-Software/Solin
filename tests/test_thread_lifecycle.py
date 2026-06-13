@@ -191,9 +191,9 @@ def test_obs_restart_waits_for_previous_worker(monkeypatch):
     assert generations[1] > generations[0]
 
 
-def test_wifi_server_reports_stopped_after_threads_exit():
+def test_wifi_server_reports_stopped_after_threads_exit(tmp_path):
     _app()
-    service = WifiReceiveServer()
+    service = WifiReceiveServer(embedded_dir=tmp_path)
     stopped: list[bool] = []
     service.server_stopped.connect(lambda: stopped.append(True))
 
@@ -208,9 +208,9 @@ def test_wifi_server_reports_stopped_after_threads_exit():
     assert not server_thread.is_alive()
 
 
-def test_wifi_explicit_stop_cancels_queued_restart(monkeypatch):
+def test_wifi_explicit_stop_cancels_queued_restart(monkeypatch, tmp_path):
     _app()
-    service = WifiReceiveServer()
+    service = WifiReceiveServer(embedded_dir=tmp_path)
     service._generation = 1
     service._stopping = True
     service._pending_start = {"title": "restart"}

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from solin.core.foundation import paths as _paths
 from solin.core.foundation.exception_logging import log_ignored_exception
+from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.playlists.storage import (
     PlaylistStoragePaths,
     load_playlists,
@@ -59,15 +60,17 @@ def flush_pending_deletions(storage_paths: PlaylistStoragePaths) -> None:
 def flush_images_dir(
     storage_paths: PlaylistStoragePaths,
     meeting_tree_store: MeetingTreeStore,
+    profile_paths: ProfilePaths,
 ) -> None:
-    if not os.path.isdir(_paths.IMAGES_DIR):
+    images_dir = os.fspath(profile_paths.images_dir)
+    if not os.path.isdir(images_dir):
         return
 
     referenced = _referenced_playlist_urls(storage_paths, normalize=True)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
 
-    for fname in os.listdir(_paths.IMAGES_DIR):
-        fpath = os.path.join(_paths.IMAGES_DIR, fname)
+    for fname in os.listdir(images_dir):
+        fpath = os.path.join(images_dir, fname)
         if not os.path.isfile(fpath):
             continue
         if os.path.normpath(fpath) not in referenced:
@@ -127,15 +130,17 @@ def flush_pptx_pages(
 def flush_embedded_dir(
     storage_paths: PlaylistStoragePaths,
     meeting_tree_store: MeetingTreeStore,
+    profile_paths: ProfilePaths,
 ) -> None:
-    if not os.path.isdir(_paths.EMBEDDED_DIR):
+    embedded_dir = os.fspath(profile_paths.embedded_dir)
+    if not os.path.isdir(embedded_dir):
         return
 
     referenced = _referenced_playlist_urls(storage_paths, normalize=True)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
 
-    for fname in os.listdir(_paths.EMBEDDED_DIR):
-        fpath = os.path.join(_paths.EMBEDDED_DIR, fname)
+    for fname in os.listdir(embedded_dir):
+        fpath = os.path.join(embedded_dir, fname)
         if not os.path.isfile(fpath):
             continue
         if os.path.normpath(fpath) not in referenced:
@@ -158,8 +163,9 @@ def try_remove_file_async(
 def cleanup_playlist_files(
     playlist: dict,
     storage_paths: PlaylistStoragePaths,
+    profile_paths: ProfilePaths,
 ) -> None:
-    embedded_dir = _paths.EMBEDDED_DIR
+    embedded_dir = os.fspath(profile_paths.embedded_dir)
     for item in playlist.get("items", []):
         item_id = item.get("id", "")
         if item_id:
@@ -179,8 +185,9 @@ def cleanup_item_files(
     item: dict,
     all_playlists: list,
     storage_paths: PlaylistStoragePaths,
+    profile_paths: ProfilePaths,
 ) -> None:
-    embedded_dir = _paths.EMBEDDED_DIR
+    embedded_dir = os.fspath(profile_paths.embedded_dir)
     item_id = item.get("id", "")
     url = item.get("url", "")
 

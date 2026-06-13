@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
 from solin.controllers.playlist_import_controller import PlaylistImportController
+from solin.core.foundation.runtime_paths import ProfilePaths
+
+_PROFILE_PATHS = ProfilePaths.from_roots(
+    data_dir="data",
+    cache_dir="cache",
+    profile_id="test",
+)
 
 
 class _PlaylistWidgetStub:
@@ -71,7 +78,7 @@ def _target(create_new=False):
 
 def test_add_current_to_playlist_creates_new_playlist(monkeypatch):
     window = _WindowStub()
-    controller = PlaylistImportController(window)
+    controller = PlaylistImportController(window, _PROFILE_PATHS)
     monkeypatch.setattr(controller, "_choose_target", lambda title: _target(create_new=True))
 
     controller.add_current_to_playlist(
@@ -94,7 +101,7 @@ def test_add_current_to_playlist_creates_new_playlist(monkeypatch):
 def test_add_current_to_playlist_reports_duplicate_when_existing_add_fails(monkeypatch):
     window = _WindowStub()
     window.playlist_widget.add_results = [False]
-    controller = PlaylistImportController(window)
+    controller = PlaylistImportController(window, _PROFILE_PATHS)
     monkeypatch.setattr(controller, "_choose_target", lambda title: _target())
 
     controller.add_current_to_playlist("video.mp4", "Video", {})
@@ -108,7 +115,7 @@ def test_add_current_to_playlist_reports_duplicate_when_existing_add_fails(monke
 def test_add_items_to_playlist_target_counts_added_items():
     window = _WindowStub()
     window.playlist_widget.add_results = [True, False, True]
-    controller = PlaylistImportController(window)
+    controller = PlaylistImportController(window, _PROFILE_PATHS)
 
     controller.add_items_to_playlist_target(
         _target(),
@@ -124,7 +131,7 @@ def test_add_items_to_playlist_target_counts_added_items():
 
 def test_add_browser_downloaded_file_routes_by_kind(monkeypatch):
     window = _WindowStub()
-    controller = PlaylistImportController(window)
+    controller = PlaylistImportController(window, _PROFILE_PATHS)
     calls = []
     monkeypatch.setattr(
         "solin.controllers.playlist_import_controller.os.path.isfile",
@@ -165,7 +172,7 @@ def test_add_browser_downloaded_file_routes_by_kind(monkeypatch):
 
 def test_send_to_temp_playlist_switches_to_playlist_page():
     window = _WindowStub()
-    controller = PlaylistImportController(window)
+    controller = PlaylistImportController(window, _PROFILE_PATHS)
     items = [{"title": "Item"}]
 
     controller.send_to_temp_playlist(items)

@@ -38,6 +38,7 @@ from ...core.meetings.publications import (
 )
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
+from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.foundation.constants import (
     DOCX_EXTS as _DOCX_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
@@ -101,6 +102,7 @@ class StudyDetailView(QWidget):
                  service: "JwpubService", *,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
+                 profile_paths: ProfilePaths,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
         self._pub   = pub_type
@@ -108,6 +110,7 @@ class StudyDetailView(QWidget):
         self._svc   = service
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
+        self._profile_paths = profile_paths
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -139,6 +142,7 @@ class StudyDetailView(QWidget):
             meeting_type=self._pub,
             language_code=lang_code,
             store=self._meeting_tree_store,
+            profile_paths=self._profile_paths,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -358,12 +362,14 @@ class _MemorialDetailView(QWidget):
     def __init__(self, md: "MemorialData", service: "JwpubService", *,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
+                 profile_paths: ProfilePaths,
                  parent=None):
         super().__init__(parent)
         self._md  = md
         self._svc = service
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
+        self._profile_paths = profile_paths
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -393,6 +399,7 @@ class _MemorialDetailView(QWidget):
             meeting_type="memorial",
             language_code=lang_code,
             store=self._meeting_tree_store,
+            profile_paths=self._profile_paths,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -590,6 +597,7 @@ class MeetingsWidget(QWidget):
         lang_manager=None,
         *,
         meeting_tree_store: MeetingTreeStore,
+        profile_paths: ProfilePaths,
         parent=None,
     ):
         super().__init__(parent)
@@ -600,6 +608,7 @@ class MeetingsWidget(QWidget):
         self._clear_details_pending = False
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
+        self._profile_paths = profile_paths
 
         self._service = JwpubService(self)
         self._set_lang_from_mgr()
@@ -826,6 +835,7 @@ class MeetingsWidget(QWidget):
             d = StudyDetailView(pub_type, wd, self._service,
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
+                                profile_paths=self._profile_paths,
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -857,6 +867,7 @@ class MeetingsWidget(QWidget):
                 self._service,
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
+                profile_paths=self._profile_paths,
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)

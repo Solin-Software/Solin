@@ -34,8 +34,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
+from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.time_utils import ceil_remaining_seconds
 from solin.core.profiles import settings as _ps
@@ -140,9 +140,18 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     _BAR_H = 48
 
-    def __init__(self, media_ctrl: MediaController, lang_manager=None, container: QWidget = None, parent=None):
+    def __init__(
+        self,
+        media_ctrl: MediaController,
+        *,
+        profile_paths: ProfilePaths,
+        lang_manager=None,
+        container: QWidget = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.media      = media_ctrl
+        self._profile_paths = profile_paths
         self.lang       = lang_manager
         self._container = container
         self._expanded  = False
@@ -755,12 +764,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if image_data:
             # ── Salva bytes como arquivo para poder referenciar na playlist ──
             import uuid as _uuid
-            os.makedirs(_paths.IMAGES_DIR, exist_ok=True)
-            _img_path = os.path.join(_paths.IMAGES_DIR, f"{_uuid.uuid4().hex}.png")
+            self._profile_paths.images_dir.mkdir(parents=True, exist_ok=True)
+            _img_path = self._profile_paths.images_dir / f"{_uuid.uuid4().hex}.png"
             try:
-                with open(_img_path, "wb") as _f:
+                with _img_path.open("wb") as _f:
                     _f.write(image_data)
-                self._image_file_path = _img_path
+                self._image_file_path = os.fspath(_img_path)
             except OSError:
                 self._image_file_path = ""
 

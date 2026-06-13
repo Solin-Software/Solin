@@ -20,7 +20,6 @@ Decisões técnicas:
 from __future__ import annotations
 
 import logging
-import os
 import re
 import socket
 import threading
@@ -33,7 +32,6 @@ from urllib.parse import unquote
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
-from solin.core.foundation import paths as _paths
 from solin.core.foundation.constants import (
     AUDIO_EXTS,
     IMAGE_EXTS,
@@ -348,11 +346,14 @@ def build_upload_html(labels: dict[str, str]) -> str:
 
 def _make_handler(token: str, html: str,
                   on_file: Callable[[str, str], None],
-                  on_activity: Callable[[], None]) -> type:
+                  on_activity: Callable[[], None],
+                  embedded_dir: str | Path) -> type:
     """
     Fábrica que retorna uma classe handler com token/callbacks injetados.
     Usar fábrica em vez de classe global evita estado compartilhado entre sessões.
     """
+    target_dir = Path(embedded_dir)
+
     class _Handler(BaseHTTPRequestHandler):
 
         _token      = token
@@ -420,9 +421,9 @@ def _make_handler(token: str, html: str,
                     continue
 
                 # Salva atomicamente: escreve em .tmp → renomeia
-                os.makedirs(_paths.EMBEDDED_DIR, exist_ok=True)
+                target_dir.mkdir(parents=True, exist_ok=True)
                 uid       = uuid.uuid4().hex
-                final     = Path(_paths.EMBEDDED_DIR) / f"{uid}{ext}"
+                final     = target_dir / f"{uid}{ext}"
                 tmp_path  = final.with_suffix(ext + ".tmp")
                 try:
                     tmp_path.write_bytes(data)
@@ -464,8 +465,14 @@ class WifiReceiveServer(QObject):
     inactivity_stopped = Signal()
     _shutdown_complete = Signal(int, bool)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        embedded_dir: str | Path,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._embedded_dir = Path(embedded_dir)
         self._server:        Optional[HTTPServer]      = None
         self._thread:        Optional[threading.Thread] = None
         self._shutdown_thread: Optional[threading.Thread] = None
@@ -548,6 +555,7 @@ class WifiReceiveServer(QObject):
                 name,
             ),
             on_activity=lambda: self._on_activity(generation),
+            embedded_dir=self._embedded_dir,
         )
 
         try:

@@ -18,6 +18,7 @@ from ..core.foundation.constants import (
     PPTX_EXTS,
     VIDEO_EXTS,
 )
+from ..core.foundation.runtime_paths import ProfilePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -29,8 +30,9 @@ from ..widgets.playlist.items import new_playlist_item
 class OpenMediaController:
     """Handles files/URLs opened through argv, drag-to-exe, or IPC."""
 
-    def __init__(self, window) -> None:
+    def __init__(self, window, profile_paths: ProfilePaths) -> None:
         self._window = window
+        self._profile_paths = profile_paths
 
     def open_media_files(self, paths: list) -> None:
         playlist = []
@@ -172,7 +174,6 @@ class OpenMediaController:
     def open_jwpub_as_temp(self, jwpub_path: str) -> None:
         from pathlib import Path
 
-        from ..core.foundation import paths as _paths_local
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(jwpub_path).stem
@@ -184,7 +185,7 @@ class OpenMediaController:
         thread = JwpubImportThread.create(
             jwpub_path,
             lang=lang,
-            dest_images_dir=_paths_local.IMAGES_DIR,
+            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self._window,
         )
 

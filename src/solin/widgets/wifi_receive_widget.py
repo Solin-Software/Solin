@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from ..core.i18n.manager import LanguageManager
 from ..core.foundation.exception_logging import log_ignored_exception
+from ..core.foundation.runtime_paths import ProfilePaths
 from ..core.foundation.constants import (
     AUDIO_EXTS as _AUDIO_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
@@ -509,12 +510,17 @@ class WifiReceiveWidget(QWidget):
         lang: LanguageManager,
         *,
         notifications: NotificationCenter,
+        profile_paths: ProfilePaths,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._lang            = lang
         self._notifications   = notifications
-        self._server          = WifiReceiveServer(self)
+        self._profile_paths   = profile_paths
+        self._server          = WifiReceiveServer(
+            embedded_dir=profile_paths.embedded_dir,
+            parent=self,
+        )
         self._session_url     = ""
         self._received_files: list[dict] = []
         self._cards:          list[_MediaCard] = []
@@ -940,7 +946,6 @@ class WifiReceiveWidget(QWidget):
         Uses JwpubImportThread (QThread) so signals reach the main thread reliably.
         Images are copied to data/images (persistent). Videos resolved via API.
         """
-        from ..core.foundation import paths as _paths_local
         from ..core.jw.publication_reader import JwpubImportThread
 
         stem = Path(orig_name).stem or Path(path).stem
@@ -948,7 +953,10 @@ class WifiReceiveWidget(QWidget):
         lang = jw_media_language_context(self._lang).api_code
 
         thread = JwpubImportThread.create(
-            path, lang=lang, dest_images_dir=_paths_local.IMAGES_DIR, parent=self
+            path,
+            lang=lang,
+            dest_images_dir=os.fspath(self._profile_paths.images_dir),
+            parent=self,
         )
 
         if not hasattr(self, "_jwpub_threads"):
@@ -1013,15 +1021,15 @@ class WifiReceiveWidget(QWidget):
         def _write_tmp(data: bytes, suffix: str) -> str:
             """Write embedded media to data/embedded/ for persistence."""
             import uuid as _uuid
-            from ..core.foundation import paths as _paths_local
-            os.makedirs(_paths_local.EMBEDDED_DIR, exist_ok=True)
+            self._profile_paths.embedded_dir.mkdir(parents=True, exist_ok=True)
             uid  = _uuid.uuid4().hex
-            path = os.path.join(_paths_local.EMBEDDED_DIR, f"{uid}{suffix}")
-            with open(path, "wb") as f:
+            path = self._profile_paths.embedded_dir / f"{uid}{suffix}"
+            with path.open("wb") as f:
                 f.write(data)
             # Track for cleanup if user discards without adding to playlist
-            self._wifi_tmp_files.add(path)
-            return path
+            path_str = os.fspath(path)
+            self._wifi_tmp_files.add(path_str)
+            return path_str
 
         added = 0
         skipped = []

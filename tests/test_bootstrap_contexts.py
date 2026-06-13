@@ -16,8 +16,6 @@ def _set_legacy_paths(monkeypatch, tmp_path) -> dict[str, str]:
     values = {
         "DATA_DIR": str(tmp_path / "data"),
         "PENDING_DEL_FILE": str(tmp_path / "data" / "pending_cleanup.json"),
-        "IMAGES_DIR": str(tmp_path / "data" / "images"),
-        "EMBEDDED_DIR": str(tmp_path / "data" / "embedded"),
         "LOG_DIR": str(tmp_path / "data" / "logs"),
         "CACHE_DIR": str(tmp_path / "cache"),
         "MEDIA_CACHE_DIR": str(tmp_path / "cache" / "media"),

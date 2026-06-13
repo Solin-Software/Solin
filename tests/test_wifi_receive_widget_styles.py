@@ -18,6 +18,7 @@ qInstallMessageHandler(lambda _mode, _context, message: messages.append(message)
 app = QApplication([])
 
 from solin.core.i18n.manager import LanguageManager
+from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:
@@ -33,6 +34,11 @@ class _Notifications:
 widget = WifiReceiveWidget(
     LanguageManager(jw_languages_cache_file=Path("jw_languages.json")),
     notifications=_Notifications(),
+    profile_paths=ProfilePaths.from_roots(
+        data_dir=Path("data"),
+        cache_dir=Path("cache"),
+        profile_id="test",
+    ),
 )
 widget.show()
 app.processEvents()

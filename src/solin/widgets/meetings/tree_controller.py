@@ -35,6 +35,7 @@ from ...core.foundation.constants import (
     THUMB_JPEG_QUALITY,
 )
 from ...core.foundation.exception_logging import log_ignored_exception
+from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,
@@ -149,6 +150,7 @@ class MeetingTreeController(QObject):
         meeting_type: str,
         language_code: str,
         store: MeetingTreeStore,
+        profile_paths: ProfilePaths,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -158,6 +160,7 @@ class MeetingTreeController(QObject):
         self._language_code = language_code or "E"
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = store
+        self._profile_paths = profile_paths
         self._builder = MeetingTreeBuilder()
         self._sync_service = MeetingLinkedFolderSync()
         self._nodes: list[Node] = []
@@ -791,7 +794,7 @@ class MeetingTreeController(QObject):
         thread = JwpubImportThread.create(
             path,
             lang=self._language_code,
-            dest_images_dir=_paths.IMAGES_DIR,
+            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self,
         )
         self._jwpub_threads.append(thread)
@@ -1304,12 +1307,7 @@ class MeetingTreeController(QObject):
         self.syncStateChanged.emit()
 
     def _durable_detached_dir(self) -> Path:
-        base = getattr(_paths, "EMBEDDED_DIR", "")
-        if base:
-            return Path(base) / "meeting_sync"
-        if self._sync_folder:
-            return Path(self._sync_folder).parent / ".solin_detached_meeting_sync"
-        return Path.cwd() / ".solin_detached_meeting_sync"
+        return self._profile_paths.embedded_dir / "meeting_sync"
 
     def _warn_sync_failed(self, message: str) -> None:
         QMessageBox.warning(
@@ -1707,20 +1705,20 @@ class MeetingTreeController(QObject):
     def _jwpub_image_dir(self) -> str:
         if self._sync_enabled and self._sync_folder:
             return str(cache_dir(Path(self._sync_folder)))
-        return _paths.IMAGES_DIR
+        return os.fspath(self._profile_paths.images_dir)
 
     def _embedded_media_dir(self) -> str:
         if self._sync_enabled and self._sync_folder:
             return str(cache_dir(Path(self._sync_folder)))
-        return _paths.EMBEDDED_DIR
+        return os.fspath(self._profile_paths.embedded_dir)
 
     def _generated_asset_roots(self) -> tuple[str, ...]:
         return tuple(
             root
             for root in (
                 getattr(_paths, "CACHE_DIR", ""),
-                getattr(_paths, "IMAGES_DIR", ""),
-                getattr(_paths, "EMBEDDED_DIR", ""),
+                os.fspath(self._profile_paths.images_dir),
+                os.fspath(self._profile_paths.embedded_dir),
                 os.fspath(meeting_thumb_dir()),
             )
             if root

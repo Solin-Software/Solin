@@ -40,8 +40,6 @@ log = logging.getLogger(__name__)
 # sem a consciência de que playlists e imagens serão perdidas.
 DATA_DIR:        str = ""   # raiz de dados do usuário
 PENDING_DEL_FILE: str = ""  # data/pending_cleanup.json
-IMAGES_DIR:      str = ""   # data/images/
-EMBEDDED_DIR:    str = ""   # data/embedded/   (mídia recebida via Wi-Fi)
 LOG_DIR:         str = ""   # data/logs/
 
 # ── Cache regenerável ─────────────────────────────────────────────────────────
@@ -67,7 +65,7 @@ def init() -> None:
     Chamadas subsequentes são no-op seguras.
     """
     global _initialized
-    global DATA_DIR, PENDING_DEL_FILE, IMAGES_DIR, EMBEDDED_DIR
+    global DATA_DIR, PENDING_DEL_FILE
     global LOG_DIR
     global CACHE_DIR, MEDIA_CACHE_DIR, THUMB_CACHE_DIR, MEETING_THUMB_CACHE_DIR
     global PDF_PAGES_DIR, PPTX_PAGES_DIR, DOCX_PAGES_DIR
@@ -85,8 +83,6 @@ def init() -> None:
     # ── Dados persistentes do usuário ─────────────────────────────────────────
     DATA_DIR         = str(_data)
     PENDING_DEL_FILE = str(_data / "pending_cleanup.json")
-    IMAGES_DIR       = str(_data / "images")
-    EMBEDDED_DIR     = str(_data / "embedded")
     LOG_DIR          = str(_data / "logs")
 
     # ── Cache regenerável ─────────────────────────────────────────────────────
@@ -120,7 +116,6 @@ def ensure_dirs() -> None:
     for directory in (
         DATA_DIR,
         LOG_DIR,
-        # IMAGES_DIR / EMBEDDED_DIR são gerenciados pelo ProfileManager
         CACHE_DIR,
         MEDIA_CACHE_DIR,
         THUMB_CACHE_DIR,

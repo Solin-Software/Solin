@@ -297,16 +297,14 @@ class ProfileManager(QObject):
         Ativa um perfil:
           1. Atualiza _active_id
           2. Garante que as pastas existam
-          3. Redireciona paths.IMAGES_DIR e EMBEDDED_DIR
-          4. Persiste o perfil ativo no QSettings global
-          5. Emite profile_switched
+          3. Persiste o perfil ativo no QSettings global
+          4. Emite profile_switched
         """
         if not any(p.id == profile_id for p in self._profiles):
             raise ValueError(f"[ProfileManager] Perfil desconhecido: {profile_id!r}")
 
         self._active_id = profile_id
         self.ensure_profile_dirs()
-        self._redirect_global_paths()
 
         # Atualiza org de QSettings para o perfil ativo
         from solin.core.profiles import settings as _ps
@@ -422,13 +420,3 @@ class ProfileManager(QObject):
         path = self._profiles_file()
         data = {"profiles": [p.to_dict() for p in self._profiles]}
         write_json_atomic(path, data)
-
-    def _redirect_global_paths(self) -> None:
-        """Aponta os globals de paths.py para o diretório do perfil ativo."""
-        from solin.core.foundation import paths
-        paths.IMAGES_DIR     = self.images_dir()
-        paths.EMBEDDED_DIR   = self.embedded_dir()
-        # Garantir que as pastas existam
-        Path(paths.IMAGES_DIR).mkdir(parents=True, exist_ok=True)
-        Path(paths.EMBEDDED_DIR).mkdir(parents=True, exist_ok=True)
-        log.debug("[ProfileManager] paths → profile/%s", self._active_id)
