@@ -22,6 +22,7 @@ from solin.core.foundation.constants import (
     QT_APPLICATION_NAME,
     QT_ORGANIZATION_NAME,
 )
+from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import manager as profile_manager
@@ -131,6 +132,8 @@ def test_profile_registry_and_directory_layout_are_stable(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("solin.core.foundation.paths.CACHE_DIR", str(cache_dir))
     monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
     manager = profile_manager.ProfileManager()
     manager._data_dir = str(tmp_path)
@@ -147,6 +150,11 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert profile_manager._unique_slug("main_hall", ["main_hall"]) == "main_hall_2"
     assert manager._profiles_file() == tmp_path / "profiles.json"
     assert manager.profile_dir() == tmp_path / "profiles" / "main_hall"
+    assert manager.paths_for() == ProfilePaths.from_roots(
+        data_dir=tmp_path,
+        cache_dir=cache_dir,
+        profile_id="main_hall",
+    )
     assert Path(manager.playlists_file()) == (
         tmp_path / "profiles" / "main_hall" / "playlists.json"
     )
@@ -155,10 +163,12 @@ def test_profile_registry_and_directory_layout_are_stable(
     )
     assert Path(manager.images_dir()) == tmp_path / "profiles" / "main_hall" / "images"
     assert Path(manager.embedded_dir()) == tmp_path / "profiles" / "main_hall" / "embedded"
-    assert profile_manager._native_webview_data_dir(
-        str(tmp_path),
-        "main_hall",
-    ) == tmp_path / "NativeWebView" / "sessions" / "solin_session_main_hall"
+    assert manager.paths_for().native_webview_data_dir == (
+        tmp_path / "NativeWebView" / "sessions" / "solin_session_main_hall"
+    )
+    assert manager.paths_for().native_webview_cache_dir == (
+        cache_dir / "NativeWebView" / "sessions" / "solin_session_main_hall"
+    )
 
     manager._save_profiles()
 

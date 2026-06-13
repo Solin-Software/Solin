@@ -1,7 +1,5 @@
-import logging
 import os
 import sys
-from typing import Any
 
 _QT_LOGGING_RULES = (
     "qt.qpa.mime=false",
@@ -23,12 +21,9 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QCoreApplication, QTimer
 
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
-from solin.core.foundation.constants import (
-    APP_VERSION,
-    QSETTINGS_APP_APP,
-    QT_APPLICATION_NAME,
-    QT_ORGANIZATION_NAME,
-)
+from solin.bootstrap.config import default_app_config
+from solin.bootstrap.container import initialize_application_container
+from solin.core.foundation.constants import QSETTINGS_APP_APP
 from solin.core.foundation.resources import application_asset_path
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.bootstrap.profile_flow import wire_profile_switch
@@ -37,9 +32,6 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
-
-log = logging.getLogger(__name__)
-
 
 def _launch_main_window(app, lang_manager, file_args):
     """
@@ -80,24 +72,11 @@ def main():
     fmt.setAlphaBufferSize(8)
     QSurfaceFormat.setDefaultFormat(fmt)
 
+    config = default_app_config()
     app = QApplication(sys.argv)
-    app.setApplicationName(QT_APPLICATION_NAME)
-    app.setOrganizationName(QT_ORGANIZATION_NAME)
-    app.setApplicationVersion(APP_VERSION)
-
-    # ── Inicializa caminhos de dados/cache via QStandardPaths ─────────────────
-    from solin.core.foundation import paths as _paths
-    _paths.init()
-    _paths.ensure_dirs()
-
-    from solin.core.foundation.logging_config import configure_logging
-    configure_logging(_paths.LOG_DIR)
-    log.info("Starting Solin %s", APP_VERSION)
-
-    # ── Inicializa ProfileManager ─────────────────────────────────────────────
-    from solin.core.profiles.manager import get as _get_pm
-    _pm = _get_pm()
-    _pm.init(_paths.DATA_DIR)
+    config.apply_to(app)
+    container = initialize_application_container(app, config)
+    _pm = container.profile_manager
 
     # ── Imports dependentes de caminhos ───────────────────────────────────────
     from solin.core.i18n.manager import LanguageManager
@@ -113,7 +92,7 @@ def main():
     requested_profile_id = runtime_args.requested_profile_id
     create_profile_mode = runtime_args.create_profile
     file_args = list(runtime_args.media_files)
-    _main_window_ref: list[Any | None] = [None]   # lista para captura por closure mutável
+    _main_window_ref = container.window_ref
 
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager()
@@ -130,8 +109,11 @@ def main():
     if try_forward_to_running(file_args):
         sys.exit(0)
     single_instance = SingleInstanceServer(app, _main_window_ref, file_args)
-    if not single_instance.start() and try_forward_to_running(file_args):
+    single_instance_started = single_instance.start()
+    if not single_instance_started and try_forward_to_running(file_args):
         sys.exit(0)
+    if single_instance_started:
+        container.lifecycle.register_single_instance(single_instance)
 
     # ── Primeira instância — limpezas ─────────────────────────────────────────
     from solin.widgets.update_dialog import cleanup_pending_patch

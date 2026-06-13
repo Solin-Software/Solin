@@ -52,6 +52,7 @@ from solin.core.foundation.constants import (
     QSETTINGS_PROFILE_ORG_PREFIX,
     QSETTINGS_PROFILE_SCOPED_APPS,
 )
+from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.storage.migration import (
     move_dir_if_exists as _move_dir_if_exists,
@@ -201,28 +202,33 @@ class ProfileManager(QObject):
 
     # ── Caminhos de dados do perfil ───────────────────────────────────────
 
-    def profile_dir(self, profile_id: str = "") -> Path:
+    def paths_for(self, profile_id: str = "") -> ProfilePaths:
         pid = profile_id or self._active_id
-        return Path(self._data_dir) / "profiles" / pid
+        from solin.core.foundation import paths as _paths
+
+        return ProfilePaths.from_roots(
+            data_dir=self._data_dir,
+            cache_dir=_paths.CACHE_DIR or None,
+            profile_id=pid,
+        )
+
+    def profile_dir(self, profile_id: str = "") -> Path:
+        return self.paths_for(profile_id).profile_dir
 
     def playlists_file(self, profile_id: str = "") -> str:
-        return str(self.profile_dir(profile_id) / "playlists.json")
+        return str(self.paths_for(profile_id).playlists_file)
 
     def meeting_trees_file(self, profile_id: str = "") -> str:
-        return str(self.profile_dir(profile_id) / "meeting_trees.json")
+        return str(self.paths_for(profile_id).meeting_trees_file)
 
     def images_dir(self, profile_id: str = "") -> str:
-        return str(self.profile_dir(profile_id) / "images")
+        return str(self.paths_for(profile_id).images_dir)
 
     def embedded_dir(self, profile_id: str = "") -> str:
-        return str(self.profile_dir(profile_id) / "embedded")
+        return str(self.paths_for(profile_id).embedded_dir)
 
     def ensure_profile_dirs(self, profile_id: str = "") -> None:
-        pid = profile_id or self._active_id
-        for d in [self.profile_dir(pid),
-                  Path(self.images_dir(pid)),
-                  Path(self.embedded_dir(pid))]:
-            d.mkdir(parents=True, exist_ok=True)
+        self.paths_for(profile_id).ensure_dirs()
 
     # ── CRUD ──────────────────────────────────────────────────────────────
 
@@ -266,13 +272,15 @@ class ProfileManager(QObject):
         self._save_profiles()
 
         # Remove dados persistentes do perfil.
-        shutil.rmtree(self.profile_dir(profile_id), ignore_errors=True)
-        shutil.rmtree(_native_webview_data_dir(self._data_dir, profile_id), ignore_errors=True)
+        profile_paths = self.paths_for(profile_id)
+        shutil.rmtree(profile_paths.profile_dir, ignore_errors=True)
+        shutil.rmtree(profile_paths.native_webview_data_dir, ignore_errors=True)
 
         from solin.core.foundation import paths as _paths
         if _paths.CACHE_DIR:
             shutil.rmtree(Path(_paths.CACHE_DIR) / "profiles" / profile_id, ignore_errors=True)
-            shutil.rmtree(_native_webview_cache_dir(_paths.CACHE_DIR, profile_id), ignore_errors=True)
+            if profile_paths.native_webview_cache_dir is not None:
+                shutil.rmtree(profile_paths.native_webview_cache_dir, ignore_errors=True)
 
         # Remove configs isoladas do perfil no QSettings.
         profile_org = f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}"
@@ -450,18 +458,6 @@ class ProfileManager(QObject):
         Path(paths.IMAGES_DIR).mkdir(parents=True, exist_ok=True)
         Path(paths.EMBEDDED_DIR).mkdir(parents=True, exist_ok=True)
         log.debug("[ProfileManager] paths → profile/%s", self._active_id)
-
-
-def _native_webview_session_name(profile_id: str) -> str:
-    return f"solin_session_{profile_id}"
-
-
-def _native_webview_data_dir(data_dir: str, profile_id: str) -> Path:
-    return Path(data_dir) / "NativeWebView" / "sessions" / _native_webview_session_name(profile_id)
-
-
-def _native_webview_cache_dir(cache_dir: str, profile_id: str) -> Path:
-    return Path(cache_dir) / "NativeWebView" / "sessions" / _native_webview_session_name(profile_id)
 
 
 # ── Acesso global (conveniência) ──────────────────────────────────────────────

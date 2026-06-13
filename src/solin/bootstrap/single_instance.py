@@ -51,10 +51,6 @@ class SingleInstanceServer:
         app_dynamic: Any = self._app
         app_dynamic._solin_single_instance_server = self
         app_dynamic._solin_app_ipc_server_active = True
-        try:
-            self._app.aboutToQuit.connect(self.close)
-        except Exception:  # noqa: BLE001 - Qt application lifecycle boundary
-            _log_ignored_exception("Could not register IPC cleanup hook", warning=True)
         return True
 
     def close(self) -> None:
