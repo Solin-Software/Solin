@@ -62,6 +62,10 @@ class ProfilePaths:
     native_webview_data_dir: Path
     native_webview_cache_dir: Path | None
 
+    @property
+    def native_webview_data_root(self) -> Path:
+        return self.native_webview_data_dir.parent.parent
+
     @classmethod
     def from_roots(
         cls,

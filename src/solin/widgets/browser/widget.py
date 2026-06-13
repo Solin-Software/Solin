@@ -4,13 +4,11 @@ import urllib.request
 import sys
 import re
 import logging
-from pathlib import Path
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, Slot, QEvent, QTimer
 from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.i18n.manager import LanguageManager
-from ...core.foundation import paths as _paths
 from ...core.network.http import urlopen as _urlopen
 from ...core.profiles.manager import get as _get_pm
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
@@ -715,11 +713,14 @@ class BrowserWidget(
         super().__init__(parent)
         self.lang = lang_manager
 
-        profile_id = _get_pm().active_id or "default"
+        profile_manager = _get_pm()
+        profile_id = profile_manager.active_id or "default"
         storage_name = f"solin_session_{profile_id}"
 
         self._session_id = storage_name
-        self._session_data_root = Path(_paths.DATA_DIR) / "NativeWebView"
+        self._session_data_root = profile_manager.paths_for(
+            profile_id,
+        ).native_webview_data_root
 
         self._browser_aspect_16_9_active: bool = False
 

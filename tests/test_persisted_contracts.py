@@ -166,6 +166,7 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert manager.paths_for().native_webview_data_dir == (
         tmp_path / "NativeWebView" / "sessions" / "solin_session_main_hall"
     )
+    assert manager.paths_for().native_webview_data_root == tmp_path / "NativeWebView"
     assert manager.paths_for().native_webview_cache_dir == (
         cache_dir / "NativeWebView" / "sessions" / "solin_session_main_hall"
     )
