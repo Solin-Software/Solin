@@ -5,6 +5,8 @@ import sqlite3
 import uuid
 from pathlib import Path
 
+import pytest
+
 from solin.core.foundation.constants import (
     DISPLAY_APP_NAME,
     IS_DEV,
@@ -133,10 +135,7 @@ def test_profile_registry_and_directory_layout_are_stable(
     monkeypatch,
 ) -> None:
     cache_dir = tmp_path / "cache"
-    monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
-    manager = profile_manager.ProfileManager()
-    manager._data_dir = str(tmp_path)
-    manager._cache_dir = str(cache_dir)
+    manager = profile_manager.ProfileManager(tmp_path, cache_dir)
     manager._active_id = "main_hall"
     manager._profiles = [
         profile_manager.ProfileInfo(
@@ -183,6 +182,35 @@ def test_profile_registry_and_directory_layout_are_stable(
         ]
     }
     assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_profile_managers_are_isolated_instances(tmp_path: Path) -> None:
+    first = profile_manager.ProfileManager(tmp_path / "first")
+    second = profile_manager.ProfileManager(tmp_path / "second")
+
+    created = first.create_profile("Main Hall")
+
+    assert created.id == "main_hall"
+    assert [profile.id for profile in first.profiles] == ["main_hall"]
+    assert second.profiles == []
+    assert first is not second
+
+
+def test_profile_paths_require_an_active_or_explicit_profile(tmp_path: Path) -> None:
+    manager = profile_manager.ProfileManager(tmp_path)
+
+    with pytest.raises(RuntimeError, match="before a profile was selected"):
+        manager.paths_for()
+
+
+def test_profile_manager_has_no_singleton_or_service_locator() -> None:
+    source = profile_manager.__file__
+    assert source is not None
+    text = Path(source).read_text(encoding="utf-8")
+
+    assert "_instance" not in text
+    assert "def __new__(" not in text
+    assert "\ndef get()" not in text
 
 
 def test_internal_playlist_file_and_item_schema_are_stable(

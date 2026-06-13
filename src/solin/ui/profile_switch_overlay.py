@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from ..core.ui.helpers import avatar_colors as _avatar_colors
 from ..core.ui.helpers import fade_in as _fade_in
 from ..core.ui.helpers import initials as _initials
-from ..core.profiles.manager import get as _get_pm
+from ..core.profiles.manager import ProfileManager
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
 
 _BG     = "#0d1117"
@@ -270,10 +270,16 @@ class ProfileSwitchOverlay(QWidget):
     profile_selected = Signal(str)
     create_profile_requested = Signal()
 
-    def __init__(self, parent_window: QWidget, current_profile_id: str):
+    def __init__(
+        self,
+        parent_window: QWidget,
+        current_profile_id: str,
+        *,
+        profile_manager: ProfileManager,
+    ):
         super().__init__(parent_window)
         self._current_id = current_profile_id
-        self._pm         = _get_pm()
+        self._pm = profile_manager
 
         self.setGeometry(parent_window.rect())
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)

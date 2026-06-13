@@ -144,13 +144,10 @@ def test_application_container_initializes_runtime_services(
             self.aboutToQuit = _Signal()
 
     class _ProfileManager:
-        def __init__(self):
-            self.init_calls = []
+        def __init__(self, data_dir, cache_dir=None):
+            self.constructor_args = (data_dir, cache_dir)
 
-        def init(self, data_dir, cache_dir=None):
-            self.init_calls.append((data_dir, cache_dir))
-
-    profile_manager = _ProfileManager()
+    constructed = []
 
     import solin.core.foundation.logging_config as logging_config
     import solin.core.profiles.manager as profile_manager_module
@@ -161,7 +158,14 @@ def test_application_container_initializes_runtime_services(
         "configure_logging",
         lambda log_dir: events.append(("logging", log_dir)),
     )
-    monkeypatch.setattr(profile_manager_module, "get", lambda: profile_manager)
+    monkeypatch.setattr(
+        profile_manager_module,
+        "ProfileManager",
+        lambda data_dir, cache_dir=None: (
+            constructed.append(_ProfileManager(data_dir, cache_dir))
+            or constructed[-1]
+        ),
+    )
 
     app = _App()
     config = AppConfig(
@@ -177,12 +181,13 @@ def test_application_container_initializes_runtime_services(
         "paths.init",
         ("logging", os.fspath(tmp_path / "data" / "logs")),
     ]
-    assert profile_manager.init_calls == [
-        (os.fspath(tmp_path / "data"), os.fspath(tmp_path / "cache"))
-    ]
+    assert constructed[0].constructor_args == (
+        os.fspath(tmp_path / "data"),
+        os.fspath(tmp_path / "cache"),
+    )
     assert container.config is config
     assert container.app is app
-    assert container.profile_manager is profile_manager
+    assert container.profile_manager is constructed[0]
     assert container.runtime_paths.data_dir == tmp_path / "data"
     assert container.window_ref == [None]
     assert app.aboutToQuit.callbacks == [container.lifecycle.shutdown]

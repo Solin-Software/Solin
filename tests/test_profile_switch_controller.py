@@ -1,4 +1,3 @@
-import solin.core.profiles.manager as profile_manager
 from solin.bootstrap import profile_flow
 from solin.controllers.profile_switch_controller import ProfileSwitchController
 
@@ -51,7 +50,7 @@ class _WindowStub:
 
 def test_request_switch_emits_main_window_signal():
     window = _WindowStub()
-    controller = ProfileSwitchController(window, lambda: _ProfileManager())
+    controller = ProfileSwitchController(window, _ProfileManager())
 
     controller.request_switch()
 
@@ -61,7 +60,7 @@ def test_request_switch_emits_main_window_signal():
 def test_update_avatar_uses_active_profile_name():
     window = _WindowStub()
     manager = _ProfileManager(_Profile("Alex"))
-    controller = ProfileSwitchController(window, lambda: manager)
+    controller = ProfileSwitchController(window, manager)
 
     controller.update_avatar("profile-id")
 
@@ -70,7 +69,7 @@ def test_update_avatar_uses_active_profile_name():
 
 def test_update_avatar_ignores_missing_active_profile():
     window = _WindowStub()
-    controller = ProfileSwitchController(window, lambda: _ProfileManager(None))
+    controller = ProfileSwitchController(window, _ProfileManager(None))
 
     controller.update_avatar("profile-id")
 
@@ -82,9 +81,10 @@ def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatc
     relaunches = []
 
     class _Overlay:
-        def __init__(self, parent, current_id):
+        def __init__(self, parent, current_id, *, profile_manager):
             self.parent = parent
             self.current_id = current_id
+            self.profile_manager = profile_manager
             self.cancelled = _SignalStub()
             self.profile_selected = _SignalStub()
             self.create_profile_requested = _SignalStub()
@@ -107,31 +107,32 @@ def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatc
     manager = _ProfileManager(_Profile("Current"))
     manager.active_profile.id = "profile-a"
 
-    monkeypatch.setattr(profile_manager, "get", lambda: manager)
     monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
         profile_flow,
         "relaunch_with_profile",
-        lambda app_arg, profile_id, window_arg: relaunches.append(
-            (app_arg, profile_id, window_arg)
+        lambda app_arg, profile_id, window_arg, manager_arg: relaunches.append(
+            (app_arg, profile_id, window_arg, manager_arg)
         ),
     )
 
     profile_flow.wire_profile_switch(
         app,
         window_ref=[window],
+        profile_manager=manager,
     )
     window.switch_profile_requested.emit()
     overlays[0].profile_selected.emit("profile-b")
 
     assert overlays[0].parent is window
     assert overlays[0].current_id == "profile-a"
+    assert overlays[0].profile_manager is manager
     assert overlays[0].shown == 1
     assert overlays[0].raised == 1
     assert window.removed_filters == [overlays[0]]
     assert overlays[0].deleted == 1
     assert window.enabled == [False]
-    assert relaunches == [(app, "profile-b", window)]
+    assert relaunches == [(app, "profile-b", window, manager)]
 
 
 def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
@@ -139,9 +140,10 @@ def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
     relaunches = []
 
     class _Overlay:
-        def __init__(self, parent, current_id):
+        def __init__(self, parent, current_id, *, profile_manager):
             self.parent = parent
             self.current_id = current_id
+            self.profile_manager = profile_manager
             self.cancelled = _SignalStub()
             self.profile_selected = _SignalStub()
             self.create_profile_requested = _SignalStub()
@@ -161,7 +163,6 @@ def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
     manager = _ProfileManager(_Profile("Current"))
     manager.active_profile.id = "profile-a"
 
-    monkeypatch.setattr(profile_manager, "get", lambda: manager)
     monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
         profile_flow,
@@ -172,6 +173,7 @@ def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
     profile_flow.wire_profile_switch(
         app=object(),
         window_ref=[window],
+        profile_manager=manager,
     )
     window.switch_profile_requested.emit()
     overlays[0].cancelled.emit()

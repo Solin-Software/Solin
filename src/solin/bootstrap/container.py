@@ -28,7 +28,7 @@ class ApplicationContainer:
 def initialize_application_container(app, config: AppConfig) -> ApplicationContainer:
     from solin.core.foundation import paths as legacy_paths
     from solin.core.foundation.logging_config import configure_logging
-    from solin.core.profiles.manager import get as get_profile_manager
+    from solin.core.profiles.manager import ProfileManager
 
     legacy_paths.init()
     runtime_paths = RuntimePaths.from_legacy_globals()
@@ -37,8 +37,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     configure_logging(os.fspath(runtime_paths.log_dir))
     log.info("Starting %s %s", config.display_name, config.version)
 
-    profile_manager = get_profile_manager()
-    profile_manager.init(
+    profile_manager = ProfileManager(
         os.fspath(runtime_paths.data_dir),
         cache_dir=os.fspath(runtime_paths.cache_dir),
     )

@@ -86,9 +86,9 @@ class MainWindowUiController:
         "nav_wifi_btn",
     )
 
-    def __init__(self, window, profile_manager_get) -> None:
+    def __init__(self, window, profile_manager) -> None:
         self._window = window
-        self._profile_manager_get = profile_manager_get
+        self._profile_manager = profile_manager
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
@@ -284,7 +284,7 @@ class MainWindowUiController:
 
     def _build_sidebar_header(self) -> QHBoxLayout:
         window = self._window
-        active = self._profile_manager_get().active_profile
+        active = self._profile_manager.active_profile
         profile_name = active.name if active else ""
 
         header_row = QHBoxLayout()

@@ -4,9 +4,9 @@ from __future__ import annotations
 class SignalConnectionController:
     """Wires MainWindow signals after widgets and controllers are created."""
 
-    def __init__(self, window, profile_manager_get) -> None:
+    def __init__(self, window, profile_manager) -> None:
         self._window = window
-        self._profile_manager_get = profile_manager_get
+        self._profile_manager = profile_manager
 
     def _refresh_timer_monitors(self) -> None:
         bridge = getattr(self._window.timer_widget, "_bridge", None)
@@ -16,7 +16,7 @@ class SignalConnectionController:
     def connect_signals(self) -> None:
         window = self._window
 
-        self._profile_manager_get().profile_switched.connect(
+        self._profile_manager.profile_switched.connect(
             window._profile_switch.update_avatar
         )
 

@@ -37,6 +37,7 @@ def _launch_main_window(
     file_args,
     runtime_paths,
     profile_paths,
+    profile_manager,
 ):
     """
     Cria e exibe o MainWindow para o perfil já ativo.
@@ -58,6 +59,7 @@ def _launch_main_window(
         profile_paths,
         playlist_storage_paths,
         meeting_tree_store,
+        profile_manager,
     )
     window.show()
 
@@ -152,7 +154,7 @@ def main():
     if create_profile_mode:
         from solin.ui.profile_screen import ProfileScreen
 
-        screen = ProfileScreen(lang_manager)
+        screen = ProfileScreen(lang_manager, profile_manager=_pm)
         _main_window_ref[0] = screen
         screen.setWindowTitle("Solin")
         screen.setMinimumSize(860, 580)
@@ -174,9 +176,10 @@ def main():
                 file_args,
                 container.runtime_paths,
                 _pm.paths_for(),
+                _pm,
             )
             _main_window_ref[0] = window
-            wire_profile_switch(app, _main_window_ref)
+            wire_profile_switch(app, _main_window_ref, _pm)
             QTimer.singleShot(400, screen.close)
 
         screen.profile_ready.connect(_on_profile_ready)
@@ -198,9 +201,10 @@ def main():
             file_args,
             container.runtime_paths,
             _pm.paths_for(),
+            _pm,
         )
         _main_window_ref[0] = window
-        wire_profile_switch(app, _main_window_ref)
+        wire_profile_switch(app, _main_window_ref, _pm)
 
     elif _pm.has_profiles() and len(_pm.profiles) == 1:
         # ── Caso rápido: perfil único → pula seletor ──────────────────────
@@ -220,15 +224,16 @@ def main():
             file_args,
             container.runtime_paths,
             _pm.paths_for(),
+            _pm,
         )
         _main_window_ref[0] = window
-        wire_profile_switch(app, _main_window_ref)
+        wire_profile_switch(app, _main_window_ref, _pm)
 
     else:
         # ── Mostra ProfileScreen ───────────────────────────────────────────
         from solin.ui.profile_screen import ProfileScreen
 
-        screen = ProfileScreen(lang_manager)
+        screen = ProfileScreen(lang_manager, profile_manager=_pm)
         _main_window_ref[0] = screen
         screen.setWindowTitle("Solin")
         screen.setMinimumSize(860, 580)
@@ -251,9 +256,10 @@ def main():
                 file_args,
                 container.runtime_paths,
                 _pm.paths_for(),
+                _pm,
             )
             _main_window_ref[0] = window
-            wire_profile_switch(app, _main_window_ref)
+            wire_profile_switch(app, _main_window_ref, _pm)
             # Fecha a tela de perfil de vez depois da animação
             QTimer.singleShot(400, screen.close)
 

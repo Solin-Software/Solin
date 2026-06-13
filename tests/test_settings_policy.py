@@ -118,12 +118,9 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
         def setValue(self, _key, _value) -> None:
             pass
 
-    monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
     monkeypatch.setattr(settings_store, "QSettings", FakeSettings)
 
-    manager = profile_manager.ProfileManager()
-    manager._data_dir = str(tmp_path)
-    manager._cache_dir = ""
+    manager = profile_manager.ProfileManager(tmp_path)
     manager._active_id = "kept"
     manager._profiles = [
         profile_manager.ProfileInfo("kept", "Kept"),

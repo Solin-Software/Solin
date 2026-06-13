@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 from ..core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from ..core.foundation.settings_keys import SettingsKey
 from ..core.ui.helpers import fade_in as _fade_in
-from ..core.profiles.manager import get as _get_pm
+from ..core.profiles.manager import ProfileManager
 from ..widgets.common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
 from ..styles.icons import (
     make_icon,
@@ -78,10 +78,16 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     profile_ready = Signal(str)
 
-    def __init__(self, lang_manager=None, parent=None):
+    def __init__(
+        self,
+        lang_manager=None,
+        *,
+        profile_manager: ProfileManager,
+        parent=None,
+    ):
         super().__init__(parent)
         self._lang = lang_manager
-        self._pm   = _get_pm()
+        self._pm = profile_manager
         self._creating_additional_profile = False
         self._ob_cancel_buttons: list[QPushButton] = []
         self._tr_labels: list[tuple[QLabel, str]] = []

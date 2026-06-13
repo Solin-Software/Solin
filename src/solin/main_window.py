@@ -42,7 +42,7 @@ from .core.profiles import settings as _ps
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
-from .core.profiles.manager import get as _get_pm
+from .core.profiles.manager import ProfileManager
 from .core.foundation.constants import (
     AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
 )
@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         profile_paths: ProfilePaths,
         playlist_storage_paths: PlaylistStoragePaths,
         meeting_tree_store: MeetingTreeStore,
+        profile_manager: ProfileManager,
     ):
         super().__init__()
         self.lang = lang_manager
@@ -67,10 +68,11 @@ class MainWindow(QMainWindow):
         self.profile_paths = profile_paths
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
+        self.profile_manager = profile_manager
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(self)
         self._auto_keys = AutoKeyDispatcher(self)
-        self._profile_switch = ProfileSwitchController(self, _get_pm)
+        self._profile_switch = ProfileSwitchController(self, profile_manager)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
         self._playlist_imports = PlaylistImportController(self)
@@ -134,13 +136,13 @@ class MainWindow(QMainWindow):
         )
         self._media_download_notifications.start()
 
-        self._ui_controller = MainWindowUiController(self, _get_pm)
+        self._ui_controller = MainWindowUiController(self, profile_manager)
         self._build_ui()
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(self)
         self._projection_stop = ProjectionStopController(self)
         self._language_controller = LanguageController(self)
-        self._signal_connections = SignalConnectionController(self, _get_pm)
+        self._signal_connections = SignalConnectionController(self, profile_manager)
         self._connect_signals()
 
         self._bootstrap_controller = MainWindowBootstrapController(self)

@@ -166,7 +166,7 @@ def test_connect_signals_wires_expected_signal_graph():
     _Signal.registry = []
     window = _WindowStub()
     profile_manager = SimpleNamespace(profile_switched=_Signal("profile_switched"))
-    controller = SignalConnectionController(window, lambda: profile_manager)
+    controller = SignalConnectionController(window, profile_manager)
 
     controller.connect_signals()
 

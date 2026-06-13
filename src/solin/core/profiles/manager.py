@@ -40,7 +40,7 @@ import re
 import shutil
 import time
 from pathlib import Path
-from typing import Optional, Self, cast
+from typing import Optional
 
 from PySide6.QtCore import QObject, QSettings, Signal
 
@@ -118,7 +118,7 @@ class ProfileInfo:
 
 class ProfileManager(QObject):
     """
-    Singleton responsável pelo ciclo de vida dos perfis.
+    Serviço responsável pelo ciclo de vida dos perfis.
 
     Signals
     -------
@@ -129,34 +129,17 @@ class ProfileManager(QObject):
 
     profile_switched = Signal(str)   # profile_id
 
-    # ── Singleton ─────────────────────────────────────────────────────────
-    _instance: Optional["ProfileManager"] = None
-
-    def __new__(cls, *args: object, **kwargs: object) -> Self:
-        if cls._instance is None:
-            obj = super().__new__(cls)
-            obj._ready = False
-            cls._instance = obj
-        return cast(Self, cls._instance)
-
-    def __init__(self, parent: Optional[QObject] = None):
-        if self._ready:
-            return
+    def __init__(
+        self,
+        data_dir: str | Path,
+        cache_dir: str | Path | None = None,
+        parent: Optional[QObject] = None,
+    ):
         super().__init__(parent)
-        self._ready     = True
-        self._data_dir  = ""
-        self._cache_dir = ""
+        self._data_dir = str(data_dir)
+        self._cache_dir = str(cache_dir or "")
         self._active_id = ""
         self._profiles: list[ProfileInfo] = []
-
-    # ── Inicialização ─────────────────────────────────────────────────────
-
-    def init(self, data_dir: str, cache_dir: str | Path | None = None) -> None:
-        """
-        Deve ser chamado UMA VEZ após paths.init(), antes de qualquer uso.
-        """
-        self._data_dir = data_dir
-        self._cache_dir = str(cache_dir or "")
         self._load_profiles()
         log.debug("[ProfileManager] Initialized - %d profile(s)", len(self._profiles))
 
@@ -207,6 +190,8 @@ class ProfileManager(QObject):
 
     def paths_for(self, profile_id: str = "") -> ProfilePaths:
         pid = profile_id or self._active_id
+        if not pid:
+            raise RuntimeError("Profile paths requested before a profile was selected.")
 
         return ProfilePaths.from_roots(
             data_dir=self._data_dir,
@@ -448,10 +433,3 @@ class ProfileManager(QObject):
         Path(paths.IMAGES_DIR).mkdir(parents=True, exist_ok=True)
         Path(paths.EMBEDDED_DIR).mkdir(parents=True, exist_ok=True)
         log.debug("[ProfileManager] paths → profile/%s", self._active_id)
-
-
-# ── Acesso global (conveniência) ──────────────────────────────────────────────
-
-def get() -> ProfileManager:
-    """Retorna o singleton do ProfileManager (criando se necessário)."""
-    return ProfileManager()
