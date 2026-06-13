@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 from PySide6.QtGui import QGuiApplication, QIcon
 
 from ..core.foundation.constants import QSETTINGS_MAIN_WINDOW_GEOMETRY_APP
+from ..core.foundation.resources import application_asset_path
 from ..core.foundation.settings_keys import SettingsKey
 from ..core.profiles import settings as _ps
 from ..core.ui.titlebar import apply_titlebar_color
@@ -42,7 +42,7 @@ class WindowStateController:
         prefs.setValue(SettingsKey.WINDOW_HEIGHT, self._window.height())
 
     def apply_icon(self) -> None:
-        icon_path = self._application_asset_path("icon.ico")
+        icon_path = application_asset_path("icon.ico")
         if icon_path.is_file():
             self._window.setWindowIcon(QIcon(str(icon_path)))
 
@@ -82,15 +82,6 @@ class WindowStateController:
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
             except Exception:  # noqa: BLE001 - Win32 foreground API boundary
                 log.debug("Failed to force main window foreground on Windows", exc_info=True)
-
-    @staticmethod
-    def _application_asset_path(filename: str) -> Path:
-        package_root = Path(__file__).resolve().parents[1]
-        for root in (package_root.parent, package_root.parents[1], Path.cwd()):
-            candidate = root / "assets" / filename
-            if candidate.is_file():
-                return candidate
-        return package_root.parents[1] / "assets" / filename
 
     @staticmethod
     def _clamped_size(

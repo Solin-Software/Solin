@@ -1,5 +1,5 @@
 from solin.controllers.ipc_controller import IpcController
-from solin.bootstrap import application as main
+from solin.bootstrap import single_instance
 
 
 class _Raw:
@@ -53,7 +53,7 @@ def test_bootstrap_ipc_reuses_controller_payload_parser(monkeypatch):
         staticmethod(lambda text: calls.append(text) or []),
     )
 
-    server = main._SingleInstanceServer(app=object(), window_ref=[], pending_files=[])
+    server = single_instance.SingleInstanceServer(app=object(), window_ref=[], pending_files=[])
     server._bring_current_window_to_front = lambda: None
     server._on_ipc_data(_Conn("https://example.test/video.mp4\n"))
 
@@ -119,7 +119,7 @@ def test_single_instance_server_dispatches_media_to_current_window(tmp_path):
             self.opened.append(paths)
 
     window = _Window()
-    server = main._SingleInstanceServer(
+    server = single_instance.SingleInstanceServer(
         app=object(),
         window_ref=[window],
         pending_files=[],
@@ -136,7 +136,7 @@ def test_single_instance_server_queues_unique_media_until_window_exists(tmp_path
     media_file = tmp_path / "clip.mp4"
     media_file.write_bytes(b"video")
     pending = [str(media_file)]
-    server = main._SingleInstanceServer(app=object(), window_ref=[], pending_files=pending)
+    server = single_instance.SingleInstanceServer(app=object(), window_ref=[], pending_files=pending)
     server._bring_current_window_to_front = lambda: None
     server._current_window = lambda: None
 

@@ -1,5 +1,5 @@
 import solin.core.profiles.manager as profile_manager
-from solin.bootstrap import application as main
+from solin.bootstrap import profile_flow
 from solin.controllers.profile_switch_controller import ProfileSwitchController
 
 
@@ -110,17 +110,15 @@ def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatc
     monkeypatch.setattr(profile_manager, "get", lambda: manager)
     monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
-        main,
-        "_relaunch_with_profile",
+        profile_flow,
+        "relaunch_with_profile",
         lambda app_arg, profile_id, window_arg: relaunches.append(
             (app_arg, profile_id, window_arg)
         ),
     )
 
-    main._wire_profile_switch(
+    profile_flow.wire_profile_switch(
         app,
-        lang_manager=object(),
-        file_args=[],
         window_ref=[window],
     )
     window.switch_profile_requested.emit()
@@ -166,15 +164,13 @@ def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
     monkeypatch.setattr(profile_manager, "get", lambda: manager)
     monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
     monkeypatch.setattr(
-        main,
-        "_relaunch_with_profile",
+        profile_flow,
+        "relaunch_with_profile",
         lambda *args: relaunches.append(args),
     )
 
-    main._wire_profile_switch(
+    profile_flow.wire_profile_switch(
         app=object(),
-        lang_manager=object(),
-        file_args=[],
         window_ref=[window],
     )
     window.switch_profile_requested.emit()

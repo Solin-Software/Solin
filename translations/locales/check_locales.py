@@ -5,6 +5,11 @@ import ast
 import re
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 def flatten_dict(d, parent_key='', sep='.'):
     """Achata dicionários aninhados para comparação profunda."""
     items = []
@@ -92,8 +97,6 @@ def find_unused_keys(all_keys, source_dir, detailed=False):
                                 value = None
                                 if isinstance(node, ast.Constant) and isinstance(node.value, str):
                                     value = node.value
-                                elif isinstance(node, getattr(ast, 'Str', type(None))):
-                                    value = node.s
 
                                 if value is not None:
                                     all_python_strings.add(value)

@@ -3,18 +3,17 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
-from PySide6 import QtCore
-
 import solin.core.profiles.manager as profile_manager
 from solin.bootstrap import application as main
-from solin.bootstrap.application import _split_runtime_args
+from solin.bootstrap import profile_flow
+from solin.bootstrap.runtime_args import parse_runtime_args
 
 
-def test_split_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
+def test_parse_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
     media_file = tmp_path / "clip.mp4"
     media_file.write_bytes(b"")
 
-    requested_profile, create_profile, file_args = _split_runtime_args([
+    runtime_args = parse_runtime_args([
         "solin",
         "--profile",
         "profile-1",
@@ -23,24 +22,24 @@ def test_split_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
         str(tmp_path / "missing.mp4"),
     ])
 
-    assert requested_profile == "profile-1"
-    assert create_profile is True
-    assert file_args == [str(media_file)]
+    assert runtime_args.requested_profile_id == "profile-1"
+    assert runtime_args.create_profile is True
+    assert runtime_args.media_files == (str(media_file),)
 
 
-def test_split_runtime_args_supports_profile_equals_form(tmp_path):
+def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
     csv_file = tmp_path / "poll.csv"
     csv_file.write_bytes(b"")
 
-    requested_profile, create_profile, file_args = _split_runtime_args([
+    runtime_args = parse_runtime_args([
         "solin",
         "--profile=profile-2",
         str(csv_file),
     ])
 
-    assert requested_profile == "profile-2"
-    assert create_profile is False
-    assert file_args == [str(csv_file)]
+    assert runtime_args.requested_profile_id == "profile-2"
+    assert runtime_args.create_profile is False
+    assert runtime_args.media_files == (str(csv_file),)
 
 
 def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkeypatch):
@@ -199,15 +198,15 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
     app = _App()
     window = _Window()
     monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
-    monkeypatch.setattr(QtCore, "QSettings", _Settings)
+    monkeypatch.setattr(profile_flow, "QSettings", _Settings)
     monkeypatch.setattr(
-        main,
-        "_stop_process_ipc",
+        profile_flow.single_instance,
+        "stop_process_ipc",
         lambda app, window: stopped.append((app, window)) or "ipc",
     )
-    monkeypatch.setattr(main, "_restart_process_ipc", lambda *args: None)
+    monkeypatch.setattr(profile_flow.single_instance, "restart_process_ipc", lambda *args: None)
     monkeypatch.setattr(
-        main,
+        profile_flow,
         "QProcess",
         SimpleNamespace(
             startDetached=lambda program, args, cwd: launches.append(
@@ -216,10 +215,10 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
             or True
         ),
     )
-    monkeypatch.setattr(main.sys, "executable", "python.exe")
-    monkeypatch.delattr(main.sys, "frozen", raising=False)
+    monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
+    monkeypatch.delattr(profile_flow.sys, "frozen", raising=False)
 
-    main._relaunch_with_profile(app, "profile-b", window)
+    profile_flow.relaunch_with_profile(app, "profile-b", window)
 
     assert settings[0].values == {"last_active_profile": "profile-b"}
     assert settings[0].synced is True
@@ -280,20 +279,24 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
     app = _App()
     window = _Window()
     monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
-    monkeypatch.setattr(QtCore, "QSettings", _Settings)
-    monkeypatch.setattr(main, "_stop_process_ipc", lambda app, window: "ipc-server")
+    monkeypatch.setattr(profile_flow, "QSettings", _Settings)
     monkeypatch.setattr(
-        main,
-        "_restart_process_ipc",
+        profile_flow.single_instance,
+        "stop_process_ipc",
+        lambda app, window: "ipc-server",
+    )
+    monkeypatch.setattr(
+        profile_flow.single_instance,
+        "restart_process_ipc",
         lambda app, server, window: restored.append((app, server, window)),
     )
     monkeypatch.setattr(
-        main,
+        profile_flow,
         "QProcess",
         SimpleNamespace(startDetached=lambda *_args: False),
     )
 
-    main._relaunch_with_profile(app, "profile-b", window)
+    profile_flow.relaunch_with_profile(app, "profile-b", window)
 
     assert window.enabled == [True]
     assert window.shown == 1
@@ -310,13 +313,17 @@ def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
             return None
 
     monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
-    monkeypatch.setattr(main, "_stop_process_ipc", lambda *_args: launches.append("stop"))
     monkeypatch.setattr(
-        main,
+        profile_flow.single_instance,
+        "stop_process_ipc",
+        lambda *_args: launches.append("stop"),
+    )
+    monkeypatch.setattr(
+        profile_flow,
         "QProcess",
         SimpleNamespace(startDetached=lambda *_args: launches.append("launch")),
     )
 
-    main._relaunch_with_profile(app=object(), profile_id="missing", window=object())
+    profile_flow.relaunch_with_profile(app=object(), profile_id="missing", window=object())
 
     assert launches == []
