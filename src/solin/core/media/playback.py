@@ -20,9 +20,8 @@ Comportamento de buffer por modo
 """
 import logging
 
-from PySide6.QtCore import QObject, Signal, QUrl, QTimer
+from PySide6.QtCore import QObject, QSettings, Signal, QUrl, QTimer
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps  # noqa: F401 (used below)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PySide6.QtGui import QPixmap, QImage
 
@@ -48,8 +47,9 @@ class MediaController(QObject):
     # False -> reproduzindo via stream HTTP ou inativo
     playback_source_changed = Signal(bool)
 
-    def __init__(self, parent=None):
+    def __init__(self, prefs: QSettings, parent=None):
         super().__init__(parent)
+        self._prefs = prefs
 
         self.player = QMediaPlayer(self)
         self.audio_output = QAudioOutput(self)
@@ -136,9 +136,8 @@ class MediaController(QObject):
             self.playback_source_changed.emit(True)
         else:
             self._play_source(url)
-            prefs = _ps.prefs()
             auto_download = (
-                prefs.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool)
+                self._prefs.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool)
                 if download_persist is None else bool(download_persist)
             )
             self._stream_persist = auto_download

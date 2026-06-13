@@ -179,6 +179,7 @@ class MainWindowUiController:
 
         window.proj_bar = ProjectionBar(
             window.media_ctrl,
+            prefs=window.profile_prefs,
             profile_paths=window.profile_paths,
             lang_manager=window.lang,
             container=window.right_col,
@@ -202,6 +203,7 @@ class MainWindowUiController:
             window.screen_mgr,
             obs_service=window._obs_service,
             ndi_service=window._ndi_service,
+            prefs=window.profile_prefs,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"
             ),
@@ -224,6 +226,7 @@ class MainWindowUiController:
             window.lang,
             meeting_tree_store=window.meeting_tree_store,
             profile_paths=window.profile_paths,
+            prefs=window.profile_prefs,
             parent=window,
         )
         window.meetings_widget.set_watched_folder(watched_folder)
@@ -248,6 +251,7 @@ class MainWindowUiController:
             window._zoom_service,
             window._camera_service,
             window.right_col,
+            prefs=window.profile_prefs,
             background_song_service=window._background_song_service,
         )
         window._quick_toolbar.monitor_clicked.connect(

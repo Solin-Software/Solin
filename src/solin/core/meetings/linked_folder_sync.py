@@ -75,7 +75,7 @@ def meeting_tag_for_pub_type(pub_type: str) -> str:
 class MeetingLinkedFolderSync:
     """Domain service for meeting state stored in a watched meeting folder."""
 
-    def __init__(self, prefs: Any | None = None) -> None:
+    def __init__(self, prefs: Any) -> None:
         self._prefs = prefs
 
     def folder_date_for(self, monday: date, pub_type: str) -> date:
@@ -296,12 +296,7 @@ class MeetingLinkedFolderSync:
         return detached
 
     def _configured_weekday(self, pub_type: str) -> int:
-        prefs = self._prefs
-        if prefs is None:
-            from solin.core.profiles import settings as _ps
-
-            prefs = _ps.prefs()
-        schedule = load_meeting_schedule(prefs)
+        schedule = load_meeting_schedule(self._prefs)
         slot = schedule.midweek if pub_type == "mwb" else schedule.weekend
         if 0 <= slot.weekday <= 6:
             return slot.weekday

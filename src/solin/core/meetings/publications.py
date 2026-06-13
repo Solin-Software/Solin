@@ -42,10 +42,9 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import (
-    QObject, QThread, Signal, Slot,
+    QObject, QSettings, QThread, Signal, Slot,
 )
 
-from solin.core.profiles import settings as _ps
 from solin.core.network.http import urlopen as _urlopen
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.jw.publication_links import (
@@ -1694,9 +1693,9 @@ class JwpubService(QObject):
     _sig_resolve           = Signal(str, str, int, int, int, str)
     _sig_prefetch_wd       = Signal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, prefs: QSettings, parent=None):
         super().__init__(parent)
-        self._prefs  = _ps.prefs()
+        self._prefs  = prefs
         self._active: dict[str, WeekData] = {}
         self._lang   = "T"
         self._is_sign_language = False

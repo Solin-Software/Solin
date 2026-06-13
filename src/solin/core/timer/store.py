@@ -1,10 +1,10 @@
 """
 store.py — Solin timer domain
 =============================
-Per-profile persistence for the advanced timer, layered on the profile-scoped
-``QSettings`` wrapper (:mod:`solin.core.profiles.settings`).
+Per-profile persistence for the advanced timer, bound to an explicitly injected
+``QSettings`` namespace.
 
-What is persisted (all under the ``Timer`` settings app of the active profile):
+What is persisted (all under the injected ``Timer`` settings app):
     • the global ``ClockConfig`` for the profile;
     • the last-selected meeting type and the timer-window visibility flag;
     • one ``MeetingSchedule`` per (week-monday, meeting-type), serialized as
@@ -20,9 +20,9 @@ from __future__ import annotations
 import json
 from datetime import date
 
-from solin.core.foundation.constants import QSETTINGS_TIMER_APP
+from PySide6.QtCore import QSettings
+
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 
 from .models import ClockConfig, MeetingSchedule, MeetingType
 from .schedule_factory import normalize_schedule
@@ -36,10 +36,13 @@ def _settings_str(value: object, default: str = "") -> str:
 
 
 class TimerStore:
-    """Thin persistence facade. Stateless — reads the active profile each call."""
+    """Thin persistence facade bound to one profile."""
 
-    def _prefs(self):
-        return _ps.prefs(QSETTINGS_TIMER_APP)
+    def __init__(self, prefs: QSettings) -> None:
+        self._settings = prefs
+
+    def _prefs(self) -> QSettings:
+        return self._settings
 
     # ── ClockConfig ───────────────────────────────────────────────────────────
 

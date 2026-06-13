@@ -185,6 +185,7 @@ def test_application_container_initializes_runtime_services(
     assert container.config is config
     assert container.app is app
     assert container.profile_manager is constructed[0]
+    assert container.global_settings is not None
     assert container.runtime_paths.data_dir == tmp_path / "data"
     assert container.window_ref == [None]
     assert app.aboutToQuit.callbacks == [container.lifecycle.shutdown]

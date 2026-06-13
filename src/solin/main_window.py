@@ -38,15 +38,17 @@ from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
 from .core.integrations.automation.shortcuts import AutoKeyDispatcher
-from .core.profiles import settings as _ps
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.profiles.manager import ProfileManager
 from .core.foundation.constants import (
     AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
+    QSETTINGS_MAIN_WINDOW_GEOMETRY_APP,
+    QSETTINGS_MONITORS_APP,
+    QSETTINGS_TIMER_APP,
 )
-from .core.foundation.settings_keys import SettingsKey
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
         lang_manager: LanguageManager,
         runtime_paths: RuntimePaths,
         profile_paths: ProfilePaths,
+        profile_settings: ProfileSettings,
         playlist_storage_paths: PlaylistStoragePaths,
         meeting_tree_store: MeetingTreeStore,
         profile_manager: ProfileManager,
@@ -66,12 +69,15 @@ class MainWindow(QMainWindow):
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
+        self.profile_settings = profile_settings
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
         self.profile_manager = profile_manager
+        profile_prefs = profile_settings.prefs()
+        self.profile_prefs = profile_prefs
         self.screen_mgr = ScreenManager(self)
-        self.media_ctrl = MediaController(self)
-        self._auto_keys = AutoKeyDispatcher(self)
+        self.media_ctrl = MediaController(profile_prefs, self)
+        self._auto_keys = AutoKeyDispatcher(profile_prefs, self)
         self._profile_switch = ProfileSwitchController(self, profile_manager)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
@@ -87,8 +93,12 @@ class MainWindow(QMainWindow):
         # The allocation store is the persistent source of truth for which
         # subsystem (media/timer) owns each monitor — consulted by both the
         # media projection controller and the timer-output controller.
-        self._monitor_allocation = MonitorAllocationStore()
-        self._timer_store = TimerStore()
+        self._monitor_allocation = MonitorAllocationStore(
+            profile_settings.prefs(QSETTINGS_MONITORS_APP)
+        )
+        self._timer_store = TimerStore(
+            profile_settings.prefs(QSETTINGS_TIMER_APP)
+        )
         self._timer_engine = TimerEngine(self)
         self._timer_output = TimerOutputController(
             self, self._timer_engine, self._timer_store, self._monitor_allocation
@@ -101,8 +111,8 @@ class MainWindow(QMainWindow):
         )
 
         # OBS WebSocket integration
-        self._obs_service = OBSWebSocketService(self)
-        self._obs_prefs   = _ps.prefs()
+        self._obs_service = OBSWebSocketService(profile_settings.prefs, self)
+        self._obs_prefs = profile_prefs
 
         # OBS/DistroAV NDI program stream receiver
         self._ndi_service = NDIReceiverService(self)
@@ -111,20 +121,21 @@ class MainWindow(QMainWindow):
         self._camera_service = CameraService(self)
 
         # Zoom Meetings integration
-        self._zoom_service = ZoomService(self)
-        self._zoom_prefs = _ps.prefs()
+        self._zoom_service = ZoomService(profile_prefs, self)
+        self._zoom_prefs = profile_prefs
 
-        # Restore saved language (before building UI so all widgets start in the right lang)
-        _prefs_boot = _ps.prefs()
-        _saved_lang = _prefs_boot.value(SettingsKey.APP_LANGUAGE, "", str)
-        if _saved_lang:
-            self.lang.set_language(_saved_lang)
-
-        self._background_song_service = BackgroundSongService(self.lang, self)
+        self._background_song_service = BackgroundSongService(
+            self.lang,
+            profile_prefs,
+            self,
+        )
 
         self.setWindowTitle(self.tr("Solin"))
         self.setMinimumSize(900, 600)
-        self._window_state = WindowStateController(self)
+        self._window_state = WindowStateController(
+            self,
+            profile_settings.prefs(QSETTINGS_MAIN_WINDOW_GEOMETRY_APP),
+        )
         self._shutdown_controller = ShutdownController(self)
         self._window_state.restore_size()
         self._window_state.apply_icon()

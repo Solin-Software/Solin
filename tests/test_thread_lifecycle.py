@@ -11,10 +11,15 @@ from solin.core.integrations.automation.zoom import service as zoom_module
 from solin.core.integrations.automation.zoom.service import ZoomService
 from solin.core.integrations.ndi import NDIReceiverService
 from solin.core.media.downloader import SongDownloader
+from solin.core.profiles.settings import ProfileSettings
 
 
 def _app() -> QCoreApplication:
     return QCoreApplication.instance() or QCoreApplication([])
+
+
+def _prefs():
+    return ProfileSettings.for_profile_id("thread_lifecycle").prefs()
 
 
 def _wait_until(predicate, timeout: float = 3.0) -> bool:
@@ -75,7 +80,7 @@ def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
 def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
-    service = ZoomService()
+    service = ZoomService(_prefs())
     service._active = True
     service._stop_evt.clear()
     service._generation = 1
@@ -115,7 +120,7 @@ def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
 def test_zoom_rejects_callback_from_stopped_generation(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
-    service = ZoomService()
+    service = ZoomService(_prefs())
     service.start()
     generation = service._generation
 
@@ -161,7 +166,7 @@ def test_ndi_restart_waits_for_previous_worker():
 
 def test_obs_restart_waits_for_previous_worker(monkeypatch):
     _app()
-    service = OBSWebSocketService()
+    service = OBSWebSocketService(_prefs)
     monkeypatch.setattr(service, "_config_ok", lambda: True)
     lock = threading.Lock()
     generations: list[int] = []

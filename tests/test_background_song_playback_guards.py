@@ -152,9 +152,9 @@ def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade(
         pre_meeting_occurrence=lambda _now: occurrence,
     )
     monkeypatch.setattr(service_module, "load_meeting_schedule", lambda _prefs: schedule)
-    monkeypatch.setattr(service_module._ps, "prefs", lambda: object())
     service = SimpleNamespace(
         _enabled=True,
+        _prefs=object(),
         _active_occurrence=None,
         _scheduled_fade_deadline=None,
         _suppressed_slot_id="",

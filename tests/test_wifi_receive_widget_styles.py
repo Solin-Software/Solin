@@ -19,6 +19,7 @@ app = QApplication([])
 
 from solin.core.i18n.manager import LanguageManager
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:
@@ -32,7 +33,10 @@ class _Notifications:
         pass
 
 widget = WifiReceiveWidget(
-    LanguageManager(jw_languages_cache_file=Path("jw_languages.json")),
+    LanguageManager(
+        global_settings=GlobalSettingsStore.create(),
+        jw_languages_cache_file=Path("jw_languages.json"),
+    ),
     notifications=_Notifications(),
     profile_paths=ProfilePaths.from_roots(
         data_dir=Path("data"),

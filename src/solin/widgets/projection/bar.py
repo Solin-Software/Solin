@@ -8,6 +8,7 @@ import random as _random
 from PySide6.QtCore import (
     QDateTime,
     QEvent,
+    QSettings,
     QSize,
     Qt,
     QTimer,
@@ -38,7 +39,6 @@ from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.time_utils import ceil_remaining_seconds
-from solin.core.profiles import settings as _ps
 from solin.core.media.playback import MediaController
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
@@ -144,6 +144,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self,
         media_ctrl: MediaController,
         *,
+        prefs: QSettings,
         profile_paths: ProfilePaths,
         lang_manager=None,
         container: QWidget = None,
@@ -151,6 +152,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     ):
         super().__init__(parent)
         self.media      = media_ctrl
+        self._prefs = prefs
         self._profile_paths = profile_paths
         self.lang       = lang_manager
         self._container = container
@@ -195,7 +197,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._is_from_saved_playlist: bool = False  # True quando reproduzindo de playlist salva
 
         # ── Prefs (carregadas do QSettings) ──────────────────────────────
-        self._prefs = _ps.prefs()
         self._loop: bool = self._prefs.value(SettingsKey.PLAYBACK_LOOP, False, bool)
         self._playback_order: str = self._prefs.value(
             SettingsKey.PLAYBACK_ORDER,

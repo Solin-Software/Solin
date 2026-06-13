@@ -50,6 +50,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
     )
+    profile_settings = object()
     profile_manager = object()
 
     class _MainWindow:
@@ -58,6 +59,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             lang_manager,
             received_runtime_paths,
             received_profile_paths,
+            received_profile_settings,
             playlist_storage_paths,
             meeting_tree_store,
             received_profile_manager,
@@ -65,6 +67,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
+            self.profile_settings = received_profile_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
             self.profile_manager = received_profile_manager
@@ -98,12 +101,14 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         file_args=file_args,
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
+        profile_settings=profile_settings,
         profile_manager=profile_manager,
     )
 
     assert window.lang_manager == "lang"
     assert window.runtime_paths is runtime_paths
     assert window.profile_paths is profile_paths
+    assert window.profile_settings is profile_settings
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
@@ -123,6 +128,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
     )
+    profile_settings = object()
     profile_manager = object()
 
     class _MainWindow:
@@ -131,6 +137,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             lang_manager,
             received_runtime_paths,
             received_profile_paths,
+            received_profile_settings,
             playlist_storage_paths,
             meeting_tree_store,
             received_profile_manager,
@@ -138,6 +145,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
+            self.profile_settings = received_profile_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
             self.profile_manager = received_profile_manager
@@ -168,6 +176,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         file_args=[],
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
+        profile_settings=profile_settings,
         profile_manager=profile_manager,
     )
 
@@ -422,6 +431,13 @@ def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
     class _ProfileManager:
         active_id = "main_hall"
 
+        def settings_for(self):
+            return SimpleNamespace(
+                app_settings=lambda: SimpleNamespace(
+                    app_language=lambda: "pt_BR",
+                )
+            )
+
     class _App:
         def __init__(self):
             self.events = []
@@ -442,11 +458,6 @@ def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
     app = _App()
     window = _Window()
     profile_manager = _ProfileManager()
-    monkeypatch.setattr(
-        profile_flow.profile_settings,
-        "app_settings",
-        lambda: SimpleNamespace(app_language=lambda: "pt_BR"),
-    )
     monkeypatch.setattr(settings_store, "QSettings", _Settings)
     monkeypatch.setattr(
         profile_flow.single_instance,

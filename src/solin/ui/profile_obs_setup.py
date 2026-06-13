@@ -8,11 +8,29 @@ from ..core.integrations.automation.obs import OBSConnectionState, OBSWebSocketS
 from .profile_widgets import _AMBER, _DIM, _GREEN, _RED
 
 
+class _TransientSettings:
+    def __init__(self) -> None:
+        self._values: dict[str, object] = {}
+
+    def value(self, key: str, default=None, value_type=None):
+        value = self._values.get(key, default)
+        if value_type is None:
+            return value
+        try:
+            return value_type(value)
+        except (TypeError, ValueError):
+            return default
+
+    def setValue(self, key: str, value: object) -> None:
+        self._values[key] = value
+
+
 class ProfileOBSSetupMixin:
     def _init_ob_obs_setup(self) -> None:
         self._ob_obs_last_state = OBSConnectionState.DISCONNECTED
         self._ob_obs_last_message = ""
         self._ob_obs_svc: OBSWebSocketService | None = None
+        self._ob_obs_prefs = _TransientSettings()
         self._ob_obs_reconnect_timer = QTimer(self)
         self._ob_obs_reconnect_timer.setSingleShot(True)
         self._ob_obs_reconnect_timer.setInterval(800)
@@ -36,7 +54,10 @@ class ProfileOBSSetupMixin:
     def _ob_obs_ensure_service(self) -> OBSWebSocketService:
         """Return (creating if needed) the onboarding-owned OBS service."""
         if self._ob_obs_svc is None:
-            svc = OBSWebSocketService(self)
+            svc = OBSWebSocketService(
+                lambda: self._ob_obs_prefs,
+                parent=self,
+            )
             svc.state_changed.connect(self._ob_obs_on_state)
             svc.scenes_updated.connect(self._ob_obs_on_scenes)
             self._ob_obs_svc = svc
@@ -52,10 +73,8 @@ class ProfileOBSSetupMixin:
         pwd = self._ob_obs_pwd.text()
 
         # Write to a temp prefs key so OBSWebSocketService._config_ok() passes
-        from ..core.profiles import settings as _ps
-        prefs = _ps.prefs()
-        prefs.setValue(SettingsKey.OBS_PORT, port)
-        prefs.setValue(SettingsKey.OBS_PASSWORD, pwd)
+        self._ob_obs_prefs.setValue(SettingsKey.OBS_PORT, port)
+        self._ob_obs_prefs.setValue(SettingsKey.OBS_PASSWORD, pwd)
 
         svc = self._ob_obs_ensure_service()
         svc.stop()
@@ -142,7 +161,11 @@ class ProfileOBSSetupMixin:
 
     def _ob_obs_save_scenes(self) -> None:
         """Persist scene selections to prefs immediately (best-effort during onboarding)."""
-        from ..core.profiles import settings as _ps
-        prefs = _ps.prefs()
-        prefs.setValue(SettingsKey.OBS_DEFAULT_SCENE, self._ob_obs_default_combo.currentText())
-        prefs.setValue(SettingsKey.OBS_MEDIA_WINDOW_SCENE, self._ob_obs_media_combo.currentText())
+        self._ob_obs_prefs.setValue(
+            SettingsKey.OBS_DEFAULT_SCENE,
+            self._ob_obs_default_combo.currentText(),
+        )
+        self._ob_obs_prefs.setValue(
+            SettingsKey.OBS_MEDIA_WINDOW_SCENE,
+            self._ob_obs_media_combo.currentText(),
+        )

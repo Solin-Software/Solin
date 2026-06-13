@@ -8,6 +8,7 @@ from typing import Any, TYPE_CHECKING
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.lifecycle import ApplicationLifecycle
 from solin.core.foundation.runtime_paths import RuntimePaths
+from solin.core.foundation.settings_store import GlobalSettingsStore
 
 if TYPE_CHECKING:
     from solin.core.profiles.manager import ProfileManager
@@ -20,6 +21,7 @@ class ApplicationContainer:
     app: Any
     config: AppConfig
     runtime_paths: RuntimePaths
+    global_settings: GlobalSettingsStore
     profile_manager: ProfileManager
     lifecycle: ApplicationLifecycle
     window_ref: list[Any | None] = field(default_factory=lambda: [None])
@@ -41,6 +43,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         os.fspath(runtime_paths.data_dir),
         cache_dir=os.fspath(runtime_paths.cache_dir),
     )
+    global_settings = GlobalSettingsStore.create()
 
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()
@@ -49,6 +52,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         app=app,
         config=config,
         runtime_paths=runtime_paths,
+        global_settings=global_settings,
         profile_manager=profile_manager,
         lifecycle=lifecycle,
     )

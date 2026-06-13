@@ -42,7 +42,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtCore import QObject, Signal
 
 from solin.core.foundation.constants import (
     QSETTINGS_APP_APP,
@@ -54,6 +54,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.profiles.settings import ProfileSettings
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 from solin.core.storage.migration import (
     move_dir_if_exists as _move_dir_if_exists,
@@ -170,21 +171,11 @@ class ProfileManager(QObject):
 
     # ── QSettings com escopo de perfil ────────────────────────────────────
 
-    def active_org(self) -> str:
-        """Org do QSettings para o perfil ativo. Ex: 'Solin_default' ou 'SolinDev_default'."""
-        return (
-            f"{QSETTINGS_PROFILE_ORG_PREFIX}{self._active_id}"
-            if self._active_id
-            else QSETTINGS_ORG_NAME
-        )
-
-    def prefs(self, base: str = QSETTINGS_PREFS_APP) -> QSettings:
-        """QSettings com namespace isolado do perfil ativo."""
-        return QSettings(self.active_org(), base)
-
-    def prefs_for(self, profile_id: str, base: str = QSETTINGS_PREFS_APP) -> QSettings:
-        """QSettings para um perfil específico."""
-        return QSettings(f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}", base)
+    def settings_for(self, profile_id: str = "") -> ProfileSettings:
+        pid = profile_id or self._active_id
+        if not pid:
+            raise RuntimeError("Profile settings requested before a profile was selected.")
+        return ProfileSettings.for_profile_id(pid)
 
     # ── Caminhos de dados do perfil ───────────────────────────────────────
 
@@ -305,10 +296,6 @@ class ProfileManager(QObject):
 
         self._active_id = profile_id
         self.ensure_profile_dirs()
-
-        # Atualiza org de QSettings para o perfil ativo
-        from solin.core.profiles import settings as _ps
-        _ps.set_org(self.active_org())
 
         # Persistir escolha
         GlobalSettingsStore.create().set_last_active_profile(profile_id)

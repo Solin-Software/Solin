@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Signal, Slot, QTimer,
+    Signal, Slot, QSettings, QTimer,
     QCoreApplication, QUrl, QEvent
 )
 from PySide6.QtGui import (
@@ -103,6 +103,7 @@ class StudyDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_paths: ProfilePaths,
+                 prefs: QSettings,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
         self._pub   = pub_type
@@ -111,6 +112,7 @@ class StudyDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._prefs = prefs
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -143,6 +145,7 @@ class StudyDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_paths=self._profile_paths,
+            prefs=self._prefs,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -363,6 +366,7 @@ class _MemorialDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_paths: ProfilePaths,
+                 prefs: QSettings,
                  parent=None):
         super().__init__(parent)
         self._md  = md
@@ -370,6 +374,7 @@ class _MemorialDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._prefs = prefs
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -400,6 +405,7 @@ class _MemorialDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_paths=self._profile_paths,
+            prefs=self._prefs,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -598,6 +604,7 @@ class MeetingsWidget(QWidget):
         *,
         meeting_tree_store: MeetingTreeStore,
         profile_paths: ProfilePaths,
+        prefs: QSettings,
         parent=None,
     ):
         super().__init__(parent)
@@ -609,8 +616,9 @@ class MeetingsWidget(QWidget):
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
         self._profile_paths = profile_paths
+        self._prefs = prefs
 
-        self._service = JwpubService(self)
+        self._service = JwpubService(prefs, self)
         self._set_lang_from_mgr()
 
         self._service.mwb_ready.connect(self._on_mwb_ready)
@@ -836,6 +844,7 @@ class MeetingsWidget(QWidget):
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
                                 profile_paths=self._profile_paths,
+                                prefs=self._prefs,
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -868,6 +877,7 @@ class MeetingsWidget(QWidget):
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
                 profile_paths=self._profile_paths,
+                prefs=self._prefs,
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)

@@ -6,7 +6,7 @@ import random
 from datetime import datetime, timedelta
 from typing import Any
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QMediaPlayer
 
 from solin.core.foundation.settings_keys import SettingsKey
@@ -14,7 +14,6 @@ from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
 from solin.core.media.playback import MediaController
 from solin.core.meetings.schedule import MeetingOccurrence, load_meeting_schedule
-from solin.core.profiles import settings as _ps
 
 DEFAULT_BACKGROUND_SONG_VOLUME = 25
 DEFAULT_BACKGROUND_SONG_FADE_SECONDS = 5
@@ -67,13 +66,18 @@ class BackgroundSongService(QObject):
     stop_before_seconds_changed = Signal(int)
     availability_changed = Signal(bool)
 
-    def __init__(self, lang_manager: object, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        lang_manager: object,
+        prefs: QSettings,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self._lang = lang_manager
-        self._prefs = _ps.prefs()
+        self._prefs = prefs
         self._store = JWSongsStore.instance()
 
-        self._media = MediaController(self)
+        self._media = MediaController(prefs, self)
 
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME
@@ -181,7 +185,6 @@ class BackgroundSongService(QObject):
 
     @Slot()
     def reload_settings(self) -> None:
-        self._prefs = _ps.prefs()
         enabled = self._prefs.value(SettingsKey.BACKGROUND_SONG_ENABLED, False, bool)
         volume = _clamp_int(
             self._prefs.value(
@@ -298,7 +301,7 @@ class BackgroundSongService(QObject):
         if not self._enabled:
             return
 
-        schedule = load_meeting_schedule(_ps.prefs())
+        schedule = load_meeting_schedule(self._prefs)
         if not schedule.has_configured_slot:
             self._auto_stop_timer.stop()
             if not self.is_playing:
@@ -566,7 +569,7 @@ class BackgroundSongService(QObject):
         self.stop()
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
-        return load_meeting_schedule(_ps.prefs()).pre_meeting_occurrence(
+        return load_meeting_schedule(self._prefs).pre_meeting_occurrence(
             datetime.now().astimezone()
         )
 

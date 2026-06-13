@@ -22,11 +22,12 @@ import threading
 import time
 import uuid
 from enum import Enum, auto
+from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 
 log = logging.getLogger(__name__)
 
@@ -95,9 +96,9 @@ class OBSWebSocketService(QObject):
     _BACKOFF_BASE = 2
     _BACKOFF_MAX  = 30
 
-    def __init__(self, parent=None):
+    def __init__(self, prefs_factory: Callable[[], Any], parent=None):
         super().__init__(parent)
-        self._prefs    = _ps.prefs()
+        self._prefs_factory = prefs_factory
         self._state    = OBSConnectionState.DISCONNECTED
         self._scenes: list[str] = []
         self._current_scene: str | None = None   # cena ativa atualmente no OBS
@@ -232,7 +233,7 @@ class OBSWebSocketService(QObject):
     # ── Internals ─────────────────────────────────────────────────────────
 
     def _config_ok(self) -> bool:
-        port = self._prefs.value(SettingsKey.OBS_PORT, 0, int)
+        port = self._prefs_factory().value(SettingsKey.OBS_PORT, 0, int)
         return bool(port and port > 0)
 
     def _attempt_connect(self):
@@ -337,8 +338,9 @@ class OBSWebSocketService(QObject):
             )
             return
 
-        port     = self._prefs.value(SettingsKey.OBS_PORT, 4455, int)
-        password = self._prefs.value(SettingsKey.OBS_PASSWORD, "", str)
+        prefs = self._prefs_factory()
+        port = prefs.value(SettingsKey.OBS_PORT, 4455, int)
+        password = prefs.value(SettingsKey.OBS_PASSWORD, "", str)
 
         try:
             ws = websocket.create_connection(f"ws://localhost:{port}", timeout=6)

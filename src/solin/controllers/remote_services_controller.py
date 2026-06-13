@@ -20,7 +20,11 @@ class RemoteServicesController:
 
     def __init__(self, window: MainWindow, lang_manager: LanguageManager) -> None:
         self._window = window
-        self._notification_service = NotificationService(lang_manager, window)
+        self._notification_service = NotificationService(
+            lang_manager,
+            window.profile_settings,
+            window,
+        )
         self._notification_queue = NotificationQueue(lang_manager, window)
         self._notification_timer = QTimer(window)
         self._update_service = UpdateService(window)

@@ -40,7 +40,7 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 from solin.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.storage.json_files import read_json_file, write_json_atomic
-from solin.core.profiles import settings as _ps
+from solin.core.profiles.settings import ProfileSettings
 from solin.core.network.http import urlopen as _urlopen
 
 log = logging.getLogger(__name__)
@@ -128,6 +128,7 @@ class JWLanguageService(QObject):
         self._languages: list[dict]  = []
         self._is_loading: bool       = False
         self._by_code: dict[str, dict] = {}
+        self._profile_settings: ProfileSettings | None = None
 
         # Carrega do cache imediatamente (síncrono, rápido)
         cached = self._load_cache()
@@ -162,9 +163,18 @@ class JWLanguageService(QObject):
 
     # ── Idioma de mídia selecionado ─────────────────────────────────────────────
 
+    def activate_profile(self, profile_settings: ProfileSettings) -> None:
+        self._profile_settings = profile_settings
+
+    def _require_profile_settings(self) -> ProfileSettings:
+        if self._profile_settings is None:
+            raise RuntimeError("JW media language requested before profile activation.")
+        return self._profile_settings
+
     @property
     def media_api_code(self) -> str:
-        s = _ps.prefs(QSETTINGS_APP_APP)
+        profile_settings = self._require_profile_settings()
+        s = profile_settings.prefs(QSETTINGS_APP_APP)
         code = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
         if code:
             return code
@@ -173,7 +183,11 @@ class JWLanguageService(QObject):
         # idioma de mídia em ProjectionPrefs/jw_language, enquanto o serviço
         # real sempre lê App/media_language_code.
         legacy = _settings_str(
-            _ps.prefs(QSETTINGS_PREFS_APP).value(SettingsKey.LEGACY_JW_LANGUAGE, "", str)
+            profile_settings.prefs(QSETTINGS_PREFS_APP).value(
+                SettingsKey.LEGACY_JW_LANGUAGE,
+                "",
+                str,
+            )
         )
         if legacy:
             s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, legacy)
@@ -181,7 +195,7 @@ class JWLanguageService(QObject):
         return legacy
 
     def set_media_api_code(self, code: str) -> None:
-        s = _ps.prefs(QSETTINGS_APP_APP)
+        s = self._require_profile_settings().prefs(QSETTINGS_APP_APP)
         old = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
         s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, code)
         s.sync()

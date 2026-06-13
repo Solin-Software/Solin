@@ -3,12 +3,11 @@ from __future__ import annotations
 import logging
 import sys
 
+from PySide6.QtCore import QSettings
 from PySide6.QtGui import QGuiApplication, QIcon
 
-from ..core.foundation.constants import QSETTINGS_MAIN_WINDOW_GEOMETRY_APP
 from ..core.foundation.resources import application_asset_path
 from ..core.foundation.settings_keys import SettingsKey
-from ..core.profiles import settings as _ps
 from ..core.ui.titlebar import apply_titlebar_color
 
 log = logging.getLogger(__name__)
@@ -21,13 +20,13 @@ class WindowStateController:
     _DEFAULT_HEIGHT = 760
     _TITLEBAR_COLOR = "#1A231F"
 
-    def __init__(self, window) -> None:
+    def __init__(self, window, prefs: QSettings) -> None:
         self._window = window
+        self._prefs = prefs
 
     def restore_size(self) -> None:
-        prefs = _ps.prefs(QSETTINGS_MAIN_WINDOW_GEOMETRY_APP)
-        width = prefs.value(SettingsKey.WINDOW_WIDTH, self._DEFAULT_WIDTH, int)
-        height = prefs.value(SettingsKey.WINDOW_HEIGHT, self._DEFAULT_HEIGHT, int)
+        width = self._prefs.value(SettingsKey.WINDOW_WIDTH, self._DEFAULT_WIDTH, int)
+        height = self._prefs.value(SettingsKey.WINDOW_HEIGHT, self._DEFAULT_HEIGHT, int)
         width, height = self._clamped_size(
             width,
             height,
@@ -37,9 +36,8 @@ class WindowStateController:
         self._window.resize(width, height)
 
     def save_size(self) -> None:
-        prefs = _ps.prefs(QSETTINGS_MAIN_WINDOW_GEOMETRY_APP)
-        prefs.setValue(SettingsKey.WINDOW_WIDTH, self._window.width())
-        prefs.setValue(SettingsKey.WINDOW_HEIGHT, self._window.height())
+        self._prefs.setValue(SettingsKey.WINDOW_WIDTH, self._window.width())
+        self._prefs.setValue(SettingsKey.WINDOW_HEIGHT, self._window.height())
 
     def apply_icon(self) -> None:
         icon_path = application_asset_path("icon.ico")

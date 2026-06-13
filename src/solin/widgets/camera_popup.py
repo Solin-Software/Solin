@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QEvent, QSize, QPropertyAnimation, Qt, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QSettings,
+    QSize,
+    QPropertyAnimation,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
@@ -17,7 +25,6 @@ from PySide6.QtWidgets import (
 
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.integrations.camera import CameraOption, CameraService
-from solin.core.profiles import settings as _ps
 from solin.styles.icons import ICON_CAMERA, ICON_CAST, make_icon
 
 
@@ -27,10 +34,10 @@ class CameraPopup(QWidget):
     camera_changed = Signal(object)
     stream_requested = Signal()
 
-    def __init__(self, camera_service: CameraService, parent=None):
+    def __init__(self, camera_service: CameraService, prefs: QSettings, parent=None):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self._camera = camera_service
-        self._prefs = _ps.prefs()
+        self._prefs = prefs
         self._active = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)

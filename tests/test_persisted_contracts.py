@@ -30,6 +30,8 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import manager as profile_manager
+from solin.core.profiles import settings as profile_settings_module
+from solin.core.profiles.settings import ProfileSettings
 from solin.widgets.playlist.items import new_playlist_item
 
 
@@ -155,6 +157,7 @@ def test_profile_registry_and_directory_layout_are_stable(
         cache_dir=cache_dir,
         profile_id="main_hall",
     )
+    assert manager.settings_for() == ProfileSettings.for_profile_id("main_hall")
     assert Path(manager.playlists_file()) == (
         tmp_path / "profiles" / "main_hall" / "playlists.json"
     )
@@ -221,6 +224,47 @@ def test_profile_storage_paths_are_not_mutable_globals() -> None:
     assert "IMAGES_DIR" not in paths_source
     assert "EMBEDDED_DIR" not in paths_source
     assert "_redirect_global_paths" not in manager_source
+
+
+def test_profile_settings_namespace_is_immutable_and_explicit() -> None:
+    settings = ProfileSettings.for_profile_id("main_hall")
+    source = Path(profile_settings_module.__file__).read_text(encoding="utf-8")
+
+    assert settings.organization == f"{QSETTINGS_PROFILE_ORG_PREFIX}main_hall"
+    assert "_ORG" not in vars(profile_settings_module)
+    assert "def set_org(" not in source
+    assert "def current_org(" not in source
+    assert "\ndef prefs(" not in source
+
+
+def test_production_code_has_no_active_profile_settings_module_alias() -> None:
+    offenders = [
+        path
+        for path in Path("src/solin").rglob("*.py")
+        if "from solin.core.profiles import settings as" in path.read_text(
+            encoding="utf-8"
+        )
+    ]
+
+    assert offenders == []
+
+
+def test_profile_settings_namespaces_are_isolated() -> None:
+    first = ProfileSettings.for_profile_id("settings_isolation_first")
+    second = ProfileSettings.for_profile_id("settings_isolation_second")
+    first_prefs = first.prefs(QSETTINGS_APP_APP)
+    second_prefs = second.prefs(QSETTINGS_APP_APP)
+    first_prefs.clear()
+    second_prefs.clear()
+    try:
+        first_prefs.setValue(SettingsKey.APP_LANGUAGE, "pt_BR")
+        first_prefs.sync()
+
+        assert first.app_settings().app_language() == "pt_BR"
+        assert second.app_settings().app_language() == ""
+    finally:
+        first_prefs.clear()
+        second_prefs.clear()
 
 
 def test_internal_playlist_file_and_item_schema_are_stable(

@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     
 from solin.core.foundation.constants import NOTIFICATION_API_URL, QSETTINGS_NOTIFICATIONS_APP
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
+from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
 
@@ -93,9 +93,9 @@ class Notification:
 
 # ── Armazenamento de IDs vistos ────────────────────────────────────────────────
 
-def _load_seen_ids() -> set[str]:
+def _load_seen_ids(profile_settings: ProfileSettings) -> set[str]:
     """Carrega a lista de IDs já exibidos do QSettings."""
-    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
     raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
     try:
         data = json.loads(raw)
@@ -106,9 +106,9 @@ def _load_seen_ids() -> set[str]:
     return set()
 
 
-def mark_seen(notif_id: str) -> None:
+def mark_seen(notif_id: str, profile_settings: ProfileSettings) -> None:
     """Marca uma notificação como exibida. Thread-safe via QSettings."""
-    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
     raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
     try:
         data = json.loads(raw)
@@ -125,9 +125,9 @@ def mark_seen(notif_id: str) -> None:
         prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, json.dumps(data))
 
 
-def reset_seen_ids() -> None:
+def reset_seen_ids(profile_settings: ProfileSettings) -> None:
     """Utilitário de diagnóstico: limpa o histórico de IDs vistos."""
-    prefs = _ps.prefs(QSETTINGS_NOTIFICATIONS_APP)
+    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
     prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]")
 
 
@@ -141,10 +141,16 @@ class NotificationWorker(QObject):
     notifications_ready = Signal(list)   # list[Notification]
     fetch_failed = Signal(str)           # mensagem de erro (para log silencioso)
 
-    def __init__(self, api_code: str, parent: QObject | None = None):
+    def __init__(
+        self,
+        api_code: str,
+        profile_settings: ProfileSettings,
+        parent: QObject | None = None,
+    ):
         super().__init__(parent)
         # api_code do idioma ativo (ex: "T" para Português, "E" para English)
         self._api_code = api_code
+        self._profile_settings = profile_settings
 
     def run(self) -> None:
         """Chamado pela thread. Faz fetch, processa, emite resultado."""
@@ -192,7 +198,7 @@ class NotificationWorker(QObject):
         if not isinstance(raw_list, list):
             return []
 
-        seen = _load_seen_ids()
+        seen = _load_seen_ids(self._profile_settings)
         result: list[Notification] = []
 
         for item in raw_list:
@@ -241,7 +247,7 @@ class NotificationWorker(QObject):
                 action_label = str(action.get("label", "")).strip()
 
             # Marca como vista AGORA — antes de emitir — para evitar re-exibição em crash
-            mark_seen(notif_id)
+            mark_seen(notif_id, self._profile_settings)
 
             result.append(Notification(
                 notif_id=notif_id,
@@ -262,15 +268,25 @@ class NotificationService(QObject):
     Fachada pública. Gerencia o ciclo de vida da thread e expõe um signal limpo.
 
     Uso típico:
-        self._notif_service = NotificationService(lang_manager, self)
+        self._notif_service = NotificationService(
+            lang_manager,
+            profile_settings,
+            self,
+        )
         self._notif_service.notifications_ready.connect(self._on_notifications)
         QTimer.singleShot(1500, self._notif_service.check)
     """
     notifications_ready = Signal(list)   # list[Notification]
 
-    def __init__(self, lang_manager: "LanguageManager", parent: QObject | None = None):
+    def __init__(
+        self,
+        lang_manager: "LanguageManager",
+        profile_settings: ProfileSettings,
+        parent: QObject | None = None,
+    ):
         super().__init__(parent)
         self._lang = lang_manager
+        self._profile_settings = profile_settings
         self._thread: QThread | None = None
         self._worker: NotificationWorker | None = None
         self._running = False
@@ -286,7 +302,7 @@ class NotificationService(QObject):
         api_code = self._lang.api_code  # ex: "T", "E", "S"
 
         self._thread = QThread(self)
-        self._worker = NotificationWorker(api_code)
+        self._worker = NotificationWorker(api_code, self._profile_settings)
         self._worker.moveToThread(self._thread)
 
         # Conecta sinais

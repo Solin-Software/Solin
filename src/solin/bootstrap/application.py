@@ -37,6 +37,7 @@ def _launch_main_window(
     file_args,
     runtime_paths,
     profile_paths,
+    profile_settings,
     profile_manager,
 ):
     """
@@ -57,6 +58,7 @@ def _launch_main_window(
         lang_manager,
         runtime_paths,
         profile_paths,
+        profile_settings,
         playlist_storage_paths,
         meeting_tree_store,
         profile_manager,
@@ -115,6 +117,7 @@ def main():
 
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager(
+        global_settings=container.global_settings,
         jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json"
     )
 
@@ -176,6 +179,7 @@ def main():
                 file_args,
                 container.runtime_paths,
                 _pm.paths_for(),
+                _pm.settings_for(),
                 _pm,
             )
             _main_window_ref[0] = window
@@ -189,11 +193,8 @@ def main():
     elif requested_profile_id and _pm.get_profile(requested_profile_id):
         # Relaunch controlado: abre diretamente no perfil solicitado.
         _pm.set_active(requested_profile_id)
-
-        from solin.core.profiles import settings as _ps
-        saved_lang = _ps.app_settings().app_language()
-        if saved_lang:
-            lang_manager.set_language(saved_lang)
+        profile_settings = _pm.settings_for()
+        lang_manager.activate_profile(profile_settings)
 
         window = _launch_main_window(
             app,
@@ -201,6 +202,7 @@ def main():
             file_args,
             container.runtime_paths,
             _pm.paths_for(),
+            profile_settings,
             _pm,
         )
         _main_window_ref[0] = window
@@ -211,12 +213,8 @@ def main():
         last_id = _pm.restore_last_active()
         if last_id is not None:
             _pm.set_active(last_id)
-
-        # Restaura idioma do perfil
-        from solin.core.profiles import settings as _ps
-        saved_lang = _ps.app_settings().app_language()
-        if saved_lang:
-            lang_manager.set_language(saved_lang)
+        profile_settings = _pm.settings_for()
+        lang_manager.activate_profile(profile_settings)
 
         window = _launch_main_window(
             app,
@@ -224,6 +222,7 @@ def main():
             file_args,
             container.runtime_paths,
             _pm.paths_for(),
+            profile_settings,
             _pm,
         )
         _main_window_ref[0] = window
@@ -256,6 +255,7 @@ def main():
                 file_args,
                 container.runtime_paths,
                 _pm.paths_for(),
+                _pm.settings_for(),
                 _pm,
             )
             _main_window_ref[0] = window

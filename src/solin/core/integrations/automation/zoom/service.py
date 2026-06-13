@@ -18,10 +18,9 @@ import threading
 import time
 from collections.abc import Callable
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QSettings, QTimer, Signal
 
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 
 log = logging.getLogger(__name__)
 
@@ -73,9 +72,9 @@ class ZoomService(QObject):
     _sig_share_error = Signal(int, str)
     _sig_worker_done = Signal(str, int)
 
-    def __init__(self, parent: QObject | None = None):
+    def __init__(self, prefs: QSettings, parent: QObject | None = None):
         super().__init__(parent)
-        self._prefs = _ps.prefs()
+        self._prefs = prefs
 
         self._connected: bool = False
         self._sharing:   bool = False

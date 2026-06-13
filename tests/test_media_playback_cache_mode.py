@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
-from solin.core.media import playback as playback_module
 from solin.core.media.playback import MediaController
 
 
@@ -39,8 +38,7 @@ class _Downloader:
 
 def _controller_with_downloader(monkeypatch, *, auto_download: bool):
     _app()
-    monkeypatch.setattr(playback_module._ps, "prefs", lambda: _Prefs(auto_download))
-    controller = MediaController()
+    controller = MediaController(_Prefs(auto_download))
     downloader = _Downloader()
     played: list[str] = []
     controller._downloader = downloader

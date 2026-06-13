@@ -27,9 +27,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from solin.core.foundation.constants import QSETTINGS_MONITORS_APP
+from PySide6.QtCore import QSettings
+
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 
 # ── Owner constants ───────────────────────────────────────────────────────────
 
@@ -99,14 +99,13 @@ class ConflictInfo:
 # ── Allocation store ──────────────────────────────────────────────────────────
 
 class MonitorAllocationStore:
-    """Profile-scoped persistent map of screen-key → owner.
+    """Profile-scoped persistent map of screen-key → owner."""
 
-    Stateless w.r.t. the active profile (reads QSettings each call) so a profile
-    switch is picked up automatically, mirroring :class:`TimerStore`.
-    """
+    def __init__(self, prefs: QSettings) -> None:
+        self._settings = prefs
 
-    def _prefs(self):
-        return _ps.prefs(QSETTINGS_MONITORS_APP)
+    def _prefs(self) -> QSettings:
+        return self._settings
 
     def _load(self) -> dict[str, str]:
         raw = self._prefs().value(SettingsKey.MONITOR_ALLOCATION, "", str)

@@ -9,7 +9,8 @@ from solin.core.ui.monitor_allocation import (
     OWNER_TIMER,
     ScreenIdentity,
 )
-from solin.core.profiles import settings as _ps
+from solin.core.foundation.constants import QSETTINGS_MONITORS_APP
+from solin.core.profiles.settings import ProfileSettings
 
 
 class _Geo:
@@ -52,39 +53,39 @@ def test_identity_falls_back_to_name_and_geometry():
     assert "HDMI-1" in key
 
 
-def _with_temp_org(fn):
-    original = _ps.current_org()
-    _ps.set_org("SolinTest_monitor_alloc")
+def _with_temp_settings(fn):
+    settings = ProfileSettings.for_profile_id("test_monitor_alloc")
+    prefs = settings.prefs(QSETTINGS_MONITORS_APP)
+    prefs.clear()
     try:
-        fn()
+        fn(prefs)
     finally:
-        _ps.prefs("Monitors").clear()
-        _ps.set_org(original)
+        prefs.clear()
 
 
 def test_default_owner_is_media():
-    def body():
-        store = MonitorAllocationStore()
+    def body(prefs):
+        store = MonitorAllocationStore(prefs)
         assert store.owner_of(_ScreenStub("DISPLAY1", serial="S1")) == OWNER_MEDIA
-    _with_temp_org(body)
+    _with_temp_settings(body)
 
 
 def test_set_and_persist_owner():
-    def body():
+    def body(prefs):
         s = _ScreenStub("DISPLAY1", serial="S1")
-        store = MonitorAllocationStore()
+        store = MonitorAllocationStore(prefs)
         store.set_owner(s, OWNER_TIMER)
         # A fresh store instance (no in-memory cache) reads the persisted value.
-        assert MonitorAllocationStore().owner_of(s) == OWNER_TIMER
+        assert MonitorAllocationStore(prefs).owner_of(s) == OWNER_TIMER
         store.set_owner(s, OWNER_OFF)
-        assert MonitorAllocationStore().owner_of(s) == OWNER_OFF
-    _with_temp_org(body)
+        assert MonitorAllocationStore(prefs).owner_of(s) == OWNER_OFF
+    _with_temp_settings(body)
 
 
 def test_request_assignment_reports_media_timer_conflict():
-    def body():
+    def body(prefs):
         s = _ScreenStub("DISPLAY1", serial="S1")
-        store = MonitorAllocationStore()
+        store = MonitorAllocationStore(prefs)
         store.set_owner(s, OWNER_MEDIA)
         conflict = store.request_assignment(s, OWNER_TIMER)
         assert conflict is not None
@@ -94,29 +95,29 @@ def test_request_assignment_reports_media_timer_conflict():
         assert store.owner_of(s) == OWNER_MEDIA
         store.confirm_assignment(s, OWNER_TIMER)
         assert store.owner_of(s) == OWNER_TIMER
-    _with_temp_org(body)
+    _with_temp_settings(body)
 
 
 def test_request_assignment_no_conflict_for_off():
-    def body():
+    def body(prefs):
         s = _ScreenStub("DISPLAY1", serial="S1")
-        store = MonitorAllocationStore()
+        store = MonitorAllocationStore(prefs)
         store.set_owner(s, OWNER_OFF)
         # off → timer is not a contested handoff; applies immediately.
         assert store.request_assignment(s, OWNER_TIMER) is None
         assert store.owner_of(s) == OWNER_TIMER
-    _with_temp_org(body)
+    _with_temp_settings(body)
 
 
 def test_timer_and_off_queries():
-    def body():
+    def body(prefs):
         a = _ScreenStub("A", serial="SA")
         b = _ScreenStub("B", serial="SB")
         c = _ScreenStub("C", serial="SC")
-        store = MonitorAllocationStore()
+        store = MonitorAllocationStore(prefs)
         store.set_owner(a, OWNER_TIMER)
         store.set_owner(b, OWNER_OFF)
         live = [a, b, c]
         assert store.timer_screens(live) == [a]
         assert store.media_off_names(live) == {"B"}
-    _with_temp_org(body)
+    _with_temp_settings(body)

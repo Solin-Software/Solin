@@ -104,3 +104,6 @@ class ProfileAppSettingsStore:
 
     def app_language(self) -> str:
         return self.settings.string(SettingsKey.APP_LANGUAGE)
+
+    def set_app_language(self, language: str) -> None:
+        self.settings.set_value(SettingsKey.APP_LANGUAGE, language)

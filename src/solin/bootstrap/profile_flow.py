@@ -9,7 +9,6 @@ from PySide6.QtCore import QCoreApplication, QProcess
 from solin.bootstrap import single_instance
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.core.profiles.manager import ProfileManager
-from solin.core.profiles import settings as profile_settings
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ def relaunch_to_profile_creator(
     """Reopen Solin directly in onboarding for creating an additional profile."""
     try:
         current_lang = (
-            profile_settings.app_settings().app_language()
+            profile_manager.settings_for().app_settings().app_language()
             if profile_manager.active_id
             else ""
         )

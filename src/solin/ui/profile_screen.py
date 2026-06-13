@@ -1257,17 +1257,20 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         name = getattr(self, "_ob_pending_name", self.tr("My Profile"))
         profile = self._pm.create_profile(name)
         self._pm.set_active(profile.id)
+        profile_settings = self._pm.settings_for()
+        if self._lang:
+            self._lang.activate_profile(profile_settings)
 
         iface_code = getattr(self, "_ob_iface_selected_code", self._lang.current_code if self._lang else "en")
         if self._lang:
             self._lang.set_language(iface_code)
-        s = self._pm.prefs(QSETTINGS_APP_APP)
+        s = profile_settings.prefs(QSETTINGS_APP_APP)
         s.setValue(SettingsKey.APP_LANGUAGE, iface_code)
         s.sync()
 
         media_code = getattr(self, "_ob_media_selected_code", "") or self._interface_api_code(iface_code)
         if media_code:
-            s2 = self._pm.prefs(QSETTINGS_APP_APP)
+            s2 = profile_settings.prefs(QSETTINGS_APP_APP)
             s2.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, media_code)
             s2.sync()
 
@@ -1283,7 +1286,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             default_scene = self._ob_obs_default_combo.currentText()
             media_scene   = self._ob_obs_media_combo.currentText()
 
-            s3 = self._pm.prefs(QSETTINGS_PREFS_APP)
+            s3 = profile_settings.prefs(QSETTINGS_PREFS_APP)
             s3.setValue(SettingsKey.OBS_ENABLED, True)
             s3.setValue(SettingsKey.OBS_PORT, port)
             s3.setValue(SettingsKey.OBS_PASSWORD, pwd)
@@ -1298,12 +1301,8 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def _activate_and_emit(self, profile_id: str) -> None:
         self._pm.set_active(profile_id)
-
-        # Restaura idioma do perfil se houver
-        s = self._pm.prefs(QSETTINGS_APP_APP)
-        saved_lang = s.value(SettingsKey.APP_LANGUAGE, "", str)
-        if saved_lang and self._lang:
-            self._lang.set_language(saved_lang)
+        if self._lang:
+            self._lang.activate_profile(self._pm.settings_for())
 
         self.profile_ready.emit(profile_id)
 

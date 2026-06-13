@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QEasingCurve, QEvent, QPoint, QRect, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QPoint,
+    QRect,
+    QSettings,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QToolTip, QWidget
 
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 from solin.core.integrations.camera import CameraOption
 from solin.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.core.ui.macos_layer import apply_corner_radius
@@ -70,12 +79,15 @@ class QuickAccessToolbar(QQuickWidget):
         zoom_service,
         camera_service=None,
         parent=None,
+        *,
+        prefs: QSettings,
         background_song_service=None,
     ):
         super().__init__(None)
         self._obs = obs_service
         self._zoom = zoom_service
         self._camera = camera_service
+        self._prefs = prefs
         self._background_song = background_song_service
         self._minimized = False
         self._obs_connected = False
@@ -187,7 +199,10 @@ class QuickAccessToolbar(QQuickWidget):
         self._scene_popup.set_obs_service(obs_service)
 
         # ── Camera Panel ──────────────────────────────────────────────────
-        self._camera_panel = CameraPopup(camera_service, self) if camera_service else None
+        self._camera_panel = (
+            CameraPopup(camera_service, self._prefs, self)
+            if camera_service else None
+        )
         if self._camera_panel:
             self._camera_panel.stream_requested.connect(self.camera_stream_requested)
             self._camera_panel.camera_changed.connect(self.camera_selection_changed)
@@ -368,18 +383,16 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_obs_tooltip(f"OBS: {scene_name}")
         if self._scene_popup.isVisible() and self._obs and self._obs.is_connected:
             scenes = self._obs.scenes
-            prefs = _ps.prefs()
-            idle_scene = prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-            media_scene = prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+            idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+            media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
             self._scene_popup.populate(scenes, scene_name or "", idle_scene, media_scene)
 
     def set_obs_scenes(self, scenes: list[str]):
         """Refresh the scene popup when the scene list changes."""
         if self._scene_popup.isVisible() and self._obs and self._obs.is_connected:
             current = self._obs.current_scene or ""
-            prefs = _ps.prefs()
-            idle_scene = prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-            media_scene = prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+            idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+            media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
             self._scene_popup.populate(scenes, current, idle_scene, media_scene)
 
     def set_obs_stream_available(self, available: bool):
@@ -600,9 +613,8 @@ class QuickAccessToolbar(QQuickWidget):
             return
         scenes = self._obs.scenes
         current = self._obs.current_scene or ""
-        prefs = _ps.prefs()
-        idle_scene = prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-        media_scene = prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+        media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
         self._scene_popup.populate(scenes, current, idle_scene, media_scene)
         self._scene_popup.show_above(self)
         if not scenes:

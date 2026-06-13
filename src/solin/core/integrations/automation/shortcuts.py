@@ -13,10 +13,15 @@ import subprocess
 import sys
 import uuid
 
-from PySide6.QtCore import QCoreApplication, QObject, QTimer, QT_TRANSLATE_NOOP
+from PySide6.QtCore import (
+    QCoreApplication,
+    QObject,
+    QSettings,
+    QTimer,
+    QT_TRANSLATE_NOOP,
+)
 
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
 
 log = logging.getLogger(__name__)
 
@@ -90,8 +95,7 @@ class AutoKeyAction:
         }
 
 
-def load_actions(prefs=None) -> list[AutoKeyAction]:
-    prefs = prefs or _ps.prefs()
+def load_actions(prefs: QSettings) -> list[AutoKeyAction]:
     raw = prefs.value(SettingsKey.AUTO_KEYS_ACTIONS, "[]", str)
     try:
         parsed = json.loads(raw) if raw else []
@@ -107,21 +111,20 @@ def load_actions(prefs=None) -> list[AutoKeyAction]:
     return actions
 
 
-def save_actions(actions: list[AutoKeyAction], prefs=None) -> None:
-    prefs = prefs or _ps.prefs()
+def save_actions(actions: list[AutoKeyAction], prefs: QSettings) -> None:
     prefs.setValue(SettingsKey.AUTO_KEYS_ACTIONS, json.dumps([a.to_dict() for a in actions]))
 
 
-def action_count_for_event(event: str, prefs=None) -> int:
+def action_count_for_event(event: str, prefs: QSettings) -> int:
     return sum(1 for a in load_actions(prefs) if a.enabled and a.event == event)
 
 
 class AutoKeyDispatcher(QObject):
     """Loads configured actions and sends their key sequences in order."""
 
-    def __init__(self, parent=None):
+    def __init__(self, prefs: QSettings, parent=None):
         super().__init__(parent)
-        self._prefs = _ps.prefs()
+        self._prefs = prefs
 
     def dispatch(self, event: str) -> None:
         if event not in AUTO_KEY_EVENTS:

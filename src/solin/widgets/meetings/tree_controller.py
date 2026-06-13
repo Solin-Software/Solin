@@ -17,7 +17,14 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QObject, Property, QCoreApplication, Signal, Slot
+from PySide6.QtCore import (
+    QObject,
+    Property,
+    QCoreApplication,
+    QSettings,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
@@ -151,6 +158,7 @@ class MeetingTreeController(QObject):
         language_code: str,
         store: MeetingTreeStore,
         profile_paths: ProfilePaths,
+        prefs: QSettings,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -161,8 +169,9 @@ class MeetingTreeController(QObject):
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = store
         self._profile_paths = profile_paths
+        self._prefs = prefs
         self._builder = MeetingTreeBuilder()
-        self._sync_service = MeetingLinkedFolderSync()
+        self._sync_service = MeetingLinkedFolderSync(prefs)
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""

@@ -1,45 +1,34 @@
-"""
-profile_settings.py — Solin
-============================
-Wrapper fino sobre QSettings que sempre usa o org do perfil ativo.
-
-Uso nos módulos:
-    from solin.core.foundation.constants import QSETTINGS_APP_APP
-    from solin.core.profiles import settings as _ps
-    ...
-    self._prefs = _ps.prefs()          # → QSettings("<org>_{slug}", "ProjectionPrefs")
-    s = _ps.prefs(QSETTINGS_APP_APP)    # → QSettings("<org>_{slug}", "App")
-
-A variável _ORG é atualizada automaticamente pelo ProfileManager.set_active().
-"""
+"""Immutable profile-scoped QSettings namespace."""
 from __future__ import annotations
+
+from dataclasses import dataclass
+
 from PySide6.QtCore import QSettings
 
-from solin.core.foundation.constants import QSETTINGS_ORG_NAME, QSETTINGS_PREFS_APP
+from solin.core.foundation.constants import (
+    QSETTINGS_PREFS_APP,
+    QSETTINGS_PROFILE_ORG_PREFIX,
+)
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
 
-# Org padrão (fallback / antes de qualquer perfil ser ativado).
-_ORG: str = QSETTINGS_ORG_NAME
 
+@dataclass(frozen=True, slots=True)
+class ProfileSettings:
+    profile_id: str
+    organization: str
 
-def set_org(org: str) -> None:
-    """Chamado pelo ProfileManager ao ativar um perfil."""
-    global _ORG
-    _ORG = org
+    @classmethod
+    def for_profile_id(cls, profile_id: str) -> ProfileSettings:
+        normalized = profile_id.strip()
+        if not normalized:
+            raise ValueError("Profile settings require a non-empty profile id.")
+        return cls(
+            profile_id=normalized,
+            organization=f"{QSETTINGS_PROFILE_ORG_PREFIX}{normalized}",
+        )
 
+    def prefs(self, app_name: str = QSETTINGS_PREFS_APP) -> QSettings:
+        return QSettings(self.organization, app_name)
 
-def current_org() -> str:
-    return _ORG
-
-
-def prefs(app_name: str = QSETTINGS_PREFS_APP) -> QSettings:
-    """
-    Retorna um novo QSettings com o org do perfil ativo.
-    Cada chamada cria uma nova instância — adequado para uso em __init__
-    e em funções que não guardam estado.
-    """
-    return QSettings(_ORG, app_name)
-
-
-def app_settings() -> ProfileAppSettingsStore:
-    return ProfileAppSettingsStore.for_organization(_ORG)
+    def app_settings(self) -> ProfileAppSettingsStore:
+        return ProfileAppSettingsStore.for_organization(self.organization)

@@ -46,16 +46,10 @@ from PySide6.QtCore import (
     QLibraryInfo,
     QLocale,
     QObject,
-    QSettings,
     Signal,
 )
-from solin.core.foundation.constants import (
-    QSETTINGS_APP_APP,
-    QSETTINGS_GLOBAL_APP,
-    QSETTINGS_ORG_NAME,
-)
-from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import settings as _ps
+from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
 
@@ -100,12 +94,15 @@ class LanguageManager(QObject):
     def __init__(
         self,
         *,
+        global_settings: GlobalSettingsStore,
         jw_languages_cache_file: str | Path,
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
         self._meta:        dict[str, dict] = {}
         self.current_code: str = "pt_BR"
+        self._global_settings = global_settings
+        self._profile_settings: ProfileSettings | None = None
 
         # Serviço de idiomas JW.org (lista completa para mídia)
         JWLanguageService  = _get_jw_language_service_class()
@@ -137,18 +134,21 @@ class LanguageManager(QObject):
                 log.warning("Failed to load language metadata %s: %s", path, exc)
 
     def _restore_saved_language(self) -> None:
-        saved = _ps.prefs(QSETTINGS_APP_APP).value(SettingsKey.APP_LANGUAGE, "", str)
-        bootstrap = QSettings(
-            QSETTINGS_ORG_NAME,
-            QSETTINGS_GLOBAL_APP,
-        ).value(SettingsKey.BOOTSTRAP_LANGUAGE, "", str)
+        bootstrap = self._global_settings.bootstrap_language()
         code = (
-            saved if saved in self._meta
-            else bootstrap if bootstrap in self._meta
+            bootstrap if bootstrap in self._meta
             else self._detect_system_language()
         )
         self.current_code = code
         self._install_translators(code)
+
+    def activate_profile(self, profile_settings: ProfileSettings) -> None:
+        self._profile_settings = profile_settings
+        self._jw_lang_svc.activate_profile(profile_settings)
+        saved = profile_settings.app_settings().app_language()
+        if saved and saved in self._meta:
+            self._global_settings.set_bootstrap_language(saved)
+            self._apply_language(saved)
 
     def _detect_system_language(self) -> str:
         """Best-effort locale for profile-agnostic screens before a profile is active."""
@@ -174,15 +174,17 @@ class LanguageManager(QObject):
         if code not in self._meta:
             log.warning("Unknown language: %r", code)
             return
+        if self._profile_settings is not None:
+            self._profile_settings.app_settings().set_app_language(code)
+        self._global_settings.set_bootstrap_language(code)
+        if code == self.current_code:
+            return
+        self._apply_language(code)
+
+    def _apply_language(self, code: str) -> None:
         if code == self.current_code:
             return
         self.current_code = code
-        s = _ps.prefs(QSETTINGS_APP_APP)
-        s.setValue(SettingsKey.APP_LANGUAGE, code)
-        s.sync()
-        gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-        gs.setValue(SettingsKey.BOOTSTRAP_LANGUAGE, code)
-        gs.sync()
         self._install_translators(code)
         self.language_changed.emit(code)
 
@@ -234,7 +236,11 @@ class LanguageManager(QObject):
         Código api JW do idioma de mídia selecionado.
         Retorna o api_code da interface se nenhum idioma de mídia for definido.
         """
-        stored = self._jw_lang_svc.media_api_code
+        stored = (
+            self._jw_lang_svc.media_api_code
+            if self._profile_settings is not None
+            else ""
+        )
         return stored if stored else self.api_code
 
     @property
@@ -244,7 +250,11 @@ class LanguageManager(QObject):
         Consulta JWLanguageService.is_media_sign_language.
         Os idiomas da interface (fallback) NUNCA são gestuais.
         """
-        return self._jw_lang_svc.is_media_sign_language
+        return (
+            self._jw_lang_svc.is_media_sign_language
+            if self._profile_settings is not None
+            else False
+        )
 
     # ── metadados (não passam pelo Qt i18n) ───────────────────────────────────
 
