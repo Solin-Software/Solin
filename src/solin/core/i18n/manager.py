@@ -287,6 +287,10 @@ class LanguageManager(QObject):
         return [(code, m.get("name", code))
                 for code, m in self._meta.items()]
 
+    def shutdown(self) -> None:
+        """Stop background work owned by language services."""
+        self._jw_lang_svc.shutdown()
+
     # ── compatibilidade: dict 'languages' (leitura) ───────────────────────────
 
     @property

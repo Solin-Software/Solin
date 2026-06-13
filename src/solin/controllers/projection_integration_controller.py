@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import time
 
 from PySide6.QtCore import QTimer
 
@@ -22,6 +23,9 @@ class ProjectionIntegrationController:
         self._window = window
         self._auto_share_active = False
         self._auto_share_generation = 0
+        self._auto_share_stop = threading.Event()
+        self._auto_share_threads_lock = threading.Lock()
+        self._auto_share_threads: set[threading.Thread] = set()
 
     def update_status(
         self,
@@ -113,6 +117,8 @@ class ProjectionIntegrationController:
         )
 
     def sync_zoom_share(self, active: bool | None = None, visual: bool = True) -> None:
+        if self._auto_share_stop.is_set():
+            return
         if active is None:
             active, visual = self.current_projection_activity()
 
@@ -140,34 +146,58 @@ class ProjectionIntegrationController:
             from ..core.integrations.automation.screen_share import execute_start_share
 
             def _run_start_share():
-                self._window._auto_share_finished.emit(
-                    generation,
-                    True,
-                    execute_start_share(hotkey, click_x, click_y),
-                )
+                ok = execute_start_share(hotkey, click_x, click_y)
+                if not self._auto_share_stop.is_set():
+                    try:
+                        self._window._auto_share_finished.emit(generation, True, ok)
+                    except RuntimeError:
+                        pass
 
             self._auto_share_active = True
-            threading.Thread(
-                target=_run_start_share,
-                daemon=True,
-                name="share-start",
-            ).start()
+            self._launch_auto_share_worker("share-start", _run_start_share)
         else:
             from ..core.integrations.automation.screen_share import execute_stop_share
 
             def _run_stop_share():
-                self._window._auto_share_finished.emit(
-                    generation,
-                    False,
-                    execute_stop_share(hotkey),
-                )
+                ok = execute_stop_share(hotkey)
+                if not self._auto_share_stop.is_set():
+                    try:
+                        self._window._auto_share_finished.emit(generation, False, ok)
+                    except RuntimeError:
+                        pass
 
             self._auto_share_active = False
-            threading.Thread(
-                target=_run_stop_share,
-                daemon=True,
-                name="share-stop",
-            ).start()
+            self._launch_auto_share_worker("share-stop", _run_stop_share)
+
+    def _launch_auto_share_worker(self, name: str, target) -> None:
+        def _run() -> None:
+            try:
+                target()
+            finally:
+                with self._auto_share_threads_lock:
+                    self._auto_share_threads.discard(threading.current_thread())
+
+        thread = threading.Thread(target=_run, daemon=True, name=name)
+        with self._auto_share_threads_lock:
+            self._auto_share_threads.add(thread)
+        thread.start()
+
+    def cleanup(self, timeout: float = 8.0) -> None:
+        """Suppress late callbacks and join owned auto-share workers."""
+        self._auto_share_generation += 1
+        self._auto_share_active = False
+        self._auto_share_stop.set()
+        deadline = time.monotonic() + max(0.0, timeout)
+        with self._auto_share_threads_lock:
+            threads = list(self._auto_share_threads)
+        for thread in threads:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            thread.join(timeout=remaining)
+        alive = [thread.name for thread in threads if thread.is_alive()]
+        if alive:
+            log.warning("Auto-share workers still running during shutdown: %s", alive)
 
     def on_auto_share_finished(
         self,

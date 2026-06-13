@@ -1,4 +1,5 @@
 from solin.controllers.projection_integration_controller import ProjectionIntegrationController
+import threading
 
 
 class _PrefsStub:
@@ -163,3 +164,23 @@ def test_auto_share_failed_stop_restores_active_state():
     controller.on_auto_share_finished(3, False, False)
 
     assert controller._auto_share_active is True
+
+
+def test_cleanup_joins_owned_auto_share_workers():
+    window = _WindowStub()
+    controller = ProjectionIntegrationController(window)
+    release = threading.Event()
+    started = threading.Event()
+
+    def worker():
+        started.set()
+        release.wait(1)
+
+    controller._launch_auto_share_worker("share-test", worker)
+    assert started.wait(1)
+    release.set()
+
+    controller.cleanup()
+
+    assert controller._auto_share_stop.is_set()
+    assert controller._auto_share_threads == set()

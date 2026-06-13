@@ -129,6 +129,8 @@ class JWLanguageService(QObject):
         self._is_loading: bool       = False
         self._by_code: dict[str, dict] = {}
         self._profile_settings: ProfileSettings | None = None
+        self._thread_pool = QThreadPool(self)
+        self._worker: _FetchWorker | None = None
 
         # Carrega do cache imediatamente (síncrono, rápido)
         cached = self._load_cache()
@@ -257,20 +259,30 @@ class JWLanguageService(QObject):
         worker = _FetchWorker()
         worker.signals.succeeded.connect(self._on_fetch_success)
         worker.signals.failed.connect(self._on_fetch_failed)
-        QThreadPool.globalInstance().start(worker)
+        self._worker = worker
+        self._thread_pool.start(worker)
 
     def _on_fetch_success(self, languages: list) -> None:
+        self._worker = None
         self._is_loading = False
         self._set_languages(languages)
         self._save_cache(languages)
         self.languages_ready.emit(self._languages)
 
     def _on_fetch_failed(self, error: str) -> None:
+        self._worker = None
         self._is_loading = False
         self.fetch_failed.emit(error)
         # Se tiver cache antigo, ainda assim emite (melhor que nada)
         if self._languages:
             self.languages_ready.emit(self._languages)
+
+    def shutdown(self) -> None:
+        """Stop queued work and wait for an active language fetch."""
+        self._thread_pool.clear()
+        self._thread_pool.waitForDone()
+        self._worker = None
+        self._is_loading = False
 
     def _set_languages(self, languages: list) -> None:
         self._languages = languages

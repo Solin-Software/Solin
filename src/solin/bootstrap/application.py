@@ -130,6 +130,7 @@ def main():
         global_settings=container.global_settings,
         jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json"
     )
+    container.lifecycle.register_cleanup(lang_manager.shutdown)
 
     # ── CSV do Zoom: janela standalone ────────────────────────────────────────
     csv_args = [

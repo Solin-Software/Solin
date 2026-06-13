@@ -13,6 +13,7 @@ from solin.core.integrations.ndi import NDIReceiverService
 from solin.core.media.downloader import SongDownloader
 from solin.core.media.cache import MediaCacheManager
 from solin.core.jw.songs import JWSongsStore
+from solin.core.jw.languages import JWLanguageService
 from solin.core.profiles.settings import ProfileSettings
 from solin.core.rendering.fonts import FontManager
 
@@ -135,6 +136,28 @@ def test_jw_songs_store_owns_and_drains_its_thread_pool(tmp_path):
 
     assert events == ["clear", "wait"]
     assert store._workers == {}
+
+
+def test_jw_language_service_owns_and_drains_its_thread_pool(tmp_path):
+    service = JWLanguageService(cache_file=tmp_path / "languages.json")
+    events = []
+
+    class _Pool:
+        def clear(self):
+            events.append("clear")
+
+        def waitForDone(self):
+            events.append("wait")
+
+    service._thread_pool = _Pool()
+    service._worker = object()
+    service._is_loading = True
+
+    service.shutdown()
+
+    assert events == ["clear", "wait"]
+    assert service._worker is None
+    assert service.is_loading is False
 
 
 def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
