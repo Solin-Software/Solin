@@ -1,4 +1,4 @@
-from solin.widgets.playlist import cleanup as playlist_cleanup
+from solin.core.playlists import cleanup as playlist_cleanup
 from solin.core.playlists.storage import (
     PlaylistStoragePaths,
     load_playlists,
@@ -48,5 +48,5 @@ def test_try_remove_file_queues_after_retries(monkeypatch):
         lambda pending: saved.append(list(pending)),
     )
 
-    assert playlist_cleanup._try_remove_file("locked.mp4", retries=1, delay=0) is False
+    assert playlist_cleanup.try_remove_file("locked.mp4", retries=1, delay=0) is False
     assert saved == [["locked.mp4"]]

@@ -4,17 +4,17 @@ import os
 import threading
 import time
 
-from ...core.foundation import paths as _paths
-from ...core.foundation.exception_logging import log_ignored_exception
-from ...core.playlists.storage import (
+from solin.core.foundation import paths as _paths
+from solin.core.foundation.exception_logging import log_ignored_exception
+from solin.core.playlists.storage import (
     load_playlists,
     load_pending_deletions,
     save_pending_deletions,
 )
-from ...core.playlists.thumbnails import playlist_thumb_path
+from solin.core.playlists.thumbnails import playlist_thumb_path
 
 
-def _try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
+def try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
     for attempt in range(retries):
         try:
             if os.path.isfile(path):
@@ -88,7 +88,7 @@ def flush_thumbs_dir() -> None:
 
 
 def flush_pdf_pages() -> None:
-    from ...core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
+    from solin.core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
 
     referenced = _referenced_playlist_urls()
     referenced.update(_meeting_tree_referenced_urls())
@@ -96,8 +96,8 @@ def flush_pdf_pages() -> None:
 
 
 def flush_pptx_pages() -> None:
-    from ...core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
-    from ...core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
+    from solin.core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
+    from solin.core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
 
     referenced = _referenced_playlist_urls()
     referenced.update(_meeting_tree_referenced_urls())
@@ -123,31 +123,31 @@ def flush_embedded_dir() -> None:
                 pass
 
 
-def _try_remove_file_async(path: str) -> None:
-    def _worker():
-        _try_remove_file(path, retries=4, delay=0.6)
+def try_remove_file_async(path: str) -> None:
+    def _worker() -> None:
+        try_remove_file(path, retries=4, delay=0.6)
 
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _cleanup_playlist_files(playlist: dict) -> None:
+def cleanup_playlist_files(playlist: dict) -> None:
     embedded_dir = _paths.EMBEDDED_DIR
     for item in playlist.get("items", []):
         item_id = item.get("id", "")
         if item_id:
             thumb = playlist_thumb_path(item_id)
             if thumb.exists():
-                _try_remove_file(os.fspath(thumb))
+                try_remove_file(os.fspath(thumb))
 
         url = item.get("url", "")
         if url and os.path.isabs(url):
             norm = os.path.normpath(url)
             norm_embedded = os.path.normpath(embedded_dir)
             if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-                _try_remove_file(norm)
+                try_remove_file(norm)
 
 
-def _cleanup_item_files(item: dict, all_playlists: list) -> None:
+def cleanup_item_files(item: dict, all_playlists: list) -> None:
     embedded_dir = _paths.EMBEDDED_DIR
     item_id = item.get("id", "")
     url = item.get("url", "")
@@ -164,13 +164,13 @@ def _cleanup_item_files(item: dict, all_playlists: list) -> None:
     if item_id and item_id not in all_ids:
         thumb = playlist_thumb_path(item_id)
         if thumb.exists():
-            _try_remove_file(os.fspath(thumb))
+            try_remove_file(os.fspath(thumb))
 
     if url and os.path.isabs(url) and url not in all_urls:
         norm = os.path.normpath(url)
         norm_embedded = os.path.normpath(embedded_dir)
         if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-            _try_remove_file_async(norm)
+            try_remove_file_async(norm)
 
 
 def _referenced_playlist_urls(*, normalize: bool = False) -> set[str]:
@@ -186,8 +186,8 @@ def _referenced_playlist_urls(*, normalize: bool = False) -> set[str]:
 def _meeting_tree_referenced_urls() -> set[str]:
     referenced: set[str] = set()
     try:
-        from ...core.meetings.tree_store import MeetingTreeStore
-        from ...core.meetings.tree_types import iter_nodes
+        from solin.core.meetings.tree_store import MeetingTreeStore
+        from solin.core.meetings.tree_types import iter_nodes
 
         data = MeetingTreeStore().load_all()
         for record in data.get("trees", {}).values():

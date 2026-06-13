@@ -27,7 +27,7 @@ from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
-from .cleanup import _cleanup_playlist_files
+from ...core.playlists.cleanup import cleanup_playlist_files
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, new_playlist_item
@@ -334,7 +334,7 @@ class _PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        _cleanup_playlist_files(pl)
+        cleanup_playlist_files(pl)
         self._playlists.remove(pl)
         save_playlists(self._playlists)
         self._rebuild_app_cards()

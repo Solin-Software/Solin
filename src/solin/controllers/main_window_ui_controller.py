@@ -28,7 +28,7 @@ from ..widgets.clips_widget import ClipsWidget
 from ..widgets.common.profile_avatar_button import ProfileAvatarButton
 from ..widgets.common.sidebar_button import SidebarButton
 from ..widgets.meetings.widget import MeetingsWidget
-from ..widgets.playlist.cleanup import (
+from ..core.playlists.cleanup import (
     flush_embedded_dir,
     flush_images_dir,
     flush_pdf_pages,

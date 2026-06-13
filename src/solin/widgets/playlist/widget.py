@@ -43,7 +43,7 @@ from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
 from .list_view import _PlaylistListView
-from .cleanup import _cleanup_item_files
+from ...core.playlists.cleanup import cleanup_item_files
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import load_playlists, save_playlists
@@ -813,7 +813,7 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import remove_item_from_manifest
             remove_item_from_manifest(self._watched_path, item)
         elif item:
-            _cleanup_item_files(item, _current_playlists_ref[0])
+            cleanup_item_files(item, _current_playlists_ref[0])
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
         self.bridge.emit_node_replaced(item_id, [])
