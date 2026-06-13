@@ -23,9 +23,7 @@ from PySide6.QtCore import Qt, QCoreApplication, QTimer
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
 from solin.bootstrap.config import default_app_config
 from solin.bootstrap.container import initialize_application_container
-from solin.core.foundation.constants import QSETTINGS_APP_APP
 from solin.core.foundation.resources import application_asset_path
-from solin.core.foundation.settings_keys import SettingsKey
 from solin.bootstrap.profile_flow import wire_profile_switch
 from solin.bootstrap.runtime_args import parse_runtime_args
 from solin.bootstrap.single_instance import (
@@ -163,8 +161,7 @@ def main():
         _pm.set_active(requested_profile_id)
 
         from solin.core.profiles import settings as _ps
-        s = _ps.prefs(QSETTINGS_APP_APP)
-        saved_lang = str(s.value(SettingsKey.APP_LANGUAGE, "", str) or "")
+        saved_lang = _ps.app_settings().app_language()
         if saved_lang:
             lang_manager.set_language(saved_lang)
 
@@ -180,8 +177,7 @@ def main():
 
         # Restaura idioma do perfil
         from solin.core.profiles import settings as _ps
-        s = _ps.prefs(QSETTINGS_APP_APP)
-        saved_lang = str(s.value(SettingsKey.APP_LANGUAGE, "", str) or "")
+        saved_lang = _ps.app_settings().app_language()
         if saved_lang:
             lang_manager.set_language(saved_lang)
 

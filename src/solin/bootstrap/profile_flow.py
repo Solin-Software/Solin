@@ -4,16 +4,12 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QProcess, QSettings
+from PySide6.QtCore import QCoreApplication, QProcess
 
 from solin.bootstrap import single_instance
-from solin.core.foundation.constants import (
-    QSETTINGS_APP_APP,
-    QSETTINGS_GLOBAL_APP,
-    QSETTINGS_ORG_NAME,
-)
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.core.profiles import manager as profile_manager
+from solin.core.profiles import settings as profile_settings
 
 log = logging.getLogger(__name__)
 
@@ -35,9 +31,7 @@ def relaunch_with_profile(app, profile_id: str, window) -> None:
     if not profile_manager.get().get_profile(profile_id):
         return
 
-    gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-    gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, profile_id)
-    gs.sync()
+    GlobalSettingsStore.create().set_last_active_profile(profile_id)
 
     ipc_server = single_instance.stop_process_ipc(app, window)
 
@@ -69,14 +63,12 @@ def relaunch_to_profile_creator(app, window) -> None:
     try:
         pm = profile_manager.get()
         current_lang = (
-            pm.prefs(QSETTINGS_APP_APP).value(SettingsKey.APP_LANGUAGE, "", str)
+            profile_settings.app_settings().app_language()
             if pm.active_id
             else ""
         )
         if current_lang:
-            gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-            gs.setValue(SettingsKey.BOOTSTRAP_LANGUAGE, current_lang)
-            gs.sync()
+            GlobalSettingsStore.create().set_bootstrap_language(current_lang)
     except Exception:  # noqa: BLE001 - Qt settings adapter boundary
         _log_ignored_exception("Could not persist bootstrap language for profile creation")
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSettings
 
 from solin.core.foundation.constants import QSETTINGS_ORG_NAME, QSETTINGS_PREFS_APP
+from solin.core.foundation.settings_store import ProfileAppSettingsStore
 
 # Org padrão (fallback / antes de qualquer perfil ser ativado).
 _ORG: str = QSETTINGS_ORG_NAME
@@ -38,3 +39,7 @@ def prefs(app_name: str = QSETTINGS_PREFS_APP) -> QSettings:
     e em funções que não guardam estado.
     """
     return QSettings(_ORG, app_name)
+
+
+def app_settings() -> ProfileAppSettingsStore:
+    return ProfileAppSettingsStore.for_organization(_ORG)

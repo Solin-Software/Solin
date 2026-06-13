@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+from solin.core.foundation import settings_store
 import solin.core.profiles.manager as profile_manager
 from solin.bootstrap import application as main
 from solin.bootstrap import profile_flow
@@ -198,7 +199,7 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
     app = _App()
     window = _Window()
     monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
-    monkeypatch.setattr(profile_flow, "QSettings", _Settings)
+    monkeypatch.setattr(settings_store, "QSettings", _Settings)
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -279,7 +280,7 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
     app = _App()
     window = _Window()
     monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
-    monkeypatch.setattr(profile_flow, "QSettings", _Settings)
+    monkeypatch.setattr(settings_store, "QSettings", _Settings)
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -327,3 +328,84 @@ def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
     profile_flow.relaunch_with_profile(app=object(), profile_id="missing", window=object())
 
     assert launches == []
+
+
+def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
+    monkeypatch,
+):
+    settings = []
+    launches = []
+    stopped = []
+
+    class _Settings:
+        def __init__(self, org_name, app_name):
+            self.org_name = org_name
+            self.app_name = app_name
+            self.values = {}
+            self.synced = False
+            settings.append(self)
+
+        def setValue(self, key, value):
+            self.values[key] = value
+
+        def sync(self):
+            self.synced = True
+
+    class _ProfileManager:
+        active_id = "main_hall"
+
+    class _App:
+        def __init__(self):
+            self.events = []
+
+        def processEvents(self):
+            self.events.append("processEvents")
+
+        def quit(self):
+            self.events.append("quit")
+
+    class _Window:
+        def __init__(self):
+            self.closed = 0
+
+        def close(self):
+            self.closed += 1
+
+    app = _App()
+    window = _Window()
+    monkeypatch.setattr(profile_manager, "get", lambda: _ProfileManager())
+    monkeypatch.setattr(
+        profile_flow.profile_settings,
+        "app_settings",
+        lambda: SimpleNamespace(app_language=lambda: "pt_BR"),
+    )
+    monkeypatch.setattr(settings_store, "QSettings", _Settings)
+    monkeypatch.setattr(
+        profile_flow.single_instance,
+        "stop_process_ipc",
+        lambda app, window: stopped.append((app, window)) or "ipc",
+    )
+    monkeypatch.setattr(profile_flow.single_instance, "restart_process_ipc", lambda *args: None)
+    monkeypatch.setattr(
+        profile_flow,
+        "QProcess",
+        SimpleNamespace(
+            startDetached=lambda program, args, cwd: launches.append(
+                (program, args, cwd)
+            )
+            or True
+        ),
+    )
+    monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
+    monkeypatch.delattr(profile_flow.sys, "frozen", raising=False)
+
+    profile_flow.relaunch_to_profile_creator(app, window)
+
+    assert settings[0].values == {"bootstrap_language": "pt_BR"}
+    assert settings[0].synced is True
+    assert stopped == [(app, window)]
+    assert launches[0][0] == "python.exe"
+    assert launches[0][1][-1:] == ["--create-profile"]
+    assert launches[0][1][0].endswith("main.py")
+    assert window.closed == 1
+    assert app.events == ["processEvents", "quit"]

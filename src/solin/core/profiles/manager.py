@@ -46,13 +46,13 @@ from PySide6.QtCore import QObject, QSettings, Signal
 
 from solin.core.foundation.constants import (
     QSETTINGS_APP_APP,
-    QSETTINGS_GLOBAL_APP,
     QSETTINGS_ORG_NAME,
     QSETTINGS_PREFS_APP,
     QSETTINGS_PROFILE_ORG_PREFIX,
     QSETTINGS_PROFILE_SCOPED_APPS,
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.storage.migration import (
     move_dir_if_exists as _move_dir_if_exists,
@@ -179,8 +179,8 @@ class ProfileManager(QObject):
 
     def has_legacy_settings(self) -> bool:
         """True se existirem dados legados (sem perfil) no QSettings."""
-        s = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_PREFS_APP)
-        return bool(s.allKeys())
+        store = SettingsStore.for_namespace(QSETTINGS_ORG_NAME, QSETTINGS_PREFS_APP)
+        return bool(store.all_keys())
 
     # ── QSettings com escopo de perfil ────────────────────────────────────
 
@@ -286,9 +286,7 @@ class ProfileManager(QObject):
         profile_org = f"{QSETTINGS_PROFILE_ORG_PREFIX}{profile_id}"
         for app_name in QSETTINGS_PROFILE_SCOPED_APPS:
             try:
-                s = QSettings(profile_org, app_name)
-                s.clear()
-                s.sync()
+                SettingsStore.for_namespace(profile_org, app_name).clear()
             except Exception as exc:  # noqa: BLE001 - Qt settings backend cleanup boundary
                 log.warning(
                     "[ProfileManager] Failed to clear QSettings %s/%s: %s",
@@ -298,11 +296,10 @@ class ProfileManager(QObject):
         if was_active and self._profiles:
             self.set_active(self._profiles[0].id)
         else:
-            gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-            last = gs.value(SettingsKey.LAST_ACTIVE_PROFILE, "", str)
-            if last == profile_id:
-                gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, self._profiles[0].id)
-                gs.sync()
+            GlobalSettingsStore.create().clear_last_active_profile_if(
+                profile_id,
+                self._profiles[0].id,
+            )
 
         log.info("[ProfileManager] Profile removed: %s", profile_id)
         return True
@@ -330,9 +327,7 @@ class ProfileManager(QObject):
         _ps.set_org(self.active_org())
 
         # Persistir escolha
-        gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-        gs.setValue(SettingsKey.LAST_ACTIVE_PROFILE, profile_id)
-        gs.sync()
+        GlobalSettingsStore.create().set_last_active_profile(profile_id)
 
         log.info("[ProfileManager] Active profile: %s", profile_id)
         self.profile_switched.emit(profile_id)
@@ -344,8 +339,7 @@ class ProfileManager(QObject):
         """
         if not self._profiles:
             return None
-        gs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)
-        last = gs.value(SettingsKey.LAST_ACTIVE_PROFILE, "", str)
+        last = GlobalSettingsStore.create().last_active_profile()
         if last and any(p.id == last for p in self._profiles):
             return last
         return self._profiles[0].id
@@ -391,20 +385,20 @@ class ProfileManager(QObject):
 
         # ── QSettings ────────────────────────────────────────────────────
         for base in (QSETTINGS_PREFS_APP, QSETTINGS_APP_APP):
-            src_s = QSettings(QSETTINGS_ORG_NAME, base)
-            dst_s = QSettings(f"{QSETTINGS_PROFILE_ORG_PREFIX}{pid}", base)
+            src_s = SettingsStore.for_namespace(QSETTINGS_ORG_NAME, base)
+            dst_s = SettingsStore.for_namespace(f"{QSETTINGS_PROFILE_ORG_PREFIX}{pid}", base)
             migrated_keys: list[str] = []
-            for key in src_s.allKeys():
+            for key in src_s.all_keys():
                 if base == QSETTINGS_APP_APP and key in _BASE_APP_GLOBAL_KEYS:
                     continue
-                dst_s.setValue(key, src_s.value(key))
+                dst_s.set_value(key, src_s.value(key), sync=False)
                 migrated_keys.append(key)
             dst_s.sync()
             if base == QSETTINGS_PREFS_APP:
                 src_s.clear()
             else:
                 for key in migrated_keys:
-                    src_s.remove(key)
+                    src_s.remove(key, sync=False)
             src_s.sync()
             log.info(
                 "[Migration] QSettings %s/%s -> %s%s/%s; legacy cleared",

@@ -14,6 +14,7 @@ from solin.core.foundation.constants import (
     QSETTINGS_PROFILE_SCOPED_APPS,
     QSETTINGS_TIMER_APP,
 )
+from solin.core.foundation import settings_store
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.profiles import manager as profile_manager
 
@@ -118,7 +119,7 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
             pass
 
     monkeypatch.setattr(profile_manager.ProfileManager, "_instance", None)
-    monkeypatch.setattr(profile_manager, "QSettings", FakeSettings)
+    monkeypatch.setattr(settings_store, "QSettings", FakeSettings)
     monkeypatch.setattr("solin.core.foundation.paths.CACHE_DIR", "")
 
     manager = profile_manager.ProfileManager()
