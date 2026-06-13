@@ -10,6 +10,7 @@ from typing import Optional
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
 
 from ...core.media.cache import MediaCacheManager
+from ...core.playlists.thumbnails import playlist_thumb_path
 from ...core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,
@@ -25,11 +26,18 @@ from ...core.meetings.colors import (
 from .edit_visuals import (
     _format_duration,
     _media_badge,
-    _thumb_cache_path,
     _UNSECTIONED_BG,
 )
 
 _MARKER_POSITION_FALLBACK = 1_000_000_000
+
+
+def _playlist_thumb_exists(item_id: str) -> bool:
+    try:
+        return playlist_thumb_path(item_id).exists()
+    except RuntimeError:
+        return False
+
 
 # ── Flat model ─────────────────────────────────────────────────────────────────
 
@@ -387,7 +395,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def _thumb_source_for(self, item_id: str) -> str:
         version = self._thumb_versions.get(item_id, 0)
-        if version > 0 or os.path.exists(_thumb_cache_path(item_id)):
+        if version > 0 or _playlist_thumb_exists(item_id):
             return f"image://playlistthumbs/{item_id}/{version}"
         return ""
 

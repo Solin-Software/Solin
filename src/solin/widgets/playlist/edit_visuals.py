@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import os
-
 from PySide6.QtCore import QByteArray, QCoreApplication, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtSvg import QSvgRenderer
 
-from ...core.foundation import paths as _paths
 from ...styles.icons import (
     ICON_ARROW_LEFT,
     ICON_CHEVRON_DOWN,
@@ -60,10 +57,6 @@ def _media_badge(media_type: str) -> str:
 # ── Thumbnail provider ────────────────────────────────────────────────────────
 
 _THUMB_W, _THUMB_H = 208, 120
-
-
-def _thumb_cache_path(item_id: str) -> str:
-    return os.path.join(_paths.THUMB_CACHE_DIR, f"{item_id}.jpg")
 
 
 def _round_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:

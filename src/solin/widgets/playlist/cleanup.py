@@ -11,7 +11,7 @@ from ...core.playlists.storage import (
     load_pending_deletions,
     save_pending_deletions,
 )
-from .thumbnails import _thumb_cache_path
+from ...core.playlists.thumbnails import playlist_thumb_path
 
 
 def _try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
@@ -135,9 +135,9 @@ def _cleanup_playlist_files(playlist: dict) -> None:
     for item in playlist.get("items", []):
         item_id = item.get("id", "")
         if item_id:
-            thumb = _thumb_cache_path(item_id)
-            if os.path.exists(thumb):
-                _try_remove_file(thumb)
+            thumb = playlist_thumb_path(item_id)
+            if thumb.exists():
+                _try_remove_file(os.fspath(thumb))
 
         url = item.get("url", "")
         if url and os.path.isabs(url):
@@ -162,9 +162,9 @@ def _cleanup_item_files(item: dict, all_playlists: list) -> None:
                 all_urls.add(other["url"])
 
     if item_id and item_id not in all_ids:
-        thumb = _thumb_cache_path(item_id)
-        if os.path.exists(thumb):
-            _try_remove_file(thumb)
+        thumb = playlist_thumb_path(item_id)
+        if thumb.exists():
+            _try_remove_file(os.fspath(thumb))
 
     if url and os.path.isabs(url) and url not in all_urls:
         norm = os.path.normpath(url)

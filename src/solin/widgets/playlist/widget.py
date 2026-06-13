@@ -47,10 +47,10 @@ from .cleanup import _cleanup_item_files
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import load_playlists, save_playlists
+from ...core.playlists.thumbnails import playlist_thumb_path
 from .thumbnails import (
     _load_thumb_from_disk,
     _save_thumb_to_disk,
-    _thumb_cache_path,
 )
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
@@ -521,7 +521,7 @@ class _PlaylistEditView(
                     self._request_thumbnail(item_id, url, media_type)
                 continue
 
-            has_disk = os.path.exists(_thumb_cache_path(item_id))
+            has_disk = playlist_thumb_path(item_id).exists()
             if has_disk:
                 if needs_title:
                     self._request_thumbnail(item_id, url, media_type)

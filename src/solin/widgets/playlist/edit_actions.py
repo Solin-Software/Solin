@@ -9,17 +9,16 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
-from ...core.foundation import paths as _paths
 from ...core.foundation.constants import (
     JWPUB_EXTS as _JWPUB_EXTS,
     MEDIA_EXTS as _MEDIA_EXTS,
     PDF_EXTS as _PDF_EXTS,
 )
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.thumbnails import playlist_thumb_path
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
 from .items import _enrich_items_for_export, media_type_from_url, new_playlist_item
-from .thumbnails import _thumb_cache_path
 
 
 class _PlaylistEditActionsMixin:
@@ -201,10 +200,11 @@ class _PlaylistEditActionsMixin:
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
             try:
-                os.makedirs(_paths.THUMB_CACHE_DIR, exist_ok=True)
                 import shutil
 
-                shutil.copy2(thumb_path, _thumb_cache_path(pl_item_id))
+                target_path = playlist_thumb_path(pl_item_id)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(thumb_path, target_path)
             except OSError as e:
                 import logging
 
