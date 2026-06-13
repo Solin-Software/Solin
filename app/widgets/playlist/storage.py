@@ -27,7 +27,7 @@ def _save_playlists(playlists: list[dict]) -> None:
         log_ignored_exception(__name__, "Could not save playlists file")
 
 
-def _load_pending_deletions() -> list[str]:
+def load_pending_deletions() -> list[str]:
     try:
         if os.path.exists(_paths.PENDING_DEL_FILE):
             with open(_paths.PENDING_DEL_FILE, "r", encoding="utf-8") as handle:
@@ -37,7 +37,7 @@ def _load_pending_deletions() -> list[str]:
     return []
 
 
-def _save_pending_deletions(paths: list[str]) -> None:
+def save_pending_deletions(paths: list[str]) -> None:
     try:
         os.makedirs(_paths.DATA_DIR, exist_ok=True)
         with open(_paths.PENDING_DEL_FILE, "w", encoding="utf-8") as handle:

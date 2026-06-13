@@ -43,7 +43,7 @@ from ..core.timer.schedule_factory import (
     set_section_part_count,
 )
 from ..core.i18n.timer_part_titles import display_part_title
-from ..core.meetings.colors import _section_colors
+from ..core.meetings.colors import section_colors
 from ..core.timer.part_titles import is_indexed_part_title_source
 from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
 
@@ -86,7 +86,7 @@ _CONFIGURABLE_COUNT = {Section.MINISTRY, Section.LIVING}
 def _section_palette(section: Section) -> dict[str, str]:
     code = _SECTION_CODES.get(section, "")
     hue = SECTION_META.get(code, ("", 215))[1]
-    colors = _section_colors(hue)
+    colors = section_colors(hue)
     return {
         "accent": colors["accent"],
         "text": colors["text"],

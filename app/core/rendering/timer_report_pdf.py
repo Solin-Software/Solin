@@ -21,7 +21,7 @@ from PySide6.QtGui import (
 
 from ..i18n.date import format_datetime, format_time_with_seconds
 from ..i18n.timer_part_titles import display_part_title
-from ..meetings.colors import _section_colors
+from ..meetings.colors import section_colors
 from ..meetings.section_meta import SECTION_META
 from ..timer.models import MeetingSchedule, MeetingType, PartState, Section
 from ..timer.part_titles import is_indexed_part_title_source
@@ -102,7 +102,7 @@ def _section_label(section: Section) -> str:
 def _section_color(section: Section) -> str:
     code = _SECTION_CODES.get(section, "")
     hue = SECTION_META.get(code, ("", 215))[1]
-    return _section_colors(hue)["accent"]
+    return section_colors(hue)["accent"]
 
 
 def _fmt_duration(seconds: float) -> str:

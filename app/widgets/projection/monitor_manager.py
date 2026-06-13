@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.projection.window import media_type_for
 from app.styles.icons import ICON_CLOSE, ICON_IMAGE, ICON_MONITOR, ICON_TV, ICON_VIDEO, make_icon
 
 # ── Monitor Manager Popup ─────────────────────────────────────────────────────
@@ -331,8 +332,7 @@ class MonitorManagerPopup(QWidget):
                 "color: #c9d1d9; font-size: 11px; background: transparent;"
             )
             # Pick icon based on extension
-            from app.projection.window import _media_type_for
-            mtype = _media_type_for(path)
+            mtype = media_type_for(path)
             icon_svg = ICON_VIDEO if mtype == "video" else ICON_IMAGE
             icon_color = "#3fb950" if mtype == "video" else "#58a6ff"
             self._idle_type_icon.setPixmap(make_icon(icon_svg, 14, icon_color).pixmap(14, 14))

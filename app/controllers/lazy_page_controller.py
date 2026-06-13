@@ -42,7 +42,7 @@ class LazyPageController:
         if self._window.browser_widget is not None:
             return self._window.browser_widget
 
-        from ..widgets.browser import BrowserWidget
+        from ..widgets.browser.widget import BrowserWidget
 
         self._window.browser_widget = BrowserWidget(self._window.lang)
         self._replace_stack_widget(self.BROWSER_INDEX, self._window.browser_widget)

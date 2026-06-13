@@ -6,8 +6,8 @@ from PySide6.QtCore import QDateTime, QTimer
 
 from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
 from ..core.ui.screens import ScreenManager
-from ..projection import FloatingPreviewWindow, ProjectionWindow
 from ..projection.idle_source import IdleMediaSource
+from ..projection.window import FloatingPreviewWindow, ProjectionWindow
 
 
 class ProjectionWindowController:

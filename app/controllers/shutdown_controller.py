@@ -139,9 +139,12 @@ class ShutdownController:
 
     @staticmethod
     def _queue_pending_deletion(tmp_path: str) -> None:
-        from ..widgets.playlist.storage import _load_pending_deletions, _save_pending_deletions
+        from ..widgets.playlist.storage import (
+            load_pending_deletions,
+            save_pending_deletions,
+        )
 
-        pending = _load_pending_deletions()
+        pending = load_pending_deletions()
         if tmp_path not in pending:
             pending.append(tmp_path)
-            _save_pending_deletions(pending)
+            save_pending_deletions(pending)

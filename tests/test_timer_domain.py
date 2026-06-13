@@ -115,7 +115,7 @@ def test_weekend_default_parts():
 
 def test_timer_section_palette_uses_meeting_section_hues():
     from app.core.meetings.section_meta import SECTION_META
-    from app.core.meetings.colors import _section_colors
+    from app.core.meetings.colors import section_colors
     from app.widgets.timer_bridge import _section_palette
 
     section_codes = {
@@ -129,7 +129,7 @@ def test_timer_section_palette_uses_meeting_section_hues():
     }
 
     for section, code in section_codes.items():
-        colors = _section_colors(SECTION_META[code][1])
+        colors = section_colors(SECTION_META[code][1])
         palette = _section_palette(section)
         assert palette["accent"] == colors["accent"]
         assert palette["text"] == colors["text"]

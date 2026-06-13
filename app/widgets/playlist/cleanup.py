@@ -7,9 +7,9 @@ import time
 from ...core.foundation import paths as _paths
 from ...core.foundation.exception_logging import log_ignored_exception
 from .storage import (
-    _load_pending_deletions,
     _load_playlists,
-    _save_pending_deletions,
+    load_pending_deletions,
+    save_pending_deletions,
 )
 from .thumbnails import _thumb_cache_path
 
@@ -24,15 +24,15 @@ def _try_remove_file(path: str, retries: int = 3, delay: float = 0.5) -> bool:
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
 
-    pending = _load_pending_deletions()
+    pending = load_pending_deletions()
     if path not in pending:
         pending.append(path)
-        _save_pending_deletions(pending)
+        save_pending_deletions(pending)
     return False
 
 
 def flush_pending_deletions() -> None:
-    pending = _load_pending_deletions()
+    pending = load_pending_deletions()
     if not pending:
         return
 
@@ -43,7 +43,7 @@ def flush_pending_deletions() -> None:
                 os.remove(path)
         except OSError:
             still_pending.append(path)
-    _save_pending_deletions(still_pending)
+    save_pending_deletions(still_pending)
 
 
 def flush_images_dir() -> None:

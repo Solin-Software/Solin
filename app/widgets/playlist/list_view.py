@@ -29,7 +29,7 @@ from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from .cleanup import _cleanup_playlist_files
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
-from .items import _enrich_items_for_export, _new_item
+from .items import _enrich_items_for_export, new_playlist_item
 from .storage import _save_playlists
 
 _BTN_STYLE = (
@@ -390,7 +390,7 @@ class _PlaylistListView(QWidget):
                 items = []
                 for raw in data.get("items", []):
                     url = raw.get("url") or raw.get("jworg_url") or ""
-                    item = _new_item(
+                    item = new_playlist_item(
                         title=raw.get("title", ""),
                         url=url,
                         type=raw.get("type", "video"),

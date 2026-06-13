@@ -3,7 +3,7 @@ from __future__ import annotations
 import colorsys
 import random
 
-_APP_BASE_HUE = 215
+APP_BASE_HUE = 215
 _GOLDEN_ANGLE = 137.508
 
 
@@ -13,32 +13,32 @@ def _hsl_to_hex(h: int, s: int, l: int) -> str:
     return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
 
 
-def _accent_from_hue(hue: int) -> str:
+def accent_from_hue(hue: int) -> str:
     """Section accent color from hue."""
     return _hsl_to_hex(hue, 55, 52)
 
 
-def _section_text_from_hue(hue: int) -> str:
+def section_text_from_hue(hue: int) -> str:
     """Section title text color from hue."""
     return _hsl_to_hex(hue, 40, 72)
 
 
-def _badge_bg_from_hue(hue: int) -> str:
+def badge_bg_from_hue(hue: int) -> str:
     """Section count badge background from hue."""
     return _hsl_to_hex(hue, 30, 18)
 
 
-def _card_bg_from_hue(_hue: int) -> str:
+def card_bg_from_hue(_hue: int) -> str:
     """Section card background."""
     return "#12171f"
 
 
-def _card_border_from_hue(_hue: int) -> str:
+def card_border_from_hue(_hue: int) -> str:
     """Section card border."""
     return "#1a2030"
 
 
-def _generate_section_hue(existing_hues: list[int]) -> int:
+def generate_section_hue(existing_hues: list[int]) -> int:
     """Pick a new hue that is harmonious with the app theme and existing sections."""
     base_offset = random.randint(0, 359)
     for attempt in range(72):
@@ -51,15 +51,15 @@ def _generate_section_hue(existing_hues: list[int]) -> int:
     return random.randint(0, 359)
 
 
-def _section_colors(hue: int) -> dict:
+def section_colors(hue: int) -> dict:
     """Derive a dark-theme section palette from a single hue."""
     return {
         "bg": _hsl_to_hex(hue, 30, 13),
         "bg_hover": _hsl_to_hex(hue, 35, 16),
         "border": _hsl_to_hex(hue, 30, 22),
-        "accent": _accent_from_hue(hue),
-        "text": _section_text_from_hue(hue),
-        "badge": _badge_bg_from_hue(hue),
+        "accent": accent_from_hue(hue),
+        "text": section_text_from_hue(hue),
+        "badge": badge_bg_from_hue(hue),
         "item_bg": _hsl_to_hex(hue, 20, 11),
         "item_bd": _hsl_to_hex(hue, 25, 18),
     }

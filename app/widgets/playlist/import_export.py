@@ -8,7 +8,7 @@ from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.rendering.libreoffice import LoConvertThread, cached_pages as lo_cached_pages
 from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
-from .items import _new_item
+from .items import new_playlist_item
 
 
 class _PlaylistEditImportMixin:
@@ -58,7 +58,7 @@ class _PlaylistEditImportMixin:
         if not self._pl:
             return
         new_items = [
-            _new_item(
+            new_playlist_item(
                 title=f"{pdf_stem} — p. {i + 1}",
                 url=page_path,
                 type="image",
@@ -132,7 +132,7 @@ class _PlaylistEditImportMixin:
                 return
             new_items = []
             for raw in items:
-                it = _new_item(
+                it = new_playlist_item(
                     title=raw.get("title", file_stem),
                     url=raw.get("url", ""),
                     type=raw.get("type", "video"),
@@ -229,7 +229,7 @@ class _PlaylistEditImportMixin:
         if not self._pl:
             return
         new_items = [
-            _new_item(
+            new_playlist_item(
                 title=f"{stem} — p. {i + 1}",
                 url=page_path,
                 type="image",
@@ -267,7 +267,7 @@ class _PlaylistEditImportMixin:
                 new_items = []
                 for raw in data.get("items", []):
                     url = raw.get("url") or raw.get("jworg_url") or ""
-                    item = _new_item(
+                    item = new_playlist_item(
                         title=raw.get("title", ""),
                         url=url,
                         type=raw.get("type", "video"),

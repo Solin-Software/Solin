@@ -11,7 +11,7 @@ from ...core.integrations.automation.shortcuts import (
     AutoKeyAction,
     event_label,
 )
-from ..common import NoScrollComboBox as _NoScrollComboBox
+from ..common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
 from ._shared import (
     _ACCENT,
     _BG,

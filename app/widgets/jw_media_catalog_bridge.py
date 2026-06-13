@@ -44,7 +44,7 @@ from ..core.jw.catalog import (
     JWMediaCatalogService,
     ensure_thumbnail_cached,
 )
-from ..core.meetings.colors import _accent_from_hue
+from ..core.meetings.colors import accent_from_hue
 
 log = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def build_jw_media_placement_options(
             "id": f"section:{section_id}",
             "label": sec.get("name", "Section"),
             "type": "section",
-            "color": _accent_from_hue(hue),
+            "color": accent_from_hue(hue),
         })
     return options
 

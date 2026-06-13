@@ -59,7 +59,7 @@ from ...core.rendering.libreoffice import (
     cached_pages as lo_cached_pages,
     libreoffice_available,
 )
-from ...core.meetings.colors import _generate_section_hue, _section_colors
+from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ..media_info_extractor import MediaInfoQueue, is_filename_title
 from ..playlist.edit_visuals import _format_duration
@@ -1344,7 +1344,7 @@ class MeetingTreeController(QObject):
             "id": new_node_id(),
             "type": "section",
             "title": name,
-            "color_hue": _generate_section_hue(hues),
+            "color_hue": generate_section_hue(hues),
             "collapsed": False,
             "children": [],
             "meeting_generated": False,
@@ -1886,7 +1886,7 @@ class MeetingTreeController(QObject):
         node_type = node.get("type", "")
         if node_type in ("section", "subsection"):
             hue = int(node.get("color_hue", 215))
-            colors = _section_colors(hue)
+            colors = section_colors(hue)
             children = [self._qml_node(child) for child in node.get("children", [])]
             return {
                 "id": node.get("id", ""),

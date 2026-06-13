@@ -7,7 +7,7 @@ from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_P
 from ...core.foundation.settings_keys import SettingsKey
 from ...core.integrations.automation.obs import OBSConnectionState
 from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
-from ..common import NoScrollComboBox as _NoScrollComboBox
+from ..common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
 from ._shared import (
     _ACCENT,
     _BG,

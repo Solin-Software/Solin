@@ -27,7 +27,7 @@ from ..core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
 from ..core.foundation.settings_keys import SettingsKey
 from ..core.ui.helpers import fade_in as _fade_in
 from ..core.profiles.manager import get as _get_pm
-from ..widgets.common import NoScrollComboBox as _NoScrollComboBox
+from ..widgets.common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
 from ..styles.icons import (
     make_icon,
     ICON_EDIT, ICON_TRASH,

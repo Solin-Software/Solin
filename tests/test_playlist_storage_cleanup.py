@@ -1,9 +1,9 @@
 from app.widgets.playlist import cleanup as playlist_cleanup
 from app.widgets.playlist.storage import (
-    _load_pending_deletions,
     _load_playlists,
-    _save_pending_deletions,
     _save_playlists,
+    load_pending_deletions,
+    save_pending_deletions,
 )
 
 
@@ -28,9 +28,9 @@ def test_playlist_storage_roundtrips_pending_deletions(tmp_path, monkeypatch):
         str(pending_file),
     )
 
-    _save_pending_deletions(["locked.mp4"])
+    save_pending_deletions(["locked.mp4"])
 
-    assert _load_pending_deletions() == ["locked.mp4"]
+    assert load_pending_deletions() == ["locked.mp4"]
 
 
 def test_try_remove_file_queues_after_retries(monkeypatch):
@@ -42,10 +42,10 @@ def test_try_remove_file_queues_after_retries(monkeypatch):
         "remove",
         lambda _path: (_ for _ in ()).throw(OSError()),
     )
-    monkeypatch.setattr(playlist_cleanup, "_load_pending_deletions", lambda: [])
+    monkeypatch.setattr(playlist_cleanup, "load_pending_deletions", lambda: [])
     monkeypatch.setattr(
         playlist_cleanup,
-        "_save_pending_deletions",
+        "save_pending_deletions",
         lambda pending: saved.append(list(pending)),
     )
 

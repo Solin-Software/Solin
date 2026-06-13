@@ -15,7 +15,7 @@ from ..media_info_extractor import is_filename_title
 from .thumbnails import _load_thumb_from_disk, _thumb_to_bytes
 
 
-def _media_type_from_url(url: str) -> str:
+def media_type_from_url(url: str) -> str:
     if not url:
         return "video"
     ext = Path(url.split("?")[0]).suffix.lower()
@@ -46,8 +46,8 @@ def _enrich_items_for_export(
     return result
 
 
-def _new_item(title: str, url: str, **kwargs) -> dict:
-    media_type = kwargs.pop("type", _media_type_from_url(url))
+def new_playlist_item(title: str, url: str, **kwargs) -> dict:
+    media_type = kwargs.pop("type", media_type_from_url(url))
     url_stem = Path(url.split("?")[0]).stem if url else ""
     is_auto = is_filename_title(title) or (bool(url_stem) and title == url_stem)
     item = {

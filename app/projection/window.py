@@ -192,7 +192,7 @@ _VIDEO_EXTS = frozenset({
 })
 
 
-def _media_type_for(path: str) -> str:
+def media_type_for(path: str) -> str:
     """Return 'image', 'video', or 'unknown' based on file extension."""
     ext = os.path.splitext(path)[1].lower()
     if ext in _IMAGE_EXTS:

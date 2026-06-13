@@ -38,13 +38,13 @@ from ...core.jw.language_context import (
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ..media_info_extractor import MediaInfoQueue, is_filename_title
-from .items import _media_type_from_url
+from .items import media_type_from_url
 from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
 from .list_view import _PlaylistListView
 from .cleanup import _cleanup_item_files
-from ...core.meetings.colors import _APP_BASE_HUE, _generate_section_hue
+from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from .storage import _load_playlists, _save_playlists
 from .thumbnails import (
@@ -472,7 +472,7 @@ class _PlaylistEditView(
         needs_save = False
         from ...core.jw.metadata import JW_DOMAINS as _JW_DOMAINS_CHECK
         for item in items:
-            detected = _media_type_from_url(item.get("url", ""))
+            detected = media_type_from_url(item.get("url", ""))
             if item.get("type") == "video" and detected != "video":
                 item["type"] = detected
                 needs_save = True
@@ -608,7 +608,7 @@ class _PlaylistEditView(
         if not name: return
         sections = self._pl.setdefault("sections", [])
         existing_hues = [s.get("color_hue", 0) for s in sections]
-        hue = _generate_section_hue(existing_hues)
+        hue = generate_section_hue(existing_hues)
         sec = {
             "id": str(uuid.uuid4()),
             "name": name,
@@ -776,7 +776,7 @@ class _PlaylistEditView(
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
         if not sec: return
-        current_hue = sec.get("color_hue", _APP_BASE_HUE)
+        current_hue = sec.get("color_hue", APP_BASE_HUE)
         dlg = _HuePickerDialog(current_hue, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         sec["color_hue"] = dlg.selected_hue()

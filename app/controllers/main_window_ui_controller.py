@@ -25,7 +25,9 @@ from ..styles.icons import (
     ICON_NAV_WIFI,
 )
 from ..widgets.clips_widget import ClipsWidget
-from ..widgets.meetings import MeetingsWidget
+from ..widgets.common.profile_avatar_button import ProfileAvatarButton
+from ..widgets.common.sidebar_button import SidebarButton
+from ..widgets.meetings.widget import MeetingsWidget
 from ..widgets.playlist.cleanup import (
     flush_embedded_dir,
     flush_images_dir,
@@ -35,8 +37,7 @@ from ..widgets.playlist.cleanup import (
     flush_thumbs_dir,
 )
 from ..widgets.playlist.widget import PlaylistWidget
-from ..widgets.common import ProfileAvatarButton, SidebarButton
-from ..widgets.projection import ProjectionBar
+from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
 from ..widgets.sermon_theme_widget import SermonThemeWidget
 from ..widgets.settings_widget import SettingsWidget

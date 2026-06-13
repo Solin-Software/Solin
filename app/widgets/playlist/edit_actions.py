@@ -18,7 +18,7 @@ from ...core.foundation.constants import (
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
-from .items import _enrich_items_for_export, _media_type_from_url, _new_item
+from .items import _enrich_items_for_export, media_type_from_url, new_playlist_item
 from .thumbnails import _thumb_cache_path
 
 
@@ -102,7 +102,9 @@ class _PlaylistEditActionsMixin:
                 skipped += 1
                 continue
             kw = {"section_id": section_id} if section_id else {}
-            new_items.append(_new_item(title=Path(actual_path).stem, url=actual_path, **kw))
+            new_items.append(
+                new_playlist_item(title=Path(actual_path).stem, url=actual_path, **kw)
+            )
             added += 1
         if added:
             items = self._pl.setdefault("items", [])
@@ -352,7 +354,7 @@ class _PlaylistEditActionsMixin:
             if not item.get("id"):
                 item["id"] = str(uuid.uuid4())
             if not item.get("type"):
-                item["type"] = _media_type_from_url(item.get("url", ""))
+                item["type"] = media_type_from_url(item.get("url", ""))
             norm.append(item)
         pl = {"id": "__temp__", "name": display_name, "items": norm, "_temp": True}
         self.load_playlist(pl)

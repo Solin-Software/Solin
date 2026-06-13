@@ -23,7 +23,7 @@ from ..core.jw.language_context import (
     jw_media_language_context,
 )
 from ..core.media.mime import mime_to_ext
-from ..widgets.playlist.items import _new_item
+from ..widgets.playlist.items import new_playlist_item
 
 
 class OpenMediaController:
@@ -159,7 +159,7 @@ class OpenMediaController:
 
     def on_pdf_ready(self, pages: list, pdf_stem: str) -> None:
         items = [
-            _new_item(
+            new_playlist_item(
                 title=f"{pdf_stem} — p. {index + 1}",
                 url=page_path,
                 type="image",
@@ -206,7 +206,7 @@ class OpenMediaController:
 
             new_items = []
             for raw in items:
-                item = _new_item(
+                item = new_playlist_item(
                     title=raw.get("title", file_stem),
                     url=raw.get("url", ""),
                     type=raw.get("type", "video"),
@@ -286,7 +286,7 @@ class OpenMediaController:
 
     def on_lo_ready(self, pages: list, stem: str) -> None:
         items = [
-            _new_item(
+            new_playlist_item(
                 title=f"{stem} — p. {index + 1}",
                 url=page_path,
                 type="image",

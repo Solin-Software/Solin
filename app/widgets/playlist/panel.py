@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from app.core.ui.helpers import make_rounded_thumb
 from app.styles.icons import ICON_IMAGE, ICON_MUSIC, ICON_VIDEO, make_icon
-from .items import _media_type_from_url
+from .items import media_type_from_url
 
 
 _PANEL_W = 210
@@ -208,7 +208,7 @@ class PlaylistPanel(QWidget):
 
         for index, data in enumerate(items):
             url = data.get("url", "")
-            media_type = data.get("type") or _media_type_from_url(url)
+            media_type = data.get("type") or media_type_from_url(url)
             title = data.get("title", f"Item {index + 1}")
             row = _PlaylistItem(index, title, media_type, self._get_type_label(media_type))
             row.clicked_index.connect(self.item_clicked)

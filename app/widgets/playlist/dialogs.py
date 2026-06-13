@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...core.meetings.colors import _section_colors
+from ...core.meetings.colors import section_colors
 
 
 class _NameDialog(QDialog):
@@ -202,7 +202,7 @@ class _HuePickerDialog(QDialog):
         lay.addLayout(row)
 
     def _swatch_css(self, hue: int) -> str:
-        colors = _section_colors(hue)
+        colors = section_colors(hue)
         return (
             f"background:{colors['bg']};"
             f"border:2px solid {colors['accent']};"

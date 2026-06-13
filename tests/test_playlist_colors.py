@@ -1,17 +1,17 @@
 from app.core.meetings.colors import (
-    _accent_from_hue,
-    _badge_bg_from_hue,
-    _card_bg_from_hue,
-    _card_border_from_hue,
-    _generate_section_hue,
+    accent_from_hue,
+    badge_bg_from_hue,
+    card_bg_from_hue,
+    card_border_from_hue,
+    generate_section_hue,
     _hsl_to_hex,
-    _section_colors,
-    _section_text_from_hue,
+    section_colors,
+    section_text_from_hue,
 )
 
 
 def test_section_colors_returns_complete_dark_theme_palette():
-    colors = _section_colors(215)
+    colors = section_colors(215)
 
     assert set(colors) == {
         "bg",
@@ -30,11 +30,11 @@ def test_section_color_helpers_share_the_same_hsl_formula():
     hue = 188
 
     assert _hsl_to_hex(0, 100, 50) == "#ff0000"
-    assert _accent_from_hue(hue) == _section_colors(hue)["accent"]
-    assert _section_text_from_hue(hue) == _section_colors(hue)["text"]
-    assert _badge_bg_from_hue(hue) == _section_colors(hue)["badge"]
-    assert _card_bg_from_hue(hue) == "#12171f"
-    assert _card_border_from_hue(hue) == "#1a2030"
+    assert accent_from_hue(hue) == section_colors(hue)["accent"]
+    assert section_text_from_hue(hue) == section_colors(hue)["text"]
+    assert badge_bg_from_hue(hue) == section_colors(hue)["badge"]
+    assert card_bg_from_hue(hue) == "#12171f"
+    assert card_border_from_hue(hue) == "#1a2030"
 
 
 def test_generate_section_hue_avoids_existing_hues(monkeypatch):
@@ -43,7 +43,7 @@ def test_generate_section_hue_avoids_existing_hues(monkeypatch):
         lambda _start, _end: 215,
     )
 
-    hue = _generate_section_hue([215])
+    hue = generate_section_hue([215])
     distance = min(abs(hue - 215), 360 - abs(hue - 215))
 
     assert distance > 30

@@ -111,7 +111,7 @@ def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
 
 
 def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
-    from app.widgets import browser as browser_package
+    import app.widgets.browser.widget as browser_module
 
     class _BrowserFactory:
         def __init__(self, lang_manager, parent=None):
@@ -120,7 +120,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
 
     window = _WindowStub()
     controller = LazyPageController(window)
-    monkeypatch.setattr(browser_package, "BrowserWidget", _BrowserFactory)
+    monkeypatch.setattr(browser_module, "BrowserWidget", _BrowserFactory)
     monkeypatch.setattr(controller, "_connect_browser_signals", lambda: None)
 
     browser = controller.ensure_browser_widget()

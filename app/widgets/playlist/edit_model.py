@@ -16,11 +16,11 @@ from ...core.i18n.strings import (
     tr_offline_downloading_progress,
 )
 from ...core.meetings.colors import (
-    _accent_from_hue,
-    _badge_bg_from_hue,
-    _card_bg_from_hue,
-    _card_border_from_hue,
-    _section_text_from_hue,
+    accent_from_hue,
+    badge_bg_from_hue,
+    card_bg_from_hue,
+    card_border_from_hue,
+    section_text_from_hue,
 )
 from .edit_visuals import (
     _format_duration,
@@ -287,9 +287,9 @@ class PlaylistEditModel(QAbstractListModel):
             "id": sec["id"],
             "type": "subsection" if is_subsection else "section",
             "title": sec.get("name", ""),
-            "color": _accent_from_hue(hue),
-            "textColor": _section_text_from_hue(hue),
-            "badgeBg": _badge_bg_from_hue(hue),
+            "color": accent_from_hue(hue),
+            "textColor": section_text_from_hue(hue),
+            "badgeBg": badge_bg_from_hue(hue),
             "collapsed": sec.get("collapsed", False),
             "itemCount": total_count,
             "children": children,
@@ -812,11 +812,11 @@ class PlaylistEditModel(QAbstractListModel):
             "depth":         0,
             "card_top":      False,   # computed later
             "card_bottom":   False,
-            "card_bg":       _card_bg_from_hue(hue),
-            "card_border":   _card_border_from_hue(hue),
+            "card_bg":       card_bg_from_hue(hue),
+            "card_border":   card_border_from_hue(hue),
             "gap_above":     0,
             "show_accent":   True,
-            "accent_color":  _accent_from_hue(hue),
+            "accent_color":  accent_from_hue(hue),
             "collapsed":     sec.get("collapsed", False),
             "item_count":    count,
             "thumb_source":  "",
@@ -828,8 +828,8 @@ class PlaylistEditModel(QAbstractListModel):
             "duration_text": "",
             "section_id":    sec["id"],
             "parent_id":     sec.get("parent_id", ""),
-            "section_text":  _section_text_from_hue(hue),
-            "badge_bg":      _badge_bg_from_hue(hue),
+            "section_text":  section_text_from_hue(hue),
+            "badge_bg":      badge_bg_from_hue(hue),
             "url":           "",
             "sub_card_top":  False,
             "sub_card_bottom": False,
@@ -850,11 +850,11 @@ class PlaylistEditModel(QAbstractListModel):
             "depth":         1,
             "card_top":      False,
             "card_bottom":   False,
-            "card_bg":       _card_bg_from_hue(parent_hue),
-            "card_border":   _card_border_from_hue(parent_hue),
+            "card_bg":       card_bg_from_hue(parent_hue),
+            "card_border":   card_border_from_hue(parent_hue),
             "gap_above":     0,
             "show_accent":   True,
-            "accent_color":  _accent_from_hue(parent_hue),
+            "accent_color":  accent_from_hue(parent_hue),
             "collapsed":     sub.get("collapsed", False),
             "item_count":    count,
             "thumb_source":  "",
@@ -914,11 +914,11 @@ class PlaylistEditModel(QAbstractListModel):
             "depth":         depth,
             "card_top":      False,
             "card_bottom":   False,
-            "card_bg":       _card_bg_from_hue(hue) if section else _UNSECTIONED_BG,
-            "card_border":   _card_border_from_hue(hue) if section else "transparent",
+            "card_bg":       card_bg_from_hue(hue) if section else _UNSECTIONED_BG,
+            "card_border":   card_border_from_hue(hue) if section else "transparent",
             "gap_above":     0,
             "show_accent":   bool(section),
-            "accent_color":  _accent_from_hue(hue) if section else "",
+            "accent_color":  accent_from_hue(hue) if section else "",
             "collapsed":     False,
             "item_count":    0,
             "thumb_source":  f"image://playlistthumbs/{item['id']}/0",
@@ -1168,18 +1168,18 @@ class PlaylistEditModel(QAbstractListModel):
             entry["section_id"] = subsection_ref["id"]
             entry["_card_group"] = section_ref["id"]
             entry["show_accent"] = False
-            entry["accent_color"] = _accent_from_hue(hue)
-            entry["card_bg"] = _card_bg_from_hue(hue)
-            entry["card_border"] = _card_border_from_hue(hue)
+            entry["accent_color"] = accent_from_hue(hue)
+            entry["card_bg"] = card_bg_from_hue(hue)
+            entry["card_border"] = card_border_from_hue(hue)
             entry["depth"] = 2
         elif target_type == "section" and section_ref:
             hue = section_ref.get("color_hue", 215)
             entry["section_id"] = section_ref["id"]
             entry["_card_group"] = section_ref["id"]
             entry["show_accent"] = True
-            entry["accent_color"] = _accent_from_hue(hue)
-            entry["card_bg"] = _card_bg_from_hue(hue)
-            entry["card_border"] = _card_border_from_hue(hue)
+            entry["accent_color"] = accent_from_hue(hue)
+            entry["card_bg"] = card_bg_from_hue(hue)
+            entry["card_border"] = card_border_from_hue(hue)
             entry["depth"] = 1
         else:
             entry["section_id"] = ""

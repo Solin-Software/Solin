@@ -7,7 +7,7 @@ from PySide6.QtCore import QCoreApplication
 
 from ..core.foundation.settings_keys import SettingsKey
 from ..styles.theme import STYLESHEET
-from ..widgets.projection import MonitorManagerPopup
+from ..widgets.projection.monitor_manager import MonitorManagerPopup
 from .ipc_controller import IpcController
 from .remote_services_controller import RemoteServicesController
 

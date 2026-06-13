@@ -24,7 +24,8 @@ from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_theme_controller import TimerThemeController
 from .controllers.wifi_playlist_controller import WifiPlaylistController
 from .controllers.window_state_controller import WindowStateController
-from .core.timer import TimerEngine, TimerStore
+from .core.timer.engine import TimerEngine
+from .core.timer.store import TimerStore
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
@@ -35,7 +36,7 @@ from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
 from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
-from .core.integrations.automation.zoom import ZoomService
+from .core.integrations.automation.zoom.service import ZoomService
 from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.profiles import settings as _ps
 from .core.profiles.manager import get as _get_pm

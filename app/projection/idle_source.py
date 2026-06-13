@@ -41,7 +41,7 @@ from PySide6.QtCore import QObject, Signal, Slot, QUrl
 from PySide6.QtGui import QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 
-from .window import _media_type_for
+from .window import media_type_for
 
 _TARGET_FORMAT = QImage.Format.Format_ARGB32_Premultiplied
 
@@ -99,7 +99,7 @@ class IdleMediaSource(QObject):
         """Load an image (emit one frame) or start a looping muted video."""
         self._stop_player()
         self._path = path
-        self._type = _media_type_for(path)
+        self._type = media_type_for(path)
         self._image = None
 
         if self._type == "image":
