@@ -1,4 +1,5 @@
 from solin.controllers.lazy_page_controller import LazyPageController
+from solin.core.foundation.runtime_paths import ProfilePaths
 
 
 class _WidgetStub:
@@ -31,6 +32,11 @@ class _WindowStub:
         self.stack = _StackStub()
         self.lang = object()
         self.notifications = object()
+        self.profile_paths = ProfilePaths.from_roots(
+            data_dir="data",
+            cache_dir="cache",
+            profile_id="main",
+        )
 
 
 class _BrowserStub:
@@ -114,8 +120,9 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     import solin.widgets.browser.widget as browser_module
 
     class _BrowserFactory:
-        def __init__(self, lang_manager, parent=None):
+        def __init__(self, lang_manager, *, profile_paths, parent=None):
             self.lang_manager = lang_manager
+            self.profile_paths = profile_paths
             self.parent = parent
 
     window = _WindowStub()
@@ -127,4 +134,5 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
 
     assert browser is window.browser_widget
     assert browser.lang_manager is window.lang
+    assert browser.profile_paths is window.profile_paths
     assert browser.parent is None

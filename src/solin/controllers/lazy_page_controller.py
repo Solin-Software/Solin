@@ -44,7 +44,10 @@ class LazyPageController:
 
         from ..widgets.browser.widget import BrowserWidget
 
-        self._window.browser_widget = BrowserWidget(self._window.lang)
+        self._window.browser_widget = BrowserWidget(
+            self._window.lang,
+            profile_paths=self._window.profile_paths,
+        )
         self._replace_stack_widget(self.BROWSER_INDEX, self._window.browser_widget)
         self._connect_browser_signals()
         return self._window.browser_widget

@@ -47,11 +47,18 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = object()
+    profile_paths = object()
 
     class _MainWindow:
-        def __init__(self, lang_manager, received_runtime_paths):
+        def __init__(
+            self,
+            lang_manager,
+            received_runtime_paths,
+            received_profile_paths,
+        ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
+            self.profile_paths = received_profile_paths
 
         def show(self):
             events.append("show")
@@ -81,10 +88,12 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         lang_manager="lang",
         file_args=file_args,
         runtime_paths=runtime_paths,
+        profile_paths=profile_paths,
     )
 
     assert window.lang_manager == "lang"
     assert window.runtime_paths is runtime_paths
+    assert window.profile_paths is profile_paths
     assert events == [
         "show",
         ("titlebar", window, "#1A231F"),
@@ -96,11 +105,18 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
 def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):
     events = []
     runtime_paths = object()
+    profile_paths = object()
 
     class _MainWindow:
-        def __init__(self, lang_manager, received_runtime_paths):
+        def __init__(
+            self,
+            lang_manager,
+            received_runtime_paths,
+            received_profile_paths,
+        ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
+            self.profile_paths = received_profile_paths
 
         def show(self):
             events.append("show")
@@ -127,6 +143,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         lang_manager="lang",
         file_args=[],
         runtime_paths=runtime_paths,
+        profile_paths=profile_paths,
     )
 
     assert events == ["show", ("titlebar", "#1A231F")]

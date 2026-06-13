@@ -31,7 +31,13 @@ from solin.bootstrap.single_instance import (
     try_forward_to_running,
 )
 
-def _launch_main_window(app, lang_manager, file_args, runtime_paths):
+def _launch_main_window(
+    app,
+    lang_manager,
+    file_args,
+    runtime_paths,
+    profile_paths,
+):
     """
     Cria e exibe o MainWindow para o perfil já ativo.
     Retorna a instância do MainWindow.
@@ -39,7 +45,7 @@ def _launch_main_window(app, lang_manager, file_args, runtime_paths):
     from solin.main_window import MainWindow
     from solin.core.ui.titlebar import apply_titlebar_color
 
-    window = MainWindow(lang_manager, runtime_paths)
+    window = MainWindow(lang_manager, runtime_paths, profile_paths)
     window.show()
 
     apply_titlebar_color(window, "#1A231F")
@@ -154,6 +160,7 @@ def main():
                 lang_manager,
                 file_args,
                 container.runtime_paths,
+                _pm.paths_for(),
             )
             _main_window_ref[0] = window
             wire_profile_switch(app, _main_window_ref)
@@ -177,6 +184,7 @@ def main():
             lang_manager,
             file_args,
             container.runtime_paths,
+            _pm.paths_for(),
         )
         _main_window_ref[0] = window
         wire_profile_switch(app, _main_window_ref)
@@ -198,6 +206,7 @@ def main():
             lang_manager,
             file_args,
             container.runtime_paths,
+            _pm.paths_for(),
         )
         _main_window_ref[0] = window
         wire_profile_switch(app, _main_window_ref)
@@ -228,6 +237,7 @@ def main():
                 lang_manager,
                 file_args,
                 container.runtime_paths,
+                _pm.paths_for(),
             )
             _main_window_ref[0] = window
             wire_profile_switch(app, _main_window_ref)
