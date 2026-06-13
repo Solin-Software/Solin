@@ -54,6 +54,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 from solin.core.storage.migration import (
     move_dir_if_exists as _move_dir_if_exists,
     move_file_if_exists as _move_file_if_exists,
@@ -419,8 +420,7 @@ class ProfileManager(QObject):
             self._profiles = []
             return
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = read_json_file(path)
             self._profiles = [ProfileInfo.from_dict(d) for d in data.get("profiles", [])]
         except (
             OSError,
@@ -435,12 +435,8 @@ class ProfileManager(QObject):
 
     def _save_profiles(self) -> None:
         path = self._profiles_file()
-        path.parent.mkdir(parents=True, exist_ok=True)
         data = {"profiles": [p.to_dict() for p in self._profiles]}
-        tmp = path.with_suffix(".json.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        tmp.replace(path)   # atomic write
+        write_json_atomic(path, data)
 
     def _redirect_global_paths(self) -> None:
         """Aponta os globals de paths.py para o diretório do perfil ativo."""

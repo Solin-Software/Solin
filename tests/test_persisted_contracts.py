@@ -181,7 +181,7 @@ def test_profile_registry_and_directory_layout_are_stable(
             }
         ]
     }
-    assert not (tmp_path / "profiles.json.tmp").exists()
+    assert list(tmp_path.glob(".*.tmp")) == []
 
 
 def test_internal_playlist_file_and_item_schema_are_stable(

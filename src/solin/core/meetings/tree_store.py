@@ -13,6 +13,7 @@ from typing import Any
 
 from solin.core.foundation import paths as _paths
 from solin.core.profiles.manager import ProfileManager
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 from .tree_types import Node, clone_nodes, iter_nodes
 
@@ -42,8 +43,7 @@ class MeetingTreeStore:
         if not path.exists():
             return self._empty()
         try:
-            with path.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            data = read_json_file(path)
             if not isinstance(data, dict):
                 return self._empty()
             data.setdefault("version", 1)
@@ -140,12 +140,7 @@ class MeetingTreeStore:
 
     def _write(self, data: dict[str, Any]) -> None:
         path = self.path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8", newline="\n") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=True)
-            fh.write("\n")
-        os.replace(tmp, path)
+        write_json_atomic(path, data, sort_keys=True, trailing_newline=True)
 
 
 def flush_meeting_thumbs_dir(profile_id: str = "") -> None:

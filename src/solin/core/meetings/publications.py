@@ -54,6 +54,7 @@ from solin.core.jw.publication_links import (
     fetch_pub_media_json,
     select_pub_media_file,
 )
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 log = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class JwpubChecksumStore:
     def _load(self) -> dict:
         try:
             if self._path.exists():
-                data = json.loads(self._path.read_text(encoding="utf-8"))
+                data = read_json_file(self._path)
                 if isinstance(data, dict):
                     return data
                 log.warning("ChecksumStore: unexpected format in %s — resetting", self._path)
@@ -253,8 +254,7 @@ class JwpubChecksumStore:
           1. Re-read the on-disk file.
           2. Merge: disk entries first, then in-memory entries on top
              (in-memory wins on conflict — the current write is authoritative).
-          3. Write the merged dict to a .tmp sibling, then os.replace() it
-             over the real file (atomic on POSIX and Windows ≥ Vista).
+          3. Write the merged dict through the shared atomic JSON helper.
         """
         try:
             # 1. Read whatever is currently on disk (may have been written by
@@ -262,7 +262,7 @@ class JwpubChecksumStore:
             on_disk: dict[str, str] = {}
             try:
                 if self._path.exists():
-                    raw = json.loads(self._path.read_text(encoding="utf-8"))
+                    raw = read_json_file(self._path)
                     if isinstance(raw, dict):
                         on_disk = raw
             except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -274,13 +274,7 @@ class JwpubChecksumStore:
             self._data = merged
 
             # 3. Atomic write.
-            tmp = self._path.with_suffix(".tmp")
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            tmp.write_text(
-                json.dumps(merged, indent=2, sort_keys=True),
-                encoding="utf-8",
-            )
-            tmp.replace(self._path)
+            write_json_atomic(self._path, merged, sort_keys=True)
         except OSError as exc:
             log.error("ChecksumStore: could not save %s: %s", self._path, exc)
 
