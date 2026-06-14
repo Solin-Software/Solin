@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from solin.controllers.open_media_controller import OpenMediaController
+from solin.core.foundation.qt_threads import OwnedQThreadRegistry
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.media.formats import mime_to_ext
 
@@ -72,6 +73,10 @@ class _WindowStub:
         self.projected = (playlist, index, keep_expanded, playback_order)
 
 
+def _controller(window):
+    return OpenMediaController(window, _PROFILE_PATHS, OwnedQThreadRegistry())
+
+
 def test_mime_to_ext_maps_known_and_safe_fallbacks():
     assert mime_to_ext("image/jpeg") == ".jpg"
     assert mime_to_ext("video/quicktime") == ".mov"
@@ -96,7 +101,7 @@ def test_open_media_files_projects_single_local_media_and_expands(
     media_type,
 ):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
     media_path = str(tmp_path / filename)
     timers = []
     monkeypatch.setattr(
@@ -121,7 +126,7 @@ def test_open_media_files_projects_single_local_media_and_expands(
 
 def test_open_media_files_sends_multiple_media_items_to_temp_playlist(tmp_path):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
     video_path = str(tmp_path / "clip.mp4")
     image_path = str(tmp_path / "slide.png")
 
@@ -137,7 +142,7 @@ def test_open_media_files_sends_multiple_media_items_to_temp_playlist(tmp_path):
 
 def test_open_media_files_sends_multiple_http_media_to_temp_playlist():
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
 
     controller.open_media_files([
         "https://example.test/media/opening.mp4?token=abc",
@@ -162,7 +167,7 @@ def test_open_media_files_sends_multiple_http_media_to_temp_playlist():
 
 def test_open_media_files_classifies_http_audio_by_url_extension(monkeypatch):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
     monkeypatch.setattr(
         "solin.controllers.open_media_controller.QTimer",
         SimpleNamespace(singleShot=lambda _ms, callback: callback()),
@@ -180,7 +185,7 @@ def test_open_media_files_classifies_http_audio_by_url_extension(monkeypatch):
 
 def test_open_media_files_routes_pdf_and_jwpub_to_conversion_methods(tmp_path):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
     routed = []
     controller.open_pdf_as_temp = lambda path: routed.append(("pdf", path))
     controller.open_jwpub_as_temp = lambda path: routed.append(("jwpub", path))
@@ -196,7 +201,7 @@ def test_open_media_files_routes_pdf_and_jwpub_to_conversion_methods(tmp_path):
 
 def test_open_media_files_routes_conversions_without_blocking_media_playlist(tmp_path):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
     routed = []
     controller.open_pdf_as_temp = lambda path: routed.append(("pdf", path))
     controller.open_jwpub_as_temp = lambda path: routed.append(("jwpub", path))
@@ -217,7 +222,7 @@ def test_open_media_files_routes_conversions_without_blocking_media_playlist(tmp
 
 def test_on_pdf_ready_builds_temp_playlist_and_switches_page():
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
 
     controller.on_pdf_ready(["/tmp/page-1.png", "/tmp/page-2.png"], "document")
 
@@ -232,7 +237,7 @@ def test_on_pdf_ready_builds_temp_playlist_and_switches_page():
 
 def test_expand_jwlplaylist_returns_jworg_and_local_items(monkeypatch):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
 
     def _fake_read(path, fallback_lang_code):
         assert path == "playlist.jwlplaylist"
@@ -268,7 +273,7 @@ def test_expand_jwlplaylist_returns_jworg_and_local_items(monkeypatch):
 
 def test_expand_jwlplaylist_writes_embedded_media(monkeypatch):
     window = _WindowStub()
-    controller = OpenMediaController(window, _PROFILE_PATHS)
+    controller = _controller(window)
 
     monkeypatch.setattr(
         "solin.core.playlists.reader.read_jwlplaylist",
@@ -305,7 +310,7 @@ def test_expand_jwlplaylist_writes_embedded_media(monkeypatch):
 
 
 def test_best_ext_prefers_filename_then_mime_type():
-    controller = OpenMediaController(_WindowStub(), _PROFILE_PATHS)
+    controller = _controller(_WindowStub())
 
     assert controller._best_ext({"filename": "video.mov"}, "video/mp4") == ".mov"
     assert controller._best_ext({"mime_type": "audio/ogg"}, "video/mp4") == ".ogg"

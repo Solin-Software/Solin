@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from ..core.foundation.runtime_paths import ProfilePaths
+from ..core.foundation.qt_threads import OwnedQThreadRegistry
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -19,9 +20,15 @@ from ..core.playlists.items import create_playlist_item
 class PlaylistImportController:
     """Handles adding projected, downloaded, and imported media to playlists."""
 
-    def __init__(self, window, profile_paths: ProfilePaths) -> None:
+    def __init__(
+        self,
+        window,
+        profile_paths: ProfilePaths,
+        thread_registry: OwnedQThreadRegistry,
+    ) -> None:
         self._window = window
         self._profile_paths = profile_paths
+        self._thread_registry = thread_registry
 
     def add_current_to_playlist(self, url: str, title: str, meta: object) -> None:
         if not url:
@@ -241,9 +248,7 @@ class PlaylistImportController:
             runtime_paths.pdf_pages_dir,
             parent=self._window,
         )
-        if not hasattr(self._window, "_browser_pdf_threads"):
-            self._window._browser_pdf_threads = []
-        self._window._browser_pdf_threads.append(thread)
+        self._thread_registry.track(thread)
 
         thread.pages_ready.connect(
             lambda pages_ready, stem: self.add_items_to_playlist_target(
@@ -260,10 +265,6 @@ class PlaylistImportController:
                 ),
                 title=self._window.tr("Error opening PDF"),
             )
-        )
-        thread.finished.connect(
-            lambda thread_ref=thread: self._window._browser_pdf_threads.remove(thread_ref)
-            if thread_ref in self._window._browser_pdf_threads else None
         )
         thread.start()
 
@@ -285,13 +286,7 @@ class PlaylistImportController:
             dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self._window,
         )
-        if not hasattr(self._window, "_browser_jwpub_threads"):
-            self._window._browser_jwpub_threads = []
-        self._window._browser_jwpub_threads.append(thread)
-        thread.finished.connect(
-            lambda thread_ref=thread: self._window._browser_jwpub_threads.remove(thread_ref)
-            if thread_ref in self._window._browser_jwpub_threads else None
-        )
+        self._thread_registry.track(thread)
 
         @thread.items_ready.connect
         def _on_ready(items: list, file_stem: str):

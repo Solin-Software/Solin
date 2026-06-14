@@ -2,36 +2,52 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
-from ..core.foundation.qt_threads import stop_owned_qthread
-
-if TYPE_CHECKING:
-    from solin.main_window import MainWindow
+from ..core.foundation.qt_threads import OwnedQThreadRegistry
 
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class ShutdownServices:
+    """Long-lived services stopped by the main-window shutdown boundary."""
+
+    remote_services: Any | None
+    download_notifications: Any | None
+    notifications: Any | None
+    projection_integrations: Any
+    background_song: Any
+    media_controller: Any
+    ndi: Any
+    camera: Any
+    obs: Any
+    zoom: Any
+    ipc: Any | None
+
+
+@dataclass(frozen=True, slots=True)
+class ShutdownDependencies:
+    """Explicit state and callbacks required to close the presentation shell."""
+
+    projection_session: Any
+    timer_output: Any | None
+    services: ShutdownServices
+    widget_providers: tuple[Callable[[], Any | None], ...]
+    conversion_threads: OwnedQThreadRegistry
+    jwl_temp_files: set[str]
+    playlist_storage_paths: Any
+    save_window_state: Callable[[], None]
+    cleanup_lazy_pages: Callable[[], None] | None
+
+
 class ShutdownController:
-    """Coordinates MainWindow shutdown without owning the app subsystems."""
+    """Coordinates application shutdown from explicitly owned resources."""
 
-    _CLEANUP_WIDGET_ATTRS = (
-        "meetings_widget",
-        "cache_manager_widget",
-        "wifi_receive_widget",
-        "playlist_widget",
-        "timer_widget",
-    )
-    _CONVERSION_THREAD_ATTRS = (
-        "_pdf_argv_threads",
-        "_jwpub_argv_threads",
-        "_lo_argv_threads",
-        "_browser_pdf_threads",
-        "_browser_jwpub_threads",
-    )
-
-    def __init__(self, window: MainWindow) -> None:
-        self._window = window
+    def __init__(self, dependencies: ShutdownDependencies) -> None:
+        self._dependencies = dependencies
 
     def shutdown(self) -> None:
         self.close_projection_targets()
@@ -46,69 +62,62 @@ class ShutdownController:
         self.cleanup_lazy_pages()
 
     def close_projection_targets(self) -> None:
-        projection_session = self._window.projection_session
-        for win in projection_session.projection_windows:
-            win.close()
+        dependencies = self._dependencies
+        projection_session = dependencies.projection_session
+        for window in projection_session.projection_windows:
+            window.close()
         projection_session.projection_windows.clear()
         projection_session.close_floating_preview()
-        timer_output = getattr(self._window, "timer_output", None)
-        if timer_output is not None:
-            timer_output.close_all()
+        if dependencies.timer_output is not None:
+            dependencies.timer_output.close_all()
 
     def stop_remote_services(self) -> None:
-        remote_services = getattr(self._window, "_remote_services", None)
+        remote_services = self._dependencies.services.remote_services
         if remote_services is not None:
             remote_services.stop()
 
     def stop_notifications(self) -> None:
-        download_notifications = getattr(
-            self._window,
-            "_media_download_notifications",
-            None,
-        )
-        if download_notifications is not None:
-            download_notifications.stop()
-        notifications = getattr(self._window, "notifications", None)
-        if notifications is not None:
-            notifications.shutdown()
+        services = self._dependencies.services
+        if services.download_notifications is not None:
+            services.download_notifications.stop()
+        if services.notifications is not None:
+            services.notifications.shutdown()
 
     def cleanup_widgets(self) -> None:
-        for attr in self._CLEANUP_WIDGET_ATTRS:
-            self._cleanup_widget(getattr(self._window, attr, None))
+        for provider in self._dependencies.widget_providers:
+            self._cleanup_widget(provider())
 
     def stop_media_services(self) -> None:
-        self._window._projection_integrations.cleanup()
-        self._window._background_song_service.shutdown()
-        self._window.media_ctrl.stop()
-        self._window._ndi_service.stop(wait=True)
-        self._window._camera_service.stop()
-        self._window._obs_service.stop(wait=True)
-        self._window._zoom_service.stop(wait=True)
+        services = self._dependencies.services
+        services.projection_integrations.cleanup()
+        services.background_song.shutdown()
+        services.media_controller.stop()
+        services.ndi.stop(wait=True)
+        services.camera.stop()
+        services.obs.stop(wait=True)
+        services.zoom.stop(wait=True)
 
     def stop_conversion_threads(self) -> None:
-        for attr in self._CONVERSION_THREAD_ATTRS:
-            threads = getattr(self._window, attr, [])
-            for thread in list(threads):
-                self._stop_conversion_thread(thread, threads)
+        self._dependencies.conversion_threads.stop_all(logger=log)
 
     def close_ipc(self) -> None:
-        ipc_controller = getattr(self._window, "_ipc_controller", None)
-        if ipc_controller is not None:
-            ipc_controller.close()
+        ipc = self._dependencies.services.ipc
+        if ipc is not None:
+            ipc.close()
 
     def cleanup_jwl_temp_files(self) -> None:
-        for tmp_path in getattr(self._window, "_jwl_tmp_files", set()):
+        for tmp_path in self._dependencies.jwl_temp_files:
             self._remove_or_queue_tmp_file(tmp_path)
 
     def save_window_state(self) -> None:
-        self._window._window_state.save_size()
+        self._dependencies.save_window_state()
 
     def cleanup_lazy_pages(self) -> None:
-        lazy_pages = getattr(self._window, "_lazy_pages", None)
-        if lazy_pages is None:
+        cleanup = self._dependencies.cleanup_lazy_pages
+        if cleanup is None:
             return
         try:
-            lazy_pages.cleanup_browser()
+            cleanup()
         except Exception:  # noqa: BLE001 - application shutdown cleanup boundary
             log.warning("Failed to cleanup lazy browser page during shutdown", exc_info=True)
 
@@ -120,17 +129,6 @@ class ShutdownController:
             except Exception:  # noqa: BLE001 - application shutdown cleanup boundary
                 log.warning("Widget cleanup failed during shutdown", exc_info=True)
 
-    @staticmethod
-    def _stop_conversion_thread(thread, threads) -> None:
-        stopped = stop_owned_qthread(
-            thread,
-            wait_ms=3_000,
-            logger=log,
-            label="Conversion",
-        )
-        if stopped and thread in threads:
-            threads.remove(thread)
-
     def _remove_or_queue_tmp_file(self, tmp_path: str) -> None:
         try:
             if os.path.isfile(tmp_path):
@@ -141,8 +139,9 @@ class ShutdownController:
     def _queue_pending_deletion(self, tmp_path: str) -> None:
         from ..core.playlists.storage import PendingDeletionRepository
 
-        storage_paths = self._window.playlist_storage_paths
-        pending_repo = PendingDeletionRepository.from_paths(storage_paths)
+        pending_repo = PendingDeletionRepository.from_paths(
+            self._dependencies.playlist_storage_paths
+        )
         pending = pending_repo.load()
         if tmp_path not in pending:
             pending.append(tmp_path)

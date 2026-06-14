@@ -28,7 +28,11 @@ from .controllers.projection_integration_controller import ProjectionIntegration
 from .controllers.projection_stop_controller import ProjectionStopController
 from .controllers.projection_window_controller import ProjectionWindowController
 from .controllers.remote_services_controller import RemoteServicesController
-from .controllers.shutdown_controller import ShutdownController
+from .controllers.shutdown_controller import (
+    ShutdownController,
+    ShutdownDependencies,
+    ShutdownServices,
+)
 from .controllers.signal_connection_controller import (
     MainWindowSignalHandlers,
     MainWindowSignalSources,
@@ -73,6 +77,7 @@ from .core.integrations.automation.shortcuts import (
     AutoKeySettingsStore,
 )
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
@@ -172,12 +177,22 @@ class MainWindow(QMainWindow):
         self._jwl_tmp_files: set[str] = set()
         self._next_is_sjjm = False
         self._obs_pre_media_scene = ""
+        self._conversion_threads = OwnedQThreadRegistry()
+        self._shutdown_controller = None
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
-        self._playlist_imports = PlaylistImportController(self, profile_paths)
-        self._open_media_controller = OpenMediaController(self, profile_paths)
+        self._playlist_imports = PlaylistImportController(
+            self,
+            profile_paths,
+            self._conversion_threads,
+        )
+        self._open_media_controller = OpenMediaController(
+            self,
+            profile_paths,
+            self._conversion_threads,
+        )
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
         self._wifi_playlist_controller = WifiPlaylistController(self)
@@ -237,7 +252,6 @@ class MainWindow(QMainWindow):
             self,
             WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         )
-        self._shutdown_controller = ShutdownController(self)
         self._window_state.restore_size()
         self._window_state.apply_icon()
 
@@ -323,6 +337,37 @@ class MainWindow(QMainWindow):
         self._monitor_popup = startup_resources.monitor_popup
         self._ipc_controller = startup_resources.ipc_controller
         self._remote_services = startup_resources.remote_services
+        self._shutdown_controller = ShutdownController(
+            ShutdownDependencies(
+                projection_session=self.projection_session,
+                timer_output=self.timer_output,
+                services=ShutdownServices(
+                    remote_services=self._remote_services,
+                    download_notifications=self._media_download_notifications,
+                    notifications=self.notifications,
+                    projection_integrations=self._projection_integrations,
+                    background_song=self._background_song_service,
+                    media_controller=self.media_ctrl,
+                    ndi=self._ndi_service,
+                    camera=self._camera_service,
+                    obs=self._obs_service,
+                    zoom=self._zoom_service,
+                    ipc=self._ipc_controller,
+                ),
+                widget_providers=(
+                    lambda: self.meetings_widget,
+                    lambda: self.cache_manager_widget,
+                    lambda: self.wifi_receive_widget,
+                    lambda: self.playlist_widget,
+                    lambda: self.timer_widget,
+                ),
+                conversion_threads=self._conversion_threads,
+                jwl_temp_files=self._jwl_tmp_files,
+                playlist_storage_paths=self.playlist_storage_paths,
+                save_window_state=self._window_state.save_size,
+                cleanup_lazy_pages=self._lazy_pages.cleanup_browser,
+            )
+        )
 
         # Show the clock window on any monitor reserved for the timer once the
         # screens have settled (mirrors the media projection startup timing).
@@ -453,5 +498,6 @@ class MainWindow(QMainWindow):
             return
         self._closing = True
 
-        self._shutdown_controller.shutdown()
+        if self._shutdown_controller is not None:
+            self._shutdown_controller.shutdown()
         super().closeEvent(event)

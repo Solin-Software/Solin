@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from solin.controllers.shutdown_controller import ShutdownController
+from solin.controllers.shutdown_controller import (
+    ShutdownController,
+    ShutdownDependencies,
+    ShutdownServices,
+)
+from solin.core.foundation.qt_threads import OwnedQThreadRegistry
 
 
 class _CleanupWidget:
@@ -49,6 +54,58 @@ class _ThreadStub:
         pass
 
 
+class _ProjectionSession:
+    def __init__(self, events):
+        self.projection_windows = [
+            SimpleNamespace(close=lambda: events.append("projection"))
+        ]
+        self._events = events
+
+    def close_floating_preview(self):
+        self._events.append("floating")
+
+
+class _Recorder:
+    def __init__(self, events, name):
+        self._events = events
+        self._name = name
+
+    def __getattr__(self, method_name):
+        def _record(*_args, **_kwargs):
+            self._events.append(f"{self._name}.{method_name}")
+
+        return _record
+
+
+def _dependencies(events=None):
+    events = events if events is not None else []
+    widget = _CleanupWidget()
+    registry = OwnedQThreadRegistry()
+    return ShutdownDependencies(
+        projection_session=_ProjectionSession(events),
+        timer_output=_Recorder(events, "timer"),
+        services=ShutdownServices(
+            remote_services=_Recorder(events, "remote"),
+            download_notifications=_Recorder(events, "downloads"),
+            notifications=_Recorder(events, "notifications"),
+            projection_integrations=_Recorder(events, "projection-integrations"),
+            background_song=_Recorder(events, "background-song"),
+            media_controller=_Recorder(events, "media"),
+            ndi=_Recorder(events, "ndi"),
+            camera=_Recorder(events, "camera"),
+            obs=_Recorder(events, "obs"),
+            zoom=_Recorder(events, "zoom"),
+            ipc=_Recorder(events, "ipc"),
+        ),
+        widget_providers=(lambda: widget,),
+        conversion_threads=registry,
+        jwl_temp_files=set(),
+        playlist_storage_paths=object(),
+        save_window_state=lambda: events.append("window-state"),
+        cleanup_lazy_pages=lambda: events.append("lazy-pages"),
+    )
+
+
 def test_cleanup_widget_calls_cleanup():
     widget = _CleanupWidget()
 
@@ -65,31 +122,72 @@ def test_cleanup_widget_swallows_cleanup_errors():
     assert widget.cleaned is True
 
 
-def test_stop_conversion_thread_quits_waits_and_removes_finished_thread():
-    thread = _ThreadStub(running=True, stop_after_quit=True)
-    threads = [thread]
+def test_thread_registry_discards_finished_thread():
+    registry = OwnedQThreadRegistry()
+    thread = _ThreadStub()
 
-    ShutdownController._stop_conversion_thread(thread, threads)
+    registry.track(thread)
+    thread.finished.connected()
+
+    assert registry.active_count == 0
+
+
+def test_thread_registry_stops_and_removes_finished_thread():
+    registry = OwnedQThreadRegistry()
+    thread = _ThreadStub(running=True, stop_after_quit=True)
+    registry.track(thread)
+
+    registry.stop_all()
 
     assert thread.quit_called is True
     assert thread.wait_ms == 3000
-    assert thread not in threads
+    assert registry.active_count == 0
 
 
-def test_stop_conversion_thread_defers_delete_when_still_running():
+def test_thread_registry_defers_delete_when_thread_remains_running():
+    registry = OwnedQThreadRegistry()
     thread = _ThreadStub(running=True, stop_after_quit=False)
-    threads = [thread]
+    registry.track(thread)
 
-    ShutdownController._stop_conversion_thread(thread, threads)
+    registry.stop_all()
 
-    assert thread in threads
+    assert registry.active_count == 1
     assert thread.parent is None
     assert thread.finished.connected == thread.deleteLater
 
 
+def test_shutdown_runs_owned_cleanup_boundaries_in_order():
+    events = []
+    dependencies = _dependencies(events)
+    thread = _ThreadStub()
+    dependencies.conversion_threads.track(thread)
+
+    ShutdownController(dependencies).shutdown()
+
+    assert events == [
+        "projection",
+        "floating",
+        "timer.close_all",
+        "remote.stop",
+        "downloads.stop",
+        "notifications.shutdown",
+        "projection-integrations.cleanup",
+        "background-song.shutdown",
+        "media.stop",
+        "ndi.stop",
+        "camera.stop",
+        "obs.stop",
+        "zoom.stop",
+        "ipc.close",
+        "window-state",
+        "lazy-pages",
+    ]
+    assert dependencies.projection_session.projection_windows == []
+    assert dependencies.conversion_threads.active_count == 0
+
+
 def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
     queued = []
-
     monkeypatch.setattr(
         "solin.controllers.shutdown_controller.os.path.isfile",
         lambda path: True,
@@ -103,8 +201,14 @@ def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
         "_queue_pending_deletion",
         lambda _self, path: queued.append(path),
     )
+    controller = ShutdownController(_dependencies())
 
-    controller = ShutdownController(SimpleNamespace())
     controller._remove_or_queue_tmp_file("temp.jwlplaylist")
 
     assert queued == ["temp.jwlplaylist"]
+
+
+def test_shutdown_controller_uses_explicit_dependencies():
+    controller = ShutdownController(_dependencies())
+
+    assert not hasattr(controller, "_window")

@@ -16,6 +16,7 @@ from ..core.foundation.constants import (
     PPTX_EXTS,
 )
 from ..core.foundation.runtime_paths import ProfilePaths
+from ..core.foundation.qt_threads import OwnedQThreadRegistry
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -32,9 +33,15 @@ from ..core.playlists.items import create_playlist_item
 class OpenMediaController:
     """Handles files/URLs opened through argv, drag-to-exe, or IPC."""
 
-    def __init__(self, window, profile_paths: ProfilePaths) -> None:
+    def __init__(
+        self,
+        window,
+        profile_paths: ProfilePaths,
+        thread_registry: OwnedQThreadRegistry,
+    ) -> None:
         self._window = window
         self._profile_paths = profile_paths
+        self._thread_registry = thread_registry
 
     def open_media_files(self, paths: list) -> None:
         playlist = []
@@ -145,9 +152,7 @@ class OpenMediaController:
             runtime_paths.pdf_pages_dir,
             parent=self._window,
         )
-        if not hasattr(self._window, "_pdf_argv_threads"):
-            self._window._pdf_argv_threads = []
-        self._window._pdf_argv_threads.append(thread)
+        self._thread_registry.track(thread)
 
         thread.pages_ready.connect(self.on_pdf_ready)
         thread.conversion_failed.connect(
@@ -159,10 +164,6 @@ class OpenMediaController:
                     str(err),
                 ),
             )
-        )
-        thread.finished.connect(
-            lambda thread_ref=thread: self._window._pdf_argv_threads.remove(thread_ref)
-            if thread_ref in self._window._pdf_argv_threads else None
         )
         thread.start()
 
@@ -196,13 +197,7 @@ class OpenMediaController:
             parent=self._window,
         )
 
-        if not hasattr(self._window, "_jwpub_argv_threads"):
-            self._window._jwpub_argv_threads = []
-        self._window._jwpub_argv_threads.append(thread)
-        thread.finished.connect(
-            lambda thread_ref=thread: self._window._jwpub_argv_threads.remove(thread_ref)
-            if thread_ref in self._window._jwpub_argv_threads else None
-        )
+        self._thread_registry.track(thread)
 
         @thread.items_ready.connect
         def _on_ready(items: list, file_stem: str):
@@ -279,9 +274,7 @@ class OpenMediaController:
             pdf_pages_dir=runtime_paths.pdf_pages_dir,
             parent=self._window,
         )
-        if not hasattr(self._window, "_lo_argv_threads"):
-            self._window._lo_argv_threads = []
-        self._window._lo_argv_threads.append(thread)
+        self._thread_registry.track(thread)
 
         thread.pages_ready.connect(self.on_lo_ready)
         thread.conversion_failed.connect(
@@ -293,10 +286,6 @@ class OpenMediaController:
                     str(err),
                 ),
             )
-        )
-        thread.finished.connect(
-            lambda thread_ref=thread: self._window._lo_argv_threads.remove(thread_ref)
-            if thread_ref in self._window._lo_argv_threads else None
         )
         thread.start()
 
