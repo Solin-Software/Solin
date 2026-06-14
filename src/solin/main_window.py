@@ -8,7 +8,11 @@ from PySide6.QtCore import QObject, QTimer, Signal, QEvent
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageController
-from .controllers.live_integration_controller import LiveIntegrationController
+from .controllers.live_integration_controller import (
+    LiveIntegrationContext,
+    LiveIntegrationController,
+    LiveIntegrationHandlers,
+)
 from .controllers.ipc_controller import IpcController
 from .controllers.main_window_bootstrap_controller import (
     MainWindowBootstrapController,
@@ -55,7 +59,7 @@ from .controllers.wifi_playlist_controller import (
     WifiPlaylistHandlers,
 )
 from .controllers.window_state_controller import WindowStateController
-from .core.projection.application import ProjectionSession
+from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .core.ui.window_settings import WindowGeometrySettingsStore
@@ -181,18 +185,17 @@ class MainWindow(QMainWindow):
                 ScreenManager.secondary_screens()
             ),
         )
+        self._obs_scene_session = ObsSceneSession()
         self._monitor_popup = None
         self._ipc_controller = None
         self._remote_services = None
         self._jwl_tmp_files: set[str] = set()
         self._next_is_sjjm = False
-        self._obs_pre_media_scene = ""
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
-        self._live_integrations = LiveIntegrationController(self)
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
         self._projection_stop = ProjectionStopController(self)
@@ -332,7 +335,37 @@ class MainWindow(QMainWindow):
             ),
         )
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
-        self._projection_integrations = ProjectionIntegrationController(self)
+        self._projection_integrations = ProjectionIntegrationController(
+            self,
+            self._obs_scene_session,
+        )
+        self._live_integrations = LiveIntegrationController(
+            LiveIntegrationContext(
+                projection_session=self.projection_session,
+                obs_scene_session=self._obs_scene_session,
+                obs_settings=self._obs_settings,
+                camera_settings=self._camera_settings,
+                obs_service=self._obs_service,
+                ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
+                zoom_service=self._zoom_service,
+                notifications=self.notifications,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                quick_toolbar=lambda: getattr(self, "_quick_toolbar", None),
+                projection_windows=self.projection_session.all_windows,
+                translate=self.tr,
+            ),
+            LiveIntegrationHandlers(
+                stop_projection=self._projection_stop.stop_projection,
+                stop_browser_tab_projection=(
+                    self._navigation.stop_browser_tab_projection
+                ),
+                update_projection_status=(
+                    self._projection_integrations.update_status
+                ),
+            ),
+        )
         self._language_controller = LanguageController(self)
         self._signal_connections = SignalConnectionController(
             MainWindowSignalSources(
@@ -372,6 +405,7 @@ class MainWindow(QMainWindow):
         self._bootstrap_controller = MainWindowBootstrapController(
             MainWindowStartupDependencies(
                 projection_session=self.projection_session,
+                obs_scene_session=self._obs_scene_session,
                 projection_targets=self._projection_targets,
                 obs_settings=self._obs_settings,
                 obs_service=self._obs_service,

@@ -18,9 +18,10 @@ log = logging.getLogger(__name__)
 class ProjectionIntegrationController:
     """Synchronizes projection state with OBS, Zoom, and auto-key edges."""
 
-    def __init__(self, window) -> None:
+    def __init__(self, window, obs_scene_session) -> None:
         self._window = window
         self._session = window.projection_session
+        self._obs_scene_session = obs_scene_session
         self._auto_share_active = False
         self._auto_share_generation = 0
         self._auto_share_stop = threading.Event()
@@ -86,17 +87,17 @@ class ProjectionIntegrationController:
             if _MEMORIZE_PRE_MEDIA_SCENE:
                 current = window._obs_service.current_scene or ""
                 if media_scene and current and current != media_scene:
-                    window._obs_pre_media_scene = current
+                    self._obs_scene_session.remember(current)
             scene = media_scene
         else:
             current = window._obs_service.current_scene or ""
             if media_scene and current and current != media_scene:
                 return
             if _MEMORIZE_PRE_MEDIA_SCENE:
-                scene = window._obs_pre_media_scene or default_scene
+                scene = self._obs_scene_session.pre_media_scene or default_scene
             else:
                 scene = default_scene
-            window._obs_pre_media_scene = ""
+            self._obs_scene_session.clear()
 
         if scene and not scene.startswith("—"):
             window._obs_service.request_scene_change(scene)

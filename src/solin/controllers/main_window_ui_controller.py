@@ -378,22 +378,26 @@ class MainWindowUiController:
             window._projection_targets.on_monitor_manager_requested
         )
         window._quick_toolbar.obs_scene_change.connect(
-            window._live_integrations.on_quick_obs_scene_change
+            lambda scene_name: window._live_integrations.on_quick_obs_scene_change(
+                scene_name
+            )
         )
         window._quick_toolbar.obs_return_scene_change.connect(
-            window._live_integrations.on_quick_obs_return_scene_change
+            lambda scene_name: (
+                window._live_integrations.on_quick_obs_return_scene_change(scene_name)
+            )
         )
         window._quick_toolbar.obs_stream_requested.connect(
-            window._live_integrations.project_obs_ndi_stream
+            lambda: window._live_integrations.project_obs_ndi_stream()
         )
         window._quick_toolbar.obs_camera_stream_requested.connect(
-            window._live_integrations.project_camera_stream
+            lambda: window._live_integrations.project_camera_stream()
         )
         window._quick_toolbar.camera_stream_requested.connect(
-            window._live_integrations.project_camera_stream
+            lambda: window._live_integrations.project_camera_stream()
         )
         window._quick_toolbar.camera_selection_changed.connect(
-            window._live_integrations.on_camera_selection_changed
+            lambda option: window._live_integrations.on_camera_selection_changed(option)
         )
         window._quick_toolbar.set_camera_enabled(
             window.settings_widget.get_camera_enabled()

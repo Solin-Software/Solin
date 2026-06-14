@@ -2,7 +2,7 @@ from solin.controllers.main_window_bootstrap_controller import (
     MainWindowBootstrapController,
     MainWindowStartupDependencies,
 )
-from solin.core.projection.application import ProjectionSession
+from solin.core.projection.application import ObsSceneSession, ProjectionSession
 
 
 class _Signal:
@@ -109,10 +109,8 @@ class _IpcController:
 
     def start(self):
         self.started = True
-        self.obs_scene_memory_at_start = getattr(
-            self._window,
-            "_obs_pre_media_scene",
-            None,
+        self.obs_scene_memory_at_start = (
+            self._window.obs_scene_session.pre_media_scene
         )
         self._window.events.append("ipc")
 
@@ -145,9 +143,9 @@ class _Window:
         self._zoom_settings = _EnabledSettings(zoom_enabled)
         self._background_song_service = _Startable(self, "background-song")
         self.projection_session = ProjectionSession()
+        self.obs_scene_session = ObsSceneSession()
         self._jwl_tmp_files = set()
         self._next_is_sjjm = False
-        self._obs_pre_media_scene = ""
         self.stylesheets = []
 
     def setStyleSheet(self, stylesheet):
@@ -159,6 +157,7 @@ def _make_controller(window, *, ipc_active=False, platform="win32"):
     return MainWindowBootstrapController(
         MainWindowStartupDependencies(
             projection_session=window.projection_session,
+            obs_scene_session=window.obs_scene_session,
             projection_targets=window._projection_targets,
             obs_settings=window._obs_settings,
             obs_service=window._obs_service,
@@ -179,6 +178,7 @@ def _make_controller(window, *, ipc_active=False, platform="win32"):
 
 def test_finish_startup_preserves_startup_order_and_initializes_state():
     window = _Window(obs_enabled=True, zoom_enabled=True)
+    window.obs_scene_session.remember("Camera")
 
     resources = _make_controller(window).finish_startup()
 
@@ -204,7 +204,7 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
     assert window.projection_session.tab_projection_active is False
     assert window._jwl_tmp_files == set()
     assert window._next_is_sjjm is False
-    assert window._obs_pre_media_scene == ""
+    assert window.obs_scene_session.pre_media_scene == ""
     assert resources.ipc_controller.obs_scene_memory_at_start == ""
     assert resources.monitor_popup is not None
     assert resources.remote_services.started is True

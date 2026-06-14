@@ -15,6 +15,7 @@ class MainWindowStartupDependencies:
     """Services and factories required for post-UI application startup."""
 
     projection_session: Any
+    obs_scene_session: Any
     projection_targets: Any
     obs_settings: Any
     obs_service: Any
@@ -77,6 +78,7 @@ class MainWindowBootstrapController:
         session.set_idle_media_path("")
         session.floating_preview_window = None
         session.reset_state()
+        dependencies.obs_scene_session.clear()
         dependencies.projection_targets.open_projection_windows()
         session.set_tab_projection_active(False)
 

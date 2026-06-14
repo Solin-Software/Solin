@@ -23,6 +23,23 @@ def idle_projection_state() -> ProjectionState:
     return {"type": "idle"}
 
 
+class ObsSceneSession:
+    """State shared by projection flows that temporarily switch OBS scenes."""
+
+    def __init__(self) -> None:
+        self._pre_media_scene = ""
+
+    @property
+    def pre_media_scene(self) -> str:
+        return self._pre_media_scene
+
+    def remember(self, scene_name: str) -> None:
+        self._pre_media_scene = scene_name
+
+    def clear(self) -> None:
+        self._pre_media_scene = ""
+
+
 class ProjectionSession:
     """Single source of truth for projection state owned by one main window."""
 

@@ -352,6 +352,12 @@ class QuickAccessToolbar(QQuickWidget):
         self._update_separator()
         self._reposition()
 
+    def set_zoom_participants(self, count: int, names: list[str]) -> None:
+        self._zoom_panel.set_participants(count, names)
+
+    def set_zoom_sharing(self, sharing: bool) -> None:
+        self._zoom_panel.set_sharing(sharing)
+
     def set_camera_enabled(self, enabled: bool):
         self._camera_enabled = bool(enabled)
         self._bridge.set_camera_visible(self._camera_enabled)

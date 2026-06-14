@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QImage
@@ -12,134 +15,184 @@ from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PR
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class LiveIntegrationContext:
+    """Stable services and presentation ports for live integrations."""
+
+    projection_session: Any
+    obs_scene_session: Any
+    obs_settings: Any
+    camera_settings: Any
+    obs_service: Any
+    ndi_service: Any
+    camera_service: Any
+    zoom_service: Any
+    notifications: Any
+    projection_bar: Any
+    media_controller: Any
+    quick_toolbar: Callable[[], Any | None]
+    projection_windows: Callable[[], list[Any]]
+    translate: Callable[[str], str]
+    platform: str = sys.platform
+
+
+@dataclass(frozen=True, slots=True)
+class LiveIntegrationHandlers:
+    """Shell actions invoked by live integration workflows."""
+
+    stop_projection: Callable[[], None]
+    stop_browser_tab_projection: Callable[[], None]
+    update_projection_status: Callable[..., None]
+
+
 class LiveIntegrationController:
     """Owns OBS, NDI, camera, Zoom, and quick-toolbar integration callbacks."""
 
-    def __init__(self, window) -> None:
-        self._window = window
-        self._session = window.projection_session
+    def __init__(
+        self,
+        context: LiveIntegrationContext,
+        handlers: LiveIntegrationHandlers,
+    ) -> None:
+        self._context = context
+        self._handlers = handlers
+        self._session = context.projection_session
 
     @Slot(bool)
     def on_zoom_settings_enabled_toggled(self, enabled: bool) -> None:
-        window = self._window
-        if sys.platform != "win32":
+        context = self._context
+        if context.platform != "win32":
             return
         if enabled:
-            window._zoom_service.start()
+            context.zoom_service.start()
         else:
-            window._zoom_service.stop()
-            window._quick_toolbar.set_zoom_connected(False)
+            context.zoom_service.stop()
+            toolbar = context.quick_toolbar()
+            if toolbar is not None:
+                toolbar.set_zoom_connected(False)
 
     @Slot(bool)
     def on_zoom_settings_parts_toggled(self, show: bool) -> None:
-        window = self._window
-        if sys.platform != "win32":
+        context = self._context
+        if context.platform != "win32":
             return
         if show:
-            window._zoom_service.start_participant_polling()
+            context.zoom_service.start_participant_polling()
         else:
-            window._zoom_service.stop_participant_polling()
+            context.zoom_service.stop_participant_polling()
             self.on_zoom_participants_updated(0, [])
 
     def on_zoom_connection_changed(self, connected: bool) -> None:
-        self._window._quick_toolbar.set_zoom_connected(connected)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_zoom_connected(connected)
 
     def on_zoom_participants_updated(self, count: int, names: list) -> None:
-        toolbar = self._window._quick_toolbar
-        if hasattr(toolbar, "_zoom_panel"):
-            toolbar._zoom_panel.set_participants(count, names)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_zoom_participants(count, names)
 
     def on_zoom_sharing_state_changed(self, sharing: bool) -> None:
-        toolbar = self._window._quick_toolbar
-        if hasattr(toolbar, "_zoom_panel"):
-            toolbar._zoom_panel.set_sharing(sharing)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_zoom_sharing(sharing)
 
     def on_zoom_share_error(self, message: str) -> None:
-        self._window.notifications.error(
+        context = self._context
+        context.notifications.error(
             message,
-            title=self._window.tr("Zoom sharing failed"),
+            title=context.translate("Zoom sharing failed"),
             dedupe_key=f"zoom-share:{message}",
         )
 
     def on_obs_state_changed(self, _state, _message: str) -> None:
         self.refresh_obs_btn_availability()
-        self._window._quick_toolbar.set_obs_connected(self._window._obs_service.is_connected)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_obs_connected(self._context.obs_service.is_connected)
 
     def on_obs_scene_changed(self, scene_name: str) -> None:
-        window = self._window
-        window._quick_toolbar.set_obs_current_scene(scene_name)
-        media_scene = window._obs_settings.media_window_scene()
+        context = self._context
+        toolbar = context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_obs_current_scene(scene_name)
+        media_scene = context.obs_settings.media_window_scene()
         if not media_scene or media_scene.startswith("—"):
             return
-        window.proj_bar.set_obs_scene_is_media(scene_name == media_scene)
+        context.projection_bar.set_obs_scene_is_media(scene_name == media_scene)
 
     def on_obs_scenes_updated(self, scenes: list) -> None:
-        self._window._quick_toolbar.set_obs_scenes(scenes)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_obs_scenes(scenes)
 
     def refresh_obs_btn_availability(self) -> None:
-        window = self._window
-        connected = window._obs_service.is_connected
-        available = connected and window._obs_settings.has_media_window_scene()
-        window.proj_bar.set_obs_btn_available(available)
+        context = self._context
+        connected = context.obs_service.is_connected
+        available = connected and context.obs_settings.has_media_window_scene()
+        context.projection_bar.set_obs_btn_available(available)
 
     def refresh_obs_stream_availability(self) -> None:
-        window = self._window
-        available = window._obs_settings.ndi_stream_configured()
-        if hasattr(window, "_quick_toolbar"):
-            window._quick_toolbar.set_obs_stream_available(available)
-            window._quick_toolbar.set_obs_stream_active(
-                self._session.state_type == "obs_stream"
-            )
-            self.refresh_obs_camera_stream_availability()
+        toolbar = self._context.quick_toolbar()
+        if toolbar is None:
+            return
+        available = self._context.obs_settings.ndi_stream_configured()
+        toolbar.set_obs_stream_available(available)
+        toolbar.set_obs_stream_active(self._session.state_type == "obs_stream")
+        self.refresh_obs_camera_stream_availability()
 
     def set_obs_stream_active(self, active: bool) -> None:
-        if hasattr(self._window, "_quick_toolbar"):
-            self._window._quick_toolbar.set_obs_stream_active(active)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_obs_stream_active(active)
 
     def selected_camera_option(self) -> CameraOption | None:
-        window = self._window
-        if hasattr(window, "_quick_toolbar"):
-            opt = window._quick_toolbar.current_camera_option()
+        context = self._context
+        toolbar = context.quick_toolbar()
+        if toolbar is not None:
+            opt = toolbar.current_camera_option()
             if opt is not None:
                 return opt
-        backend = window._camera_settings.backend()
-        name = window._camera_settings.device_name()
-        return window._camera_service.find_saved(backend, name)
+        backend = context.camera_settings.backend()
+        name = context.camera_settings.device_name()
+        return context.camera_service.find_saved(backend, name)
 
     def refresh_obs_camera_stream_availability(self) -> None:
-        window = self._window
-        if not hasattr(window, "_quick_toolbar"):
+        context = self._context
+        toolbar = context.quick_toolbar()
+        if toolbar is None:
             return
-        ndi_enabled = window._obs_settings.ndi_enabled()
-        camera_enabled = window._camera_settings.is_enabled()
+        ndi_enabled = context.obs_settings.ndi_enabled()
+        camera_enabled = context.camera_settings.is_enabled()
         if not camera_enabled or ndi_enabled:
-            window._quick_toolbar.set_obs_camera_stream_available(False)
+            toolbar.set_obs_camera_stream_available(False)
             return
         opt = self.selected_camera_option()
-        window._quick_toolbar.set_obs_camera_stream_available(bool(opt and opt.is_virtual))
+        toolbar.set_obs_camera_stream_available(bool(opt and opt.is_virtual))
 
     def set_camera_stream_active(self, active: bool) -> None:
-        if hasattr(self._window, "_quick_toolbar"):
-            self._window._quick_toolbar.set_camera_stream_active(active)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_camera_stream_active(active)
 
     def on_camera_settings_enabled_toggled(self, enabled: bool) -> None:
-        window = self._window
-        window._quick_toolbar.set_camera_enabled(enabled)
+        toolbar = self._context.quick_toolbar()
+        if toolbar is not None:
+            toolbar.set_camera_enabled(enabled)
         self.refresh_obs_camera_stream_availability()
         if not enabled and self._session.state_type == "camera_stream":
-            window._stop_projection()
+            self._handlers.stop_projection()
 
     def on_camera_selection_changed(self, _option) -> None:
         self.refresh_obs_camera_stream_availability()
 
     def on_quick_obs_scene_change(self, scene_name: str) -> None:
-        self._window._obs_service.request_scene_change(scene_name)
+        self._context.obs_service.request_scene_change(scene_name)
 
     def on_quick_obs_return_scene_change(self, scene_name: str) -> None:
-        window = self._window
+        context = self._context
         scene_name = (scene_name or "").strip()
-        media_scene = window._obs_settings.media_window_scene()
-        current = window._obs_service.current_scene or ""
+        media_scene = context.obs_settings.media_window_scene()
+        current = context.obs_service.current_scene or ""
         if (
             not scene_name
             or scene_name == current
@@ -148,148 +201,159 @@ class LiveIntegrationController:
             or current != media_scene
         ):
             return
-        window._obs_pre_media_scene = scene_name
+        context.obs_scene_session.remember(scene_name)
 
     def project_obs_ndi_stream(self) -> None:
-        window = self._window
+        context = self._context
         if self._session.state_type == "obs_stream":
-            window._stop_projection()
+            self._handlers.stop_projection()
             return
 
-        source = window._obs_settings.ndi_source()
-        if not window._obs_settings.ndi_stream_configured():
-            window.notifications.warning(window.tr("OBS stream is not configured."))
+        source = context.obs_settings.ndi_source()
+        if not context.obs_settings.ndi_stream_configured():
+            context.notifications.warning(
+                context.translate("OBS stream is not configured.")
+            )
             self.refresh_obs_stream_availability()
             return
 
         self._session.set_tab_projection_active(False)
         try:
-            window._navigation.stop_browser_tab_projection()
+            self._handlers.stop_browser_tab_projection()
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before OBS stream", exc_info=True)
-        window.media_ctrl.stop()
-        window._camera_service.stop()
-        window.proj_bar.set_playlist([])
-        for win in window._all_windows():
+        context.media_controller.stop()
+        context.camera_service.stop()
+        context.projection_bar.set_playlist([])
+        for win in context.projection_windows():
             win.clear()
-        title = window.tr("OBS Program Stream")
-        window.proj_bar.activate_live_stream(title, keep_expanded=window.proj_bar.is_expanded())
+        title = context.translate("OBS Program Stream")
+        context.projection_bar.activate_live_stream(
+            title,
+            keep_expanded=context.projection_bar.is_expanded(),
+        )
         self._session.set_state({"type": "obs_stream", "title": title})
-        window._projection_integrations.update_status(
+        self._handlers.update_projection_status(
             True,
             title,
             auto_keys_media=False,
             sync_obs=False,
         )
         self.set_obs_stream_active(True)
-        window._ndi_service.start(source, max_fps=30)
+        context.ndi_service.start(source, max_fps=30)
 
     def project_camera_stream(self) -> None:
-        window = self._window
+        context = self._context
         if self._session.state_type == "camera_stream":
-            window._stop_projection()
+            self._handlers.stop_projection()
             return
 
-        if not window._camera_settings.is_enabled():
-            window.notifications.warning(window.tr("Camera is not enabled."))
+        if not context.camera_settings.is_enabled():
+            context.notifications.warning(context.translate("Camera is not enabled."))
             return
 
         option = self.selected_camera_option()
         if option is None:
-            window.notifications.warning(window.tr("No camera selected."))
+            context.notifications.warning(context.translate("No camera selected."))
             return
 
         self._session.set_tab_projection_active(False)
         try:
-            window._navigation.stop_browser_tab_projection()
+            self._handlers.stop_browser_tab_projection()
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before camera stream", exc_info=True)
-        window.media_ctrl.stop()
-        window._ndi_service.stop()
-        window._camera_service.stop()
-        window.proj_bar.set_playlist([])
-        for win in window._all_windows():
+        context.media_controller.stop()
+        context.ndi_service.stop()
+        context.camera_service.stop()
+        context.projection_bar.set_playlist([])
+        for win in context.projection_windows():
             win.clear()
-        title = window.tr("Camera")
-        window.proj_bar.activate_live_stream(title, keep_expanded=window.proj_bar.is_expanded())
+        title = context.translate("Camera")
+        context.projection_bar.activate_live_stream(
+            title,
+            keep_expanded=context.projection_bar.is_expanded(),
+        )
         self._session.set_state({"type": "camera_stream", "title": title})
-        window._projection_integrations.update_status(
+        self._handlers.update_projection_status(
             True,
             title,
             auto_keys_media=False,
             sync_obs=False,
         )
         self.set_camera_stream_active(True)
-        window._camera_service.start(option)
+        context.camera_service.start(option)
 
     @Slot(QImage)
     def on_camera_frame(self, frame: QImage) -> None:
-        window = self._window
         if self._session.state_type != "camera_stream":
             return
-        for win in window._all_windows():
+        context = self._context
+        for win in context.projection_windows():
             if hasattr(win, "show_image_from_qimage"):
                 win.show_image_from_qimage(frame, cache_pixmap=False)
-        window.proj_bar.update_tab_live_preview(frame)
+        context.projection_bar.update_tab_live_preview(frame)
 
     def on_camera_error(self, message: str) -> None:
-        window = self._window
         if self._session.state_type == "camera_stream":
-            window.notifications.error(
+            context = self._context
+            context.notifications.error(
                 message,
-                title=window.tr("Camera error"),
+                title=context.translate("Camera error"),
                 dedupe_key=f"camera:{message}",
             )
-            window._stop_projection()
+            self._handlers.stop_projection()
 
     def on_camera_stopped(self) -> None:
         self.set_camera_stream_active(False)
 
     @Slot(QImage)
     def on_obs_ndi_frame(self, frame: QImage) -> None:
-        window = self._window
         if self._session.state_type != "obs_stream":
             return
-        for win in window._all_windows():
+        context = self._context
+        for win in context.projection_windows():
             if hasattr(win, "show_image_from_qimage"):
                 win.show_image_from_qimage(frame, cache_pixmap=False)
-        window.proj_bar.update_tab_live_preview(frame)
+        context.projection_bar.update_tab_live_preview(frame)
 
     def on_obs_ndi_error(self, message: str) -> None:
-        window = self._window
         if self._session.state_type == "obs_stream":
-            window.notifications.error(
+            context = self._context
+            context.notifications.error(
                 message,
-                title=window.tr("OBS stream error"),
+                title=context.translate("OBS stream error"),
                 dedupe_key=f"obs-stream:{message}",
             )
-            window._stop_projection()
+            self._handlers.stop_projection()
 
     def on_obs_ndi_stopped(self) -> None:
-        if not self._window._ndi_service.is_running:
+        if not self._context.ndi_service.is_running:
             self.set_obs_stream_active(False)
 
     def on_obs_scene_toggle(self) -> None:
-        window = self._window
-        if not window._obs_service.is_connected:
+        context = self._context
+        if not context.obs_service.is_connected:
             return
 
-        media_scene = window._obs_settings.media_window_scene()
+        media_scene = context.obs_settings.media_window_scene()
         if not media_scene or media_scene.startswith("—"):
             return
 
-        if window.proj_bar.is_obs_scene_media():
+        if context.projection_bar.is_obs_scene_media():
             if _MEMORIZE_PRE_MEDIA_SCENE:
-                target = window._obs_pre_media_scene or window._obs_settings.default_scene()
+                target = (
+                    context.obs_scene_session.pre_media_scene
+                    or context.obs_settings.default_scene()
+                )
             else:
-                target = window._obs_settings.default_scene()
+                target = context.obs_settings.default_scene()
             if target and not target.startswith("—"):
-                window._obs_service.request_scene_change(target)
-                window.proj_bar.set_obs_scene_is_media(False)
+                context.obs_service.request_scene_change(target)
+                context.projection_bar.set_obs_scene_is_media(False)
         else:
             if _MEMORIZE_PRE_MEDIA_SCENE:
-                current = window._obs_service.current_scene or ""
+                current = context.obs_service.current_scene or ""
                 if current and current != media_scene:
-                    window._obs_pre_media_scene = current
-            window._obs_service.request_scene_change(media_scene)
-            window.proj_bar.set_obs_scene_is_media(True)
+                    context.obs_scene_session.remember(current)
+            context.obs_service.request_scene_change(media_scene)
+            context.projection_bar.set_obs_scene_is_media(True)
