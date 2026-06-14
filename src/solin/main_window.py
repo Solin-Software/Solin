@@ -18,7 +18,12 @@ from .controllers.main_window_bootstrap_controller import (
     MainWindowBootstrapController,
     MainWindowStartupDependencies,
 )
-from .controllers.main_window_ui_controller import MainWindowUiController
+from .controllers.main_window_ui_controller import (
+    MainWindowUiContext,
+    MainWindowUiController,
+    MainWindowUiHandlers,
+    MainWindowUiResources,
+)
 from .controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
 )
@@ -323,8 +328,120 @@ class MainWindow(QMainWindow):
         self._media_download_notifications.start()
 
         self._ui_controller = MainWindowUiController(
-            self,
-            active_profile,
+            MainWindowUiContext(
+                parent=self,
+                event_filter=self,
+                set_central_widget=self.setCentralWidget,
+                active_profile_name=active_profile.name,
+                translate=self.tr,
+                lang_manager=self.lang,
+                notifications=self.notifications,
+                profile_paths=self.profile_paths,
+                runtime_paths=self.runtime_paths,
+                media_cache_manager=self.media_cache_manager,
+                media_controller=self.media_ctrl,
+                screen_manager=self.screen_mgr,
+                obs_service=self._obs_service,
+                ndi_service=self._ndi_service,
+                zoom_service=self._zoom_service,
+                camera_service=self._camera_service,
+                obs_settings=self._obs_settings,
+                zoom_settings=self._zoom_settings,
+                auto_share_settings=self._auto_share_settings,
+                camera_settings=self._camera_settings,
+                auto_key_settings=self._auto_key_settings,
+                media_settings=self._media_settings,
+                meeting_schedule_settings=self._meeting_schedule_settings,
+                watched_folder_settings=self._watched_folder_settings,
+                yeartext_settings=self._yeartext_settings,
+                background_song_settings=self._background_song_settings,
+                projection_playback_settings=self._projection_playback_settings,
+                background_song_service=self._background_song_service,
+                timer_bridge=self.timer_bridge,
+                playlist_storage_paths=self.playlist_storage_paths,
+                meeting_tree_store=self.meeting_tree_store,
+                jw_catalog_cache_paths=self.jw_catalog_cache_paths,
+                jw_songs_store=self.jw_songs_store,
+                jwpub_checksum_store=self.jwpub_checksum_store,
+            ),
+            MainWindowUiHandlers(
+                project_image=lambda data: self._media_projection.project_image_bytes(
+                    data
+                ),
+                project_video=lambda url, title, playlist, playback_order: (
+                    self._media_projection.project_video(
+                        url,
+                        title,
+                        playlist,
+                        playback_order,
+                    )
+                ),
+                stop_projection=lambda: self._projection_stop.stop_projection(),
+                project_tab_frame=lambda frame: (
+                    self._media_projection.project_tab_frame(frame)
+                ),
+                add_current_to_playlist=lambda url, title, meta: (
+                    self._playlist_imports.add_current_to_playlist(url, title, meta)
+                ),
+                add_downloaded_file_to_playlist=lambda path, title, kind: (
+                    self._playlist_imports.add_browser_downloaded_file(
+                        path,
+                        title,
+                        kind,
+                    )
+                ),
+                report_download_failure=lambda title, error: (
+                    self._playlist_imports.browser_download_failed(title, error)
+                ),
+                play_cached_media=lambda path, media_type, original_url="", display_title="": (
+                    self._media_projection.on_cache_play(
+                        path,
+                        media_type,
+                        original_url,
+                        display_title,
+                    )
+                ),
+                wifi_media_received=lambda path, original_name: (
+                    self._wifi_playlist_controller.on_wifi_media_received(
+                        path,
+                        original_name,
+                    )
+                ),
+                wifi_add_single=lambda path, title, original_name: (
+                    self._wifi_playlist_controller.on_wifi_request_add_single(
+                        path,
+                        title,
+                        original_name,
+                    )
+                ),
+                wifi_add_all=lambda items: (
+                    self._wifi_playlist_controller.on_wifi_send_all_to_playlist(items)
+                ),
+                wifi_play=lambda path, title: (
+                    self._wifi_playlist_controller.on_wifi_request_play(path, title)
+                ),
+                monitor_manager_requested=(
+                    self._projection_targets.on_monitor_manager_requested
+                ),
+                quick_obs_scene_change=lambda scene_name: (
+                    self._live_integrations.on_quick_obs_scene_change(scene_name)
+                ),
+                quick_obs_return_scene_change=lambda scene_name: (
+                    self._live_integrations.on_quick_obs_return_scene_change(
+                        scene_name
+                    )
+                ),
+                project_obs_stream=lambda: (
+                    self._live_integrations.project_obs_ndi_stream()
+                ),
+                project_camera_stream=lambda: (
+                    self._live_integrations.project_camera_stream()
+                ),
+                camera_selection_changed=lambda option: (
+                    self._live_integrations.on_camera_selection_changed(option)
+                ),
+                profile_switch_requested=self._profile_switch.request_switch,
+            ),
             media_info_queue_factory=media_info_queue_factory,
             media_info_service_factory=media_info_service_factory,
         )
@@ -626,13 +743,29 @@ class MainWindow(QMainWindow):
     # ── UI Build ──────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        self._ui_controller.build_ui()
+        self._install_ui_resources(self._ui_controller.build_ui())
 
-    def _build_sidebar(self):
-        return self._ui_controller.build_sidebar()
-
-    def _build_bottom_bar(self):
-        return self._ui_controller.build_bottom_bar()
+    def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
+        self.stack = resources.stack
+        self._lazy_pages = resources.lazy_pages
+        self._navigation = resources.navigation
+        self.right_col = resources.right_col
+        self.proj_bar = resources.projection_bar
+        self.songs_widget = resources.songs_widget
+        self.settings_widget = resources.settings_widget
+        self.timer_widget = resources.timer_widget
+        self.clips_widget = resources.clips_widget
+        self.sermon_theme_widget = resources.sermon_theme_widget
+        self.playlist_widget = resources.playlist_widget
+        self.meetings_widget = resources.meetings_widget
+        self._quick_toolbar = resources.quick_toolbar
+        self._sidebar_title_lbl = resources.sidebar_title_label
+        self._sidebar_subtitle_lbl = resources.sidebar_subtitle_label
+        self._profile_avatar_btn = resources.profile_avatar_button
+        self._nav_btns = resources.nav_buttons
+        self._nav_buttons_by_name = resources.nav_buttons_by_name
+        for attr_name, button in resources.nav_buttons_by_name.items():
+            setattr(self, attr_name, button)
 
     # Signal emitted when user wants to return to profile selector.
     switch_profile_requested = Signal()

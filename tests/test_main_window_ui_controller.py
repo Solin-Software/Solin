@@ -38,7 +38,7 @@ def test_ui_controller_primes_native_hosts_before_browser_materializes():
     build_source = inspect.getsource(MainWindowUiController.build_ui)
     prime_source = inspect.getsource(MainWindowUiController._prime_native_cursor_hosts)
 
-    assert "_prime_native_cursor_hosts()" in build_source
+    assert "_prime_native_cursor_hosts(" in build_source
     assert "WA_NativeWindow" in prime_source
     assert "WA_DontCreateNativeAncestors" in prime_source
     assert "winId()" in prime_source

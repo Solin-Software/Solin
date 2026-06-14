@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import (
@@ -14,6 +16,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.meetings.tree_store import flush_meeting_thumbs_dir
+from ..core.playlists.cleanup import (
+    flush_embedded_dir,
+    flush_images_dir,
+    flush_pdf_pages,
+    flush_pending_deletions,
+    flush_pptx_pages,
+    flush_thumbs_dir,
+)
 from ..styles.icons import (
     ICON_NAV_BROWSER,
     ICON_NAV_CACHE,
@@ -29,15 +39,8 @@ from ..styles.icons import (
 from ..widgets.clips_widget import ClipsWidget
 from ..widgets.common.profile_avatar_button import ProfileAvatarButton
 from ..widgets.common.sidebar_button import SidebarButton
+from ..widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
 from ..widgets.meetings.widget import MeetingsWidget
-from ..core.playlists.cleanup import (
-    flush_embedded_dir,
-    flush_images_dir,
-    flush_pdf_pages,
-    flush_pending_deletions,
-    flush_pptx_pages,
-    flush_thumbs_dir,
-)
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar
 from ..widgets.quick_access_toolbar import QuickAccessToolbar
@@ -57,11 +60,114 @@ from .main_window_nav import (
     SWITCH_PROFILE_SOURCE,
 )
 from .navigation_controller import NavigationController
-from ..widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowUiContext:
+    parent: QWidget
+    event_filter: QObject
+    set_central_widget: Callable[[QWidget], None]
+    active_profile_name: str
+    translate: Callable[[str], str]
+    lang_manager: Any
+    notifications: Any
+    profile_paths: Any
+    runtime_paths: Any
+    media_cache_manager: Any
+    media_controller: Any
+    screen_manager: Any
+    obs_service: Any
+    ndi_service: Any
+    zoom_service: Any
+    camera_service: Any
+    obs_settings: Any
+    zoom_settings: Any
+    auto_share_settings: Any
+    camera_settings: Any
+    auto_key_settings: Any
+    media_settings: Any
+    meeting_schedule_settings: Any
+    watched_folder_settings: Any
+    yeartext_settings: Any
+    background_song_settings: Any
+    projection_playback_settings: Any
+    background_song_service: Any
+    timer_bridge: Any
+    playlist_storage_paths: Any
+    meeting_tree_store: Any
+    jw_catalog_cache_paths: Any
+    jw_songs_store: Any
+    jwpub_checksum_store: Any
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowUiHandlers:
+    project_image: Callable[..., Any]
+    project_video: Callable[..., Any]
+    stop_projection: Callable[..., Any]
+    project_tab_frame: Callable[..., Any]
+    add_current_to_playlist: Callable[..., Any]
+    add_downloaded_file_to_playlist: Callable[..., Any]
+    report_download_failure: Callable[..., Any]
+    play_cached_media: Callable[..., Any]
+    wifi_media_received: Callable[..., Any]
+    wifi_add_single: Callable[..., Any]
+    wifi_add_all: Callable[..., Any]
+    wifi_play: Callable[..., Any]
+    monitor_manager_requested: Callable[..., Any]
+    quick_obs_scene_change: Callable[..., Any]
+    quick_obs_return_scene_change: Callable[..., Any]
+    project_obs_stream: Callable[..., Any]
+    project_camera_stream: Callable[..., Any]
+    camera_selection_changed: Callable[..., Any]
+    profile_switch_requested: Callable[..., Any]
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowUiResources:
+    stack: QStackedWidget
+    lazy_pages: LazyPageController
+    navigation: NavigationController
+    right_col: QWidget
+    projection_bar: ProjectionBar
+    songs_widget: SongsWidget
+    settings_widget: SettingsWidget
+    timer_widget: TimerWidget
+    clips_widget: ClipsWidget
+    sermon_theme_widget: SermonThemeWidget
+    playlist_widget: PlaylistWidget
+    meetings_widget: MeetingsWidget
+    quick_toolbar: QuickAccessToolbar
+    sidebar_title_label: QLabel
+    sidebar_subtitle_label: QLabel
+    profile_avatar_button: ProfileAvatarButton
+    nav_buttons: list[SidebarButton]
+    nav_buttons_by_name: dict[str, SidebarButton]
+
+
+@dataclass(frozen=True, slots=True)
+class _PageResources:
+    songs_widget: SongsWidget
+    settings_widget: SettingsWidget
+    timer_widget: TimerWidget
+    clips_widget: ClipsWidget
+    sermon_theme_widget: SermonThemeWidget
+    playlist_widget: PlaylistWidget
+    meetings_widget: MeetingsWidget
+
+
+@dataclass(frozen=True, slots=True)
+class _SidebarResources:
+    frame: QFrame
+    title_label: QLabel
+    subtitle_label: QLabel
+    profile_avatar_button: ProfileAvatarButton
+    nav_buttons: list[SidebarButton]
+    nav_buttons_by_name: dict[str, SidebarButton]
 
 
 class MainWindowUiController:
-    """Builds the MainWindow widget tree and static navigation chrome."""
+    """Builds the main-window widget tree from explicit UI dependencies."""
 
     _NAV_BUTTON_ICONS = (
         ICON_NAV_SONGS,
@@ -95,14 +201,14 @@ class MainWindowUiController:
 
     def __init__(
         self,
-        window,
-        active_profile,
+        context: MainWindowUiContext,
+        handlers: MainWindowUiHandlers,
         *,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
     ) -> None:
-        self._window = window
-        self._active_profile = active_profile
+        self._context = context
+        self._handlers = handlers
         self._media_info_queue_factory = media_info_queue_factory
         self._media_info_service_factory = media_info_service_factory
 
@@ -114,119 +220,219 @@ class MainWindowUiController:
     def sidebar_layout_order(cls) -> tuple[str, ...]:
         return cls._SIDEBAR_LAYOUT_ORDER
 
-    def build_ui(self) -> None:
-        window = self._window
+    def build_ui(self) -> MainWindowUiResources:
+        context = self._context
         central = QWidget()
-        window.setCentralWidget(central)
+        context.set_central_widget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        window.stack = QStackedWidget()
-        window.stack.setObjectName("ContentArea")
-        window._lazy_pages = LazyPageController(
+        stack = QStackedWidget()
+        stack.setObjectName("ContentArea")
+        lazy_pages = self._build_lazy_pages(stack)
+
+        nav_buttons: list[SidebarButton] = []
+        projection_bar_ref: dict[str, ProjectionBar | None] = {"value": None}
+        quick_toolbar_ref: dict[str, QuickAccessToolbar | None] = {"value": None}
+        navigation = NavigationController(
+            stack,
+            lazy_pages,
+            nav_buttons=lambda: nav_buttons,
+            projection_bar=lambda: projection_bar_ref["value"],
+            quick_toolbar=lambda: quick_toolbar_ref["value"],
+        )
+
+        pages = self._build_pages(stack, lazy_pages)
+        sidebar = self._build_sidebar(navigation, nav_buttons)
+        root.addWidget(sidebar.frame)
+
+        right_col = QWidget()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_layout = QVBoxLayout(right_col)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        right_layout.addWidget(stack, stretch=1)
+
+        bottom_bar, projection_bar = self._build_bottom_bar(right_col)
+        projection_bar_ref["value"] = projection_bar
+        right_layout.addWidget(bottom_bar)
+
+        root.addWidget(right_col, stretch=1)
+
+        quick_toolbar = self._build_quick_toolbar(
+            right_col,
+            navigation,
+            pages.settings_widget,
+        )
+        quick_toolbar_ref["value"] = quick_toolbar
+        self._prime_native_cursor_hosts(right_col, stack)
+        right_col.installEventFilter(context.event_filter)
+
+        return MainWindowUiResources(
+            stack=stack,
+            lazy_pages=lazy_pages,
+            navigation=navigation,
+            right_col=right_col,
+            projection_bar=projection_bar,
+            songs_widget=pages.songs_widget,
+            settings_widget=pages.settings_widget,
+            timer_widget=pages.timer_widget,
+            clips_widget=pages.clips_widget,
+            sermon_theme_widget=pages.sermon_theme_widget,
+            playlist_widget=pages.playlist_widget,
+            meetings_widget=pages.meetings_widget,
+            quick_toolbar=quick_toolbar,
+            sidebar_title_label=sidebar.title_label,
+            sidebar_subtitle_label=sidebar.subtitle_label,
+            profile_avatar_button=sidebar.profile_avatar_button,
+            nav_buttons=nav_buttons,
+            nav_buttons_by_name=sidebar.nav_buttons_by_name,
+        )
+
+    def _build_lazy_pages(self, stack: QStackedWidget) -> LazyPageController:
+        context = self._context
+        handlers = self._handlers
+        return LazyPageController(
             LazyPageContext(
-                parent=window,
-                stack=window.stack,
-                lang_manager=window.lang,
-                notifications=window.notifications,
-                profile_paths=window.profile_paths,
-                runtime_paths=window.runtime_paths,
-                media_cache_manager=window.media_cache_manager,
+                parent=context.parent,
+                stack=stack,
+                lang_manager=context.lang_manager,
+                notifications=context.notifications,
+                profile_paths=context.profile_paths,
+                runtime_paths=context.runtime_paths,
+                media_cache_manager=context.media_cache_manager,
                 media_info_service_factory=self._media_info_service_factory,
             ),
             LazyPageHandlers(
-                project_image=lambda data: window._media_projection.project_image_bytes(
-                    data
+                project_image=handlers.project_image,
+                project_video=handlers.project_video,
+                stop_projection=handlers.stop_projection,
+                project_tab_frame=handlers.project_tab_frame,
+                add_current_to_playlist=handlers.add_current_to_playlist,
+                add_downloaded_file_to_playlist=(
+                    handlers.add_downloaded_file_to_playlist
                 ),
-                project_video=lambda url, title, playlist, playback_order: (
-                    window._media_projection.project_video(
-                        url,
-                        title,
-                        playlist,
-                        playback_order,
-                    )
-                ),
-                stop_projection=lambda: window._projection_stop.stop_projection(),
-                project_tab_frame=lambda frame: (
-                    window._media_projection.project_tab_frame(frame)
-                ),
-                add_current_to_playlist=lambda url, title, meta: (
-                    window._playlist_imports.add_current_to_playlist(
-                        url,
-                        title,
-                        meta,
-                    )
-                ),
-                add_downloaded_file_to_playlist=lambda path, title, kind: (
-                    window._playlist_imports.add_browser_downloaded_file(
-                        path,
-                        title,
-                        kind,
-                    )
-                ),
-                report_download_failure=lambda title, error: (
-                    window._playlist_imports.browser_download_failed(title, error)
-                ),
-                play_cached_media=lambda path, media_type, original_url="", display_title="": (
-                    window._media_projection.on_cache_play(
-                        path,
-                        media_type,
-                        original_url,
-                        display_title,
-                    )
-                ),
-                wifi_media_received=lambda path, original_name: (
-                    window._wifi_playlist_controller.on_wifi_media_received(
-                        path,
-                        original_name,
-                    )
-                ),
-                wifi_add_single=lambda path, title, original_name: (
-                    window._wifi_playlist_controller.on_wifi_request_add_single(
-                        path,
-                        title,
-                        original_name,
-                    )
-                ),
-                wifi_add_all=lambda items: (
-                    window._wifi_playlist_controller.on_wifi_send_all_to_playlist(
-                        items
-                    )
-                ),
-                wifi_play=lambda path, title: (
-                    window._wifi_playlist_controller.on_wifi_request_play(path, title)
-                ),
+                report_download_failure=handlers.report_download_failure,
+                play_cached_media=handlers.play_cached_media,
+                wifi_media_received=handlers.wifi_media_received,
+                wifi_add_single=handlers.wifi_add_single,
+                wifi_add_all=handlers.wifi_add_all,
+                wifi_play=handlers.wifi_play,
             ),
         )
-        window._navigation = NavigationController(
-            window.stack,
-            window._lazy_pages,
-            nav_buttons=lambda: window._nav_btns,
-            projection_bar=lambda: getattr(window, "proj_bar", None),
-            quick_toolbar=lambda: getattr(window, "_quick_toolbar", None),
+
+    def _build_pages(
+        self,
+        stack: QStackedWidget,
+        lazy_pages: LazyPageController,
+    ) -> _PageResources:
+        context = self._context
+        songs_widget = SongsWidget(
+            context.lang_manager,
+            context.media_cache_manager,
+            context.jw_songs_store,
+            context.runtime_paths.cache_dir,
+            context.media_controller,
+            parent=context.parent,
+        )
+        settings_widget = SettingsWidget(
+            context.lang_manager,
+            context.screen_manager,
+            obs_service=context.obs_service,
+            ndi_service=context.ndi_service,
+            obs_settings=context.obs_settings,
+            zoom_settings=context.zoom_settings,
+            auto_share_settings=context.auto_share_settings,
+            camera_settings=context.camera_settings,
+            auto_key_settings=context.auto_key_settings,
+            media_settings=context.media_settings,
+            meeting_schedule_settings=context.meeting_schedule_settings,
+            watched_folder_settings=context.watched_folder_settings,
+            yeartext_settings=context.yeartext_settings,
+            background_song_settings=context.background_song_settings,
+            yeartext_cache_file=(
+                context.runtime_paths.cache_dir / "yeartext_cache.json"
+            ),
+            parent=context.parent,
+        )
+        timer_widget = TimerWidget(
+            context.lang_manager,
+            bridge=context.timer_bridge,
+            parent=context.parent,
+        )
+        clips_widget = ClipsWidget(
+            context.lang_manager,
+            context.media_cache_manager,
+            context.runtime_paths.cache_dir,
+            context.media_controller,
+            parent=context.parent,
+        )
+        sermon_theme_widget = SermonThemeWidget(
+            context.lang_manager,
+            parent=context.parent,
+        )
+        watched_folder = settings_widget.get_watched_folder()
+        playlist_widget = PlaylistWidget(
+            context.lang_manager,
+            media_ctrl=context.media_controller,
+            watched_folder=watched_folder,
+            notifications=context.notifications,
+            profile_paths=context.profile_paths,
+            runtime_paths=context.runtime_paths,
+            storage_paths=context.playlist_storage_paths,
+            media_cache_manager=context.media_cache_manager,
+            jw_catalog_cache_paths=context.jw_catalog_cache_paths,
+            jw_songs_store=context.jw_songs_store,
+            thumb_cache_dir=context.runtime_paths.thumb_cache_dir,
+            media_info_queue_factory=self._media_info_queue_factory,
+            parent=context.parent,
+        )
+        meetings_widget = MeetingsWidget(
+            context.lang_manager,
+            meeting_tree_store=context.meeting_tree_store,
+            profile_paths=context.profile_paths,
+            runtime_paths=context.runtime_paths,
+            cache_manager=context.media_cache_manager,
+            jw_catalog_cache_paths=context.jw_catalog_cache_paths,
+            jw_songs_store=context.jw_songs_store,
+            jwpub_checksum_store=context.jwpub_checksum_store,
+            media_settings=context.media_settings,
+            meeting_schedule_settings=context.meeting_schedule_settings,
+            media_info_queue_factory=self._media_info_queue_factory,
+            parent=context.parent,
+        )
+        meetings_widget.set_watched_folder(watched_folder)
+
+        self._flush_orphaned_media_files()
+
+        stack.addWidget(songs_widget)
+        stack.addWidget(meetings_widget)
+        stack.addWidget(lazy_pages.placeholder())
+        stack.addWidget(clips_widget)
+        stack.addWidget(timer_widget)
+        stack.addWidget(sermon_theme_widget)
+        stack.addWidget(settings_widget)
+        stack.addWidget(playlist_widget)
+        stack.addWidget(lazy_pages.placeholder())
+        stack.addWidget(lazy_pages.placeholder())
+
+        return _PageResources(
+            songs_widget=songs_widget,
+            settings_widget=settings_widget,
+            timer_widget=timer_widget,
+            clips_widget=clips_widget,
+            sermon_theme_widget=sermon_theme_widget,
+            playlist_widget=playlist_widget,
+            meetings_widget=meetings_widget,
         )
 
-        self._build_pages()
-
-        root.addWidget(self.build_sidebar())
-
-        window.right_col = QWidget()
-        window.right_col.setContentsMargins(0, 0, 0, 0)
-        right_layout = QVBoxLayout(window.right_col)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
-        right_layout.addWidget(window.stack, stretch=1)
-        right_layout.addWidget(self.build_bottom_bar())
-
-        root.addWidget(window.right_col, stretch=1)
-
-        self._build_quick_toolbar()
-        self._prime_native_cursor_hosts()
-        window.right_col.installEventFilter(window)
-
-    def build_sidebar(self) -> QFrame:
-        window = self._window
+    def _build_sidebar(
+        self,
+        navigation: NavigationController,
+        shared_nav_buttons: list[SidebarButton],
+    ) -> _SidebarResources:
+        context = self._context
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
         sidebar.setFixedWidth(220)
@@ -235,37 +441,51 @@ class MainWindowUiController:
         layout.setContentsMargins(12, 16, 12, 16)
         layout.setSpacing(4)
 
-        window._sidebar_title_lbl = QLabel(window.tr(SIDEBAR_TITLE_SOURCE))
-        window._sidebar_title_lbl.setObjectName("SectionTitle")
-        window._sidebar_title_lbl.setStyleSheet(
+        title_label = QLabel(context.translate(SIDEBAR_TITLE_SOURCE))
+        title_label.setObjectName("SectionTitle")
+        title_label.setStyleSheet(
             "background: transparent; font-size: 14px; font-weight: 700; "
             "padding: 4px 8px 2px 8px;"
         )
-        window._sidebar_subtitle_lbl = QLabel(window.tr(SIDEBAR_SUBTITLE_SOURCE))
-        window._sidebar_subtitle_lbl.setObjectName("SectionSubtitle")
-        window._sidebar_subtitle_lbl.setStyleSheet(
+        subtitle_label = QLabel(context.translate(SIDEBAR_SUBTITLE_SOURCE))
+        subtitle_label.setObjectName("SectionSubtitle")
+        subtitle_label.setStyleSheet(
             "background: transparent; padding: 0 8px 12px 8px;"
         )
 
-        layout.addLayout(self._build_sidebar_header())
+        profile_avatar_button = self._build_sidebar_header(
+            title_label,
+            subtitle_label,
+        )
+        nav_buttons_by_name, nav_buttons = self._build_nav_buttons(navigation)
+        shared_nav_buttons.extend(nav_buttons)
+
+        layout.addLayout(
+            self._build_sidebar_header_layout(
+                title_label,
+                subtitle_label,
+                profile_avatar_button,
+            )
+        )
         layout.addWidget(self._separator())
         layout.addSpacing(4)
-
-        self._build_nav_buttons()
         for attr_name in self._SIDEBAR_LAYOUT_ORDER:
-            layout.addWidget(getattr(window, attr_name))
+            layout.addWidget(nav_buttons_by_name[attr_name])
         layout.addStretch()
-        layout.addWidget(window.nav_settings_btn)
+        layout.addWidget(nav_buttons_by_name["nav_settings_btn"])
 
-        window._nav_btns = [
-            getattr(window, attr_name)
-            for attr_name, _icon, _label, _index in self._NAV_BUTTON_SPECS
-        ]
-        window._navigation.switch_page(1)
-        return sidebar
+        navigation.switch_page(1)
+        return _SidebarResources(
+            frame=sidebar,
+            title_label=title_label,
+            subtitle_label=subtitle_label,
+            profile_avatar_button=profile_avatar_button,
+            nav_buttons=nav_buttons,
+            nav_buttons_by_name=nav_buttons_by_name,
+        )
 
-    def build_bottom_bar(self) -> QFrame:
-        window = self._window
+    def _build_bottom_bar(self, right_col: QWidget) -> tuple[QFrame, ProjectionBar]:
+        context = self._context
         bar = QFrame()
         bar.setObjectName("StatusBar")
         bar.setFixedHeight(48)
@@ -273,201 +493,119 @@ class MainWindowUiController:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        window.proj_bar = ProjectionBar(
-            window.media_ctrl,
-            playback_settings=window._projection_playback_settings,
-            profile_paths=window.profile_paths,
-            media_cache_dir=window.media_cache_manager.media_cache_dir,
+        projection_bar = ProjectionBar(
+            context.media_controller,
+            playback_settings=context.projection_playback_settings,
+            profile_paths=context.profile_paths,
+            media_cache_dir=context.media_cache_manager.media_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,
-            lang_manager=window.lang,
-            container=window.right_col,
+            lang_manager=context.lang_manager,
+            container=right_col,
         )
-        window.proj_bar.setFixedHeight(48)
-        window.proj_bar.setSizePolicy(
+        projection_bar.setFixedHeight(48)
+        projection_bar.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-        window.proj_bar.setStyleSheet(
+        projection_bar.setStyleSheet(
             "QFrame#StatusBar { border: none; background: transparent; }"
         )
-        layout.addWidget(window.proj_bar)
-        return bar
+        layout.addWidget(projection_bar)
+        return bar, projection_bar
 
-    def _build_pages(self) -> None:
-        window = self._window
-        window.songs_widget = SongsWidget(
-            window.lang,
-            window.media_cache_manager,
-            window.jw_songs_store,
-            window.runtime_paths.cache_dir,
-            window.media_ctrl,
-            parent=window,
+    def _build_quick_toolbar(
+        self,
+        right_col: QWidget,
+        navigation: NavigationController,
+        settings_widget: SettingsWidget,
+    ) -> QuickAccessToolbar:
+        context = self._context
+        handlers = self._handlers
+        toolbar = QuickAccessToolbar(
+            context.obs_service,
+            context.zoom_service,
+            context.camera_service,
+            right_col,
+            obs_settings=context.obs_settings,
+            camera_settings=context.camera_settings,
+            background_song_service=context.background_song_service,
         )
-        window.settings_widget = SettingsWidget(
-            window.lang,
-            window.screen_mgr,
-            obs_service=window._obs_service,
-            ndi_service=window._ndi_service,
-            obs_settings=window._obs_settings,
-            zoom_settings=window._zoom_settings,
-            auto_share_settings=window._auto_share_settings,
-            camera_settings=window._camera_settings,
-            auto_key_settings=window._auto_key_settings,
-            media_settings=window._media_settings,
-            meeting_schedule_settings=window._meeting_schedule_settings,
-            watched_folder_settings=window._watched_folder_settings,
-            yeartext_settings=window._yeartext_settings,
-            background_song_settings=window._background_song_settings,
-            yeartext_cache_file=(
-                window.runtime_paths.cache_dir / "yeartext_cache.json"
-            ),
-            parent=window,
-        )
-        window.timer_widget = TimerWidget(
-            window.lang,
-            bridge=window.timer_bridge,
-            parent=window,
-        )
-        window.clips_widget = ClipsWidget(
-            window.lang,
-            window.media_cache_manager,
-            window.runtime_paths.cache_dir,
-            window.media_ctrl,
-            parent=window,
-        )
-        window.sermon_theme_widget = SermonThemeWidget(window.lang, parent=window)
-        watched_folder = window.settings_widget.get_watched_folder()
-        window.playlist_widget = PlaylistWidget(
-            window.lang,
-            media_ctrl=window.media_ctrl,
-            watched_folder=watched_folder,
-            notifications=window.notifications,
-            profile_paths=window.profile_paths,
-            runtime_paths=window.runtime_paths,
-            storage_paths=window.playlist_storage_paths,
-            media_cache_manager=window.media_cache_manager,
-            jw_catalog_cache_paths=window.jw_catalog_cache_paths,
-            jw_songs_store=window.jw_songs_store,
-            thumb_cache_dir=window.runtime_paths.thumb_cache_dir,
-            media_info_queue_factory=self._media_info_queue_factory,
-            parent=window,
-        )
-        window.meetings_widget = MeetingsWidget(
-            window.lang,
-            meeting_tree_store=window.meeting_tree_store,
-            profile_paths=window.profile_paths,
-            runtime_paths=window.runtime_paths,
-            cache_manager=window.media_cache_manager,
-            jw_catalog_cache_paths=window.jw_catalog_cache_paths,
-            jw_songs_store=window.jw_songs_store,
-            jwpub_checksum_store=window.jwpub_checksum_store,
-            media_settings=window._media_settings,
-            meeting_schedule_settings=window._meeting_schedule_settings,
-            media_info_queue_factory=self._media_info_queue_factory,
-            parent=window,
-        )
-        window.meetings_widget.set_watched_folder(watched_folder)
+        toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
+        toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
+        toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
+        toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
+        toolbar.obs_camera_stream_requested.connect(handlers.project_camera_stream)
+        toolbar.camera_stream_requested.connect(handlers.project_camera_stream)
+        toolbar.camera_selection_changed.connect(handlers.camera_selection_changed)
+        toolbar.set_camera_enabled(settings_widget.get_camera_enabled())
+        toolbar.show()
+        toolbar.reposition()
+        navigation.update_quick_toolbar_browser_style()
+        return toolbar
 
-        self._flush_orphaned_media_files()
-
-        window.stack.addWidget(window.songs_widget)
-        window.stack.addWidget(window.meetings_widget)
-        window.stack.addWidget(window._lazy_pages.placeholder())
-        window.stack.addWidget(window.clips_widget)
-        window.stack.addWidget(window.timer_widget)
-        window.stack.addWidget(window.sermon_theme_widget)
-        window.stack.addWidget(window.settings_widget)
-        window.stack.addWidget(window.playlist_widget)
-        window.stack.addWidget(window._lazy_pages.placeholder())
-        window.stack.addWidget(window._lazy_pages.placeholder())
-
-    def _build_quick_toolbar(self) -> None:
-        window = self._window
-        window._quick_toolbar = QuickAccessToolbar(
-            window._obs_service,
-            window._zoom_service,
-            window._camera_service,
-            window.right_col,
-            obs_settings=window._obs_settings,
-            camera_settings=window._camera_settings,
-            background_song_service=window._background_song_service,
-        )
-        window._quick_toolbar.monitor_clicked.connect(
-            window._projection_targets.on_monitor_manager_requested
-        )
-        window._quick_toolbar.obs_scene_change.connect(
-            lambda scene_name: window._live_integrations.on_quick_obs_scene_change(
-                scene_name
-            )
-        )
-        window._quick_toolbar.obs_return_scene_change.connect(
-            lambda scene_name: (
-                window._live_integrations.on_quick_obs_return_scene_change(scene_name)
-            )
-        )
-        window._quick_toolbar.obs_stream_requested.connect(
-            lambda: window._live_integrations.project_obs_ndi_stream()
-        )
-        window._quick_toolbar.obs_camera_stream_requested.connect(
-            lambda: window._live_integrations.project_camera_stream()
-        )
-        window._quick_toolbar.camera_stream_requested.connect(
-            lambda: window._live_integrations.project_camera_stream()
-        )
-        window._quick_toolbar.camera_selection_changed.connect(
-            lambda option: window._live_integrations.on_camera_selection_changed(option)
-        )
-        window._quick_toolbar.set_camera_enabled(
-            window.settings_widget.get_camera_enabled()
-        )
-        window._quick_toolbar.show()
-        window._quick_toolbar.reposition()
-        window._navigation.update_quick_toolbar_browser_style()
-
-    def _prime_native_cursor_hosts(self) -> None:
-        window = self._window
-        for widget in (window.right_col, window.stack):
+    @staticmethod
+    def _prime_native_cursor_hosts(
+        right_col: QWidget,
+        stack: QStackedWidget,
+    ) -> None:
+        for widget in (right_col, stack):
             widget.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
             widget.setAttribute(Qt.WidgetAttribute.WA_DontCreateNativeAncestors, True)
             widget.winId()
 
-    def _build_sidebar_header(self) -> QHBoxLayout:
-        window = self._window
-        profile_name = self._active_profile.name
+    def _build_sidebar_header(
+        self,
+        _title_label: QLabel,
+        _subtitle_label: QLabel,
+    ) -> ProfileAvatarButton:
+        profile_avatar_button = ProfileAvatarButton(
+            self._context.active_profile_name,
+        )
+        profile_avatar_button.setToolTip(
+            self._context.translate(SWITCH_PROFILE_SOURCE)
+        )
+        profile_avatar_button.clicked.connect(
+            self._handlers.profile_switch_requested
+        )
+        return profile_avatar_button
 
+    @staticmethod
+    def _build_sidebar_header_layout(
+        title_label: QLabel,
+        subtitle_label: QLabel,
+        profile_avatar_button: ProfileAvatarButton,
+    ) -> QHBoxLayout:
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(0)
 
         title_col = QVBoxLayout()
         title_col.setSpacing(0)
-        title_col.addWidget(window._sidebar_title_lbl)
-        title_col.addWidget(window._sidebar_subtitle_lbl)
-
-        window._profile_avatar_btn = ProfileAvatarButton(profile_name)
-        window._profile_avatar_btn.setToolTip(window.tr(SWITCH_PROFILE_SOURCE))
-        window._profile_avatar_btn.clicked.connect(window._profile_switch.request_switch)
+        title_col.addWidget(title_label)
+        title_col.addWidget(subtitle_label)
 
         header_row.addLayout(title_col, 1)
         header_row.addWidget(
-            window._profile_avatar_btn,
+            profile_avatar_button,
             0,
             Qt.AlignmentFlag.AlignVCenter,
         )
         return header_row
 
-    def _build_nav_buttons(self) -> None:
-        window = self._window
-        window._nav_buttons_by_name = {}
+    def _build_nav_buttons(
+        self,
+        navigation: NavigationController,
+    ) -> tuple[dict[str, SidebarButton], list[SidebarButton]]:
+        nav_buttons_by_name: dict[str, SidebarButton] = {}
+        nav_buttons: list[SidebarButton] = []
         for attr_name, icon, label, page_index in self._NAV_BUTTON_SPECS:
-            button = SidebarButton(icon, window.tr(label))
+            button = SidebarButton(icon, self._context.translate(label))
             button.clicked.connect(
-                lambda _checked=False, index=page_index: window._navigation.switch_page(
-                    index
-                )
+                lambda _checked=False, index=page_index: navigation.switch_page(index)
             )
-            setattr(window, attr_name, button)
-            window._nav_buttons_by_name[attr_name] = button
+            nav_buttons_by_name[attr_name] = button
+            nav_buttons.append(button)
+        return nav_buttons_by_name, nav_buttons
 
     @staticmethod
     def _separator() -> QFrame:
@@ -479,11 +617,12 @@ class MainWindowUiController:
         return sep
 
     def _flush_orphaned_media_files(self) -> None:
-        storage_paths = self._window.playlist_storage_paths
-        runtime_paths = self._window.runtime_paths
-        meeting_tree_store = self._window.meeting_tree_store
+        context = self._context
+        storage_paths = context.playlist_storage_paths
+        runtime_paths = context.runtime_paths
+        meeting_tree_store = context.meeting_tree_store
+        profile_paths = context.profile_paths
         flush_pending_deletions(storage_paths, meeting_tree_store)
-        profile_paths = self._window.profile_paths
         flush_images_dir(storage_paths, meeting_tree_store, profile_paths)
         flush_thumbs_dir(storage_paths, runtime_paths.thumb_cache_dir)
         flush_meeting_thumbs_dir(
