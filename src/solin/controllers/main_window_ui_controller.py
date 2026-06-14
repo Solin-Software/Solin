@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import (
@@ -60,6 +60,9 @@ from .main_window_nav import (
     SWITCH_PROFILE_SOURCE,
 )
 from .navigation_controller import NavigationController
+
+if TYPE_CHECKING:
+    from ..core.media.browser_downloads import BrowserDownloadService
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,11 +213,13 @@ class MainWindowUiController:
         *,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
+        browser_download_service_factory: Callable[[], BrowserDownloadService],
     ) -> None:
         self._context = context
         self._handlers = handlers
         self._media_info_queue_factory = media_info_queue_factory
         self._media_info_service_factory = media_info_service_factory
+        self._browser_download_service_factory = browser_download_service_factory
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
@@ -306,6 +311,9 @@ class MainWindowUiController:
                 profile_paths=context.profile_paths,
                 runtime_paths=context.runtime_paths,
                 media_cache_manager=context.media_cache_manager,
+                browser_download_service_factory=(
+                    self._browser_download_service_factory
+                ),
                 media_info_service_factory=self._media_info_service_factory,
             ),
             LazyPageHandlers(

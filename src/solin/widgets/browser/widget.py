@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import binascii
 import logging
 import re
@@ -5,14 +7,13 @@ import sys
 import threading
 import time
 from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, Slot, QEvent, QTimer
 from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
-from ...core.media.cache import MediaCacheManager
 from ...core.network.http import HttpError, get_bytes
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
 from .crop_overlay import _CropOverlay
@@ -23,6 +24,9 @@ from .tab import BrowserTab
 from .ui import _BrowserUiMixin
 
 log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from ...core.media.browser_downloads import BrowserDownloadService
 
 
 class _ImageFetchCoordinator:
@@ -804,13 +808,13 @@ class BrowserWidget(
         lang_manager: LanguageManager,
         *,
         profile_paths: ProfilePaths,
-        media_cache_manager: MediaCacheManager,
+        download_service: BrowserDownloadService,
         parent=None,
         projection_fps: int | None = None,
     ):
         super().__init__(parent)
         self.lang = lang_manager
-        self._media_cache_manager = media_cache_manager
+        self._download_service = download_service
 
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root
@@ -1026,6 +1030,12 @@ class BrowserWidget(
             log.warning(
                 "Browser image fetches still running during shutdown: %s",
                 alive_fetches,
+            )
+        alive_downloads = self._download_service.shutdown()
+        if alive_downloads:
+            log.warning(
+                "Browser downloads still running during shutdown: %s",
+                alive_downloads,
             )
 
         try:

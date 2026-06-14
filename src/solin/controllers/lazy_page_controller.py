@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+    from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
     from solin.widgets.media_info_extractor import MediaInfoService
 
@@ -24,6 +25,7 @@ class LazyPageContext:
     profile_paths: ProfilePaths
     runtime_paths: RuntimePaths
     media_cache_manager: MediaCacheManager
+    browser_download_service_factory: Callable[[], BrowserDownloadService]
     media_info_service_factory: Callable[[QObject], MediaInfoService]
 
 
@@ -101,7 +103,7 @@ class LazyPageController:
         self._browser_widget = BrowserWidget(
             context.lang_manager,
             profile_paths=context.profile_paths,
-            media_cache_manager=context.media_cache_manager,
+            download_service=context.browser_download_service_factory(),
         )
         self._replace_stack_widget(self.BROWSER_INDEX, self._browser_widget)
         self._connect_browser_signals()

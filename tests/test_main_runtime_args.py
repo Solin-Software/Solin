@@ -71,6 +71,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         ),
         create_info_queue=object(),
         create_info_service=object(),
+        create_browser_download_service=object(),
     )
     font_manager = object()
     jw_catalog_cache_paths = object()
@@ -91,6 +92,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_background_media_controller,
             received_media_info_queue_factory,
             received_media_info_service_factory,
+            received_browser_download_service_factory,
             received_media_settings,
             received_font_manager,
             received_jw_catalog_cache_paths,
@@ -111,6 +113,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.background_media_controller = received_background_media_controller
             self.media_info_queue_factory = received_media_info_queue_factory
             self.media_info_service_factory = received_media_info_service_factory
+            self.browser_download_service_factory = (
+                received_browser_download_service_factory
+            )
             self.media_settings = received_media_settings
             self.font_manager = received_font_manager
             self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
@@ -173,6 +178,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.media_settings is media_settings
     assert window.media_info_queue_factory is media.create_info_queue
     assert window.media_info_service_factory is media.create_info_service
+    assert (
+        window.browser_download_service_factory
+        is media.create_browser_download_service
+    )
     assert all(controller.parent is window for controller in created_media_controllers)
     assert window.font_manager is font_manager
     assert window.jw_catalog_cache_paths is jw_catalog_cache_paths
@@ -212,6 +221,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         create_playback=lambda _settings: _MediaController(),
         create_info_queue=object(),
         create_info_service=object(),
+        create_browser_download_service=object(),
     )
     font_manager = object()
     jw_catalog_cache_paths = object()
@@ -232,6 +242,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_background_media_controller,
             received_media_info_queue_factory,
             received_media_info_service_factory,
+            received_browser_download_service_factory,
             received_media_settings,
             received_font_manager,
             received_jw_catalog_cache_paths,
@@ -252,6 +263,9 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.background_media_controller = received_background_media_controller
             self.media_info_queue_factory = received_media_info_queue_factory
             self.media_info_service_factory = received_media_info_service_factory
+            self.browser_download_service_factory = (
+                received_browser_download_service_factory
+            )
             self.media_settings = received_media_settings
             self.font_manager = received_font_manager
             self.jw_catalog_cache_paths = received_jw_catalog_cache_paths

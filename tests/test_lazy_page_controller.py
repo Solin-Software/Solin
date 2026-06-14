@@ -43,6 +43,10 @@ class _WindowStub:
         )
         self.media_info_queue_factory = lambda _parent: object()
         self.media_info_service_factory = lambda _parent: object()
+        self.browser_download_service = object()
+        self.browser_download_service_factory = (
+            lambda: self.browser_download_service
+        )
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
             cache_dir="cache",
@@ -72,6 +76,9 @@ def _controller(window):
             profile_paths=window.profile_paths,
             runtime_paths=object(),
             media_cache_manager=window.media_cache_manager,
+            browser_download_service_factory=(
+                window.browser_download_service_factory
+            ),
             media_info_service_factory=window.media_info_service_factory,
         ),
         LazyPageHandlers(
@@ -166,12 +173,12 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             lang_manager,
             *,
             profile_paths,
-            media_cache_manager,
+            download_service,
             parent=None,
         ):
             self.lang_manager = lang_manager
             self.profile_paths = profile_paths
-            self.media_cache_manager = media_cache_manager
+            self.download_service = download_service
             self.parent = parent
 
     window = _WindowStub()
@@ -184,5 +191,5 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser is controller.browser_widget
     assert browser.lang_manager is window.lang
     assert browser.profile_paths is window.profile_paths
-    assert browser.media_cache_manager is window.media_cache_manager
+    assert browser.download_service is window.browser_download_service
     assert browser.parent is None

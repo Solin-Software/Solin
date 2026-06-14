@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject
 
+from solin.core.media.browser_downloads import BrowserDownloadService
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.downloader import SongDownloader
 from solin.core.media.playback import MediaController
@@ -47,6 +48,12 @@ class MediaComposition:
             self.cache_manager,
             downloader_factory=self.create_downloader,
             parent=parent,
+        )
+
+    def create_browser_download_service(self) -> BrowserDownloadService:
+        return BrowserDownloadService(
+            self._media_cache_dir,
+            notify_cached=self.cache_manager.notify_cached_threadsafe,
         )
 
     def create_info_queue(self, parent: QObject) -> MediaInfoQueue:
