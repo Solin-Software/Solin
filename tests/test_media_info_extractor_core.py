@@ -118,13 +118,12 @@ def test_media_info_queue_ignores_extractors_from_cleared_generation(
     queue.request(0, str(tmp_path / "second.mp4"))
 
     assert first.cancelled is True
-    assert queue._active[0].url.endswith("second.mp4")
+    assert len(extractors) == 2
 
     first.info_ready.emit(0, object(), "stale")
     first.thumbnail_failed.emit(0)
     first.duration_ready.emit(0, 90_000)
 
-    assert queue._active[0].url.endswith("second.mp4")
     assert queue.get_cached(0) == (None, "")
 
     second = extractors[1]
@@ -133,3 +132,58 @@ def test_media_info_queue_ignores_extractors_from_cleared_generation(
 
     assert second.cancelled is True
     assert queue.get_cached(0) == (None, "")
+
+
+def test_media_info_queue_rejects_fast_path_callback_after_invalidation(tmp_path):
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs")
+    version = queue._scheduler.version_for(0)
+    old_pixmap = object()
+    new_pixmap = object()
+    queue._cache[0] = (old_pixmap, "old")
+
+    queue.invalidate(0)
+    queue._cache[0] = (new_pixmap, "new")
+
+    assert not queue._emit_info_if_current(version, 0, old_pixmap, "old")
+    assert queue.get_cached(0) == (new_pixmap, "new")
+
+
+def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
+    monkeypatch,
+    tmp_path,
+):
+    class _Signal:
+        def connect(self, _callback):
+            pass
+
+    class _Extractor:
+        def __init__(self, index):
+            self.index = index
+            self.info_ready = _Signal()
+            self.thumbnail_failed = _Signal()
+            self.duration_ready = _Signal()
+
+    class _NullPixmap:
+        def isNull(self):
+            return True
+
+    created: list[int] = []
+
+    def _factory(index, _url, _media_type, _parent):
+        if index == 0:
+            raise RuntimeError("factory failed")
+        created.append(index)
+        return _Extractor(index)
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
+    monkeypatch.setattr(media_info_module, "QPixmap", _NullPixmap)
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs")
+    queue._scheduler.enqueue(0, "failed.mp4", "video")
+    queue._scheduler.enqueue(1, "second.mp4", "video")
+    queue._scheduler.enqueue(2, "third.mp4", "video")
+
+    queue._pump()
+
+    assert created == [1, 2]
+    assert set(queue._scheduler.active) == {1, 2}
+    assert not queue._scheduler.pending

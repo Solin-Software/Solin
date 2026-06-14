@@ -33,7 +33,6 @@ import struct
 import threading
 import time
 import zlib
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -42,6 +41,11 @@ from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
 from ..core.foundation.exception_logging import log_ignored_exception
+from ..core.media.info_queue import (
+    MediaInfoJob,
+    MediaInfoScheduler,
+    MediaInfoVersion,
+)
 from ..core.network.http import HttpError, get as http_get, get_bytes
 
 log = logging.getLogger(__name__)
@@ -956,18 +960,6 @@ def _create_extractor(index: int, url: str, media_type: str, parent: QObject) ->
     return factory(index, url, media_type, parent)
 
 
-@dataclass(slots=True)
-class _MediaInfoJob:
-    generation: int
-    revision: int
-    index: int
-    url: str
-    media_type: str
-    extractor: QObject | None = None
-
-
-
-
 class MediaInfoQueue(QObject):
     """
     Gerencia a extração de thumbnail + título em fila, com no máximo
@@ -999,11 +991,11 @@ class MediaInfoQueue(QObject):
         super().__init__(parent)
         self._media_cache_dir = os.fspath(media_cache_dir)
         self._thumb_cache_dir = os.fspath(thumb_cache_dir)
-        self._generation = 0
-        self._index_revisions: dict[int, int] = {}
-        self._cache:   dict[int, tuple[QPixmap, str]] = {}   # index → (pixmap, title)
-        self._pending: list[_MediaInfoJob] = []
-        self._active: dict[int, _MediaInfoJob] = {}
+        self._scheduler = MediaInfoScheduler(
+            max_concurrent=self._MAX_CONCURRENT,
+        )
+        self._cache: dict[int, tuple[QPixmap, str]] = {}
+        self._extractors: dict[int, QObject] = {}
 
     # ── Disk Cache ────────────────────────────────────────────────────────────
 
@@ -1057,7 +1049,7 @@ class MediaInfoQueue(QObject):
 
     def request(self, index: int, url: str, media_type: str = "video"):
         """Solicita extração de info para o item. Idempotente."""
-        if index in self._cache or index in self._active:
+        if index in self._cache or self._scheduler.is_scheduled(index):
             return
 
         # Fast-Path: Tenta carregar do cache de disco ANTES de qualquer coisa
@@ -1065,7 +1057,7 @@ class MediaInfoQueue(QObject):
         if disk_px is not None:
             self._cache[index] = (disk_px, disk_title)
             self._emit_info_later(
-                self._generation,
+                self._scheduler.version_for(index),
                 index,
                 disk_px,
                 disk_title,
@@ -1085,7 +1077,12 @@ class MediaInfoQueue(QObject):
                 px = QPixmap(target)
                 self._cache[index] = (px if not px.isNull() else QPixmap(), "")
                 if not px.isNull():
-                    self._emit_info_later(self._generation, index, px, "")
+                    self._emit_info_later(
+                        self._scheduler.version_for(index),
+                        index,
+                        px,
+                        "",
+                    )
                 return
             if is_remote:
                 self._enqueue(index, url, media_type)
@@ -1103,7 +1100,7 @@ class MediaInfoQueue(QObject):
                     self._save_to_disk_cache(url, px, title)
                     self._cache[index] = (px, title)
                     self._emit_info_later(
-                        self._generation,
+                        self._scheduler.version_for(index),
                         index,
                         px,
                         title,
@@ -1166,30 +1163,19 @@ class MediaInfoQueue(QObject):
         return px is not None and not px.isNull()
 
     def invalidate(self, index: int):
-        self._index_revisions[index] = self._index_revisions.get(index, 0) + 1
-        self._pending = [job for job in self._pending if job.index != index]
-        active = self._active.pop(index, None)
-        if active is not None:
-            self._cancel_job(active)
+        for job in self._scheduler.invalidate(index):
+            self._cancel_job(job)
         self._cache.pop(index, None)
 
     def clear(self):
-        self._generation += 1
-        self._pending.clear()
+        active_jobs = self._scheduler.clear()
         self._cache.clear()
-        self._index_revisions.clear()
-        active_jobs = list(self._active.values())
-        self._active.clear()
         for job in active_jobs:
             self._cancel_job(job)
 
     def shutdown(self, timeout: float = 2.0) -> None:
-        self._generation += 1
-        self._pending.clear()
+        active_jobs = self._scheduler.shutdown()
         self._cache.clear()
-        self._index_revisions.clear()
-        active_jobs = list(self._active.values())
-        self._active.clear()
         deadline = time.monotonic() + max(0.0, timeout)
         for job in active_jobs:
             remaining = max(0.0, deadline - time.monotonic())
@@ -1198,19 +1184,11 @@ class MediaInfoQueue(QObject):
     # ── Interno ───────────────────────────────────────────────────────────────
 
     def _enqueue(self, index: int, url: str, media_type: str) -> None:
-        self._pending.append(
-            _MediaInfoJob(
-                generation=self._generation,
-                revision=self._index_revisions.get(index, 0),
-                index=index,
-                url=url,
-                media_type=media_type,
-            )
-        )
+        self._scheduler.enqueue(index, url, media_type)
 
     def _emit_info_later(
         self,
-        generation: int,
+        version: MediaInfoVersion,
         index: int,
         pixmap: QPixmap,
         title: str,
@@ -1219,67 +1197,73 @@ class MediaInfoQueue(QObject):
         queued_pixmap = QPixmap(pixmap)
         QTimer.singleShot(
             0,
-            lambda g=generation, i=index, px=queued_pixmap, t=title:
-                self._emit_info_if_current(g, i, px, t)
+            lambda v=version, i=index, px=queued_pixmap, t=title:
+                self._emit_info_if_current(v, i, px, t)
         )
 
     def _emit_info_if_current(
         self,
-        generation: int,
+        version: MediaInfoVersion,
         index: int,
         pixmap: QPixmap,
         title: str,
-    ) -> None:
-        if generation == self._generation and index in self._cache:
-            self.info_ready.emit(index, pixmap, title)
+    ) -> bool:
+        if (
+            version.index != index
+            or not self._scheduler.is_current(version)
+            or index not in self._cache
+        ):
+            return False
+        self.info_ready.emit(index, pixmap, title)
+        return True
 
     def _pump(self):
-        while self._pending and len(self._active) < self._MAX_CONCURRENT:
-            job = self._pending.pop(0)
-            if job.generation != self._generation:
-                continue
-            if job.index in self._cache or job.index in self._active:
-                continue
+        while jobs := self._scheduler.pump(blocked_indices=self._cache):
+            for job in jobs:
+                self._start_job(job)
+
+    def _start_job(self, job: MediaInfoJob) -> None:
+        try:
             ex = _create_extractor(
                 job.index,
                 job.url,
                 job.media_type,
                 self,
             )
-            job.extractor = ex
-            self._active[job.index] = job
-            extractor_signals = cast(Any, ex)
-            extractor_signals.info_ready.connect(
-                lambda index, pixmap, title, current=job:
-                    self._on_ready(current, index, pixmap, title)
+        except Exception:  # noqa: BLE001 - Qt factory boundary isolates one failed job
+            self._scheduler.fail(job, job.index)
+            log.exception(
+                "Could not create media info extractor for %s",
+                job.url,
             )
-            extractor_signals.thumbnail_failed.connect(
-                lambda index, current=job:
-                    self._on_failed(current, index)
-            )
-            duration_ready = getattr(ex, "duration_ready", None)
-            if duration_ready is not None:
-                duration_ready.connect(
-                    lambda index, dur_ms, current=job:
-                        self._on_duration_ext(current, index, dur_ms)
-                )
-
-    def _job_is_current(self, job: _MediaInfoJob, index: int) -> bool:
-        return (
-            job.generation == self._generation
-            and job.revision == self._index_revisions.get(index, 0)
-            and job.index == index
-            and self._active.get(index) is job
+            self._save_to_disk_cache(job.url, QPixmap(), "")
+            self._cache[job.index] = (QPixmap(), "")
+            return
+        self._extractors[job.index] = ex
+        extractor_signals = cast(Any, ex)
+        extractor_signals.info_ready.connect(
+            lambda index, pixmap, title, current=job:
+                self._on_ready(current, index, pixmap, title)
         )
+        extractor_signals.thumbnail_failed.connect(
+            lambda index, current=job:
+                self._on_failed(current, index)
+        )
+        duration_ready = getattr(ex, "duration_ready", None)
+        if duration_ready is not None:
+            duration_ready.connect(
+                lambda index, dur_ms, current=job:
+                    self._on_duration_ext(current, index, dur_ms)
+            )
 
-    @staticmethod
     def _cancel_job(
-        job: _MediaInfoJob,
+        self,
+        job: MediaInfoJob,
         *,
         wait: bool = False,
         timeout: float = 0.0,
     ) -> None:
-        extractor = job.extractor
+        extractor = self._extractors.pop(job.index, None)
         if extractor is None:
             return
         cancel = getattr(extractor, "cancel", None)
@@ -1298,32 +1282,32 @@ class MediaInfoQueue(QObject):
 
     def _on_duration_ext(
         self,
-        job: _MediaInfoJob,
+        job: MediaInfoJob,
         index: int,
         dur_ms: int,
     ):
-        if self._job_is_current(job, index) and dur_ms > 0:
+        if self._scheduler.accepts_result(job, index) and dur_ms > 0:
             self.duration_ready.emit(index, dur_ms)
 
     def _on_ready(
         self,
-        job: _MediaInfoJob,
+        job: MediaInfoJob,
         index: int,
         pixmap: QPixmap,
         title: str,
     ):
-        if not self._job_is_current(job, index):
+        if not self._scheduler.complete(job, index):
             return
-        self._active.pop(index, None)
+        self._extractors.pop(index, None)
         self._save_to_disk_cache(job.url, pixmap, title)
         self._cache[index] = (pixmap, title)
         self.info_ready.emit(index, pixmap, title)
         self._pump()
 
-    def _on_failed(self, job: _MediaInfoJob, index: int):
-        if not self._job_is_current(job, index):
+    def _on_failed(self, job: MediaInfoJob, index: int):
+        if not self._scheduler.fail(job, index):
             return
-        self._active.pop(index, None)
+        self._extractors.pop(index, None)
         self._save_to_disk_cache(job.url, QPixmap(), "")
         self._cache[index] = (QPixmap(), "")
         self._pump()
