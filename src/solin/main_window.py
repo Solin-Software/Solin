@@ -4,9 +4,7 @@ from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QMainWindow
-from PySide6.QtCore import (
-    QObject, Slot, QTimer, Signal, QEvent
-)
+from PySide6.QtCore import QObject, QTimer, Signal, QEvent
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageController
@@ -195,7 +193,11 @@ class MainWindow(QMainWindow):
         )
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
-        self._wifi_playlist_controller = WifiPlaylistController(self)
+        self._wifi_playlist_controller = WifiPlaylistController(
+            self,
+            lambda: self._lazy_pages.wifi_receive_widget,
+        )
+        self._projection_stop = ProjectionStopController(self)
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
@@ -272,7 +274,6 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(self)
-        self._projection_stop = ProjectionStopController(self)
         self._language_controller = LanguageController(self)
         self._signal_connections = SignalConnectionController(
             MainWindowSignalSources(
@@ -356,8 +357,8 @@ class MainWindow(QMainWindow):
                 ),
                 widget_providers=(
                     lambda: self.meetings_widget,
-                    lambda: self.cache_manager_widget,
-                    lambda: self.wifi_receive_widget,
+                    lambda: self._lazy_pages.cache_manager_widget,
+                    lambda: self._lazy_pages.wifi_receive_widget,
                     lambda: self.playlist_widget,
                     lambda: self.timer_widget,
                 ),
@@ -392,19 +393,6 @@ class MainWindow(QMainWindow):
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()
 
-    @Slot(str, str)
-    def _project_video(self, url: str, title: str,
-                       playlist: list | None = None,
-                       playback_order: str | None = None,
-                       from_saved_playlist: bool = False):
-        self._media_projection.project_video(
-            url,
-            title,
-            playlist,
-            playback_order,
-            from_saved_playlist=from_saved_playlist,
-        )
-
     def _project_video_core(self, url: str, title: str, keep_expanded: bool = False, is_audio: bool = False):
         self._media_projection.project_video_core(
             url,
@@ -413,36 +401,8 @@ class MainWindow(QMainWindow):
             is_audio=is_audio,
         )
 
-    @Slot(bytes)
-    def _project_image_bytes(self, data: bytes):
-        self._media_projection.project_image_bytes(data)
-
-    @Slot(object)
-    def _project_tab_frame(self, frame):
-        self._media_projection.project_tab_frame(frame)
-
     def _stop_projection(self):
         self._projection_stop.stop_projection()
-
-    def _on_cache_play(self, path: str, media_type: str, original_url: str = "", display_title: str = ""):
-        self._media_projection.on_cache_play(
-            path,
-            media_type,
-            original_url,
-            display_title,
-        )
-
-    def _on_wifi_media_received(self, path: str, orig_name: str) -> None:
-        self._wifi_playlist_controller.on_wifi_media_received(path, orig_name)
-
-    def _on_wifi_request_play(self, path: str, title: str) -> None:
-        self._wifi_playlist_controller.on_wifi_request_play(path, title)
-
-    def _on_wifi_request_add_single(self, path: str, title: str, orig_name: str) -> None:
-        self._wifi_playlist_controller.on_wifi_request_add_single(path, title, orig_name)
-
-    def _on_wifi_send_all_to_playlist(self, items: list) -> None:
-        self._wifi_playlist_controller.on_wifi_send_all_to_playlist(items)
 
     def eventFilter(self, obj, event):
         if obj is self.right_col and event.type() == QEvent.Type.Resize:

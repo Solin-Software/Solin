@@ -213,7 +213,9 @@ def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (
         "ipc_controller.py",
+        "lazy_page_controller.py",
         "main_window_bootstrap_controller.py",
+        "navigation_controller.py",
         "remote_services_controller.py",
         "shutdown_controller.py",
         "signal_connection_controller.py",

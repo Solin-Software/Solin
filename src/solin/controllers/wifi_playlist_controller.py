@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -30,8 +31,9 @@ class WifiPlaylistController:
         "meps_language",
     )
 
-    def __init__(self, window) -> None:
+    def __init__(self, window, wifi_receive_widget: Callable[[], object | None]) -> None:
         self._window = window
+        self._wifi_receive_widget = wifi_receive_widget
 
     def on_wifi_media_received(self, _path: str, _orig_name: str) -> None:
         # The Wi-Fi widget owns received-card state. Users choose follow-up
@@ -93,7 +95,9 @@ class WifiPlaylistController:
             dlg.accept()
             self._window.notifications.success(message)
             self._discard_wifi_tmp(path)
-            self._window.wifi_receive_widget.remove_received_file(path)
+            wifi_receive = self._wifi_receive_widget()
+            if wifi_receive is not None:
+                wifi_receive.remove_received_file(path)
 
         if playlists:
             self._add_playlist_picker(
@@ -162,7 +166,9 @@ class WifiPlaylistController:
         def _show_success_notification(message: str):
             dlg.accept()
             self._window.notifications.success(message)
-            self._window.wifi_receive_widget.clear_all_received()
+            wifi_receive = self._wifi_receive_widget()
+            if wifi_receive is not None:
+                wifi_receive.clear_all_received()
 
         if playlists:
             self._add_playlist_picker(
@@ -229,10 +235,13 @@ class WifiPlaylistController:
         return kwargs
 
     def _received_entry(self, path: str) -> dict:
+        wifi_receive = self._wifi_receive_widget()
+        if wifi_receive is None:
+            return {}
         return next(
             (
                 entry
-                for entry in self._window.wifi_receive_widget._received_files
+                for entry in wifi_receive._received_files
                 if entry.get("path") == path
             ),
             {},
@@ -332,7 +341,9 @@ class WifiPlaylistController:
         )
 
     def _discard_wifi_tmp(self, path: str) -> None:
-        self._window.wifi_receive_widget._wifi_tmp_files.discard(path)
+        wifi_receive = self._wifi_receive_widget()
+        if wifi_receive is not None:
+            wifi_receive._wifi_tmp_files.discard(path)
 
     def _style_dialog(self, dlg: QDialog) -> None:
         dlg.setStyleSheet(

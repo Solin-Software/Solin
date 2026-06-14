@@ -1,4 +1,8 @@
-from solin.controllers.lazy_page_controller import LazyPageController
+from solin.controllers.lazy_page_controller import (
+    LazyPageContext,
+    LazyPageController,
+    LazyPageHandlers,
+)
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.media.cache import MediaCacheManager
 
@@ -60,19 +64,42 @@ class _BrowserStub:
 
 def _controller(window):
     return LazyPageController(
-        window,
-        media_info_service_factory=window.media_info_service_factory,
+        LazyPageContext(
+            parent=window,
+            stack=window.stack,
+            lang_manager=window.lang,
+            notifications=window.notifications,
+            profile_paths=window.profile_paths,
+            runtime_paths=object(),
+            media_cache_manager=window.media_cache_manager,
+            media_info_service_factory=window.media_info_service_factory,
+        ),
+        LazyPageHandlers(
+            project_image=lambda *_args: None,
+            project_video=lambda *_args: None,
+            stop_projection=lambda: None,
+            project_tab_frame=lambda *_args: None,
+            add_current_to_playlist=lambda *_args: None,
+            add_downloaded_file_to_playlist=lambda *_args: None,
+            report_download_failure=lambda *_args: None,
+            play_cached_media=lambda *_args: None,
+            wifi_media_received=lambda *_args: None,
+            wifi_add_single=lambda *_args: None,
+            wifi_add_all=lambda *_args: None,
+            wifi_play=lambda *_args: None,
+        ),
     )
 
 
-def test_lazy_page_controller_initializes_expected_window_attrs():
+def test_lazy_page_controller_owns_lazy_widget_state():
     window = _WindowStub()
 
-    _controller(window)
+    controller = _controller(window)
 
-    assert window.browser_widget is None
-    assert window.cache_manager_widget is None
-    assert window.wifi_receive_widget is None
+    assert controller.browser_widget is None
+    assert controller.cache_manager_widget is None
+    assert controller.wifi_receive_widget is None
+    assert not hasattr(controller, "_window")
 
 
 def test_lazy_page_controller_replaces_stack_placeholder_in_place():
@@ -92,7 +119,7 @@ def test_lazy_page_controller_delegates_browser_lifecycle():
     window = _WindowStub()
     controller = _controller(window)
     browser = _BrowserStub()
-    window.browser_widget = browser
+    controller._browser_widget = browser
 
     controller.stop_browser_tab_projection()
     controller.cleanup_browser()
@@ -154,7 +181,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
 
     browser = controller.ensure_browser_widget()
 
-    assert browser is window.browser_widget
+    assert browser is controller.browser_widget
     assert browser.lang_manager is window.lang
     assert browser.profile_paths is window.profile_paths
     assert browser.media_cache_manager is window.media_cache_manager

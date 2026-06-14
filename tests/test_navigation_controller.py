@@ -2,7 +2,8 @@ from solin.controllers.navigation_controller import NavigationController
 
 
 class _LazyPagesStub:
-    def __init__(self):
+    def __init__(self, browser_widget):
+        self.browser_widget = browser_widget
         self.ensured = []
         self.stopped_browser_tab_projection = False
 
@@ -62,46 +63,50 @@ class _QuickToolbarStub:
         self.repositioned = True
 
 
-class _WindowStub:
-    def __init__(self):
-        self.page0 = object()
-        self.browser_widget = object()
-        self._lazy_pages = _LazyPagesStub()
-        self.stack = _StackStub([self.page0, self.browser_widget])
-        self._nav_btns = [_NavButtonStub(), _NavButtonStub()]
-        self.proj_bar = _ProjectionBarStub(expanded=True)
-        self._quick_toolbar = _QuickToolbarStub()
+def _fixture(*, quick_toolbar=True):
+    page = object()
+    browser = object()
+    stack = _StackStub([page, browser])
+    lazy_pages = _LazyPagesStub(browser)
+    buttons = [_NavButtonStub(), _NavButtonStub()]
+    projection_bar = _ProjectionBarStub(expanded=True)
+    toolbar = _QuickToolbarStub() if quick_toolbar else None
+    controller = NavigationController(
+        stack,
+        lazy_pages,
+        nav_buttons=lambda: buttons,
+        projection_bar=lambda: projection_bar,
+        quick_toolbar=lambda: toolbar,
+    )
+    return controller, stack, lazy_pages, buttons, projection_bar, toolbar
 
 
 def test_switch_page_updates_stack_buttons_projection_bar_and_toolbar():
-    window = _WindowStub()
-    controller = NavigationController(window)
+    controller, stack, lazy_pages, buttons, projection_bar, toolbar = _fixture()
 
     controller.switch_page(1)
 
-    assert window._lazy_pages.ensured == [1]
-    assert window.stack.current_index == 1
-    assert [btn.active for btn in window._nav_btns] == [False, True]
-    assert window.proj_bar.collapsed is True
-    assert window._quick_toolbar.browser_rect_modes == [True]
-    assert window._quick_toolbar.raised is True
-    assert window._quick_toolbar.repositioned is True
+    assert lazy_pages.ensured == [1]
+    assert stack.current_index == 1
+    assert [button.active for button in buttons] == [False, True]
+    assert projection_bar.collapsed is True
+    assert toolbar.browser_rect_modes == [True]
+    assert toolbar.raised is True
+    assert toolbar.repositioned is True
 
 
 def test_update_quick_toolbar_browser_style_handles_missing_toolbar():
-    window = _WindowStub()
-    delattr(window, "_quick_toolbar")
-    controller = NavigationController(window)
+    controller, stack, *_rest = _fixture(quick_toolbar=False)
 
     controller.update_quick_toolbar_browser_style()
 
-    assert window.stack.current_index == 0
+    assert stack.current_index == 0
 
 
 def test_stop_browser_tab_projection_delegates_to_lazy_pages():
-    window = _WindowStub()
-    controller = NavigationController(window)
+    controller, _stack, lazy_pages, *_rest = _fixture()
 
     controller.stop_browser_tab_projection()
 
-    assert window._lazy_pages.stopped_browser_tab_projection is True
+    assert lazy_pages.stopped_browser_tab_projection is True
+    assert not hasattr(controller, "_window")

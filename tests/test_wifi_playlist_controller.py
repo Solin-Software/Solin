@@ -64,7 +64,7 @@ class _WindowStub:
 
 def test_on_wifi_request_play_routes_images_audio_and_video():
     window = _WindowStub()
-    controller = WifiPlaylistController(window)
+    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
 
     controller.on_wifi_request_play("slide.png", "Slide")
     controller.on_wifi_request_play("song.mp3", "Song")
@@ -92,7 +92,8 @@ def test_on_wifi_request_play_routes_images_audio_and_video():
 
 
 def test_item_from_wifi_entry_preserves_jw_metadata_and_original_filename():
-    controller = WifiPlaylistController(_WindowStub())
+    window = _WindowStub()
+    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
 
     item = controller.item_from_wifi_entry({
         "path": "song.mp3",
@@ -120,7 +121,7 @@ def test_item_from_wifi_entry_preserves_jw_metadata_and_original_filename():
 def test_add_single_to_existing_playlist_reports_duplicate_without_losing_metadata():
     window = _WindowStub()
     window.playlist_widget.add_results = [False]
-    controller = WifiPlaylistController(window)
+    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
     messages = []
 
     controller._add_single_to_existing_playlist(
@@ -148,7 +149,7 @@ def test_create_playlist_with_all_items_discards_tmp_files_and_counts_added():
     window = _WindowStub()
     window.playlist_widget.add_results = [False, True]
     window.wifi_receive_widget._wifi_tmp_files = {"a.mp4", "b.mp4", "c.mp4"}
-    controller = WifiPlaylistController(window)
+    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
     messages = []
 
     controller._create_playlist_with_all_items(

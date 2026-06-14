@@ -45,7 +45,11 @@ from ..widgets.sermon_theme_widget import SermonThemeWidget
 from ..widgets.settings_widget import SettingsWidget
 from ..widgets.songs_widget import SongsWidget
 from ..widgets.timer_widget import TimerWidget
-from .lazy_page_controller import LazyPageController
+from .lazy_page_controller import (
+    LazyPageContext,
+    LazyPageController,
+    LazyPageHandlers,
+)
 from .main_window_nav import (
     NAV_LABELS,
     SIDEBAR_SUBTITLE_SOURCE,
@@ -121,10 +125,50 @@ class MainWindowUiController:
         window.stack = QStackedWidget()
         window.stack.setObjectName("ContentArea")
         window._lazy_pages = LazyPageController(
-            window,
-            media_info_service_factory=self._media_info_service_factory,
+            LazyPageContext(
+                parent=window,
+                stack=window.stack,
+                lang_manager=window.lang,
+                notifications=window.notifications,
+                profile_paths=window.profile_paths,
+                runtime_paths=window.runtime_paths,
+                media_cache_manager=window.media_cache_manager,
+                media_info_service_factory=self._media_info_service_factory,
+            ),
+            LazyPageHandlers(
+                project_image=window._media_projection.project_image_bytes,
+                project_video=window._media_projection.project_video,
+                stop_projection=window._projection_stop.stop_projection,
+                project_tab_frame=window._media_projection.project_tab_frame,
+                add_current_to_playlist=(
+                    window._playlist_imports.add_current_to_playlist
+                ),
+                add_downloaded_file_to_playlist=(
+                    window._playlist_imports.add_browser_downloaded_file
+                ),
+                report_download_failure=(
+                    window._playlist_imports.browser_download_failed
+                ),
+                play_cached_media=window._media_projection.on_cache_play,
+                wifi_media_received=(
+                    window._wifi_playlist_controller.on_wifi_media_received
+                ),
+                wifi_add_single=(
+                    window._wifi_playlist_controller.on_wifi_request_add_single
+                ),
+                wifi_add_all=(
+                    window._wifi_playlist_controller.on_wifi_send_all_to_playlist
+                ),
+                wifi_play=window._wifi_playlist_controller.on_wifi_request_play,
+            ),
         )
-        window._navigation = NavigationController(window)
+        window._navigation = NavigationController(
+            window.stack,
+            window._lazy_pages,
+            nav_buttons=lambda: window._nav_btns,
+            projection_bar=lambda: getattr(window, "proj_bar", None),
+            quick_toolbar=lambda: getattr(window, "_quick_toolbar", None),
+        )
 
         self._build_pages()
 
