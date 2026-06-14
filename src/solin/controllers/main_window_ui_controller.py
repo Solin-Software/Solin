@@ -89,6 +89,7 @@ class MainWindowUiContext:
     meeting_schedule_settings: Any
     watched_folder_settings: Any
     yeartext_settings: Any
+    yeartext_service_factory: Callable[[QObject], Any]
     background_song_settings: Any
     projection_playback_settings: Any
     background_song_service: Any
@@ -351,10 +352,8 @@ class MainWindowUiController:
             meeting_schedule_settings=context.meeting_schedule_settings,
             watched_folder_settings=context.watched_folder_settings,
             yeartext_settings=context.yeartext_settings,
+            yeartext_service_factory=context.yeartext_service_factory,
             background_song_settings=context.background_song_settings,
-            yeartext_cache_file=(
-                context.runtime_paths.cache_dir / "yeartext_cache.json"
-            ),
             parent=context.parent,
         )
         timer_widget = TimerWidget(

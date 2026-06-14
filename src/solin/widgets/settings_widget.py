@@ -1,11 +1,15 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import (
-    Qt, Signal, QEvent,
+    Qt, Signal, QEvent, QObject,
 )
-from pathlib import Path
 
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.screens import ScreenManager
@@ -37,6 +41,9 @@ from .settings.watched_folder_section import WatchedFolderSectionMixin
 from .settings.yearly_text_section import YearlyTextSectionMixin
 from .settings.zoom_section import ZoomSectionMixin
 import sys
+
+if TYPE_CHECKING:
+    from ..core.jw.yeartext import YeartextService
 
 
 
@@ -82,14 +89,14 @@ class SettingsWidget(
                  watched_folder_settings: WatchedFolderSettingsStore,
                  yeartext_settings: YeartextSettingsStore,
                  background_song_settings: BackgroundSongSettingsStore,
-                 yeartext_cache_file: str | Path,
+                 yeartext_service_factory: Callable[[QObject], YeartextService],
                  parent=None):
         super().__init__(parent)
         self.lang       = lang_manager
         self.screen_mgr = screen_manager
         self._obs       = obs_service
         self._ndi       = ndi_service
-        self._yeartext_cache_file = Path(yeartext_cache_file)
+        self._yeartext_service_factory = yeartext_service_factory
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
         self._auto_share_settings = auto_share_settings

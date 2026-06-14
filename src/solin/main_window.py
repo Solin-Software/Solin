@@ -91,6 +91,7 @@ from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
 from .core.jw.catalog import JWMediaCatalogCachePaths
 from .core.jw.songs import JWSongsStore
+from .core.jw.yeartext import YeartextService
 from .core.jw.yeartext_settings import YeartextSettingsStore
 from .core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from .core.media.playback import MediaController
@@ -356,6 +357,10 @@ class MainWindow(QMainWindow):
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
                 yeartext_settings=self._yeartext_settings,
+                yeartext_service_factory=lambda parent: YeartextService(
+                    cache_file=self.runtime_paths.cache_dir / "yeartext_cache.json",
+                    parent=parent,
+                ),
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,
                 background_song_service=self._background_song_service,
