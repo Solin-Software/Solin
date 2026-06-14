@@ -585,6 +585,27 @@ def test_widgets_do_not_construct_jw_catalog_service():
     )
 
 
+def test_update_dialog_has_no_network_persistence_or_process_adapters():
+    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "update_dialog.py"
+    forbidden_modules = {
+        "subprocess",
+        "PySide6.QtNetwork",
+        "solin.core.foundation.settings_store",
+    }
+    violations: list[str] = []
+
+    for node in _imports(path):
+        modules = (
+            [alias.name for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [node.module or ""]
+        )
+        if any(module in forbidden_modules for module in modules):
+            violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

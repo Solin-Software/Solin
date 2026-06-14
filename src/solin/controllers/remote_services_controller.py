@@ -7,6 +7,11 @@ from PySide6.QtWidgets import QWidget
 
 from ..core.foundation.constants import NOTIFICATION_CHECK_DELAY_MS, UPDATE_CHECK_DELAY_MS
 from ..core.remote.notifications import NotificationService
+from ..core.remote.patch_installer import (
+    PatchDownloadWorker,
+    launch_patch_installer,
+    save_pending_patch_cleanup,
+)
 from ..core.remote.updates import UpdateService
 from ..widgets.notification_dialog import NotificationQueue
 from ..widgets.update_dialog import UpdateDialog
@@ -56,7 +61,13 @@ class RemoteServicesController:
             self._stop_service(service)
 
     def _on_update_available(self, info) -> None:
-        dlg = UpdateDialog(info, self._dialog_parent)
+        dlg = UpdateDialog(
+            info,
+            self._dialog_parent,
+            patch_downloader_factory=PatchDownloadWorker,
+            save_cleanup_path=save_pending_patch_cleanup,
+            launch_patch=launch_patch_installer,
+        )
         dlg.show()
 
     @staticmethod

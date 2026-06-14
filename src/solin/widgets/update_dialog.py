@@ -10,21 +10,18 @@ Two modes:
              saves to temp, launches the installer and exits the app.
 
 Temp-file cleanup:
-  Before launching the patch, saves the path through InstallationSettingsStore.
-  On next launch, main.py reads the value, deletes the file and clears it.
+  Before launching the patch, delegates persistence to the injected adapter.
+  On next launch, bootstrap delegates deletion to the same remote adapter.
   (Cannot delete while patch.exe is running on Windows.)
 """
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-import tempfile
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
-    Qt, QUrl, QObject, Signal,
+    Qt, QUrl, QObject,
     QPropertyAnimation, QEasingCurve, QByteArray, QPoint,
 )
 from PySide6.QtGui import QDesktopServices, QMouseEvent
@@ -33,11 +30,9 @@ from PySide6.QtWidgets import (
     QPushButton, QProgressBar, QFrame,
     QGraphicsOpacityEffect,
 )
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
-
-from solin.core.foundation.settings_store import InstallationSettingsStore
 
 if TYPE_CHECKING:
+    from solin.core.remote.patch_installer import PatchDownloadWorker
     from solin.core.remote.update_policy import UpdateInfo
 
 log = logging.getLogger(__name__)
@@ -126,101 +121,6 @@ QProgressBar::chunk {{
 }}
 """
 
-# ── Pending-patch cleanup (called at boot in main.py) ─────────────────────────
-
-def cleanup_pending_patch() -> None:
-    """
-    Deletes the patch file downloaded in the previous session.
-    Called at the start of main(), after the app has restarted post-update.
-    """
-    settings = InstallationSettingsStore.create()
-    path = settings.pending_patch_cleanup_path()
-    if path:
-        settings.clear_pending_patch_cleanup_path()
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-                log.debug("[Update] patch temp removed: %s", path)
-        except OSError as exc:
-            log.debug("[Update] failed to remove patch temp: %s", exc)
-
-
-def _save_cleanup_path(path: str) -> None:
-    InstallationSettingsStore.create().set_pending_patch_cleanup_path(path)
-
-
-# ── Download worker ───────────────────────────────────────────────────────────
-
-class _DownloadWorker(QObject):
-    """
-    Uses QNetworkAccessManager for download with progress.
-    Runs on the main thread (QNAM is event-loop driven) but emits
-    signals that the dialog consumes without blocking the UI.
-    """
-    progress = Signal(int)   # 0–100
-    finished = Signal(str)   # path to saved file
-    failed   = Signal(str)   # error message
-
-    def __init__(self, url: str, parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self._url   = url
-        self._path  = ""
-        self._file  = None
-        self._reply: QNetworkReply | None = None
-        self._nam   = QNetworkAccessManager(self)
-
-    def start(self) -> None:
-        """Start the download. Non-blocking."""
-        suffix = os.path.splitext(self._url.split("?")[0])[-1] or ".exe"
-        fd, self._path = tempfile.mkstemp(suffix=suffix, prefix="Solin_patch_")
-        self._file = os.fdopen(fd, "wb")
-
-        req = QNetworkRequest(QUrl(self._url))
-        req.setAttribute(
-            QNetworkRequest.Attribute.RedirectPolicyAttribute,
-            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy,
-        )
-        self._reply = self._nam.get(req)
-        self._reply.downloadProgress.connect(self._on_progress)
-        self._reply.readyRead.connect(self._on_data)
-        self._reply.finished.connect(self._on_finished)
-        self._reply.errorOccurred.connect(self._on_error)
-
-    def abort(self) -> None:
-        if self._reply:
-            self._reply.abort()
-
-    def _on_progress(self, received: int, total: int) -> None:
-        if total > 0:
-            self.progress.emit(int(received * 100 / total))
-
-    def _on_data(self) -> None:
-        if self._reply and self._file:
-            data = self._reply.readAll()
-            if data:
-                self._file.write(bytes(data))
-
-    def _on_finished(self) -> None:
-        if self._file:
-            self._file.flush()
-            self._file.close()
-            self._file = None
-        if self._reply and self._reply.error() == QNetworkReply.NetworkError.NoError:
-            self.finished.emit(self._path)
-
-    def _on_error(self, err: QNetworkReply.NetworkError) -> None:
-        if self._file:
-            self._file.close()
-            self._file = None
-        try:
-            if self._path and os.path.isfile(self._path):
-                os.remove(self._path)
-        except OSError:
-            pass
-        msg = self._reply.errorString() if self._reply else str(err)
-        self.failed.emit(msg)
-
-
 # ── Update dialog ─────────────────────────────────────────────────────────────
 
 class UpdateDialog(QDialog):
@@ -234,10 +134,21 @@ class UpdateDialog(QDialog):
     to reposition it on screen.
     """
 
-    def __init__(self, info: "UpdateInfo", parent=None) -> None:
+    def __init__(
+        self,
+        info: "UpdateInfo",
+        parent=None,
+        *,
+        patch_downloader_factory: Callable[[str, QObject], PatchDownloadWorker],
+        save_cleanup_path: Callable[[str], None],
+        launch_patch: Callable[[str], None],
+    ) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self._info       = info
-        self._downloader: _DownloadWorker | None = None
+        self._patch_downloader_factory = patch_downloader_factory
+        self._save_cleanup_path = save_cleanup_path
+        self._launch_patch = launch_patch
+        self._downloader: PatchDownloadWorker | None = None
         self._patch_path = ""
 
         # Drag state
@@ -367,7 +278,7 @@ class UpdateDialog(QDialog):
         self._status_label.setVisible(True)
         self._status_label.setText(self.tr("Starting download…"))
 
-        self._downloader = _DownloadWorker(self._info.url, self)
+        self._downloader = self._patch_downloader_factory(self._info.url, self)
         self._downloader.progress.connect(self._on_progress)
         self._downloader.finished.connect(self._on_download_done)
         self._downloader.failed.connect(self._on_download_failed)
@@ -383,7 +294,7 @@ class UpdateDialog(QDialog):
         self._status_label.setText(self.tr("Completed. Applying update…"))
         self._btn_cancel.setEnabled(False)
 
-        _save_cleanup_path(path)
+        self._save_cleanup_path(path)
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(800, self._launch_patch_and_quit)
@@ -404,22 +315,8 @@ class UpdateDialog(QDialog):
         Launches the patch with /SILENT /CLOSEAPPLICATIONS and exits this process.
         The patch.iss [Run] section is configured to reopen Solin after install.
         """
-        if not self._patch_path or not os.path.isfile(self._patch_path):
-            log.error("[Update] patch file not found: %s", self._patch_path)
-            return
-
         try:
-            args = [
-                self._patch_path,
-                "/SILENT",
-                "/CLOSEAPPLICATIONS",
-                "/RESTARTAPPLICATIONS",
-            ]
-            if sys.platform == "win32":
-                DETACHED_PROCESS = 0x00000008
-                subprocess.Popen(args, creationflags=DETACHED_PROCESS, close_fds=True)
-            else:
-                subprocess.Popen(args, close_fds=True)
+            self._launch_patch(self._patch_path)
         except OSError as exc:
             log.error("[Update] failed to launch patch: %s", exc)
             self._status_label.setStyleSheet(f"color:{_C['red']}; background:transparent;")

@@ -234,7 +234,7 @@ def main():
         container.lifecycle.register_single_instance(single_instance)
 
     # ── Primeira instância — limpezas ─────────────────────────────────────────
-    from solin.widgets.update_dialog import cleanup_pending_patch
+    from solin.core.remote.patch_installer import cleanup_pending_patch
     cleanup_pending_patch()
 
     from solin.core.media.download_storage import cleanup_orphan_temps, cleanup_incomplete_cache
