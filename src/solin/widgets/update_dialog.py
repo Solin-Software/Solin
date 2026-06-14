@@ -38,7 +38,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRe
 from solin.core.foundation.settings_store import InstallationSettingsStore
 
 if TYPE_CHECKING:
-    from solin.core.remote.updates import UpdateInfo
+    from solin.core.remote.update_policy import UpdateInfo
 
 log = logging.getLogger(__name__)
 
@@ -255,7 +255,7 @@ class UpdateDialog(QDialog):
     # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        from solin.core.remote.updates import UpdateKind
+        from solin.core.remote.update_policy import UpdateKind
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -351,7 +351,7 @@ class UpdateDialog(QDialog):
         self.close()
 
     def _on_action(self) -> None:
-        from solin.core.remote.updates import UpdateKind
+        from solin.core.remote.update_policy import UpdateKind
         if self._info.kind == UpdateKind.SETUP:
             QDesktopServices.openUrl(QUrl(self._info.url))
             self.close()

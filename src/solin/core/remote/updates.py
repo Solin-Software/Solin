@@ -32,61 +32,16 @@ Segurança:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QThread, Signal
 
 from solin.core.foundation.constants import APP_PLATFORM, APP_VERSION, UPDATE_CHECK_URL
 from solin.core.network.http import HttpError, get_json
-
-if TYPE_CHECKING:
-    pass
+from solin.core.remote.update_policy import UpdateInfo, evaluate_update
 
 log = logging.getLogger(__name__)
 
 FETCH_TIMEOUT_S: int = 10
-
-
-# ── Tipos ──────────────────────────────────────────────────────────────────────
-
-class UpdateKind(Enum):
-    SETUP = "setup"   # instalação completa — abre browser
-    PATCH = "patch"   # patch silencioso   — baixa e aplica
-
-
-@dataclass(frozen=True)
-class UpdateInfo:
-    kind:    UpdateKind
-    version: str   # versão disponível
-    url:     str   # URL de download / página
-
-
-# ── Comparação de versão ───────────────────────────────────────────────────────
-
-def _parse_version(v: str) -> tuple[int, ...]:
-    """'1.2.3.4' → (1, 2, 3, 4). Tolera 2–4 partes; preenche com 0."""
-    parts = v.strip().split(".")
-    result = []
-    for p in parts[:4]:
-        try:
-            result.append(int(p))
-        except ValueError:
-            result.append(0)
-    while len(result) < 4:
-        result.append(0)
-    return tuple(result)
-
-
-def _is_newer(candidate: str, current: str) -> bool:
-    """Retorna True se candidate > current."""
-    return _parse_version(candidate) > _parse_version(current)
-
-
-def _meets_min(current: str, min_version: str) -> bool:
-    """Retorna True se current >= min_version."""
-    return _parse_version(current) >= _parse_version(min_version)
 
 
 # ── Worker ─────────────────────────────────────────────────────────────────────
@@ -123,45 +78,13 @@ class UpdateWorker(QObject):
             self.fetch_failed.emit(str(exc))
             return
 
-        info = self._evaluate(payload)
+        info = evaluate_update(payload, current_version=APP_VERSION)
         if info:
             log.debug("[Update] available: %s %s", info.kind.value, info.version)
             self.update_available.emit(info)
         else:
             log.debug("[Update] no update")
             self.no_update.emit()
-
-    def _evaluate(self, payload: dict) -> UpdateInfo | None:
-        if not isinstance(payload, dict):
-            return None
-
-        current = APP_VERSION
-
-        # ── Tenta patch primeiro (menor, silencioso) ───────────────────────────
-        patch_data = payload.get("patch")
-        if isinstance(patch_data, dict):
-            p_ver     = str(patch_data.get("version", "")).strip()
-            p_url     = str(patch_data.get("url", "")).strip()
-            p_min_ver = str(patch_data.get("min_version", "0.0.0.0")).strip()
-
-            if (
-                p_ver and p_url
-                and _is_newer(p_ver, current)
-                and _meets_min(current, p_min_ver)
-            ):
-                return UpdateInfo(kind=UpdateKind.PATCH, version=p_ver, url=p_url)
-
-        # ── Fallback: setup completo ───────────────────────────────────────────
-        setup_data = payload.get("setup")
-        if isinstance(setup_data, dict):
-            s_ver = str(setup_data.get("version", "")).strip()
-            s_url = str(setup_data.get("url", "")).strip()
-
-            if s_ver and s_url and _is_newer(s_ver, current):
-                return UpdateInfo(kind=UpdateKind.SETUP, version=s_ver, url=s_url)
-
-        return None
-
 
 # ── Controlador público ────────────────────────────────────────────────────────
 
