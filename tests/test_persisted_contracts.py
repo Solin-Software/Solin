@@ -236,7 +236,7 @@ def test_profile_settings_namespace_is_immutable_and_explicit() -> None:
     assert "_ORG" not in vars(profile_settings_module)
     assert "def set_org(" not in source
     assert "def current_org(" not in source
-    assert "\ndef prefs(" not in source
+    assert "def prefs(" not in source
 
 
 def test_production_code_has_no_active_profile_settings_module_alias() -> None:
@@ -254,19 +254,18 @@ def test_production_code_has_no_active_profile_settings_module_alias() -> None:
 def test_profile_settings_namespaces_are_isolated() -> None:
     first = ProfileSettings.for_profile_id("settings_isolation_first")
     second = ProfileSettings.for_profile_id("settings_isolation_second")
-    first_prefs = first.prefs(QSETTINGS_APP_APP)
-    second_prefs = second.prefs(QSETTINGS_APP_APP)
-    first_prefs.clear()
-    second_prefs.clear()
+    first_store = first.app_settings()
+    second_store = second.app_settings()
+    first_store.settings.clear()
+    second_store.settings.clear()
     try:
-        first_prefs.setValue(SettingsKey.APP_LANGUAGE, "pt_BR")
-        first_prefs.sync()
+        first_store.set_app_language("pt_BR")
 
-        assert first.app_settings().app_language() == "pt_BR"
-        assert second.app_settings().app_language() == ""
+        assert first_store.app_language() == "pt_BR"
+        assert second_store.app_language() == ""
     finally:
-        first_prefs.clear()
-        second_prefs.clear()
+        first_store.settings.clear()
+        second_store.settings.clear()
 
 
 def test_internal_playlist_file_and_item_schema_are_stable(
