@@ -10,6 +10,7 @@ from solin.core.ui.monitor_allocation import (
     ScreenIdentity,
 )
 from solin.core.foundation.constants import QSETTINGS_MONITORS_APP
+from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 
@@ -55,12 +56,15 @@ def test_identity_falls_back_to_name_and_geometry():
 
 def _with_temp_settings(fn):
     settings = ProfileSettings.for_profile_id("test_monitor_alloc")
-    prefs = settings.prefs(QSETTINGS_MONITORS_APP)
-    prefs.clear()
+    store_settings = SettingsStore.for_namespace(
+        settings.organization,
+        QSETTINGS_MONITORS_APP,
+    )
+    store_settings.clear()
     try:
-        fn(prefs)
+        fn(store_settings)
     finally:
-        prefs.clear()
+        store_settings.clear()
 
 
 def test_default_owner_is_media():

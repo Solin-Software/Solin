@@ -27,6 +27,7 @@ from .controllers.window_state_controller import WindowStateController
 from .core.timer.engine import TimerEngine
 from .core.timer.store import TimerStore
 from .core.ui.monitor_allocation import MonitorAllocationStore
+from .core.ui.window_settings import WindowGeometrySettingsStore
 from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
@@ -48,12 +49,7 @@ from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.manager import ProfileManager
-from .core.foundation.constants import (
-    AUDIO_EXTS                  as _AUDIO_EXTS_LOCAL,
-    QSETTINGS_MAIN_WINDOW_GEOMETRY_APP,
-    QSETTINGS_MONITORS_APP,
-    QSETTINGS_TIMER_APP,
-)
+from .core.foundation.constants import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
@@ -112,12 +108,10 @@ class MainWindow(QMainWindow):
         # The allocation store is the persistent source of truth for which
         # subsystem (media/timer) owns each monitor — consulted by both the
         # media projection controller and the timer-output controller.
-        self._monitor_allocation = MonitorAllocationStore(
-            profile_settings.prefs(QSETTINGS_MONITORS_APP)
+        self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
+            profile_settings,
         )
-        self._timer_store = TimerStore(
-            profile_settings.prefs(QSETTINGS_TIMER_APP)
-        )
+        self._timer_store = TimerStore.for_profile_settings(profile_settings)
         self._timer_engine = TimerEngine(self)
         self._timer_output = TimerOutputController(
             self, self._timer_engine, self._timer_store, self._monitor_allocation
@@ -155,7 +149,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(900, 600)
         self._window_state = WindowStateController(
             self,
-            profile_settings.prefs(QSETTINGS_MAIN_WINDOW_GEOMETRY_APP),
+            WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         )
         self._shutdown_controller = ShutdownController(self)
         self._window_state.restore_size()

@@ -50,6 +50,7 @@ from solin.core.timer.part_titles import (
 from solin.core.timer.engine import TimerEngine
 from solin.core.timer.store import TimerStore
 from solin.core.foundation.constants import QSETTINGS_TIMER_APP
+from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 
@@ -58,6 +59,12 @@ _WEEK = date(2026, 6, 1)
 
 def _app() -> QCoreApplication:
     return QCoreApplication.instance() or QCoreApplication([])
+
+
+def _timer_store(profile_id: str) -> tuple[TimerStore, SettingsStore]:
+    profile_settings = ProfileSettings.for_profile_id(profile_id)
+    settings = SettingsStore.for_namespace(profile_settings.organization, QSETTINGS_TIMER_APP)
+    return TimerStore(settings), settings
 
 
 # ── Schedule defaults ─────────────────────────────────────────────────────────
@@ -1010,12 +1017,9 @@ def test_render_stopped_countdown_shows_elapsed_result():
 
 def test_store_roundtrip(tmp_path):
     _app()
-    prefs = ProfileSettings.for_profile_id("test_timer_store").prefs(
-        QSETTINGS_TIMER_APP
-    )
-    prefs.clear()
+    store, settings = _timer_store("test_timer_store")
+    settings.clear()
     try:
-        store = TimerStore(prefs)
         cfg = ClockConfig(
             mode=ClockMode.ANALOG,
             analog_style=AnalogClockStyle.CLASSIC,
@@ -1034,17 +1038,14 @@ def test_store_roundtrip(tmp_path):
         store.set_timer_visible(False)
         assert store.get_timer_visible() is False
     finally:
-        prefs.clear()
+        settings.clear()
 
 
 def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
     _app()
-    prefs = ProfileSettings.for_profile_id("test_timer_store_migration").prefs(
-        QSETTINGS_TIMER_APP
-    )
-    prefs.clear()
+    store, settings = _timer_store("test_timer_store_migration")
+    settings.clear()
     try:
-        store = TimerStore(prefs)
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
         sch.parts = [
             p for p in sch.parts
@@ -1052,7 +1053,7 @@ def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
             and p.kind is not PartKind.CBS
         ]
         key = f"schedule/{_WEEK.isoformat()}/{MeetingType.MIDWEEK.value}"
-        prefs.setValue(key, json.dumps(sch.to_dict()))
+        settings.set_value(key, json.dumps(sch.to_dict()))
 
         loaded = store.load_schedule(_WEEK, MeetingType.MIDWEEK)
 
@@ -1060,22 +1061,19 @@ def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
         assert loaded.parts[0].section is Section.OPENING_COMMENTS
         assert loaded.parts_in(Section.LIVING)[-1].kind is PartKind.CBS
         assert loaded.parts[-1].section is Section.CONCLUDING_COMMENTS
-        saved = json.loads(prefs.value(key, "", str))
+        saved = json.loads(settings.string(key))
         assert saved["parts"][0]["section"] == Section.OPENING_COMMENTS.value
         assert saved["parts"][-2]["kind"] == PartKind.CBS.value
         assert saved["parts"][-1]["section"] == Section.CONCLUDING_COMMENTS.value
     finally:
-        prefs.clear()
+        settings.clear()
 
 
 def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
     _app()
-    prefs = ProfileSettings.for_profile_id("test_timer_store_used_schedule").prefs(
-        QSETTINGS_TIMER_APP
-    )
-    prefs.clear()
+    store, settings = _timer_store("test_timer_store_used_schedule")
+    settings.clear()
     try:
-        store = TimerStore(prefs)
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
         sch.parts = [
             p for p in sch.parts
@@ -1086,7 +1084,7 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
         sch.parts[0].first_started_epoch = 1_700_000_000.0
         sch.parts[0].accumulated_seconds = 60
         key = f"schedule/{_WEEK.isoformat()}/{MeetingType.MIDWEEK.value}"
-        prefs.setValue(key, json.dumps(sch.to_dict()))
+        settings.set_value(key, json.dumps(sch.to_dict()))
 
         loaded = store.load_schedule(_WEEK, MeetingType.MIDWEEK)
 
@@ -1094,9 +1092,9 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
         assert all(p.kind is not PartKind.CBS for p in loaded.parts)
         assert all(p.section is not Section.OPENING_COMMENTS for p in loaded.parts)
         assert all(p.section is not Section.CONCLUDING_COMMENTS for p in loaded.parts)
-        saved = json.loads(prefs.value(key, "", str))
+        saved = json.loads(settings.string(key))
         assert all(p.get("kind") != PartKind.CBS.value for p in saved["parts"])
         assert all(p["section"] != Section.OPENING_COMMENTS.value for p in saved["parts"])
         assert all(p["section"] != Section.CONCLUDING_COMMENTS.value for p in saved["parts"])
     finally:
-        prefs.clear()
+        settings.clear()

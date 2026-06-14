@@ -27,9 +27,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSettings
-
+from solin.core.foundation.constants import QSETTINGS_MONITORS_APP
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.settings_store import SettingsStore
+from solin.core.profiles.settings import ProfileSettings
 
 # ── Owner constants ───────────────────────────────────────────────────────────
 
@@ -101,14 +102,23 @@ class ConflictInfo:
 class MonitorAllocationStore:
     """Profile-scoped persistent map of screen-key → owner."""
 
-    def __init__(self, prefs: QSettings) -> None:
-        self._settings = prefs
+    def __init__(self, settings: SettingsStore) -> None:
+        self._settings = settings
 
-    def _prefs(self) -> QSettings:
-        return self._settings
+    @classmethod
+    def for_profile_settings(
+        cls,
+        profile_settings: ProfileSettings,
+    ) -> "MonitorAllocationStore":
+        return cls(
+            SettingsStore.for_namespace(
+                profile_settings.organization,
+                QSETTINGS_MONITORS_APP,
+            )
+        )
 
     def _load(self) -> dict[str, str]:
-        raw = self._prefs().value(SettingsKey.MONITOR_ALLOCATION, "", str)
+        raw = self._settings.string(SettingsKey.MONITOR_ALLOCATION)
         if not raw:
             return {}
         try:
@@ -118,11 +128,9 @@ class MonitorAllocationStore:
             return {}
 
     def _save(self, mapping: dict[str, str]) -> None:
-        s = self._prefs()
         # Don't persist defaults — keep the map compact.
         compact = {k: v for k, v in mapping.items() if v != _DEFAULT_OWNER}
-        s.setValue(SettingsKey.MONITOR_ALLOCATION, json.dumps(compact))
-        s.sync()
+        self._settings.set_value(SettingsKey.MONITOR_ALLOCATION, json.dumps(compact))
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
