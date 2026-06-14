@@ -35,10 +35,8 @@ from typing import Optional
 log = logging.getLogger(__name__)
 
 # ── Resolução de metadados JW.org (compartilhado com media_info_extractor) ────
-from solin.core.jw.metadata import (
-    resolve_jworg_meta  as _resolve_jworg_meta,
-    JW_DOMAINS          as _JW_DOMAINS,
-)
+from solin.core.jw.identifiers import is_jw_url
+from solin.core.jw.metadata import resolve_jworg_meta as _resolve_jworg_meta
 
 from .media_reference import parse_jw_media_reference
 from .schema import create_jwlplaylist_schema
@@ -517,9 +515,9 @@ def _write_jwlplaylist(
         # ── PASSO 2: determina se é item JW.org (exporta como referência) ────
         # JW.org quando tem key_symbol (publicação simbólica) OU doc_id de CDN JW.
         # Arquivos locais com nome JW (ex: rr_T_43.mp3) TAMBÉM são JW quando
-        # parse_jworg_url extraiu um key_symbol/doc_id deles.
+        # parse_jw_media_reference extraiu um key_symbol/doc_id deles.
         is_jworg = bool(key_symbol) or bool(
-            doc_id and url and any(d in url.lower() for d in _JW_DOMAINS)
+            doc_id and url and is_jw_url(url)
         )
 
         # ── PASSO 3: para URLs http, verifica cache local ─────────────────────

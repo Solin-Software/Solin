@@ -17,7 +17,7 @@ from PySide6.QtCore import (
 )
 
 from ..core.jw.media_api import song_publication_symbol
-from ..core.jw.metadata import MEPS_FROM_LANG, parse_jworg_url
+from ..core.jw.identifiers import lang_to_meps, parse_jworg_url
 from ..core.jw.songs import JWSongsStore
 from .jw_media_catalog_bridge import build_jw_media_placement_options
 
@@ -443,7 +443,7 @@ class JWSongsBridge(QObject):
         number = _song_number(self._pending_item)
         pub = parsed.get("key_symbol") or song_publication_symbol(self._is_sign_language)
         language = _language_from_url(url, self._api_code)
-        meps_language = parsed.get("meps_language") or MEPS_FROM_LANG.get(language, 0)
+        meps_language = parsed.get("meps_language") or lang_to_meps(language)
         duration = float(self._pending_item.get("duration") or 0)
 
         item_data: dict[str, Any] = {

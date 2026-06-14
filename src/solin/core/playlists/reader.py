@@ -63,7 +63,7 @@ from solin.core.foundation.constants import (
     VIDEO_QUALITY_FALLBACK_DIR,
     VIDEO_QUALITY_ORDER,
 )
-from solin.core.jw.metadata import _LANG_FROM_MEPS
+from solin.core.jw.identifiers import meps_to_lang
 
 log = logging.getLogger(__name__)
 
@@ -753,7 +753,7 @@ def resolve_jworg_url(
     is_audio  = (major_multimedia_type == 0)
     fileformat = "MP3" if is_audio else "MP4"
 
-    lang_code = _meps_to_lang_code(meps_language, fallback=fallback_lang_code)
+    lang_code = meps_to_lang(meps_language, fallback=fallback_lang_code)
 
     params: dict[str, str] = {
         "langwritten": lang_code,
@@ -809,7 +809,7 @@ def resolve_jworg_metadata(
 
     is_audio   = (major_multimedia_type == 0)
     fileformat = "MP3" if is_audio else "MP4"
-    lang_code  = _meps_to_lang_code(meps_language, fallback=fallback_lang_code)
+    lang_code  = meps_to_lang(meps_language, fallback=fallback_lang_code)
 
     params: dict[str, str] = {
         "langwritten": lang_code,
@@ -962,29 +962,6 @@ def _extract_best_entry(
 
     log.warning("No usable URL found in API entries.")
     return None
-
-def _meps_to_lang_code(meps_language: int, fallback: str = "E") -> str:
-    """
-    Converte o ID de idioma MEPS (usado internamente pelo JW Library) para o
-    codigo de lingua usado na API publica do JW.org (ex: "T" = portugues).
-
-    Apenas os IDs sao mapeados aqui.  Para qualquer ID desconhecido
-    o fallback é usado -- idealmente o api_code do LanguageManager do app, de
-    forma que o idioma da interface sirva como lingua padrao para os videos.
-
-    IDs:
-      0    -> "E"  English
-      651  -> "S"  Espanol
-      5    -> "T"  Portugues
-    """
-    code = _LANG_FROM_MEPS.get(meps_language)
-    if code is None:
-        log.debug(
-            "Unknown MEPS ID %d - using app language fallback: %s",
-            meps_language, fallback,
-        )
-        return fallback
-    return code
 
 # ── Função de conveniência ────────────────────────────────────────────────────
 

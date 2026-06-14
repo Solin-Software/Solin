@@ -14,6 +14,7 @@ from ...core.foundation.constants import (
     PDF_EXTS as _PDF_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS, media_type_from_path
+from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.items import create_playlist_item
 from ...core.playlists.thumbnails import playlist_thumb_path
@@ -182,11 +183,9 @@ class _PlaylistEditActionsMixin:
         except (ValueError, TypeError):
             meps_lang = 0
 
-        from ...core.jw.metadata import MEPS_FROM_LANG as _MEPS
-
         lang_str = item_data.get("language", "").upper()
-        if not meps_lang and lang_str in _MEPS:
-            meps_lang = _MEPS[lang_str]
+        if not meps_lang and lang_str:
+            meps_lang = lang_to_meps(lang_str)
 
         pl_item = {
             "id": pl_item_id,

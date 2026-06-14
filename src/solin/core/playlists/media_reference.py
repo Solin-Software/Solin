@@ -4,17 +4,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TypedDict, cast
 
-from ..jw.metadata import MEPS_FROM_LANG, parse_jworg_url
-
-
-class JwMediaReference(TypedDict):
-    key_symbol: str | None
-    track: int | None
-    issue_tag: int | None
-    doc_id: int | None
-    meps_language: int
+from ..jw.identifiers import (
+    JwMediaIdentifier,
+    lang_to_meps,
+    parse_jworg_url,
+)
 
 
 _JW_FILENAME_RE = re.compile(
@@ -37,13 +32,13 @@ def _reference(
     track: int | None,
     doc_id: int | None,
     language_code: str,
-) -> JwMediaReference:
+) -> JwMediaIdentifier:
     return {
         "key_symbol": key_symbol,
         "track": track,
         "issue_tag": None,
         "doc_id": doc_id,
-        "meps_language": MEPS_FROM_LANG.get(language_code.upper(), 0),
+        "meps_language": lang_to_meps(language_code),
     }
 
 
@@ -51,12 +46,12 @@ def parse_jw_media_reference(
     url: str,
     *,
     original_filename: str = "",
-) -> JwMediaReference | None:
+) -> JwMediaIdentifier | None:
     """Extract a JW media reference from a CDN URL or local filename."""
     if url.startswith(("http://", "https://")):
         parsed = parse_jworg_url(url)
         if parsed:
-            return cast(JwMediaReference, parsed)
+            return parsed
 
     candidates: list[str] = []
     if original_filename:

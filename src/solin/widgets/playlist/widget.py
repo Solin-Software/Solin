@@ -40,6 +40,7 @@ from ...core.jw.language_context import (
     jw_media_language_context,
 )
 from ...core.jw.catalog import JWMediaCatalogCachePaths
+from ...core.jw.identifiers import is_jw_url
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
@@ -495,7 +496,6 @@ class _PlaylistEditView(
             if section.get("parent_id")
         }
         needs_save = False
-        from ...core.jw.metadata import JW_DOMAINS as _JW_DOMAINS_CHECK
         for item in items:
             detected = media_type_from_path(
                 item.get("url", ""),
@@ -507,7 +507,7 @@ class _PlaylistEditView(
             url = item.get("url", "")
             if (not item.get("auto_title")
                     and url.startswith(("http://", "https://"))
-                    and any(d in url.lower() for d in _JW_DOMAINS_CHECK)
+                    and is_jw_url(url)
                     and " | " in item.get("title", "")):
                 item["auto_title"] = True
                 needs_save = True
