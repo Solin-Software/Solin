@@ -8,7 +8,7 @@ class SignalConnectionController:
         self._window = window
 
     def _refresh_timer_monitors(self) -> None:
-        bridge = getattr(self._window.timer_widget, "_bridge", None)
+        bridge = getattr(self._window, "timer_bridge", None)
         if bridge is not None:
             bridge.refreshMonitors()
 
@@ -57,7 +57,7 @@ class SignalConnectionController:
         )
         # Keep the timer clock windows + the Timer tab's monitor grid in sync
         # when monitors are hot-plugged.
-        timer_output = getattr(window, "_timer_output", None)
+        timer_output = getattr(window, "timer_output", None)
         if timer_output is not None:
             window.screen_mgr.screens_changed.connect(timer_output.on_screens_changed)
             window.screen_mgr.screens_changed.connect(self._refresh_timer_monitors)

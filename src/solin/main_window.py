@@ -1,3 +1,5 @@
+from typing import Any
+
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import (
     Slot, QTimer, Signal, QDateTime, QEvent
@@ -20,12 +22,14 @@ from .controllers.projection_stop_controller import ProjectionStopController
 from .controllers.projection_window_controller import ProjectionWindowController
 from .controllers.shutdown_controller import ShutdownController
 from .controllers.signal_connection_controller import SignalConnectionController
+from .controllers.timer_engine import TimerEngine
+from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
+from .controllers.timer_pdf_export_controller import TimerPdfExportController
 from .controllers.timer_theme_controller import TimerThemeController
 from .controllers.wifi_playlist_controller import WifiPlaylistController
 from .controllers.window_state_controller import WindowStateController
-from .core.timer.engine import TimerEngine
-from .core.timer.store import TimerStore
+from .core.timer.application import TimerSession
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .core.ui.window_settings import WindowGeometrySettingsStore
 from .projection.window import ProjectionWindow
@@ -64,11 +68,15 @@ from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
 from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
+from .widgets.timer_bridge import TimerBridge
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
     _auto_share_finished = Signal(int, bool, bool)
+    proj_bar: Any
+    right_col: Any
+    _quick_toolbar: Any
 
     def __init__(
         self,
@@ -83,6 +91,7 @@ class MainWindow(QMainWindow):
         jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
         meeting_tree_store: MeetingTreeStore,
+        timer_session: TimerSession,
         active_profile: ProfileInfo,
     ):
         super().__init__()
@@ -97,6 +106,7 @@ class MainWindow(QMainWindow):
         self.jwpub_checksum_store = jwpub_checksum_store
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
+        self.timer_session = timer_session
         self.active_profile = active_profile
         self._obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
         self._zoom_settings = ZoomSettingsStore.for_profile_settings(profile_settings)
@@ -148,16 +158,33 @@ class MainWindow(QMainWindow):
         self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
             profile_settings,
         )
-        self._timer_store = TimerStore.for_profile_settings(profile_settings)
-        self._timer_engine = TimerEngine(self)
-        self._timer_output = TimerOutputController(
-            self, self._timer_engine, self._timer_store, self._monitor_allocation
+        self.timer_engine = TimerEngine(self)
+        self.timer_output = TimerOutputController(
+            self.timer_engine,
+            timer_session,
+            self._monitor_allocation,
         )
         # Screen names (QScreen.name()) where the user hid media. Restored from
         # the persisted allocation so reconnecting a monitor honours the choice
         # (previously this preference was lost on every restart/reconnect).
         self._deactivated_screens: set[str] = set(
             self._monitor_allocation.media_off_names(ScreenManager.secondary_screens())
+        )
+        self.timer_monitors = TimerMonitorController(
+            screen_manager=self.screen_mgr,
+            allocation=self._monitor_allocation,
+            timer_output=self.timer_output,
+            projection_windows=lambda: tuple(self.projection_windows),
+            reconcile_media=self._projection_targets.reconcile_projection_windows,
+            deactivate_media_screen=self._deactivated_screens.add,
+        )
+        self.timer_bridge = TimerBridge(
+            engine=self.timer_engine,
+            session=timer_session,
+            output=self.timer_output,
+            monitors=self.timer_monitors,
+            pdf_export=TimerPdfExportController(self),
+            language_manager=lang_manager,
         )
 
         # OBS WebSocket integration
@@ -214,7 +241,7 @@ class MainWindow(QMainWindow):
 
         # Show the clock window on any monitor reserved for the timer once the
         # screens have settled (mirrors the media projection startup timing).
-        QTimer.singleShot(900, self._timer_output.reconcile)
+        QTimer.singleShot(900, self.timer_output.reconcile)
 
     # ── UI Build ──────────────────────────────────────────────────────────
 

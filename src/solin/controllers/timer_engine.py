@@ -1,6 +1,5 @@
-"""
-engine.py — Solin timer domain
-==============================
+"""Qt scheduler and signal adapter for the timer state machine.
+
 ``TimerEngine`` adapts the framework-independent ``TimerStateMachine`` to Qt.
 It supplies refresh scheduling, delayed frozen-result reversion, translated
 display titles, and signals for the presentation layer.
@@ -22,10 +21,10 @@ from dataclasses import replace
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from .models import Direction, MeetingPart, MeetingSchedule, TimerSnapshot
-from .part_titles import is_indexed_part_title_source
-from .state_machine import TimerStateMachine
-from ..i18n.timer_part_titles import display_part_title
+from ..core.i18n.timer_part_titles import display_part_title
+from ..core.timer.models import Direction, MeetingPart, MeetingSchedule, TimerSnapshot
+from ..core.timer.part_titles import is_indexed_part_title_source
+from ..core.timer.state_machine import TimerStateMachine
 
 # Update cadence: 250 ms keeps the countdown visually smooth while staying
 # cheap. Elapsed is recomputed from wall time, so the interval only affects

@@ -406,15 +406,14 @@ class ProjectionWindowController:
 
     def _release_timer_on(self, screen) -> None:
         """Ask the timer-output controller to drop its window from ``screen``."""
-        timer_output = getattr(self._window, "_timer_output", None)
+        timer_output = getattr(self._window, "timer_output", None)
         if timer_output is not None and hasattr(timer_output, "reconcile"):
             timer_output.reconcile()
 
     def _notify_timer_monitors_changed(self) -> None:
         """Refresh the Timer tab's monitor grid after a media-side takeover so
         the reserved monitor flips back to 'Reserve for timer'."""
-        timer_widget = getattr(self._window, "timer_widget", None)
-        bridge = getattr(timer_widget, "_bridge", None) if timer_widget else None
+        bridge = getattr(self._window, "timer_bridge", None)
         if bridge is not None:
             bridge.refreshMonitors()
 

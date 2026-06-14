@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 
+from ..core.timer.application import TimerSession
+from ..core.timer.models import ClockConfig
 from ..core.ui.monitor_allocation import OWNER_TIMER
 from ..core.ui.screens import ScreenManager
 from ..projection.timer_window import ClockRenderBridge, TimerOutputWindow
@@ -23,13 +25,17 @@ from ..projection.timer_window import ClockRenderBridge, TimerOutputWindow
 class TimerOutputController:
     """Manages the fullscreen clock windows across reserved monitors."""
 
-    def __init__(self, window, engine, store, allocation) -> None:
-        self._window = window
+    def __init__(
+        self,
+        engine,
+        session: TimerSession,
+        allocation,
+    ) -> None:
         self._engine = engine
-        self._store = store
+        self._session = session
         self._allocation = allocation
 
-        self._clock_config = store.load_clock_config()
+        self._clock_config = session.clock_config
         self._engine.set_direction(self._clock_config.direction)
         self._engine.set_freeze_seconds(self._clock_config.freeze_seconds)
 
@@ -39,10 +45,9 @@ class TimerOutputController:
 
     # ── Configuration ──────────────────────────────────────────────────────
 
-    def set_clock_config(self, config) -> None:
+    def set_clock_config(self, config: ClockConfig) -> None:
         """Apply a new ClockConfig: persist, sync direction, repaint windows."""
         self._clock_config = config.clamped()
-        self._store.save_clock_config(self._clock_config)
         self._engine.set_direction(self._clock_config.direction)
         self._engine.set_freeze_seconds(self._clock_config.freeze_seconds)
         self._bridge.refresh_now()
@@ -54,11 +59,11 @@ class TimerOutputController:
     # ── Visibility (reserve vs. show) ──────────────────────────────────────
 
     def set_visible(self, visible: bool) -> None:
-        self._store.set_timer_visible(bool(visible))
+        self._session.set_timer_visible(bool(visible))
         self.reconcile()
 
     def is_visible(self) -> bool:
-        return self._store.get_timer_visible()
+        return self._session.timer_visible()
 
     # ── Screen-change wiring ───────────────────────────────────────────────
 
@@ -69,7 +74,7 @@ class TimerOutputController:
     # ── Reconciliation ─────────────────────────────────────────────────────
 
     def _desired_screens(self) -> list:
-        if not self._store.get_timer_visible():
+        if not self._session.timer_visible():
             return []
         return [
             s for s in ScreenManager.secondary_screens()

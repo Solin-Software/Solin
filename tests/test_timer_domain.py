@@ -47,9 +47,9 @@ from solin.core.timer.part_titles import (
     WATCHTOWER_STUDY_TITLE,
     PART_TITLE_SOURCES,
 )
-from solin.core.timer.engine import TimerEngine
+from solin.controllers.timer_engine import TimerEngine
 from solin.core.timer.state_machine import TimerStateMachine
-from solin.core.timer.store import TimerStore
+from solin.core.timer.infrastructure import QSettingsTimerRepository
 from solin.core.foundation.constants import QSETTINGS_TIMER_APP
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
@@ -62,10 +62,12 @@ def _app() -> QCoreApplication:
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-def _timer_store(profile_id: str) -> tuple[TimerStore, SettingsStore]:
+def _timer_repository(
+    profile_id: str,
+) -> tuple[QSettingsTimerRepository, SettingsStore]:
     profile_settings = ProfileSettings.for_profile_id(profile_id)
     settings = SettingsStore.for_namespace(profile_settings.organization, QSETTINGS_TIMER_APP)
-    return TimerStore(settings), settings
+    return QSettingsTimerRepository(settings), settings
 
 
 # ── Schedule defaults ─────────────────────────────────────────────────────────
@@ -1081,7 +1083,7 @@ def test_render_stopped_countdown_shows_elapsed_result():
 
 def test_store_roundtrip(tmp_path):
     _app()
-    store, settings = _timer_store("test_timer_store")
+    repository, settings = _timer_repository("test_timer_store")
     settings.clear()
     try:
         cfg = ClockConfig(
@@ -1089,25 +1091,25 @@ def test_store_roundtrip(tmp_path):
             analog_style=AnalogClockStyle.CLASSIC,
             text_scale_pct=90,
         )
-        store.save_clock_config(cfg)
-        assert store.load_clock_config() == cfg
+        repository.save_clock_config(cfg)
+        assert repository.load_clock_config() == cfg
 
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
         sch.parts[0].state = PartState.RUNNING
         sch.parts[0].started_at_epoch = 999.0
-        store.save_schedule(sch)
-        loaded = store.load_schedule(_WEEK, MeetingType.MIDWEEK)
+        repository.save_schedule(sch)
+        loaded = repository.load_schedule(_WEEK, MeetingType.MIDWEEK)
         assert loaded == sch
 
-        store.set_timer_visible(False)
-        assert store.get_timer_visible() is False
+        repository.set_timer_visible(False)
+        assert repository.get_timer_visible() is False
     finally:
         settings.clear()
 
 
 def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
     _app()
-    store, settings = _timer_store("test_timer_store_migration")
+    repository, settings = _timer_repository("test_timer_store_migration")
     settings.clear()
     try:
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
@@ -1119,7 +1121,7 @@ def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
         key = f"schedule/{_WEEK.isoformat()}/{MeetingType.MIDWEEK.value}"
         settings.set_value(key, json.dumps(sch.to_dict()))
 
-        loaded = store.load_schedule(_WEEK, MeetingType.MIDWEEK)
+        loaded = repository.load_schedule(_WEEK, MeetingType.MIDWEEK)
 
         assert loaded is not None
         assert loaded.parts[0].section is Section.OPENING_COMMENTS
@@ -1135,7 +1137,7 @@ def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
 
 def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
     _app()
-    store, settings = _timer_store("test_timer_store_used_schedule")
+    repository, settings = _timer_repository("test_timer_store_used_schedule")
     settings.clear()
     try:
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
@@ -1150,7 +1152,7 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
         key = f"schedule/{_WEEK.isoformat()}/{MeetingType.MIDWEEK.value}"
         settings.set_value(key, json.dumps(sch.to_dict()))
 
-        loaded = store.load_schedule(_WEEK, MeetingType.MIDWEEK)
+        loaded = repository.load_schedule(_WEEK, MeetingType.MIDWEEK)
 
         assert loaded is not None
         assert all(p.kind is not PartKind.CBS for p in loaded.parts)

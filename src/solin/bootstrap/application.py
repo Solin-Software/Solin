@@ -44,6 +44,7 @@ def _launch_main_window(
     jw_catalog_cache_paths,
     jw_songs_store,
     jwpub_checksum_store,
+    timer_session,
     active_profile,
 ):
     """
@@ -72,6 +73,7 @@ def _launch_main_window(
         jwpub_checksum_store,
         playlist_storage_paths,
         meeting_tree_store,
+        timer_session,
         active_profile,
     )
     window.show()
@@ -113,6 +115,10 @@ def _create_profile_screen(container, lang_manager):
 
 
 def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
+    from solin.core.meetings.publications import current_monday
+    from solin.core.timer.application import TimerSession
+    from solin.core.timer.infrastructure import QSettingsTimerRepository
+
     profile_context = container.profile_runtime.create(profile_id)
     active_profile = container.profile_service.get_profile(profile_id)
     if active_profile is None:
@@ -131,6 +137,10 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
         container.jw_catalog_cache_paths,
         container.jw_songs_store,
         container.jwpub_checksum_store,
+        TimerSession(
+            QSettingsTimerRepository.for_profile_settings(profile_context.settings),
+            current_week_monday=current_monday(),
+        ),
         active_profile,
     )
     container.window_ref[0] = window

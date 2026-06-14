@@ -1,8 +1,4 @@
-"""
-store.py — Solin timer domain
-=============================
-Per-profile persistence for the advanced timer, bound to an explicitly injected
-settings namespace.
+"""QSettings persistence adapter for the advanced timer.
 
 What is persisted (all under the injected ``Timer`` settings app):
     • the global ``ClockConfig`` for the profile;
@@ -28,6 +24,7 @@ from solin.core.profiles.settings import ProfileSettings
 from .models import ClockConfig, MeetingSchedule, MeetingType
 from .schedule_factory import normalize_schedule
 
+
 def _schedule_key(week_monday: str, meeting_type: MeetingType) -> str:
     return f"schedule/{week_monday}/{meeting_type.value}"
 
@@ -36,15 +33,23 @@ def _settings_str(value: object, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
 
-class TimerStore:
+class QSettingsTimerRepository:
     """Thin persistence facade bound to one profile."""
 
     def __init__(self, settings: SettingsStore) -> None:
         self._settings = settings
 
     @classmethod
-    def for_profile_settings(cls, profile_settings: ProfileSettings) -> "TimerStore":
-        return cls(SettingsStore.for_namespace(profile_settings.organization, QSETTINGS_TIMER_APP))
+    def for_profile_settings(
+        cls,
+        profile_settings: ProfileSettings,
+    ) -> "QSettingsTimerRepository":
+        return cls(
+            SettingsStore.for_namespace(
+                profile_settings.organization,
+                QSETTINGS_TIMER_APP,
+            )
+        )
 
     # ── ClockConfig ───────────────────────────────────────────────────────────
 
@@ -92,8 +97,11 @@ class TimerStore:
 
     # ── Schedules ─────────────────────────────────────────────────────────────
 
-    def load_schedule(self, week_monday: date,
-                      meeting_type: MeetingType) -> MeetingSchedule | None:
+    def load_schedule(
+        self,
+        week_monday: date,
+        meeting_type: MeetingType,
+    ) -> MeetingSchedule | None:
         key = _schedule_key(week_monday.isoformat(), meeting_type)
         raw = self._settings.string(key)
         if not raw:

@@ -51,7 +51,7 @@ class ShutdownController:
         if self._window.floating_preview_window is not None:
             self._window.floating_preview_window.close()
             self._window.floating_preview_window = None
-        timer_output = getattr(self._window, "_timer_output", None)
+        timer_output = getattr(self._window, "timer_output", None)
         if timer_output is not None:
             timer_output.close_all()
 

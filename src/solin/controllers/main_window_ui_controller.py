@@ -227,7 +227,11 @@ class MainWindowUiController:
             ),
             parent=window,
         )
-        window.timer_widget = TimerWidget(window.lang, parent=window)
+        window.timer_widget = TimerWidget(
+            window.lang,
+            bridge=window.timer_bridge,
+            parent=window,
+        )
         window.clips_widget = ClipsWidget(
             window.lang,
             window.media_cache_manager,

@@ -55,6 +55,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
+    timer_session = object()
     active_profile = object()
 
     class _MainWindow:
@@ -71,6 +72,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
+            received_timer_session,
             received_active_profile,
         ):
             self.lang_manager = lang_manager
@@ -84,6 +86,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
+            self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 
         def show(self):
@@ -121,6 +124,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
+        timer_session=timer_session,
         active_profile=active_profile,
     )
 
@@ -136,6 +140,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
+    assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert events == [
         "show",
@@ -158,6 +163,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
+    timer_session = object()
     active_profile = object()
 
     class _MainWindow:
@@ -174,6 +180,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
+            received_timer_session,
             received_active_profile,
         ):
             self.lang_manager = lang_manager
@@ -187,6 +194,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
+            self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 
         def show(self):
@@ -221,6 +229,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
+        timer_session=timer_session,
         active_profile=active_profile,
     )
 

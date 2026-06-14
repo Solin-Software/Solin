@@ -125,13 +125,19 @@ class TimerWidget(QWidget):
     # target QDateTime that MainWindow projects via the timer-theme controller.
     project_timer_signal = Signal(QDateTime)
 
-    def __init__(self, lang: "LanguageManager | None" = None, parent=None):
+    def __init__(
+        self,
+        lang: "LanguageManager | None" = None,
+        *,
+        bridge: TimerBridge,
+        parent=None,
+    ):
         super().__init__(parent)
         self.lang = lang
-        self._bridge: TimerBridge | None = None
-        self._build_ui(parent)
+        self.bridge = bridge
+        self._build_ui()
 
-    def _build_ui(self, window) -> None:
+    def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -148,13 +154,9 @@ class TimerWidget(QWidget):
             timer_digit_font_family(),
         )
 
-        # The bridge needs the timer services that MainWindow created before the
-        # UI was built. When absent (e.g. an isolated unit test), the tab still
-        # loads but the advanced features stay inert.
-        if window is not None and hasattr(window, "_timer_engine"):
-            self._bridge = TimerBridge(window, parent=self)
-            self._bridge.mediaCountdownRequested.connect(self.project_timer_signal)
-            self._qml.rootContext().setContextProperty("timer", self._bridge)
+        self.bridge.setParent(self)
+        self.bridge.mediaCountdownRequested.connect(self.project_timer_signal)
+        self._qml.rootContext().setContextProperty("timer", self.bridge)
 
         load_qml_type(self._qml, "TimerView")
         layout.addWidget(self._qml)
@@ -174,8 +176,7 @@ class TimerWidget(QWidget):
             self._qml.engine().retranslate()
         except Exception:  # noqa: BLE001 - QML engine lifecycle boundary
             log_ignored_exception(__name__, "Could not refresh timer language")
-        if self._bridge is not None:
-            self._bridge.refresh_language()
+        self.bridge.refresh_language()
 
     def refresh_language(self) -> None:
         self.retranslateUi()

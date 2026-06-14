@@ -7,24 +7,20 @@ operator's actions. It is the single seam between the pure domain
 network adapter would hook in, since every action funnels through here and every
 view is built from serializable domain objects.
 
-It owns the currently-selected ``MeetingSchedule`` (shared by reference with the
-``TimerEngine``), persists edits per profile via ``TimerStore``, and brokers
-monitor reservation against the shared ``MonitorAllocationStore`` (delegating the
-actual fullscreen windows to the media and timer-output controllers).
+It presents a ``TimerSession`` and delegates scheduling, persistence, monitor
+reservation, PDF export, and fullscreen output to explicitly injected adapters.
 """
 
 from __future__ import annotations
 
-import logging
-from datetime import date, timedelta
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot, QStandardPaths
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
 
 from ..core.i18n.date import format_time_with_seconds, week_label
 from ..core.meetings.publications import current_monday
 from ..core.meetings.section_meta import SECTION_META
+from ..core.timer.application import TimerSession
 from ..core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
@@ -35,19 +31,18 @@ from ..core.timer.models import (
     Section,
 )
 from ..core.timer.schedule_factory import (
-    adjust_part,
-    build_default_schedule,
     configurable_count_for,
-    normalize_schedule,
-    redistribute_section,
-    set_section_part_count,
 )
 from ..core.i18n.timer_part_titles import display_part_title
 from ..core.meetings.colors import section_colors
 from ..core.timer.part_titles import is_indexed_part_title_source
-from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
+from ..controllers.timer_monitor_controller import TimerMonitorController
+from ..controllers.timer_pdf_export_controller import TimerPdfExportController
 
-log = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    _QVARIANT = object
+else:
+    _QVARIANT = "QVariant"
 
 
 # Stable key per section — used by the QML to translate the header (via the
@@ -179,40 +174,40 @@ class TimerBridge(QObject):
     # Relayed to TimerWidget.project_timer_signal for the media-countdown mode.
     mediaCountdownRequested = Signal(QDateTime)
 
-    def __init__(self, window, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        engine,
+        session: TimerSession,
+        output,
+        monitors: TimerMonitorController,
+        pdf_export: TimerPdfExportController,
+        language_manager=None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._window = window
-        self._engine = window._timer_engine
-        self._store = window._timer_store
-        self._output = window._timer_output
-        self._allocation = window._monitor_allocation
-
-        self._week_monday: date = current_monday()
-        self._meeting_type: MeetingType = self._store.load_last_meeting_type()
-        self._clock_config: ClockConfig = self._output.clock_config
+        self._engine = engine
+        self._session = session
+        self._output = output
+        self._monitors = monitors
+        self._pdf_export = pdf_export
+        self._language_manager = language_manager
+        self._clock_config: ClockConfig = session.clock_config
+        self._schedule = session.schedule
         self._live: dict = {}
 
         self._engine.state_changed.connect(self._on_engine_state)
         self._engine.tick.connect(self._on_engine_tick)
 
-        self._load_schedule()
+        self._engine.set_schedule(self._schedule)
 
     # ── Schedule lifecycle ─────────────────────────────────────────────────
 
-    def _load_schedule(self) -> None:
-        sch = self._store.load_schedule(self._week_monday, self._meeting_type)
-        if sch is None:
-            sch = build_default_schedule(self._week_monday, self._meeting_type)
-        elif normalize_schedule(sch):
-            self._store.save_schedule(sch)
-        self._schedule = sch
-        self._engine.set_schedule(sch)
+    def _replace_schedule(self, schedule) -> None:
+        self._schedule = schedule
+        self._engine.set_schedule(schedule)
         self.scheduleChanged.emit()
         self.liveStateChanged.emit()
-
-    def _persist(self) -> None:
-        self._store.save_schedule(self._schedule)
-        self.scheduleChanged.emit()
 
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
@@ -223,7 +218,7 @@ class TimerBridge(QObject):
         # progress survives a restart, then refresh the views.
         self._live = snapshot
         if self._schedule is not None:
-            self._store.save_schedule(self._schedule)
+            self._session.persist_live_state()
         self.scheduleChanged.emit()
         self.liveStateChanged.emit()
 
@@ -234,56 +229,57 @@ class TimerBridge(QObject):
     # ── Exposed: schedule model ────────────────────────────────────────────
 
     def _parts_model(self) -> list:
-        lang = getattr(self._window, "lang", None)
-        time_format = getattr(lang, "time_with_seconds_format", "HH:mm:ss")
+        time_format = getattr(
+            self._language_manager,
+            "time_with_seconds_format",
+            "HH:mm:ss",
+        )
         return _parts_model_for_schedule(self._schedule, time_format)
 
-    parts = Property("QVariant", _parts_model, notify=scheduleChanged)
+    parts = Property(_QVARIANT, _parts_model, notify=scheduleChanged)
 
     def _live_model(self) -> dict:
         return self._live
 
-    liveState = Property("QVariant", _live_model, notify=liveStateChanged)
+    liveState = Property(_QVARIANT, _live_model, notify=liveStateChanged)
 
     # ── Exposed: week / meeting type ───────────────────────────────────────
 
     def _week_label(self) -> str:
-        return week_label(self._week_monday)
+        return week_label(self._session.week_monday)
 
     weekLabel = Property(str, _week_label, notify=weekChanged)
 
     def _meeting_type_value(self) -> str:
-        return self._meeting_type.value
+        return self._session.meeting_type.value
 
     meetingType = Property(str, _meeting_type_value, notify=weekChanged)
 
     def _is_current_week(self) -> bool:
-        return self._week_monday == current_monday()
+        return self._session.is_current_week
 
     isCurrentWeek = Property(bool, _is_current_week, notify=weekChanged)
 
     @Slot()
     def previousWeek(self) -> None:
-        self._week_monday -= timedelta(days=7)
+        schedule = self._session.previous_week()
         self.weekChanged.emit()
         self.weekShift.emit(-1)
-        self._load_schedule()
+        self._replace_schedule(schedule)
 
     @Slot()
     def nextWeek(self) -> None:
-        self._week_monday += timedelta(days=7)
+        schedule = self._session.next_week()
         self.weekChanged.emit()
         self.weekShift.emit(+1)
-        self._load_schedule()
+        self._replace_schedule(schedule)
 
     @Slot()
     def goToCurrentWeek(self) -> None:
-        target = current_monday()
-        direction = (target > self._week_monday) - (target < self._week_monday)
-        self._week_monday = target
+        direction = self._session.go_to_current_week(current_monday())
         self.weekChanged.emit()
-        self.weekShift.emit(int(direction))
-        self._load_schedule()
+        self.weekShift.emit(direction)
+        self._replace_schedule(self._session.schedule)
 
     @Slot(str)
     def setMeetingType(self, value: str) -> None:
@@ -291,70 +287,37 @@ class TimerBridge(QObject):
             mt = MeetingType(value)
         except ValueError:
             return
-        if mt is self._meeting_type:
+        if not self._session.set_meeting_type(mt):
             return
-        self._meeting_type = mt
-        self._store.save_last_meeting_type(mt)
         self.weekChanged.emit()
         self.weekShift.emit(0)   # switch midweek/weekend with a pure fade
-        self._load_schedule()
+        self._replace_schedule(self._session.schedule)
 
     @Slot()
     def exportSchedulePdf(self) -> None:
-        from ..core.rendering.timer_report_pdf import default_pdf_filename, export_schedule_pdf
-
-        documents = QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.DocumentsLocation
+        time_format = getattr(
+            self._language_manager,
+            "time_with_seconds_format",
+            "HH:mm:ss",
         )
-        base_dir = Path(documents) if documents else Path.home()
-        default_path = base_dir / default_pdf_filename(self._schedule)
-        path, _ = QFileDialog.getSaveFileName(
-            self._window,
-            self.tr("Export PDF"),
-            str(default_path),
-            self.tr("PDF files (*.pdf)"),
+        date_format = getattr(
+            self._language_manager,
+            "date_format",
+            "dd/MM/yyyy HH:mm",
         )
-        if not path:
-            return
-        if not path.lower().endswith(".pdf"):
-            path += ".pdf"
-
-        lang = getattr(self._window, "lang", None)
-        time_format = getattr(lang, "time_with_seconds_format", "HH:mm:ss")
-        date_format = getattr(lang, "date_format", "dd/MM/yyyy HH:mm")
         meeting_type_label = (
-            self.tr("Weekend") if self._meeting_type is MeetingType.WEEKEND
+            self.tr("Weekend") if self._session.meeting_type is MeetingType.WEEKEND
             else self.tr("Midweek")
         )
-        try:
-            export_schedule_pdf(
-                self._schedule,
-                path,
-                week_label=self._week_label(),
-                meeting_type_label=meeting_type_label,
-                date_format=date_format,
-                time_format=time_format,
-            )
-        except Exception as exc:  # noqa: BLE001 - PDF export adapter boundary
-            log.exception("Timer PDF export failed")
-            QMessageBox.critical(
-                self._window,
-                self.tr("Export failed"),
-                self.tr("Could not export the timer PDF:\n{error}").replace("{error}", str(exc)),
-            )
-            return
-
-        QMessageBox.information(
-            self._window,
-            self.tr("PDF exported"),
-            self.tr("Saved to:\n{path}").replace("{path}", path),
+        self._pdf_export.export(
+            self._schedule,
+            week_label=self._week_label(),
+            meeting_type_label=meeting_type_label,
+            date_format=date_format,
+            time_format=time_format,
         )
 
     # ── Exposed: part editing ──────────────────────────────────────────────
-
-    def _part_is_editable(self, part_id: str) -> bool:
-        part = self._schedule.part_by_id(part_id) if self._schedule is not None else None
-        return part is not None and part.state is PartState.IDLE
 
     @Slot(str)
     def startPart(self, part_id: str) -> None:
@@ -370,17 +333,13 @@ class TimerBridge(QObject):
 
     @Slot(str, int)
     def adjustPart(self, part_id: str, delta_seconds: int) -> None:
-        if not self._part_is_editable(part_id):
-            return
-        adjust_part(self._schedule, part_id, int(delta_seconds))
-        self._persist()
+        if self._session.adjust_part(part_id, int(delta_seconds)):
+            self.scheduleChanged.emit()
 
     @Slot(str, int)
     def setPartSeconds(self, part_id: str, seconds: int) -> None:
-        if not self._part_is_editable(part_id):
-            return
-        redistribute_section(self._schedule, part_id, int(seconds))
-        self._persist()
+        if self._session.set_part_seconds(part_id, int(seconds)):
+            self.scheduleChanged.emit()
 
     @Slot(str, int)
     def setSectionCount(self, section: str, count: int) -> None:
@@ -388,22 +347,22 @@ class TimerBridge(QObject):
             sec = Section(section)
         except ValueError:
             return
-        set_section_part_count(self._schedule, sec, int(count))
-        self._engine.set_schedule(self._schedule)
-        self._persist()
+        if self._session.set_section_count(sec, int(count)):
+            self._engine.set_schedule(self._schedule)
+            self.scheduleChanged.emit()
 
     # ── Exposed: clock config ──────────────────────────────────────────────
 
     def _clock_model(self) -> dict:
         return self._clock_config.to_dict()
 
-    clockConfig = Property("QVariant", _clock_model, notify=clockConfigChanged)
+    clockConfig = Property(_QVARIANT, _clock_model, notify=clockConfigChanged)
 
     def _clock_modes_model(self) -> list[str]:
         return [mode.value for mode in CLOCK_MODE_OPTIONS]
 
     clockModes = Property(
-        "QVariant",
+        _QVARIANT,
         _clock_modes_model,
         notify=clockConfigChanged,
     )
@@ -412,7 +371,7 @@ class TimerBridge(QObject):
         return [display.value for display in PART_TIMER_DISPLAY_OPTIONS]
 
     partTimerDisplays = Property(
-        "QVariant",
+        _QVARIANT,
         _part_timer_displays_model,
         notify=clockConfigChanged,
     )
@@ -421,45 +380,29 @@ class TimerBridge(QObject):
         return [style.value for style in ANALOG_CLOCK_STYLE_OPTIONS]
 
     analogClockStyles = Property(
-        "QVariant",
+        _QVARIANT,
         _analog_clock_styles_model,
         notify=clockConfigChanged,
     )
 
     @Slot(str, "QVariant")
     def updateClock(self, key: str, value) -> None:
-        data = self._clock_config.to_dict()
-        if key not in data:
+        config = self._session.update_clock(key, value)
+        if config is None:
             return
-        data[key] = value
-        self._clock_config = ClockConfig.from_dict(data).clamped()
+        self._clock_config = config
         self._output.set_clock_config(self._clock_config)
         self.clockConfigChanged.emit()
 
     # ── Exposed: monitors ──────────────────────────────────────────────────
 
-    def _secondary_screens(self) -> list:
-        return self._window.screen_mgr.secondary_screens()
-
     def _monitors_model(self) -> list:
-        rows = []
-        for i, s in enumerate(self._secondary_screens()):
-            owner = self._allocation.owner_of(s)
-            geo = s.geometry()
-            rows.append({
-                "index": i,
-                "name": s.name() or f"Monitor {i + 1}",
-                "resolution": f"{geo.width()} × {geo.height()}",
-                "owner": owner,
-                "reserved": owner == OWNER_TIMER,
-                "usedByMedia": owner == OWNER_MEDIA,
-            })
-        return rows
+        return self._monitors.model()
 
-    monitors = Property("QVariant", _monitors_model, notify=monitorsChanged)
+    monitors = Property(_QVARIANT, _monitors_model, notify=monitorsChanged)
 
     def _timer_visible(self) -> bool:
-        return self._output.is_visible()
+        return self._monitors.is_visible()
 
     timerVisible = Property(bool, _timer_visible, notify=monitorsChanged)
 
@@ -467,48 +410,23 @@ class TimerBridge(QObject):
     def refreshMonitors(self) -> None:
         self.monitorsChanged.emit()
 
-    def _media_present_on(self, screen) -> bool:
-        """True when a media projection window is *actually* shown on ``screen``.
-
-        The conflict prompt must reflect reality, not the default ownership — a
-        monitor defaults to ``media`` even when no media window is there, so
-        keying off ownership alone would warn about displacing media that isn't
-        present.
-        """
-        for win in getattr(self._window, "projection_windows", []):
-            try:
-                if win.screen() == screen:
-                    return True
-            except Exception:  # noqa: BLE001 - Qt screen-lifecycle boundary
-                continue
-        return False
-
     @Slot(int, result="QVariant")
     def requestReserve(self, index: int):
         """Reserve a monitor for the timer. Returns a conflict dict (for the QML
         confirm dialog) only when media is genuinely projecting there; otherwise
         reserves immediately and returns an empty dict."""
-        screens = self._secondary_screens()
-        if index < 0 or index >= len(screens):
-            return {}
-        screen = screens[index]
-        if self._media_present_on(screen):
-            return {
-                "conflict": True,
-                "index": index,
-                "screenName": screen.name() or self.tr("this monitor"),
-            }
-        self._allocation.set_owner(screen, OWNER_TIMER)
-        self._apply_timer_takeover()
-        return {}
+        result = self._monitors.request_reserve(
+            index,
+            self.tr("this monitor"),
+        )
+        if not result:
+            self.monitorsChanged.emit()
+        return result
 
     @Slot(int)
     def confirmReserve(self, index: int) -> None:
-        screens = self._secondary_screens()
-        if index < 0 or index >= len(screens):
-            return
-        self._allocation.set_owner(screens[index], OWNER_TIMER)
-        self._apply_timer_takeover()
+        if self._monitors.confirm_reserve(index):
+            self.monitorsChanged.emit()
 
     @Slot(int)
     def unreserveMonitor(self, index: int) -> None:
@@ -516,32 +434,13 @@ class TimerBridge(QObject):
         responsible for showing media (the media window's own monitor menu is).
         The screen is left empty; the operator shows media there from that menu
         ("Show") if they want it."""
-        screens = self._secondary_screens()
-        if index < 0 or index >= len(screens):
-            return
-        screen = screens[index]
-        self._allocation.set_owner(screen, OWNER_OFF)
-        # Keep the media side's in-memory "hidden" set in sync so its monitor
-        # menu shows this screen as available to "Show".
-        self._window._deactivated_screens.add(screen.name())
-        self._output.reconcile()   # fade the clock out
-        self.monitorsChanged.emit()
+        if self._monitors.unreserve(index):
+            self.monitorsChanged.emit()
 
     @Slot(bool)
     def setTimerVisible(self, visible: bool) -> None:
-        self._output.set_visible(bool(visible))
+        self._monitors.set_visible(bool(visible))
         self.monitorsChanged.emit()
-
-    def _apply_timer_takeover(self) -> None:
-        # Media must drop the screen first, then the clock claims it.
-        self._reconcile_media()
-        self._output.reconcile()
-        self.monitorsChanged.emit()
-
-    def _reconcile_media(self) -> None:
-        media = getattr(self._window, "_projection_targets", None)
-        if media is not None and hasattr(media, "reconcile_projection_windows"):
-            media.reconcile_projection_windows()
 
     # ── Exposed: media countdown mode ──────────────────────────────────────
 
