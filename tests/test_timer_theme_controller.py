@@ -1,6 +1,10 @@
 from PySide6.QtCore import QDateTime
 
-from solin.controllers.timer_theme_controller import TimerThemeController
+from solin.controllers.timer_theme_controller import (
+    TimerThemeContext,
+    TimerThemeController,
+    TimerThemeHandlers,
+)
 from solin.core.projection.application import ProjectionSession
 
 
@@ -84,9 +88,31 @@ class _WindowStub:
         return text
 
 
+def _controller(window):
+    return TimerThemeController(
+        TimerThemeContext(
+            projection_session=window.projection_session,
+            projection_bar=window.proj_bar,
+            media_controller=window.media_ctrl,
+            ndi_service=window._ndi_service,
+            camera_service=window._camera_service,
+            projection_windows=window._all_windows,
+            translate=window.tr,
+        ),
+        TimerThemeHandlers(
+            stop_browser_tab_projection=(
+                window._navigation.stop_browser_tab_projection
+            ),
+            update_projection_status=(
+                window._projection_integrations.update_status
+            ),
+        ),
+    )
+
+
 def test_start_timer_stops_active_sources_and_broadcasts_timer():
     window = _WindowStub()
-    controller = TimerThemeController(window)
+    controller = _controller(window)
     controller._remaining_seconds = lambda _target_dt: 42
     target_dt = QDateTime.currentDateTime().addSecs(60)
 
@@ -116,7 +142,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
 
 def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
     window = _WindowStub()
-    controller = TimerThemeController(window)
+    controller = _controller(window)
 
     controller.on_timer_update_proj(7, 30)
     controller.on_timer_blink_proj(True)
@@ -133,7 +159,7 @@ def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
 
 def test_project_sermon_theme_renders_preview_and_updates_projection_state():
     window = _WindowStub()
-    controller = TimerThemeController(window)
+    controller = _controller(window)
     controller._render_sermon_theme_preview = lambda text, subtitle: b"preview"
     text = "A theme long enough to be shortened in the projection bar"
 
@@ -155,3 +181,9 @@ def test_project_sermon_theme_renders_preview_and_updates_projection_state():
     args, kwargs = window._projection_integrations.statuses[0]
     assert args == (True, text[:28] + "…")
     assert kwargs == {"auto_keys_media": False}
+
+
+def test_timer_theme_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")

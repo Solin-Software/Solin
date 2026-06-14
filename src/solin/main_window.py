@@ -55,7 +55,11 @@ from .controllers.timer_engine import TimerEngine
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_pdf_export_controller import TimerPdfExportController
-from .controllers.timer_theme_controller import TimerThemeController
+from .controllers.timer_theme_controller import (
+    TimerThemeContext,
+    TimerThemeController,
+    TimerThemeHandlers,
+)
 from .controllers.wifi_playlist_controller import (
     WifiPlaylistContext,
     WifiPlaylistController,
@@ -199,7 +203,6 @@ class MainWindow(QMainWindow):
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
-        self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
         self._projection_stop = ProjectionStopController(self)
 
@@ -370,6 +373,25 @@ class MainWindow(QMainWindow):
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
+                stop_browser_tab_projection=(
+                    self._navigation.stop_browser_tab_projection
+                ),
+                update_projection_status=(
+                    self._projection_integrations.update_status
+                ),
+            ),
+        )
+        self._timer_theme_controller = TimerThemeController(
+            TimerThemeContext(
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
+                projection_windows=self.projection_session.all_windows,
+                translate=self.tr,
+            ),
+            TimerThemeHandlers(
                 stop_browser_tab_projection=(
                     self._navigation.stop_browser_tab_projection
                 ),
