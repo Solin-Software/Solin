@@ -39,6 +39,12 @@ from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
+from .core.integrations.automation.settings import (
+    AutoShareSettingsStore,
+    CameraSettingsStore,
+    OBSSettingsStore,
+    ZoomSettingsStore,
+)
 from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
@@ -86,6 +92,12 @@ class MainWindow(QMainWindow):
         self.profile_manager = profile_manager
         profile_prefs = profile_settings.prefs()
         self.profile_prefs = profile_prefs
+        self._obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
+        self._zoom_settings = ZoomSettingsStore.for_profile_settings(profile_settings)
+        self._auto_share_settings = AutoShareSettingsStore.for_profile_settings(
+            profile_settings,
+        )
+        self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(
             profile_prefs,
@@ -124,8 +136,7 @@ class MainWindow(QMainWindow):
         )
 
         # OBS WebSocket integration
-        self._obs_service = OBSWebSocketService(profile_settings.prefs, self)
-        self._obs_prefs = profile_prefs
+        self._obs_service = OBSWebSocketService(self._obs_settings, self)
 
         # OBS/DistroAV NDI program stream receiver
         self._ndi_service = NDIReceiverService(self)
@@ -134,8 +145,7 @@ class MainWindow(QMainWindow):
         self._camera_service = CameraService(self)
 
         # Zoom Meetings integration
-        self._zoom_service = ZoomService(profile_prefs, self)
-        self._zoom_prefs = profile_prefs
+        self._zoom_service = ZoomService(self._zoom_settings, self)
 
         self._background_song_service = BackgroundSongService(
             self.lang,

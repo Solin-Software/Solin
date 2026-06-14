@@ -15,7 +15,6 @@ from solin.core.media.downloader import SongDownloader
 from solin.core.media.cache import MediaCacheManager
 from solin.core.jw.songs import JWSongsStore
 from solin.core.jw.languages import JWLanguageService
-from solin.core.profiles.settings import ProfileSettings
 from solin.core.rendering.fonts import FontManager
 
 
@@ -23,8 +22,20 @@ def _app() -> QCoreApplication:
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-def _prefs():
-    return ProfileSettings.for_profile_id("thread_lifecycle").prefs()
+class _ZoomSettings:
+    def show_participants(self) -> bool:
+        return True
+
+
+class _OBSSettings:
+    def is_configured(self) -> bool:
+        return True
+
+    def websocket_port(self, default: int = 4455) -> int:
+        return default
+
+    def password(self) -> str:
+        return ""
 
 
 def _wait_until(predicate, timeout: float = 3.0) -> bool:
@@ -164,7 +175,7 @@ def test_jw_language_service_owns_and_drains_its_thread_pool(tmp_path):
 def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
-    service = ZoomService(_prefs())
+    service = ZoomService(_ZoomSettings())
     service._active = True
     service._stop_evt.clear()
     service._generation = 1
@@ -215,7 +226,7 @@ def test_zoom_session_is_owned_by_one_service_generation(monkeypatch):
 
     sessions: list[_Session] = []
     monkeypatch.setattr(zoom_controls, "ZoomSession", _Session)
-    service = ZoomService(_prefs())
+    service = ZoomService(_ZoomSettings())
     monkeypatch.setattr(service, "_poll_connection", lambda: None)
 
     service.start()
@@ -243,7 +254,7 @@ def test_zoom_session_is_owned_by_one_service_generation(monkeypatch):
 def test_zoom_rejects_callback_from_stopped_generation(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
-    service = ZoomService(_prefs())
+    service = ZoomService(_ZoomSettings())
     service.start()
     generation = service._generation
 
@@ -289,7 +300,7 @@ def test_ndi_restart_waits_for_previous_worker():
 
 def test_obs_restart_waits_for_previous_worker(monkeypatch):
     _app()
-    service = OBSWebSocketService(_prefs)
+    service = OBSWebSocketService(_OBSSettings())
     monkeypatch.setattr(service, "_config_ok", lambda: True)
     lock = threading.Lock()
     generations: list[int] = []

@@ -3,26 +3,33 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 
-from ..core.foundation.settings_keys import SettingsKey
 from ..core.integrations.automation.obs import OBSConnectionState, OBSWebSocketService
 from .profile_widgets import _AMBER, _DIM, _GREEN, _RED
 
 
-class _TransientSettings:
+class _TransientOBSSettings:
     def __init__(self) -> None:
-        self._values: dict[str, object] = {}
+        self._port = 0
+        self._password = ""
+        self.default_scene = ""
+        self.media_scene = ""
 
-    def value(self, key: str, default=None, value_type=None):
-        value = self._values.get(key, default)
-        if value_type is None:
-            return value
-        try:
-            return value_type(value)
-        except (TypeError, ValueError):
-            return default
+    def set_connection(self, port: int, password: str) -> None:
+        self._port = int(port)
+        self._password = password
 
-    def setValue(self, key: str, value: object) -> None:
-        self._values[key] = value
+    def set_scene_names(self, default_scene: str, media_scene: str) -> None:
+        self.default_scene = default_scene
+        self.media_scene = media_scene
+
+    def is_configured(self) -> bool:
+        return self._port > 0
+
+    def websocket_port(self, default: int = 4455) -> int:
+        return self._port if self._port > 0 else default
+
+    def password(self) -> str:
+        return self._password
 
 
 class ProfileOBSSetupMixin:
@@ -30,7 +37,7 @@ class ProfileOBSSetupMixin:
         self._ob_obs_last_state = OBSConnectionState.DISCONNECTED
         self._ob_obs_last_message = ""
         self._ob_obs_svc: OBSWebSocketService | None = None
-        self._ob_obs_prefs = _TransientSettings()
+        self._ob_obs_settings = _TransientOBSSettings()
         self._ob_obs_reconnect_timer = QTimer(self)
         self._ob_obs_reconnect_timer.setSingleShot(True)
         self._ob_obs_reconnect_timer.setInterval(800)
@@ -55,7 +62,7 @@ class ProfileOBSSetupMixin:
         """Return (creating if needed) the onboarding-owned OBS service."""
         if self._ob_obs_svc is None:
             svc = OBSWebSocketService(
-                lambda: self._ob_obs_prefs,
+                self._ob_obs_settings,
                 parent=self,
             )
             svc.state_changed.connect(self._ob_obs_on_state)
@@ -72,9 +79,7 @@ class ProfileOBSSetupMixin:
             port = 4455
         pwd = self._ob_obs_pwd.text()
 
-        # Write to a temp prefs key so OBSWebSocketService._config_ok() passes
-        self._ob_obs_prefs.setValue(SettingsKey.OBS_PORT, port)
-        self._ob_obs_prefs.setValue(SettingsKey.OBS_PASSWORD, pwd)
+        self._ob_obs_settings.set_connection(port, pwd)
 
         svc = self._ob_obs_ensure_service()
         svc.stop()
@@ -160,12 +165,8 @@ class ProfileOBSSetupMixin:
             combo.blockSignals(False)
 
     def _ob_obs_save_scenes(self) -> None:
-        """Persist scene selections to prefs immediately (best-effort during onboarding)."""
-        self._ob_obs_prefs.setValue(
-            SettingsKey.OBS_DEFAULT_SCENE,
+        """Keep scene selections in the onboarding session state."""
+        self._ob_obs_settings.set_scene_names(
             self._ob_obs_default_combo.currentText(),
-        )
-        self._ob_obs_prefs.setValue(
-            SettingsKey.OBS_MEDIA_WINDOW_SCENE,
             self._ob_obs_media_combo.currentText(),
         )

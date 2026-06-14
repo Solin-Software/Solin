@@ -17,12 +17,12 @@ class _Signal:
         return [callback.__name__ for callback in self.callbacks]
 
 
-class _Prefs:
-    def __init__(self, values):
-        self._values = values
+class _EnabledSettings:
+    def __init__(self, enabled):
+        self._enabled = enabled
 
-    def value(self, key, default=None, _type=None):
-        return self._values.get(key, default)
+    def is_enabled(self):
+        return self._enabled
 
 
 class _Startable:
@@ -135,10 +135,10 @@ class _Window:
         self.lang = object()
         self._projection_targets = _ProjectionTargets(self)
         self._obs_service = _Startable(self, "obs")
-        self._obs_prefs = _Prefs({"obs/enabled": obs_enabled})
+        self._obs_settings = _EnabledSettings(obs_enabled)
         self._live_integrations = _LiveIntegrations(self)
         self._zoom_service = _ZoomService(self)
-        self._zoom_prefs = _Prefs({"zoom/enabled": zoom_enabled})
+        self._zoom_settings = _EnabledSettings(zoom_enabled)
         self._background_song_service = _Startable(self, "background-song")
         self.stylesheets = []
 

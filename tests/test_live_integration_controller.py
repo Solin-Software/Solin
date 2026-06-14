@@ -1,12 +1,51 @@
 from solin.controllers.live_integration_controller import LiveIntegrationController
 
 
-class _PrefsStub:
-    def __init__(self, values=None):
-        self.values = values or {}
+class _ObsSettingsStub:
+    def __init__(self):
+        self.values = {
+            "media_scene": "Media",
+            "default_scene": "Idle",
+            "ndi_enabled": False,
+            "ndi_source": "",
+        }
 
-    def value(self, key, default=None, _type=None):
-        return self.values.get(key, default)
+    def media_window_scene(self):
+        return self.values["media_scene"]
+
+    def default_scene(self):
+        return self.values["default_scene"]
+
+    def has_media_window_scene(self):
+        scene = self.media_window_scene()
+        return bool(scene and not scene.startswith("—"))
+
+    def ndi_enabled(self):
+        return self.values["ndi_enabled"]
+
+    def ndi_source(self):
+        return self.values["ndi_source"].strip()
+
+    def ndi_stream_configured(self):
+        return self.ndi_enabled() and bool(self.ndi_source())
+
+
+class _CameraSettingsStub:
+    def __init__(self):
+        self.values = {
+            "enabled": True,
+            "backend": "dshow",
+            "device_name": "Cam",
+        }
+
+    def is_enabled(self):
+        return self.values["enabled"]
+
+    def backend(self):
+        return self.values["backend"]
+
+    def device_name(self):
+        return self.values["device_name"]
 
 
 class _ObsServiceStub:
@@ -98,17 +137,8 @@ class _NotificationsStub:
 
 class _WindowStub:
     def __init__(self):
-        self._obs_prefs = _PrefsStub(
-            {
-                "obs/media_window_scene": "Media",
-                "obs/default_scene": "Idle",
-                "obs/ndi_enabled": False,
-                "obs/ndi_source": "",
-                "camera/enabled": True,
-                "camera/backend": "dshow",
-                "camera/device_name": "Cam",
-            }
-        )
+        self._obs_settings = _ObsSettingsStub()
+        self._camera_settings = _CameraSettingsStub()
         self._obs_service = _ObsServiceStub()
         self._camera_service = _CameraServiceStub()
         self._quick_toolbar = _QuickToolbarStub()
@@ -141,8 +171,8 @@ def test_refresh_obs_btn_availability_requires_connection_and_media_scene():
 
 def test_refresh_obs_stream_availability_updates_stream_and_camera_availability():
     window = _WindowStub()
-    window._obs_prefs.values["obs/ndi_enabled"] = True
-    window._obs_prefs.values["obs/ndi_source"] = "Program"
+    window._obs_settings.values["ndi_enabled"] = True
+    window._obs_settings.values["ndi_source"] = "Program"
     window._proj_state = {"type": "obs_stream"}
     controller = LiveIntegrationController(window)
 

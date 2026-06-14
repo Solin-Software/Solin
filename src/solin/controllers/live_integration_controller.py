@@ -8,7 +8,6 @@ from PySide6.QtGui import QImage
 
 from ..core.integrations.camera import CameraOption
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA_SCENE
-from ..core.foundation.settings_keys import SettingsKey
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ class LiveIntegrationController:
     def on_obs_scene_changed(self, scene_name: str) -> None:
         window = self._window
         window._quick_toolbar.set_obs_current_scene(scene_name)
-        media_scene = window._obs_prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        media_scene = window._obs_settings.media_window_scene()
         if not media_scene or media_scene.startswith("—"):
             return
         window.proj_bar.set_obs_scene_is_media(scene_name == media_scene)
@@ -79,15 +78,12 @@ class LiveIntegrationController:
     def refresh_obs_btn_availability(self) -> None:
         window = self._window
         connected = window._obs_service.is_connected
-        media_scene = window._obs_prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
-        available = connected and bool(media_scene) and not media_scene.startswith("—")
+        available = connected and window._obs_settings.has_media_window_scene()
         window.proj_bar.set_obs_btn_available(available)
 
     def refresh_obs_stream_availability(self) -> None:
         window = self._window
-        enabled = window._obs_prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool)
-        source = window._obs_prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str).strip()
-        available = bool(enabled and source)
+        available = window._obs_settings.ndi_stream_configured()
         if hasattr(window, "_quick_toolbar"):
             window._quick_toolbar.set_obs_stream_available(available)
             window._quick_toolbar.set_obs_stream_active(
@@ -105,16 +101,16 @@ class LiveIntegrationController:
             opt = window._quick_toolbar.current_camera_option()
             if opt is not None:
                 return opt
-        backend = window._obs_prefs.value(SettingsKey.CAMERA_BACKEND, "", str)
-        name = window._obs_prefs.value(SettingsKey.CAMERA_DEVICE_NAME, "", str)
+        backend = window._camera_settings.backend()
+        name = window._camera_settings.device_name()
         return window._camera_service.find_saved(backend, name)
 
     def refresh_obs_camera_stream_availability(self) -> None:
         window = self._window
         if not hasattr(window, "_quick_toolbar"):
             return
-        ndi_enabled = window._obs_prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool)
-        camera_enabled = window._obs_prefs.value(SettingsKey.CAMERA_ENABLED, False, bool)
+        ndi_enabled = window._obs_settings.ndi_enabled()
+        camera_enabled = window._camera_settings.is_enabled()
         if not camera_enabled or ndi_enabled:
             window._quick_toolbar.set_obs_camera_stream_available(False)
             return
@@ -141,7 +137,7 @@ class LiveIntegrationController:
     def on_quick_obs_return_scene_change(self, scene_name: str) -> None:
         window = self._window
         scene_name = (scene_name or "").strip()
-        media_scene = window._obs_prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        media_scene = window._obs_settings.media_window_scene()
         current = window._obs_service.current_scene or ""
         if (
             not scene_name
@@ -159,8 +155,8 @@ class LiveIntegrationController:
             window._stop_projection()
             return
 
-        source = window._obs_prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str).strip()
-        if not window._obs_prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool) or not source:
+        source = window._obs_settings.ndi_source()
+        if not window._obs_settings.ndi_stream_configured():
             window.notifications.warning(window.tr("OBS stream is not configured."))
             self.refresh_obs_stream_availability()
             return
@@ -193,7 +189,7 @@ class LiveIntegrationController:
             window._stop_projection()
             return
 
-        if not window._obs_prefs.value(SettingsKey.CAMERA_ENABLED, False, bool):
+        if not window._camera_settings.is_enabled():
             window.notifications.warning(window.tr("Camera is not enabled."))
             return
 
@@ -277,19 +273,15 @@ class LiveIntegrationController:
         if not window._obs_service.is_connected:
             return
 
-        media_scene = window._obs_prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        media_scene = window._obs_settings.media_window_scene()
         if not media_scene or media_scene.startswith("—"):
             return
 
         if window.proj_bar.is_obs_scene_media():
             if _MEMORIZE_PRE_MEDIA_SCENE:
-                target = window._obs_pre_media_scene or window._obs_prefs.value(
-                    SettingsKey.OBS_DEFAULT_SCENE,
-                    "",
-                    str,
-                )
+                target = window._obs_pre_media_scene or window._obs_settings.default_scene()
             else:
-                target = window._obs_prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+                target = window._obs_settings.default_scene()
             if target and not target.startswith("—"):
                 window._obs_service.request_scene_change(target)
                 window.proj_bar.set_obs_scene_is_media(False)

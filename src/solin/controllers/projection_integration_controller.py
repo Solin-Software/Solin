@@ -8,7 +8,6 @@ import time
 from PySide6.QtCore import QTimer
 
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA_SCENE
-from ..core.foundation.settings_keys import SettingsKey
 
 
 AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS = 1900
@@ -76,8 +75,8 @@ class ProjectionIntegrationController:
             active, visual = self.current_projection_activity()
 
         has_output = self.has_visible_projection_output()
-        media_scene = window._obs_prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
-        default_scene = window._obs_prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+        media_scene = window._obs_settings.media_window_scene()
+        default_scene = window._obs_settings.default_scene()
 
         going_to_media = active and visual and has_output
 
@@ -102,19 +101,10 @@ class ProjectionIntegrationController:
             window.proj_bar.set_obs_scene_is_media(going_to_media)
 
     def auto_share_hotkey(self) -> str:
-        hotkey = self._window._zoom_prefs.value(SettingsKey.SHARE_HOTKEY, "", str).strip()
-        if hotkey:
-            return hotkey
-        return (
-            self._window._zoom_prefs.value(SettingsKey.SHARE_START_HOTKEY, "", str).strip()
-            or self._window._zoom_prefs.value(SettingsKey.SHARE_STOP_HOTKEY, "", str).strip()
-        )
+        return self._window._auto_share_settings.hotkey()
 
     def auto_share_configured(self) -> bool:
-        return (
-            self._window._zoom_prefs.value(SettingsKey.SHARE_ENABLED, False, bool)
-            and bool(self.auto_share_hotkey())
-        )
+        return self._window._auto_share_settings.is_configured()
 
     def sync_zoom_share(self, active: bool | None = None, visual: bool = True) -> None:
         if self._auto_share_stop.is_set():
@@ -122,8 +112,7 @@ class ProjectionIntegrationController:
         if active is None:
             active, visual = self.current_projection_activity()
 
-        share_enabled = self._window._zoom_prefs.value(SettingsKey.SHARE_ENABLED, False, bool)
-        if not share_enabled:
+        if not self._window._auto_share_settings.is_enabled():
             self._auto_share_generation += 1
             self._auto_share_active = False
             return
@@ -141,8 +130,7 @@ class ProjectionIntegrationController:
         generation = self._auto_share_generation
 
         if should_share:
-            click_x = self._window._zoom_prefs.value(SettingsKey.SHARE_CLICK_X, -1, int)
-            click_y = self._window._zoom_prefs.value(SettingsKey.SHARE_CLICK_Y, -1, int)
+            click_x, click_y = self._window._auto_share_settings.click_position()
             from ..core.integrations.automation.screen_share import execute_start_share
 
             def _run_start_share():

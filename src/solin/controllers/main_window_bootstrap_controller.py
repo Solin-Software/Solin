@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtCore import QCoreApplication
 
-from ..core.foundation.settings_keys import SettingsKey
 from ..styles.theme import STYLESHEET
 from ..widgets.projection.monitor_manager import MonitorManagerPopup
 from .ipc_controller import IpcController
@@ -63,7 +62,7 @@ class MainWindowBootstrapController:
 
     def start_obs_integration(self) -> None:
         window = self._window
-        if window._obs_prefs.value(SettingsKey.OBS_ENABLED, False, bool):
+        if window._obs_settings.is_enabled():
             window._obs_service.start()
         window._live_integrations.refresh_obs_btn_availability()
         window._live_integrations.refresh_obs_stream_availability()
@@ -80,7 +79,7 @@ class MainWindowBootstrapController:
     def start_zoom_if_enabled(self) -> None:
         window = self._window
         if (
-            window._zoom_prefs.value(SettingsKey.ZOOM_ENABLED, False, bool)
+            window._zoom_settings.is_enabled()
             and self._platform == "win32"
         ):
             window._zoom_service.start()

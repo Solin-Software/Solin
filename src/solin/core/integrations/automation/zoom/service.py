@@ -19,9 +19,9 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QSettings, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.integrations.automation.settings import ZoomParticipantSettings
 
 if TYPE_CHECKING:
     from .controls import ZoomSession
@@ -76,9 +76,13 @@ class ZoomService(QObject):
     _sig_share_error = Signal(int, str)
     _sig_worker_done = Signal(str, int)
 
-    def __init__(self, prefs: QSettings, parent: QObject | None = None):
+    def __init__(
+        self,
+        settings: ZoomParticipantSettings,
+        parent: QObject | None = None,
+    ):
         super().__init__(parent)
-        self._prefs = prefs
+        self._settings = settings
 
         self._connected: bool = False
         self._sharing:   bool = False
@@ -325,7 +329,7 @@ class ZoomService(QObject):
             # Slow down connection checks
             self._conn_timer.setInterval(20000)
             # Start participant polling if enabled
-            show_parts = self._prefs.value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, True, bool)
+            show_parts = self._settings.show_participants()
             if show_parts:
                 self.start_participant_polling()
         else:
@@ -484,7 +488,7 @@ class ZoomService(QObject):
         elif not sharing and was_sharing:
             # Resume participant polling
             self._share_timer.stop()
-            show_parts = self._prefs.value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, True, bool)
+            show_parts = self._settings.show_participants()
             if show_parts and self._connected:
                 self._part_timer.start(5000)
 

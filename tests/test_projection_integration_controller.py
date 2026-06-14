@@ -2,12 +2,35 @@ from solin.controllers.projection_integration_controller import ProjectionIntegr
 import threading
 
 
-class _PrefsStub:
-    def __init__(self, values=None):
-        self.values = values or {}
+class _ObsSettingsStub:
+    def __init__(self, *, media_scene="Media", default_scene="Idle"):
+        self._media_scene = media_scene
+        self._default_scene = default_scene
 
-    def value(self, key, default=None, _type=None):
-        return self.values.get(key, default)
+    def media_window_scene(self):
+        return self._media_scene
+
+    def default_scene(self):
+        return self._default_scene
+
+
+class _AutoShareSettingsStub:
+    def __init__(self, *, enabled=False, hotkey="", click_position=(-1, -1)):
+        self._enabled = enabled
+        self._hotkey = hotkey
+        self._click_position = click_position
+
+    def is_enabled(self):
+        return self._enabled
+
+    def hotkey(self):
+        return self._hotkey
+
+    def is_configured(self):
+        return self._enabled and bool(self._hotkey)
+
+    def click_position(self):
+        return self._click_position
 
 
 class _ObsServiceStub:
@@ -40,13 +63,8 @@ class _AutoKeyProjectionStub:
 class _WindowStub:
     def __init__(self, *, visible=True, obs_connected=True):
         self._proj_state = {"type": "idle"}
-        self._obs_prefs = _PrefsStub(
-            {
-                "obs/media_window_scene": "Media",
-                "obs/default_scene": "Idle",
-            }
-        )
-        self._zoom_prefs = _PrefsStub({"share/enabled": False})
+        self._obs_settings = _ObsSettingsStub()
+        self._auto_share_settings = _AutoShareSettingsStub()
         self._obs_service = _ObsServiceStub(obs_connected, "Camera")
         self._obs_pre_media_scene = ""
         self.proj_bar = _ProjectionBarStub()
@@ -112,15 +130,11 @@ def test_sync_obs_scene_returns_to_previous_scene_from_media_scene():
     assert window.proj_bar.obs_scene_states == [False]
 
 
-def test_auto_share_hotkey_uses_current_key_before_migration_keys():
+def test_auto_share_hotkey_uses_settings_store_value():
     window = _WindowStub()
-    window._zoom_prefs = _PrefsStub(
-        {
-            "share/enabled": True,
-            "share/hotkey": "Ctrl+Shift+S",
-            "share/start_hotkey": "OldStart",
-            "share/stop_hotkey": "OldStop",
-        }
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Ctrl+Shift+S",
     )
     controller = ProjectionIntegrationController(window)
 
@@ -128,20 +142,13 @@ def test_auto_share_hotkey_uses_current_key_before_migration_keys():
     assert controller.auto_share_configured() is True
 
 
-def test_auto_share_hotkey_falls_back_to_legacy_keys():
+def test_auto_share_configured_rejects_missing_hotkey():
     window = _WindowStub()
-    window._zoom_prefs = _PrefsStub(
-        {
-            "share/enabled": True,
-            "share/hotkey": "",
-            "share/start_hotkey": "LegacyStart",
-            "share/stop_hotkey": "LegacyStop",
-        }
-    )
+    window._auto_share_settings = _AutoShareSettingsStub(enabled=True, hotkey="")
     controller = ProjectionIntegrationController(window)
 
-    assert controller.auto_share_hotkey() == "LegacyStart"
-    assert controller.auto_share_configured() is True
+    assert controller.auto_share_hotkey() == ""
+    assert controller.auto_share_configured() is False
 
 
 def test_auto_share_ignores_stale_worker_result():
