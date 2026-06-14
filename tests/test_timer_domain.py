@@ -48,6 +48,7 @@ from solin.core.timer.part_titles import (
     PART_TITLE_SOURCES,
 )
 from solin.core.timer.engine import TimerEngine
+from solin.core.timer.state_machine import TimerStateMachine
 from solin.core.timer.store import TimerStore
 from solin.core.foundation.constants import QSETTINGS_TIMER_APP
 from solin.core.foundation.settings_store import SettingsStore
@@ -454,6 +455,54 @@ def _living_last_default() -> int:
 
 # ── Engine lifecycle ──────────────────────────────────────────────────────────
 
+def test_state_machine_transitions_are_deterministic():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    first, second = schedule.parts
+    state.set_schedule(schedule)
+
+    assert state.start_part(first.id, now=100.0)
+    assert first.started_at_epoch == 100.0
+    assert state.start_part(second.id, now=145.0)
+    assert first.state is PartState.STOPPED
+    assert first.accumulated_seconds == 45.0
+    assert second.started_at_epoch == 145.0
+
+    assert state.stop_part(now=175.0)
+    assert second.state is PartState.STOPPED
+    assert second.accumulated_seconds == 30.0
+    assert state.snapshot(now=200.0).active_part_id == second.id
+    assert state.clear_stopped_part(second.id)
+    assert not state.snapshot(now=200.0).active
+
+
+def test_state_machine_ignores_invalid_transitions():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    part = schedule.parts[0]
+    state.set_schedule(schedule)
+
+    assert not state.start_part("missing", now=100.0)
+    assert not state.stop_part(part.id, now=100.0)
+    assert not state.reset_part("missing")
+    assert not state.clear_stopped_part(part.id)
+
+
+def test_state_machine_restores_running_part_and_canonical_title():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+    running = schedule.parts_in(Section.MINISTRY)[1]
+    running.state = PartState.RUNNING
+    running.started_at_epoch = 100.0
+
+    state.set_schedule(schedule)
+    snapshot = state.snapshot(now=160.0)
+
+    assert snapshot.active_part_id == running.id
+    assert snapshot.active_part_title == GENERIC_INDEXED_PART_TITLE
+    assert snapshot.elapsed_seconds == 60.0
+
+
 def test_engine_countdown_and_overrun():
     _app()
     engine = TimerEngine()
@@ -558,6 +607,21 @@ def test_engine_revert_cancelled_when_new_part_starts():
     engine.start_part(p2.id)        # supersedes the pending revert
     engine._on_revert_timeout()     # stale fire — must be a no-op
     assert engine.snapshot().active_part_id == p2.id
+
+
+def test_engine_invalid_start_keeps_pending_revert():
+    _app()
+    engine = TimerEngine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    engine.set_schedule(schedule)
+    part = schedule.parts[0]
+    engine.start_part(part.id)
+    engine.stop_part(part.id)
+
+    engine.start_part("missing")
+    engine._on_revert_timeout()
+
+    assert not engine.snapshot().active
 
 
 def test_engine_zero_freeze_reverts_immediately():

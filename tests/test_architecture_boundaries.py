@@ -223,3 +223,28 @@ def test_meeting_schedule_domain_has_no_framework_or_application_dependencies():
             violations.append(_display(path, node))
 
     assert violations == []
+
+
+def test_timer_domain_has_no_framework_or_application_dependencies():
+    timer_root = PROJECT_ROOT / "src" / "solin" / "core" / "timer"
+    domain_files = (
+        "models.py",
+        "part_titles.py",
+        "render.py",
+        "schedule_factory.py",
+        "state_machine.py",
+    )
+    violations: list[str] = []
+
+    for filename in domain_files:
+        path = timer_root / filename
+        for node in _imports(path):
+            roots = (
+                [alias.name.split(".", 1)[0] for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [(node.module or "").split(".", 1)[0]]
+            )
+            if any(root in {"PySide6", "solin"} for root in roots):
+                violations.append(_display(path, node))
+
+    assert violations == []
