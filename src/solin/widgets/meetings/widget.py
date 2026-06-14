@@ -58,6 +58,7 @@ from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.memorial import MemorialData, MemorialService
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
+from ...core.media.settings import MediaSettingsStore
 from ...qml_module import load_qml_type
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
 from ..jw_songs_bridge import JWSongsBridge
@@ -632,6 +633,7 @@ class MeetingsWidget(QWidget):
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
+        media_settings: MediaSettingsStore,
         prefs: QSettings,
         parent=None,
     ):
@@ -649,10 +651,11 @@ class MeetingsWidget(QWidget):
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._jwpub_checksum_store = jwpub_checksum_store
+        self._media_settings = media_settings
         self._prefs = prefs
 
         self._service = JwpubService(
-            prefs,
+            media_settings,
             cache_manager,
             runtime_paths.jwpub_cache_dir,
             jwpub_checksum_store,

@@ -39,11 +39,10 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import (
-    QObject, QSettings, QThread, Signal, Slot,
+    QObject, QThread, Signal, Slot,
 )
 
 from solin.core.network.http import HttpError, stream_get
-from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.jw.publication_links import (
     DEFAULT_USER_AGENT,
     VIDEO_FORMATS,
@@ -51,6 +50,7 @@ from solin.core.jw.publication_links import (
     select_pub_media_file,
 )
 from solin.core.media.cache import MediaCacheManager, is_url_cached
+from solin.core.media.settings import MediaSettingsStore
 from solin.core.storage.json_repository import JsonFileRepository
 
 log = logging.getLogger(__name__)
@@ -1651,14 +1651,14 @@ class JwpubService(QObject):
 
     def __init__(
         self,
-        prefs: QSettings,
+        media_settings: MediaSettingsStore,
         cache_manager: MediaCacheManager,
         jwpub_cache_dir: str | os.PathLike[str],
         checksum_store: JwpubChecksumStore,
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._prefs  = prefs
+        self._media_settings = media_settings
         self._cache_manager = cache_manager
         self._active: dict[str, WeekData] = {}
         self._lang   = "T"
@@ -1785,7 +1785,7 @@ class JwpubService(QObject):
         self._active.pop(monday.isoformat(), None)
 
     def auto_download_if_enabled(self):
-        if not self._prefs.value(SettingsKey.MEETINGS_AUTO_DOWNLOAD, False, bool):
+        if not self._media_settings.meetings_auto_download():
             return
         mon      = _monday_of_week(date.today())
         next_mon = mon + timedelta(weeks=1)
@@ -1810,7 +1810,7 @@ class JwpubService(QObject):
 
     @Slot(str, object)
     def _on_auto_dl_ready(self, key: str, wd: object):
-        if not self._prefs.value(SettingsKey.MEETINGS_AUTO_DOWNLOAD, False, bool):
+        if not self._media_settings.meetings_auto_download():
             return
         mon = _monday_of_week(date.today())
         target_keys = {mon.isoformat(), (mon + timedelta(weeks=1)).isoformat()}

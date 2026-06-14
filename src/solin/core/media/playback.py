@@ -20,13 +20,13 @@ Comportamento de buffer por modo
 """
 import logging
 
-from PySide6.QtCore import QObject, QSettings, Signal, QUrl, QTimer
-from solin.core.foundation.settings_keys import SettingsKey
+from PySide6.QtCore import QObject, Signal, QUrl, QTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PySide6.QtGui import QPixmap, QImage
 
 from .downloader import SongDownloader
 from .cache import MediaCacheManager
+from .settings import MediaPlaybackSettings
 
 log = logging.getLogger(__name__)
 
@@ -50,12 +50,12 @@ class MediaController(QObject):
 
     def __init__(
         self,
-        prefs: QSettings,
+        settings: MediaPlaybackSettings,
         cache_manager: MediaCacheManager,
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._prefs = prefs
+        self._settings = settings
         self._cache_manager = cache_manager
 
         self.player = QMediaPlayer(self)
@@ -143,7 +143,7 @@ class MediaController(QObject):
         else:
             self._play_source(url)
             auto_download = (
-                self._prefs.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool)
+                self._settings.auto_download_on_play()
                 if download_persist is None else bool(download_persist)
             )
             self._stream_persist = auto_download

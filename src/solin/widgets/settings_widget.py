@@ -18,6 +18,8 @@ from ..core.integrations.automation.settings import (
 )
 from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
+from ..core.jw.background_song_settings import BackgroundSongSettingsStore
+from ..core.media.settings import MediaSettingsStore
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin
@@ -73,6 +75,8 @@ class SettingsWidget(
                  auto_share_settings: AutoShareSettingsStore,
                  camera_settings: CameraSettingsStore,
                  auto_key_settings: AutoKeySettingsStore,
+                 media_settings: MediaSettingsStore,
+                 background_song_settings: BackgroundSongSettingsStore,
                  yeartext_cache_file: str | Path,
                  parent=None):
         super().__init__(parent)
@@ -87,6 +91,8 @@ class SettingsWidget(
         self._auto_share_settings = auto_share_settings
         self._camera_settings = camera_settings
         self._auto_key_settings = auto_key_settings
+        self._media_settings = media_settings
+        self._background_song_settings = background_song_settings
         self._init_yearly_text_section()
         self._build_ui()
         screen_manager.screens_changed.connect(self._refresh_screens)

@@ -31,10 +31,12 @@ from .core.ui.window_settings import WindowGeometrySettingsStore
 from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
+from .core.jw.background_song_settings import BackgroundSongSettingsStore
 from .core.jw.catalog import JWMediaCatalogCachePaths
 from .core.jw.songs import JWSongsStore
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
+from .core.media.settings import MediaSettingsStore
 from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
@@ -104,9 +106,13 @@ class MainWindow(QMainWindow):
             profile_settings,
         )
         self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
+        self._media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
+        self._background_song_settings = (
+            BackgroundSongSettingsStore.for_profile_settings(profile_settings)
+        )
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(
-            profile_prefs,
+            self._media_settings,
             media_cache_manager,
             self,
         )
@@ -155,6 +161,8 @@ class MainWindow(QMainWindow):
 
         self._background_song_service = BackgroundSongService(
             self.lang,
+            self._background_song_settings,
+            self._media_settings,
             profile_prefs,
             jw_songs_store,
             media_cache_manager,

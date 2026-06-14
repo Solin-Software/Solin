@@ -6,29 +6,27 @@ import random
 from datetime import datetime, timedelta
 from typing import Any
 
-from PySide6.QtCore import QObject, QSettings, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QMediaPlayer
 
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.jw.background_song_settings import (
+    DEFAULT_BACKGROUND_SONG_FADE_SECONDS,
+    DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
+    DEFAULT_BACKGROUND_SONG_VOLUME,
+    BackgroundSongSettingsStore,
+    clamp_background_song_fade_seconds,
+    clamp_background_song_stop_before_seconds,
+    clamp_background_song_volume,
+)
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
+from solin.core.media.settings import MediaSettingsStore
 from solin.core.meetings.schedule import MeetingOccurrence, load_meeting_schedule
 
-DEFAULT_BACKGROUND_SONG_VOLUME = 25
-DEFAULT_BACKGROUND_SONG_FADE_SECONDS = 5
-DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS = 10
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50
-
-
-def _clamp_int(value: Any, minimum: int, maximum: int, fallback: int) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return fallback
-    return max(minimum, min(maximum, number))
 
 
 def _display_title(item: dict[str, Any]) -> str:
@@ -70,17 +68,20 @@ class BackgroundSongService(QObject):
     def __init__(
         self,
         lang_manager: object,
-        prefs: QSettings,
+        settings: BackgroundSongSettingsStore,
+        media_settings: MediaSettingsStore,
+        schedule_prefs: Any,
         songs_store: JWSongsStore,
         cache_manager: MediaCacheManager,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._lang = lang_manager
-        self._prefs = prefs
+        self._settings = settings
+        self._schedule_prefs = schedule_prefs
         self._store = songs_store
 
-        self._media = MediaController(prefs, cache_manager, self)
+        self._media = MediaController(media_settings, cache_manager, self)
 
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME
@@ -188,34 +189,10 @@ class BackgroundSongService(QObject):
 
     @Slot()
     def reload_settings(self) -> None:
-        enabled = self._prefs.value(SettingsKey.BACKGROUND_SONG_ENABLED, False, bool)
-        volume = _clamp_int(
-            self._prefs.value(
-                SettingsKey.BACKGROUND_SONG_VOLUME,
-                DEFAULT_BACKGROUND_SONG_VOLUME,
-            ),
-            0,
-            100,
-            DEFAULT_BACKGROUND_SONG_VOLUME,
-        )
-        fade_seconds = _clamp_int(
-            self._prefs.value(
-                SettingsKey.BACKGROUND_SONG_FADE_SECONDS,
-                DEFAULT_BACKGROUND_SONG_FADE_SECONDS,
-            ),
-            0,
-            30,
-            DEFAULT_BACKGROUND_SONG_FADE_SECONDS,
-        )
-        stop_before_seconds = _clamp_int(
-            self._prefs.value(
-                SettingsKey.BACKGROUND_SONG_STOP_BEFORE_SECONDS,
-                DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
-            ),
-            0,
-            300,
-            DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS,
-        )
+        enabled = self._settings.is_enabled()
+        volume = self._settings.volume_percent()
+        fade_seconds = self._settings.fade_seconds()
+        stop_before_seconds = self._settings.stop_before_seconds()
 
         enabled_changed = enabled != self._enabled
         self._enabled = bool(enabled)
@@ -238,7 +215,7 @@ class BackgroundSongService(QObject):
     def set_enabled(self, enabled: bool) -> None:
         if self._enabled == bool(enabled):
             return
-        self._prefs.setValue(SettingsKey.BACKGROUND_SONG_ENABLED, bool(enabled))
+        self._settings.set_enabled(enabled)
         self.reload_settings()
 
     def set_volume_percent(self, value: int) -> None:
@@ -304,7 +281,7 @@ class BackgroundSongService(QObject):
         if not self._enabled:
             return
 
-        schedule = load_meeting_schedule(self._prefs)
+        schedule = load_meeting_schedule(self._schedule_prefs)
         if not schedule.has_configured_slot:
             self._auto_stop_timer.stop()
             if not self.is_playing:
@@ -489,7 +466,7 @@ class BackgroundSongService(QObject):
 
     def _can_start_new_track(self) -> bool:
         now = datetime.now().astimezone()
-        occurrence = load_meeting_schedule(self._prefs).pre_meeting_occurrence(now)
+        occurrence = load_meeting_schedule(self._schedule_prefs).pre_meeting_occurrence(now)
         if occurrence is None:
             active = self._active_occurrence
             if not self._manual_session and active is not None and now >= active.starts_at:
@@ -572,14 +549,14 @@ class BackgroundSongService(QObject):
         self.stop()
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
-        return load_meeting_schedule(self._prefs).pre_meeting_occurrence(
+        return load_meeting_schedule(self._schedule_prefs).pre_meeting_occurrence(
             datetime.now().astimezone()
         )
 
     def _set_volume_percent(self, value: int, *, persist: bool) -> None:
-        value = _clamp_int(value, 0, 100, DEFAULT_BACKGROUND_SONG_VOLUME)
+        value = clamp_background_song_volume(value)
         if persist:
-            self._prefs.setValue(SettingsKey.BACKGROUND_SONG_VOLUME, value)
+            self._settings.set_volume_percent(value)
         changed = value != self._volume_percent
         self._volume_percent = value
         if not self._fade_timer.isActive():
@@ -588,17 +565,17 @@ class BackgroundSongService(QObject):
             self.volume_changed.emit(value)
 
     def _set_fade_seconds(self, value: int, *, persist: bool) -> None:
-        value = _clamp_int(value, 0, 30, DEFAULT_BACKGROUND_SONG_FADE_SECONDS)
+        value = clamp_background_song_fade_seconds(value)
         if persist:
-            self._prefs.setValue(SettingsKey.BACKGROUND_SONG_FADE_SECONDS, value)
+            self._settings.set_fade_seconds(value)
         if value != self._fade_seconds:
             self._fade_seconds = value
             self.fade_seconds_changed.emit(value)
 
     def _set_stop_before_seconds(self, value: int, *, persist: bool) -> None:
-        value = _clamp_int(value, 0, 300, DEFAULT_BACKGROUND_SONG_STOP_BEFORE_SECONDS)
+        value = clamp_background_song_stop_before_seconds(value)
         if persist:
-            self._prefs.setValue(SettingsKey.BACKGROUND_SONG_STOP_BEFORE_SECONDS, value)
+            self._settings.set_stop_before_seconds(value)
         if value != self._stop_before_seconds:
             self._stop_before_seconds = value
             self.stop_before_seconds_changed.emit(value)

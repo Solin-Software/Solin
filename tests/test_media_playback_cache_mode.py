@@ -10,12 +10,12 @@ def _app():
     return QCoreApplication.instance() or QCoreApplication([])
 
 
-class _Prefs:
+class _MediaSettings:
     def __init__(self, auto_download: bool) -> None:
         self._auto_download = auto_download
 
-    def value(self, _key, default=None, _type=None):
-        return self._auto_download if _type is bool else default
+    def auto_download_on_play(self) -> bool:
+        return self._auto_download
 
 
 class _Downloader:
@@ -40,7 +40,7 @@ class _Downloader:
 def _controller_with_downloader(tmp_path, *, auto_download: bool):
     _app()
     controller = MediaController(
-        _Prefs(auto_download),
+        _MediaSettings(auto_download),
         MediaCacheManager(tmp_path),
     )
     downloader = _Downloader()

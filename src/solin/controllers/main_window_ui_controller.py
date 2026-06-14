@@ -218,6 +218,8 @@ class MainWindowUiController:
             auto_share_settings=window._auto_share_settings,
             camera_settings=window._camera_settings,
             auto_key_settings=window._auto_key_settings,
+            media_settings=window._media_settings,
+            background_song_settings=window._background_song_settings,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"
             ),
@@ -256,6 +258,7 @@ class MainWindowUiController:
             jw_catalog_cache_paths=window.jw_catalog_cache_paths,
             jw_songs_store=window.jw_songs_store,
             jwpub_checksum_store=window.jwpub_checksum_store,
+            media_settings=window._media_settings,
             prefs=window.profile_prefs,
             parent=window,
         )

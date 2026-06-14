@@ -32,7 +32,7 @@ def _guard_service(occurrence: MeetingOccurrence):
     service = SimpleNamespace(
         _fade_seconds=5,
         _stop_before_seconds=10,
-        _prefs=object(),
+        _schedule_prefs=object(),
         _active_occurrence=None,
         _suppressed_slot_id="",
         _desired_playing=True,
@@ -154,7 +154,7 @@ def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade(
     monkeypatch.setattr(service_module, "load_meeting_schedule", lambda _prefs: schedule)
     service = SimpleNamespace(
         _enabled=True,
-        _prefs=object(),
+        _schedule_prefs=object(),
         _active_occurrence=None,
         _scheduled_fade_deadline=None,
         _suppressed_slot_id="",
