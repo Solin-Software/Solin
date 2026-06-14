@@ -3,7 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from solin.controllers.open_media_controller import OpenMediaController
+from solin.controllers.open_media_controller import (
+    OpenMediaContext,
+    OpenMediaController,
+    OpenMediaHandlers,
+)
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.media.formats import mime_to_ext
@@ -42,9 +46,28 @@ class _ProjectionBarStub:
 class _PlaylistWidgetStub:
     def __init__(self):
         self.opened_pdf_playlists = []
+        self.opened_named_playlists = []
+        self.appended = []
 
     def open_pdf_as_temp_playlist(self, items, stem):
         self.opened_pdf_playlists.append((items, stem))
+        return "pdf-session"
+
+    def open_temp_playlist(self, items, _lang, *, name=None):
+        self.opened_named_playlists.append((items, name))
+        return "named-session"
+
+    def append_temp_playlist_items(self, playlist_id, items):
+        self.appended.append((playlist_id, items))
+        return True
+
+
+class _NotificationsStub:
+    def __init__(self):
+        self.successes = []
+
+    def success(self, message):
+        self.successes.append(message)
 
 
 class _WindowStub:
@@ -54,6 +77,7 @@ class _WindowStub:
         self._playlist_imports = _PlaylistImportStub()
         self.proj_bar = _ProjectionBarStub()
         self.playlist_widget = _PlaylistWidgetStub()
+        self.notifications = _NotificationsStub()
         self.lang = SimpleNamespace(
             api_code="E",
             jw_lang_service=SimpleNamespace(media_api_code="T"),
@@ -74,7 +98,39 @@ class _WindowStub:
 
 
 def _controller(window):
-    return OpenMediaController(window, _PROFILE_PATHS, OwnedQThreadRegistry())
+    return OpenMediaController(
+        OpenMediaContext(
+            dialog_parent=window,
+            runtime_paths=SimpleNamespace(
+                pdf_pages_dir="cache/pdf",
+                pptx_pages_dir="cache/pptx",
+                docx_pages_dir="cache/docx",
+            ),
+            profile_paths=_PROFILE_PATHS,
+            language_manager=window.lang,
+            notifications=window.notifications,
+            thread_registry=OwnedQThreadRegistry(),
+            temp_files=window._jwl_tmp_files,
+            translate=window.tr,
+        ),
+        OpenMediaHandlers(
+            switch_to_playlist=lambda: window._navigation.switch_page(7),
+            project_media_at_index=window._project_media_at_index,
+            expand_projection_overlay=window.proj_bar.expand_overlay,
+            send_to_temp_playlist=window._playlist_imports.send_to_temp_playlist,
+            open_pdf_temp_playlist=window.playlist_widget.open_pdf_as_temp_playlist,
+            open_named_temp_playlist=lambda items, name: (
+                window.playlist_widget.open_temp_playlist(
+                    items,
+                    window.lang,
+                    name=name,
+                )
+            ),
+            append_temp_playlist_items=(
+                window.playlist_widget.append_temp_playlist_items
+            ),
+        ),
+    )
 
 
 def test_mime_to_ext_maps_known_and_safe_fallbacks():
@@ -315,3 +371,9 @@ def test_best_ext_prefers_filename_then_mime_type():
     assert controller._best_ext({"filename": "video.mov"}, "video/mp4") == ".mov"
     assert controller._best_ext({"mime_type": "audio/ogg"}, "video/mp4") == ".ogg"
     assert controller._best_ext({}, "video/mp4") == ".mp4"
+
+
+def test_open_media_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")

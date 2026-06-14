@@ -1,6 +1,10 @@
 from types import SimpleNamespace
 
-from solin.controllers.playlist_import_controller import PlaylistImportController
+from solin.controllers.playlist_import_controller import (
+    PlaylistImportContext,
+    PlaylistImportController,
+    PlaylistImportHandlers,
+)
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
 from solin.core.foundation.runtime_paths import ProfilePaths
 
@@ -79,9 +83,19 @@ def _target(create_new=False):
 
 def _controller(window):
     return PlaylistImportController(
-        window,
-        _PROFILE_PATHS,
-        OwnedQThreadRegistry(),
+        PlaylistImportContext(
+            dialog_parent=window,
+            runtime_paths=SimpleNamespace(pdf_pages_dir="cache/pdf"),
+            profile_paths=_PROFILE_PATHS,
+            language_manager=window.lang,
+            notifications=window.notifications,
+            playlist_widget=window.playlist_widget,
+            thread_registry=OwnedQThreadRegistry(),
+            translate=window.tr,
+        ),
+        PlaylistImportHandlers(
+            switch_to_playlist=lambda: window._navigation.switch_page(7),
+        ),
     )
 
 
@@ -188,3 +202,9 @@ def test_send_to_temp_playlist_switches_to_playlist_page():
 
     assert window._navigation.pages == [7]
     assert window.playlist_widget.temp_opened == (items, window.lang)
+
+
+def test_playlist_import_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")

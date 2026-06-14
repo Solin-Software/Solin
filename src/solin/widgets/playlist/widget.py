@@ -1088,9 +1088,14 @@ class PlaylistWidget(QWidget):
         self._list_view.refresh()
         self._edit_view.load_playlist(pl)
 
-    def open_pdf_as_temp_playlist(self, items: list, pdf_stem: str) -> None:
-        self._edit_view.load_temp_playlist(items, self.lang, name=f"📄  {pdf_stem}")
+    def open_pdf_as_temp_playlist(self, items: list, pdf_stem: str) -> str:
+        playlist_id = self._edit_view.load_temp_playlist(
+            items,
+            self.lang,
+            name=f"📄  {pdf_stem}",
+        )
         self._stack.setCurrentIndex(1)
+        return playlist_id
 
     def _on_project_items(self, items: list, start_idx: int, order: str):
         if not items: return
@@ -1105,9 +1110,32 @@ class PlaylistWidget(QWidget):
 
     # ── API pública ────────────────────────────────────────────────────────
 
-    def open_temp_playlist(self, items: list, lang=None):
-        self._edit_view.load_temp_playlist(items, lang)
+    def open_temp_playlist(
+        self,
+        items: list,
+        lang=None,
+        *,
+        name: str | None = None,
+    ) -> str:
+        playlist_id = self._edit_view.load_temp_playlist(items, lang, name=name)
         self._stack.setCurrentIndex(1)
+        return playlist_id
+
+    def append_temp_playlist_items(
+        self,
+        playlist_id: str,
+        items: list[dict],
+    ) -> bool:
+        playlist = self._edit_view._pl
+        if (
+            not self._edit_view._is_temp
+            or playlist is None
+            or playlist.get("id") != playlist_id
+        ):
+            return False
+        playlist.setdefault("items", []).extend(copy.deepcopy(items))
+        self._edit_view._rebuild_list()
+        return True
 
     def get_playlist_names(self) -> list[tuple[str, str]]:
         return [(p["id"], p["name"]) for p in self._playlists]

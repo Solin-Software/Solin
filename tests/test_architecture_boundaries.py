@@ -216,6 +216,8 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "lazy_page_controller.py",
         "main_window_bootstrap_controller.py",
         "navigation_controller.py",
+        "open_media_controller.py",
+        "playlist_import_controller.py",
         "remote_services_controller.py",
         "shutdown_controller.py",
         "signal_connection_controller.py",

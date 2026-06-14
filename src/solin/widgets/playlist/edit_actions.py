@@ -355,7 +355,14 @@ class _PlaylistEditActionsMixin:
         self._sync_order()
         self.back_requested.emit()
 
-    def load_temp_playlist(self, items: list, lang=None, name: str | None = None) -> None:
+    def load_temp_playlist(
+        self,
+        items: list,
+        lang=None,
+        name: str | None = None,
+        *,
+        playlist_id: str | None = None,
+    ) -> str:
         if lang:
             self.lang = lang
         self._is_temp = True
@@ -371,8 +378,10 @@ class _PlaylistEditActionsMixin:
                     default="video",
                 )
             norm.append(item)
-        pl = {"id": "__temp__", "name": display_name, "items": norm, "_temp": True}
+        temp_id = playlist_id or f"__temp__:{uuid.uuid4()}"
+        pl = {"id": temp_id, "name": display_name, "items": norm, "_temp": True}
         self.load_playlist(pl)
+        return temp_id
 
     def _save_temp_playlist(self) -> None:
         dlg = _NameDialog(lang=self.lang, parent=self)

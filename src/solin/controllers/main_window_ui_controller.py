@@ -140,14 +140,22 @@ class MainWindowUiController:
                 project_video=window._media_projection.project_video,
                 stop_projection=window._projection_stop.stop_projection,
                 project_tab_frame=window._media_projection.project_tab_frame,
-                add_current_to_playlist=(
-                    window._playlist_imports.add_current_to_playlist
+                add_current_to_playlist=lambda url, title, meta: (
+                    window._playlist_imports.add_current_to_playlist(
+                        url,
+                        title,
+                        meta,
+                    )
                 ),
-                add_downloaded_file_to_playlist=(
-                    window._playlist_imports.add_browser_downloaded_file
+                add_downloaded_file_to_playlist=lambda path, title, kind: (
+                    window._playlist_imports.add_browser_downloaded_file(
+                        path,
+                        title,
+                        kind,
+                    )
                 ),
-                report_download_failure=(
-                    window._playlist_imports.browser_download_failed
+                report_download_failure=lambda title, error: (
+                    window._playlist_imports.browser_download_failed(title, error)
                 ),
                 play_cached_media=window._media_projection.on_cache_play,
                 wifi_media_received=(

@@ -19,8 +19,16 @@ from .controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
 )
 from .controllers.media_projection_controller import MediaProjectionController
-from .controllers.open_media_controller import OpenMediaController
-from .controllers.playlist_import_controller import PlaylistImportController
+from .controllers.open_media_controller import (
+    OpenMediaContext,
+    OpenMediaController,
+    OpenMediaHandlers,
+)
+from .controllers.playlist_import_controller import (
+    PlaylistImportContext,
+    PlaylistImportController,
+    PlaylistImportHandlers,
+)
 from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.projection_integration_controller import ProjectionIntegrationController
 from .controllers.projection_stop_controller import ProjectionStopController
@@ -181,16 +189,6 @@ class MainWindow(QMainWindow):
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
-        self._playlist_imports = PlaylistImportController(
-            self,
-            profile_paths,
-            self._conversion_threads,
-        )
-        self._open_media_controller = OpenMediaController(
-            self,
-            profile_paths,
-            self._conversion_threads,
-        )
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
         self._wifi_playlist_controller = WifiPlaylistController(
@@ -272,6 +270,52 @@ class MainWindow(QMainWindow):
             media_info_service_factory=media_info_service_factory,
         )
         self._build_ui()
+        self._playlist_imports = PlaylistImportController(
+            PlaylistImportContext(
+                dialog_parent=self,
+                runtime_paths=self.runtime_paths,
+                profile_paths=self.profile_paths,
+                language_manager=self.lang,
+                notifications=self.notifications,
+                playlist_widget=self.playlist_widget,
+                thread_registry=self._conversion_threads,
+                translate=self.tr,
+            ),
+            PlaylistImportHandlers(
+                switch_to_playlist=lambda: self._navigation.switch_page(7),
+            ),
+        )
+        self._open_media_controller = OpenMediaController(
+            OpenMediaContext(
+                dialog_parent=self,
+                runtime_paths=self.runtime_paths,
+                profile_paths=self.profile_paths,
+                language_manager=self.lang,
+                notifications=self.notifications,
+                thread_registry=self._conversion_threads,
+                temp_files=self._jwl_tmp_files,
+                translate=self.tr,
+            ),
+            OpenMediaHandlers(
+                switch_to_playlist=lambda: self._navigation.switch_page(7),
+                project_media_at_index=self._media_projection.project_media_at_index,
+                expand_projection_overlay=self.proj_bar.expand_overlay,
+                send_to_temp_playlist=self._playlist_imports.send_to_temp_playlist,
+                open_pdf_temp_playlist=(
+                    self.playlist_widget.open_pdf_as_temp_playlist
+                ),
+                open_named_temp_playlist=lambda items, name: (
+                    self.playlist_widget.open_temp_playlist(
+                        items,
+                        self.lang,
+                        name=name,
+                    )
+                ),
+                append_temp_playlist_items=(
+                    self.playlist_widget.append_temp_playlist_items
+                ),
+            ),
+        )
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(self)
         self._language_controller = LanguageController(self)

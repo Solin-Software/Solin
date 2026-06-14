@@ -2,6 +2,7 @@ from solin.core.media.formats import media_type_from_path
 from solin.core.playlists.items import (
     create_playlist_item,
     looks_like_filename_title,
+    playlist_items_from_jwpub,
 )
 
 
@@ -49,3 +50,24 @@ def test_looks_like_filename_title_only_accepts_audio_or_video_names():
     assert looks_like_filename_title("clip.mp4") is True
     assert looks_like_filename_title("cover.jpg") is False
     assert looks_like_filename_title("Opening Song") is False
+
+
+def test_playlist_items_from_jwpub_preserves_metadata_and_manual_title():
+    items = playlist_items_from_jwpub(
+        [{
+            "title": "Imported title",
+            "url": "https://example.test/media.mp4",
+            "type": "video",
+            "key_symbol": "lff",
+            "track": 3,
+            "meps_language": 5,
+        }],
+        "Fallback",
+    )
+
+    assert len(items) == 1
+    assert items[0]["title"] == "Imported title"
+    assert items[0]["key_symbol"] == "lff"
+    assert items[0]["track"] == 3
+    assert items[0]["meps_language"] == 5
+    assert items[0]["auto_title"] is False

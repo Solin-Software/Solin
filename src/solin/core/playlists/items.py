@@ -64,3 +64,26 @@ def create_playlist_item(
                 item["auto_title"] = True
 
     return cast(PlaylistMediaItem, item)
+
+
+def playlist_items_from_jwpub(
+    raw_items: list[dict[str, Any]],
+    fallback_title: str,
+) -> list[PlaylistMediaItem]:
+    """Map JWPUB import output to the canonical playlist item representation."""
+    items: list[PlaylistMediaItem] = []
+    for raw in raw_items:
+        item = create_playlist_item(
+            title=raw.get("title", fallback_title),
+            url=raw.get("url", ""),
+            type=raw.get("type", "video"),
+            key_symbol=raw.get("key_symbol"),
+            track=raw.get("track"),
+            issue_tag=raw.get("issue_tag"),
+            doc_id=raw.get("doc_id"),
+            meps_language=raw.get("meps_language", raw.get("language", 0)),
+        )
+        if raw.get("url") and raw.get("type") != "image":
+            item["auto_title"] = False
+        items.append(item)
+    return items
