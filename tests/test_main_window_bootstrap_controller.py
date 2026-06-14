@@ -145,7 +145,6 @@ class _Window:
         self.projection_session = ProjectionSession()
         self.obs_scene_session = ObsSceneSession()
         self._jwl_tmp_files = set()
-        self._next_is_sjjm = False
         self.stylesheets = []
 
     def setStyleSheet(self, stylesheet):
@@ -203,7 +202,6 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
     assert window.projection_session.state == {"type": "idle"}
     assert window.projection_session.tab_projection_active is False
     assert window._jwl_tmp_files == set()
-    assert window._next_is_sjjm is False
     assert window.obs_scene_session.pre_media_scene == ""
     assert resources.ipc_controller.obs_scene_memory_at_start == ""
     assert resources.monitor_popup is not None

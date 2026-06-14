@@ -197,7 +197,6 @@ class _WindowStub:
     def __init__(self):
         self.events = []
         self._AUDIO_EXTS = frozenset({".mp3", ".m4a"})
-        self._next_is_sjjm = False
         self.projection_session = ProjectionSession()
         self.projection_session.set_tab_projection_active(True)
         self._navigation = _NavigationStub()
@@ -241,14 +240,14 @@ def test_project_video_classifies_audio_and_updates_status():
 
 def test_project_video_core_uses_announcement_mode_for_sjjm_video():
     window = _WindowStub()
-    window._next_is_sjjm = True
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
     controller = MediaProjectionController(window)
+    controller._next_is_sjjm = True
 
     controller.project_video_core("video.mp4", "Video", keep_expanded=True)
 
-    assert window._next_is_sjjm is False
+    assert controller._next_is_sjjm is False
     assert window.proj_bar.videos == [("Video", True, False)]
     assert window.proj_bar.announcement_count == 1
     assert window._auto_key_projection.prepared == 1
@@ -280,14 +279,14 @@ def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
 
 def test_project_video_core_pauses_sjjm_video_when_announcement_mode_is_disabled():
     window = _WindowStub()
-    window._next_is_sjjm = True
     window.settings_widget.sjjm_announce_mode = False
     window.settings_widget.start_videos_paused = True
     controller = MediaProjectionController(window)
+    controller._next_is_sjjm = True
 
     controller.project_video_core("song.mp4", "Song")
 
-    assert window._next_is_sjjm is False
+    assert controller._next_is_sjjm is False
     assert window.proj_bar.announcement_count == 0
     assert window.media_ctrl.played == ["song.mp4"]
     assert window.media_ctrl.paused == 1
@@ -308,14 +307,14 @@ def test_project_video_core_ignores_announcement_for_non_sjjm_videos_but_still_p
 
 def test_project_video_core_never_start_pauses_audio_or_enters_song_announcement():
     window = _WindowStub()
-    window._next_is_sjjm = True
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
     controller = MediaProjectionController(window)
+    controller._next_is_sjjm = True
 
     controller.project_video_core("song.mp3", "Song Audio", is_audio=True)
 
-    assert window._next_is_sjjm is False
+    assert controller._next_is_sjjm is False
     assert window.proj_bar.videos == [("Song Audio", False, True)]
     assert window.proj_bar.announcement_count == 0
     assert window.media_ctrl.played == ["song.mp3"]
@@ -332,7 +331,7 @@ def test_on_sjjm_project_marks_only_the_next_video_for_announcement():
 
     controller.on_sjjm_project("song.mp4", "Song", playlist, "")
 
-    assert window._next_is_sjjm is False
+    assert controller._next_is_sjjm is False
     assert window.proj_bar.playlists == [(playlist, None, True)]
     assert window.proj_bar.announcement_count == 1
     assert window.media_ctrl.played == ["song.mp4"]

@@ -201,7 +201,6 @@ class MainWindow(QMainWindow):
         self._ipc_controller = None
         self._remote_services = None
         self._jwl_tmp_files: set[str] = set()
-        self._next_is_sjjm = False
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)

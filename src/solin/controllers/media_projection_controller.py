@@ -28,6 +28,7 @@ class MediaProjectionController:
     def __init__(self, window) -> None:
         self._window = window
         self._session = window.projection_session
+        self._next_is_sjjm = False
 
     def on_song_project(
         self,
@@ -51,7 +52,7 @@ class MediaProjectionController:
         playlist: list,
         order: str,
     ) -> None:
-        self._window._next_is_sjjm = True
+        self._next_is_sjjm = True
         self.project_video(
             url,
             title,
@@ -61,7 +62,6 @@ class MediaProjectionController:
         )
 
     def on_meeting_media_project(self, item) -> None:
-        window = self._window
         if not item:
             return
 
@@ -91,7 +91,7 @@ class MediaProjectionController:
             or os.path.exists(item.file_path)
         ):
             if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
-                window._next_is_sjjm = True
+                self._next_is_sjjm = True
             media_type = "audio" if "audio" in mime else "video"
             playlist_item = {
                 "url": item.file_path,
@@ -102,7 +102,7 @@ class MediaProjectionController:
             return
 
         if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
-            window._next_is_sjjm = True
+            self._next_is_sjjm = True
             self._resolve_and_project_meeting_item(item, title)
         elif item.key_symbol or item.meps_doc_id:
             self._resolve_and_project_meeting_item(item, title)
@@ -194,8 +194,8 @@ class MediaProjectionController:
         is_audio: bool = False,
     ) -> None:
         window = self._window
-        is_sjjm = window._next_is_sjjm
-        window._next_is_sjjm = False
+        is_sjjm = self._next_is_sjjm
+        self._next_is_sjjm = False
 
         self._session.set_tab_projection_active(False)
         window._navigation.stop_browser_tab_projection()
