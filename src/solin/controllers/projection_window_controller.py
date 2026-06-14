@@ -4,7 +4,6 @@ import os
 
 from PySide6.QtCore import QDateTime, QTimer
 
-from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
 from ..core.ui.screens import ScreenManager
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
@@ -15,6 +14,7 @@ class ProjectionWindowController:
 
     def __init__(self, window, *, idle_source_factory=IdleMediaSource) -> None:
         self._window = window
+        self._session = window.projection_session
         # The single shared idle decoder is created lazily on first use so the
         # controller stays cheap to construct (and unit-testable without a
         # QApplication).  All surfaces paint the frames it fans out, so the idle
@@ -22,42 +22,22 @@ class ProjectionWindowController:
         self._idle_source_factory = idle_source_factory
         self._idle_source: IdleMediaSource | None = None
 
-    # ── Monitor allocation helpers ─────────────────────────────────────────
-    #
-    # The shared MonitorAllocationStore (when present on the window) is the
-    # persistent source of truth for which subsystem owns each screen. All the
-    # logic degrades gracefully to the legacy in-memory ``_deactivated_screens``
-    # set when no store is wired (e.g. in unit tests with a window stub).
-
-    def _allocation(self):
-        return getattr(self._window, "_monitor_allocation", None)
-
     def _media_eligible(self, screen) -> bool:
         """True when media projection windows may be shown on ``screen``."""
-        alloc = self._allocation()
-        if alloc is None:
-            return screen.name() not in self._window._deactivated_screens
-        return alloc.owner_of(screen) == OWNER_MEDIA
+        return self._session.media_eligible(screen)
 
     def _is_timer_reserved(self, screen) -> bool:
-        alloc = self._allocation()
-        return alloc is not None and alloc.owner_of(screen) == OWNER_TIMER
+        return self._session.timer_reserved(screen)
 
     def _persist_media_owner(self, screen, active: bool) -> None:
         """Record an explicit media show/hide choice in the shared store."""
-        alloc = self._allocation()
-        if alloc is None:
-            return
-        # Never clobber a timer reservation from the media side here.
-        if alloc.owner_of(screen) == OWNER_TIMER:
-            return
-        alloc.set_owner(screen, OWNER_MEDIA if active else OWNER_OFF)
+        self._session.set_media_owner(screen, active=active)
 
     def open_projection_windows(self) -> None:
         window = self._window
-        for w in window.projection_windows:
+        for w in self._session.projection_windows:
             w.close()
-        window.projection_windows.clear()
+        self._session.projection_windows.clear()
 
         self._normalize_expired_state()
 
@@ -68,12 +48,12 @@ class ProjectionWindowController:
                 continue
             idx += 1
             win = ProjectionWindow(screen, idx, window.font_manager)
-            window.projection_windows.append(win)
+            self._session.projection_windows.append(win)
 
-        for win in window.projection_windows:
+        for win in self._session.projection_windows:
             self.apply_full_state_to_window(win)
 
-        self._set_screen_count(len(window.projection_windows))
+        self._set_screen_count(len(self._session.projection_windows))
         window._projection_integrations.sync_projection_integrations()
 
     def apply_yearly_text(self, quote: str, ref: str, api_code: str = "") -> None:
@@ -98,7 +78,7 @@ class ProjectionWindowController:
 
         quote, ref, api_code = self._yearly_text()
         win.set_yearly_text(quote, ref, api_code)
-        if self._window._idle_media_path:
+        if self._session.idle_media_path:
             win.set_idle_active()
             # Paint the most recent decoded frame right away so a hot-plugged or
             # respawned surface is in sync from its very first frame instead of
@@ -142,12 +122,12 @@ class ProjectionWindowController:
         *shared* state once, not per-window.  Without it an expired countdown
         would be replayed (and silently ignored) on every new window forever.
         """
-        state = getattr(self._window, "_proj_state", {"type": "idle"})
+        state = self._session.state
         if state.get("type") != "timer":
             return
         now = QDateTime.currentDateTime()
         if now.secsTo(state["target_dt"]) <= 0:
-            self._window._proj_state = {"type": "idle"}
+            self._session.reset_state()
             self._window._projection_integrations.sync_obs_scene(False)
 
     def on_screens_changed(self) -> None:
@@ -176,10 +156,14 @@ class ProjectionWindowController:
             s for s in ScreenManager.secondary_screens()
             if self._screen_name(s) is not None
         ]
-        connected: dict[str, object] = {self._screen_name(s): s for s in secondary}
+        connected: dict[str, object] = {}
+        for screen in secondary:
+            name = self._screen_name(screen)
+            if name is not None:
+                connected[name] = screen
 
         still_valid: list[ProjectionWindow] = []
-        for win in window.projection_windows:
+        for win in self._session.projection_windows:
             win_name = self._screen_name(win.screen())
             fresh_screen = connected.get(win_name) if win_name is not None else None
             # Drop windows on disconnected/deleted screens *and* on screens that
@@ -190,10 +174,13 @@ class ProjectionWindowController:
             else:
                 win.refit_to_screen(fresh_screen)
                 still_valid.append(win)
-        window.projection_windows = still_valid
+        self._session.projection_windows = still_valid
 
         existing_names = {
-            n for n in (self._screen_name(win.screen()) for win in window.projection_windows)
+            n for n in (
+                self._screen_name(win.screen())
+                for win in self._session.projection_windows
+            )
             if n is not None
         }
         self._normalize_expired_state()
@@ -206,23 +193,20 @@ class ProjectionWindowController:
                 continue
             win = ProjectionWindow(screen, i + 1, self._window.font_manager)
             self.apply_full_state_to_window(win)
-            window.projection_windows.append(win)
+            self._session.projection_windows.append(win)
 
-        self._set_screen_count(len(window.projection_windows))
+        self._set_screen_count(len(self._session.projection_windows))
         window._projection_integrations.sync_projection_integrations()
 
     def all_windows(self) -> list:
-        wins = list(self._window.projection_windows)
-        if self._window.floating_preview_window is not None:
-            wins.append(self._window.floating_preview_window)
-        return wins
+        return self._session.all_windows()
 
     def on_idle_media_changed(self, path: str) -> None:
         window = self._window
         # Reject a path that no longer exists — treat it as "clear".
         if path and not os.path.isfile(path):
             path = ""
-        window._idle_media_path = path
+        self._session.set_idle_media_path(path)
 
         if path:
             # Activate surfaces *before* loading: a static image emits its single
@@ -248,12 +232,10 @@ class ProjectionWindowController:
     def on_floating_toggle(self, make_active: bool) -> None:
         window = self._window
         if make_active:
-            if window.floating_preview_window is None:
-                window.floating_preview_window = self.create_floating_window()
+            if self._session.floating_preview_window is None:
+                self._session.floating_preview_window = self.create_floating_window()
         else:
-            if window.floating_preview_window is not None:
-                window.floating_preview_window.close()
-                window.floating_preview_window = None
+            self._session.close_floating_preview()
 
         window._projection_integrations.sync_projection_integrations()
         QTimer.singleShot(
@@ -274,40 +256,39 @@ class ProjectionWindowController:
         return win
 
     def on_floating_respawn(self, saved_geo) -> None:
-        self._window.floating_preview_window = None
+        self._session.floating_preview_window = None
         QTimer.singleShot(120, lambda: self.respawn_floating_silent(saved_geo))
 
     def respawn_floating_silent(self, saved_geo) -> None:
-        window = self._window
-        if window.floating_preview_window is not None:
+        if self._session.floating_preview_window is not None:
             return
-        window.floating_preview_window = self.create_floating_window()
+        self._session.floating_preview_window = self.create_floating_window()
         QTimer.singleShot(0, lambda: (
-            window.floating_preview_window.setGeometry(saved_geo)
-            if window.floating_preview_window is not None else None
+            self._session.floating_preview_window.setGeometry(saved_geo)
+            if self._session.floating_preview_window is not None else None
         ))
 
     def on_monitor_manager_requested(self, anchor_widget) -> None:
         window = self._window
         popup = window._monitor_popup
         secondary = ScreenManager.secondary_screens()
-        active_screens = {id(win.screen()): win for win in window.projection_windows}
-
-        alloc = self._allocation()
+        active_screens = {
+            id(win.screen()): win for win in self._session.projection_windows
+        }
         screens_info = []
         for i, screen in enumerate(secondary):
             screens_info.append({
                 "screen": screen,
                 "active": id(screen) in active_screens,
                 "index": i,
-                "timer_reserved": alloc is not None and alloc.owner_of(screen) == OWNER_TIMER,
+                "timer_reserved": self._session.timer_reserved(screen),
             })
 
-        floating_active = window.floating_preview_window is not None
+        floating_active = self._session.floating_preview_window is not None
         popup.populate(
             screens_info,
             floating_active=floating_active,
-            idle_media_path=window._idle_media_path,
+            idle_media_path=self._session.idle_media_path,
         )
         popup.show_above(anchor_widget)
 
@@ -327,8 +308,8 @@ class ProjectionWindowController:
                 # Do every screen-referencing operation *before* releasing the
                 # clock: tearing the clock window down can make the OS
                 # re-enumerate and invalidate the captured `screen` object.
-                window._deactivated_screens.discard(screen_name)
-                self._allocation().confirm_assignment(screen, OWNER_MEDIA)
+                self._session.show_media_on_screen_name(screen_name)
+                self._session.confirm_media_assignment(screen)
                 self._release_timer_on(screen)
                 self._notify_timer_monitors_changed()
                 # Rebuild media windows through reconcile, which re-queries the
@@ -337,26 +318,32 @@ class ProjectionWindowController:
                 # manual create from the now-stale `screen` did not.
                 self.reconcile_projection_windows()
             else:
-                window._deactivated_screens.discard(screen_name)
+                self._session.show_media_on_screen_name(screen_name)
                 self._persist_media_owner(screen, active=True)
-                already = any(win.screen() == screen for win in window.projection_windows)
+                already = any(
+                    win.screen() == screen
+                    for win in self._session.projection_windows
+                )
                 if not already:
                     win = ProjectionWindow(
                         screen,
                         screen_index + 1,
                         self._window.font_manager,
                     )
-                    window.projection_windows.append(win)
+                    self._session.projection_windows.append(win)
                     self.apply_full_state_to_window(win)
-                    self._set_screen_count(len(window.projection_windows))
+                    self._set_screen_count(len(self._session.projection_windows))
         else:
-            window._deactivated_screens.add(screen_name)
+            self._session.hide_media_on_screen_name(screen_name)
             self._persist_media_owner(screen, active=False)
-            to_remove = [win for win in window.projection_windows if win.screen() == screen]
+            to_remove = [
+                win for win in self._session.projection_windows
+                if win.screen() == screen
+            ]
             for win in to_remove:
-                window.projection_windows.remove(win)
+                self._session.projection_windows.remove(win)
                 win.fade_out_and_close()
-            self._set_screen_count(len(window.projection_windows))
+            self._set_screen_count(len(self._session.projection_windows))
 
         window._projection_integrations.sync_projection_integrations()
         QTimer.singleShot(
@@ -367,7 +354,7 @@ class ProjectionWindowController:
     def on_monitor_all(self, make_active: bool) -> None:
         window = self._window
         if make_active:
-            window._deactivated_screens.clear()
+            self._session.clear_hidden_media_screens()
             # "Project all" claims every non-timer-reserved screen for media.
             for screen in ScreenManager.secondary_screens():
                 if not self._is_timer_reserved(screen):
@@ -375,11 +362,11 @@ class ProjectionWindowController:
             self.open_projection_windows()
         else:
             for screen in ScreenManager.secondary_screens():
-                window._deactivated_screens.add(screen.name())
+                self._session.hide_media_on_screen_name(screen.name())
                 self._persist_media_owner(screen, active=False)
-            for win in window.projection_windows:
+            for win in self._session.projection_windows:
                 win.fade_out_and_close()
-            window.projection_windows.clear()
+            self._session.projection_windows.clear()
             self._set_screen_count(0)
             window._projection_integrations.sync_projection_integrations()
         window._monitor_popup.hide_animated()
@@ -418,7 +405,7 @@ class ProjectionWindowController:
             bridge.refreshMonitors()
 
     def restore_state_to_window(self, win) -> None:
-        state = getattr(self._window, "_proj_state", {"type": "idle"})
+        state = self._session.state
         kind = state.get("type", "idle")
         if kind == "idle":
             return

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from PySide6.QtCore import QDateTime
 
 from ..core.foundation.time_utils import ceil_remaining_seconds
@@ -10,10 +12,11 @@ class TimerThemeController:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._session = window.projection_session
 
     def start_timer(self, target_dt: QDateTime) -> None:
         window = self._window
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         window._navigation.stop_browser_tab_projection()
         window.media_ctrl.stop()
         window._ndi_service.stop()
@@ -31,7 +34,7 @@ class TimerThemeController:
             f"Cronômetro → {target_dt.time().toString('HH:mm')}",
             auto_keys_media=False,
         )
-        window._proj_state = {"type": "timer", "target_dt": target_dt, "total": total}
+        self._session.set_state({"type": "timer", "target_dt": target_dt, "total": total})
 
     def on_timer_update_proj(self, remaining: int, total: int) -> None:
         for projection_window in self._window._all_windows():
@@ -43,7 +46,7 @@ class TimerThemeController:
 
     def project_sermon_theme(self, text: str, subtitle: str = "") -> None:
         window = self._window
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         window._navigation.stop_browser_tab_projection()
         window.media_ctrl.stop()
         window._ndi_service.stop()
@@ -62,12 +65,12 @@ class TimerThemeController:
             short,
             auto_keys_media=False,
         )
-        window._proj_state = {
+        self._session.set_state({
             "type": "sermon_theme",
             "text": text,
             "subtitle": subtitle,
             "transform": (1.0, 0.0, 0.0),
-        }
+        })
 
     def _remaining_seconds(self, target_dt: QDateTime) -> int:
         return ceil_remaining_seconds(target_dt)
@@ -84,6 +87,6 @@ class TimerThemeController:
         buffer = QBuffer()
         buffer.open(QIODevice.OpenModeFlag.WriteOnly)
         pixmap.save(buffer, "PNG")
-        image_bytes = bytes(buffer.data())
+        image_bytes = bytes(cast(bytes, buffer.data()))
         buffer.close()
         return image_bytes

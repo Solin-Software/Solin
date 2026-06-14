@@ -1,6 +1,7 @@
 from PySide6.QtCore import QDateTime
 
 from solin.controllers.timer_theme_controller import TimerThemeController
+from solin.core.projection.application import ProjectionSession
 
 
 class _NavigationStub:
@@ -65,14 +66,15 @@ class _ProjectionWindowStub:
 
 class _WindowStub:
     def __init__(self):
-        self._tab_proj_active = True
+        self.projection_session = ProjectionSession()
+        self.projection_session.set_tab_projection_active(True)
         self._navigation = _NavigationStub()
         self.media_ctrl = _ServiceStub()
         self._ndi_service = _ServiceStub()
         self._camera_service = _ServiceStub()
         self.proj_bar = _ProjectionBarStub()
         self._projection_integrations = _ProjectionIntegrationsStub()
-        self._proj_state = {"type": "video"}
+        self.projection_session.set_state({"type": "video"})
         self.windows = [_ProjectionWindowStub(), _ProjectionWindowStub()]
 
     def _all_windows(self):
@@ -90,7 +92,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
 
     controller.start_timer(target_dt)
 
-    assert window._tab_proj_active is False
+    assert window.projection_session.tab_projection_active is False
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
@@ -101,7 +103,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
         [(42, 42)],
         [(42, 42)],
     ]
-    assert window._proj_state == {
+    assert window.projection_session.state == {
         "type": "timer",
         "target_dt": target_dt,
         "total": 42,
@@ -137,14 +139,14 @@ def test_project_sermon_theme_renders_preview_and_updates_projection_state():
 
     controller.project_sermon_theme(text)
 
-    assert window._tab_proj_active is False
+    assert window.projection_session.tab_projection_active is False
     assert window.proj_bar.playlists == [[]]
     assert [projection_window.themes for projection_window in window.windows] == [
         [(text, "PUBLIC TALK")],
         [(text, "PUBLIC TALK")],
     ]
     assert window.proj_bar.images == [(text[:28] + "…", b"preview")]
-    assert window._proj_state == {
+    assert window.projection_session.state == {
         "type": "sermon_theme",
         "text": text,
         "subtitle": "PUBLIC TALK",

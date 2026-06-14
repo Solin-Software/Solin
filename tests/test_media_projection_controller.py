@@ -1,4 +1,5 @@
 from solin.controllers.media_projection_controller import MediaProjectionController
+from solin.core.projection.application import ProjectionSession
 
 
 class _NavigationStub:
@@ -197,7 +198,8 @@ class _WindowStub:
         self.events = []
         self._AUDIO_EXTS = frozenset({".mp3", ".m4a"})
         self._next_is_sjjm = False
-        self._tab_proj_active = True
+        self.projection_session = ProjectionSession()
+        self.projection_session.set_tab_projection_active(True)
         self._navigation = _NavigationStub()
         self.media_ctrl = _ServiceStub(self.events, "media")
         self._ndi_service = _ServiceStub(self.events, "ndi")
@@ -207,7 +209,6 @@ class _WindowStub:
         self._auto_key_projection = _AutoKeyProjectionStub(self.events)
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.playlist_widget = _PlaylistWidgetStub()
-        self._proj_state = {"type": "idle"}
         self.windows = [
             _ProjectionWindowStub(self.events),
             _ProjectionWindowStub(self.events),
@@ -232,7 +233,7 @@ def test_project_video_classifies_audio_and_updates_status():
     assert window.proj_bar.videos == [("Song", False, True)]
     assert [projection_window.began_video for projection_window in window.windows] == [0, 0]
     assert window.media_ctrl.played == ["song.mp3"]
-    assert window._proj_state == {"type": "video", "is_audio": True}
+    assert window.projection_session.state == {"type": "video", "is_audio": True}
     assert window._projection_integrations.statuses == [
         ((True, "Song"), {"visual": False, "auto_keys_media": False})
     ]
@@ -359,7 +360,7 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
         [b"image-data"],
         [b"image-data"],
     ]
-    assert window._proj_state == {
+    assert window.projection_session.state == {
         "type": "image",
         "data": b"image-data",
         "transform": (1.0, 0.0, 0.0),
@@ -368,14 +369,14 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
 
 def test_project_tab_frame_initializes_live_tab_once():
     window = _WindowStub()
-    window._tab_proj_active = False
+    window.projection_session.set_tab_projection_active(False)
     controller = MediaProjectionController(window)
     frame = object()
 
     controller.project_tab_frame(frame)
     controller.project_tab_frame(frame)
 
-    assert window._tab_proj_active is True
+    assert window.projection_session.tab_projection_active is True
     assert window.proj_bar.playlists == [([], None, False)]
     assert window.proj_bar.images[0][0] == "Browser — Live Tab"
     assert window.proj_bar.hidden_add_to_playlist == 1
@@ -413,38 +414,40 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
 def test_image_transform_is_persisted_in_projection_state():
     window = _WindowStub()
     controller = MediaProjectionController(window)
-    window._proj_state = {"type": "image", "data": b"x", "transform": (1.0, 0.0, 0.0)}
+    window.projection_session.set_state(
+        {"type": "image", "data": b"x", "transform": (1.0, 0.0, 0.0)}
+    )
 
     controller.on_image_apply_transform(2.0, 0.1, -0.2)
-    assert window._proj_state["transform"] == (2.0, 0.1, -0.2)
+    assert window.projection_session.state["transform"] == (2.0, 0.1, -0.2)
 
     controller.on_image_reset_transform()
-    assert window._proj_state["transform"] == (1.0, 0.0, 0.0)
+    assert window.projection_session.state["transform"] == (1.0, 0.0, 0.0)
 
 
 def test_sermon_theme_transform_is_persisted_in_projection_state():
     window = _WindowStub()
     controller = MediaProjectionController(window)
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "sermon_theme",
         "text": "t",
         "subtitle": "s",
         "transform": (1.0, 0.0, 0.0),
-    }
+    })
 
     controller.on_image_apply_transform(1.4, 0.0, 0.1)
 
-    assert window._proj_state["transform"] == (1.4, 0.0, 0.1)
+    assert window.projection_session.state["transform"] == (1.4, 0.0, 0.1)
 
 
 def test_image_transform_not_persisted_when_state_is_not_image():
     window = _WindowStub()
     controller = MediaProjectionController(window)
-    window._proj_state = {"type": "video", "is_audio": False}
+    window.projection_session.set_state({"type": "video", "is_audio": False})
 
     controller.on_image_apply_transform(2.0, 0.1, -0.2)
 
-    assert "transform" not in window._proj_state
+    assert "transform" not in window.projection_session.state
 
 
 def test_title_metadata_only_updates_video_mode():

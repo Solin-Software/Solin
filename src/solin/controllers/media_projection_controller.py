@@ -12,10 +12,10 @@ from ..core.foundation.constants import (
 )
 from ..core.media.formats import AUDIO_EXTS
 
-#: Projection states that carry a zoom/pan transform (so it is persisted in
-#: _proj_state and replayed onto surfaces created later).  Both render through a
-#: zoom/pan-capable widget: image → VideoDisplayWidget, sermon theme → the talk
-#: theme slide.
+#: Projection states that carry a zoom/pan transform (so it is persisted in the
+#: projection session and replayed onto surfaces created later).  Both render
+#: through a zoom/pan-capable widget: image -> VideoDisplayWidget, sermon theme
+#: -> the talk theme slide.
 _TRANSFORMABLE_STATES = frozenset({"image", "sermon_theme"})
 
 #: Identity transform (no zoom, no pan).
@@ -27,6 +27,7 @@ class MediaProjectionController:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._session = window.projection_session
 
     def on_song_project(
         self,
@@ -196,7 +197,7 @@ class MediaProjectionController:
         is_sjjm = window._next_is_sjjm
         window._next_is_sjjm = False
 
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         window._navigation.stop_browser_tab_projection()
         window._ndi_service.stop()
         window._camera_service.stop()
@@ -237,7 +238,7 @@ class MediaProjectionController:
         ):
             window.media_ctrl.pause()
 
-        window._proj_state = {"type": "video", "is_audio": is_audio}
+        self._session.set_state({"type": "video", "is_audio": is_audio})
         window._projection_integrations.update_status(
             True,
             title,
@@ -251,8 +252,8 @@ class MediaProjectionController:
 
     def project_tab_frame(self, frame) -> None:
         window = self._window
-        if not window._tab_proj_active:
-            window._tab_proj_active = True
+        if not self._session.tab_projection_active:
+            self._session.set_tab_projection_active(True)
             window.media_ctrl.stop()
             window._ndi_service.stop()
             window._camera_service.stop()
@@ -283,15 +284,17 @@ class MediaProjectionController:
         # created later (hot-plugged monitor / respawned preview) is replayed
         # with the same framing instead of showing it untransformed.  Applies to
         # both projected images and the sermon-theme slide.
-        if window._proj_state.get("type") in _TRANSFORMABLE_STATES:
-            window._proj_state["transform"] = (zoom, norm_x, norm_y)
+        state = self._session.state
+        if state.get("type") in _TRANSFORMABLE_STATES:
+            state["transform"] = (zoom, norm_x, norm_y)
         for projection_window in window._all_windows():
             projection_window.set_image_transform(zoom, norm_x, norm_y)
 
     def on_image_reset_transform(self) -> None:
         window = self._window
-        if window._proj_state.get("type") in _TRANSFORMABLE_STATES:
-            window._proj_state["transform"] = _IDENTITY_TRANSFORM
+        state = self._session.state
+        if state.get("type") in _TRANSFORMABLE_STATES:
+            state["transform"] = _IDENTITY_TRANSFORM
         for projection_window in window._all_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
 
@@ -447,7 +450,7 @@ class MediaProjectionController:
         keep_expanded: bool = False,
     ) -> None:
         window = self._window
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         window._navigation.stop_browser_tab_projection()
         window.media_ctrl.stop()
         window._ndi_service.stop()
@@ -482,7 +485,9 @@ class MediaProjectionController:
             title,
             auto_keys_media=True,
         )
-        window._proj_state = {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
+        self._session.set_state(
+            {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
+        )
 
     def _audio_exts(self):
         return getattr(self._window, "_AUDIO_EXTS", AUDIO_EXTS)

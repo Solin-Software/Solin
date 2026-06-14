@@ -20,6 +20,7 @@ class ProjectionIntegrationController:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._session = window.projection_session
         self._auto_share_active = False
         self._auto_share_generation = 0
         self._auto_share_stop = threading.Event()
@@ -54,11 +55,12 @@ class ProjectionIntegrationController:
         return False
 
     def current_projection_activity(self) -> tuple[bool, bool]:
-        kind = self._window._proj_state.get("type", "idle")
+        state = self._session.state
+        kind = state.get("type", "idle")
         if kind == "idle":
             return False, True
         if kind == "video":
-            return True, not bool(self._window._proj_state.get("is_audio", False))
+            return True, not bool(state.get("is_audio", False))
         return True, True
 
     def sync_projection_integrations(self) -> None:
@@ -206,7 +208,7 @@ class ProjectionIntegrationController:
             )
 
     def raise_visible_projection_windows(self) -> None:
-        for win in list(self._window.projection_windows):
+        for win in list(self._session.projection_windows):
             try:
                 if not win.isVisible():
                     continue

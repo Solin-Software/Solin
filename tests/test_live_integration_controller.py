@@ -1,4 +1,5 @@
 from solin.controllers.live_integration_controller import LiveIntegrationController
+from solin.core.projection.application import ProjectionSession
 
 
 class _ObsSettingsStub:
@@ -143,7 +144,7 @@ class _WindowStub:
         self._camera_service = _CameraServiceStub()
         self._quick_toolbar = _QuickToolbarStub()
         self.proj_bar = _ProjectionBarStub()
-        self._proj_state = {"type": "idle"}
+        self.projection_session = ProjectionSession()
         self._obs_pre_media_scene = ""
         self.stopped_projection = False
         self.notifications = _NotificationsStub()
@@ -173,7 +174,7 @@ def test_refresh_obs_stream_availability_updates_stream_and_camera_availability(
     window = _WindowStub()
     window._obs_settings.values["ndi_enabled"] = True
     window._obs_settings.values["ndi_source"] = "Program"
-    window._proj_state = {"type": "obs_stream"}
+    window.projection_session.set_state({"type": "obs_stream"})
     controller = LiveIntegrationController(window)
 
     controller.refresh_obs_stream_availability()
@@ -230,7 +231,7 @@ def test_obs_scene_toggle_moves_between_media_and_return_scene():
 
 def test_camera_disabled_stops_active_camera_stream():
     window = _WindowStub()
-    window._proj_state = {"type": "camera_stream"}
+    window.projection_session.set_state({"type": "camera_stream"})
     controller = LiveIntegrationController(window)
 
     controller.on_camera_settings_enabled_toggled(False)

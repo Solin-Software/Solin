@@ -1,6 +1,7 @@
 from PySide6.QtCore import QDateTime
 
 from solin.controllers.projection_window_controller import ProjectionWindowController
+from solin.core.projection.application import ProjectionSession
 
 
 class _ProjectionIntegrationsStub:
@@ -178,16 +179,12 @@ def _patch_secondary_screens(monkeypatch, screens):
 
 class _WindowStub:
     def __init__(self):
-        self.projection_windows = []
-        self.floating_preview_window = None
-        self._proj_state = {"type": "idle"}
+        self.projection_session = ProjectionSession()
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.settings_widget = _SettingsWidgetStub()
         self.proj_bar = _CountTargetStub()
         self._quick_toolbar = _CountTargetStub()
-        self._idle_media_path = ""
         self._monitor_popup = _MonitorPopupStub()
-        self._deactivated_screens = set()
         self.font_manager = object()
 
 
@@ -195,8 +192,8 @@ def test_all_windows_includes_floating_preview_when_present():
     window = _WindowStub()
     secondary = _ProjectionWindowStub()
     floating = _ProjectionWindowStub()
-    window.projection_windows = [secondary]
-    window.floating_preview_window = floating
+    window.projection_session.projection_windows = [secondary]
+    window.projection_session.floating_preview_window = floating
 
     controller = ProjectionWindowController(window)
 
@@ -209,16 +206,16 @@ def test_on_idle_media_changed_activates_source_and_windows(tmp_path):
     src = _StubIdleSource()
     window = _WindowStub()
     win = _ProjectionWindowStub()
-    window.projection_windows = [win]
+    window.projection_session.projection_windows = [win]
     controller = ProjectionWindowController(window, idle_source_factory=lambda: src)
 
     controller.on_idle_media_changed(str(img))
-    assert window._idle_media_path == str(img)
+    assert window.projection_session.idle_media_path == str(img)
     assert src.media_set == [str(img)]   # decoded once on the shared source
     assert win.idle_active == 1
 
     controller.on_idle_media_changed("")
-    assert window._idle_media_path == ""
+    assert window.projection_session.idle_media_path == ""
     assert src.cleared == 1
     assert win.cleared_idle == 1
     assert window._monitor_popup.idle_paths == [str(img), ""]
@@ -228,12 +225,12 @@ def test_on_idle_media_changed_rejects_missing_file():
     src = _StubIdleSource()
     window = _WindowStub()
     win = _ProjectionWindowStub()
-    window.projection_windows = [win]
+    window.projection_session.projection_windows = [win]
     controller = ProjectionWindowController(window, idle_source_factory=lambda: src)
 
     controller.on_idle_media_changed("does-not-exist.png")
 
-    assert window._idle_media_path == ""
+    assert window.projection_session.idle_media_path == ""
     assert src.media_set == []
     assert win.cleared_idle == 1
 
@@ -248,8 +245,8 @@ def test_distribute_idle_frame_fans_out_to_all_surfaces(tmp_path):
     window = _WindowStub()
     secondary = _ProjectionWindowStub()
     floating = _ProjectionWindowStub()
-    window.projection_windows = [secondary]
-    window.floating_preview_window = floating
+    window.projection_session.projection_windows = [secondary]
+    window.projection_session.floating_preview_window = floating
     controller = ProjectionWindowController(window, idle_source_factory=lambda: src)
 
     controller.on_idle_media_changed(str(img))   # creates + wires the source
@@ -268,7 +265,7 @@ def test_apply_full_state_pushes_current_frame_to_new_surface(tmp_path):
     img.write_bytes(b"fake")
     src = _StubIdleSource()
     window = _WindowStub()
-    window._idle_media_path = str(img)
+    window.projection_session.set_idle_media_path(str(img))
     controller = ProjectionWindowController(window, idle_source_factory=lambda: src)
     controller._ensure_idle_source()
     src.current_image = object()
@@ -289,7 +286,7 @@ def test_idle_video_paused_while_hidden_and_resumed_when_visible(tmp_path):
     window = _WindowStub()
     win = _ProjectionWindowStub()
     win.idle_visible_flag = False        # a clip is being projected → idle hidden
-    window.projection_windows = [win]
+    window.projection_session.projection_windows = [win]
     controller = ProjectionWindowController(window, idle_source_factory=lambda: src)
 
     controller.on_idle_media_changed(str(vid))
@@ -311,11 +308,11 @@ def test_idle_video_paused_while_hidden_and_resumed_when_visible(tmp_path):
 
 def test_image_transform_replayed_to_new_surface_instantly():
     window = _WindowStub()
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "image",
         "data": b"img",
         "transform": (1.5, 0.2, -0.1),
-    }
+    })
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
@@ -328,11 +325,11 @@ def test_image_transform_replayed_to_new_surface_instantly():
 
 def test_identity_image_transform_is_not_replayed():
     window = _WindowStub()
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "image",
         "data": b"img",
         "transform": (1.0, 0.0, 0.0),
-    }
+    })
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
@@ -344,12 +341,12 @@ def test_identity_image_transform_is_not_replayed():
 
 def test_sermon_theme_transform_replayed_to_new_surface_instantly():
     window = _WindowStub()
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "sermon_theme",
         "text": "Theme",
         "subtitle": "Sub",
         "transform": (1.3, -0.1, 0.05),
-    }
+    })
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
@@ -364,17 +361,19 @@ def test_restore_state_to_window_applies_visual_states():
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
-    window._proj_state = {"type": "video", "is_audio": False}
+    window.projection_session.set_state({"type": "video", "is_audio": False})
     controller.restore_state_to_window(win)
-    window._proj_state = {"type": "image", "data": b"image"}
+    window.projection_session.set_state({"type": "image", "data": b"image"})
     controller.restore_state_to_window(win)
-    window._proj_state = {"type": "sermon_theme", "text": "Theme", "subtitle": "Sub"}
+    window.projection_session.set_state(
+        {"type": "sermon_theme", "text": "Theme", "subtitle": "Sub"}
+    )
     controller.restore_state_to_window(win)
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "timer",
         "target_dt": QDateTime.currentDateTime().addSecs(60),
         "total": 120,
-    }
+    })
     controller.restore_state_to_window(win)
 
     assert win.video_started is True
@@ -386,9 +385,9 @@ def test_restore_state_to_window_applies_visual_states():
 def test_on_monitor_manager_requested_populates_active_screens(monkeypatch):
     window = _WindowStub()
     screens = [_ScreenStub("A"), _ScreenStub("B")]
-    window.projection_windows = [_ProjectionWindowStub(screens[1])]
-    window.floating_preview_window = _ProjectionWindowStub()
-    window._idle_media_path = "idle.png"
+    window.projection_session.projection_windows = [_ProjectionWindowStub(screens[1])]
+    window.projection_session.floating_preview_window = _ProjectionWindowStub()
+    window.projection_session.set_idle_media_path("idle.png")
     controller = ProjectionWindowController(window)
     monkeypatch.setattr(
         "solin.controllers.projection_window_controller.ScreenManager.secondary_screens",
@@ -408,7 +407,7 @@ def test_on_monitor_all_false_deactivates_every_screen(monkeypatch):
     window = _WindowStub()
     screens = [_ScreenStub("A"), _ScreenStub("B")]
     win = _ProjectionWindowStub(screens[0])
-    window.projection_windows = [win]
+    window.projection_session.projection_windows = [win]
     controller = ProjectionWindowController(window)
     monkeypatch.setattr(
         "solin.controllers.projection_window_controller.ScreenManager.secondary_screens",
@@ -417,9 +416,9 @@ def test_on_monitor_all_false_deactivates_every_screen(monkeypatch):
 
     controller.on_monitor_all(False)
 
-    assert window._deactivated_screens == {"A", "B"}
+    assert window.projection_session.media_hidden_screen_names == {"A", "B"}
     assert win.faded is True
-    assert window.projection_windows == []
+    assert window.projection_session.projection_windows == []
     assert window.proj_bar.counts == [0]
     assert window._quick_toolbar.counts == [0]
     assert window._projection_integrations.synced == 1
@@ -431,8 +430,8 @@ def test_on_monitor_all_false_deactivates_every_screen(monkeypatch):
 
 def test_apply_full_state_applies_yearly_idle_and_projection():
     window = _WindowStub()
-    window._idle_media_path = "bg.png"
-    window._proj_state = {"type": "image", "data": b"img"}
+    window.projection_session.set_idle_media_path("bg.png")
+    window.projection_session.set_state({"type": "image", "data": b"img"})
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
@@ -446,7 +445,7 @@ def test_apply_full_state_applies_yearly_idle_and_projection():
 
 def test_apply_full_state_clears_idle_when_no_path():
     window = _WindowStub()
-    window._idle_media_path = ""
+    window.projection_session.set_idle_media_path("")
     controller = ProjectionWindowController(window)
     win = _ProjectionWindowStub()
 
@@ -458,16 +457,16 @@ def test_apply_full_state_clears_idle_when_no_path():
 
 def test_normalize_expired_state_collapses_dead_timer():
     window = _WindowStub()
-    window._proj_state = {
+    window.projection_session.set_state({
         "type": "timer",
         "target_dt": QDateTime.currentDateTime().addSecs(-10),
         "total": 60,
-    }
+    })
     controller = ProjectionWindowController(window)
 
     controller._normalize_expired_state()
 
-    assert window._proj_state == {"type": "idle"}
+    assert window.projection_session.state == {"type": "idle"}
     assert window._projection_integrations.obs_syncs == [False]
 
 
@@ -478,12 +477,12 @@ def test_normalize_expired_state_keeps_live_timer():
         "target_dt": QDateTime.currentDateTime().addSecs(120),
         "total": 120,
     }
-    window._proj_state = state
+    window.projection_session.set_state(state)
     controller = ProjectionWindowController(window)
 
     controller._normalize_expired_state()
 
-    assert window._proj_state is state
+    assert window.projection_session.state == state
     assert window._projection_integrations.obs_syncs == []
 
 
@@ -495,10 +494,10 @@ def test_reconcile_applies_idle_media_to_newly_connected_monitor(monkeypatch):
     push that idle to the new window (previously reconcile replayed yearly text
     and proj_state but forgot the idle media)."""
     window = _WindowStub()
-    window._idle_media_path = "idle.png"
+    window.projection_session.set_idle_media_path("idle.png")
     screen_a, screen_b = _ScreenStub("A"), _ScreenStub("B")
     existing = _ProjectionWindowStub(screen_a)
-    window.projection_windows = [existing]
+    window.projection_session.projection_windows = [existing]
     controller = ProjectionWindowController(window)
 
     created = _patch_projection_window(monkeypatch)
@@ -507,14 +506,14 @@ def test_reconcile_applies_idle_media_to_newly_connected_monitor(monkeypatch):
     controller.reconcile_projection_windows()
 
     # Existing window kept and refit — never recreated, idle untouched.
-    assert existing in window.projection_windows
+    assert existing in window.projection_session.projection_windows
     assert existing.refit_to == [screen_a]
     # Exactly one new window for B, and it received the custom idle.
     assert len(created) == 1
     new_win = created[0]
     assert new_win.screen() is screen_b
     assert new_win.idle_active == 1
-    assert new_win in window.projection_windows
+    assert new_win in window.projection_session.projection_windows
 
 
 def test_reconcile_recreates_idle_after_screen_identity_swap(monkeypatch):
@@ -522,11 +521,11 @@ def test_reconcile_recreates_idle_after_screen_identity_swap(monkeypatch):
     no longer match any connected screen: it is closed and fresh windows are
     created for every screen — all of which must get the custom idle."""
     window = _WindowStub()
-    window._idle_media_path = "idle.png"
+    window.projection_session.set_idle_media_path("idle.png")
     stale = _ScreenStub("OLD")
     screen_b, screen_c = _ScreenStub("B"), _ScreenStub("C")
     orphan = _ProjectionWindowStub(stale)
-    window.projection_windows = [orphan]
+    window.projection_session.projection_windows = [orphan]
     controller = ProjectionWindowController(window)
 
     created = _patch_projection_window(monkeypatch)
@@ -535,7 +534,7 @@ def test_reconcile_recreates_idle_after_screen_identity_swap(monkeypatch):
     controller.reconcile_projection_windows()
 
     assert orphan.faded is True
-    assert orphan not in window.projection_windows
+    assert orphan not in window.projection_session.projection_windows
     assert len(created) == 2
     assert {w.screen() for w in created} == {screen_b, screen_c}
     for w in created:
@@ -544,11 +543,11 @@ def test_reconcile_recreates_idle_after_screen_identity_swap(monkeypatch):
 
 def test_reconcile_skips_deactivated_screens(monkeypatch):
     window = _WindowStub()
-    window._idle_media_path = "idle.png"
-    window._deactivated_screens = {"B"}
+    window.projection_session.set_idle_media_path("idle.png")
+    window.projection_session.hide_media_on_screen_name("B")
     screen_a, screen_b = _ScreenStub("A"), _ScreenStub("B")
     existing = _ProjectionWindowStub(screen_a)
-    window.projection_windows = [existing]
+    window.projection_session.projection_windows = [existing]
     controller = ProjectionWindowController(window)
 
     created = _patch_projection_window(monkeypatch)
@@ -557,12 +556,12 @@ def test_reconcile_skips_deactivated_screens(monkeypatch):
     controller.reconcile_projection_windows()
 
     assert created == []
-    assert window.projection_windows == [existing]
+    assert window.projection_session.projection_windows == [existing]
 
 
 def test_on_monitor_toggle_activate_applies_idle(monkeypatch):
     window = _WindowStub()
-    window._idle_media_path = "idle.png"
+    window.projection_session.set_idle_media_path("idle.png")
     screen_a = _ScreenStub("A")
     controller = ProjectionWindowController(window)
 
@@ -578,7 +577,7 @@ def test_on_monitor_toggle_activate_applies_idle(monkeypatch):
 
 def test_open_projection_windows_applies_idle_to_all(monkeypatch):
     window = _WindowStub()
-    window._idle_media_path = "idle.png"
+    window.projection_session.set_idle_media_path("idle.png")
     screen_a, screen_b = _ScreenStub("A"), _ScreenStub("B")
     controller = ProjectionWindowController(window)
 

@@ -29,10 +29,10 @@ from .controllers.timer_pdf_export_controller import TimerPdfExportController
 from .controllers.timer_theme_controller import TimerThemeController
 from .controllers.wifi_playlist_controller import WifiPlaylistController
 from .controllers.window_state_controller import WindowStateController
+from .core.projection.application import ProjectionSession
 from .core.timer.application import TimerSession
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .core.ui.window_settings import WindowGeometrySettingsStore
-from .projection.window import ProjectionWindow
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
@@ -139,6 +139,15 @@ class MainWindow(QMainWindow):
             media_cache_manager,
             self,
         )
+        self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
+            profile_settings,
+        )
+        self.projection_session = ProjectionSession(
+            allocation=self._monitor_allocation,
+            media_hidden_screen_names=self._monitor_allocation.media_off_names(
+                ScreenManager.secondary_screens()
+            ),
+        )
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
@@ -148,35 +157,25 @@ class MainWindow(QMainWindow):
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
         self._wifi_playlist_controller = WifiPlaylistController(self)
-        self.projection_windows: list[ProjectionWindow] = []
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
         # The allocation store is the persistent source of truth for which
         # subsystem (media/timer) owns each monitor — consulted by both the
         # media projection controller and the timer-output controller.
-        self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
-            profile_settings,
-        )
         self.timer_engine = TimerEngine(self)
         self.timer_output = TimerOutputController(
             self.timer_engine,
             timer_session,
             self._monitor_allocation,
         )
-        # Screen names (QScreen.name()) where the user hid media. Restored from
-        # the persisted allocation so reconnecting a monitor honours the choice
-        # (previously this preference was lost on every restart/reconnect).
-        self._deactivated_screens: set[str] = set(
-            self._monitor_allocation.media_off_names(ScreenManager.secondary_screens())
-        )
         self.timer_monitors = TimerMonitorController(
             screen_manager=self.screen_mgr,
             allocation=self._monitor_allocation,
             timer_output=self.timer_output,
-            projection_windows=lambda: tuple(self.projection_windows),
+            projection_windows=lambda: tuple(self.projection_session.projection_windows),
             reconcile_media=self._projection_targets.reconcile_projection_windows,
-            deactivate_media_screen=self._deactivated_screens.add,
+            deactivate_media_screen=self.projection_session.hide_media_on_screen_name,
         )
         self.timer_bridge = TimerBridge(
             engine=self.timer_engine,
@@ -389,7 +388,7 @@ class MainWindow(QMainWindow):
         self._language_controller.retranslate_ui()
 
     def _all_windows(self) -> list:
-        return self._projection_targets.all_windows()
+        return self.projection_session.all_windows()
 
     # ── IPC — single instance ─────────────────────────────────────────────
 

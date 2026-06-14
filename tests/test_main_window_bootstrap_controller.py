@@ -1,4 +1,5 @@
 from solin.controllers.main_window_bootstrap_controller import MainWindowBootstrapController
+from solin.core.projection.application import ProjectionSession
 
 
 class _Signal:
@@ -140,6 +141,7 @@ class _Window:
         self._zoom_service = _ZoomService(self)
         self._zoom_settings = _EnabledSettings(zoom_enabled)
         self._background_song_service = _Startable(self, "background-song")
+        self.projection_session = ProjectionSession()
         self.stylesheets = []
 
     def setStyleSheet(self, stylesheet):
@@ -180,10 +182,10 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
         "remote",
         "style",
     ]
-    assert window._idle_media_path == ""
-    assert window.floating_preview_window is None
-    assert window._proj_state == {"type": "idle"}
-    assert window._tab_proj_active is False
+    assert window.projection_session.idle_media_path == ""
+    assert window.projection_session.floating_preview_window is None
+    assert window.projection_session.state == {"type": "idle"}
+    assert window.projection_session.tab_projection_active is False
     assert window._jwl_tmp_files == set()
     assert window._next_is_sjjm is False
     assert window._obs_pre_media_scene == ""

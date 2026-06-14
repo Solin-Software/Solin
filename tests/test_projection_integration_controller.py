@@ -1,5 +1,7 @@
-from solin.controllers.projection_integration_controller import ProjectionIntegrationController
 import threading
+
+from solin.controllers.projection_integration_controller import ProjectionIntegrationController
+from solin.core.projection.application import ProjectionSession
 
 
 class _ObsSettingsStub:
@@ -62,7 +64,7 @@ class _AutoKeyProjectionStub:
 
 class _WindowStub:
     def __init__(self, *, visible=True, obs_connected=True):
-        self._proj_state = {"type": "idle"}
+        self.projection_session = ProjectionSession()
         self._obs_settings = _ObsSettingsStub()
         self._auto_share_settings = _AutoShareSettingsStub()
         self._obs_service = _ObsServiceStub(obs_connected, "Camera")
@@ -89,10 +91,10 @@ def test_current_projection_activity_distinguishes_idle_video_audio_and_visual()
 
     assert controller.current_projection_activity() == (False, True)
 
-    window._proj_state = {"type": "video", "is_audio": True}
+    window.projection_session.set_state({"type": "video", "is_audio": True})
     assert controller.current_projection_activity() == (True, False)
 
-    window._proj_state = {"type": "image"}
+    window.projection_session.set_state({"type": "image"})
     assert controller.current_projection_activity() == (True, True)
 
 

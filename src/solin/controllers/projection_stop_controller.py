@@ -18,6 +18,7 @@ class ProjectionStopController:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._session = window.projection_session
 
     def stop_any(self) -> None:
         self._stop(
@@ -38,11 +39,11 @@ class ProjectionStopController:
         stop_ndi_later_for_obs: bool,
     ) -> None:
         window = self._window
-        was_obs_stream = window._proj_state.get("type") == "obs_stream"
-        was_camera_stream = window._proj_state.get("type") == "camera_stream"
+        was_obs_stream = self._session.state_type == "obs_stream"
+        was_camera_stream = self._session.state_type == "camera_stream"
         was_visual = self._was_visual_projection()
 
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         if tolerate_navigation_errors:
             try:
                 window._navigation.stop_browser_tab_projection()
@@ -66,17 +67,18 @@ class ProjectionStopController:
             False,
             sync_obs=not (was_obs_stream or was_camera_stream),
         )
-        window._proj_state = {"type": "idle"}
+        self._session.reset_state()
         window._live_integrations.set_obs_stream_active(False)
         window._live_integrations.set_camera_stream_active(False)
 
         share_handling = window._projection_integrations.auto_share_configured()
+        floating_preview = self._session.floating_preview_window
         if (
             was_visual
-            and window.floating_preview_window is not None
+            and floating_preview is not None
             and not share_handling
         ):
-            window.floating_preview_window.trigger_zoom_break()
+            floating_preview.trigger_zoom_break()
 
     def _was_visual_projection(self) -> bool:
         window = self._window
@@ -86,7 +88,7 @@ class ProjectionStopController:
             lambda: False,
         )
         return (
-            window._tab_proj_active
+            self._session.tab_projection_active
             or is_visual_media_active()
-            or window._proj_state.get("type") in self._VISUAL_PROJECTION_TYPES
+            or self._session.state_type in self._VISUAL_PROJECTION_TYPES
         )

@@ -53,12 +53,12 @@ class MainWindowBootstrapController:
     def initialize_projection_session(self) -> None:
         window = self._window
         # Must be set before opening projection targets because startup restore
-        # reads these attributes while rebuilding the projection windows.
-        window._idle_media_path = ""
-        window.floating_preview_window = None
-        window._proj_state = {"type": "idle"}
+        # reads session state while rebuilding the projection windows.
+        window.projection_session.set_idle_media_path("")
+        window.projection_session.floating_preview_window = None
+        window.projection_session.reset_state()
         window._projection_targets.open_projection_windows()
-        window._tab_proj_active = False
+        window.projection_session.set_tab_projection_active(False)
 
     def start_obs_integration(self) -> None:
         window = self._window

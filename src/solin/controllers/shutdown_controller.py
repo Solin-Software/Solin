@@ -46,11 +46,11 @@ class ShutdownController:
         self.cleanup_lazy_pages()
 
     def close_projection_targets(self) -> None:
-        for win in self._window.projection_windows:
+        projection_session = self._window.projection_session
+        for win in projection_session.projection_windows:
             win.close()
-        if self._window.floating_preview_window is not None:
-            self._window.floating_preview_window.close()
-            self._window.floating_preview_window = None
+        projection_session.projection_windows.clear()
+        projection_session.close_floating_preview()
         timer_output = getattr(self._window, "timer_output", None)
         if timer_output is not None:
             timer_output.close_all()

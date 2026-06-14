@@ -17,6 +17,7 @@ class LiveIntegrationController:
 
     def __init__(self, window) -> None:
         self._window = window
+        self._session = window.projection_session
 
     @Slot(bool)
     def on_zoom_settings_enabled_toggled(self, enabled: bool) -> None:
@@ -87,7 +88,7 @@ class LiveIntegrationController:
         if hasattr(window, "_quick_toolbar"):
             window._quick_toolbar.set_obs_stream_available(available)
             window._quick_toolbar.set_obs_stream_active(
-                getattr(window, "_proj_state", {}).get("type") == "obs_stream"
+                self._session.state_type == "obs_stream"
             )
             self.refresh_obs_camera_stream_availability()
 
@@ -125,7 +126,7 @@ class LiveIntegrationController:
         window = self._window
         window._quick_toolbar.set_camera_enabled(enabled)
         self.refresh_obs_camera_stream_availability()
-        if not enabled and window._proj_state.get("type") == "camera_stream":
+        if not enabled and self._session.state_type == "camera_stream":
             window._stop_projection()
 
     def on_camera_selection_changed(self, _option) -> None:
@@ -151,7 +152,7 @@ class LiveIntegrationController:
 
     def project_obs_ndi_stream(self) -> None:
         window = self._window
-        if window._proj_state.get("type") == "obs_stream":
+        if self._session.state_type == "obs_stream":
             window._stop_projection()
             return
 
@@ -161,7 +162,7 @@ class LiveIntegrationController:
             self.refresh_obs_stream_availability()
             return
 
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         try:
             window._navigation.stop_browser_tab_projection()
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
@@ -173,7 +174,7 @@ class LiveIntegrationController:
             win.clear()
         title = window.tr("OBS Program Stream")
         window.proj_bar.activate_live_stream(title, keep_expanded=window.proj_bar.is_expanded())
-        window._proj_state = {"type": "obs_stream", "title": title}
+        self._session.set_state({"type": "obs_stream", "title": title})
         window._projection_integrations.update_status(
             True,
             title,
@@ -185,7 +186,7 @@ class LiveIntegrationController:
 
     def project_camera_stream(self) -> None:
         window = self._window
-        if window._proj_state.get("type") == "camera_stream":
+        if self._session.state_type == "camera_stream":
             window._stop_projection()
             return
 
@@ -198,7 +199,7 @@ class LiveIntegrationController:
             window.notifications.warning(window.tr("No camera selected."))
             return
 
-        window._tab_proj_active = False
+        self._session.set_tab_projection_active(False)
         try:
             window._navigation.stop_browser_tab_projection()
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
@@ -211,7 +212,7 @@ class LiveIntegrationController:
             win.clear()
         title = window.tr("Camera")
         window.proj_bar.activate_live_stream(title, keep_expanded=window.proj_bar.is_expanded())
-        window._proj_state = {"type": "camera_stream", "title": title}
+        self._session.set_state({"type": "camera_stream", "title": title})
         window._projection_integrations.update_status(
             True,
             title,
@@ -224,7 +225,7 @@ class LiveIntegrationController:
     @Slot(QImage)
     def on_camera_frame(self, frame: QImage) -> None:
         window = self._window
-        if window._proj_state.get("type") != "camera_stream":
+        if self._session.state_type != "camera_stream":
             return
         for win in window._all_windows():
             if hasattr(win, "show_image_from_qimage"):
@@ -233,7 +234,7 @@ class LiveIntegrationController:
 
     def on_camera_error(self, message: str) -> None:
         window = self._window
-        if window._proj_state.get("type") == "camera_stream":
+        if self._session.state_type == "camera_stream":
             window.notifications.error(
                 message,
                 title=window.tr("Camera error"),
@@ -247,7 +248,7 @@ class LiveIntegrationController:
     @Slot(QImage)
     def on_obs_ndi_frame(self, frame: QImage) -> None:
         window = self._window
-        if window._proj_state.get("type") != "obs_stream":
+        if self._session.state_type != "obs_stream":
             return
         for win in window._all_windows():
             if hasattr(win, "show_image_from_qimage"):
@@ -256,7 +257,7 @@ class LiveIntegrationController:
 
     def on_obs_ndi_error(self, message: str) -> None:
         window = self._window
-        if window._proj_state.get("type") == "obs_stream":
+        if self._session.state_type == "obs_stream":
             window.notifications.error(
                 message,
                 title=window.tr("OBS stream error"),
