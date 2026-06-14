@@ -99,7 +99,8 @@ class MainWindowUiContext:
     meeting_tree_store: Any
     jw_catalog_cache_paths: Any
     jw_songs_store: Any
-    jwpub_checksum_store: Any
+    jwpub_service_factory: Callable[[QObject], Any]
+    memorial_service_factory: Callable[[QObject], Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,9 +398,10 @@ class MainWindowUiController:
             cache_manager=context.media_cache_manager,
             jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_songs_store=context.jw_songs_store,
-            jwpub_checksum_store=context.jwpub_checksum_store,
             media_settings=context.media_settings,
             meeting_schedule_settings=context.meeting_schedule_settings,
+            jwpub_service_factory=context.jwpub_service_factory,
+            memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,
             parent=context.parent,
         )

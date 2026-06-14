@@ -536,6 +536,31 @@ def test_settings_widgets_do_not_construct_yeartext_service():
     )
 
 
+def test_meeting_widgets_do_not_construct_meeting_services():
+    meetings_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings"
+    forbidden = {"JwpubService", "MemorialService"}
+    violations: list[str] = []
+
+    for path in sorted(meetings_widget_root.rglob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            called_name = (
+                node.func.id
+                if isinstance(node.func, ast.Name)
+                else node.func.attr
+                if isinstance(node.func, ast.Attribute)
+                else ""
+            )
+            if called_name in forbidden:
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Meeting widgets must receive meeting services from composition:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

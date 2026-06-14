@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QObject, Signal, Slot, QTimer,
@@ -33,10 +34,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtQuickWidgets import QQuickWidget
 
-from ...core.meetings.publications import (
-    JwpubChecksumStore, JwpubService,
-    current_monday,
-)
+from ...core.meetings.publications import current_monday
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
@@ -57,7 +55,6 @@ from ...core.jw.catalog import JWMediaCatalogCachePaths
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.rendering.libreoffice import libreoffice_available
-from ...core.meetings.memorial import MemorialService
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
@@ -76,6 +73,10 @@ from .visuals import (
 from .week_nav import WeekNavBar, _WeekPicker
 from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from ..media_info_extractor import MediaInfoQueue
+
+if TYPE_CHECKING:
+    from ...core.meetings.memorial import MemorialService
+    from ...core.meetings.publications import JwpubService
 
 
 def _meeting_drop_exts() -> frozenset[str]:
@@ -642,9 +643,10 @@ class MeetingsWidget(QWidget):
         cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
-        jwpub_checksum_store: JwpubChecksumStore,
         media_settings: MediaSettingsStore,
         meeting_schedule_settings: MeetingScheduleSettingsStore,
+        jwpub_service_factory: Callable[[QObject], JwpubService],
+        memorial_service_factory: Callable[[QObject], MemorialService],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
     ):
@@ -661,18 +663,11 @@ class MeetingsWidget(QWidget):
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
-        self._jwpub_checksum_store = jwpub_checksum_store
         self._media_settings = media_settings
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
 
-        self._service = JwpubService(
-            media_settings,
-            cache_manager,
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            self,
-        )
+        self._service = jwpub_service_factory(self)
         self._set_lang_from_mgr()
 
         self._service.mwb_ready.connect(self._on_mwb_ready)
@@ -682,11 +677,7 @@ class MeetingsWidget(QWidget):
         self._service.error_sig.connect(self._on_error)
 
         # ── Memorial service ───────────────────────────────────────────────────
-        self._memorial_svc = MemorialService(
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            self,
-        )
+        self._memorial_svc = memorial_service_factory(self)
         self._set_memorial_lang_from_mgr()
         self._memorial_svc.memorial_ready.connect(self._on_memorial_ready)
         self._memorial_svc.memorial_status.connect(self._on_memorial_status)

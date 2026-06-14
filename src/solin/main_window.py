@@ -120,7 +120,8 @@ from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
-from .core.meetings.publications import JwpubChecksumStore
+from .core.meetings.memorial import MemorialService
+from .core.meetings.publications import JwpubChecksumStore, JwpubService
 from .core.profiles.models import ProfileInfo
 from .widgets.timer_bridge import TimerBridge
 from .widgets.projection.monitor_manager import MonitorManagerPopup
@@ -370,7 +371,18 @@ class MainWindow(QMainWindow):
                 meeting_tree_store=self.meeting_tree_store,
                 jw_catalog_cache_paths=self.jw_catalog_cache_paths,
                 jw_songs_store=self.jw_songs_store,
-                jwpub_checksum_store=self.jwpub_checksum_store,
+                jwpub_service_factory=lambda parent: JwpubService(
+                    self._media_settings,
+                    self.media_cache_manager,
+                    self.runtime_paths.jwpub_cache_dir,
+                    self.jwpub_checksum_store,
+                    parent,
+                ),
+                memorial_service_factory=lambda parent: MemorialService(
+                    self.runtime_paths.jwpub_cache_dir,
+                    self.jwpub_checksum_store,
+                    parent,
+                ),
             ),
             MainWindowUiHandlers(
                 project_image=lambda data: self._media_projection.project_image_bytes(
