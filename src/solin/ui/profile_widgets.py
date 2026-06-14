@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.profiles.manager import ProfileInfo
+from ..core.profiles.models import ProfileInfo
 from ..core.ui.helpers import avatar_colors as _avatar_colors
 from ..core.ui.helpers import initials as _initials
 from ..styles.icons import make_icon

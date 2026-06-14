@@ -30,6 +30,7 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import manager as profile_manager
+from solin.core.profiles import models as profile_models
 from solin.core.profiles import settings as profile_settings_module
 from solin.core.profiles.settings import ProfileSettings
 from solin.widgets.playlist.items import new_playlist_item
@@ -141,15 +142,15 @@ def test_profile_registry_and_directory_layout_are_stable(
     manager = profile_manager.ProfileManager(tmp_path, cache_dir)
     manager._active_id = "main_hall"
     manager._profiles = [
-        profile_manager.ProfileInfo(
+        profile_models.ProfileInfo(
             id="main_hall",
             name="Main Hall",
             created_at=1_700_000_000.0,
         )
     ]
 
-    assert profile_manager._normalize_slug(" Main Hall - East ") == "main_hall_east"
-    assert profile_manager._unique_slug("main_hall", ["main_hall"]) == "main_hall_2"
+    assert profile_models.profile_slug(" Main Hall - East ") == "main_hall_east"
+    assert profile_models.unique_profile_slug("main_hall", {"main_hall"}) == "main_hall_2"
     assert manager._profiles_file() == tmp_path / "profiles.json"
     assert manager.profile_dir() == tmp_path / "profiles" / "main_hall"
     assert manager.paths_for() == ProfilePaths.from_roots(

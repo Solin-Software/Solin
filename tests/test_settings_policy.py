@@ -17,6 +17,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation import settings_store
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.profiles import manager as profile_manager
+from solin.core.profiles import models as profile_models
 
 
 EXPECTED_SETTINGS_KEYS = {
@@ -123,8 +124,8 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
     manager = profile_manager.ProfileManager(tmp_path)
     manager._active_id = "kept"
     manager._profiles = [
-        profile_manager.ProfileInfo("kept", "Kept"),
-        profile_manager.ProfileInfo("removed", "Removed"),
+        profile_models.ProfileInfo("kept", "Kept"),
+        profile_models.ProfileInfo("removed", "Removed"),
     ]
 
     assert manager.delete_profile("removed") is True

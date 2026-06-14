@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from solin.core.foundation.constants import QSETTINGS_PROFILE_ORG_PREFIX
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
+from solin.core.profiles.models import validate_profile_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,9 +15,7 @@ class ProfileSettings:
 
     @classmethod
     def for_profile_id(cls, profile_id: str) -> ProfileSettings:
-        normalized = profile_id.strip()
-        if not normalized:
-            raise ValueError("Profile settings require a non-empty profile id.")
+        normalized = validate_profile_id(profile_id)
         return cls(
             profile_id=normalized,
             organization=f"{QSETTINGS_PROFILE_ORG_PREFIX}{normalized}",

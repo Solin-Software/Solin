@@ -36,9 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -54,6 +52,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.profiles import models as profile_models
 from solin.core.profiles.settings import ProfileSettings
 from solin.core.storage.json_repository import JsonFileRepository
 from solin.core.storage.migration import (
@@ -71,50 +70,6 @@ _BASE_APP_GLOBAL_KEYS = {
 }
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _normalize_slug(name: str) -> str:
-    """Converte nome legível em slug seguro para caminhos e QSettings."""
-    slug = name.strip().lower()
-    slug = re.sub(r"[^\w\s-]", "", slug)
-    slug = re.sub(r"[\s_-]+", "_", slug)
-    slug = slug.strip("_")
-    return slug or "profile"
-
-
-def _unique_slug(slug: str, existing: list[str]) -> str:
-    """Garante unicidade adicionando sufixo numérico se necessário."""
-    if slug not in existing:
-        return slug
-    i = 2
-    while f"{slug}_{i}" in existing:
-        i += 1
-    return f"{slug}_{i}"
-
-
-# ── ProfileInfo ───────────────────────────────────────────────────────────────
-
-class ProfileInfo:
-    """Metadados de um perfil. Imutáveis exceto pelo nome de exibição."""
-
-    __slots__ = ("id", "name", "created_at")
-
-    def __init__(self, id: str, name: str, created_at: float = 0.0):
-        self.id         = id
-        self.name       = name
-        self.created_at = created_at or time.time()
-
-    def to_dict(self) -> dict:
-        return {"id": self.id, "name": self.name, "created_at": self.created_at}
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "ProfileInfo":
-        return cls(d["id"], d["name"], d.get("created_at", time.time()))
-
-    def __repr__(self) -> str:
-        return f"ProfileInfo(id={self.id!r}, name={self.name!r})"
-
-
 class ProfileRegistryRepository:
     """Repository for the global ``profiles.json`` registry."""
 
@@ -125,7 +80,7 @@ class ProfileRegistryRepository:
     def path(self) -> Path:
         return self._json.path
 
-    def load(self) -> list[ProfileInfo]:
+    def load(self) -> list[profile_models.ProfileInfo]:
         if not self._json.exists():
             return []
         data = self._json.read()
@@ -134,9 +89,9 @@ class ProfileRegistryRepository:
         profiles = data.get("profiles", [])
         if not isinstance(profiles, list):
             raise ValueError("Profile registry 'profiles' must be a list")
-        return [ProfileInfo.from_dict(d) for d in profiles]
+        return [profile_models.ProfileInfo.from_dict(d) for d in profiles]
 
-    def save(self, profiles: list[ProfileInfo]) -> None:
+    def save(self, profiles: list[profile_models.ProfileInfo]) -> None:
         self._json.write({"profiles": [profile.to_dict() for profile in profiles]})
 
 
@@ -168,14 +123,14 @@ class ProfileManager(QObject):
             Path(self._data_dir) / _PROFILES_FILENAME,
         )
         self._active_id = ""
-        self._profiles: list[ProfileInfo] = []
+        self._profiles: list[profile_models.ProfileInfo] = []
         self._load_profiles()
         log.debug("[ProfileManager] Initialized - %d profile(s)", len(self._profiles))
 
     # ── Leitura ───────────────────────────────────────────────────────────
 
     @property
-    def profiles(self) -> list[ProfileInfo]:
+    def profiles(self) -> list[profile_models.ProfileInfo]:
         return list(self._profiles)
 
     @property
@@ -183,10 +138,10 @@ class ProfileManager(QObject):
         return self._active_id
 
     @property
-    def active_profile(self) -> Optional[ProfileInfo]:
+    def active_profile(self) -> Optional[profile_models.ProfileInfo]:
         return next((p for p in self._profiles if p.id == self._active_id), None)
 
-    def get_profile(self, profile_id: str) -> Optional[ProfileInfo]:
+    def get_profile(self, profile_id: str) -> Optional[profile_models.ProfileInfo]:
         return next((p for p in self._profiles if p.id == profile_id), None)
 
     def has_profiles(self) -> bool:
@@ -238,22 +193,26 @@ class ProfileManager(QObject):
 
     # ── CRUD ──────────────────────────────────────────────────────────────
 
-    def create_profile(self, name: str) -> ProfileInfo:
-        existing = [p.id for p in self._profiles]
-        slug = _unique_slug(_normalize_slug(name), existing)
-        p = ProfileInfo(id=slug, name=name)
+    def create_profile(self, name: str) -> profile_models.ProfileInfo:
+        normalized_name = profile_models.normalize_profile_name(name)
+        existing = {profile.id for profile in self._profiles}
+        slug = profile_models.unique_profile_slug(
+            profile_models.profile_slug(normalized_name),
+            existing,
+        )
+        p = profile_models.ProfileInfo(id=slug, name=normalized_name)
         self._profiles.append(p)
         self.ensure_profile_dirs(slug)
         self._save_profiles()
-        log.info("[ProfileManager] Profile created: %r (%s)", name, slug)
+        log.info("[ProfileManager] Profile created: %r (%s)", normalized_name, slug)
         return p
 
     def rename_profile(self, profile_id: str, new_name: str) -> None:
         p = self.get_profile(profile_id)
         if p:
-            p.name = new_name
+            p.rename(new_name)
             self._save_profiles()
-            log.info("[ProfileManager] Profile renamed: %s -> %r", profile_id, new_name)
+            log.info("[ProfileManager] Profile renamed: %s -> %r", profile_id, p.name)
 
     def delete_profile(self, profile_id: str) -> bool:
         """
@@ -345,7 +304,7 @@ class ProfileManager(QObject):
 
     # ── Migração de dados legados ──────────────────────────────────────────
 
-    def migrate_legacy(self, profile_name: str) -> ProfileInfo:
+    def migrate_legacy(self, profile_name: str) -> profile_models.ProfileInfo:
         """
         Cria um perfil a partir do estado legado (sem perfis).
 
