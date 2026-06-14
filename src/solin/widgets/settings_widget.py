@@ -10,6 +10,7 @@ from pathlib import Path
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.screens import ScreenManager
 from ..core.integrations.automation.obs import OBSWebSocketService
+from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
@@ -60,7 +61,10 @@ class SettingsWidget(
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
                  ndi_service: NDIReceiverService | None = None, *,
-                 prefs: QSettings, yeartext_cache_file: str | Path, parent=None):
+                 prefs: QSettings,
+                 auto_key_settings: AutoKeySettingsStore,
+                 yeartext_cache_file: str | Path,
+                 parent=None):
         super().__init__(parent)
         self.lang       = lang_manager
         self.screen_mgr = screen_manager
@@ -68,6 +72,7 @@ class SettingsWidget(
         self._ndi       = ndi_service
         self._yeartext_cache_file = Path(yeartext_cache_file)
         self._prefs     = prefs
+        self._auto_key_settings = auto_key_settings
         self._init_yearly_text_section()
         self._build_ui()
         screen_manager.screens_changed.connect(self._refresh_screens)

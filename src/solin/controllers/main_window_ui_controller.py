@@ -213,6 +213,7 @@ class MainWindowUiController:
             obs_service=window._obs_service,
             ndi_service=window._ndi_service,
             prefs=window.profile_prefs,
+            auto_key_settings=window._auto_key_settings,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"
             ),

@@ -48,7 +48,10 @@ from .core.integrations.automation.settings import (
 from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
-from .core.integrations.automation.shortcuts import AutoKeyDispatcher
+from .core.integrations.automation.shortcuts import (
+    AutoKeyDispatcher,
+    AutoKeySettingsStore,
+)
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistStoragePaths
@@ -97,6 +100,9 @@ class MainWindow(QMainWindow):
         self._auto_share_settings = AutoShareSettingsStore.for_profile_settings(
             profile_settings,
         )
+        self._auto_key_settings = AutoKeySettingsStore.for_profile_settings(
+            profile_settings,
+        )
         self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
         self.screen_mgr = ScreenManager(self)
         self.media_ctrl = MediaController(
@@ -104,7 +110,7 @@ class MainWindow(QMainWindow):
             media_cache_manager,
             self,
         )
-        self._auto_keys = AutoKeyDispatcher(profile_prefs, self)
+        self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self, profile_manager)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
