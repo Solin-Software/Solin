@@ -1,4 +1,8 @@
-from solin.controllers.media_projection_controller import MediaProjectionController
+from solin.controllers.media_projection_controller import (
+    MediaProjectionContext,
+    MediaProjectionController,
+    MediaProjectionHandlers,
+)
 from solin.core.projection.application import ProjectionSession
 
 
@@ -193,6 +197,14 @@ class _PlaylistWidgetStub:
         self._edit_view = _EditViewStub()
 
 
+class _MeetingServiceStub:
+    def __init__(self):
+        self.resolved = {}
+
+    def resolve_video(self, item):
+        return self.resolved
+
+
 class _WindowStub:
     def __init__(self):
         self.events = []
@@ -207,6 +219,7 @@ class _WindowStub:
         self._auto_key_projection = _AutoKeyProjectionStub(self.events)
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.playlist_widget = _PlaylistWidgetStub()
+        self.meeting_service = _MeetingServiceStub()
         self.windows = [
             _ProjectionWindowStub(self.events),
             _ProjectionWindowStub(self.events),
@@ -219,9 +232,43 @@ class _WindowStub:
         return text
 
 
+def _controller(window):
+    return MediaProjectionController(
+        MediaProjectionContext(
+            projection_session=window.projection_session,
+            projection_bar=window.proj_bar,
+            media_controller=window.media_ctrl,
+            ndi_service=window._ndi_service,
+            camera_service=window._camera_service,
+            projection_windows=window._all_windows,
+            playlist_edit_is_temp=lambda: getattr(
+                window.playlist_widget._edit_view,
+                "_is_temp",
+                False,
+            ),
+            meeting_service=lambda: window.meeting_service,
+            dialog_parent=window,
+            translate=window.tr,
+            sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
+            start_videos_paused=window.settings_widget.get_start_videos_paused,
+        ),
+        MediaProjectionHandlers(
+            stop_browser_tab_projection=(
+                window._navigation.stop_browser_tab_projection
+            ),
+            update_projection_status=(
+                window._projection_integrations.update_status
+            ),
+            prepare_video_session=(
+                window._auto_key_projection.prepare_video_session
+            ),
+        ),
+    )
+
+
 def test_project_video_classifies_audio_and_updates_status():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
 
     controller.project_video("song.mp3", "Song")
 
@@ -241,7 +288,7 @@ def test_project_video_core_uses_announcement_mode_for_sjjm_video():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     controller._next_is_sjjm = True
 
     controller.project_video_core("video.mp4", "Video", keep_expanded=True)
@@ -262,7 +309,7 @@ def test_project_video_core_uses_announcement_mode_for_sjjm_video():
 def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
     window = _WindowStub()
     window.settings_widget.start_videos_paused = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
 
     controller.project_video_core("talk.mp4", "Talk")
 
@@ -280,7 +327,7 @@ def test_project_video_core_pauses_sjjm_video_when_announcement_mode_is_disabled
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = False
     window.settings_widget.start_videos_paused = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     controller._next_is_sjjm = True
 
     controller.project_video_core("song.mp4", "Song")
@@ -295,7 +342,7 @@ def test_project_video_core_ignores_announcement_for_non_sjjm_videos_but_still_p
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
 
     controller.project_video_core("regular.mp4", "Regular")
 
@@ -308,7 +355,7 @@ def test_project_video_core_never_start_pauses_audio_or_enters_song_announcement
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     controller._next_is_sjjm = True
 
     controller.project_video_core("song.mp3", "Song Audio", is_audio=True)
@@ -325,7 +372,7 @@ def test_project_video_core_never_start_pauses_audio_or_enters_song_announcement
 def test_on_sjjm_project_marks_only_the_next_video_for_announcement():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     playlist = [{"url": "song.mp4", "title": "Song", "type": "video"}]
 
     controller.on_sjjm_project("song.mp4", "Song", playlist, "")
@@ -345,7 +392,7 @@ def test_on_sjjm_project_marks_only_the_next_video_for_announcement():
 def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
     window = _WindowStub()
     window.proj_bar.expanded = True
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     image_path = tmp_path / "slide.png"
     image_path.write_bytes(b"image-data")
     playlist = [{"url": str(image_path), "title": "Slide", "type": "image"}]
@@ -368,7 +415,7 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
 def test_project_tab_frame_initializes_live_tab_once():
     window = _WindowStub()
     window.projection_session.set_tab_projection_active(False)
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     frame = object()
 
     controller.project_tab_frame(frame)
@@ -388,7 +435,7 @@ def test_project_tab_frame_initializes_live_tab_once():
 
 def test_frame_and_image_transform_helpers_respect_projection_modes():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
 
     window.proj_bar.video_mode = True
     controller.distribute_frame("frame-1")
@@ -411,7 +458,7 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
 
 def test_image_transform_is_persisted_in_projection_state():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     window.projection_session.set_state(
         {"type": "image", "data": b"x", "transform": (1.0, 0.0, 0.0)}
     )
@@ -425,7 +472,7 @@ def test_image_transform_is_persisted_in_projection_state():
 
 def test_sermon_theme_transform_is_persisted_in_projection_state():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     window.projection_session.set_state({
         "type": "sermon_theme",
         "text": "t",
@@ -440,7 +487,7 @@ def test_sermon_theme_transform_is_persisted_in_projection_state():
 
 def test_image_transform_not_persisted_when_state_is_not_image():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     window.projection_session.set_state({"type": "video", "is_audio": False})
 
     controller.on_image_apply_transform(2.0, 0.1, -0.2)
@@ -450,7 +497,7 @@ def test_image_transform_not_persisted_when_state_is_not_image():
 
 def test_title_metadata_only_updates_video_mode():
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
 
     controller.on_title_from_metadata("Ignored")
     window.proj_bar.video_mode = True
@@ -461,7 +508,7 @@ def test_title_metadata_only_updates_video_mode():
 
 def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
     window = _WindowStub()
-    controller = MediaProjectionController(window)
+    controller = _controller(window)
     image_path = tmp_path / "second.png"
     image_path.write_bytes(b"second")
     playlist = [
@@ -474,3 +521,9 @@ def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
     assert window.proj_bar.playlists == [(playlist, None, False)]
     assert window.proj_bar.playlist_indices == [1]
     assert window.proj_bar.images == [("Second", b"second", True)]
+
+
+def test_media_projection_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")

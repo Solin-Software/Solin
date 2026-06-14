@@ -217,6 +217,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "language_controller.py",
         "live_integration_controller.py",
         "main_window_bootstrap_controller.py",
+        "media_projection_controller.py",
         "navigation_controller.py",
         "open_media_controller.py",
         "playlist_import_controller.py",

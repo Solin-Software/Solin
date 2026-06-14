@@ -136,10 +136,21 @@ class MainWindowUiController:
                 media_info_service_factory=self._media_info_service_factory,
             ),
             LazyPageHandlers(
-                project_image=window._media_projection.project_image_bytes,
-                project_video=window._media_projection.project_video,
+                project_image=lambda data: window._media_projection.project_image_bytes(
+                    data
+                ),
+                project_video=lambda url, title, playlist, playback_order: (
+                    window._media_projection.project_video(
+                        url,
+                        title,
+                        playlist,
+                        playback_order,
+                    )
+                ),
                 stop_projection=lambda: window._projection_stop.stop_projection(),
-                project_tab_frame=window._media_projection.project_tab_frame,
+                project_tab_frame=lambda frame: (
+                    window._media_projection.project_tab_frame(frame)
+                ),
                 add_current_to_playlist=lambda url, title, meta: (
                     window._playlist_imports.add_current_to_playlist(
                         url,
@@ -157,7 +168,14 @@ class MainWindowUiController:
                 report_download_failure=lambda title, error: (
                     window._playlist_imports.browser_download_failed(title, error)
                 ),
-                play_cached_media=window._media_projection.on_cache_play,
+                play_cached_media=lambda path, media_type, original_url="", display_title="": (
+                    window._media_projection.on_cache_play(
+                        path,
+                        media_type,
+                        original_url,
+                        display_title,
+                    )
+                ),
                 wifi_media_received=lambda path, original_name: (
                     window._wifi_playlist_controller.on_wifi_media_received(
                         path,

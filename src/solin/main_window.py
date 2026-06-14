@@ -22,7 +22,11 @@ from .controllers.main_window_ui_controller import MainWindowUiController
 from .controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
 )
-from .controllers.media_projection_controller import MediaProjectionController
+from .controllers.media_projection_controller import (
+    MediaProjectionContext,
+    MediaProjectionController,
+    MediaProjectionHandlers,
+)
 from .controllers.open_media_controller import (
     OpenMediaContext,
     OpenMediaController,
@@ -207,7 +211,6 @@ class MainWindow(QMainWindow):
             self.switch_profile_requested.emit
         )
         self._projection_targets = ProjectionWindowController(self)
-        self._media_projection = MediaProjectionController(self)
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
@@ -324,8 +327,12 @@ class MainWindow(QMainWindow):
                 ),
             ),
             WifiPlaylistHandlers(
-                play_cached_media=self._media_projection.on_cache_play,
-                project_video=self._media_projection.project_video,
+                play_cached_media=lambda *args, **kwargs: (
+                    self._media_projection.on_cache_play(*args, **kwargs)
+                ),
+                project_video=lambda *args, **kwargs: (
+                    self._media_projection.project_video(*args, **kwargs)
+                ),
             ),
         )
         self._open_media_controller = OpenMediaController(
@@ -341,7 +348,9 @@ class MainWindow(QMainWindow):
             ),
             OpenMediaHandlers(
                 switch_to_playlist=lambda: self._navigation.switch_page(7),
-                project_media_at_index=self._media_projection.project_media_at_index,
+                project_media_at_index=lambda *args, **kwargs: (
+                    self._media_projection.project_media_at_index(*args, **kwargs)
+                ),
                 expand_projection_overlay=self.proj_bar.expand_overlay,
                 send_to_temp_playlist=self._playlist_imports.send_to_temp_playlist,
                 open_pdf_temp_playlist=(
@@ -372,6 +381,37 @@ class MainWindow(QMainWindow):
                 projection_bar=self.proj_bar,
                 auto_share_finished=self._auto_share_finished.emit,
             )
+        )
+        self._media_projection = MediaProjectionController(
+            MediaProjectionContext(
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
+                projection_windows=self.projection_session.all_windows,
+                playlist_edit_is_temp=lambda: getattr(
+                    self.playlist_widget._edit_view,
+                    "_is_temp",
+                    False,
+                ),
+                meeting_service=lambda: self.meetings_widget.get_service(),
+                dialog_parent=self,
+                translate=self.tr,
+                sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
+                start_videos_paused=self.settings_widget.get_start_videos_paused,
+            ),
+            MediaProjectionHandlers(
+                stop_browser_tab_projection=(
+                    self._navigation.stop_browser_tab_projection
+                ),
+                update_projection_status=(
+                    self._projection_integrations.update_status
+                ),
+                prepare_video_session=(
+                    self._auto_key_projection.prepare_video_session
+                ),
+            ),
         )
         self._projection_stop = ProjectionStopController(
             ProjectionStopContext(

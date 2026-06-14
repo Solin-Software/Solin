@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QMessageBox
@@ -22,12 +25,44 @@ _TRANSFORMABLE_STATES = frozenset({"image", "sermon_theme"})
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
 
 
+@dataclass(frozen=True, slots=True)
+class MediaProjectionContext:
+    """Dependencies for media, image, playlist, cache, and live-tab projection."""
+
+    projection_session: Any
+    projection_bar: Any
+    media_controller: Any
+    ndi_service: Any
+    camera_service: Any
+    projection_windows: Callable[[], list[Any]]
+    playlist_edit_is_temp: Callable[[], bool]
+    meeting_service: Callable[[], Any]
+    dialog_parent: Any
+    translate: Callable[[str], str]
+    sjjm_announce_mode: Callable[[], bool]
+    start_videos_paused: Callable[[], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class MediaProjectionHandlers:
+    """Shell and integration actions used by media projection workflows."""
+
+    stop_browser_tab_projection: Callable[[], None]
+    update_projection_status: Callable[..., None]
+    prepare_video_session: Callable[[], None]
+
+
 class MediaProjectionController:
     """Handles media, image, playlist, cache, and live-tab projection flows."""
 
-    def __init__(self, window) -> None:
-        self._window = window
-        self._session = window.projection_session
+    def __init__(
+        self,
+        context: MediaProjectionContext,
+        handlers: MediaProjectionHandlers,
+    ) -> None:
+        self._context = context
+        self._handlers = handlers
+        self._session = context.projection_session
         self._next_is_sjjm = False
 
     def on_song_project(
@@ -122,7 +157,7 @@ class MediaProjectionController:
                 playlist=playlist,
                 playback_order=order if order else None,
                 from_saved_playlist=True,
-                keep_expanded=self._window.proj_bar.is_expanded(),
+                keep_expanded=self._context.projection_bar.is_expanded(),
             )
             return
 
@@ -135,7 +170,7 @@ class MediaProjectionController:
         )
 
     def edit_view_is_temp(self) -> bool:
-        return getattr(self._window.playlist_widget._edit_view, "_is_temp", False)
+        return self._context.playlist_edit_is_temp()
 
     def project_video(
         self,
@@ -146,7 +181,7 @@ class MediaProjectionController:
         from_saved_playlist: bool = False,
     ) -> None:
         items = playlist if playlist else [{"url": url, "title": title}]
-        self._window.proj_bar.set_playlist(
+        self._context.projection_bar.set_playlist(
             items,
             playback_order,
             from_saved_playlist=from_saved_playlist,
@@ -155,26 +190,26 @@ class MediaProjectionController:
         self.project_video_core(url, title, is_audio=ext in AUDIO_EXTS)
 
     def project_next_auto(self, url: str, title: str, media_type: str) -> None:
-        window = self._window
+        context = self._context
         if url == "__replay__":
-            window.media_ctrl.stop()
-            window._ndi_service.stop()
-            window._camera_service.stop()
-            current = window.proj_bar.current_playlist_item()
+            context.media_controller.stop()
+            context.ndi_service.stop()
+            context.camera_service.stop()
+            current = context.projection_bar.current_playlist_item()
             if current is None:
                 return
             current_ext = os.path.splitext(current.get("url", ""))[1].lower()
             if current_ext not in AUDIO_EXTS:
-                for projection_window in window._all_windows():
+                for projection_window in context.projection_windows():
                     projection_window.begin_video()
-            window.media_ctrl.play_url(current["url"])
+            context.media_controller.play_url(current["url"])
             return
 
         if media_type == "image":
             self._project_image_path(
                 title,
                 url,
-                keep_expanded=window.proj_bar.is_expanded(),
+                keep_expanded=context.projection_bar.is_expanded(),
             )
             return
 
@@ -182,7 +217,7 @@ class MediaProjectionController:
         self.project_video_core(
             url,
             title,
-            keep_expanded=window.proj_bar.is_expanded(),
+            keep_expanded=context.projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
         )
 
@@ -193,53 +228,53 @@ class MediaProjectionController:
         keep_expanded: bool = False,
         is_audio: bool = False,
     ) -> None:
-        window = self._window
+        context = self._context
         is_sjjm = self._next_is_sjjm
         self._next_is_sjjm = False
 
         self._session.set_tab_projection_active(False)
-        window._navigation.stop_browser_tab_projection()
-        window._ndi_service.stop()
-        window._camera_service.stop()
-        window.media_ctrl.stop()
-        window._ndi_service.stop()
-        window._camera_service.stop()
+        self._handlers.stop_browser_tab_projection()
+        context.ndi_service.stop()
+        context.camera_service.stop()
+        context.media_controller.stop()
+        context.ndi_service.stop()
+        context.camera_service.stop()
 
-        for projection_window in window._all_windows():
+        for projection_window in context.projection_windows():
             projection_window.clear()
 
-        window.proj_bar.activate_video(
+        context.projection_bar.activate_video(
             title,
             keep_expanded=keep_expanded,
             is_audio=is_audio,
         )
 
         if not is_audio:
-            for projection_window in window._all_windows():
+            for projection_window in context.projection_windows():
                 projection_window.begin_video()
 
         announce = (
             is_sjjm
             and not is_audio
-            and window.settings_widget.get_sjjm_announce_mode()
+            and context.sjjm_announce_mode()
         )
         if announce:
-            window.proj_bar.begin_announcement_mode()
+            context.projection_bar.begin_announcement_mode()
 
         if not is_audio:
-            window._auto_key_projection.prepare_video_session()
+            self._handlers.prepare_video_session()
 
-        window.media_ctrl.play_url(url)
+        context.media_controller.play_url(url)
 
         if (
             not is_audio
             and not announce
-            and window.settings_widget.get_start_videos_paused()
+            and context.start_videos_paused()
         ):
-            window.media_ctrl.pause()
+            context.media_controller.pause()
 
         self._session.set_state({"type": "video", "is_audio": is_audio})
-        window._projection_integrations.update_status(
+        self._handlers.update_projection_status(
             True,
             title,
             visual=not is_audio,
@@ -247,39 +282,39 @@ class MediaProjectionController:
         )
 
     def project_image_bytes(self, data: bytes) -> None:
-        title = self._window.tr("Showing image")
+        title = self._context.translate("Showing image")
         self._project_image_data(title, data, playlist=[])
 
     def project_tab_frame(self, frame) -> None:
-        window = self._window
+        context = self._context
         if not self._session.tab_projection_active:
             self._session.set_tab_projection_active(True)
-            window.media_ctrl.stop()
-            window._ndi_service.stop()
-            window._camera_service.stop()
-            window.proj_bar.set_playlist([])
-            for projection_window in window._all_windows():
+            context.media_controller.stop()
+            context.ndi_service.stop()
+            context.camera_service.stop()
+            context.projection_bar.set_playlist([])
+            for projection_window in context.projection_windows():
                 projection_window.clear()
-            window.proj_bar.activate_image(window.tr("Browser — Live Tab"))
-            window.proj_bar.hide_add_to_playlist_action()
-            window.proj_bar.set_live_tab_mode(True)
+            live_tab_title = context.translate("Browser — Live Tab")
+            context.projection_bar.activate_image(live_tab_title)
+            context.projection_bar.hide_add_to_playlist_action()
+            context.projection_bar.set_live_tab_mode(True)
             if not ALLOW_ZOOM_PAN_ON_LIVE_TAB:
-                window.proj_bar.preview_content.set_image_mode(False)
-            window._projection_integrations.update_status(
+                context.projection_bar.preview_content.set_image_mode(False)
+            self._handlers.update_projection_status(
                 True,
-                window.tr("Browser — Live Tab"),
+                live_tab_title,
                 auto_keys_media=False,
             )
 
-        for projection_window in window._all_windows():
+        for projection_window in context.projection_windows():
             if isinstance(frame, QImage) and hasattr(projection_window, "show_image_from_qimage"):
                 projection_window.show_image_from_qimage(frame, cache_pixmap=False)
             else:
                 projection_window.show_image_from_pixmap(frame)
-        window.proj_bar.update_tab_live_preview(frame)
+        context.projection_bar.update_tab_live_preview(frame)
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
-        window = self._window
         # Persist the transform as part of the projection state so a surface
         # created later (hot-plugged monitor / respawned preview) is replayed
         # with the same framing instead of showing it untransformed.  Applies to
@@ -287,19 +322,18 @@ class MediaProjectionController:
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
             state["transform"] = (zoom, norm_x, norm_y)
-        for projection_window in window._all_windows():
+        for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(zoom, norm_x, norm_y)
 
     def on_image_reset_transform(self) -> None:
-        window = self._window
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
             state["transform"] = _IDENTITY_TRANSFORM
-        for projection_window in window._all_windows():
+        for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
 
     def on_image_reset_transform_instant(self) -> None:
-        for projection_window in self._window._all_windows():
+        for projection_window in self._context.projection_windows():
             projection_window.reset_image_transform_instant()
 
     def on_cache_play(
@@ -324,16 +358,17 @@ class MediaProjectionController:
             )
 
     def on_title_from_metadata(self, title: str) -> None:
-        if self._window.proj_bar.is_video_mode() and title:
-            self._window.proj_bar.set_projected_title(title)
+        projection_bar = self._context.projection_bar
+        if projection_bar.is_video_mode() and title:
+            projection_bar.set_projected_title(title)
 
     def distribute_frame(self, frame) -> None:
-        window = self._window
-        if not window.proj_bar.is_video_mode():
+        context = self._context
+        if not context.projection_bar.is_video_mode():
             return
-        if window.proj_bar.is_audio_mode():
+        if context.projection_bar.is_audio_mode():
             return
-        for projection_window in window._all_windows():
+        for projection_window in context.projection_windows():
             projection_window.update_frame(frame)
 
     def project_media_at_index(
@@ -343,7 +378,7 @@ class MediaProjectionController:
         keep_expanded: bool = False,
         playback_order: str | None = None,
     ) -> None:
-        window = self._window
+        context = self._context
         if not playlist or index >= len(playlist):
             return
 
@@ -362,8 +397,8 @@ class MediaProjectionController:
             return
 
         ext = os.path.splitext(item["url"])[1].lower()
-        window.proj_bar.set_playlist(playlist, playback_order)
-        window.proj_bar.set_playlist_index(index)
+        context.projection_bar.set_playlist(playlist, playback_order)
+        context.projection_bar.set_playlist_index(index)
         self.project_video_core(
             item["url"],
             item["title"],
@@ -372,8 +407,8 @@ class MediaProjectionController:
         )
 
     def on_playlist_navigate(self, index: int) -> None:
-        window = self._window
-        playlist = window.proj_bar.playlist_items()
+        projection_bar = self._context.projection_bar
+        playlist = projection_bar.playlist_items()
         if not playlist or index >= len(playlist):
             return
 
@@ -383,7 +418,7 @@ class MediaProjectionController:
             self._project_image_path(
                 item["title"],
                 item["url"],
-                keep_expanded=window.proj_bar.is_expanded(),
+                keep_expanded=projection_bar.is_expanded(),
             )
             return
 
@@ -391,12 +426,12 @@ class MediaProjectionController:
         self.project_video_core(
             item["url"],
             item["title"],
-            keep_expanded=window.proj_bar.is_expanded(),
+            keep_expanded=projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
         )
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:
-        service = self._window.meetings_widget.get_service()
+        service = self._context.meeting_service()
         resolved = service.resolve_video(item)
         url = resolved.get("url", "")
         if url:
@@ -406,7 +441,7 @@ class MediaProjectionController:
             return
 
         QMessageBox.information(
-            self._window,
+            self._context.dialog_parent,
             "Meetings",
             f"Could not resolve video URL for: {title}\n"
             "Check your internet connection.",
@@ -449,38 +484,38 @@ class MediaProjectionController:
         index: int | None = None,
         keep_expanded: bool = False,
     ) -> None:
-        window = self._window
+        context = self._context
         self._session.set_tab_projection_active(False)
-        window._navigation.stop_browser_tab_projection()
-        window.media_ctrl.stop()
-        window._ndi_service.stop()
-        window._camera_service.stop()
+        self._handlers.stop_browser_tab_projection()
+        context.media_controller.stop()
+        context.ndi_service.stop()
+        context.camera_service.stop()
 
         if playlist is not None:
             if playback_order is None:
-                window.proj_bar.set_playlist(
+                context.projection_bar.set_playlist(
                     playlist,
                     from_saved_playlist=from_saved_playlist,
                 )
             else:
-                window.proj_bar.set_playlist(
+                context.projection_bar.set_playlist(
                     playlist,
                     playback_order,
                     from_saved_playlist=from_saved_playlist,
                 )
             if index is not None:
-                window.proj_bar.set_playlist_index(index)
+                context.projection_bar.set_playlist_index(index)
 
-        for projection_window in window._all_windows():
+        for projection_window in context.projection_windows():
             projection_window.clear()
             projection_window.show_image_from_url_data(data)
 
-        window.proj_bar.activate_image(
+        context.projection_bar.activate_image(
             title,
             image_data=data,
             keep_expanded=keep_expanded,
         )
-        window._projection_integrations.update_status(
+        self._handlers.update_projection_status(
             True,
             title,
             auto_keys_media=True,
