@@ -18,29 +18,7 @@ from .application import (
     PrefetchPlan,
     QueuedPrefetch,
 )
-
-# ── Helpers de path (espelham downloader.py para evitar import circular) ──────
-
-def _url_to_filename(url: str) -> str:
-    return url.split("/")[-1].split("?")[0]
-
-
-def cached_path_for(url: str, media_cache_dir: str | os.PathLike[str]) -> str:
-    """Retorna o caminho local esperado para a URL (arquivo pode não existir)."""
-    cache_dir = os.fspath(media_cache_dir)
-    os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, _url_to_filename(url))
-
-
-def is_url_cached(url: str, media_cache_dir: str | os.PathLike[str]) -> bool:
-    """True se o arquivo local existe E o marcador .done está presente."""
-    if not url or not url.startswith("http"):
-        return False
-    try:
-        path = cached_path_for(url, media_cache_dir)
-        return os.path.isfile(path) and os.path.isfile(path + ".done")
-    except (OSError, ValueError):
-        return False
+from .download_storage import is_remote_url, is_url_cached
 
 
 class _Downloader(Protocol):
@@ -102,7 +80,7 @@ class MediaCacheManager(QObject):
     @staticmethod
     def is_remote(url: str) -> bool:
         """True se a URL é HTTP/HTTPS (portanto sujeita a cacheamento)."""
-        return bool(url and url.startswith("http"))
+        return is_remote_url(url)
 
     def is_prefetching(self, url: str) -> bool:
         """True se há um prefetch ativo para a URL."""

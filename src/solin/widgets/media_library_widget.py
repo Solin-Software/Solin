@@ -30,7 +30,8 @@ from ..core.jw.media_api import fetch_clips
 from ..core.jw.songs import JWSongsStore
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
-from ..core.media.cache import MediaCacheManager, cached_path_for
+from ..core.media.cache import MediaCacheManager
+from ..core.media.download_storage import cached_path_for
 from ..core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,

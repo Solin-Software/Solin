@@ -9,8 +9,12 @@ from pathlib import Path
 from solin.core.media.downloader import (
     SongDownloader,
     _DownloadJob,
-    _make_persistent_temp_path,
-    _safe_remove,
+)
+from solin.core.media.download_storage import (
+    DownloadProgressGate,
+    cleanup_incomplete_cache,
+    make_persistent_temp_path,
+    safe_remove,
 )
 
 
@@ -99,16 +103,73 @@ def test_downloader_rejects_truncated_encoded_transfer(tmp_path):
 def test_persistent_download_jobs_use_isolated_staging_files(tmp_path):
     final_path = str(tmp_path / "media.mp3")
 
-    first = _make_persistent_temp_path(final_path)
-    second = _make_persistent_temp_path(final_path)
+    first = make_persistent_temp_path(final_path)
+    second = make_persistent_temp_path(final_path)
 
     assert first != second
     assert os.path.dirname(first) == str(tmp_path)
     assert first.endswith(".tmp")
     assert second.endswith(".tmp")
 
-    _safe_remove(first)
+    safe_remove(first)
 
     assert not os.path.exists(first)
     assert os.path.exists(second)
-    _safe_remove(second)
+    safe_remove(second)
+
+
+def test_cleanup_incomplete_cache_removes_only_unfinished_downloads(tmp_path):
+    complete = tmp_path / "complete.mp3"
+    complete.write_bytes(b"complete")
+    complete.with_name("complete.mp3.done").write_text("url", encoding="utf-8")
+    incomplete = tmp_path / "incomplete.mp3"
+    incomplete.write_bytes(b"incomplete")
+    staging = tmp_path / ".media.mp3.abc.tmp"
+    staging.write_bytes(b"staging")
+    marker = tmp_path / "orphan.done"
+    marker.write_text("marker", encoding="utf-8")
+
+    removed = cleanup_incomplete_cache(tmp_path)
+
+    assert removed == 2
+    assert complete.exists()
+    assert complete.with_name("complete.mp3.done").exists()
+    assert marker.exists()
+    assert not incomplete.exists()
+    assert not staging.exists()
+
+
+def test_download_progress_gate_throttles_by_percent_byte_and_time():
+    now = 1.0
+
+    def clock() -> float:
+        return now
+
+    gate = DownloadProgressGate(clock=clock)
+
+    assert gate.should_emit(1, 1000)
+    assert not gate.should_emit(2, 1000)
+    assert gate.should_emit(10, 1000)
+
+    unknown_total = DownloadProgressGate(clock=clock)
+    assert unknown_total.should_emit(1, 0)
+    assert not unknown_total.should_emit(2, 0)
+
+    now = 1.21
+    assert unknown_total.should_emit(2, 0)
+
+
+def test_media_download_storage_has_no_qt_or_downloader_dependency():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "solin"
+        / "core"
+        / "media"
+        / "download_storage.py"
+    ).read_text(encoding="utf-8")
+
+    assert "PySide6" not in source
+    assert "QObject" not in source
+    assert "Signal" not in source
+    assert "SongDownloader" not in source

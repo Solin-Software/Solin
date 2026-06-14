@@ -17,84 +17,20 @@ persist=False (download automático DESLIGADO)
 """
 import os
 import logging
-import tempfile
 import threading
-import time
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
-from solin.core.foundation.constants import TEMP_STREAM_PREFIX
 from solin.core.network.http import stream_get
-
-PROGRESS_EMIT_MIN_INTERVAL_SECONDS = 0.20
-PROGRESS_EMIT_MIN_BYTES = 512 * 1024
+from .download_storage import (
+    DownloadProgressGate,
+    commit_persistent_download,
+    completed_cached_path,
+    prepare_download_target,
+    safe_remove,
+)
 
 log = logging.getLogger(__name__)
-
-
-def _url_to_path(url: str, media_cache_dir: str | os.PathLike[str]) -> str:
-    cache_dir = os.fspath(media_cache_dir)
-    os.makedirs(cache_dir, exist_ok=True)
-    filename = url.split("/")[-1].split("?")[0]
-    return os.path.join(cache_dir, filename)
-
-
-def _make_temp_path(url: str) -> str:
-    """Cria um arquivo temporário vazio com extensão correta e prefixo Solin_stream_."""
-    name = url.split("/")[-1].split("?")[0]
-    ext = ("." + name.rsplit(".", 1)[-1]) if "." in name else ""
-    fd, path = tempfile.mkstemp(suffix=ext, prefix=TEMP_STREAM_PREFIX)
-    os.close(fd)
-    return path
-
-
-def _make_persistent_temp_path(final_path: str) -> str:
-    """Create a job-unique staging file beside the persistent destination."""
-    directory = os.path.dirname(final_path)
-    filename = os.path.basename(final_path)
-    fd, path = tempfile.mkstemp(
-        prefix=f".{filename}.",
-        suffix=".tmp",
-        dir=directory,
-    )
-    os.close(fd)
-    return path
-
-
-def _lock_path(temp_path: str) -> str:
-    """Retorna o caminho do lockfile correspondente ao tempfile."""
-    return temp_path + ".lock"
-
-
-def _acquire_lock(temp_path: str) -> None:
-    """Cria o lockfile que sinaliza que este tempfile está em uso."""
-    try:
-        with open(_lock_path(temp_path), "w") as f:
-            f.write(str(os.getpid()))
-    except OSError:
-        pass
-
-
-def _release_lock(temp_path: str) -> None:
-    """Remove o lockfile ao deletar o tempfile."""
-    try:
-        lp = _lock_path(temp_path)
-        if os.path.isfile(lp):
-            os.remove(lp)
-    except OSError:
-        pass
-
-
-def _safe_remove(path) -> None:
-    """Remove o arquivo e seu lockfile (se existir)."""
-    if path and os.path.isfile(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    # Sempre tenta remover o lock, mesmo se o arquivo já não existia
-    if path:
-        _release_lock(path)
 
 
 @dataclass
@@ -142,10 +78,7 @@ class SongDownloader(QObject):
 
     def get_cached_path(self, url: str):
         """Retorna caminho local se arquivo persistente ja existe."""
-        path = _url_to_path(url, self._media_cache_dir)
-        if os.path.exists(path) and os.path.exists(path + ".done"):
-            return path
-        return None
+        return completed_cached_path(url, self._media_cache_dir)
 
     def start(self, url: str, persist: bool = True) -> int:
         """
@@ -185,7 +118,7 @@ class SongDownloader(QObject):
                 job.writing_tmp = None
             else:
                 tmp = None
-        _safe_remove(tmp)
+        safe_remove(tmp)
 
     def cleanup_temp(self) -> None:
         """
@@ -195,7 +128,7 @@ class SongDownloader(QObject):
         with self._lock:
             path = self._finished_temp
             self._finished_temp = None
-        _safe_remove(path)
+        safe_remove(path)
 
     def take_finished_temp(self):
         """Retorna (e limpa) o caminho do temp finalizado para rastreamento externo."""
@@ -209,21 +142,21 @@ class SongDownloader(QObject):
     def _worker(self, job: _DownloadJob) -> None:
         url = job.url
         persist = job.persist
-        if persist:
-            final_path = _url_to_path(url, self._media_cache_dir)
-            if os.path.exists(final_path) and os.path.exists(final_path + ".done"):
-                size = os.path.getsize(final_path)
-                try:
-                    self._worker_progress.emit(job.job_id, size, size)
-                    self._worker_finished.emit(job.job_id, final_path, True)
-                except RuntimeError:
-                    return
+        target = prepare_download_target(
+            url,
+            self._media_cache_dir,
+            persist=persist,
+        )
+        final_path = target.final_path
+        write_tmp = target.write_path
+        if target.is_cached:
+            size = target.cached_size or 0
+            try:
+                self._worker_progress.emit(job.job_id, size, size)
+                self._worker_finished.emit(job.job_id, final_path, True)
+            except RuntimeError:
                 return
-            write_tmp = _make_persistent_temp_path(final_path)
-        else:
-            write_tmp = _make_temp_path(url)
-            final_path = write_tmp
-            _acquire_lock(write_tmp)
+            return
 
         with self._lock:
             job.writing_tmp = write_tmp
@@ -235,31 +168,15 @@ class SongDownloader(QObject):
             with stream_get(url, timeout=30) as resp:
                 total      = int(resp.headers.get("content-length", 0))
                 downloaded = 0
-                last_progress_at = 0.0
-                last_progress_pct = -1
-                last_progress_bytes = 0
+                progress_gate = DownloadProgressGate()
 
                 def emit_progress(force: bool = False) -> None:
-                    nonlocal last_progress_at, last_progress_pct, last_progress_bytes
-                    if downloaded <= 0 or job.cancel_event.is_set():
-                        return
-                    now = time.monotonic()
-                    if total > 0:
-                        pct = int(downloaded * 100 / total)
-                        if force or pct != last_progress_pct:
-                            last_progress_pct = pct
-                            last_progress_at = now
-                            last_progress_bytes = downloaded
-                            self._worker_progress.emit(job.job_id, downloaded, total)
-                        return
-                    if (
-                        force
-                        or last_progress_at <= 0
-                        or downloaded - last_progress_bytes >= PROGRESS_EMIT_MIN_BYTES
-                        or now - last_progress_at >= PROGRESS_EMIT_MIN_INTERVAL_SECONDS
+                    if progress_gate.should_emit(
+                        downloaded,
+                        total,
+                        force=force,
+                        cancelled=job.cancel_event.is_set(),
                     ):
-                        last_progress_at = now
-                        last_progress_bytes = downloaded
                         self._worker_progress.emit(job.job_id, downloaded, total)
 
                 with open(write_tmp, "wb") as f:
@@ -282,16 +199,14 @@ class SongDownloader(QObject):
                         or job.cancel_event.is_set()
                     ):
                         return
-                    os.replace(write_tmp, final_path)
-                    with open(final_path + ".done", "w") as marker:
-                        marker.write(url)
+                    commit_persistent_download(target, url)
 
             succeeded = True
             try:
                 self._worker_finished.emit(job.job_id, final_path, persist)
             except RuntimeError:
                 if not persist:
-                    _safe_remove(final_path)
+                    safe_remove(final_path)
 
         except Exception as exc:  # noqa: BLE001 - background download job boundary
             log.exception("Media download job %s failed", job.job_id)
@@ -305,7 +220,7 @@ class SongDownloader(QObject):
                 with self._lock:
                     if job.writing_tmp == write_tmp:
                         job.writing_tmp = None
-                _safe_remove(write_tmp)
+                safe_remove(write_tmp)
 
     def _is_current_job(self, job_id: int) -> bool:
         with self._lock:
@@ -328,7 +243,7 @@ class SongDownloader(QObject):
                     self._finished_temp = local_path
         if stale:
             if not persist:
-                _safe_remove(local_path)
+                safe_remove(local_path)
             return
         self.finished.emit(local_path)
 
@@ -339,98 +254,3 @@ class SongDownloader(QObject):
             self._job = None
             self._thread = None
         self.error.emit(message)
-
-
-# ── Limpeza de órfãos na inicialização ────────────────────────────────────────
-
-def cleanup_orphan_temps() -> int:
-    """
-    Varre o diretório de temporários do SO em busca de lockfiles órfãos
-    com prefixo 'Solin_stream_' — sinal de que o app encerrou abruptamente
-    sem deletar o tempfile correspondente.
-
-    Filtra EXCLUSIVAMENTE pelo prefixo Solin_stream_ para não interferir
-    em lockfiles de outros aplicativos no mesmo diretório.
-
-    Retorna o número de arquivos removidos.
-    """
-    import tempfile as _tempfile
-
-    tmp_dir = _tempfile.gettempdir()
-    removed = 0
-
-    try:
-        entries = os.listdir(tmp_dir)
-    except OSError:
-        return 0
-
-    for name in entries:
-        # Interessa apenas lockfiles com prefixo Solin
-        if not (name.startswith(TEMP_STREAM_PREFIX) and name.endswith(".lock")):
-            continue
-
-        lock_path = os.path.join(tmp_dir, name)
-        # O tempfile tem o mesmo nome sem o sufixo ".lock"
-        temp_path = lock_path[: -len(".lock")]
-
-        # Remove tempfile (se ainda existir) e o lockfile
-        try:
-            if os.path.isfile(temp_path):
-                os.remove(temp_path)
-                removed += 1
-            os.remove(lock_path)
-        except OSError:
-            pass  # Corrida improvável entre instâncias — ignora silenciosamente
-
-    if removed:
-        log.info("Removed %d orphan stream tempfile(s).", removed)
-
-    return removed
-
-
-def cleanup_incomplete_cache(
-    media_cache_dir: str | os.PathLike[str],
-) -> int:
-    """
-    Varre MEDIA_CACHE_DIR em busca de arquivos de mídia sem marcador .done —
-    resíduos de downloads interrompidos (crash, kill, queda de energia).
-
-    Regra: para cada arquivo que NÃO termina em '.done' ou '.tmp',
-    se não existir um '<arquivo>.done' ao lado, é download incompleto → apaga.
-    Os próprios marcadores .done são preservados (são apenas sentinelas vazias).
-    Os arquivos .tmp de escrita ativa também são removidos (nunca têm .done).
-
-    Retorna o número de arquivos removidos.
-    """
-    cache_dir = os.fspath(media_cache_dir)
-    if not os.path.isdir(cache_dir):
-        return 0
-
-    removed = 0
-
-    try:
-        entries = os.listdir(cache_dir)
-    except OSError:
-        return 0
-
-    for name in entries:
-        # Marcadores sentinela — nunca remover
-        if name.endswith(".done"):
-            continue
-
-        path = os.path.join(cache_dir, name)
-        if not os.path.isfile(path):
-            continue
-
-        # .tmp de escrita ativa ou arquivo de mídia sem .done → incompleto
-        if name.endswith(".tmp") or not os.path.isfile(path + ".done"):
-            try:
-                os.remove(path)
-                removed += 1
-            except OSError:
-                pass
-
-    if removed:
-        log.info("Removed %d incomplete media cache download(s).", removed)
-
-    return removed

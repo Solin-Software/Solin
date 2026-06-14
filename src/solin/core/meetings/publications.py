@@ -48,7 +48,8 @@ from solin.core.jw.publication_links import (
     fetch_pub_media_json,
     select_pub_media_file,
 )
-from solin.core.media.cache import MediaCacheManager, is_url_cached
+from solin.core.media.cache import MediaCacheManager
+from solin.core.media.download_storage import is_url_cached
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.storage.json_repository import JsonFileRepository
 from .models import (

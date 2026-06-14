@@ -224,7 +224,7 @@ def main():
     from solin.widgets.update_dialog import cleanup_pending_patch
     cleanup_pending_patch()
 
-    from solin.core.media.downloader import cleanup_orphan_temps, cleanup_incomplete_cache
+    from solin.core.media.download_storage import cleanup_orphan_temps, cleanup_incomplete_cache
     cleanup_orphan_temps()
     cleanup_incomplete_cache(container.runtime_paths.media_cache_dir)
 

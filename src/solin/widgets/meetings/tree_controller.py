@@ -2240,7 +2240,7 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def _on_cache_removed(self, path: str):
-        from ...core.media.cache import cached_path_for
+        from ...core.media.download_storage import cached_path_for
         removed = os.path.normcase(os.path.abspath(path))
         for node in iter_nodes(self._nodes):
             if node.get("type") != "media":
