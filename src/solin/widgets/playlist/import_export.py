@@ -295,15 +295,11 @@ class _PlaylistEditImportMixin:
                         section_id=section_id,
                     )
                     if raw.get("data") and not url:
-                        self._profile_paths.embedded_dir.mkdir(
-                            parents=True,
-                            exist_ok=True,
+                        item["url"] = self._profile_media_store.save_embedded(
+                            raw["data"],
+                            raw.get("filename", "media"),
+                            identifier=item["id"],
                         )
-                        ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                        fpath = self._profile_paths.embedded_dir / f"{item['id']}{ext}"
-                        with fpath.open("wb") as f:
-                            f.write(raw["data"])
-                        item["url"] = os.fspath(fpath)
                         item["type"] = raw.get("type", "video")
                     new_items.append(item)
                 if new_items:

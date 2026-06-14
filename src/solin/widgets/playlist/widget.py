@@ -69,6 +69,7 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.jw.catalog import JWMediaCatalogService
+    from ...core.media.profile_store import ProfileMediaStore
     from ...core.ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
 
@@ -94,6 +95,7 @@ class _PlaylistEditView(
         runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
+        profile_media_store: ProfileMediaStore,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
@@ -112,6 +114,7 @@ class _PlaylistEditView(
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
+        self._profile_media_store = profile_media_store
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -918,6 +921,7 @@ class PlaylistWidget(QWidget):
         runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
+        profile_media_store: ProfileMediaStore,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
@@ -934,6 +938,7 @@ class PlaylistWidget(QWidget):
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
+        self._profile_media_store = profile_media_store
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_catalog_service_factory = jw_catalog_service_factory
@@ -969,6 +974,7 @@ class PlaylistWidget(QWidget):
             profile_paths=self._profile_paths,
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
+            profile_media_store=self._profile_media_store,
             media_cache_manager=self._media_cache_manager,
             thumb_cache_dir=self._thumb_cache_dir,
             schedule_cleanup=self._schedule_cleanup,
@@ -983,6 +989,7 @@ class PlaylistWidget(QWidget):
             runtime_paths=self._runtime_paths,
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
+            profile_media_store=self._profile_media_store,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_catalog_service_factory=self._jw_catalog_service_factory,

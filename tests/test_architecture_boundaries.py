@@ -638,6 +638,42 @@ def test_media_info_services_live_outside_widget_package():
     assert not legacy_path.exists()
 
 
+def test_profile_media_bytes_are_persisted_outside_widgets():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    paths = (
+        widget_root / "playlist" / "import_export.py",
+        widget_root / "playlist" / "list_view.py",
+        widget_root / "meetings" / "tree_controller.py",
+        widget_root / "wifi_receive_widget.py",
+        widget_root / "projection" / "bar.py",
+    )
+    violations: list[str] = []
+
+    for path in paths:
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            is_open = (
+                isinstance(function, ast.Name)
+                and function.id == "open"
+            ) or (
+                isinstance(function, ast.Attribute)
+                and function.attr == "open"
+            )
+            if not is_open:
+                continue
+            mode_index = 1 if isinstance(function, ast.Name) else 0
+            if len(node.args) <= mode_index:
+                continue
+            mode = node.args[mode_index]
+            if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+                if any(flag in mode.value for flag in ("w", "a", "x")):
+                    violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

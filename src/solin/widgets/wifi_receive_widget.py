@@ -51,6 +51,7 @@ from ..styles.icons import make_icon
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
+    from ..core.media.profile_store import ProfileMediaStore
     from ..core.ui.notifications import NotificationCenter
 
 _PDF_EXTS_SET = _PDF_EXTS
@@ -515,6 +516,7 @@ class WifiReceiveWidget(QWidget):
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
+        profile_media_store: ProfileMediaStore,
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent: QWidget | None = None,
     ) -> None:
@@ -523,6 +525,7 @@ class WifiReceiveWidget(QWidget):
         self._notifications   = notifications
         self._profile_paths   = profile_paths
         self._runtime_paths   = runtime_paths
+        self._profile_media_store = profile_media_store
         self._server          = WifiReceiveServer(
             embedded_dir=profile_paths.embedded_dir,
             parent=self,
@@ -1030,16 +1033,13 @@ class WifiReceiveWidget(QWidget):
 
         def _write_tmp(data: bytes, suffix: str) -> str:
             """Write embedded media to data/embedded/ for persistence."""
-            import uuid as _uuid
-            self._profile_paths.embedded_dir.mkdir(parents=True, exist_ok=True)
-            uid  = _uuid.uuid4().hex
-            path = self._profile_paths.embedded_dir / f"{uid}{suffix}"
-            with path.open("wb") as f:
-                f.write(data)
+            path = self._profile_media_store.save_embedded(
+                data,
+                f"media{suffix}",
+            )
             # Track for cleanup if user discards without adding to playlist
-            path_str = os.fspath(path)
-            self._wifi_tmp_files.add(path_str)
-            return path_str
+            self._wifi_tmp_files.add(path)
+            return path
 
         added = 0
         skipped = []

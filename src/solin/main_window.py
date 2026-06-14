@@ -97,6 +97,7 @@ from .core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
+from .core.media.profile_store import ProfileMediaStore
 from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
@@ -160,6 +161,7 @@ class MainWindow(QMainWindow):
         playlist_storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
+        profile_media_store: ProfileMediaStore,
         timer_session: TimerSession,
         active_profile: ProfileInfo,
     ):
@@ -373,6 +375,7 @@ class MainWindow(QMainWindow):
                 playlist_storage_paths=self.playlist_storage_paths,
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
+                profile_media_store=profile_media_store,
                 jw_catalog_cache_paths=self.jw_catalog_cache_paths,
                 jw_catalog_service_factory=lambda parent: JWMediaCatalogService(
                     self.jw_catalog_cache_paths,

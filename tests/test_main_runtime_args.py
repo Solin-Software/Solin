@@ -48,6 +48,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     profile_paths = SimpleNamespace(
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
+        embedded_dir="embedded",
+        images_dir="images",
     )
     profile_settings = object()
     media_cache_manager = object()
@@ -103,6 +105,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
+            profile_media_store,
             received_timer_session,
             received_active_profile,
         ):
@@ -129,6 +132,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
+            self.profile_media_store = profile_media_store
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 
@@ -200,6 +204,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.playlist_repository.path) == "playlists.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
+    assert str(window.profile_media_store.embedded_dir) == "embedded"
+    assert str(window.profile_media_store.images_dir) == "images"
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert events == [
@@ -216,6 +222,8 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     profile_paths = SimpleNamespace(
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
+        embedded_dir="embedded",
+        images_dir="images",
     )
     profile_settings = object()
     media_cache_manager = object()
@@ -262,6 +270,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
+            profile_media_store,
             received_timer_session,
             received_active_profile,
         ):
@@ -288,6 +297,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
+            self.profile_media_store = profile_media_store
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 

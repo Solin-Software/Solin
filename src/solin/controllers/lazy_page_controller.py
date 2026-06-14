@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
+    from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.network.browser_images import BrowserImageFetchService
     from solin.ui.media_info import MediaInfoService
 
@@ -26,6 +27,7 @@ class LazyPageContext:
     profile_paths: ProfilePaths
     runtime_paths: RuntimePaths
     media_cache_manager: MediaCacheManager
+    profile_media_store: ProfileMediaStore
     browser_download_service_factory: Callable[[], BrowserDownloadService]
     browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService]
     media_info_service_factory: Callable[[QObject], MediaInfoService]
@@ -141,6 +143,7 @@ class LazyPageController:
             notifications=context.notifications,
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
+            profile_media_store=context.profile_media_store,
             media_info_service_factory=context.media_info_service_factory,
             parent=context.parent,
         )

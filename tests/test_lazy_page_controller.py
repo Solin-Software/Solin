@@ -51,6 +51,7 @@ class _WindowStub:
         self.browser_image_fetch_service_factory = (
             lambda: self.browser_image_fetch_service
         )
+        self.profile_media_store = object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
             cache_dir="cache",
@@ -80,6 +81,7 @@ def _controller(window):
             profile_paths=window.profile_paths,
             runtime_paths=object(),
             media_cache_manager=window.media_cache_manager,
+            profile_media_store=window.profile_media_store,
             browser_download_service_factory=(
                 window.browser_download_service_factory
             ),

@@ -101,6 +101,7 @@ class MainWindowUiContext:
     playlist_storage_paths: Any
     playlist_repository: Any
     meeting_tree_store: Any
+    profile_media_store: Any
     jw_catalog_cache_paths: Any
     jw_catalog_service_factory: Callable[[QObject], Any]
     jw_songs_store: Any
@@ -314,6 +315,7 @@ class MainWindowUiController:
                 profile_paths=context.profile_paths,
                 runtime_paths=context.runtime_paths,
                 media_cache_manager=context.media_cache_manager,
+                profile_media_store=context.profile_media_store,
                 browser_download_service_factory=(
                     self._browser_download_service_factory
                 ),
@@ -398,6 +400,7 @@ class MainWindowUiController:
             runtime_paths=context.runtime_paths,
             storage_paths=context.playlist_storage_paths,
             playlist_repository=context.playlist_repository,
+            profile_media_store=context.profile_media_store,
             media_cache_manager=context.media_cache_manager,
             jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
@@ -409,6 +412,7 @@ class MainWindowUiController:
         meetings_widget = MeetingsWidget(
             context.lang_manager,
             meeting_tree_store=context.meeting_tree_store,
+            profile_media_store=context.profile_media_store,
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             cache_manager=context.media_cache_manager,
@@ -517,6 +521,7 @@ class MainWindowUiController:
             context.media_controller,
             playback_settings=context.projection_playback_settings,
             profile_paths=context.profile_paths,
+            profile_media_store=context.profile_media_store,
             media_cache_dir=context.media_cache_manager.media_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,
             lang_manager=context.lang_manager,

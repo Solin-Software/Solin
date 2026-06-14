@@ -21,6 +21,7 @@ from solin.core.i18n.manager import LanguageManager
 from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
+from solin.core.media.profile_store import ProfileMediaStore
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:
@@ -37,18 +38,23 @@ runtime_paths = RuntimePaths.from_roots(
     data_dir=Path("data"),
     cache_dir=Path("cache"),
 )
+profile_paths = ProfilePaths.from_roots(
+    data_dir=Path("data"),
+    cache_dir=Path("cache"),
+    profile_id="test",
+)
 widget = WifiReceiveWidget(
     LanguageManager(
         global_settings=GlobalSettingsStore.create(),
         jw_languages_cache_file=Path("jw_languages.json"),
     ),
     notifications=_Notifications(),
-    profile_paths=ProfilePaths.from_roots(
-        data_dir=Path("data"),
-        cache_dir=Path("cache"),
-        profile_id="test",
-    ),
+    profile_paths=profile_paths,
     runtime_paths=runtime_paths,
+    profile_media_store=ProfileMediaStore(
+        profile_paths.embedded_dir,
+        profile_paths.images_dir,
+    ),
     media_info_service_factory=lambda parent: MediaInfoService(
         lambda owner: MediaInfoQueue(
             runtime_paths.media_cache_dir,

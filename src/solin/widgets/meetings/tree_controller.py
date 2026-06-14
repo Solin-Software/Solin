@@ -29,6 +29,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
+from ...core.media.profile_store import ProfileMediaStore
 from ...core.foundation.constants import (
     DOCX_EXTS,
     JWPUB_EXTS,
@@ -156,6 +157,7 @@ class MeetingTreeController(QObject):
         meeting_type: str,
         language_code: str,
         store: MeetingTreeStore,
+        profile_media_store: ProfileMediaStore,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -170,6 +172,7 @@ class MeetingTreeController(QObject):
         self._language_code = language_code or "E"
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = store
+        self._profile_media_store = profile_media_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
@@ -1156,12 +1159,11 @@ class MeetingTreeController(QObject):
         node_id = new_node_id()
         url = str(raw.get("url") or raw.get("jworg_url") or "")
         if raw.get("data") and not url:
-            embedded_dir = self._embedded_media_dir()
-            os.makedirs(embedded_dir, exist_ok=True)
-            ext = Path(str(raw.get("filename") or "media")).suffix or ".mp4"
-            url = os.path.join(embedded_dir, f"{node_id}{ext}")
-            with open(url, "wb") as handle:
-                handle.write(raw["data"])
+            url = self._profile_media_store.save_embedded(
+                raw["data"],
+                str(raw.get("filename") or "media"),
+                identifier=node_id,
+            )
         media_type = str(raw.get("type") or "").lower()
         if media_type not in ("image", "audio", "video"):
             media_type = _media_type_from_path(url)

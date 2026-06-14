@@ -76,6 +76,7 @@ from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
     from ...core.jw.catalog import JWMediaCatalogService
+    from ...core.media.profile_store import ProfileMediaStore
     from ...core.meetings.memorial import MemorialService
     from ...core.meetings.publications import JwpubService
 
@@ -112,6 +113,7 @@ class StudyDetailView(QWidget):
                  service: "JwpubService", *,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
+                 profile_media_store: ProfileMediaStore,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -127,6 +129,7 @@ class StudyDetailView(QWidget):
         self._svc   = service
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
+        self._profile_media_store = profile_media_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -166,6 +169,7 @@ class StudyDetailView(QWidget):
             meeting_type=self._pub,
             language_code=lang_code,
             store=self._meeting_tree_store,
+            profile_media_store=self._profile_media_store,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -394,6 +398,7 @@ class _MemorialDetailView(QWidget):
     def __init__(self, md: "MemorialData", service: "JwpubService", *,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
+                 profile_media_store: ProfileMediaStore,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -408,6 +413,7 @@ class _MemorialDetailView(QWidget):
         self._svc = service
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
+        self._profile_media_store = profile_media_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -445,6 +451,7 @@ class _MemorialDetailView(QWidget):
             meeting_type="memorial",
             language_code=lang_code,
             store=self._meeting_tree_store,
+            profile_media_store=self._profile_media_store,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -651,6 +658,7 @@ class MeetingsWidget(QWidget):
         lang_manager=None,
         *,
         meeting_tree_store: MeetingTreeStore,
+        profile_media_store: ProfileMediaStore,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -672,6 +680,7 @@ class MeetingsWidget(QWidget):
         self._clear_details_pending = False
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
+        self._profile_media_store = profile_media_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -907,6 +916,7 @@ class MeetingsWidget(QWidget):
             d = StudyDetailView(pub_type, wd, self._service,
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
+                                profile_media_store=self._profile_media_store,
                                 profile_paths=self._profile_paths,
                                 runtime_paths=self._runtime_paths,
                                 cache_manager=self._cache_manager,
@@ -946,6 +956,7 @@ class MeetingsWidget(QWidget):
                 self._service,
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
+                profile_media_store=self._profile_media_store,
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,

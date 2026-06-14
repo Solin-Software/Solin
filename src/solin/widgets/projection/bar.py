@@ -40,6 +40,7 @@ from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.time_utils import ceil_remaining_seconds
 from solin.core.media.playback import MediaController
+from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.media.settings import ProjectionPlaybackSettingsStore
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
@@ -147,6 +148,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         *,
         playback_settings: ProjectionPlaybackSettingsStore,
         profile_paths: ProfilePaths,
+        profile_media_store: ProfileMediaStore,
         media_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         lang_manager=None,
@@ -157,6 +159,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.media      = media_ctrl
         self._playback_settings = playback_settings
         self._profile_paths = profile_paths
+        self._profile_media_store = profile_media_store
         self._media_cache_dir = media_cache_dir
         self.lang       = lang_manager
         self._container = container
@@ -763,14 +766,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.image_reset_transform_instant.emit()
 
         if image_data:
-            # ── Salva bytes como arquivo para poder referenciar na playlist ──
-            import uuid as _uuid
-            self._profile_paths.images_dir.mkdir(parents=True, exist_ok=True)
-            _img_path = self._profile_paths.images_dir / f"{_uuid.uuid4().hex}.png"
             try:
-                with _img_path.open("wb") as _f:
-                    _f.write(image_data)
-                self._image_file_path = os.fspath(_img_path)
+                self._image_file_path = (
+                    self._profile_media_store.save_projected_image(image_data)
+                )
             except OSError:
                 self._image_file_path = ""
 

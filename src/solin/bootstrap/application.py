@@ -54,6 +54,7 @@ def _launch_main_window(
     from solin.main_window import MainWindow
     from solin.core.meetings.tree_store import MeetingTreeStore
     from solin.core.media.settings import MediaSettingsStore
+    from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
     from solin.core.ui.titlebar import apply_titlebar_color
 
@@ -63,6 +64,10 @@ def _launch_main_window(
     )
     playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
     meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
+    profile_media_store = ProfileMediaStore(
+        profile_paths.embedded_dir,
+        profile_paths.images_dir,
+    )
     media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
     media_controller = media.create_playback(media_settings)
     background_media_controller = media.create_playback(media_settings)
@@ -86,6 +91,7 @@ def _launch_main_window(
         playlist_storage_paths,
         playlist_repository,
         meeting_tree_store,
+        profile_media_store,
         timer_session,
         active_profile,
     )

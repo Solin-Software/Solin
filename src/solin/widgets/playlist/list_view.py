@@ -35,6 +35,7 @@ from .dialogs import _NameDialog
 from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
+    from ...core.media.profile_store import ProfileMediaStore
     from ...core.playlists.storage import PlaylistRepository
 
 _BTN_STYLE = (
@@ -71,6 +72,7 @@ class _PlaylistListView(QWidget):
         profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
+        profile_media_store: ProfileMediaStore,
         media_cache_manager: MediaCacheManager,
         thumb_cache_dir: str | os.PathLike[str],
         schedule_cleanup: Callable[[list[dict]], None],
@@ -84,6 +86,7 @@ class _PlaylistListView(QWidget):
         self._profile_paths = profile_paths
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
+        self._profile_media_store = profile_media_store
         self._media_cache_manager = media_cache_manager
         self._thumb_cache_dir = thumb_cache_dir
         self._schedule_cleanup = schedule_cleanup
@@ -424,15 +427,11 @@ class _PlaylistListView(QWidget):
                         meps_language=raw.get("language", 0),
                     )
                     if raw.get("data") and not url:
-                        self._profile_paths.embedded_dir.mkdir(
-                            parents=True,
-                            exist_ok=True,
+                        item["url"] = self._profile_media_store.save_embedded(
+                            raw["data"],
+                            raw.get("filename", "media"),
+                            identifier=item["id"],
                         )
-                        ext = Path(raw.get("filename", "media")).suffix or ".mp4"
-                        fpath = self._profile_paths.embedded_dir / f"{item['id']}{ext}"
-                        with fpath.open("wb") as f:
-                            f.write(raw["data"])
-                        item["url"] = os.fspath(fpath)
                         item["type"] = raw.get("type", "video")
                     items.append(item)
                 self._playlists.append(
