@@ -34,7 +34,10 @@ from .controllers.playlist_import_controller import (
     PlaylistImportHandlers,
 )
 from .controllers.profile_switch_controller import ProfileSwitchController
-from .controllers.projection_integration_controller import ProjectionIntegrationController
+from .controllers.projection_integration_controller import (
+    ProjectionIntegrationContext,
+    ProjectionIntegrationController,
+)
 from .controllers.projection_stop_controller import ProjectionStopController
 from .controllers.projection_window_controller import ProjectionWindowController
 from .controllers.remote_services_controller import RemoteServicesController
@@ -336,8 +339,17 @@ class MainWindow(QMainWindow):
         )
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(
-            self,
-            self._obs_scene_session,
+            ProjectionIntegrationContext(
+                projection_session=self.projection_session,
+                obs_scene_session=self._obs_scene_session,
+                auto_key_projection=self._auto_key_projection,
+                projection_windows=self.projection_session.all_windows,
+                obs_service=self._obs_service,
+                obs_settings=self._obs_settings,
+                auto_share_settings=self._auto_share_settings,
+                projection_bar=self.proj_bar,
+                auto_share_finished=self._auto_share_finished.emit,
+            )
         )
         self._live_integrations = LiveIntegrationController(
             LiveIntegrationContext(

@@ -4,6 +4,9 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import QTimer
 
@@ -15,13 +18,28 @@ AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS = 1900
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectionIntegrationContext:
+    """Dependencies for synchronizing projection with external integrations."""
+
+    projection_session: Any
+    obs_scene_session: Any
+    auto_key_projection: Any
+    projection_windows: Callable[[], list[Any]]
+    obs_service: Any
+    obs_settings: Any
+    auto_share_settings: Any
+    projection_bar: Any
+    auto_share_finished: Callable[[int, bool, bool], None]
+
+
 class ProjectionIntegrationController:
     """Synchronizes projection state with OBS, Zoom, and auto-key edges."""
 
-    def __init__(self, window, obs_scene_session) -> None:
-        self._window = window
-        self._session = window.projection_session
-        self._obs_scene_session = obs_scene_session
+    def __init__(self, context: ProjectionIntegrationContext) -> None:
+        self._context = context
+        self._session = context.projection_session
+        self._obs_scene_session = context.obs_scene_session
         self._auto_share_active = False
         self._auto_share_generation = 0
         self._auto_share_stop = threading.Event()
@@ -39,15 +57,15 @@ class ProjectionIntegrationController:
         # Status text was removed from the sidebar; the projection edge still
         # drives OBS, Zoom, and auto-key integrations.
         if not active:
-            self._window._auto_key_projection.set_visual_active(False)
+            self._context.auto_key_projection.set_visual_active(False)
         elif auto_keys_media is not None:
-            self._window._auto_key_projection.set_visual_active(bool(auto_keys_media))
+            self._context.auto_key_projection.set_visual_active(bool(auto_keys_media))
         if sync_obs:
             self.sync_obs_scene(active=active, visual=visual)
         self.sync_zoom_share(active=active, visual=visual)
 
     def has_visible_projection_output(self) -> bool:
-        for win in self._window._all_windows():
+        for win in self._context.projection_windows():
             try:
                 if win.isVisible():
                     return True
@@ -70,27 +88,27 @@ class ProjectionIntegrationController:
         self.sync_zoom_share(active=active, visual=visual)
 
     def sync_obs_scene(self, active: bool | None = None, visual: bool = True) -> None:
-        window = self._window
-        if not window._obs_service.is_connected:
+        context = self._context
+        if not context.obs_service.is_connected:
             return
 
         if active is None:
             active, visual = self.current_projection_activity()
 
         has_output = self.has_visible_projection_output()
-        media_scene = window._obs_settings.media_window_scene()
-        default_scene = window._obs_settings.default_scene()
+        media_scene = context.obs_settings.media_window_scene()
+        default_scene = context.obs_settings.default_scene()
 
         going_to_media = active and visual and has_output
 
         if going_to_media:
             if _MEMORIZE_PRE_MEDIA_SCENE:
-                current = window._obs_service.current_scene or ""
+                current = context.obs_service.current_scene or ""
                 if media_scene and current and current != media_scene:
                     self._obs_scene_session.remember(current)
             scene = media_scene
         else:
-            current = window._obs_service.current_scene or ""
+            current = context.obs_service.current_scene or ""
             if media_scene and current and current != media_scene:
                 return
             if _MEMORIZE_PRE_MEDIA_SCENE:
@@ -100,14 +118,14 @@ class ProjectionIntegrationController:
             self._obs_scene_session.clear()
 
         if scene and not scene.startswith("—"):
-            window._obs_service.request_scene_change(scene)
-            window.proj_bar.set_obs_scene_is_media(going_to_media)
+            context.obs_service.request_scene_change(scene)
+            context.projection_bar.set_obs_scene_is_media(going_to_media)
 
     def auto_share_hotkey(self) -> str:
-        return self._window._auto_share_settings.hotkey()
+        return self._context.auto_share_settings.hotkey()
 
     def auto_share_configured(self) -> bool:
-        return self._window._auto_share_settings.is_configured()
+        return self._context.auto_share_settings.is_configured()
 
     def sync_zoom_share(self, active: bool | None = None, visual: bool = True) -> None:
         if self._auto_share_stop.is_set():
@@ -115,7 +133,8 @@ class ProjectionIntegrationController:
         if active is None:
             active, visual = self.current_projection_activity()
 
-        if not self._window._auto_share_settings.is_enabled():
+        context = self._context
+        if not context.auto_share_settings.is_enabled():
             self._auto_share_generation += 1
             self._auto_share_active = False
             return
@@ -133,14 +152,14 @@ class ProjectionIntegrationController:
         generation = self._auto_share_generation
 
         if should_share:
-            click_x, click_y = self._window._auto_share_settings.click_position()
+            click_x, click_y = context.auto_share_settings.click_position()
             from ..core.integrations.automation.screen_share import execute_start_share
 
             def _run_start_share():
                 ok = execute_start_share(hotkey, click_x, click_y)
                 if not self._auto_share_stop.is_set():
                     try:
-                        self._window._auto_share_finished.emit(generation, True, ok)
+                        context.auto_share_finished(generation, True, ok)
                     except RuntimeError:
                         pass
 
@@ -153,7 +172,7 @@ class ProjectionIntegrationController:
                 ok = execute_stop_share(hotkey)
                 if not self._auto_share_stop.is_set():
                     try:
-                        self._window._auto_share_finished.emit(generation, False, ok)
+                        context.auto_share_finished(generation, False, ok)
                     except RuntimeError:
                         pass
 

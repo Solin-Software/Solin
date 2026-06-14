@@ -1,6 +1,9 @@
 import threading
 
-from solin.controllers.projection_integration_controller import ProjectionIntegrationController
+from solin.controllers.projection_integration_controller import (
+    ProjectionIntegrationContext,
+    ProjectionIntegrationController,
+)
 from solin.core.projection.application import ObsSceneSession, ProjectionSession
 
 
@@ -77,6 +80,22 @@ class _WindowStub:
         return [_ProjectionWindowStub(self._visible)]
 
 
+def _controller(window):
+    return ProjectionIntegrationController(
+        ProjectionIntegrationContext(
+            projection_session=window.projection_session,
+            obs_scene_session=window.obs_scene_session,
+            auto_key_projection=window._auto_key_projection,
+            projection_windows=window._all_windows,
+            obs_service=window._obs_service,
+            obs_settings=window._obs_settings,
+            auto_share_settings=window._auto_share_settings,
+            projection_bar=window.proj_bar,
+            auto_share_finished=lambda *_args: None,
+        )
+    )
+
+
 class _ProjectionWindowStub:
     def __init__(self, visible):
         self._visible = visible
@@ -87,7 +106,7 @@ class _ProjectionWindowStub:
 
 def test_current_projection_activity_distinguishes_idle_video_audio_and_visual():
     window = _WindowStub()
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     assert controller.current_projection_activity() == (False, True)
 
@@ -100,7 +119,7 @@ def test_current_projection_activity_distinguishes_idle_video_audio_and_visual()
 
 def test_update_status_drives_auto_key_edges():
     window = _WindowStub(obs_connected=False)
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     controller.update_status(True, auto_keys_media=True, sync_obs=False)
     controller.update_status(False, sync_obs=False)
@@ -110,7 +129,7 @@ def test_update_status_drives_auto_key_edges():
 
 def test_sync_obs_scene_moves_to_media_and_remembers_previous_scene():
     window = _WindowStub(visible=True)
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     controller.sync_obs_scene(active=True, visual=True)
 
@@ -123,7 +142,7 @@ def test_sync_obs_scene_returns_to_previous_scene_from_media_scene():
     window = _WindowStub(visible=True)
     window._obs_service.current_scene = "Media"
     window.obs_scene_session.remember("Camera")
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     controller.sync_obs_scene(active=False, visual=True)
 
@@ -138,7 +157,7 @@ def test_auto_share_hotkey_uses_settings_store_value():
         enabled=True,
         hotkey="Ctrl+Shift+S",
     )
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     assert controller.auto_share_hotkey() == "Ctrl+Shift+S"
     assert controller.auto_share_configured() is True
@@ -147,7 +166,7 @@ def test_auto_share_hotkey_uses_settings_store_value():
 def test_auto_share_configured_rejects_missing_hotkey():
     window = _WindowStub()
     window._auto_share_settings = _AutoShareSettingsStub(enabled=True, hotkey="")
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
 
     assert controller.auto_share_hotkey() == ""
     assert controller.auto_share_configured() is False
@@ -155,7 +174,7 @@ def test_auto_share_configured_rejects_missing_hotkey():
 
 def test_auto_share_ignores_stale_worker_result():
     window = _WindowStub()
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
     controller._auto_share_generation = 2
     controller._auto_share_active = False
 
@@ -166,7 +185,7 @@ def test_auto_share_ignores_stale_worker_result():
 
 def test_auto_share_failed_stop_restores_active_state():
     window = _WindowStub()
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
     controller._auto_share_generation = 3
     controller._auto_share_active = False
 
@@ -177,7 +196,7 @@ def test_auto_share_failed_stop_restores_active_state():
 
 def test_cleanup_joins_owned_auto_share_workers():
     window = _WindowStub()
-    controller = ProjectionIntegrationController(window, window.obs_scene_session)
+    controller = _controller(window)
     release = threading.Event()
     started = threading.Event()
 
@@ -193,3 +212,9 @@ def test_cleanup_joins_owned_auto_share_workers():
 
     assert controller._auto_share_stop.is_set()
     assert controller._auto_share_threads == set()
+
+
+def test_projection_integration_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")
