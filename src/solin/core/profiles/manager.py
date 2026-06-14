@@ -55,7 +55,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.profiles.settings import ProfileSettings
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_repository import JsonFileRepository
 from solin.core.storage.migration import (
     move_dir_if_exists as _move_dir_if_exists,
     move_file_if_exists as _move_file_if_exists,
@@ -115,6 +115,31 @@ class ProfileInfo:
         return f"ProfileInfo(id={self.id!r}, name={self.name!r})"
 
 
+class ProfileRegistryRepository:
+    """Repository for the global ``profiles.json`` registry."""
+
+    def __init__(self, path: str | Path) -> None:
+        self._json = JsonFileRepository(path)
+
+    @property
+    def path(self) -> Path:
+        return self._json.path
+
+    def load(self) -> list[ProfileInfo]:
+        if not self._json.exists():
+            return []
+        data = self._json.read()
+        if not isinstance(data, dict):
+            raise ValueError("Profile registry root must be an object")
+        profiles = data.get("profiles", [])
+        if not isinstance(profiles, list):
+            raise ValueError("Profile registry 'profiles' must be a list")
+        return [ProfileInfo.from_dict(d) for d in profiles]
+
+    def save(self, profiles: list[ProfileInfo]) -> None:
+        self._json.write({"profiles": [profile.to_dict() for profile in profiles]})
+
+
 # ── ProfileManager ────────────────────────────────────────────────────────────
 
 class ProfileManager(QObject):
@@ -139,6 +164,9 @@ class ProfileManager(QObject):
         super().__init__(parent)
         self._data_dir = str(data_dir)
         self._cache_dir = str(cache_dir or "")
+        self._profile_repository = ProfileRegistryRepository(
+            Path(self._data_dir) / _PROFILES_FILENAME,
+        )
         self._active_id = ""
         self._profiles: list[ProfileInfo] = []
         self._load_profiles()
@@ -382,16 +410,11 @@ class ProfileManager(QObject):
     # ── Internos ──────────────────────────────────────────────────────────
 
     def _profiles_file(self) -> Path:
-        return Path(self._data_dir) / _PROFILES_FILENAME
+        return self._profile_repository.path
 
     def _load_profiles(self) -> None:
-        path = self._profiles_file()
-        if not path.exists():
-            self._profiles = []
-            return
         try:
-            data = read_json_file(path)
-            self._profiles = [ProfileInfo.from_dict(d) for d in data.get("profiles", [])]
+            self._profiles = self._profile_repository.load()
         except (
             OSError,
             UnicodeError,
@@ -404,6 +427,4 @@ class ProfileManager(QObject):
             self._profiles = []
 
     def _save_profiles(self) -> None:
-        path = self._profiles_file()
-        data = {"profiles": [p.to_dict() for p in self._profiles]}
-        write_json_atomic(path, data)
+        self._profile_repository.save(self._profiles)

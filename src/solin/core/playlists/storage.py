@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from solin.core.foundation.exception_logging import log_ignored_exception
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_repository import JsonFileRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,54 +14,73 @@ class PlaylistStoragePaths:
     pending_deletions_file: Path
 
 
-def load_playlists(paths: PlaylistStoragePaths) -> list[dict]:
-    try:
-        if paths.playlists_file.exists():
-            data = read_json_file(paths.playlists_file)
-            return data.get("playlists", []) if isinstance(data, dict) else []
-    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
-        log_ignored_exception(__name__, "Could not load playlists file")
-    return []
+class PlaylistRepository:
+    """Repository for the profile-local ``playlists.json`` file."""
 
+    def __init__(self, path: str | Path) -> None:
+        self._json = JsonFileRepository(path)
 
-def load_playlists_strict(paths: PlaylistStoragePaths) -> list[dict]:
-    """Load playlists while preserving read/parse failures for destructive callers."""
-    if not paths.playlists_file.exists():
+    @classmethod
+    def from_paths(cls, paths: PlaylistStoragePaths) -> "PlaylistRepository":
+        return cls(paths.playlists_file)
+
+    @property
+    def path(self) -> Path:
+        return self._json.path
+
+    def load(self) -> list[dict]:
+        try:
+            if self._json.exists():
+                data = self._json.read()
+                return data.get("playlists", []) if isinstance(data, dict) else []
+        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
+            log_ignored_exception(__name__, "Could not load playlists file")
         return []
-    data = read_json_file(paths.playlists_file)
-    if not isinstance(data, dict):
-        raise ValueError("Playlist storage root must be an object")
-    playlists = data.get("playlists", [])
-    if not isinstance(playlists, list):
-        raise ValueError("Playlist storage 'playlists' must be a list")
-    return playlists
+
+    def load_strict(self) -> list[dict]:
+        """Load playlists while preserving read/parse failures for destructive callers."""
+        if not self._json.exists():
+            return []
+        data = self._json.read()
+        if not isinstance(data, dict):
+            raise ValueError("Playlist storage root must be an object")
+        playlists = data.get("playlists", [])
+        if not isinstance(playlists, list):
+            raise ValueError("Playlist storage 'playlists' must be a list")
+        return playlists
+
+    def save(self, playlists: list[dict]) -> None:
+        try:
+            self._json.write({"playlists": playlists})
+        except (OSError, UnicodeError, TypeError, ValueError):
+            log_ignored_exception(__name__, "Could not save playlists file")
 
 
-def save_playlists(
-    playlists: list[dict],
-    paths: PlaylistStoragePaths,
-) -> None:
-    try:
-        write_json_atomic(paths.playlists_file, {"playlists": playlists})
-    except (OSError, UnicodeError, TypeError, ValueError):
-        log_ignored_exception(__name__, "Could not save playlists file")
+class PendingDeletionRepository:
+    """Repository for pending filesystem deletions that could not complete."""
 
+    def __init__(self, path: str | Path) -> None:
+        self._json = JsonFileRepository(path)
 
-def load_pending_deletions(paths: PlaylistStoragePaths) -> list[str]:
-    try:
-        if paths.pending_deletions_file.exists():
-            data = read_json_file(paths.pending_deletions_file)
-            return data.get("pending", []) if isinstance(data, dict) else []
-    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
-        log_ignored_exception(__name__, "Could not load pending deletions file")
-    return []
+    @classmethod
+    def from_paths(cls, paths: PlaylistStoragePaths) -> "PendingDeletionRepository":
+        return cls(paths.pending_deletions_file)
 
+    @property
+    def path(self) -> Path:
+        return self._json.path
 
-def save_pending_deletions(
-    media_paths: list[str],
-    paths: PlaylistStoragePaths,
-) -> None:
-    try:
-        write_json_atomic(paths.pending_deletions_file, {"pending": media_paths})
-    except (OSError, UnicodeError, TypeError, ValueError):
-        log_ignored_exception(__name__, "Could not save pending deletions file")
+    def load(self) -> list[str]:
+        try:
+            if self._json.exists():
+                data = self._json.read()
+                return data.get("pending", []) if isinstance(data, dict) else []
+        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
+            log_ignored_exception(__name__, "Could not load pending deletions file")
+        return []
+
+    def save(self, media_paths: list[str]) -> None:
+        try:
+            self._json.write({"pending": media_paths})
+        except (OSError, UnicodeError, TypeError, ValueError):
+            log_ignored_exception(__name__, "Could not save pending deletions file")

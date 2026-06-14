@@ -277,6 +277,7 @@ def test_internal_playlist_file_and_item_schema_are_stable(
         playlists_file=playlists_file,
         pending_deletions_file=tmp_path / "pending.json",
     )
+    repository = playlist_storage.PlaylistRepository.from_paths(storage_paths)
 
     item = new_playlist_item("Welcome", "C:/media/welcome.mp4")
     playlist = {
@@ -287,12 +288,12 @@ def test_internal_playlist_file_and_item_schema_are_stable(
         "markers": [],
     }
 
-    playlist_storage.save_playlists([playlist], storage_paths)
+    repository.save([playlist])
 
     assert json.loads(playlists_file.read_text(encoding="utf-8")) == {
         "playlists": [playlist]
     }
-    assert playlist_storage.load_playlists(storage_paths) == [playlist]
+    assert repository.load() == [playlist]
     assert set(item) == {
         "id",
         "title",

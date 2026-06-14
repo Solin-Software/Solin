@@ -53,9 +53,8 @@ from ...core.playlists.cleanup import PlaylistCleanupQueue
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import (
+    PlaylistRepository,
     PlaylistStoragePaths,
-    load_playlists,
-    save_playlists,
 )
 from ...core.playlists.thumbnails import playlist_thumb_path
 from .thumbnails import (
@@ -106,6 +105,7 @@ class _PlaylistEditView(
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
+        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -215,7 +215,7 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import save_manifest_playlist
             save_manifest_playlist(self._watched_path, self._pl)
         else:
-            save_playlists(self._all_playlists, self._storage_paths)
+            self._playlist_repository.save(self._all_playlists)
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -919,6 +919,7 @@ class PlaylistWidget(QWidget):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
+        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -931,7 +932,7 @@ class PlaylistWidget(QWidget):
         self._cleanup_timer.setSingleShot(True)
         self._cleanup_timer.setInterval(750)
         self._cleanup_timer.timeout.connect(self._cleanup_queue.flush)
-        self._playlists = load_playlists(storage_paths)
+        self._playlists = self._playlist_repository.load()
         self._watched_folder = watched_folder
         self._build_ui()
         self._setup_watcher()
@@ -1076,7 +1077,7 @@ class PlaylistWidget(QWidget):
         pl.pop("_temp", None)
         pl.setdefault("items", [])
         self._playlists.append(pl)
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         self._list_view.refresh()
         self._edit_view.load_playlist(pl)
 
@@ -1111,7 +1112,7 @@ class PlaylistWidget(QWidget):
         if url and any(it.get("url", "") == url for it in pl.get("items", [])):
             return False
         pl.setdefault("items", []).append(item)
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         if (self._stack.currentIndex() == 1
                 and self._edit_view._pl
                 and self._edit_view._pl["id"] == pl_id):
@@ -1126,7 +1127,7 @@ class PlaylistWidget(QWidget):
     def create_playlist_with_item(self, name: str, item: dict) -> str:
         pl = {"id": str(uuid.uuid4()), "name": name, "items": [item]}
         self._playlists.append(pl)
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         self._list_view.refresh()
         return pl["id"]
 

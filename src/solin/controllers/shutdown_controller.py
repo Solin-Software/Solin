@@ -139,13 +139,11 @@ class ShutdownController:
             self._queue_pending_deletion(tmp_path)
 
     def _queue_pending_deletion(self, tmp_path: str) -> None:
-        from ..core.playlists.storage import (
-            load_pending_deletions,
-            save_pending_deletions,
-        )
+        from ..core.playlists.storage import PendingDeletionRepository
 
         storage_paths = self._window.playlist_storage_paths
-        pending = load_pending_deletions(storage_paths)
+        pending_repo = PendingDeletionRepository.from_paths(storage_paths)
+        pending = pending_repo.load()
         if tmp_path not in pending:
             pending.append(tmp_path)
-            save_pending_deletions(pending, storage_paths)
+            pending_repo.save(pending)

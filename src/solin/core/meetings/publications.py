@@ -51,7 +51,7 @@ from solin.core.jw.publication_links import (
     select_pub_media_file,
 )
 from solin.core.media.cache import MediaCacheManager, is_url_cached
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_repository import JsonFileRepository
 
 log = logging.getLogger(__name__)
 
@@ -215,8 +215,8 @@ class JwpubChecksumStore:
     """
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
-        self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._json = JsonFileRepository(path)
+        self._json.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock  = threading.Lock()
         self._data: dict[str, str] = self._load()
 
@@ -224,13 +224,13 @@ class JwpubChecksumStore:
 
     def _load(self) -> dict:
         try:
-            if self._path.exists():
-                data = read_json_file(self._path)
+            if self._json.exists():
+                data = self._json.read()
                 if isinstance(data, dict):
                     return data
-                log.warning("ChecksumStore: unexpected format in %s — resetting", self._path)
+                log.warning("ChecksumStore: unexpected format in %s — resetting", self._json.path)
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            log.warning("ChecksumStore: could not load %s: %s", self._path, exc)
+            log.warning("ChecksumStore: could not load %s: %s", self._json.path, exc)
         return {}
 
     def _flush(self) -> None:
@@ -248,8 +248,8 @@ class JwpubChecksumStore:
             #    another save() call that ran between our last _flush and now).
             on_disk: dict[str, str] = {}
             try:
-                if self._path.exists():
-                    raw = read_json_file(self._path)
+                if self._json.exists():
+                    raw = self._json.read()
                     if isinstance(raw, dict):
                         on_disk = raw
             except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -261,9 +261,9 @@ class JwpubChecksumStore:
             self._data = merged
 
             # 3. Atomic write.
-            write_json_atomic(self._path, merged, sort_keys=True)
+            self._json.write(merged, sort_keys=True)
         except OSError as exc:
-            log.error("ChecksumStore: could not save %s: %s", self._path, exc)
+            log.error("ChecksumStore: could not save %s: %s", self._json.path, exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
 

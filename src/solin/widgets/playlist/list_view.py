@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.storage import PlaylistStoragePaths, save_playlists
+from ...core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
@@ -78,6 +78,7 @@ class _PlaylistListView(QWidget):
         self._watched_folder = watched_folder
         self._profile_paths = profile_paths
         self._storage_paths = storage_paths
+        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
         self._media_cache_manager = media_cache_manager
         self._thumb_cache_dir = thumb_cache_dir
         self._schedule_cleanup = schedule_cleanup
@@ -296,7 +297,7 @@ class _PlaylistListView(QWidget):
             return
         pl = {"id": str(uuid.uuid4()), "name": name, "items": []}
         self._playlists.append(pl)
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         self._rebuild_app_cards()
         self.open_playlist.emit(pl["id"])
 
@@ -312,7 +313,7 @@ class _PlaylistListView(QWidget):
         if not name:
             return
         pl["name"] = name
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         self._rebuild_app_cards()
 
     def _delete_playlist(self, pl_id: str) -> None:
@@ -347,7 +348,7 @@ class _PlaylistListView(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._playlists.remove(pl)
-        save_playlists(self._playlists, self._storage_paths)
+        self._playlist_repository.save(self._playlists)
         self._schedule_cleanup(list(pl.get("items", [])))
         self._rebuild_app_cards()
 
@@ -442,7 +443,7 @@ class _PlaylistListView(QWidget):
                     ).replace("{error}", str(e)),
                 )
         if imported:
-            save_playlists(self._playlists, self._storage_paths)
+            self._playlist_repository.save(self._playlists)
             self._rebuild_app_cards()
 
     def _find(self, pl_id: str) -> Optional[dict]:

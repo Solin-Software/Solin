@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from __future__ import annotations
-
 import os
 import time
 from typing import TYPE_CHECKING
@@ -9,16 +7,22 @@ from typing import TYPE_CHECKING
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.playlists.storage import (
+    PendingDeletionRepository,
+    PlaylistRepository,
     PlaylistStoragePaths,
-    load_playlists,
-    load_playlists_strict,
-    load_pending_deletions,
-    save_pending_deletions,
 )
 from solin.core.playlists.thumbnails import playlist_thumb_path
 
 if TYPE_CHECKING:
     from solin.core.meetings.tree_store import MeetingTreeStore
+
+
+def _playlist_repository(paths: PlaylistStoragePaths) -> PlaylistRepository:
+    return PlaylistRepository.from_paths(paths)
+
+
+def _pending_deletion_repository(paths: PlaylistStoragePaths) -> PendingDeletionRepository:
+    return PendingDeletionRepository.from_paths(paths)
 
 
 def try_remove_file(
@@ -36,10 +40,11 @@ def try_remove_file(
             if attempt < retries - 1:
                 time.sleep(delay * (attempt + 1))
 
-    pending = load_pending_deletions(storage_paths)
+    pending_repo = _pending_deletion_repository(storage_paths)
+    pending = pending_repo.load()
     if path not in pending:
         pending.append(path)
-        save_pending_deletions(pending, storage_paths)
+        pending_repo.save(pending)
     return False
 
 
@@ -47,12 +52,13 @@ def flush_pending_deletions(
     storage_paths: PlaylistStoragePaths,
     meeting_tree_store: MeetingTreeStore,
 ) -> None:
-    pending = load_pending_deletions(storage_paths)
+    pending_repo = _pending_deletion_repository(storage_paths)
+    pending = pending_repo.load()
     if not pending:
         return
 
     try:
-        playlists = load_playlists_strict(storage_paths)
+        playlists = _playlist_repository(storage_paths).load_strict()
     except (OSError, UnicodeError, ValueError):
         log_ignored_exception(
             __name__,
@@ -89,7 +95,7 @@ def flush_pending_deletions(
                 os.remove(path)
         except OSError:
             still_pending.append(path)
-    save_pending_deletions(still_pending, storage_paths)
+    pending_repo.save(still_pending)
 
 
 def flush_images_dir(
@@ -124,7 +130,7 @@ def flush_thumbs_dir(
         return
 
     referenced_ids: set[str] = set()
-    for playlist in load_playlists(storage_paths):
+    for playlist in _playlist_repository(storage_paths).load():
         for item in playlist.get("items", []):
             item_id = item.get("id", "")
             if item_id:
@@ -219,7 +225,7 @@ class PlaylistCleanupQueue:
             return
 
         try:
-            playlists = load_playlists_strict(self._storage_paths)
+            playlists = _playlist_repository(self._storage_paths).load_strict()
         except (OSError, UnicodeError, ValueError):
             log_ignored_exception(
                 __name__,
@@ -257,7 +263,7 @@ def _referenced_playlist_urls(
     normalize: bool = False,
 ) -> set[str]:
     referenced: set[str] = set()
-    for playlist in load_playlists(storage_paths):
+    for playlist in _playlist_repository(storage_paths).load():
         for item in playlist.get("items", []):
             url = item.get("url", "")
             if url:

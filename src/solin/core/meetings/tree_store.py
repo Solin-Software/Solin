@@ -10,7 +10,7 @@ import logging
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_repository import JsonFileRepository
 
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
 from .tree_types import Node, clone_nodes, iter_nodes
@@ -25,21 +25,21 @@ class MeetingTreeStore:
         self,
         path: str | Path,
     ) -> None:
-        self._path = Path(path)
+        self._json = JsonFileRepository(path)
 
     @property
     def path(self) -> Path:
-        return self._path
+        return self._json.path
 
     def _empty(self) -> dict[str, Any]:
         return {"version": 1, "trees": {}}
 
     def load_all(self) -> dict[str, Any]:
         path = self.path
-        if not path.exists():
+        if not self._json.exists():
             return self._empty()
         try:
-            data = read_json_file(path)
+            data = self._json.read()
             if not isinstance(data, dict):
                 return self._empty()
             data.setdefault("version", 1)
@@ -135,8 +135,7 @@ class MeetingTreeStore:
             self._write(data)
 
     def _write(self, data: dict[str, Any]) -> None:
-        path = self.path
-        write_json_atomic(path, data, sort_keys=True, trailing_newline=True)
+        self._json.write(data, sort_keys=True, trailing_newline=True)
 
 
 def _stored_file_name(value: str) -> str:

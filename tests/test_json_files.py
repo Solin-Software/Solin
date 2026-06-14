@@ -5,6 +5,7 @@ import json
 import pytest
 
 from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_repository import JsonFileRepository
 
 
 def test_write_json_atomic_writes_payload_and_removes_temp_files(tmp_path) -> None:
@@ -40,3 +41,14 @@ def test_read_json_file_propagates_json_decode_errors(tmp_path) -> None:
 
     with pytest.raises(json.JSONDecodeError):
         read_json_file(path)
+
+
+def test_json_file_repository_owns_one_atomic_json_document(tmp_path) -> None:
+    repository = JsonFileRepository(tmp_path / "state" / "playlists.json")
+
+    repository.write({"playlists": [{"id": "main"}]}, sort_keys=True)
+
+    assert repository.path == tmp_path / "state" / "playlists.json"
+    assert repository.exists()
+    assert repository.read() == {"playlists": [{"id": "main"}]}
+    assert list((tmp_path / "state").glob(".*.tmp")) == []
