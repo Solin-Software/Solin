@@ -221,6 +221,7 @@ class MainWindowUiController:
             media_settings=window._media_settings,
             meeting_schedule_settings=window._meeting_schedule_settings,
             watched_folder_settings=window._watched_folder_settings,
+            yeartext_settings=window._yeartext_settings,
             background_song_settings=window._background_song_settings,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"

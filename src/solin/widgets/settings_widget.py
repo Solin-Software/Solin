@@ -20,6 +20,7 @@ from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
 from ..core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from ..core.jw.background_song_settings import BackgroundSongSettingsStore
+from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore
 from ..core.meetings.schedule import MeetingScheduleSettingsStore
 from .settings.about_section import AboutSectionMixin
@@ -80,6 +81,7 @@ class SettingsWidget(
                  media_settings: MediaSettingsStore,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  watched_folder_settings: WatchedFolderSettingsStore,
+                 yeartext_settings: YeartextSettingsStore,
                  background_song_settings: BackgroundSongSettingsStore,
                  yeartext_cache_file: str | Path,
                  parent=None):
@@ -98,6 +100,7 @@ class SettingsWidget(
         self._media_settings = media_settings
         self._meeting_schedule_settings = meeting_schedule_settings
         self._watched_folder_settings = watched_folder_settings
+        self._yeartext_settings = yeartext_settings
         self._background_song_settings = background_song_settings
         self._init_yearly_text_section()
         self._build_ui()
