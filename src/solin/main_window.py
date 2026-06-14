@@ -34,6 +34,7 @@ from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
 from .core.jw.catalog import JWMediaCatalogCachePaths
 from .core.jw.songs import JWSongsStore
+from .core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.settings import MediaSettingsStore
@@ -110,6 +111,9 @@ class MainWindow(QMainWindow):
         self._media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
         self._meeting_schedule_settings = (
             MeetingScheduleSettingsStore.for_profile_settings(profile_settings)
+        )
+        self._watched_folder_settings = WatchedFolderSettingsStore.for_profile_settings(
+            profile_settings,
         )
         self._background_song_settings = (
             BackgroundSongSettingsStore.for_profile_settings(profile_settings)
