@@ -46,7 +46,7 @@ from .text_match import (
     _toolbar_action_match_score,
     _video_button_state_from_text,
 )
-from .types import AudioState, MeetingState, ShareState, VideoState
+from .state import AudioState, MeetingState, ShareState, VideoState
 
 log = logging.getLogger(__name__)
 
@@ -1236,8 +1236,12 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
     ctx.ensure_toolbar()
     win = ctx.get_main_window()
 
-    state = MeetingState(in_meeting=True)
-    state.sharing = ShareState.SHARING if _is_sharing(session) else ShareState.NOT_SHARING
+    sharing = ShareState.from_active(_is_sharing(session))
+    audio = AudioState.UNKNOWN
+    video = VideoState.UNKNOWN
+    audio_title = ""
+    video_title = ""
+    participant_count = 0
 
     if ctx.is_floating:
         # Modo floating: busca audio/video por texto (controlIDs indisponiveis)
@@ -1247,30 +1251,36 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
                     title = d.window_text() or ""
                     if not title:
                         continue
-                    if state.audio == AudioState.UNKNOWN:
+                    if audio is AudioState.UNKNOWN:
                         has_audio_signature = _toolbar_action_match_score(
                             title,
                             AUDIO_MUTED_TEXT + AUDIO_UNMUTED_TEXT + CONNECT_AUDIO_TEXT,
                         ) > 0
                         if has_audio_signature:
-                            audio_state = _audio_button_state_from_text(title)
-                            state.audio       = audio_state
-                            state.audio_title = title
-                    if state.video == VideoState.UNKNOWN:
+                            audio = _audio_button_state_from_text(title)
+                            audio_title = title
+                    if video is VideoState.UNKNOWN:
                         video_state = _video_button_state_from_text(title)
-                        if video_state != VideoState.UNKNOWN:
-                            state.video       = video_state
-                            state.video_title = title
+                        if video_state is not VideoState.UNKNOWN:
+                            video = video_state
+                            video_title = title
                 except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     continue
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to infer Zoom state from visible toolbar controls")
-        return state
+        return MeetingState(
+            audio=audio,
+            video=video,
+            sharing=sharing,
+            audio_title=audio_title,
+            video_title=video_title,
+            in_meeting=True,
+        )
 
     # Modo normal: busca por controlID
     h = ctx.main_handle
     if h is None:
-        return state
+        return MeetingState(sharing=sharing, in_meeting=True)
     elements = _find_elements_by_cid(
         session,
         win,
@@ -1281,18 +1291,16 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
     audio_el = elements.get("btn_muteAudio")
     if audio_el:
         try:
-            title             = audio_el.window_text() or ""
-            state.audio_title = title
-            state.audio       = _audio_button_state_from_text(title)
+            audio_title = audio_el.window_text() or ""
+            audio = _audio_button_state_from_text(audio_title)
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom audio button state")
 
     video_el = elements.get("btn_muteVideo")
     if video_el:
         try:
-            title             = video_el.window_text() or ""
-            state.video_title = title
-            state.video       = _video_button_state_from_text(title)
+            video_title = video_el.window_text() or ""
+            video = _video_button_state_from_text(video_title)
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom video button state")
 
@@ -1302,11 +1310,19 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
             title = part_el.window_text() or ""
             m = re.search(r"(\d+)", title)
             if m:
-                state.participant_count = int(m.group(1))
+                participant_count = int(m.group(1))
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Failed to read Zoom participant count from toolbar")
 
-    return state
+    return MeetingState(
+        audio=audio,
+        video=video,
+        sharing=sharing,
+        audio_title=audio_title,
+        video_title=video_title,
+        participant_count=participant_count,
+        in_meeting=True,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────

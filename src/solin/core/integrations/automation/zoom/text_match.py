@@ -9,7 +9,7 @@ from .i18n_labels import (
     VIDEO_STARTED_TEXT,
     VIDEO_STOPPED_TEXT,
 )
-from .types import AudioState, VideoState
+from .state import AudioState, VideoState
 
 
 def _matches_any(text: str, patterns: list[str]) -> bool:

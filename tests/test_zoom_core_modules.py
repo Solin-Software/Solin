@@ -1,3 +1,4 @@
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -24,7 +25,7 @@ from solin.core.integrations.automation.zoom.text_match import (
     _toolbar_action_match_score,
     _video_button_state_from_text,
 )
-from solin.core.integrations.automation.zoom.types import (
+from solin.core.integrations.automation.zoom.state import (
     AudioState,
     MeetingState,
     ShareState,
@@ -38,7 +39,27 @@ def test_zoom_state_types_are_importable_without_pywinauto():
     assert state.audio is AudioState.UNKNOWN
     assert state.video is VideoState.UNKNOWN
     assert state.sharing is ShareState.UNKNOWN
-    assert state.participant_names == []
+    assert state.participant_names == ()
+
+
+def test_zoom_state_value_objects_are_immutable_and_validated():
+    state = MeetingState(
+        sharing=ShareState.SHARING,
+        participant_count=2,
+        participant_names=("Alex", "Sam"),
+        in_meeting=True,
+    )
+
+    assert state.is_sharing is True
+    assert ShareState.from_active(False) is ShareState.NOT_SHARING
+    assert ShareState.UNKNOWN.is_active is None
+    assert AudioState.DISCONNECTED.is_connected is False
+    assert AudioState.UNKNOWN.is_connected is None
+
+    with pytest.raises(FrozenInstanceError):
+        state.participant_count = 3  # type: ignore[misc]
+    with pytest.raises(ValueError, match="cannot be negative"):
+        MeetingState(participant_count=-1)
 
 
 def test_zoom_i18n_labels_keep_core_actions_and_fallbacks():
@@ -105,7 +126,7 @@ def test_zoom_controls_uses_package_local_zoom_modules():
     assert "from .i18n_labels import" in source
     assert "from .toolbar_cache import" in source
     assert "from .text_match import" in source
-    assert "from .types import AudioState, MeetingState, ShareState, VideoState" in source
+    assert "from .state import AudioState, MeetingState, ShareState, VideoState" in source
 
 
 def test_cancelled_zoom_session_rejects_ui_actions():
