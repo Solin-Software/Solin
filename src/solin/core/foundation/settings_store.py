@@ -93,6 +93,15 @@ class GlobalSettingsStore:
     def set_bootstrap_language(self, language: str) -> None:
         self.settings.set_value(SettingsKey.BOOTSTRAP_LANGUAGE, language)
 
+    def pending_patch_cleanup_path(self) -> str:
+        return self.settings.string(SettingsKey.PENDING_PATCH_CLEANUP)
+
+    def set_pending_patch_cleanup_path(self, path: str) -> None:
+        self.settings.set_value(SettingsKey.PENDING_PATCH_CLEANUP, path)
+
+    def clear_pending_patch_cleanup_path(self) -> None:
+        self.settings.remove(SettingsKey.PENDING_PATCH_CLEANUP)
+
 
 @dataclass(frozen=True, slots=True)
 class ProfileAppSettingsStore:

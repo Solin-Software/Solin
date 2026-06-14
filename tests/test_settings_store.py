@@ -50,13 +50,20 @@ def test_global_settings_store_reads_and_writes_named_contracts(monkeypatch) -> 
 
     store.set_last_active_profile("main_hall")
     store.set_bootstrap_language("pt_BR")
+    store.set_pending_patch_cleanup_path("C:/Temp/Solin_patch.exe")
 
     assert store.last_active_profile() == "main_hall"
     assert store.bootstrap_language() == "pt_BR"
+    assert store.pending_patch_cleanup_path() == "C:/Temp/Solin_patch.exe"
     assert _FakeSettings.buckets[(QSETTINGS_ORG_NAME, QSETTINGS_GLOBAL_APP)] == {
         SettingsKey.LAST_ACTIVE_PROFILE: "main_hall",
         SettingsKey.BOOTSTRAP_LANGUAGE: "pt_BR",
+        SettingsKey.PENDING_PATCH_CLEANUP: "C:/Temp/Solin_patch.exe",
     }
+
+    store.clear_pending_patch_cleanup_path()
+
+    assert store.pending_patch_cleanup_path() == ""
 
 
 def test_profile_app_settings_store_reads_language(monkeypatch) -> None:

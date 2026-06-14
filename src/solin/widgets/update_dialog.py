@@ -10,9 +10,8 @@ Two modes:
              saves to temp, launches the installer and exits the app.
 
 Temp-file cleanup:
-  Before launching the patch, saves the path in
-  QSettings("<base>","App") -> "pending_patch_cleanup".
-  On next launch, main.py reads the key, deletes the file and clears the key.
+  Before launching the patch, saves the path through GlobalSettingsStore.
+  On next launch, main.py reads the value, deletes the file and clears it.
   (Cannot delete while patch.exe is running on Windows.)
 """
 from __future__ import annotations
@@ -25,7 +24,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
-    Qt, QUrl, QObject, Signal, QSettings,
+    Qt, QUrl, QObject, Signal,
     QPropertyAnimation, QEasingCurve, QByteArray, QPoint,
 )
 from PySide6.QtGui import QDesktopServices, QMouseEvent
@@ -36,8 +35,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-from solin.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_ORG_NAME
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.settings_store import GlobalSettingsStore
 
 if TYPE_CHECKING:
     from solin.core.remote.updates import UpdateInfo
@@ -135,11 +133,10 @@ def cleanup_pending_patch() -> None:
     Deletes the patch file downloaded in the previous session.
     Called at the start of main(), after the app has restarted post-update.
     """
-    prefs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)
-    path = prefs.value(SettingsKey.PENDING_PATCH_CLEANUP, "", str)
+    settings = GlobalSettingsStore.create()
+    path = settings.pending_patch_cleanup_path()
     if path:
-        prefs.remove(SettingsKey.PENDING_PATCH_CLEANUP)
-        prefs.sync()
+        settings.clear_pending_patch_cleanup_path()
         try:
             if os.path.isfile(path):
                 os.remove(path)
@@ -149,9 +146,7 @@ def cleanup_pending_patch() -> None:
 
 
 def _save_cleanup_path(path: str) -> None:
-    prefs = QSettings(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)
-    prefs.setValue(SettingsKey.PENDING_PATCH_CLEANUP, path)
-    prefs.sync()
+    GlobalSettingsStore.create().set_pending_patch_cleanup_path(path)
 
 
 # ── Download worker ───────────────────────────────────────────────────────────
