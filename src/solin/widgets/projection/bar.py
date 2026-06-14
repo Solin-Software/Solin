@@ -8,7 +8,6 @@ import random as _random
 from PySide6.QtCore import (
     QDateTime,
     QEvent,
-    QSettings,
     QSize,
     Qt,
     QTimer,
@@ -37,9 +36,9 @@ from PySide6.QtWidgets import (
 
 from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.time_utils import ceil_remaining_seconds
 from solin.core.media.playback import MediaController
+from solin.core.media.settings import ProjectionPlaybackSettingsStore
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
     ICON_CAST,
@@ -121,7 +120,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
       - Ícones SVG (sem emojis)
       - Suporte a playlist com modos: desligado / próximo / aleatório
       - Menu de opções de vídeo (velocidade, loop, ordem)
-      - Preferências persistidas via QSettings
+      - Persisted playback preferences through a typed settings store
     """
     stop_requested      = Signal()
     seek_requested      = Signal(int)
@@ -144,7 +143,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self,
         media_ctrl: MediaController,
         *,
-        prefs: QSettings,
+        playback_settings: ProjectionPlaybackSettingsStore,
         profile_paths: ProfilePaths,
         media_cache_dir: str | os.PathLike[str],
         thumb_cache_dir: str | os.PathLike[str],
@@ -154,7 +153,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     ):
         super().__init__(parent)
         self.media      = media_ctrl
-        self._prefs = prefs
+        self._playback_settings = playback_settings
         self._profile_paths = profile_paths
         self._media_cache_dir = media_cache_dir
         self._thumb_cache_dir = thumb_cache_dir
@@ -200,15 +199,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._screen_count: int = 0              # armazenado para refresh de idioma
         self._is_from_saved_playlist: bool = False  # True quando reproduzindo de playlist salva
 
-        # ── Prefs (carregadas do QSettings) ──────────────────────────────
-        self._loop: bool = self._prefs.value(SettingsKey.PLAYBACK_LOOP, False, bool)
-        self._playback_order: str = self._prefs.value(
-            SettingsKey.PLAYBACK_ORDER,
-            ORDER_OFF,
-            str,
-        )
-        self._speed: float = self._prefs.value(SettingsKey.PLAYBACK_SPEED, 1.0, float)
-        self._volume: float = self._prefs.value(SettingsKey.PLAYBACK_VOLUME, 0.80, float)
+        # ── Persisted playback preferences ───────────────────────────────
+        self._loop: bool = self._playback_settings.loop_enabled()
+        self._playback_order: str = self._playback_settings.playback_order()
+        self._speed: float = self._playback_settings.speed()
+        self._volume: float = self._playback_settings.volume()
 
         # ── Song Announcement Mode state machine ─────────────────────────
         # States: "off" | "gate" | "ready"
@@ -1196,16 +1191,16 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _set_speed(self, rate: float):
         self._speed = rate
-        self._prefs.setValue(SettingsKey.PLAYBACK_SPEED, rate)
+        self._playback_settings.set_speed(rate)
         self.media.set_playback_rate(rate)
 
     def _toggle_loop(self):
         self._loop = not self._loop
-        self._prefs.setValue(SettingsKey.PLAYBACK_LOOP, self._loop)
+        self._playback_settings.set_loop_enabled(self._loop)
 
     def _set_playback_order(self, order: str):
         self._playback_order = order
-        self._prefs.setValue(SettingsKey.PLAYBACK_ORDER, order)
+        self._playback_settings.set_playback_order(order)
         # Reinicia rastreamento de aleatório ao mudar de modo
         self._played_indices = {self._playlist_index}
 
@@ -1214,7 +1209,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _on_volume_slider(self, value: int):
         vol = value / 100.0
         self._volume = vol
-        self._prefs.setValue(SettingsKey.PLAYBACK_VOLUME, vol)
+        self._playback_settings.set_volume(vol)
         self.volume_changed.emit(vol)
         # Atualiza ícone
         if value == 0:

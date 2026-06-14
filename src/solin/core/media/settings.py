@@ -3,10 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from solin.core.foundation.constants import QSETTINGS_PREFS_APP
+from solin.core.foundation.constants import (
+    ORDER_NEXT,
+    ORDER_OFF,
+    ORDER_RANDOM,
+    QSETTINGS_PREFS_APP,
+)
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
+
+_PLAYBACK_ORDERS = frozenset({ORDER_OFF, ORDER_NEXT, ORDER_RANDOM})
+
+
+def _float_setting(value: object, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class MediaPlaybackSettings(Protocol):
@@ -52,3 +66,56 @@ class MediaSettingsStore:
 
     def set_start_videos_paused(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.START_VIDEOS_PAUSED, bool(enabled))
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionPlaybackSettingsStore:
+    settings: SettingsStore
+
+    @classmethod
+    def for_profile_settings(
+        cls,
+        profile_settings: ProfileSettings,
+    ) -> "ProjectionPlaybackSettingsStore":
+        return cls(
+            SettingsStore.for_namespace(
+                profile_settings.organization,
+                QSETTINGS_PREFS_APP,
+            )
+        )
+
+    def loop_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.PLAYBACK_LOOP, False, bool))
+
+    def set_loop_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.PLAYBACK_LOOP, bool(enabled))
+
+    def playback_order(self) -> str:
+        order = self.settings.string(SettingsKey.PLAYBACK_ORDER, ORDER_OFF)
+        return order if order in _PLAYBACK_ORDERS else ORDER_OFF
+
+    def set_playback_order(self, order: str) -> None:
+        self.settings.set_value(
+            SettingsKey.PLAYBACK_ORDER,
+            order if order in _PLAYBACK_ORDERS else ORDER_OFF,
+        )
+
+    def speed(self) -> float:
+        speed = _float_setting(
+            self.settings.value(SettingsKey.PLAYBACK_SPEED, 1.0),
+            1.0,
+        )
+        return max(0.25, min(4.0, speed))
+
+    def set_speed(self, speed: float) -> None:
+        self.settings.set_value(SettingsKey.PLAYBACK_SPEED, max(0.25, min(4.0, speed)))
+
+    def volume(self) -> float:
+        volume = _float_setting(
+            self.settings.value(SettingsKey.PLAYBACK_VOLUME, 0.80),
+            0.80,
+        )
+        return max(0.0, min(1.0, volume))
+
+    def set_volume(self, volume: float) -> None:
+        self.settings.set_value(SettingsKey.PLAYBACK_VOLUME, max(0.0, min(1.0, volume)))

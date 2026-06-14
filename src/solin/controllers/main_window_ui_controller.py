@@ -179,7 +179,7 @@ class MainWindowUiController:
 
         window.proj_bar = ProjectionBar(
             window.media_ctrl,
-            prefs=window.profile_prefs,
+            playback_settings=window._projection_playback_settings,
             profile_paths=window.profile_paths,
             media_cache_dir=window.media_cache_manager.media_cache_dir,
             thumb_cache_dir=window.runtime_paths.thumb_cache_dir,

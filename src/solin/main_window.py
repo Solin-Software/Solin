@@ -38,7 +38,7 @@ from .core.jw.yeartext_settings import YeartextSettingsStore
 from .core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
-from .core.media.settings import MediaSettingsStore
+from .core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
 from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
@@ -98,8 +98,6 @@ class MainWindow(QMainWindow):
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
         self.profile_manager = profile_manager
-        profile_prefs = profile_settings.prefs()
-        self.profile_prefs = profile_prefs
         self._obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
         self._zoom_settings = ZoomSettingsStore.for_profile_settings(profile_settings)
         self._auto_share_settings = AutoShareSettingsStore.for_profile_settings(
@@ -110,6 +108,9 @@ class MainWindow(QMainWindow):
         )
         self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
         self._media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
+        self._projection_playback_settings = (
+            ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings)
+        )
         self._meeting_schedule_settings = (
             MeetingScheduleSettingsStore.for_profile_settings(profile_settings)
         )
