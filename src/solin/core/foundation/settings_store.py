@@ -93,6 +93,21 @@ class GlobalSettingsStore:
     def set_bootstrap_language(self, language: str) -> None:
         self.settings.set_value(SettingsKey.BOOTSTRAP_LANGUAGE, language)
 
+
+@dataclass(frozen=True, slots=True)
+class InstallationSettingsStore:
+    settings: SettingsStore
+
+    @classmethod
+    def create(cls) -> InstallationSettingsStore:
+        return cls(SettingsStore.for_namespace(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP))
+
+    def install_id(self) -> str:
+        return self.settings.string(SettingsKey.INSTALL_ID)
+
+    def set_install_id(self, install_id: str) -> None:
+        self.settings.set_value(SettingsKey.INSTALL_ID, install_id)
+
     def pending_patch_cleanup_path(self) -> str:
         return self.settings.string(SettingsKey.PENDING_PATCH_CLEANUP)
 

@@ -10,7 +10,7 @@ Two modes:
              saves to temp, launches the installer and exits the app.
 
 Temp-file cleanup:
-  Before launching the patch, saves the path through GlobalSettingsStore.
+  Before launching the patch, saves the path through InstallationSettingsStore.
   On next launch, main.py reads the value, deletes the file and clears it.
   (Cannot delete while patch.exe is running on Windows.)
 """
@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
-from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.foundation.settings_store import InstallationSettingsStore
 
 if TYPE_CHECKING:
     from solin.core.remote.updates import UpdateInfo
@@ -133,7 +133,7 @@ def cleanup_pending_patch() -> None:
     Deletes the patch file downloaded in the previous session.
     Called at the start of main(), after the app has restarted post-update.
     """
-    settings = GlobalSettingsStore.create()
+    settings = InstallationSettingsStore.create()
     path = settings.pending_patch_cleanup_path()
     if path:
         settings.clear_pending_patch_cleanup_path()
@@ -146,7 +146,7 @@ def cleanup_pending_patch() -> None:
 
 
 def _save_cleanup_path(path: str) -> None:
-    GlobalSettingsStore.create().set_pending_patch_cleanup_path(path)
+    InstallationSettingsStore.create().set_pending_patch_cleanup_path(path)
 
 
 # ── Download worker ───────────────────────────────────────────────────────────
