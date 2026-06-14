@@ -7,19 +7,17 @@ separadamente: ativo mostra progresso; queued mostra espera sem spinner falso.
 """
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass, field
 import os
 from pathlib import Path
-import time
 from typing import Any, Callable, Protocol, cast
 from PySide6.QtCore import QObject, Signal, Slot
 
-MAX_CONCURRENT_PREFETCHES = 3
-PREFETCH_RETRY_LIMIT = 1
-MAX_BATCH_PREPROGRESS_FAILURES = 3
-PREFETCH_PROGRESS_MIN_INTERVAL_SECONDS = 0.25
-PREFETCH_PROGRESS_MIN_BYTES = 512 * 1024
+from .application import (
+    MediaPrefetchQueue,
+    PrefetchAction,
+    PrefetchPlan,
+    QueuedPrefetch,
+)
 
 # ── Helpers de path (espelham downloader.py para evitar import circular) ──────
 
@@ -55,35 +53,6 @@ class _Downloader(Protocol):
     def start(self, url: str) -> None: ...
 
 
-@dataclass
-class _QueuedPrefetch:
-    url: str
-    batch_id: str = ""
-    retries: int = 0
-
-
-@dataclass
-class _ActivePrefetch:
-    downloader: _Downloader
-    batch_id: str = ""
-    retries: int = 0
-    had_progress: bool = False
-    last_progress_emit_at: float = 0.0
-    last_progress_pct: int = -1
-    last_progress_bytes: int = 0
-
-
-@dataclass
-class _BatchState:
-    total: int = 0
-    queued: set[str] = field(default_factory=set)
-    active: set[str] = field(default_factory=set)
-    done: int = 0
-    failed: int = 0
-    consecutive_preprogress_failures: int = 0
-    canceled: bool = False
-
-
 class MediaCacheManager(QObject):
     """Owns the application media-cache queue on the Qt main thread."""
 
@@ -112,15 +81,18 @@ class MediaCacheManager(QObject):
     ) -> None:
         super().__init__(parent)
         self.media_cache_dir = Path(media_cache_dir)
-        self.max_concurrent_prefetches = MAX_CONCURRENT_PREFETCHES
-        self._queue: deque[_QueuedPrefetch] = deque()
-        self._queued: dict[str, _QueuedPrefetch] = {}
-        self._active: dict[str, _ActivePrefetch] = {}
-        self._batches: dict[str, _BatchState] = {}
+        self._prefetch_queue = MediaPrefetchQueue(self)
+        self._downloaders: dict[str, _Downloader] = {}
         self._downloader_factory: Callable[[QObject], _Downloader] | None = None
-        self._batch_signal_suppressed = 0
-        self._dirty_batches: set[str] = set()
         self._notify_cached_requested.connect(self.notify_cached)
+
+    @property
+    def max_concurrent_prefetches(self) -> int:
+        return self._prefetch_queue.max_concurrent
+
+    @max_concurrent_prefetches.setter
+    def max_concurrent_prefetches(self, value: int) -> None:
+        self._prefetch_queue.max_concurrent = max(0, int(value))
 
     # ── API pública ───────────────────────────────────────────────────────
 
@@ -134,11 +106,11 @@ class MediaCacheManager(QObject):
 
     def is_prefetching(self, url: str) -> bool:
         """True se há um prefetch ativo para a URL."""
-        return url in self._active
+        return self._prefetch_queue.is_prefetching(url)
 
     def is_queued(self, url: str) -> bool:
         """True se a URL aguarda uma vaga na fila de prefetch."""
-        return url in self._queued
+        return self._prefetch_queue.is_queued(url)
 
     @Slot(str)
     def prefetch(self, url: str, priority: bool = False) -> None:
@@ -146,79 +118,19 @@ class MediaCacheManager(QObject):
         Inicia download em background para pré-cachear a mídia.
         No-op se já cacheado; se a fila estiver cheia, aguarda uma vaga.
         """
-        self._enqueue(url, priority=priority)
-        self._pump_queue()
+        self._apply_plan(self._prefetch_queue.prefetch(url, priority=priority))
 
     def prefetch_many(self, urls: list[str], batch_id: str) -> int:
         """Enfileira um lote deduplicado e retorna quantas URLs entraram na fila."""
-        if not batch_id:
-            return 0
-
-        added = 0
-        seen: set[str] = set()
-        batch = self._batches.setdefault(batch_id, _BatchState())
-        batch.canceled = False
-
-        self._batch_signal_suppressed += 1
-        try:
-            for url in urls:
-                if url in seen:
-                    continue
-                seen.add(url)
-                if self._enqueue(url, batch_id=batch_id, priority=False):
-                    added += 1
-                    batch.total += 1
-        finally:
-            self._batch_signal_suppressed = max(0, self._batch_signal_suppressed - 1)
-        self._dirty_batches.add(batch_id)
-        self._flush_deferred_batch_signals()
-        self._pump_queue()
-        return added
+        plan = self._prefetch_queue.prefetch_many(urls, batch_id)
+        self._apply_plan(plan)
+        return plan.added
 
     def batch_counts(self, batch_id: str) -> tuple[int, int, int, int]:
-        batch = self._batches.get(batch_id)
-        if not batch:
-            return 0, 0, 0, 0
-        return len(batch.queued), len(batch.active), batch.done, batch.failed
+        return self._prefetch_queue.batch_counts(batch_id)
 
     def batch_is_active(self, batch_id: str) -> bool:
-        batch = self._batches.get(batch_id)
-        return bool(batch and (batch.queued or batch.active))
-
-    def _enqueue(
-        self,
-        url: str,
-        *,
-        batch_id: str = "",
-        priority: bool = False,
-        retries: int = 0,
-    ) -> bool:
-        if not self.is_remote(url):
-            return False
-        if self.is_cached(url):
-            self.cache_changed.emit(url)
-            return False
-        if url in self._active:
-            return False
-        if url in self._queued:
-            if priority:
-                self._promote_queued(url)
-            return False
-
-        entry = _QueuedPrefetch(url=url, batch_id=batch_id, retries=retries)
-        if priority:
-            self._queue.appendleft(entry)
-        else:
-            self._queue.append(entry)
-        self._queued[url] = entry
-
-        if batch_id:
-            batch = self._batches.setdefault(batch_id, _BatchState())
-            batch.queued.add(url)
-            self._emit_batch_changed(batch_id)
-
-        self.prefetch_queued.emit(url)
-        return True
+        return self._prefetch_queue.batch_is_active(batch_id)
 
     def cancel_prefetch(self, url: str) -> None:
         """
@@ -226,46 +138,14 @@ class MediaCacheManager(QObject):
         Deve ser chamado pelo MediaController ANTES de iniciar seu download,
         para evitar gravações simultâneas no mesmo .tmp.
         """
-        queued = self._queued.pop(url, None)
-        if queued is not None:
-            self._queue = deque(entry for entry in self._queue if entry.url != url)
-            self._remove_from_batch(queued.batch_id, url, was_queued=True)
-            self.prefetch_dequeued.emit(url)
-            return
-
-        active = self._active.pop(url, None)
-        if active is not None:
-            self._remove_from_batch(active.batch_id, url, was_active=True)
-            active.downloader.cancel()
-            self.prefetch_dequeued.emit(url)
-            self._pump_queue()
+        self._apply_plan(self._prefetch_queue.cancel_prefetch(url))
 
     def cancel_all(self) -> None:
         """Cancela todos os prefetches ativos (ex: ao fechar o app)."""
-        queued_urls = list(self._queued.keys())
-        for url in queued_urls:
-            self.cancel_prefetch(url)
-        for url in list(self._active.keys()):
-            self.cancel_prefetch(url)
+        self._apply_plan(self._prefetch_queue.cancel_all())
 
     def cancel_batch(self, batch_id: str) -> None:
-        batch = self._batches.get(batch_id)
-        if not batch:
-            return
-        batch.canceled = True
-        for url in list(batch.queued):
-            self.cancel_prefetch(url)
-        for url in list(batch.active):
-            self.cancel_prefetch(url)
-        self._emit_batch_changed(batch_id)
-
-    def _promote_queued(self, url: str) -> None:
-        entry = self._queued.get(url)
-        if entry is None:
-            return
-        self._queue = deque(item for item in self._queue if item.url != url)
-        self._queue.appendleft(entry)
-        self.prefetch_queued.emit(url)
+        self._apply_plan(self._prefetch_queue.cancel_batch(batch_id))
 
     def notify_cached(self, url: str) -> None:
         """
@@ -273,17 +153,8 @@ class MediaCacheManager(QObject):
         Garante que o prefetch concorrente (se houvesse) seja removido do dict
         e emite cache_changed para atualizar a UI.
         """
-        active = self._active.pop(url, None)
-        if active is not None:
-            self._mark_batch_done(active.batch_id, url)
-        queued = self._queued.pop(url, None)
-        if queued is not None:
-            self._queue = deque(entry for entry in self._queue if entry.url != url)
-            self._remove_from_batch(queued.batch_id, url, was_queued=True)
-            self.prefetch_dequeued.emit(url)
-        if url:
-            self.cache_changed.emit(url)
-        self._pump_queue()
+        self._downloaders.pop(url, None)
+        self._apply_plan(self._prefetch_queue.notify_cached(url))
 
     def notify_cached_threadsafe(self, url: str) -> None:
         """Queue a cache notification onto the manager's owning Qt thread."""
@@ -329,20 +200,9 @@ class MediaCacheManager(QObject):
         return cast(_Downloader, dl)
 
     def _pump_queue(self) -> None:
-        while self._queue and len(self._active) < self.max_concurrent_prefetches:
-            entry = self._queue.popleft()
-            if self._queued.pop(entry.url, None) is None:
-                continue
-            if self.is_cached(entry.url):
-                self._mark_batch_done(entry.batch_id, entry.url)
-                self.cache_changed.emit(entry.url)
-                self.prefetch_dequeued.emit(entry.url)
-                continue
-            if entry.url in self._active:
-                continue
-            self._start_entry(entry)
+        self._apply_plan(self._prefetch_queue.pump())
 
-    def _start_entry(self, entry: _QueuedPrefetch) -> None:
+    def _start_entry(self, entry: QueuedPrefetch) -> None:
         dl = self._create_downloader()
         dl.progress.connect(
             lambda d, t, u=entry.url: self._on_prefetch_progress(u, d, t)
@@ -353,191 +213,50 @@ class MediaCacheManager(QObject):
         dl.error.connect(
             lambda msg, u=entry.url: self._on_prefetch_error(u, msg)
         )
-
-        self._active[entry.url] = _ActivePrefetch(
-            downloader=dl,
-            batch_id=entry.batch_id,
-            retries=entry.retries,
-        )
-        self.prefetch_dequeued.emit(entry.url)
-
-        if entry.batch_id:
-            batch = self._batches.setdefault(entry.batch_id, _BatchState())
-            batch.queued.discard(entry.url)
-            batch.active.add(entry.url)
-            self._emit_batch_changed(entry.batch_id)
-
+        self._downloaders[entry.url] = dl
         dl.start(entry.url)
 
     def _on_prefetch_progress(self, url: str, downloaded: int, total: int) -> None:
-        active = self._active.get(url)
-        if active is not None and downloaded > 0:
-            active.had_progress = True
-            batch = self._batches.get(active.batch_id)
-            if batch is not None:
-                batch.consecutive_preprogress_failures = 0
-        if active is not None and not self._should_emit_progress(active, downloaded, total):
-            return
-        self.prefetch_progress.emit(url, downloaded, total)
+        self._apply_plan(
+            self._prefetch_queue.start_progress(url, downloaded, total)
+        )
 
     def _on_prefetch_done(self, url: str) -> None:
-        active = self._active.pop(url, None)
-        if active is not None:
-            self._mark_batch_done(active.batch_id, url)
-        self.cache_changed.emit(url)
-        self._pump_queue()
+        self._downloaders.pop(url, None)
+        self._apply_plan(self._prefetch_queue.complete(url))
 
     def _on_prefetch_error(self, url: str, msg: str) -> None:
-        active = self._active.pop(url, None)
-        if active is None:
-            return
-
-        self._remove_from_batch(active.batch_id, url, was_active=True)
-
-        if self._is_fatal_cache_error(msg):
-            self._mark_batch_failed(active.batch_id, url, preprogress=not active.had_progress)
-            self.prefetch_error.emit(url, msg)
-            if active.batch_id:
-                self._abort_batch(active.batch_id, msg)
-            self._pump_queue()
-            return
-
-        if active.retries < PREFETCH_RETRY_LIMIT:
-            self._enqueue(
-                url,
-                batch_id=active.batch_id,
-                priority=True,
-                retries=active.retries + 1,
-            )
-            self._pump_queue()
-            return
-
-        self._mark_batch_failed(active.batch_id, url, preprogress=not active.had_progress)
-        self.prefetch_error.emit(url, msg)
-        self._pump_queue()
-
-    def _mark_batch_done(self, batch_id: str, url: str) -> None:
-        if not batch_id:
-            return
-        batch = self._batches.setdefault(batch_id, _BatchState())
-        batch.queued.discard(url)
-        batch.active.discard(url)
-        batch.done += 1
-        batch.consecutive_preprogress_failures = 0
-        self._emit_batch_changed(batch_id)
-
-    def _mark_batch_failed(self, batch_id: str, url: str, *, preprogress: bool) -> None:
-        if not batch_id:
-            return
-        batch = self._batches.setdefault(batch_id, _BatchState())
-        batch.queued.discard(url)
-        batch.active.discard(url)
-        batch.failed += 1
-        if preprogress:
-            batch.consecutive_preprogress_failures += 1
-        else:
-            batch.consecutive_preprogress_failures = 0
-        self._emit_batch_changed(batch_id)
-        if batch.consecutive_preprogress_failures >= MAX_BATCH_PREPROGRESS_FAILURES:
-            self._abort_batch(
-                batch_id,
-                "Several downloads failed before receiving data. Check your connection.",
-            )
-
-    def _remove_from_batch(
-        self,
-        batch_id: str,
-        url: str,
-        *,
-        was_queued: bool = False,
-        was_active: bool = False,
-    ) -> None:
-        if not batch_id:
-            return
-        batch = self._batches.get(batch_id)
-        if not batch:
-            return
-        if was_queued:
-            batch.queued.discard(url)
-        if was_active:
-            batch.active.discard(url)
-        self._emit_batch_changed(batch_id)
-
-    def _abort_batch(self, batch_id: str, msg: str) -> None:
-        batch = self._batches.get(batch_id)
-        if not batch or batch.canceled:
-            return
-        batch.canceled = True
-        for queued_url in list(batch.queued):
-            queued = self._queued.pop(queued_url, None)
-            if queued is not None:
-                self._queue = deque(entry for entry in self._queue if entry.url != queued_url)
-                self.prefetch_dequeued.emit(queued_url)
-        batch.queued.clear()
-        for active_url in list(batch.active):
-            active = self._active.pop(active_url, None)
-            if active is not None:
-                active.downloader.cancel()
-                self.prefetch_dequeued.emit(active_url)
-        batch.active.clear()
-        self.prefetch_batch_error.emit(batch_id, msg)
-        self._emit_batch_changed(batch_id)
+        self._downloaders.pop(url, None)
+        self._apply_plan(self._prefetch_queue.fail(url, msg))
 
     def _emit_batch_changed(self, batch_id: str) -> None:
         if not batch_id:
             return
-        if self._batch_signal_suppressed > 0:
-            self._dirty_batches.add(batch_id)
-            return
         queued, active, done, failed = self.batch_counts(batch_id)
         self.prefetch_batch_changed.emit(batch_id, queued, active, done, failed)
 
-    def _flush_deferred_batch_signals(self) -> None:
-        if self._batch_signal_suppressed > 0:
-            return
-        dirty = list(self._dirty_batches)
-        self._dirty_batches.clear()
-        for batch_id in dirty:
-            self._emit_batch_changed(batch_id)
+    def _apply_plan(self, plan: PrefetchPlan) -> None:
+        for action in plan.actions:
+            self._apply_action(action)
 
-    @staticmethod
-    def _is_fatal_cache_error(msg: str) -> bool:
-        lowered = (msg or "").lower()
-        fatal_markers = (
-            "no space",
-            "not enough space",
-            "disk full",
-            "quota",
-            "permission denied",
-            "access is denied",
-            "winerror 112",
-            "errno 28",
-            "errno 13",
-        )
-        return any(marker in lowered for marker in fatal_markers)
-
-    @staticmethod
-    def _should_emit_progress(active: _ActivePrefetch, downloaded: int, total: int) -> bool:
-        now = time.monotonic()
-        if total > 0:
-            pct = int(downloaded * 100 / total)
-            if pct != active.last_progress_pct:
-                active.last_progress_pct = pct
-                active.last_progress_emit_at = now
-                active.last_progress_bytes = downloaded
-                return True
-            return False
-
-        if active.last_progress_emit_at <= 0:
-            active.last_progress_emit_at = now
-            active.last_progress_bytes = downloaded
-            return True
-        if downloaded - active.last_progress_bytes >= PREFETCH_PROGRESS_MIN_BYTES:
-            active.last_progress_emit_at = now
-            active.last_progress_bytes = downloaded
-            return True
-        if now - active.last_progress_emit_at >= PREFETCH_PROGRESS_MIN_INTERVAL_SECONDS:
-            active.last_progress_emit_at = now
-            active.last_progress_bytes = downloaded
-            return True
-        return False
+    def _apply_action(self, action: PrefetchAction) -> None:
+        if action.kind == "queued":
+            self.prefetch_queued.emit(action.url)
+        elif action.kind == "dequeued":
+            self.prefetch_dequeued.emit(action.url)
+        elif action.kind == "cache_changed":
+            self.cache_changed.emit(action.url)
+        elif action.kind == "progress":
+            self.prefetch_progress.emit(action.url, action.downloaded, action.total)
+        elif action.kind == "error":
+            self.prefetch_error.emit(action.url, action.message)
+        elif action.kind == "batch_changed":
+            self._emit_batch_changed(action.batch_id)
+        elif action.kind == "batch_error":
+            self.prefetch_batch_error.emit(action.batch_id, action.message)
+        elif action.kind == "cancel_active":
+            downloader = self._downloaders.pop(action.url, None)
+            if downloader is not None:
+                downloader.cancel()
+        elif action.kind == "start" and action.entry is not None:
+            self._start_entry(action.entry)
