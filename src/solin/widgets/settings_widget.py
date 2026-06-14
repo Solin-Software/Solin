@@ -22,7 +22,7 @@ from ..core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore
-from ..core.meetings.schedule import MeetingScheduleSettingsStore
+from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin

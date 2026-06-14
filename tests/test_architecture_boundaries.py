@@ -207,3 +207,19 @@ def test_clean_architecture_layer_dependencies():
         "must remain independent of PySide6 and presentation:\n"
         + "\n".join(sorted(set(violations)))
     )
+
+
+def test_meeting_schedule_domain_has_no_framework_or_application_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "schedule.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if any(root in {"PySide6", "solin"} for root in roots):
+            violations.append(_display(path, node))
+
+    assert violations == []

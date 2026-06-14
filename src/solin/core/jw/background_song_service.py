@@ -25,8 +25,8 @@ from solin.core.media.playback import MediaController
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.meetings.schedule import (
     MeetingOccurrence,
-    MeetingScheduleSettingsStore,
 )
+from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50

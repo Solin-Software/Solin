@@ -11,12 +11,12 @@ from solin.core.meetings.schedule import (
     UNCONFIGURED_WEEKDAY,
     WEEKEND,
     MeetingSchedule,
-    MeetingScheduleSettingsStore,
     MeetingSlot,
     minutes_to_time_text,
     normalize_weekday,
     parse_time_text,
 )
+from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 

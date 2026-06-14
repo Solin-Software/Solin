@@ -17,7 +17,7 @@ from solin.core.meetings.linked_folder_sync import (
     MeetingSyncError,
     MeetingSyncRecord,
 )
-from solin.core.meetings.schedule import MeetingScheduleSettingsStore
+from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 from solin.widgets.meetings.tree_controller import MeetingTreeController
 

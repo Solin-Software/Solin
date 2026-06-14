@@ -55,7 +55,7 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncError,
     MeetingSyncIdentity,
 )
-from ...core.meetings.schedule import MeetingScheduleSettingsStore
+from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.publications import MeetingMedia, WeekData
 from ...core.meetings.thumbnails import (
     meeting_thumb_cache_key,

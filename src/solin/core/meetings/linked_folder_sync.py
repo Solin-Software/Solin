@@ -23,7 +23,8 @@ from solin.core.ingest.manifest import (
 )
 
 from .folder_matcher import match_meeting_folder
-from .schedule import MeetingScheduleSettingsStore, UNCONFIGURED_WEEKDAY
+from .schedule import UNCONFIGURED_WEEKDAY
+from .schedule_settings import MeetingScheduleSettingsStore
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
