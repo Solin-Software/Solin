@@ -47,7 +47,10 @@ from .controllers.projection_stop_controller import (
     ProjectionStopController,
     ProjectionStopHandlers,
 )
-from .controllers.projection_window_controller import ProjectionWindowController
+from .controllers.projection_window_controller import (
+    ProjectionWindowContext,
+    ProjectionWindowController,
+)
 from .controllers.remote_services_controller import RemoteServicesController
 from .controllers.shutdown_controller import (
     ShutdownController,
@@ -210,7 +213,32 @@ class MainWindow(QMainWindow):
         self._profile_switch = ProfileSwitchController(
             self.switch_profile_requested.emit
         )
-        self._projection_targets = ProjectionWindowController(self)
+        self._projection_targets = ProjectionWindowController(
+            ProjectionWindowContext(
+                session=self.projection_session,
+                font_manager=self.font_manager,
+                secondary_screens=ScreenManager.secondary_screens,
+                sync_projection_integrations=(
+                    lambda: self._projection_integrations.sync_projection_integrations()
+                ),
+                sync_obs_scene=lambda active: (
+                    self._projection_integrations.sync_obs_scene(active)
+                ),
+                yearly_text=self._current_yearly_projection_text,
+                set_projection_screen_count=(
+                    lambda count: self.proj_bar.set_screen_count(count)
+                ),
+                set_toolbar_screen_count=(
+                    lambda count: self._quick_toolbar.set_screen_count(count)
+                ),
+                monitor_popup=lambda: self._monitor_popup,
+                monitor_anchor=lambda: self._quick_toolbar._monitor_btn,
+                translate=self.tr,
+                dialog_parent=self,
+                timer_output=lambda: getattr(self, "timer_output", None),
+                timer_bridge=lambda: getattr(self, "timer_bridge", None),
+            )
+        )
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
@@ -610,6 +638,10 @@ class MainWindow(QMainWindow):
     switch_profile_requested = Signal()
 
     # ── Projection ────────────────────────────────────────────────────────
+
+    def _current_yearly_projection_text(self) -> tuple[str, str, str]:
+        quote, reference = self.settings_widget.get_yearly_text()
+        return quote, reference, self.settings_widget._current_api_code()
 
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()

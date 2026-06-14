@@ -1,20 +1,55 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 import os
+from typing import Any
 
 from PySide6.QtCore import QDateTime, QTimer
 
 from ..core.ui.screens import ScreenManager
+from ..core.projection.application import ProjectionSession
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
+
+
+def _no_object() -> Any | None:
+    return None
+
+
+def default_secondary_screens() -> Sequence[Any]:
+    return ScreenManager.secondary_screens()
+
+
+@dataclass(frozen=True)
+class ProjectionWindowContext:
+    session: ProjectionSession
+    font_manager: Any
+    secondary_screens: Callable[[], Sequence[Any]]
+    sync_projection_integrations: Callable[[], None]
+    sync_obs_scene: Callable[[bool], None]
+    yearly_text: Callable[[], tuple[str, str, str]]
+    set_projection_screen_count: Callable[[int], None]
+    set_toolbar_screen_count: Callable[[int], None]
+    monitor_popup: Callable[[], Any | None]
+    monitor_anchor: Callable[[], Any]
+    translate: Callable[[str], str]
+    dialog_parent: Any | None = None
+    timer_output: Callable[[], Any | None] = _no_object
+    timer_bridge: Callable[[], Any | None] = _no_object
 
 
 class ProjectionWindowController:
     """Owns projection target windows and monitor-manager actions."""
 
-    def __init__(self, window, *, idle_source_factory=IdleMediaSource) -> None:
-        self._window = window
-        self._session = window.projection_session
+    def __init__(
+        self,
+        context: ProjectionWindowContext,
+        *,
+        idle_source_factory=IdleMediaSource,
+    ) -> None:
+        self._context = context
+        self._session = context.session
         # The single shared idle decoder is created lazily on first use so the
         # controller stays cheap to construct (and unit-testable without a
         # QApplication).  All surfaces paint the frames it fans out, so the idle
@@ -34,27 +69,26 @@ class ProjectionWindowController:
         self._session.set_media_owner(screen, active=active)
 
     def open_projection_windows(self) -> None:
-        window = self._window
         for w in self._session.projection_windows:
             w.close()
         self._session.projection_windows.clear()
 
         self._normalize_expired_state()
 
-        secondary = ScreenManager.secondary_screens()
+        secondary = self._context.secondary_screens()
         idx = 0
         for screen in secondary:
             if not self._media_eligible(screen):
                 continue
             idx += 1
-            win = ProjectionWindow(screen, idx, window.font_manager)
+            win = ProjectionWindow(screen, idx, self._context.font_manager)
             self._session.projection_windows.append(win)
 
         for win in self._session.projection_windows:
             self.apply_full_state_to_window(win)
 
         self._set_screen_count(len(self._session.projection_windows))
-        window._projection_integrations.sync_projection_integrations()
+        self._context.sync_projection_integrations()
 
     def apply_yearly_text(self, quote: str, ref: str, api_code: str = "") -> None:
         for win in self.all_windows():
@@ -128,7 +162,7 @@ class ProjectionWindowController:
         now = QDateTime.currentDateTime()
         if now.secsTo(state["target_dt"]) <= 0:
             self._session.reset_state()
-            self._window._projection_integrations.sync_obs_scene(False)
+            self._context.sync_obs_scene(False)
 
     def on_screens_changed(self) -> None:
         # 700 ms gives Windows DWM enough time to finish reorganising the
@@ -150,10 +184,9 @@ class ProjectionWindowController:
             return None
 
     def reconcile_projection_windows(self) -> None:
-        window = self._window
         # Filter out any screens Qt has already deleted under us.
         secondary = [
-            s for s in ScreenManager.secondary_screens()
+            s for s in self._context.secondary_screens()
             if self._screen_name(s) is not None
         ]
         connected: dict[str, object] = {}
@@ -191,18 +224,17 @@ class ProjectionWindowController:
                 continue
             if not self._media_eligible(screen):
                 continue
-            win = ProjectionWindow(screen, i + 1, self._window.font_manager)
+            win = ProjectionWindow(screen, i + 1, self._context.font_manager)
             self.apply_full_state_to_window(win)
             self._session.projection_windows.append(win)
 
         self._set_screen_count(len(self._session.projection_windows))
-        window._projection_integrations.sync_projection_integrations()
+        self._context.sync_projection_integrations()
 
     def all_windows(self) -> list:
         return self._session.all_windows()
 
     def on_idle_media_changed(self, path: str) -> None:
-        window = self._window
         # Reject a path that no longer exists — treat it as "clear".
         if path and not os.path.isfile(path):
             path = ""
@@ -226,27 +258,24 @@ class ProjectionWindowController:
             for win in self.all_windows():
                 win.clear_idle()
 
-        if window._monitor_popup is not None:
-            window._monitor_popup._sync_idle_ui(path)
+        popup = self._context.monitor_popup()
+        if popup is not None:
+            popup._sync_idle_ui(path)
 
     def on_floating_toggle(self, make_active: bool) -> None:
-        window = self._window
         if make_active:
             if self._session.floating_preview_window is None:
                 self._session.floating_preview_window = self.create_floating_window()
         else:
             self._session.close_floating_preview()
 
-        window._projection_integrations.sync_projection_integrations()
-        QTimer.singleShot(
-            420,
-            lambda: self.on_monitor_manager_requested(window._quick_toolbar._monitor_btn),
-        )
+        self._context.sync_projection_integrations()
+        QTimer.singleShot(420, self._reopen_monitor_manager)
 
     def create_floating_window(self) -> FloatingPreviewWindow:
         quote, ref, api_code = self._yearly_text()
         win = FloatingPreviewWindow(
-            self._window.font_manager,
+            self._context.font_manager,
             yearly_text_quote=quote,
             yearly_text_ref=ref,
             api_code=api_code,
@@ -269,9 +298,10 @@ class ProjectionWindowController:
         ))
 
     def on_monitor_manager_requested(self, anchor_widget) -> None:
-        window = self._window
-        popup = window._monitor_popup
-        secondary = ScreenManager.secondary_screens()
+        popup = self._context.monitor_popup()
+        if popup is None:
+            return
+        secondary = self._context.secondary_screens()
         active_screens = {
             id(win.screen()): win for win in self._session.projection_windows
         }
@@ -293,8 +323,7 @@ class ProjectionWindowController:
         popup.show_above(anchor_widget)
 
     def on_monitor_toggle(self, screen_index: int, make_active: bool) -> None:
-        window = self._window
-        secondary = ScreenManager.secondary_screens()
+        secondary = self._context.secondary_screens()
         if screen_index >= len(secondary):
             return
         screen = secondary[screen_index]
@@ -328,7 +357,7 @@ class ProjectionWindowController:
                     win = ProjectionWindow(
                         screen,
                         screen_index + 1,
-                        self._window.font_manager,
+                        self._context.font_manager,
                     )
                     self._session.projection_windows.append(win)
                     self.apply_full_state_to_window(win)
@@ -345,31 +374,29 @@ class ProjectionWindowController:
                 win.fade_out_and_close()
             self._set_screen_count(len(self._session.projection_windows))
 
-        window._projection_integrations.sync_projection_integrations()
-        QTimer.singleShot(
-            420,
-            lambda: self.on_monitor_manager_requested(window._quick_toolbar._monitor_btn),
-        )
+        self._context.sync_projection_integrations()
+        QTimer.singleShot(420, self._reopen_monitor_manager)
 
     def on_monitor_all(self, make_active: bool) -> None:
-        window = self._window
         if make_active:
             self._session.clear_hidden_media_screens()
             # "Project all" claims every non-timer-reserved screen for media.
-            for screen in ScreenManager.secondary_screens():
+            for screen in self._context.secondary_screens():
                 if not self._is_timer_reserved(screen):
                     self._persist_media_owner(screen, active=True)
             self.open_projection_windows()
         else:
-            for screen in ScreenManager.secondary_screens():
+            for screen in self._context.secondary_screens():
                 self._session.hide_media_on_screen_name(screen.name())
                 self._persist_media_owner(screen, active=False)
             for win in self._session.projection_windows:
                 win.fade_out_and_close()
             self._session.projection_windows.clear()
             self._set_screen_count(0)
-            window._projection_integrations.sync_projection_integrations()
-        window._monitor_popup.hide_animated()
+            self._context.sync_projection_integrations()
+        popup = self._context.monitor_popup()
+        if popup is not None:
+            popup.hide_animated()
 
     # ── Conflict handling (media side) ─────────────────────────────────────
 
@@ -377,12 +404,12 @@ class ProjectionWindowController:
         """Native confirmation before media displaces the timer on a screen."""
         from PySide6.QtWidgets import QMessageBox
 
-        name = screen.name() or self._window.tr("this monitor")
-        box = QMessageBox(self._window)
+        name = screen.name() or self._context.translate("this monitor")
+        box = QMessageBox(self._context.dialog_parent)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(self._window.tr("Monitor in use by the timer"))
+        box.setWindowTitle(self._context.translate("Monitor in use by the timer"))
         box.setText(
-            self._window.tr(
+            self._context.translate(
                 "The timer is currently using {monitor}. Move media here and "
                 "hide the timer on this monitor?"
             ).replace("{monitor}", str(name))
@@ -393,14 +420,14 @@ class ProjectionWindowController:
 
     def _release_timer_on(self, screen) -> None:
         """Ask the timer-output controller to drop its window from ``screen``."""
-        timer_output = getattr(self._window, "timer_output", None)
+        timer_output = self._context.timer_output()
         if timer_output is not None and hasattr(timer_output, "reconcile"):
             timer_output.reconcile()
 
     def _notify_timer_monitors_changed(self) -> None:
         """Refresh the Timer tab's monitor grid after a media-side takeover so
         the reserved monitor flips back to 'Reserve for timer'."""
-        bridge = getattr(self._window, "timer_bridge", None)
+        bridge = self._context.timer_bridge()
         if bridge is not None:
             bridge.refreshMonitors()
 
@@ -438,13 +465,11 @@ class ProjectionWindowController:
             win.set_image_transform(*transform, animate=False)
 
     def _yearly_text(self) -> tuple[str, str, str]:
-        quote, ref = self._window.settings_widget.get_yearly_text()
-        return (
-            quote,
-            ref,
-            self._window.settings_widget._current_api_code(),
-        )
+        return self._context.yearly_text()
 
     def _set_screen_count(self, count: int) -> None:
-        self._window.proj_bar.set_screen_count(count)
-        self._window._quick_toolbar.set_screen_count(count)
+        self._context.set_projection_screen_count(count)
+        self._context.set_toolbar_screen_count(count)
+
+    def _reopen_monitor_manager(self) -> None:
+        self.on_monitor_manager_requested(self._context.monitor_anchor())
