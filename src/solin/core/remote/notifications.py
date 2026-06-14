@@ -7,7 +7,7 @@ Fluxo completo:
   1. NotificationWorker é iniciado em QThread separado ~1,5 s após o app abrir.
   2. Faz GET na NOTIFICATION_API_URL com timeout curto (não trava a UI).
   3. Valida o schema mínimo do payload.
-  4. Filtra notificações cujo ID já está no histórico local (QSettings).
+  4. Filtra notificações cujo ID já está no histórico local do perfil.
   5. Resolve o conteúdo localizado usando o api_code do idioma ativo,
      com fallback para "E" (inglês) se o código não estiver disponível.
   6. Emite o signal `notifications_ready` com a lista já processada.
@@ -44,7 +44,6 @@ Formato esperado da API:
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -53,9 +52,9 @@ from PySide6.QtCore import QObject, QThread, Signal
 if TYPE_CHECKING:
     from solin.core.i18n.manager import LanguageManager
     
-from solin.core.foundation.constants import NOTIFICATION_API_URL, QSETTINGS_NOTIFICATIONS_APP
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.constants import NOTIFICATION_API_URL
 from solin.core.network.http import HttpError, get_json
+from solin.core.remote.notification_settings import NotificationSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
@@ -95,41 +94,18 @@ class Notification:
 # ── Armazenamento de IDs vistos ────────────────────────────────────────────────
 
 def _load_seen_ids(profile_settings: ProfileSettings) -> set[str]:
-    """Carrega a lista de IDs já exibidos do QSettings."""
-    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
-    raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
-    try:
-        data = json.loads(raw)
-        if isinstance(data, list):
-            return set(str(i) for i in data)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return set()
+    """Carrega a lista de IDs já exibidos do store tipado."""
+    return NotificationSettingsStore.for_profile_settings(profile_settings).seen_ids()
 
 
 def mark_seen(notif_id: str, profile_settings: ProfileSettings) -> None:
-    """Marca uma notificação como exibida. Thread-safe via QSettings."""
-    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
-    raw = prefs.value(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]", str)
-    try:
-        data = json.loads(raw)
-        if not isinstance(data, list):
-            data = []
-    except (json.JSONDecodeError, TypeError):
-        data = []
-
-    if notif_id not in data:
-        data.append(notif_id)
-        # Limita o histórico a 500 entradas para evitar crescimento ilimitado
-        if len(data) > 500:
-            data = data[-500:]
-        prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, json.dumps(data))
+    """Marca uma notificação como exibida."""
+    NotificationSettingsStore.for_profile_settings(profile_settings).mark_seen(notif_id)
 
 
 def reset_seen_ids(profile_settings: ProfileSettings) -> None:
     """Utilitário de diagnóstico: limpa o histórico de IDs vistos."""
-    prefs = profile_settings.prefs(QSETTINGS_NOTIFICATIONS_APP)
-    prefs.setValue(SettingsKey.NOTIFICATIONS_SEEN_IDS, "[]")
+    NotificationSettingsStore.for_profile_settings(profile_settings).reset_seen_ids()
 
 
 # ── Worker assíncrono ──────────────────────────────────────────────────────────

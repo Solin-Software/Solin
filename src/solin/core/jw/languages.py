@@ -36,8 +36,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from solin.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 from solin.core.profiles.settings import ProfileSettings
 from solin.core.network.http import get_json
@@ -49,10 +48,6 @@ log = logging.getLogger(__name__)
 _LANGUAGES_URL  = "https://b.jw-cdn.org/apis/mediator/v1/languages/E/all"
 _CACHE_TTL_DAYS = 30
 _FETCH_TIMEOUT  = 15
-
-
-def _settings_str(value: object, default: str = "") -> str:
-    return value if isinstance(value, str) else default
 
 
 # ── Worker de fetch ─────────────────────────────────────────────────────────────
@@ -173,32 +168,14 @@ class JWLanguageService(QObject):
 
     @property
     def media_api_code(self) -> str:
-        profile_settings = self._require_profile_settings()
-        s = profile_settings.prefs(QSETTINGS_APP_APP)
-        code = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
-        if code:
-            return code
-
-        # Migração defensiva: versões anteriores do onboarding salvavam o
-        # idioma de mídia em ProjectionPrefs/jw_language, enquanto o serviço
-        # real sempre lê App/media_language_code.
-        legacy = _settings_str(
-            profile_settings.prefs(QSETTINGS_PREFS_APP).value(
-                SettingsKey.LEGACY_JW_LANGUAGE,
-                "",
-                str,
-            )
-        )
-        if legacy:
-            s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, legacy)
-            s.sync()
-        return legacy
+        return JWLanguageSettingsStore.for_profile_settings(
+            self._require_profile_settings(),
+        ).media_language_code()
 
     def set_media_api_code(self, code: str) -> None:
-        s = self._require_profile_settings().prefs(QSETTINGS_APP_APP)
-        old = _settings_str(s.value(SettingsKey.MEDIA_LANGUAGE_CODE, "", str))
-        s.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, code)
-        s.sync()
+        store = JWLanguageSettingsStore.for_profile_settings(self._require_profile_settings())
+        old = store.media_language_code()
+        store.set_media_language_code(code)
         log.debug("[JWLanguageService] Media language: %s", code)
         if code != old:
             self.media_language_changed.emit(code)
