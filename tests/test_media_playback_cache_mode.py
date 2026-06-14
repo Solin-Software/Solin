@@ -60,7 +60,7 @@ def test_play_url_uses_auto_download_setting_by_default(tmp_path):
 
     assert played == ["https://cdn.example/song.mp3"]
     assert downloader.started == [("https://cdn.example/song.mp3", True)]
-    assert controller._stream_persist is True
+    assert controller.stream_persist is True
     controller.stop()
 
 
@@ -74,5 +74,5 @@ def test_play_url_can_force_temporary_download(tmp_path):
 
     assert played == ["https://cdn.example/song.mp3"]
     assert downloader.started == [("https://cdn.example/song.mp3", False)]
-    assert controller._stream_persist is False
+    assert controller.stream_persist is False
     controller.stop()

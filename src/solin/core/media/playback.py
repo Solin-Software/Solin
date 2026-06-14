@@ -19,6 +19,7 @@ Comportamento de buffer por modo
       Tempfile apagado no stop() ou no play_url() seguinte.
 """
 import logging
+import os
 
 from PySide6.QtCore import QObject, Signal, QUrl, QTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
@@ -26,6 +27,7 @@ from PySide6.QtGui import QPixmap, QImage
 
 from .downloader import SongDownloader
 from .cache import MediaCacheManager
+from .playback_session import MediaPlaybackSession
 from .settings import MediaPlaybackSettings
 
 log = logging.getLogger(__name__)
@@ -66,23 +68,11 @@ class MediaController(QObject):
         self.player.setVideoSink(self.video_sink)
 
         self._downloader = SongDownloader(cache_manager.media_cache_dir, self)
-        self._current_url: str = ""
-        self._local_path: str | None = None
-        # True quando _local_path e um tempfile (persist=False)
-        self._local_is_temp: bool = False
-        self._defer_local_switch: bool = False
-        self._pending_local_switch: tuple[str, bool] | None = None
-        self._pending_local_notified: bool = False
-        self._cover_emitted: bool = False
-        self._stream_persist: bool = True   # persiste no download atual?
+        self._session = MediaPlaybackSession()
         self._reconnect_timer = QTimer(self)
         self._reconnect_timer.setSingleShot(True)
         self._reconnect_timer.setInterval(800)
         self._reconnect_timer.timeout.connect(self._do_reconnect)
-
-        self._session_id: int = 0
-        self._frame_session: int = 0
-        self._requested_playing: bool = False
 
         self.video_sink.videoFrameChanged.connect(self._on_frame)
         self.player.playbackStateChanged.connect(self._on_state)
@@ -95,6 +85,18 @@ class MediaController(QObject):
         self._downloader.progress.connect(self._on_download_progress)
         self._downloader.finished.connect(self._on_download_finished)
         self._downloader.error.connect(self._on_download_error)
+
+    @property
+    def current_url(self) -> str:
+        return self._session.current_url
+
+    @property
+    def local_path(self) -> str | None:
+        return self._session.local_path
+
+    @property
+    def stream_persist(self) -> bool:
+        return self._session.stream_persist
 
     # ── Playback público ──────────────────────────────────────────────────
 
@@ -111,31 +113,20 @@ class MediaController(QObject):
         # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova
         self._cleanup_current_temp()
 
-        self._current_url = url
-        self._local_path = None
-        self._local_is_temp = False
-        self._pending_local_switch = None
-        self._pending_local_notified = False
-        self._cover_emitted = False
-        self._requested_playing = True
-
-        # Nova sessao — frames residuais do video anterior sao descartados
-        self._session_id += 1
-        self._frame_session = self._session_id
+        self._session.begin_playback(url)
 
         # Cancela prefetch ativo para esta URL
-        if url and url.startswith("http"):
+        if MediaCacheManager.is_remote(url):
             self._cache_manager.cancel_prefetch(url)
 
         self.player.stop()
         self.player.setSource(QUrl())
         self.buffer_progress.emit(0, 0)
 
-        import os
         cached = self._downloader.get_cached_path(url)
         if cached:
-            self._local_path = cached
-            self._local_is_temp = False
+            self._session.set_cached_local(cached)
+            self._session.set_stream_persist(True)
             size = os.path.getsize(cached)
             self.buffer_progress.emit(size, size)
             self._play_source(cached)
@@ -146,34 +137,28 @@ class MediaController(QObject):
                 self._settings.auto_download_on_play()
                 if download_persist is None else bool(download_persist)
             )
-            self._stream_persist = auto_download
+            self._session.set_stream_persist(auto_download)
             # Inicia download (persist ou temp) — buffer bar funciona em ambos
             self._downloader.start(url, persist=auto_download)
             self.playback_source_changed.emit(False)
 
     def play(self):
-        self._requested_playing = True
+        self._session.set_requested_playing(True)
         self.player.play()
 
     def pause(self):
-        self._requested_playing = False
+        self._session.set_requested_playing(False)
         self.player.pause()
 
     def stop(self):
         self._reconnect_timer.stop()
         self._downloader.cancel()
-        self._session_id += 1
-        self._requested_playing = False
+        self._session.begin_stop()
         self.player.stop()
         self.player.setSource(QUrl())
         # Apaga tempfile se o player estiver usando um
         self._cleanup_current_temp()
-        self._current_url = ""
-        self._local_path = None
-        self._local_is_temp = False
-        self._defer_local_switch = False
-        self._pending_local_switch = None
-        self._pending_local_notified = False
+        self._session.finish_stop()
         self.buffer_progress.emit(0, 0)
         self.playback_source_changed.emit(False)
 
@@ -186,7 +171,7 @@ class MediaController(QObject):
     def replay(self):
         """Reinicia do comeco sem limpar a fonte — usado no loop de item unico."""
         self.player.setPosition(0)
-        self._requested_playing = True
+        self._session.set_requested_playing(True)
         QTimer.singleShot(30, self.player.play)
 
     def seek(self, ms: int):
@@ -200,13 +185,13 @@ class MediaController(QObject):
         QMediaPlayer reinicia/perturba posição e estado, então a pausa precisa
         ocorrer primeiro. Depois aplicamos a troca usando a posição atual.
         """
-        self._defer_local_switch = deferred
-        if not deferred and self._pending_local_switch:
-            local_path, local_is_temp = self._pending_local_switch
-            already_notified = self._pending_local_notified
-            self._pending_local_switch = None
-            self._pending_local_notified = False
-            self._switch_to_local(local_path, local_is_temp, notify_cache=not already_notified)
+        request = self._session.set_local_switch_deferred(deferred)
+        if request is not None:
+            self._switch_to_local(
+                request.local_path,
+                request.local_is_temp,
+                notify_cache=request.notify_cache,
+            )
 
     def set_volume(self, value: float):
         self.audio_output.setVolume(value)
@@ -245,15 +230,15 @@ class MediaController(QObject):
             or ("i/o error" in lowered and source.startswith("http"))
         )
 
-        if is_network_drop and self._current_url:
+        if is_network_drop and self._session.current_url:
             self._reconnect_timer.start()
         else:
             self.error_occurred.emit(error_string)
 
     def _do_reconnect(self):
         saved_pos = self.player.position()
-        was_playing = self.is_playing or self._requested_playing
-        source = self._local_path if self._local_path else self._current_url
+        was_playing = self.is_playing or self._session.requested_playing
+        source = self._session.reconnect_source()
         if not source:
             return
 
@@ -287,32 +272,29 @@ class MediaController(QObject):
         self.buffer_progress.emit(downloaded, total)
 
     def _on_download_finished(self, local_path: str):
-        self._local_path = local_path
-        self._local_is_temp = not self._stream_persist
+        decision = self._session.download_finished(local_path)
 
-        if self._defer_local_switch:
-            self._pending_local_switch = (local_path, self._local_is_temp)
-            self._pending_local_notified = False
-            if self._stream_persist and self._current_url:
-                self._cache_manager.notify_cached(self._current_url)
-                self._pending_local_notified = True
-            self.playback_source_changed.emit(self._stream_persist)
+        if decision.deferred:
+            if decision.notify_cache_now:
+                self._cache_manager.notify_cached(self._session.current_url)
+            self.playback_source_changed.emit(self._session.stream_persist)
             return
 
-        self._switch_to_local(local_path, self._local_is_temp)
+        request = decision.switch_request
+        if request is not None:
+            self._switch_to_local(request.local_path, request.local_is_temp)
 
     def _switch_to_local(self, local_path: str, local_is_temp: bool, notify_cache: bool = True):
-        self._local_path = local_path
-        self._local_is_temp = local_is_temp
+        self._session.mark_local_switch(local_path, local_is_temp)
 
         source = self.player.source().toString()
-        if source.startswith("http") and self._current_url:
+        if source.startswith("http") and self._session.current_url:
             # ── Captura o estado ANTES de tocar no player ─────────────────
             # Qualquer chamada ao player (stop, setSource) emite sinais síncronos
             # que podem perturbar a UI. Capturamos tudo antes.
             saved_pos   = self.player.position()
-            was_playing = self.is_playing or self._requested_playing
-            switch_session = self._session_id  # guard contra troca de mídia
+            was_playing = self.is_playing or self._session.requested_playing
+            switch_session = self._session.session_id  # guard contra troca de mídia
 
             # ── Troca a fonte sem chamar stop() explicitamente ────────────
             # setSource() já interrompe o stream HTTP internamente.
@@ -334,7 +316,7 @@ class MediaController(QObject):
 
             def _try_restore():
                 # Sessão mudou → nova mídia iniciada, abandona silenciosamente
-                if self._session_id != switch_session:
+                if self._session.session_id != switch_session:
                     return
 
                 _attempts[0] += 1
@@ -372,11 +354,11 @@ class MediaController(QObject):
             QTimer.singleShot(50, _try_restore)
 
         # Notifica CacheManager apenas em downloads persistentes
-        if notify_cache and self._stream_persist and self._current_url:
-            self._cache_manager.notify_cached(self._current_url)
+        if self._session.should_notify_cache(requested=notify_cache):
+            self._cache_manager.notify_cached(self._session.current_url)
 
         # Badge offline (ícone verde)
-        self.playback_source_changed.emit(self._stream_persist)
+        self.playback_source_changed.emit(self._session.stream_persist)
 
     def _on_download_error(self, msg: str):
         log.warning("Downloader warning: %s", msg)
@@ -384,7 +366,7 @@ class MediaController(QObject):
     # ── Player callbacks ──────────────────────────────────────────────────
 
     def _on_frame(self, frame):
-        if self._session_id != self._frame_session:
+        if not self._session.accepts_frame():
             return
         self.frame_ready.emit(frame)
 
@@ -399,7 +381,7 @@ class MediaController(QObject):
 
     def _on_status(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
-            self._requested_playing = False
+            self._session.mark_media_ended()
             self.media_ended.emit()
 
     def _on_metadata_changed(self):
@@ -415,15 +397,15 @@ class MediaController(QObject):
             if value is not None:
                 img = value
                 if isinstance(img, QImage) and not img.isNull():
-                    self._cover_emitted = True
+                    self._session.mark_cover_emitted()
                     self.cover_art_changed.emit(QPixmap.fromImage(img))
                     return
                 if isinstance(img, QPixmap) and not img.isNull():
-                    self._cover_emitted = True
+                    self._session.mark_cover_emitted()
                     self.cover_art_changed.emit(img)
                     return
 
-        if not self._cover_emitted:
+        if not self._session.cover_emitted:
             self.cover_art_changed.emit(None)
 
     # ── Helpers ───────────────────────────────────────────────────────────
@@ -441,26 +423,25 @@ class MediaController(QObject):
         Cobre dois casos:
           (a) download ainda em andamento -> cancel() ja apaga o .tmp
           (b) download concluido, player usando tempfile -> cleanup_temp()
-              apaga via _finished_temp; ou _local_path se ja foi movido
+              apaga via _finished_temp; ou local_path se ja foi movido
         """
-        if self._local_is_temp and self._local_path:
-            import os
+        temp_path = self._session.current_temp_path()
+        if temp_path:
             try:
-                if os.path.isfile(self._local_path):
-                    os.remove(self._local_path)
+                if os.path.isfile(temp_path):
+                    os.remove(temp_path)
             except OSError:
                 QTimer.singleShot(
                     250,
-                    lambda path=self._local_path: self._remove_temp_later(path, 4),
+                    lambda path=temp_path: self._remove_temp_later(path, 4),
                 )
         else:
-            # Download pode ter concluido mas ainda nao entregue a _local_path
+            # Download pode ter concluido mas ainda nao entregue a local_path
             self._downloader.cleanup_temp()
 
     def _remove_temp_later(self, path: str, attempts_left: int) -> None:
         if not path:
             return
-        import os
         try:
             if os.path.isfile(path):
                 os.remove(path)

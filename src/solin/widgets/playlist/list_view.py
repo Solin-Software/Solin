@@ -322,8 +322,8 @@ class _PlaylistListView(QWidget):
         if not pl:
             return
         if self._media_ctrl is not None:
-            cur_url = self._media_ctrl._current_url or ""
-            cur_local = self._media_ctrl._local_path or ""
+            cur_url = self._media_ctrl.current_url or ""
+            cur_local = self._media_ctrl.local_path or ""
             for it in pl.get("items", []):
                 item_url = it.get("url", "")
                 if item_url and it.get("type", "video") in ("video", "audio"):

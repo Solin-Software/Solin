@@ -828,8 +828,8 @@ class _PlaylistEditView(
             item_type = item.get("type", "video")
             if item_type in ("video", "audio"):
                 item_url   = item.get("url", "")
-                cur_url    = self._media_ctrl._current_url or ""
-                cur_local  = self._media_ctrl._local_path or ""
+                cur_url    = self._media_ctrl.current_url or ""
+                cur_local  = self._media_ctrl.local_path or ""
                 playing    = item_url and item_url in (cur_url, cur_local)
                 if not playing and cur_local and item_url:
                     playing = os.path.normpath(item_url) == os.path.normpath(cur_local)
