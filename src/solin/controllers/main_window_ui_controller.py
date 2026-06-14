@@ -213,6 +213,10 @@ class MainWindowUiController:
             obs_service=window._obs_service,
             ndi_service=window._ndi_service,
             prefs=window.profile_prefs,
+            obs_settings=window._obs_settings,
+            zoom_settings=window._zoom_settings,
+            auto_share_settings=window._auto_share_settings,
+            camera_settings=window._camera_settings,
             auto_key_settings=window._auto_key_settings,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"
@@ -277,7 +281,8 @@ class MainWindowUiController:
             window._zoom_service,
             window._camera_service,
             window.right_col,
-            prefs=window.profile_prefs,
+            obs_settings=window._obs_settings,
+            camera_settings=window._camera_settings,
             background_song_service=window._background_song_service,
         )
         window._quick_toolbar.monitor_clicked.connect(

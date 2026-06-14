@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
-    QSettings,
     QSize,
     QPropertyAnimation,
     Qt,
@@ -23,8 +22,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.integrations.camera import CameraOption, CameraService
+from solin.core.integrations.automation.settings import CameraSettingsStore
 from solin.styles.icons import ICON_CAMERA, ICON_CAST, make_icon
 
 
@@ -34,10 +33,15 @@ class CameraPopup(QWidget):
     camera_changed = Signal(object)
     stream_requested = Signal()
 
-    def __init__(self, camera_service: CameraService, prefs: QSettings, parent=None):
+    def __init__(
+        self,
+        camera_service: CameraService,
+        settings: CameraSettingsStore,
+        parent=None,
+    ):
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self._camera = camera_service
-        self._prefs = prefs
+        self._settings = settings
         self._active = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
@@ -159,8 +163,8 @@ class CameraPopup(QWidget):
         self._refresh_triggered = True
 
     def populate(self, cameras: list[CameraOption]) -> None:
-        saved_backend = self._prefs.value(SettingsKey.CAMERA_BACKEND, "", str)
-        saved_name = self._prefs.value(SettingsKey.CAMERA_DEVICE_NAME, "", str)
+        saved_backend = self._settings.backend()
+        saved_name = self._settings.device_name()
         self._combo.blockSignals(True)
         self._combo.clear()
         if not cameras:
@@ -193,8 +197,7 @@ class CameraPopup(QWidget):
         opt = self.selected_camera()
         if opt is None:
             return
-        self._prefs.setValue(SettingsKey.CAMERA_BACKEND, opt.backend.value)
-        self._prefs.setValue(SettingsKey.CAMERA_DEVICE_NAME, opt.name)
+        self._settings.set_device(opt.backend.value, opt.name)
         self.camera_changed.emit(opt)
 
     def _show_error(self, message: str) -> None:

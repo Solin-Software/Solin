@@ -9,7 +9,6 @@ from PySide6.QtCore import (
     QEvent,
     QPoint,
     QRect,
-    QSettings,
     QPropertyAnimation,
     Qt,
     QTimer,
@@ -19,7 +18,10 @@ from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegio
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QToolTip, QWidget
 
-from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.integrations.automation.settings import (
+    CameraSettingsStore,
+    OBSSettingsStore,
+)
 from solin.core.integrations.camera import CameraOption
 from solin.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.core.ui.macos_layer import apply_corner_radius
@@ -80,14 +82,16 @@ class QuickAccessToolbar(QQuickWidget):
         camera_service=None,
         parent=None,
         *,
-        prefs: QSettings,
+        obs_settings: OBSSettingsStore,
+        camera_settings: CameraSettingsStore,
         background_song_service=None,
     ):
         super().__init__(None)
         self._obs = obs_service
         self._zoom = zoom_service
         self._camera = camera_service
-        self._prefs = prefs
+        self._obs_settings = obs_settings
+        self._camera_settings = camera_settings
         self._background_song = background_song_service
         self._minimized = False
         self._obs_connected = False
@@ -200,7 +204,7 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── Camera Panel ──────────────────────────────────────────────────
         self._camera_panel = (
-            CameraPopup(camera_service, self._prefs, self)
+            CameraPopup(camera_service, self._camera_settings, self)
             if camera_service else None
         )
         if self._camera_panel:
@@ -383,16 +387,16 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_obs_tooltip(f"OBS: {scene_name}")
         if self._scene_popup.isVisible() and self._obs and self._obs.is_connected:
             scenes = self._obs.scenes
-            idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-            media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+            idle_scene = self._obs_settings.default_scene()
+            media_scene = self._obs_settings.media_window_scene()
             self._scene_popup.populate(scenes, scene_name or "", idle_scene, media_scene)
 
     def set_obs_scenes(self, scenes: list[str]):
         """Refresh the scene popup when the scene list changes."""
         if self._scene_popup.isVisible() and self._obs and self._obs.is_connected:
             current = self._obs.current_scene or ""
-            idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-            media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+            idle_scene = self._obs_settings.default_scene()
+            media_scene = self._obs_settings.media_window_scene()
             self._scene_popup.populate(scenes, current, idle_scene, media_scene)
 
     def set_obs_stream_available(self, available: bool):
@@ -613,8 +617,8 @@ class QuickAccessToolbar(QQuickWidget):
             return
         scenes = self._obs.scenes
         current = self._obs.current_scene or ""
-        idle_scene = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-        media_scene = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        idle_scene = self._obs_settings.default_scene()
+        media_scene = self._obs_settings.media_window_scene()
         self._scene_popup.populate(scenes, current, idle_scene, media_scene)
         self._scene_popup.show_above(self)
         if not scenes:

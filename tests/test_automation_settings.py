@@ -33,13 +33,11 @@ def test_obs_settings_reads_connection_scenes_and_ndi_configuration():
         assert store.is_configured() is False
         assert store.websocket_port() == 4455
 
-        settings.set_value(SettingsKey.OBS_ENABLED, True)
-        settings.set_value(SettingsKey.OBS_PORT, "4444")
-        settings.set_value(SettingsKey.OBS_PASSWORD, "secret")
-        settings.set_value(SettingsKey.OBS_DEFAULT_SCENE, "Idle")
-        settings.set_value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "Media")
-        settings.set_value(SettingsKey.OBS_NDI_ENABLED, True)
-        settings.set_value(SettingsKey.OBS_NDI_SOURCE, " Program ")
+        store.set_enabled(True)
+        store.set_connection(4444, "secret")
+        store.set_scenes("Idle", "Media")
+        store.set_ndi_enabled(True)
+        store.set_ndi_source(" Program ")
 
         assert store.is_enabled() is True
         assert store.is_configured() is True
@@ -62,19 +60,20 @@ def test_auto_share_settings_prefers_current_hotkey_before_legacy_keys():
     settings.clear()
     try:
         settings.set_value(SettingsKey.SHARE_ENABLED, True)
-        settings.set_value(SettingsKey.SHARE_HOTKEY, "Ctrl+Shift+S")
         settings.set_value(SettingsKey.SHARE_START_HOTKEY, "LegacyStart")
         settings.set_value(SettingsKey.SHARE_STOP_HOTKEY, "LegacyStop")
-        settings.set_value(SettingsKey.SHARE_CLICK_X, "320")
-        settings.set_value(SettingsKey.SHARE_CLICK_Y, "240")
+        store.set_click_position(320, 240)
+
+        assert store.ensure_hotkey() == "LegacyStart"
+        assert store.hotkey() == "LegacyStart"
+
+        store.set_hotkey("Ctrl+Shift+S")
 
         assert store.hotkey() == "Ctrl+Shift+S"
         assert store.is_configured() is True
         assert store.click_position() == (320, 240)
-
-        settings.set_value(SettingsKey.SHARE_HOTKEY, "")
-
-        assert store.hotkey() == "LegacyStart"
+        assert settings.string(SettingsKey.SHARE_START_HOTKEY) == ""
+        assert settings.string(SettingsKey.SHARE_STOP_HOTKEY) == ""
     finally:
         settings.clear()
 
@@ -92,11 +91,10 @@ def test_zoom_and_camera_settings_read_defaults_and_saved_values():
         assert camera.backend() == ""
         assert camera.device_name() == ""
 
-        settings.set_value(SettingsKey.ZOOM_ENABLED, True)
-        settings.set_value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, False)
-        settings.set_value(SettingsKey.CAMERA_ENABLED, True)
-        settings.set_value(SettingsKey.CAMERA_BACKEND, "dshow")
-        settings.set_value(SettingsKey.CAMERA_DEVICE_NAME, "Cam")
+        zoom.set_enabled(True)
+        zoom.set_show_participants(False)
+        camera.set_enabled(True)
+        camera.set_device("dshow", "Cam")
 
         assert zoom.is_enabled() is True
         assert zoom.show_participants() is False

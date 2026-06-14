@@ -3,7 +3,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from ...core.foundation.settings_keys import SettingsKey
 from ...styles.icons import ICON_ZOOM, make_icon
 from ._shared import _DIM, _MUTED, _TEXT, _ToggleSwitch
 
@@ -41,19 +40,19 @@ class ZoomSectionMixin:
         )
         col.addWidget(self._zoom_enabled_desc)
         header_lay.addLayout(col, stretch=1)
-        saved_zoom = self._prefs.value(SettingsKey.ZOOM_ENABLED, False, bool)
+        saved_zoom = self._zoom_settings.is_enabled()
         self._zoom_enabled_toggle = _ToggleSwitch(checked=saved_zoom)
         self._zoom_enabled_toggle.toggled.connect(self._on_zoom_enabled_toggled)
         header_lay.addWidget(self._zoom_enabled_toggle)
         lay.addWidget(header)
 
-        self._prefs.setValue(SettingsKey.ZOOM_SHOW_PARTICIPANTS, True)
+        self._zoom_settings.set_show_participants(True)
         return card
 
     def _on_zoom_enabled_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.ZOOM_ENABLED, checked)
+        self._zoom_settings.set_enabled(checked)
         self.zoom_enabled_toggled.emit(checked)
 
     def _on_zoom_parts_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.ZOOM_SHOW_PARTICIPANTS, checked)
+        self._zoom_settings.set_show_participants(checked)
         self.zoom_participants_toggled.emit(checked)

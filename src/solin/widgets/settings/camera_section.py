@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from ...core.foundation.settings_keys import SettingsKey
 from ...styles.icons import ICON_CAMERA
 
 
@@ -9,7 +8,7 @@ class CameraSectionMixin:
 
     def _build_camera_card(self):
         card, lay = self._card()
-        saved_camera = self._prefs.value(SettingsKey.CAMERA_ENABLED, False, bool)
+        saved_camera = self._camera_settings.is_enabled()
         row, self._camera_toggle, self._camera_label, self._camera_desc = \
             self._toggle_row(
                 ICON_CAMERA,
@@ -22,8 +21,8 @@ class CameraSectionMixin:
         return card
 
     def _on_camera_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.CAMERA_ENABLED, checked)
+        self._camera_settings.set_enabled(checked)
         self.camera_enabled_toggled.emit(checked)
 
     def get_camera_enabled(self):
-        return self._prefs.value(SettingsKey.CAMERA_ENABLED, False, bool)
+        return self._camera_settings.is_enabled()

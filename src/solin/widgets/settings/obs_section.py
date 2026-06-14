@@ -4,7 +4,6 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
 from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA
-from ...core.foundation.settings_keys import SettingsKey
 from ...core.integrations.automation.obs import OBSConnectionState
 from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
 from ..common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
@@ -56,7 +55,7 @@ class ObsSectionMixin:
         )
         col.addWidget(self._obs_header_desc)
         header_lay.addLayout(col, stretch=1)
-        obs_enabled = self._prefs.value(SettingsKey.OBS_ENABLED, False, bool)
+        obs_enabled = self._obs_settings.is_enabled()
         self._obs_toggle = _ToggleSwitch(checked=obs_enabled)
         self._obs_toggle.toggled.connect(self._on_obs_toggled)
         header_lay.addWidget(self._obs_toggle)
@@ -93,7 +92,7 @@ class ObsSectionMixin:
         obs_lay.addWidget(self._obs_port_lbl)
         self._obs_port_edit = QLineEdit()
         self._obs_port_edit.setPlaceholderText("4455")
-        saved_port = self._prefs.value(SettingsKey.OBS_PORT, "", str)
+        saved_port = self._obs_settings.raw_websocket_port()
         if saved_port:
             self._obs_port_edit.setText(str(saved_port))
         self._obs_port_edit.setMinimumHeight(36)
@@ -110,7 +109,7 @@ class ObsSectionMixin:
         self._obs_pwd_edit.setPlaceholderText(
             self.tr("Leave blank if no password is set")
         )
-        saved_pwd = self._prefs.value(SettingsKey.OBS_PASSWORD, "", str)
+        saved_pwd = self._obs_settings.password()
         if saved_pwd:
             self._obs_pwd_edit.setText(saved_pwd)
         self._obs_pwd_edit.setMinimumHeight(36)
@@ -167,7 +166,7 @@ class ObsSectionMixin:
         stream_col.addWidget(self._obs_stream_desc_lbl)
         stream_header_lay.addLayout(stream_col, stretch=1)
 
-        stream_enabled = self._prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool)
+        stream_enabled = self._obs_settings.ndi_enabled()
         self._obs_stream_toggle = _ToggleSwitch(checked=stream_enabled)
         self._obs_stream_toggle.toggled.connect(self._on_obs_stream_toggled)
         stream_header_lay.addWidget(self._obs_stream_toggle)
@@ -198,7 +197,7 @@ class ObsSectionMixin:
         self._obs_stream_sources_combo = _NoScrollComboBox()
         self._obs_stream_sources_combo.setMinimumHeight(34)
         self._obs_stream_sources_combo.setStyleSheet(self._obs_combo_style())
-        saved_ndi_source = self._prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str)
+        saved_ndi_source = self._obs_settings.ndi_source()
         if saved_ndi_source:
             self._obs_stream_sources_combo.addItem(saved_ndi_source, saved_ndi_source)
         else:
@@ -328,7 +327,7 @@ class ObsSectionMixin:
         )
 
     def _on_obs_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.OBS_ENABLED, checked)
+        self._obs_settings.set_enabled(checked)
         self._obs_expanded = checked
         if self._obs_anim is not None:
             self._obs_anim.stop()
@@ -373,8 +372,7 @@ class ObsSectionMixin:
             port = int(port_text) if port_text else 0
         except ValueError:
             port = 0
-        self._prefs.setValue(SettingsKey.OBS_PORT, port)
-        self._prefs.setValue(SettingsKey.OBS_PASSWORD, password)
+        self._obs_settings.set_connection(port, password)
         self._obs_save_hint.setText(
             self.tr("\u2713 Configuration saved \u2014 reconnecting\u2026")
         )
@@ -390,13 +388,13 @@ class ObsSectionMixin:
             ),
             self._obs_save_hint.hide(),
         ))
-        if self._obs and self._prefs.value(SettingsKey.OBS_ENABLED, False, bool):
+        if self._obs and self._obs_settings.is_enabled():
             self._obs.stop()
             if port > 0:
                 self._obs.start()
 
     def _on_obs_stream_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.OBS_NDI_ENABLED, checked)
+        self._obs_settings.set_ndi_enabled(checked)
 
         if self._obs_stream_anim is not None:
             self._obs_stream_anim.stop()
@@ -445,7 +443,7 @@ class ObsSectionMixin:
     def _on_obs_ndi_sources_ready(self, sources: list):
         self._obs_stream_refresh_btn.setEnabled(True)
         self._obs_stream_refresh_btn.setText(self.tr("Find sources"))
-        saved = self._prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str)
+        saved = self._obs_settings.ndi_source()
         self._obs_stream_sources_combo.blockSignals(True)
         self._obs_stream_sources_combo.clear()
         if sources:
@@ -459,7 +457,7 @@ class ObsSectionMixin:
             self._obs_stream_sources_combo.setCurrentIndex(selected_idx)
             selected = self._obs_stream_sources_combo.currentData()
             if isinstance(selected, str) and selected:
-                self._prefs.setValue(SettingsKey.OBS_NDI_SOURCE, selected)
+                self._obs_settings.set_ndi_source(selected)
                 self.obs_stream_config_changed.emit()
             self._obs_stream_status_lbl.setStyleSheet(
                 f"font-size: 10px; color: {_GREEN}; background: transparent; border: none;"
@@ -491,15 +489,13 @@ class ObsSectionMixin:
         data = self._obs_stream_sources_combo.currentData()
         source = data if isinstance(data, str) else text
         if source:
-            self._prefs.setValue(SettingsKey.OBS_NDI_SOURCE, source)
+            self._obs_settings.set_ndi_source(source)
             self.obs_stream_config_changed.emit()
 
     def _save_obs_scenes(self):
-        self._prefs.setValue(
-            SettingsKey.OBS_DEFAULT_SCENE, self._obs_default_combo.currentText()
-        )
-        self._prefs.setValue(
-            SettingsKey.OBS_MEDIA_WINDOW_SCENE, self._obs_media_combo.currentText()
+        self._obs_settings.set_scenes(
+            self._obs_default_combo.currentText(),
+            self._obs_media_combo.currentText(),
         )
         if not _MEMORIZE_PRE_MEDIA:
             idle_set = bool(
@@ -539,8 +535,8 @@ class ObsSectionMixin:
             self._obs_scenes_frame.setVisible(False)
 
     def _populate_obs_combos(self, scenes):
-        saved_default = self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
-        saved_media = self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        saved_default = self._obs_settings.default_scene()
+        saved_media = self._obs_settings.media_window_scene()
         for combo, saved in [
             (self._obs_default_combo, saved_default),
             (self._obs_media_combo, saved_media),
@@ -560,13 +556,13 @@ class ObsSectionMixin:
             self._obs_media_combo.setEnabled(idle_set)
 
     def get_obs_default_scene(self):
-        return self._prefs.value(SettingsKey.OBS_DEFAULT_SCENE, "", str)
+        return self._obs_settings.default_scene()
 
     def get_obs_media_window_scene(self):
-        return self._prefs.value(SettingsKey.OBS_MEDIA_WINDOW_SCENE, "", str)
+        return self._obs_settings.media_window_scene()
 
     def get_obs_ndi_enabled(self):
-        return self._prefs.value(SettingsKey.OBS_NDI_ENABLED, False, bool)
+        return self._obs_settings.ndi_enabled()
 
     def get_obs_ndi_source(self):
-        return self._prefs.value(SettingsKey.OBS_NDI_SOURCE, "", str)
+        return self._obs_settings.ndi_source()

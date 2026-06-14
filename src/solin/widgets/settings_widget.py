@@ -10,6 +10,12 @@ from pathlib import Path
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.screens import ScreenManager
 from ..core.integrations.automation.obs import OBSWebSocketService
+from ..core.integrations.automation.settings import (
+    AutoShareSettingsStore,
+    CameraSettingsStore,
+    OBSSettingsStore,
+    ZoomSettingsStore,
+)
 from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
 from .settings.about_section import AboutSectionMixin
@@ -62,6 +68,10 @@ class SettingsWidget(
                  obs_service: OBSWebSocketService | None = None,
                  ndi_service: NDIReceiverService | None = None, *,
                  prefs: QSettings,
+                 obs_settings: OBSSettingsStore,
+                 zoom_settings: ZoomSettingsStore,
+                 auto_share_settings: AutoShareSettingsStore,
+                 camera_settings: CameraSettingsStore,
                  auto_key_settings: AutoKeySettingsStore,
                  yeartext_cache_file: str | Path,
                  parent=None):
@@ -72,6 +82,10 @@ class SettingsWidget(
         self._ndi       = ndi_service
         self._yeartext_cache_file = Path(yeartext_cache_file)
         self._prefs     = prefs
+        self._obs_settings = obs_settings
+        self._zoom_settings = zoom_settings
+        self._auto_share_settings = auto_share_settings
+        self._camera_settings = camera_settings
         self._auto_key_settings = auto_key_settings
         self._init_yearly_text_section()
         self._build_ui()

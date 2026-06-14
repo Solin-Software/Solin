@@ -6,7 +6,6 @@ from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
-from ...core.foundation.settings_keys import SettingsKey
 from ...styles.icons import ICON_CROSSHAIR, ICON_EDIT, ICON_SHARE_SCREEN, make_icon
 from ._shared import (
     _BG,
@@ -27,16 +26,7 @@ class AutoShareSectionMixin:
     """Builds and manages automatic Zoom screen sharing settings."""
 
     def _autoshare_hotkey(self) -> str:
-        hotkey = self._prefs.value(SettingsKey.SHARE_HOTKEY, "", str).strip()
-        if hotkey:
-            return hotkey
-        hotkey = (
-            self._prefs.value(SettingsKey.SHARE_START_HOTKEY, "", str).strip()
-            or self._prefs.value(SettingsKey.SHARE_STOP_HOTKEY, "", str).strip()
-        )
-        if hotkey:
-            self._prefs.setValue(SettingsKey.SHARE_HOTKEY, hotkey)
-        return hotkey
+        return self._auto_share_settings.ensure_hotkey()
 
     def _macos_accessibility_trusted(self) -> bool:
         if sys.platform != "darwin":
@@ -76,7 +66,7 @@ class AutoShareSectionMixin:
         )
         col.addWidget(self._autoshare_desc)
         header_lay.addLayout(col, stretch=1)
-        saved_enabled = self._prefs.value(SettingsKey.SHARE_ENABLED, False, bool)
+        saved_enabled = self._auto_share_settings.is_enabled()
         self._autoshare_toggle = _ToggleSwitch(checked=saved_enabled)
         self._autoshare_toggle.toggled.connect(self._on_autoshare_toggled)
         header_lay.addWidget(self._autoshare_toggle)
@@ -214,8 +204,7 @@ class AutoShareSectionMixin:
         qc_cfg_lay.setContentsMargins(32, 2, 0, 0)
         qc_cfg_lay.setSpacing(10)
 
-        saved_x = self._prefs.value(SettingsKey.SHARE_CLICK_X, -1, int)
-        saved_y = self._prefs.value(SettingsKey.SHARE_CLICK_Y, -1, int)
+        saved_x, saved_y = self._auto_share_settings.click_position()
         has_pos = saved_x >= 0 and saved_y >= 0
 
         self._autoshare_pos_status = QLabel()
@@ -255,7 +244,7 @@ class AutoShareSectionMixin:
         return card
 
     def _on_autoshare_toggled(self, checked):
-        self._prefs.setValue(SettingsKey.SHARE_ENABLED, checked)
+        self._auto_share_settings.set_enabled(checked)
         self._refresh_autoshare_accessibility_status()
         self._autoshare_expanded = checked
         if self._autoshare_anim is not None:
@@ -296,9 +285,7 @@ class AutoShareSectionMixin:
         )
         if dlg.exec() != QDialog.DialogCode.Accepted or not dlg.result_sequence:
             return
-        self._prefs.setValue(SettingsKey.SHARE_HOTKEY, dlg.result_sequence)
-        self._prefs.remove(SettingsKey.SHARE_START_HOTKEY)
-        self._prefs.remove(SettingsKey.SHARE_STOP_HOTKEY)
+        self._auto_share_settings.set_hotkey(dlg.result_sequence)
         self._refresh_autoshare_hotkey_label()
 
     def _refresh_autoshare_hotkey_label(self):
@@ -310,8 +297,7 @@ class AutoShareSectionMixin:
         )
 
     def _refresh_autoshare_position_label(self):
-        saved_x = self._prefs.value(SettingsKey.SHARE_CLICK_X, -1, int)
-        saved_y = self._prefs.value(SettingsKey.SHARE_CLICK_Y, -1, int)
+        saved_x, saved_y = self._auto_share_settings.click_position()
         has_pos = saved_x >= 0 and saved_y >= 0
         text = (
             self.tr("Position: {x}, {y}")
@@ -357,8 +343,7 @@ class AutoShareSectionMixin:
     def _on_autoshare_configure(self):
         from ..screen_picker_overlay import ScreenPickerOverlay
 
-        saved_x = self._prefs.value(SettingsKey.SHARE_CLICK_X, -1, int)
-        saved_y = self._prefs.value(SettingsKey.SHARE_CLICK_Y, -1, int)
+        saved_x, saved_y = self._auto_share_settings.click_position()
 
         self._as_overlay = ScreenPickerOverlay(
             current_x=saved_x, current_y=saved_y, parent=None,
@@ -367,6 +352,5 @@ class AutoShareSectionMixin:
         self._as_overlay.show_overlay()
 
     def _on_autoshare_position_picked(self, x: int, y: int):
-        self._prefs.setValue(SettingsKey.SHARE_CLICK_X, x)
-        self._prefs.setValue(SettingsKey.SHARE_CLICK_Y, y)
+        self._auto_share_settings.set_click_position(x, y)
         self._refresh_autoshare_position_label()
