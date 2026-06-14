@@ -72,7 +72,7 @@ from .visuals import (
 )
 from .week_nav import WeekNavBar, _WeekPicker
 from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvider
-from ..media_info_extractor import MediaInfoQueue
+from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
     from ...core.jw.catalog import JWMediaCatalogService

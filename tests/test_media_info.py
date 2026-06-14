@@ -3,8 +3,8 @@ from __future__ import annotations
 import struct
 import zlib
 
-from solin.widgets import media_info_extractor as media_info_module
-from solin.widgets.media_info_extractor import (
+from solin.ui import media_info as media_info_module
+from solin.ui.media_info import (
     MediaInfoQueue,
     MediaInfoService,
     _audio_info_from_file,

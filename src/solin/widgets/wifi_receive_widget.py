@@ -48,7 +48,7 @@ from ..core.media.formats import (
 )
 from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
-from .media_info_extractor import MediaInfoService
+from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
     from ..core.ui.notifications import NotificationCenter

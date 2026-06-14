@@ -630,6 +630,14 @@ def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     assert violations == []
 
 
+def test_media_info_services_live_outside_widget_package():
+    legacy_path = (
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "media_info_extractor.py"
+    )
+
+    assert not legacy_path.exists()
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

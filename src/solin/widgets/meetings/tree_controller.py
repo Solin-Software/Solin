@@ -73,7 +73,7 @@ from ...core.rendering.libreoffice import (
 )
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
-from ..media_info_extractor import MediaInfoQueue
+from ...ui.media_info import MediaInfoQueue
 from ..playlist.edit_visuals import _format_duration
 
 _BIG_INDEX = 2**31 - 1

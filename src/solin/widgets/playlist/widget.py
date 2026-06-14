@@ -46,7 +46,7 @@ from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
-from ..media_info_extractor import MediaInfoQueue
+from ...ui.media_info import MediaInfoQueue
 from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin

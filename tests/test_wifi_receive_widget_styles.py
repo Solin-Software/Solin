@@ -20,7 +20,7 @@ app = QApplication([])
 from solin.core.i18n.manager import LanguageManager
 from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
-from solin.widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:

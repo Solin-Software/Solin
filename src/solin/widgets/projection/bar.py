@@ -66,7 +66,7 @@ from solin.styles.icons import (
     make_icon,
 )
 from solin.widgets.circular_timer import CircularTimerWidget
-from solin.widgets.media_info_extractor import MediaInfoQueue
+from solin.ui.media_info import MediaInfoQueue
 from solin.widgets.playlist.panel import PlaylistPanel
 from .audio import ProjectionAudioMixin
 from .playlist import ProjectionPlaylistMixin

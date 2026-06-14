@@ -34,30 +34,13 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-# ── Resolução de metadados JW.org (compartilhado com media_info_extractor) ────
+# ── Resolução de metadados JW.org ────────────────────────────────────────────
 from solin.core.jw.identifiers import is_jw_url
 from solin.core.jw.metadata import resolve_jworg_meta as _resolve_jworg_meta
+from solin.core.media.download_storage import completed_cached_path
 
 from .media_reference import parse_jw_media_reference
 from .schema import create_jwlplaylist_schema
-
-
-def _get_cached_media_path(
-    url: str,
-    media_cache_dir: str | os.PathLike[str],
-) -> Optional[str]:
-    """
-    Retorna o caminho local do arquivo se a URL já foi baixada completamente
-    (existe o arquivo + marcador .done). Retorna None se não há cache.
-    Espelha a mesma lógica do media_info_extractor para consistência.
-    """
-    filename = url.split("/")[-1].split("?")[0]
-    if not filename:
-        return None
-    path = os.path.join(os.fspath(media_cache_dir), filename)
-    if os.path.exists(path) and os.path.exists(path + ".done"):
-        return path
-    return None
 
 
 def _mp4_read_title(data: bytes) -> Optional[str]:
@@ -526,7 +509,7 @@ def _write_jwlplaylist(
         is_http = url.startswith(("http://", "https://"))
         local_cached_path: Optional[str] = None
         if is_http:
-            local_cached_path = _get_cached_media_path(url, media_cache_dir)
+            local_cached_path = completed_cached_path(url, media_cache_dir)
 
         # ─────────────────────────────────────────────────────────────────────
         # RAMO A: Item JW.org → Location + PlaylistItemLocationMap

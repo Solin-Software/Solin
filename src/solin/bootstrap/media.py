@@ -16,7 +16,7 @@ from solin.core.media.settings import MediaPlaybackSettings
 from solin.core.network.browser_images import BrowserImageFetchService
 
 if TYPE_CHECKING:
-    from solin.widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+    from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 
 
 class MediaComposition:
@@ -62,7 +62,7 @@ class MediaComposition:
         return BrowserImageFetchService()
 
     def create_info_queue(self, parent: QObject) -> MediaInfoQueue:
-        from solin.widgets.media_info_extractor import MediaInfoQueue
+        from solin.ui.media_info import MediaInfoQueue
 
         return MediaInfoQueue(
             self._media_cache_dir,
@@ -71,7 +71,7 @@ class MediaComposition:
         )
 
     def create_info_service(self, parent: QObject) -> MediaInfoService:
-        from solin.widgets.media_info_extractor import MediaInfoService
+        from solin.ui.media_info import MediaInfoService
 
         return MediaInfoService(
             self.create_info_queue,

@@ -40,7 +40,7 @@ from ..core.media.cache import MediaCacheManager
 from ..core.media.formats import media_type_from_path
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import make_icon, ICON_MUSIC, ICON_VIDEO, ICON_IMAGE
-from .media_info_extractor import MediaInfoService
+from ..ui.media_info import MediaInfoService
 
 
 # ── Constantes visuais ────────────────────────────────────────────────────────

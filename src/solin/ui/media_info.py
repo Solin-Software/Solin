@@ -1,5 +1,5 @@
 """
-media_info_extractor.py  ─ Solin
+Qt media metadata extraction and thumbnail services.
 Extração centralizada de thumbnail + título de mídia, de forma assíncrona
 e sem download completo de arquivos remotos.
 
@@ -46,6 +46,7 @@ from ..core.media.info_queue import (
     MediaInfoScheduler,
     MediaInfoVersion,
 )
+from ..core.media.download_storage import completed_cached_path
 from ..core.network.http import HttpError, get as http_get, get_bytes
 
 log = logging.getLogger(__name__)
@@ -53,27 +54,6 @@ log = logging.getLogger(__name__)
 _DEFAULT_METADATA_READ_BYTES = 512 * 1024
 _MAX_ID3_TAG_BYTES = 8 * 1024 * 1024
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers públicos
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _get_cached_media_path(
-    url: str,
-    media_cache_dir: str | os.PathLike[str],
-) -> str | None:
-    """
-    Retorna o caminho local do arquivo se a URL já foi baixada completamente
-    (existe o arquivo + marcador .done). Retorna None se não há cache.
-    """
-    filename = url.split("/")[-1].split("?")[0]
-    if not filename:
-        return None
-    path = os.path.join(os.fspath(media_cache_dir), filename)
-    if os.path.exists(path) and os.path.exists(path + ".done"):
-        return path
-    return None
-
 
 def _id3_tag_total_size(header: bytes) -> int | None:
     """Return the complete ID3v2 tag size, including its 10-byte header."""
@@ -1069,7 +1049,7 @@ class MediaInfoQueue(QObject):
         # ── Imagem ──────────────────────────────────────────────────────────
         if media_type == "image":
             target = (
-                _get_cached_media_path(url, self._media_cache_dir)
+                completed_cached_path(url, self._media_cache_dir)
                 if is_remote
                 else url
             )
@@ -1110,7 +1090,7 @@ class MediaInfoQueue(QObject):
 
         # ── Remoto: verifica cache local antes de qualquer rede ─────────────
         if is_remote:
-            cached_path = _get_cached_media_path(url, self._media_cache_dir)
+            cached_path = completed_cached_path(url, self._media_cache_dir)
             target = cached_path if cached_path else url
             self._enqueue(index, target, media_type)
             self._pump()

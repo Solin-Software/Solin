@@ -39,7 +39,7 @@ from ..styles.icons import (
 from ..widgets.clips_widget import ClipsWidget
 from ..widgets.common.profile_avatar_button import ProfileAvatarButton
 from ..widgets.common.sidebar_button import SidebarButton
-from ..widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+from ..ui.media_info import MediaInfoQueue, MediaInfoService
 from ..widgets.meetings.widget import MeetingsWidget
 from ..widgets.playlist.widget import PlaylistWidget
 from ..widgets.projection.bar import ProjectionBar

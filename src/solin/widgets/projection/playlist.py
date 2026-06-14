@@ -6,8 +6,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QImage, QPixmap
 
 from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
+from solin.core.media.download_storage import completed_cached_path
 from solin.styles.icons import ICON_PANEL_RIGHT, ICON_SKIP_NEXT, ICON_SKIP_PREV, make_icon
-from solin.widgets.media_info_extractor import _get_cached_media_path
 from .idle_dialog import SetAsIdleConfirmDialog
 
 
@@ -135,7 +135,7 @@ class ProjectionPlaylistMixin:
                 self._request_thumbnail(i, item)
                 continue
 
-            if _get_cached_media_path(url, self._media_cache_dir):
+            if completed_cached_path(url, self._media_cache_dir):
                 self._request_thumbnail(i, item)
                 continue
 

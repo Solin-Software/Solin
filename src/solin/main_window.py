@@ -129,7 +129,7 @@ from .widgets.projection.monitor_manager import MonitorManagerPopup
 if TYPE_CHECKING:
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.network.browser_images import BrowserImageFetchService
-    from .widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+    from .ui.media_info import MediaInfoQueue, MediaInfoService
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 

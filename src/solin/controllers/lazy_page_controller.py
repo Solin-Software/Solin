@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
     from solin.core.network.browser_images import BrowserImageFetchService
-    from solin.widgets.media_info_extractor import MediaInfoService
+    from solin.ui.media_info import MediaInfoService
 
 
 @dataclass(frozen=True, slots=True)
