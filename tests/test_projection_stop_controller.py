@@ -1,6 +1,10 @@
 import pytest
 
-from solin.controllers.projection_stop_controller import ProjectionStopController
+from solin.controllers.projection_stop_controller import (
+    ProjectionStopContext,
+    ProjectionStopController,
+    ProjectionStopHandlers,
+)
 from solin.core.projection.application import ProjectionSession
 
 
@@ -109,9 +113,37 @@ class _WindowStub:
         return self.windows
 
 
+def _controller(window):
+    return ProjectionStopController(
+        ProjectionStopContext(
+            projection_session=window.projection_session,
+            projection_bar=window.proj_bar,
+            media_controller=window.media_ctrl,
+            ndi_service=window._ndi_service,
+            camera_service=window._camera_service,
+            projection_windows=window._all_windows,
+            auto_share_configured=(
+                window._projection_integrations.auto_share_configured
+            ),
+        ),
+        ProjectionStopHandlers(
+            stop_browser_tab_projection=(
+                window._navigation.stop_browser_tab_projection
+            ),
+            update_projection_status=(
+                window._projection_integrations.update_status
+            ),
+            set_obs_stream_active=window._live_integrations.set_obs_stream_active,
+            set_camera_stream_active=(
+                window._live_integrations.set_camera_stream_active
+            ),
+        ),
+    )
+
+
 def test_stop_any_clears_projection_and_triggers_zoom_break_for_visual_state():
     window = _WindowStub(state_type="image", tab_active=True)
-    controller = ProjectionStopController(window)
+    controller = _controller(window)
 
     controller.stop_any()
 
@@ -134,7 +166,7 @@ def test_stop_any_clears_projection_and_triggers_zoom_break_for_visual_state():
 
 def test_stop_projection_uses_delayed_ndi_stop_for_obs_stream():
     window = _WindowStub(state_type="obs_stream", auto_share=True)
-    controller = ProjectionStopController(window)
+    controller = _controller(window)
 
     controller.stop_projection()
 
@@ -148,7 +180,7 @@ def test_stop_projection_uses_delayed_ndi_stop_for_obs_stream():
 
 def test_stop_projection_swallows_navigation_errors():
     window = _WindowStub(state_type="video", nav_raises=True)
-    controller = ProjectionStopController(window)
+    controller = _controller(window)
 
     controller.stop_projection()
 
@@ -158,7 +190,13 @@ def test_stop_projection_swallows_navigation_errors():
 
 def test_stop_any_preserves_navigation_errors():
     window = _WindowStub(state_type="video", nav_raises=True)
-    controller = ProjectionStopController(window)
+    controller = _controller(window)
 
     with pytest.raises(RuntimeError):
         controller.stop_any()
+
+
+def test_projection_stop_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")

@@ -38,7 +38,11 @@ from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
 )
-from .controllers.projection_stop_controller import ProjectionStopController
+from .controllers.projection_stop_controller import (
+    ProjectionStopContext,
+    ProjectionStopController,
+    ProjectionStopHandlers,
+)
 from .controllers.projection_window_controller import ProjectionWindowController
 from .controllers.remote_services_controller import RemoteServicesController
 from .controllers.shutdown_controller import (
@@ -206,7 +210,6 @@ class MainWindow(QMainWindow):
         )
         self._projection_targets = ProjectionWindowController(self)
         self._media_projection = MediaProjectionController(self)
-        self._projection_stop = ProjectionStopController(self)
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
@@ -355,6 +358,33 @@ class MainWindow(QMainWindow):
                 projection_bar=self.proj_bar,
                 auto_share_finished=self._auto_share_finished.emit,
             )
+        )
+        self._projection_stop = ProjectionStopController(
+            ProjectionStopContext(
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
+                projection_windows=self.projection_session.all_windows,
+                auto_share_configured=(
+                    self._projection_integrations.auto_share_configured
+                ),
+            ),
+            ProjectionStopHandlers(
+                stop_browser_tab_projection=(
+                    self._navigation.stop_browser_tab_projection
+                ),
+                update_projection_status=(
+                    self._projection_integrations.update_status
+                ),
+                set_obs_stream_active=lambda active: (
+                    self._live_integrations.set_obs_stream_active(active)
+                ),
+                set_camera_stream_active=lambda active: (
+                    self._live_integrations.set_camera_stream_active(active)
+                ),
+            ),
         )
         self._live_integrations = LiveIntegrationController(
             LiveIntegrationContext(

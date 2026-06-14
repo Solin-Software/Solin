@@ -1,8 +1,34 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionStopContext:
+    """Dependencies required to stop projection output cleanly."""
+
+    projection_session: Any
+    projection_bar: Any
+    media_controller: Any
+    ndi_service: Any
+    camera_service: Any
+    projection_windows: Callable[[], list[Any]]
+    auto_share_configured: Callable[[], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionStopHandlers:
+    """Shell actions affected by stopping projection."""
+
+    stop_browser_tab_projection: Callable[[], None]
+    update_projection_status: Callable[..., None]
+    set_obs_stream_active: Callable[[bool], None]
+    set_camera_stream_active: Callable[[bool], None]
 
 
 class ProjectionStopController:
@@ -16,9 +42,14 @@ class ProjectionStopController:
         "camera_stream",
     }
 
-    def __init__(self, window) -> None:
-        self._window = window
-        self._session = window.projection_session
+    def __init__(
+        self,
+        context: ProjectionStopContext,
+        handlers: ProjectionStopHandlers,
+    ) -> None:
+        self._context = context
+        self._handlers = handlers
+        self._session = context.projection_session
 
     def stop_any(self) -> None:
         self._stop(
@@ -38,7 +69,7 @@ class ProjectionStopController:
         tolerate_navigation_errors: bool,
         stop_ndi_later_for_obs: bool,
     ) -> None:
-        window = self._window
+        context = self._context
         was_obs_stream = self._session.state_type == "obs_stream"
         was_camera_stream = self._session.state_type == "camera_stream"
         was_visual = self._was_visual_projection()
@@ -46,32 +77,32 @@ class ProjectionStopController:
         self._session.set_tab_projection_active(False)
         if tolerate_navigation_errors:
             try:
-                window._navigation.stop_browser_tab_projection()
+                self._handlers.stop_browser_tab_projection()
             except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
                 log.debug("Failed to stop browser tab projection during projection stop", exc_info=True)
         else:
-            window._navigation.stop_browser_tab_projection()
+            self._handlers.stop_browser_tab_projection()
 
-        window.media_ctrl.stop()
+        context.media_controller.stop()
         if was_obs_stream and stop_ndi_later_for_obs:
-            window._ndi_service.stop_later()
+            context.ndi_service.stop_later()
         else:
-            window._ndi_service.stop()
-        window._camera_service.stop()
+            context.ndi_service.stop()
+        context.camera_service.stop()
 
-        for projection_window in window._all_windows():
+        for projection_window in context.projection_windows():
             projection_window.clear()
 
-        window.proj_bar.deactivate()
-        window._projection_integrations.update_status(
+        context.projection_bar.deactivate()
+        self._handlers.update_projection_status(
             False,
             sync_obs=not (was_obs_stream or was_camera_stream),
         )
         self._session.reset_state()
-        window._live_integrations.set_obs_stream_active(False)
-        window._live_integrations.set_camera_stream_active(False)
+        self._handlers.set_obs_stream_active(False)
+        self._handlers.set_camera_stream_active(False)
 
-        share_handling = window._projection_integrations.auto_share_configured()
+        share_handling = context.auto_share_configured()
         floating_preview = self._session.floating_preview_window
         if (
             was_visual
@@ -81,9 +112,8 @@ class ProjectionStopController:
             floating_preview.trigger_zoom_break()
 
     def _was_visual_projection(self) -> bool:
-        window = self._window
         is_visual_media_active = getattr(
-            window.proj_bar,
+            self._context.projection_bar,
             "is_visual_media_active",
             lambda: False,
         )

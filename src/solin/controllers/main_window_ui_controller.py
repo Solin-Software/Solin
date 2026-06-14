@@ -138,7 +138,7 @@ class MainWindowUiController:
             LazyPageHandlers(
                 project_image=window._media_projection.project_image_bytes,
                 project_video=window._media_projection.project_video,
-                stop_projection=window._projection_stop.stop_projection,
+                stop_projection=lambda: window._projection_stop.stop_projection(),
                 project_tab_frame=window._media_projection.project_tab_frame,
                 add_current_to_playlist=lambda url, title, meta: (
                     window._playlist_imports.add_current_to_playlist(
