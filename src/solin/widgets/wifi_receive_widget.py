@@ -14,7 +14,7 @@ Ciclo de vida do servidor:
 Sinais públicos:
   media_received(path, orig_name)
   request_add_to_playlist(path, title)
-  request_add_all_to_playlist(items: list[{path, title}])
+  request_add_all_to_playlist(items: list[received_media_entry])
 """
 from __future__ import annotations
 
@@ -1147,7 +1147,7 @@ class WifiReceiveWidget(QWidget):
         self._send_all_btn.setEnabled(True)
 
     def _on_send_all(self) -> None:
-        items = [{"path": f["path"], "title": f["title"]} for f in self._received_files]
+        items = [dict(entry) for entry in self._received_files]
         if items:
             self.request_add_all_to_playlist.emit(items)
 
@@ -1163,6 +1163,18 @@ class WifiReceiveWidget(QWidget):
             self._grid_layout.addWidget(card, i // cols, i % cols)
 
     # ── API pública — chamada pelo main_window após confirmação no diálogo ─
+
+    def received_entry(self, path: str) -> dict:
+        """Return a copy of the received-media entry for a local path."""
+        entry = next(
+            (entry for entry in self._received_files if entry.get("path") == path),
+            None,
+        )
+        return dict(entry) if entry is not None else {}
+
+    def preserve_temp_file(self, path: str) -> None:
+        """Transfer a generated temp file to playlist ownership."""
+        self._wifi_tmp_files.discard(path)
 
     def remove_received_file(self, path: str) -> None:
         """Remove o card individual. Chamado pelo main_window após o usuário confirmar."""

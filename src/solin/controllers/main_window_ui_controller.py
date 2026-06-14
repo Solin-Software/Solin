@@ -158,16 +158,27 @@ class MainWindowUiController:
                     window._playlist_imports.browser_download_failed(title, error)
                 ),
                 play_cached_media=window._media_projection.on_cache_play,
-                wifi_media_received=(
-                    window._wifi_playlist_controller.on_wifi_media_received
+                wifi_media_received=lambda path, original_name: (
+                    window._wifi_playlist_controller.on_wifi_media_received(
+                        path,
+                        original_name,
+                    )
                 ),
-                wifi_add_single=(
-                    window._wifi_playlist_controller.on_wifi_request_add_single
+                wifi_add_single=lambda path, title, original_name: (
+                    window._wifi_playlist_controller.on_wifi_request_add_single(
+                        path,
+                        title,
+                        original_name,
+                    )
                 ),
-                wifi_add_all=(
-                    window._wifi_playlist_controller.on_wifi_send_all_to_playlist
+                wifi_add_all=lambda items: (
+                    window._wifi_playlist_controller.on_wifi_send_all_to_playlist(
+                        items
+                    )
                 ),
-                wifi_play=window._wifi_playlist_controller.on_wifi_request_play,
+                wifi_play=lambda path, title: (
+                    window._wifi_playlist_controller.on_wifi_request_play(path, title)
+                ),
             ),
         )
         window._navigation = NavigationController(

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -20,6 +22,25 @@ from ..core.media.formats import AUDIO_EXTS, IMAGE_EXTS, media_type_from_path
 from ..core.playlists.items import create_playlist_item
 
 
+@dataclass(frozen=True, slots=True)
+class WifiPlaylistContext:
+    """Stable UI services used by received-media playlist workflows."""
+
+    dialog_parent: Any
+    playlist_widget: Any
+    notifications: Any
+    translate: Callable[..., str]
+    wifi_receive_widget: Callable[[], Any | None]
+
+
+@dataclass(frozen=True, slots=True)
+class WifiPlaylistHandlers:
+    """Projection actions triggered by received Wi-Fi media."""
+
+    play_cached_media: Callable[..., None]
+    project_video: Callable[..., None]
+
+
 class WifiPlaylistController:
     """Handles Wi-Fi received media playback and playlist actions."""
 
@@ -31,9 +52,13 @@ class WifiPlaylistController:
         "meps_language",
     )
 
-    def __init__(self, window, wifi_receive_widget: Callable[[], object | None]) -> None:
-        self._window = window
-        self._wifi_receive_widget = wifi_receive_widget
+    def __init__(
+        self,
+        context: WifiPlaylistContext,
+        handlers: WifiPlaylistHandlers,
+    ) -> None:
+        self._context = context
+        self._handlers = handlers
 
     def on_wifi_media_received(self, _path: str, _orig_name: str) -> None:
         # The Wi-Fi widget owns received-card state. Users choose follow-up
@@ -44,7 +69,7 @@ class WifiPlaylistController:
     def on_wifi_request_play(self, path: str, title: str) -> None:
         ext = os.path.splitext(path)[1].lower()
         if ext in IMAGE_EXTS:
-            self._window._media_projection.on_cache_play(
+            self._handlers.play_cached_media(
                 path,
                 "image",
                 "",
@@ -52,9 +77,9 @@ class WifiPlaylistController:
             )
             return
 
-        media_type = "audio" if ext in self._audio_exts() else "video"
+        media_type = "audio" if ext in AUDIO_EXTS else "video"
         playlist = [{"url": path, "title": title, "type": media_type}]
-        self._window._media_projection.project_video(
+        self._handlers.project_video(
             path,
             title,
             playlist,
@@ -68,11 +93,12 @@ class WifiPlaylistController:
         title: str,
         orig_name: str,
     ) -> None:
-        playlists = self._window.playlist_widget.get_playlist_names()
+        context = self._context
+        playlists = context.playlist_widget.get_playlist_names()
         entry = self._received_entry(path)
 
-        dlg = QDialog(self._window)
-        dlg.setWindowTitle(self._window.tr("Add to Playlist"))
+        dlg = QDialog(context.dialog_parent)
+        dlg.setWindowTitle(context.translate("Add to Playlist"))
         dlg.setModal(True)
         dlg.setMinimumWidth(340)
         dlg.setMaximumHeight(520)
@@ -93,9 +119,9 @@ class WifiPlaylistController:
 
         def _show_success_notification(message: str):
             dlg.accept()
-            self._window.notifications.success(message)
-            self._discard_wifi_tmp(path)
-            wifi_receive = self._wifi_receive_widget()
+            context.notifications.success(message)
+            self._preserve_wifi_temp(path)
+            wifi_receive = context.wifi_receive_widget()
             if wifi_receive is not None:
                 wifi_receive.remove_received_file(path)
 
@@ -114,7 +140,7 @@ class WifiPlaylistController:
                 ),
             )
         else:
-            info = QLabel(self._window.tr("No playlists found.\nCreate a new one:"))
+            info = QLabel(context.translate("No playlists found.\nCreate a new one:"))
             info.setAlignment(Qt.AlignmentFlag.AlignCenter)
             info.setStyleSheet(
                 "color:#484f58;font-size:11px;background:transparent;padding:6px;"
@@ -123,7 +149,7 @@ class WifiPlaylistController:
 
         self._add_create_row(
             root,
-            self._window.tr("Create and add"),
+            context.translate("Create and add"),
             lambda name: self._create_playlist_with_single_item(
                 name,
                 path,
@@ -141,10 +167,11 @@ class WifiPlaylistController:
         if not items:
             return
 
-        playlists = self._window.playlist_widget.get_playlist_names()
+        context = self._context
+        playlists = context.playlist_widget.get_playlist_names()
 
-        dlg = QDialog(self._window)
-        dlg.setWindowTitle(self._window.tr("Send Media to Playlist"))
+        dlg = QDialog(context.dialog_parent)
+        dlg.setWindowTitle(context.translate("Send Media to Playlist"))
         dlg.setModal(True)
         dlg.setMinimumWidth(360)
         dlg.setMaximumHeight(540)
@@ -155,7 +182,7 @@ class WifiPlaylistController:
         root.setSpacing(10)
 
         summary = QLabel(
-            self._window.tr("📲  %n file(s) received via Wi-Fi", "", len(items))
+            context.translate("📲  %n file(s) received via Wi-Fi", "", len(items))
         )
         summary.setStyleSheet(
             "color:#8b949e;font-size:11px;background:#13161c;"
@@ -165,8 +192,8 @@ class WifiPlaylistController:
 
         def _show_success_notification(message: str):
             dlg.accept()
-            self._window.notifications.success(message)
-            wifi_receive = self._wifi_receive_widget()
+            context.notifications.success(message)
+            wifi_receive = context.wifi_receive_widget()
             if wifi_receive is not None:
                 wifi_receive.clear_all_received()
 
@@ -182,7 +209,7 @@ class WifiPlaylistController:
                 ),
             )
         else:
-            info = QLabel(self._window.tr("No playlists found.\nCreate a new one:"))
+            info = QLabel(context.translate("No playlists found.\nCreate a new one:"))
             info.setAlignment(Qt.AlignmentFlag.AlignCenter)
             info.setStyleSheet(
                 "color:#484f58;font-size:11px;background:transparent;padding:6px;"
@@ -191,7 +218,7 @@ class WifiPlaylistController:
 
         self._add_create_row(
             root,
-            self._window.tr("Create and add"),
+            context.translate("Create and add"),
             lambda name: self._create_playlist_with_all_items(
                 name,
                 items,
@@ -235,17 +262,10 @@ class WifiPlaylistController:
         return kwargs
 
     def _received_entry(self, path: str) -> dict:
-        wifi_receive = self._wifi_receive_widget()
+        wifi_receive = self._context.wifi_receive_widget()
         if wifi_receive is None:
             return {}
-        return next(
-            (
-                entry
-                for entry in wifi_receive._received_files
-                if entry.get("path") == path
-            ),
-            {},
-        )
+        return wifi_receive.received_entry(path)
 
     def _add_single_to_existing_playlist(
         self,
@@ -263,17 +283,20 @@ class WifiPlaylistController:
             title=title,
             orig_name=orig_name,
         )
-        added = self._window.playlist_widget.add_item_to_playlist(playlist_id, item)
+        context = self._context
+        added = context.playlist_widget.add_item_to_playlist(playlist_id, item)
         if added:
             on_done(
-                self._window.tr('Added to playlist\n"%1"').replace(
+                context.translate('Added to playlist\n"%1"').replace(
                     "%1",
                     playlist_name,
                 )
             )
         else:
             on_done(
-                self._window.tr('This media is already in\nplaylist "%1"').replace(
+                context.translate(
+                    'This media is already in\nplaylist "%1"'
+                ).replace(
                     "%1",
                     playlist_name,
                 )
@@ -294,9 +317,10 @@ class WifiPlaylistController:
             title=title,
             orig_name=orig_name,
         )
-        self._window.playlist_widget.create_playlist_with_item(name, item)
+        context = self._context
+        context.playlist_widget.create_playlist_with_item(name, item)
         on_done(
-            self._window.tr('Playlist "%1"\ncreated successfully!').replace(
+            context.translate('Playlist "%1"\ncreated successfully!').replace(
                 "%1",
                 name,
             )
@@ -310,40 +334,43 @@ class WifiPlaylistController:
         on_done,
     ) -> None:
         added = 0
+        playlist_widget = self._context.playlist_widget
         for entry in items:
             item = self.item_from_wifi_entry(entry)
-            if self._window.playlist_widget.add_item_to_playlist(playlist_id, item):
-                self._discard_wifi_tmp(entry["path"])
+            if playlist_widget.add_item_to_playlist(playlist_id, item):
+                self._preserve_wifi_temp(entry["path"])
                 added += 1
         on_done(
-            self._window.tr('%1 file(s) added\nto playlist "%2"')
+            self._context.translate('%1 file(s) added\nto playlist "%2"')
             .replace("%1", str(added))
             .replace("%2", playlist_name)
         )
 
     def _create_playlist_with_all_items(self, name: str, items: list, on_done) -> None:
+        context = self._context
+        playlist_widget = context.playlist_widget
         first_item = self.item_from_wifi_entry(items[0])
-        playlist_id = self._window.playlist_widget.create_playlist_with_item(
+        playlist_id = playlist_widget.create_playlist_with_item(
             name,
             first_item,
         )
-        self._discard_wifi_tmp(items[0]["path"])
+        self._preserve_wifi_temp(items[0]["path"])
         added = 1
         for entry in items[1:]:
             item = self.item_from_wifi_entry(entry)
-            if self._window.playlist_widget.add_item_to_playlist(playlist_id, item):
-                self._discard_wifi_tmp(entry["path"])
+            if playlist_widget.add_item_to_playlist(playlist_id, item):
+                self._preserve_wifi_temp(entry["path"])
                 added += 1
         on_done(
-            self._window.tr('Playlist "%1" created\nwith %2 file(s)!')
+            context.translate('Playlist "%1" created\nwith %2 file(s)!')
             .replace("%1", name)
             .replace("%2", str(added))
         )
 
-    def _discard_wifi_tmp(self, path: str) -> None:
-        wifi_receive = self._wifi_receive_widget()
+    def _preserve_wifi_temp(self, path: str) -> None:
+        wifi_receive = self._context.wifi_receive_widget()
         if wifi_receive is not None:
-            wifi_receive._wifi_tmp_files.discard(path)
+            wifi_receive.preserve_temp_file(path)
 
     def _style_dialog(self, dlg: QDialog) -> None:
         dlg.setStyleSheet(
@@ -355,7 +382,7 @@ class WifiPlaylistController:
         )
 
     def _add_playlist_picker(self, root: QVBoxLayout, playlists: list, callback) -> None:
-        label = QLabel(self._window.tr("Select a playlist:"))
+        label = QLabel(self._context.translate("Select a playlist:"))
         label.setStyleSheet("color:#8b949e;font-size:10px;background:transparent;")
         root.addWidget(label)
 
@@ -396,7 +423,7 @@ class WifiPlaylistController:
         scroll.setWidget(container)
         root.addWidget(scroll)
 
-        sep = QLabel(self._window.tr("── or create a new one ──"))
+        sep = QLabel(self._context.translate("── or create a new one ──"))
         sep.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sep.setStyleSheet("color:#30363d;font-size:10px;background:transparent;")
         root.addWidget(sep)
@@ -404,7 +431,7 @@ class WifiPlaylistController:
     def _add_create_row(self, root: QVBoxLayout, button_text: str, callback) -> QLineEdit:
         row = QHBoxLayout()
         edit = QLineEdit()
-        edit.setPlaceholderText(self._window.tr("New playlist name…"))
+        edit.setPlaceholderText(self._context.translate("New playlist name…"))
         edit.setFixedHeight(30)
         row.addWidget(edit, stretch=1)
 
@@ -431,7 +458,7 @@ class WifiPlaylistController:
         return edit
 
     def _add_close_button(self, root: QVBoxLayout, dlg: QDialog) -> None:
-        close_btn = QPushButton(self._window.tr("Close"))
+        close_btn = QPushButton(self._context.translate("Close"))
         close_btn.setFixedHeight(28)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
@@ -441,6 +468,3 @@ class WifiPlaylistController:
         )
         close_btn.clicked.connect(dlg.reject)
         root.addWidget(close_btn)
-
-    def _audio_exts(self):
-        return getattr(self._window, "_AUDIO_EXTS", AUDIO_EXTS)

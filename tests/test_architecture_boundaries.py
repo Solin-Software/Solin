@@ -221,6 +221,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "remote_services_controller.py",
         "shutdown_controller.py",
         "signal_connection_controller.py",
+        "wifi_playlist_controller.py",
     )
     violations: list[str] = []
 

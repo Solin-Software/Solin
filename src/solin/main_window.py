@@ -49,7 +49,11 @@ from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_pdf_export_controller import TimerPdfExportController
 from .controllers.timer_theme_controller import TimerThemeController
-from .controllers.wifi_playlist_controller import WifiPlaylistController
+from .controllers.wifi_playlist_controller import (
+    WifiPlaylistContext,
+    WifiPlaylistController,
+    WifiPlaylistHandlers,
+)
 from .controllers.window_state_controller import WindowStateController
 from .core.projection.application import ProjectionSession
 from .core.timer.application import TimerSession
@@ -191,10 +195,6 @@ class MainWindow(QMainWindow):
         self._live_integrations = LiveIntegrationController(self)
         self._timer_theme_controller = TimerThemeController(self)
         self._media_projection = MediaProjectionController(self)
-        self._wifi_playlist_controller = WifiPlaylistController(
-            self,
-            lambda: self._lazy_pages.wifi_receive_widget,
-        )
         self._projection_stop = ProjectionStopController(self)
 
         # ── Advanced timer + shared monitor allocation ────────────────────────
@@ -283,6 +283,21 @@ class MainWindow(QMainWindow):
             ),
             PlaylistImportHandlers(
                 switch_to_playlist=lambda: self._navigation.switch_page(7),
+            ),
+        )
+        self._wifi_playlist_controller = WifiPlaylistController(
+            WifiPlaylistContext(
+                dialog_parent=self,
+                playlist_widget=self.playlist_widget,
+                notifications=self.notifications,
+                translate=self.tr,
+                wifi_receive_widget=lambda: (
+                    self._lazy_pages.wifi_receive_widget
+                ),
+            ),
+            WifiPlaylistHandlers(
+                play_cached_media=self._media_projection.on_cache_play,
+                project_video=self._media_projection.project_video,
             ),
         )
         self._open_media_controller = OpenMediaController(

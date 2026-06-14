@@ -1,4 +1,11 @@
-from solin.controllers.wifi_playlist_controller import WifiPlaylistController
+from types import SimpleNamespace
+
+from solin.controllers.wifi_playlist_controller import (
+    WifiPlaylistContext,
+    WifiPlaylistController,
+    WifiPlaylistHandlers,
+)
+from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 
 class _MediaProjectionStub:
@@ -50,6 +57,23 @@ class _WifiReceiveWidgetStub:
     def clear_all_received(self):
         self.clear_all_count += 1
 
+    def received_entry(self, path):
+        return next(
+            (dict(entry) for entry in self._received_files if entry.get("path") == path),
+            {},
+        )
+
+    def preserve_temp_file(self, path):
+        self._wifi_tmp_files.discard(path)
+
+
+class _NotificationsStub:
+    def __init__(self):
+        self.successes = []
+
+    def success(self, message):
+        self.successes.append(message)
+
 
 class _WindowStub:
     def __init__(self):
@@ -57,14 +81,31 @@ class _WindowStub:
         self._media_projection = _MediaProjectionStub()
         self.playlist_widget = _PlaylistWidgetStub()
         self.wifi_receive_widget = _WifiReceiveWidgetStub()
+        self.notifications = _NotificationsStub()
 
     def tr(self, text, *_args):
         return text
 
 
+def _controller(window):
+    return WifiPlaylistController(
+        WifiPlaylistContext(
+            dialog_parent=window,
+            playlist_widget=window.playlist_widget,
+            notifications=window.notifications,
+            translate=window.tr,
+            wifi_receive_widget=lambda: window.wifi_receive_widget,
+        ),
+        WifiPlaylistHandlers(
+            play_cached_media=window._media_projection.on_cache_play,
+            project_video=window._media_projection.project_video,
+        ),
+    )
+
+
 def test_on_wifi_request_play_routes_images_audio_and_video():
     window = _WindowStub()
-    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
+    controller = _controller(window)
 
     controller.on_wifi_request_play("slide.png", "Slide")
     controller.on_wifi_request_play("song.mp3", "Song")
@@ -93,7 +134,7 @@ def test_on_wifi_request_play_routes_images_audio_and_video():
 
 def test_item_from_wifi_entry_preserves_jw_metadata_and_original_filename():
     window = _WindowStub()
-    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
+    controller = _controller(window)
 
     item = controller.item_from_wifi_entry({
         "path": "song.mp3",
@@ -121,7 +162,7 @@ def test_item_from_wifi_entry_preserves_jw_metadata_and_original_filename():
 def test_add_single_to_existing_playlist_reports_duplicate_without_losing_metadata():
     window = _WindowStub()
     window.playlist_widget.add_results = [False]
-    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
+    controller = _controller(window)
     messages = []
 
     controller._add_single_to_existing_playlist(
@@ -149,7 +190,7 @@ def test_create_playlist_with_all_items_discards_tmp_files_and_counts_added():
     window = _WindowStub()
     window.playlist_widget.add_results = [False, True]
     window.wifi_receive_widget._wifi_tmp_files = {"a.mp4", "b.mp4", "c.mp4"}
-    controller = WifiPlaylistController(window, lambda: window.wifi_receive_widget)
+    controller = _controller(window)
     messages = []
 
     controller._create_playlist_with_all_items(
@@ -166,3 +207,44 @@ def test_create_playlist_with_all_items_discards_tmp_files_and_counts_added():
     assert [item["title"] for _, item in window.playlist_widget.added] == ["B", "C"]
     assert window.wifi_receive_widget._wifi_tmp_files == {"b.mp4"}
     assert messages == ['Playlist "Batch" created\nwith 2 file(s)!']
+
+
+def test_wifi_playlist_controller_uses_explicit_dependencies():
+    controller = _controller(_WindowStub())
+
+    assert not hasattr(controller, "_window")
+
+
+def test_wifi_receive_widget_sends_metadata_copies_for_all_received_items():
+    emitted = []
+    entry = {
+        "path": "song.mp3",
+        "title": "Song",
+        "type": "audio",
+        "key_symbol": "sjjm",
+        "track": 12,
+    }
+    widget = SimpleNamespace(
+        _received_files=[entry],
+        request_add_all_to_playlist=SimpleNamespace(emit=emitted.append),
+    )
+
+    WifiReceiveWidget._on_send_all(widget)
+
+    assert emitted == [[entry]]
+    assert emitted[0][0] is not entry
+
+
+def test_wifi_receive_widget_exposes_copies_and_transfers_temp_ownership():
+    entry = {"path": "clip.mp4", "title": "Clip"}
+    widget = SimpleNamespace(
+        _received_files=[entry],
+        _wifi_tmp_files={"clip.mp4", "other.mp4"},
+    )
+
+    received = WifiReceiveWidget.received_entry(widget, "clip.mp4")
+    WifiReceiveWidget.preserve_temp_file(widget, "clip.mp4")
+
+    assert received == entry
+    assert received is not entry
+    assert widget._wifi_tmp_files == {"other.mp4"}
