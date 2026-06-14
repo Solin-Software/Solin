@@ -228,6 +228,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "signal_connection_controller.py",
         "timer_theme_controller.py",
         "wifi_playlist_controller.py",
+        "window_state_controller.py",
     )
     violations: list[str] = []
 

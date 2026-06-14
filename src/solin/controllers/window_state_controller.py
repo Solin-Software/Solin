@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtGui import QGuiApplication, QIcon
 
@@ -12,6 +15,27 @@ from ..core.ui.window_settings import WindowGeometrySettingsStore
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class WindowStateContext:
+    """Window operations required by persisted shell state management."""
+
+    minimum_width: Callable[[], int]
+    minimum_height: Callable[[], int]
+    resize: Callable[[int, int], None]
+    width: Callable[[], int]
+    height: Callable[[], int]
+    set_window_icon: Callable[[QIcon], None]
+    move: Callable[[int, int], None]
+    is_minimized: Callable[[], bool]
+    show_normal: Callable[[], None]
+    is_visible: Callable[[], bool]
+    show: Callable[[], None]
+    raise_window: Callable[[], None]
+    activate_window: Callable[[], None]
+    win_id: Callable[[], Any]
+    titlebar_window: Any
+
+
 class WindowStateController:
     """Owns persisted size, startup icon, centering, and titlebar styling."""
 
@@ -19,11 +43,16 @@ class WindowStateController:
     _DEFAULT_HEIGHT = 760
     _TITLEBAR_COLOR = "#1A231F"
 
-    def __init__(self, window, geometry_settings: WindowGeometrySettingsStore) -> None:
-        self._window = window
+    def __init__(
+        self,
+        context: WindowStateContext,
+        geometry_settings: WindowGeometrySettingsStore,
+    ) -> None:
+        self._context = context
         self._geometry_settings = geometry_settings
 
     def restore_size(self) -> None:
+        context = self._context
         width, height = self._geometry_settings.size(
             self._DEFAULT_WIDTH,
             self._DEFAULT_HEIGHT,
@@ -31,31 +60,33 @@ class WindowStateController:
         width, height = self._clamped_size(
             width,
             height,
-            self._window.minimumWidth(),
-            self._window.minimumHeight(),
+            context.minimum_width(),
+            context.minimum_height(),
         )
-        self._window.resize(width, height)
+        context.resize(width, height)
 
     def save_size(self) -> None:
-        self._geometry_settings.save_size(self._window.width(), self._window.height())
+        context = self._context
+        self._geometry_settings.save_size(context.width(), context.height())
 
     def apply_icon(self) -> None:
         icon_path = application_asset_path("icon.ico")
         if icon_path.is_file():
-            self._window.setWindowIcon(QIcon(str(icon_path)))
+            self._context.set_window_icon(QIcon(str(icon_path)))
 
     def center_on_primary_screen(self) -> None:
         primary = QGuiApplication.primaryScreen()
         if primary is None:
             return
+        context = self._context
         geometry = primary.availableGeometry()
-        self._window.move(
-            geometry.x() + (geometry.width() - self._window.width()) // 2,
-            geometry.y() + (geometry.height() - self._window.height()) // 2,
+        context.move(
+            geometry.x() + (geometry.width() - context.width()) // 2,
+            geometry.y() + (geometry.height() - context.height()) // 2,
         )
 
     def apply_titlebar_color(self) -> None:
-        apply_titlebar_color(self._window, self._TITLEBAR_COLOR)
+        apply_titlebar_color(self._context.titlebar_window, self._TITLEBAR_COLOR)
 
     def bring_to_front(self) -> None:
         """
@@ -64,19 +95,19 @@ class WindowStateController:
         No Windows, main.py chama AllowSetForegroundWindow() na segunda
         instancia; aqui finalizamos com SetForegroundWindow() direto.
         """
-        window = self._window
-        if window.isMinimized():
-            window.showNormal()
-        elif not window.isVisible():
-            window.show()
+        context = self._context
+        if context.is_minimized():
+            context.show_normal()
+        elif not context.is_visible():
+            context.show()
 
-        window.raise_()
-        window.activateWindow()
+        context.raise_window()
+        context.activate_window()
 
         if sys.platform == "win32":
             try:
                 import ctypes
-                hwnd = int(window.winId())
+                hwnd = int(context.win_id())
                 ctypes.windll.user32.SetForegroundWindow(hwnd)
             except Exception:  # noqa: BLE001 - Win32 foreground API boundary
                 log.debug("Failed to force main window foreground on Windows", exc_info=True)

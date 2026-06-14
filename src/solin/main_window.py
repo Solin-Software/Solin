@@ -69,7 +69,7 @@ from .controllers.wifi_playlist_controller import (
     WifiPlaylistController,
     WifiPlaylistHandlers,
 )
-from .controllers.window_state_controller import WindowStateController
+from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
 from .core.ui.monitor_allocation import MonitorAllocationStore
@@ -263,7 +263,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.tr("Solin"))
         self.setMinimumSize(900, 600)
         self._window_state = WindowStateController(
-            self,
+            WindowStateContext(
+                minimum_width=self.minimumWidth,
+                minimum_height=self.minimumHeight,
+                resize=self.resize,
+                width=self.width,
+                height=self.height,
+                set_window_icon=self.setWindowIcon,
+                move=self.move,
+                is_minimized=self.isMinimized,
+                show_normal=self.showNormal,
+                is_visible=self.isVisible,
+                show=self.show,
+                raise_window=self.raise_,
+                activate_window=self.activateWindow,
+                win_id=self.winId,
+                titlebar_window=self,
+            ),
             WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         )
         self._window_state.restore_size()
