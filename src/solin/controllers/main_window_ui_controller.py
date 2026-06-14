@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from collections.abc import Callable
+
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -51,6 +53,7 @@ from .main_window_nav import (
     SWITCH_PROFILE_SOURCE,
 )
 from .navigation_controller import NavigationController
+from ..widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
 
 
 class MainWindowUiController:
@@ -86,9 +89,18 @@ class MainWindowUiController:
         "nav_wifi_btn",
     )
 
-    def __init__(self, window, active_profile) -> None:
+    def __init__(
+        self,
+        window,
+        active_profile,
+        *,
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        media_info_service_factory: Callable[[QObject], MediaInfoService],
+    ) -> None:
         self._window = window
         self._active_profile = active_profile
+        self._media_info_queue_factory = media_info_queue_factory
+        self._media_info_service_factory = media_info_service_factory
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
@@ -108,7 +120,10 @@ class MainWindowUiController:
 
         window.stack = QStackedWidget()
         window.stack.setObjectName("ContentArea")
-        window._lazy_pages = LazyPageController(window)
+        window._lazy_pages = LazyPageController(
+            window,
+            media_info_service_factory=self._media_info_service_factory,
+        )
         window._navigation = NavigationController(window)
 
         self._build_pages()
@@ -182,7 +197,7 @@ class MainWindowUiController:
             playback_settings=window._projection_playback_settings,
             profile_paths=window.profile_paths,
             media_cache_dir=window.media_cache_manager.media_cache_dir,
-            thumb_cache_dir=window.runtime_paths.thumb_cache_dir,
+            media_info_queue_factory=self._media_info_queue_factory,
             lang_manager=window.lang,
             container=window.right_col,
         )
@@ -253,6 +268,7 @@ class MainWindowUiController:
             jw_catalog_cache_paths=window.jw_catalog_cache_paths,
             jw_songs_store=window.jw_songs_store,
             thumb_cache_dir=window.runtime_paths.thumb_cache_dir,
+            media_info_queue_factory=self._media_info_queue_factory,
             parent=window,
         )
         window.meetings_widget = MeetingsWidget(
@@ -266,6 +282,7 @@ class MainWindowUiController:
             jwpub_checksum_store=window.jwpub_checksum_store,
             media_settings=window._media_settings,
             meeting_schedule_settings=window._meeting_schedule_settings,
+            media_info_queue_factory=self._media_info_queue_factory,
             parent=window,
         )
         window.meetings_widget.set_watched_folder(watched_folder)

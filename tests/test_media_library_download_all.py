@@ -35,7 +35,10 @@ def _fake_library(
 
 def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
     _app()
-    cache_manager = MediaCacheManager(tmp_path)
+    cache_manager = MediaCacheManager(
+        tmp_path,
+        downloader_factory=lambda _parent: None,
+    )
     cached_url = "https://cdn.example/song-003.mp3"
     cached_path = cached_path_for(cached_url, cache_manager.media_cache_dir)
     with open(cached_path, "w", encoding="utf-8") as handle:
@@ -64,7 +67,10 @@ def test_pending_download_all_urls_uses_audio_mode_items(tmp_path):
 
 
 def test_download_all_text_changes_with_media_mode(tmp_path):
-    cache_manager = MediaCacheManager(tmp_path)
+    cache_manager = MediaCacheManager(
+        tmp_path,
+        downloader_factory=lambda _parent: None,
+    )
     audio_library = _fake_library(
         audio_mode=True,
         items=[],

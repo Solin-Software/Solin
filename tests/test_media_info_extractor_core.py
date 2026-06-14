@@ -6,6 +6,7 @@ import zlib
 from solin.widgets import media_info_extractor as media_info_module
 from solin.widgets.media_info_extractor import (
     MediaInfoQueue,
+    MediaInfoService,
     _audio_info_from_file,
     _embedded_image_is_complete,
     _id3v2_info_from_bytes,
@@ -187,3 +188,21 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     assert created == [1, 2]
     assert set(queue._scheduler.active) == {1, 2}
     assert not queue._scheduler.pending
+
+
+def test_media_info_service_owns_queue_created_by_injected_factory(tmp_path):
+    queues = []
+
+    def _queue_factory(parent):
+        queue = MediaInfoQueue(
+            tmp_path / "media",
+            tmp_path / "thumbs",
+            parent,
+        )
+        queues.append(queue)
+        return queue
+
+    service = MediaInfoService(_queue_factory)
+
+    assert queues == [service._queue]
+    assert service._queue.parent() is service

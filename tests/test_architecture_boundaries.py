@@ -397,3 +397,81 @@ def test_remote_update_policy_has_no_framework_or_network_dependencies():
             violations.append(_display(path, node))
 
     assert violations == []
+
+
+def test_concrete_media_services_are_constructed_only_in_bootstrap():
+    source_root = PROJECT_ROOT / "src" / "solin"
+    composition_path = source_root / "bootstrap" / "media.py"
+    concrete_names = {
+        "MediaCacheManager",
+        "MediaController",
+        "MediaInfoQueue",
+        "MediaInfoService",
+        "SongDownloader",
+    }
+    violations: list[str] = []
+
+    for path in sorted(source_root.rglob("*.py")):
+        if path == composition_path:
+            continue
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            called_name = (
+                node.func.id
+                if isinstance(node.func, ast.Name)
+                else node.func.attr
+                if isinstance(node.func, ast.Attribute)
+                else ""
+            )
+            if called_name in concrete_names:
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Concrete media services must be created only by bootstrap/media.py. "
+        "Consumers must receive instances or explicit factories:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_media_cache_and_playback_do_not_import_concrete_downloader():
+    media_root = PROJECT_ROOT / "src" / "solin" / "core" / "media"
+    violations: list[str] = []
+
+    for filename in ("cache.py", "playback.py"):
+        path = media_root / filename
+        for node in _imports(path):
+            imported_module = (
+                node.module or ""
+                if isinstance(node, ast.ImportFrom)
+                else ""
+            )
+            imported_names = {alias.name for alias in node.names}
+            if imported_module.endswith("downloader") or "SongDownloader" in imported_names:
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
+def test_main_window_does_not_expose_media_factories_as_service_locator_state():
+    path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
+    forbidden_attributes = {
+        "media_info_queue_factory",
+        "media_info_service_factory",
+    }
+    violations: list[str] = []
+
+    for node in ast.walk(_tree(path)):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and target.attr in forbidden_attributes
+            ):
+                violations.append(_display(path, node))
+
+    assert violations == []

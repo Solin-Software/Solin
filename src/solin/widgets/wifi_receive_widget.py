@@ -19,12 +19,11 @@ Sinais públicos:
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from PySide6.QtCore import (
-    Qt, Signal, Slot, QThread, QObject, QTimer, QSize, QEvent,
-)
+from PySide6.QtCore import Qt, Signal, Slot, QThread, QObject, QTimer, QSize, QEvent
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -516,8 +515,7 @@ class WifiReceiveWidget(QWidget):
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
-        media_cache_dir: str | os.PathLike[str],
-        thumb_cache_dir: str | os.PathLike[str],
+        media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -525,8 +523,6 @@ class WifiReceiveWidget(QWidget):
         self._notifications   = notifications
         self._profile_paths   = profile_paths
         self._runtime_paths   = runtime_paths
-        self._media_cache_dir = media_cache_dir
-        self._thumb_cache_dir = thumb_cache_dir
         self._server          = WifiReceiveServer(
             embedded_dir=profile_paths.embedded_dir,
             parent=self,
@@ -534,11 +530,7 @@ class WifiReceiveWidget(QWidget):
         self._session_url     = ""
         self._received_files: list[dict] = []
         self._cards:          list[_MediaCard] = []
-        self._thumb_service = MediaInfoService(
-            media_cache_dir,
-            thumb_cache_dir,
-            self,
-        )
+        self._thumb_service = media_info_service_factory(self)
         self._wifi_tmp_files: set[str] = set()   # temp files criados por PDF/JWL expansion
         self._qr_thread:      Optional[QThread]   = None
         self._qr_worker:      Optional[_QrWorker] = None

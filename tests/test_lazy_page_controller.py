@@ -33,7 +33,12 @@ class _WindowStub:
         self.stack = _StackStub()
         self.lang = object()
         self.notifications = object()
-        self.media_cache_manager = MediaCacheManager("cache/media")
+        self.media_cache_manager = MediaCacheManager(
+            "cache/media",
+            downloader_factory=lambda _parent: None,
+        )
+        self.media_info_queue_factory = lambda _parent: object()
+        self.media_info_service_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
             cache_dir="cache",
@@ -53,10 +58,17 @@ class _BrowserStub:
         self.cleaned = True
 
 
+def _controller(window):
+    return LazyPageController(
+        window,
+        media_info_service_factory=window.media_info_service_factory,
+    )
+
+
 def test_lazy_page_controller_initializes_expected_window_attrs():
     window = _WindowStub()
 
-    LazyPageController(window)
+    _controller(window)
 
     assert window.browser_widget is None
     assert window.cache_manager_widget is None
@@ -65,7 +77,7 @@ def test_lazy_page_controller_initializes_expected_window_attrs():
 
 def test_lazy_page_controller_replaces_stack_placeholder_in_place():
     window = _WindowStub()
-    controller = LazyPageController(window)
+    controller = _controller(window)
 
     old_widget = window.stack.widget(LazyPageController.BROWSER_INDEX)
     replacement = _WidgetStub()
@@ -78,7 +90,7 @@ def test_lazy_page_controller_replaces_stack_placeholder_in_place():
 
 def test_lazy_page_controller_delegates_browser_lifecycle():
     window = _WindowStub()
-    controller = LazyPageController(window)
+    controller = _controller(window)
     browser = _BrowserStub()
     window.browser_widget = browser
 
@@ -91,7 +103,7 @@ def test_lazy_page_controller_delegates_browser_lifecycle():
 
 def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
     window = _WindowStub()
-    controller = LazyPageController(window)
+    controller = _controller(window)
     calls = []
 
     monkeypatch.setattr(
@@ -136,7 +148,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             self.parent = parent
 
     window = _WindowStub()
-    controller = LazyPageController(window)
+    controller = _controller(window)
     monkeypatch.setattr(browser_module, "BrowserWidget", _BrowserFactory)
     monkeypatch.setattr(controller, "_connect_browser_signals", lambda: None)
 

@@ -11,9 +11,9 @@ from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 
 if TYPE_CHECKING:
+    from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
     from solin.core.jw.songs import JWSongsStore
-    from solin.core.media.cache import MediaCacheManager
     from solin.core.meetings.publications import JwpubChecksumStore
     from solin.core.onboarding.application import OnboardingService
     from solin.core.profiles.application import ProfileService
@@ -29,7 +29,7 @@ class ApplicationContainer:
     config: AppConfig
     runtime_paths: RuntimePaths
     global_settings: GlobalSettingsStore
-    media_cache_manager: MediaCacheManager
+    media: MediaComposition
     font_manager: FontManager
     jw_catalog_cache_paths: JWMediaCatalogCachePaths
     jw_songs_store: JWSongsStore
@@ -43,9 +43,9 @@ class ApplicationContainer:
 
 def initialize_application_container(app, config: AppConfig) -> ApplicationContainer:
     from solin.core.foundation.logging_config import configure_logging
+    from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
     from solin.core.jw.songs import JWSongsStore
-    from solin.core.media.cache import MediaCacheManager
     from solin.core.meetings.publications import JwpubChecksumStore
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
@@ -73,7 +73,11 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         profile_service,
         QSettingsOnboardingSettings(),
     )
-    media_cache_manager = MediaCacheManager(runtime_paths.media_cache_dir)
+    media = MediaComposition(
+        app,
+        runtime_paths.media_cache_dir,
+        runtime_paths.thumb_cache_dir,
+    )
     font_manager = FontManager(runtime_paths.cache_dir)
     jw_catalog_cache_paths = JWMediaCatalogCachePaths(
         runtime_paths.cache_dir,
@@ -86,7 +90,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
 
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()
-    lifecycle.register_cleanup(media_cache_manager.cancel_all)
+    lifecycle.register_cleanup(media.cache_manager.cancel_all)
     lifecycle.register_cleanup(font_manager.shutdown)
     lifecycle.register_cleanup(jw_songs_store.shutdown)
 
@@ -95,7 +99,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         config=config,
         runtime_paths=runtime_paths,
         global_settings=global_settings,
-        media_cache_manager=media_cache_manager,
+        media=media,
         font_manager=font_manager,
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,

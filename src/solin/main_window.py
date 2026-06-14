@@ -1,8 +1,11 @@
-from typing import Any
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import (
-    Slot, QTimer, Signal, QDateTime, QEvent
+    QObject, Slot, QTimer, Signal, QDateTime, QEvent
 )
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
@@ -70,6 +73,9 @@ from .core.profiles.models import ProfileInfo
 from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 from .widgets.timer_bridge import TimerBridge
 
+if TYPE_CHECKING:
+    from .widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
+
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -85,6 +91,11 @@ class MainWindow(QMainWindow):
         profile_paths: ProfilePaths,
         profile_settings: ProfileSettings,
         media_cache_manager: MediaCacheManager,
+        media_controller: MediaController,
+        background_media_controller: MediaController,
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        media_info_service_factory: Callable[[QObject], MediaInfoService],
+        media_settings: MediaSettingsStore,
         font_manager: FontManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
@@ -100,6 +111,8 @@ class MainWindow(QMainWindow):
         self.profile_paths = profile_paths
         self.profile_settings = profile_settings
         self.media_cache_manager = media_cache_manager
+        self.media_ctrl = media_controller
+        self._background_media_controller = background_media_controller
         self.font_manager = font_manager
         self.jw_catalog_cache_paths = jw_catalog_cache_paths
         self.jw_songs_store = jw_songs_store
@@ -117,7 +130,7 @@ class MainWindow(QMainWindow):
             profile_settings,
         )
         self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
-        self._media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
+        self._media_settings = media_settings
         self._projection_playback_settings = (
             ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings)
         )
@@ -134,11 +147,6 @@ class MainWindow(QMainWindow):
             BackgroundSongSettingsStore.for_profile_settings(profile_settings)
         )
         self.screen_mgr = ScreenManager(self)
-        self.media_ctrl = MediaController(
-            self._media_settings,
-            media_cache_manager,
-            self,
-        )
         self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
             profile_settings,
         )
@@ -201,10 +209,9 @@ class MainWindow(QMainWindow):
         self._background_song_service = BackgroundSongService(
             self.lang,
             self._background_song_settings,
-            self._media_settings,
             self._meeting_schedule_settings,
             jw_songs_store,
-            media_cache_manager,
+            background_media_controller,
             self,
         )
 
@@ -226,7 +233,12 @@ class MainWindow(QMainWindow):
         )
         self._media_download_notifications.start()
 
-        self._ui_controller = MainWindowUiController(self, active_profile)
+        self._ui_controller = MainWindowUiController(
+            self,
+            active_profile,
+            media_info_queue_factory=media_info_queue_factory,
+            media_info_service_factory=media_info_service_factory,
+        )
         self._build_ui()
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(self)

@@ -17,11 +17,12 @@ Changes in this version:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Signal, Slot, QTimer,
+    QObject, Signal, Slot, QTimer,
     QCoreApplication, QUrl, QEvent
 )
 from PySide6.QtGui import (
@@ -74,6 +75,7 @@ from .visuals import (
 )
 from .week_nav import WeekNavBar, _WeekPicker
 from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvider
+from ..media_info_extractor import MediaInfoQueue
 
 
 def _meeting_drop_exts() -> frozenset[str]:
@@ -114,6 +116,7 @@ class StudyDetailView(QWidget):
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
                  jw_songs_store: JWSongsStore,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
+                 media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
         self._pub   = pub_type
@@ -127,6 +130,7 @@ class StudyDetailView(QWidget):
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._meeting_schedule_settings = meeting_schedule_settings
+        self._media_info_queue_factory = media_info_queue_factory
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -162,6 +166,7 @@ class StudyDetailView(QWidget):
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
             schedule_settings=self._meeting_schedule_settings,
+            media_info_queue_factory=self._media_info_queue_factory,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -387,6 +392,7 @@ class _MemorialDetailView(QWidget):
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
                  jw_songs_store: JWSongsStore,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
+                 media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  parent=None):
         super().__init__(parent)
         self._md  = md
@@ -399,6 +405,7 @@ class _MemorialDetailView(QWidget):
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._meeting_schedule_settings = meeting_schedule_settings
+        self._media_info_queue_factory = media_info_queue_factory
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -432,6 +439,7 @@ class _MemorialDetailView(QWidget):
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
             schedule_settings=self._meeting_schedule_settings,
+            media_info_queue_factory=self._media_info_queue_factory,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -637,6 +645,7 @@ class MeetingsWidget(QWidget):
         jwpub_checksum_store: JwpubChecksumStore,
         media_settings: MediaSettingsStore,
         meeting_schedule_settings: MeetingScheduleSettingsStore,
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
     ):
         super().__init__(parent)
@@ -655,6 +664,7 @@ class MeetingsWidget(QWidget):
         self._jwpub_checksum_store = jwpub_checksum_store
         self._media_settings = media_settings
         self._meeting_schedule_settings = meeting_schedule_settings
+        self._media_info_queue_factory = media_info_queue_factory
 
         self._service = JwpubService(
             media_settings,
@@ -897,6 +907,7 @@ class MeetingsWidget(QWidget):
                                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
                                 jw_songs_store=self._jw_songs_store,
                                 meeting_schedule_settings=self._meeting_schedule_settings,
+                                media_info_queue_factory=self._media_info_queue_factory,
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -934,6 +945,7 @@ class MeetingsWidget(QWidget):
                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
                 jw_songs_store=self._jw_songs_store,
                 meeting_schedule_settings=self._meeting_schedule_settings,
+                media_info_queue_factory=self._media_info_queue_factory,
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)

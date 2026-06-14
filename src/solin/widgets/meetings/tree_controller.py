@@ -14,6 +14,7 @@ import mimetypes
 import os
 import shutil
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +160,7 @@ class MeetingTreeController(QObject):
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
         schedule_settings: MeetingScheduleSettingsStore,
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -190,11 +192,7 @@ class MeetingTreeController(QObject):
         self._playlist_name = ""
         self._thumb_cache: dict[str, QPixmap] = {}
         self._thumb_versions: dict[str, int] = {}
-        self._info_queue = MediaInfoQueue(
-            cache_manager.media_cache_dir,
-            runtime_paths.thumb_cache_dir,
-            self,
-        )
+        self._info_queue = media_info_queue_factory(self)
         self._info_queue.info_ready.connect(self._on_info_ready)
         self._info_queue.duration_ready.connect(self._on_duration_ready)
         self._token_to_node_id: dict[int, str] = {}

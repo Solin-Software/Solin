@@ -1331,15 +1331,14 @@ class MediaInfoService(QObject):
 
     def __init__(
         self,
-        media_cache_dir: str | os.PathLike[str],
-        thumb_cache_dir: str | os.PathLike[str],
+        queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._path_to_idx: dict[str, int] = {}
         self._idx_to_path: dict[int, str] = {}
         self._next_idx    = 0
-        self._queue = MediaInfoQueue(media_cache_dir, thumb_cache_dir, self)
+        self._queue = queue_factory(self)
         self._queue.info_ready.connect(self._on_queue_ready)
 
     def request(self, path: str, media_type: str = "video"):

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Protocol, cast
 from PySide6.QtCore import QObject, Signal, Slot
 
 from .application import (
@@ -18,17 +17,8 @@ from .application import (
     PrefetchPlan,
     QueuedPrefetch,
 )
+from .qt_contracts import PrefetchDownloader, PrefetchDownloaderFactory
 from .download_storage import is_remote_url, is_url_cached
-
-
-class _Downloader(Protocol):
-    progress: Any
-    finished: Any
-    error: Any
-
-    def cancel(self) -> None: ...
-
-    def start(self, url: str) -> None: ...
 
 
 class MediaCacheManager(QObject):
@@ -55,13 +45,15 @@ class MediaCacheManager(QObject):
     def __init__(
         self,
         media_cache_dir: str | os.PathLike[str],
+        *,
+        downloader_factory: PrefetchDownloaderFactory,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.media_cache_dir = Path(media_cache_dir)
         self._prefetch_queue = MediaPrefetchQueue(self)
-        self._downloaders: dict[str, _Downloader] = {}
-        self._downloader_factory: Callable[[QObject], _Downloader] | None = None
+        self._downloaders: dict[str, PrefetchDownloader] = {}
+        self._downloader_factory = downloader_factory
         self._notify_cached_requested.connect(self.notify_cached)
 
     @property
@@ -163,19 +155,8 @@ class MediaCacheManager(QObject):
 
     # ── Slots internos ────────────────────────────────────────────────────
 
-    def _create_downloader(self) -> _Downloader:
-        if self._downloader_factory is not None:
-            return self._downloader_factory(self)
-
-        # Import lazy para evitar circular dependency no topo do módulo.
-        from .downloader import SongDownloader
-        from PySide6.QtCore import QCoreApplication
-
-        dl = SongDownloader(self.media_cache_dir, self)
-        app = QCoreApplication.instance()
-        if app is not None:
-            dl.moveToThread(app.thread())
-        return cast(_Downloader, dl)
+    def _create_downloader(self) -> PrefetchDownloader:
+        return self._downloader_factory(self)
 
     def _pump_queue(self) -> None:
         self._apply_plan(self._prefetch_queue.pump())

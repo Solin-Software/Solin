@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QDialog, QMessageBox, QStackedWidget,
 )
 from PySide6.QtCore import (
-    Signal, QTimer,
+    QObject, Signal, QTimer,
     QEvent, Slot,
 )
 from PySide6.QtGui import QPixmap, QColor
@@ -96,6 +96,7 @@ class _PlaylistEditView(
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
         thumb_cache_dir: str | os.PathLike[str],
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         all_playlists: list[dict],
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
@@ -124,11 +125,7 @@ class _PlaylistEditView(
         self._thumb_pending_item_ids: set[str] = set()
         self._thumb_request_token: int = 0
         self._qml_pointer_depth = 0
-        self._thumb_queue = MediaInfoQueue(
-            media_cache_manager.media_cache_dir,
-            self._thumb_cache_dir,
-            self,
-        )
+        self._thumb_queue = media_info_queue_factory(self)
         self._thumb_queue.info_ready.connect(self._on_info)
         self._thumb_queue.duration_ready.connect(self._on_duration_from_extractor)
         self._pdf_threads:  list[object] = []
@@ -917,6 +914,7 @@ class PlaylistWidget(QWidget):
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
         thumb_cache_dir: str | os.PathLike[str],
+        media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
     ):
         super().__init__(parent)
@@ -931,6 +929,7 @@ class PlaylistWidget(QWidget):
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._thumb_cache_dir = Path(thumb_cache_dir)
+        self._media_info_queue_factory = media_info_queue_factory
         self._cleanup_queue = PlaylistCleanupQueue(
             storage_paths,
             self._thumb_cache_dir,
@@ -976,6 +975,7 @@ class PlaylistWidget(QWidget):
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_songs_store=self._jw_songs_store,
             thumb_cache_dir=self._thumb_cache_dir,
+            media_info_queue_factory=self._media_info_queue_factory,
             all_playlists=self._playlists,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,

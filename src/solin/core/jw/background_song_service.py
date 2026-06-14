@@ -20,9 +20,7 @@ from solin.core.jw.background_song_settings import (
 )
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
-from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
-from solin.core.media.settings import MediaSettingsStore
 from solin.core.meetings.schedule import (
     MeetingOccurrence,
 )
@@ -72,10 +70,9 @@ class BackgroundSongService(QObject):
         self,
         lang_manager: object,
         settings: BackgroundSongSettingsStore,
-        media_settings: MediaSettingsStore,
         schedule_settings: MeetingScheduleSettingsStore,
         songs_store: JWSongsStore,
-        cache_manager: MediaCacheManager,
+        media_controller: MediaController,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -84,7 +81,7 @@ class BackgroundSongService(QObject):
         self._schedule_settings = schedule_settings
         self._store = songs_store
 
-        self._media = MediaController(media_settings, cache_manager, self)
+        self._media = media_controller
 
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME

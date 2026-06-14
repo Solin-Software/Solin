@@ -51,6 +51,27 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     )
     profile_settings = object()
     media_cache_manager = object()
+    media_settings = object()
+
+    class _MediaController:
+        def __init__(self):
+            self.parent = None
+
+        def setParent(self, parent):
+            self.parent = parent
+
+    created_media_controllers = [_MediaController(), _MediaController()]
+    pending_media_controllers = list(created_media_controllers)
+    media = SimpleNamespace(
+        cache_manager=media_cache_manager,
+        create_playback=lambda settings: (
+            pending_media_controllers.pop(0)
+            if settings is media_settings
+            else None
+        ),
+        create_info_queue=object(),
+        create_info_service=object(),
+    )
     font_manager = object()
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
@@ -66,6 +87,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_profile_paths,
             received_profile_settings,
             received_media_cache_manager,
+            received_media_controller,
+            received_background_media_controller,
+            received_media_info_queue_factory,
+            received_media_info_service_factory,
+            received_media_settings,
             received_font_manager,
             received_jw_catalog_cache_paths,
             received_jw_songs_store,
@@ -80,6 +106,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.profile_paths = received_profile_paths
             self.profile_settings = received_profile_settings
             self.media_cache_manager = received_media_cache_manager
+            self.media_controller = received_media_controller
+            self.background_media_controller = received_background_media_controller
+            self.media_info_queue_factory = received_media_info_queue_factory
+            self.media_info_service_factory = received_media_info_service_factory
+            self.media_settings = received_media_settings
             self.font_manager = received_font_manager
             self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
             self.jw_songs_store = received_jw_songs_store
@@ -111,6 +142,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()
         ),
     )
+    monkeypatch.setattr(
+        "solin.core.media.settings.MediaSettingsStore.for_profile_settings",
+        lambda _settings: media_settings,
+    )
 
     window = main._launch_main_window(
         app=object(),
@@ -119,7 +154,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
-        media_cache_manager=media_cache_manager,
+        media=media,
         font_manager=font_manager,
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
@@ -133,6 +168,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.profile_paths is profile_paths
     assert window.profile_settings is profile_settings
     assert window.media_cache_manager is media_cache_manager
+    assert window.media_settings is media_settings
+    assert window.media_info_queue_factory is media.create_info_queue
+    assert window.media_info_service_factory is media.create_info_service
+    assert all(controller.parent is window for controller in created_media_controllers)
     assert window.font_manager is font_manager
     assert window.jw_catalog_cache_paths is jw_catalog_cache_paths
     assert window.jw_songs_store is jw_songs_store
@@ -159,6 +198,18 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     )
     profile_settings = object()
     media_cache_manager = object()
+    media_settings = object()
+
+    class _MediaController:
+        def setParent(self, _parent):
+            pass
+
+    media = SimpleNamespace(
+        cache_manager=media_cache_manager,
+        create_playback=lambda _settings: _MediaController(),
+        create_info_queue=object(),
+        create_info_service=object(),
+    )
     font_manager = object()
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
@@ -174,6 +225,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_profile_paths,
             received_profile_settings,
             received_media_cache_manager,
+            received_media_controller,
+            received_background_media_controller,
+            received_media_info_queue_factory,
+            received_media_info_service_factory,
+            received_media_settings,
             received_font_manager,
             received_jw_catalog_cache_paths,
             received_jw_songs_store,
@@ -188,6 +244,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.profile_paths = received_profile_paths
             self.profile_settings = received_profile_settings
             self.media_cache_manager = received_media_cache_manager
+            self.media_controller = received_media_controller
+            self.background_media_controller = received_background_media_controller
+            self.media_info_queue_factory = received_media_info_queue_factory
+            self.media_info_service_factory = received_media_info_service_factory
+            self.media_settings = received_media_settings
             self.font_manager = received_font_manager
             self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
             self.jw_songs_store = received_jw_songs_store
@@ -216,6 +277,10 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             singleShot=lambda ms, callback: events.append(("timer", ms)) or callback()
         ),
     )
+    monkeypatch.setattr(
+        "solin.core.media.settings.MediaSettingsStore.for_profile_settings",
+        lambda _settings: media_settings,
+    )
 
     main._launch_main_window(
         app=object(),
@@ -224,7 +289,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
-        media_cache_manager=media_cache_manager,
+        media=media,
         font_manager=font_manager,
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,

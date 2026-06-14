@@ -6,7 +6,10 @@ from solin.widgets.playlist.edit_model import PlaylistEditModel
 
 def _model(tmp_path) -> PlaylistEditModel:
     return PlaylistEditModel(
-        MediaCacheManager(tmp_path / "media"),
+        MediaCacheManager(
+            tmp_path / "media",
+            downloader_factory=lambda _parent: None,
+        ),
         tmp_path / "thumbs",
     )
 

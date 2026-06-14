@@ -38,8 +38,10 @@ class MediaCacheManagerQueueTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         FakeDownloader.created.clear()
-        self.mgr = MediaCacheManager(self._tmp.name)
-        self.mgr._downloader_factory = lambda parent: FakeDownloader(parent)
+        self.mgr = MediaCacheManager(
+            self._tmp.name,
+            downloader_factory=FakeDownloader,
+        )
 
     def tearDown(self):
         self.mgr.cancel_all()
@@ -173,9 +175,11 @@ class MediaLibraryModelQueueTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         FakeDownloader.created.clear()
-        self.mgr = MediaCacheManager(self._tmp.name)
+        self.mgr = MediaCacheManager(
+            self._tmp.name,
+            downloader_factory=FakeDownloader,
+        )
         self.mgr.max_concurrent_prefetches = 1
-        self.mgr._downloader_factory = lambda parent: FakeDownloader(parent)
 
     def tearDown(self):
         self.mgr.cancel_all()

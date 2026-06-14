@@ -24,6 +24,7 @@ Decisões técnicas importantes:
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QThread, QObject, QSize, QTimer, QEvent
@@ -415,13 +416,13 @@ class CacheManagerWidget(QWidget):
         self,
         lang: LanguageManager,
         cache_manager: MediaCacheManager,
-        thumb_cache_dir: str | os.PathLike[str],
+        *,
+        media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._lang         = lang
         self._cache_manager = cache_manager
-        self._thumb_cache_dir = thumb_cache_dir
         self._all_cards:   list[MediaCard] = []
         self._vis_cards:   list[MediaCard] = []
         self._selected:    set[str]        = set()
@@ -429,11 +430,7 @@ class CacheManagerWidget(QWidget):
         self._type_counts: dict[str, int]  = {}
         self._scan_thread: QThread | None  = None
         self._scan_worker: _ScanWorker | None = None
-        self._thumb_service = MediaInfoService(
-            cache_manager.media_cache_dir,
-            thumb_cache_dir,
-            self,
-        )
+        self._thumb_service = media_info_service_factory(self)
         self._thumb_service.info_ready.connect(self._on_thumb_ready)
         self._build_ui()
 

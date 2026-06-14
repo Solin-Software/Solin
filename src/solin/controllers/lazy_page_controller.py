@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QWidget
 
 if TYPE_CHECKING:
     from solin.main_window import MainWindow
+    from solin.widgets.media_info_extractor import MediaInfoService
 
 
 class LazyPageController:
@@ -15,8 +18,14 @@ class LazyPageController:
     CACHE_INDEX = 8
     WIFI_INDEX = 9
 
-    def __init__(self, window: MainWindow) -> None:
+    def __init__(
+        self,
+        window: MainWindow,
+        *,
+        media_info_service_factory: Callable[[QObject], MediaInfoService],
+    ) -> None:
         self._window = window
+        self._media_info_service_factory = media_info_service_factory
         self._browser_signals_connected = False
         self._cache_signals_connected = False
         self._wifi_signals_connected = False
@@ -62,7 +71,7 @@ class LazyPageController:
         self._window.cache_manager_widget = CacheManagerWidget(
             self._window.lang,
             self._window.media_cache_manager,
-            self._window.runtime_paths.thumb_cache_dir,
+            media_info_service_factory=self._media_info_service_factory,
             parent=self._window,
         )
         self._replace_stack_widget(self.CACHE_INDEX, self._window.cache_manager_widget)
@@ -80,8 +89,7 @@ class LazyPageController:
             notifications=self._window.notifications,
             profile_paths=self._window.profile_paths,
             runtime_paths=self._window.runtime_paths,
-            media_cache_dir=self._window.media_cache_manager.media_cache_dir,
-            thumb_cache_dir=self._window.runtime_paths.thumb_cache_dir,
+            media_info_service_factory=self._media_info_service_factory,
             parent=self._window,
         )
         self._replace_stack_widget(self.WIFI_INDEX, self._window.wifi_receive_widget)

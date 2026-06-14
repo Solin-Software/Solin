@@ -95,7 +95,10 @@ def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
 
 def test_media_cache_notification_from_python_thread_runs_on_qt_thread(tmp_path):
     app = _app()
-    manager = MediaCacheManager(tmp_path)
+    manager = MediaCacheManager(
+        tmp_path,
+        downloader_factory=lambda _parent: None,
+    )
     callback_threads = []
     manager.cache_changed.connect(
         lambda _url: callback_threads.append(QCoreApplication.instance().thread())

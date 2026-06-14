@@ -4,6 +4,7 @@ import os
 from dataclasses import FrozenInstanceError
 
 import pytest
+from PySide6.QtCore import QObject
 
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.container import initialize_application_container
@@ -86,8 +87,9 @@ def test_application_lifecycle_runs_cleanup_callbacks_once_in_reverse_order() ->
         def connect(self, callback):
             self.callbacks.append(callback)
 
-    class _App:
+    class _App(QObject):
         def __init__(self):
+            super().__init__()
             self.aboutToQuit = _Signal()
 
     app = _App()
@@ -122,8 +124,9 @@ def test_application_container_initializes_runtime_services(
         def connect(self, callback):
             self.callbacks.append(callback)
 
-    class _App:
+    class _App(QObject):
         def __init__(self):
+            super().__init__()
             self.aboutToQuit = _Signal()
 
     class _ProfileService:
@@ -182,6 +185,8 @@ def test_application_container_initializes_runtime_services(
     assert container.profile_runtime is not None
     assert container.onboarding_service is not None
     assert container.global_settings is not None
+    assert container.media.cache_manager.parent() is app
+    assert not hasattr(container, "media_cache_manager")
     assert container.jwpub_checksum_store is not None
     assert container.runtime_paths.data_dir == tmp_path / "data"
     assert container.window_ref == [None]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
@@ -18,8 +18,13 @@ class _MediaSettings:
         return self._auto_download
 
 
-class _Downloader:
+class _Downloader(QObject):
+    progress = Signal(int, int)
+    finished = Signal(str)
+    error = Signal(str)
+
     def __init__(self) -> None:
+        super().__init__()
         self.started: list[tuple[str, bool]] = []
         self.cancel_count = 0
         self.cleanup_count = 0
@@ -39,13 +44,17 @@ class _Downloader:
 
 def _controller_with_downloader(tmp_path, *, auto_download: bool):
     _app()
+    downloader = _Downloader()
+    cache_manager = MediaCacheManager(
+        tmp_path,
+        downloader_factory=lambda _parent: _Downloader(),
+    )
     controller = MediaController(
         _MediaSettings(auto_download),
-        MediaCacheManager(tmp_path),
+        cache_manager,
+        downloader_factory=lambda _parent: downloader,
     )
-    downloader = _Downloader()
     played: list[str] = []
-    controller._downloader = downloader
     controller._play_source = played.append
     return controller, downloader, played
 

@@ -39,7 +39,7 @@ def _launch_main_window(
     runtime_paths,
     profile_paths,
     profile_settings,
-    media_cache_manager,
+    media,
     font_manager,
     jw_catalog_cache_paths,
     jw_songs_store,
@@ -53,6 +53,7 @@ def _launch_main_window(
     """
     from solin.main_window import MainWindow
     from solin.core.meetings.tree_store import MeetingTreeStore
+    from solin.core.media.settings import MediaSettingsStore
     from solin.core.playlists.storage import PlaylistStoragePaths
     from solin.core.ui.titlebar import apply_titlebar_color
 
@@ -61,12 +62,20 @@ def _launch_main_window(
         pending_deletions_file=runtime_paths.pending_del_file,
     )
     meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
+    media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
+    media_controller = media.create_playback(media_settings)
+    background_media_controller = media.create_playback(media_settings)
     window = MainWindow(
         lang_manager,
         runtime_paths,
         profile_paths,
         profile_settings,
-        media_cache_manager,
+        media.cache_manager,
+        media_controller,
+        background_media_controller,
+        media.create_info_queue,
+        media.create_info_service,
+        media_settings,
         font_manager,
         jw_catalog_cache_paths,
         jw_songs_store,
@@ -76,6 +85,8 @@ def _launch_main_window(
         timer_session,
         active_profile,
     )
+    media_controller.setParent(window)
+    background_media_controller.setParent(window)
     window.show()
 
     apply_titlebar_color(window, "#1A231F")
@@ -132,7 +143,7 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
         container.runtime_paths,
         profile_context.paths,
         profile_context.settings,
-        container.media_cache_manager,
+        container.media,
         container.font_manager,
         container.jw_catalog_cache_paths,
         container.jw_songs_store,

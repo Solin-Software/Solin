@@ -25,8 +25,8 @@ from PySide6.QtCore import QObject, Signal, QUrl, QTimer
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PySide6.QtGui import QPixmap, QImage
 
-from .downloader import SongDownloader
 from .cache import MediaCacheManager
+from .qt_contracts import PlaybackDownloaderFactory
 from .playback_session import MediaPlaybackSession
 from .settings import MediaPlaybackSettings
 
@@ -54,6 +54,8 @@ class MediaController(QObject):
         self,
         settings: MediaPlaybackSettings,
         cache_manager: MediaCacheManager,
+        *,
+        downloader_factory: PlaybackDownloaderFactory,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -67,7 +69,7 @@ class MediaController(QObject):
         self.video_sink = QVideoSink(self)
         self.player.setVideoSink(self.video_sink)
 
-        self._downloader = SongDownloader(cache_manager.media_cache_dir, self)
+        self._downloader = downloader_factory(self)
         self._session = MediaPlaybackSession()
         self._reconnect_timer = QTimer(self)
         self._reconnect_timer.setSingleShot(True)
