@@ -1,6 +1,10 @@
 from types import SimpleNamespace
 
-from solin.controllers.signal_connection_controller import SignalConnectionController
+from solin.controllers.signal_connection_controller import (
+    MainWindowSignalHandlers,
+    MainWindowSignalSources,
+    SignalConnectionController,
+)
 
 
 class _Signal:
@@ -142,42 +146,85 @@ class _WindowStub:
             on_auto_share_finished=_slot("auto_share_finished"),
         )
 
-        self._on_sjjm_project = _slot("on_sjjm_project")
-        self._on_meeting_media_project = _slot("on_meeting_media_project")
-        self._on_song_project = _slot("on_song_project")
-        self._start_timer = _slot("start_timer")
-        self._project_sermon_theme = _slot("project_sermon_theme")
-        self._on_playlist_project = _slot("on_playlist_project")
-        self._project_image_bytes = _slot("project_image_bytes")
-        self._distribute_frame = _slot("distribute_frame")
-        self._on_title_from_metadata = _slot("title_from_metadata")
-        self._stop_any = _slot("stop_any")
-        self._on_timer_update_proj = _slot("timer_update")
-        self._on_timer_blink_proj = _slot("timer_blink")
-        self._project_next_auto = _slot("project_next")
-        self._on_playlist_navigate = _slot("playlist_navigate")
-        self._on_image_apply_transform = _slot("image_apply")
-        self._on_image_reset_transform = _slot("image_reset")
-        self._on_image_reset_transform_instant = _slot("image_reset_instant")
+        self._media_projection = SimpleNamespace(
+            on_sjjm_project=_slot("on_sjjm_project"),
+            on_meeting_media_project=_slot("on_meeting_media_project"),
+            on_song_project=_slot("on_song_project"),
+            on_playlist_project=_slot("on_playlist_project"),
+            project_image_bytes=_slot("project_image_bytes"),
+            distribute_frame=_slot("distribute_frame"),
+            on_title_from_metadata=_slot("title_from_metadata"),
+            project_next_auto=_slot("project_next"),
+            on_playlist_navigate=_slot("playlist_navigate"),
+            on_image_apply_transform=_slot("image_apply"),
+            on_image_reset_transform=_slot("image_reset"),
+            on_image_reset_transform_instant=_slot("image_reset_instant"),
+        )
+        self._timer_theme = SimpleNamespace(
+            start_timer=_slot("start_timer"),
+            project_sermon_theme=_slot("project_sermon_theme"),
+            on_timer_update_proj=_slot("timer_update"),
+            on_timer_blink_proj=_slot("timer_blink"),
+        )
+        self._projection_stop = SimpleNamespace(stop_any=_slot("stop_any"))
+
+
+def _sources(window):
+    return MainWindowSignalSources(
+        songs_widget=window.songs_widget,
+        meetings_widget=window.meetings_widget,
+        clips_widget=window.clips_widget,
+        timer_widget=window.timer_widget,
+        sermon_theme_widget=window.sermon_theme_widget,
+        playlist_widget=window.playlist_widget,
+        projection_bar=window.proj_bar,
+        media_controller=window.media_ctrl,
+        screen_manager=window.screen_mgr,
+        language_manager=window.lang,
+        settings_widget=window.settings_widget,
+        obs_service=window._obs_service,
+        ndi_service=window._ndi_service,
+        camera_service=window._camera_service,
+        auto_share_finished=window._auto_share_finished,
+    )
+
+
+def _handlers(window, *, timer_output=None, timer_bridge=None):
+    return MainWindowSignalHandlers(
+        media_projection=window._media_projection,
+        timer_theme=window._timer_theme,
+        playlist_imports=window._playlist_imports,
+        auto_key_projection=window._auto_key_projection,
+        projection_stop=window._projection_stop,
+        projection_targets=window._projection_targets,
+        language_controller=window._language_controller,
+        live_integrations=window._live_integrations,
+        background_song_service=window._background_song_service,
+        projection_integrations=window._projection_integrations,
+        timer_output=timer_output,
+        timer_bridge=timer_bridge,
+    )
 
 
 def test_connect_signals_wires_expected_signal_graph():
     _Signal.registry = []
     window = _WindowStub()
-    controller = SignalConnectionController(window)
+    controller = SignalConnectionController(_sources(window), _handlers(window))
 
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
     assert total_connections == 48
     assert window.songs_widget.project_video_signal.connected == [
-        window._on_sjjm_project
+        window._media_projection.on_sjjm_project
     ]
     assert window.settings_widget.watched_folder_changed.connected == [
         window.playlist_widget.set_watched_folder,
         window.meetings_widget.set_watched_folder,
     ]
-    assert window.proj_bar.stop_requested.connected == [window._stop_any]
+    assert window.proj_bar.stop_requested.connected == [
+        window._projection_stop.stop_any
+    ]
     assert window.settings_widget.background_song_toggled.connected == [
         window._background_song_service.set_enabled
     ]
@@ -188,3 +235,37 @@ def test_connect_signals_wires_expected_signal_graph():
         window._projection_integrations.on_auto_share_finished
     ]
     assert len(window._obs_service.scenes_updated.connected) == 2
+
+
+def test_controller_uses_explicit_endpoints_instead_of_main_window():
+    window = _WindowStub()
+
+    controller = SignalConnectionController(_sources(window), _handlers(window))
+
+    assert not hasattr(controller, "_window")
+
+
+def test_screen_changes_refresh_timer_output_and_monitor_bridge():
+    window = _WindowStub()
+    timer_output = SimpleNamespace(on_screens_changed=_slot("timer_screens_changed"))
+    refresh_calls = []
+    timer_bridge = SimpleNamespace(
+        refreshMonitors=lambda: refresh_calls.append("refresh")
+    )
+    controller = SignalConnectionController(
+        _sources(window),
+        _handlers(
+            window,
+            timer_output=timer_output,
+            timer_bridge=timer_bridge,
+        ),
+    )
+
+    controller.connect_signals()
+    window.screen_mgr.screens_changed.connected[-1]()
+
+    assert window.screen_mgr.screens_changed.connected[:2] == [
+        window._projection_targets.on_screens_changed,
+        timer_output.on_screens_changed,
+    ]
+    assert refresh_calls == ["refresh"]

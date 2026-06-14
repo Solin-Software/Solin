@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import (
-    QObject, Slot, QTimer, Signal, QDateTime, QEvent
+    QObject, Slot, QTimer, Signal, QEvent
 )
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
@@ -24,7 +24,11 @@ from .controllers.projection_integration_controller import ProjectionIntegration
 from .controllers.projection_stop_controller import ProjectionStopController
 from .controllers.projection_window_controller import ProjectionWindowController
 from .controllers.shutdown_controller import ShutdownController
-from .controllers.signal_connection_controller import SignalConnectionController
+from .controllers.signal_connection_controller import (
+    MainWindowSignalHandlers,
+    MainWindowSignalSources,
+    SignalConnectionController,
+)
 from .controllers.timer_engine import TimerEngine
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
@@ -244,8 +248,40 @@ class MainWindow(QMainWindow):
         self._projection_integrations = ProjectionIntegrationController(self)
         self._projection_stop = ProjectionStopController(self)
         self._language_controller = LanguageController(self)
-        self._signal_connections = SignalConnectionController(self)
-        self._connect_signals()
+        self._signal_connections = SignalConnectionController(
+            MainWindowSignalSources(
+                songs_widget=self.songs_widget,
+                meetings_widget=self.meetings_widget,
+                clips_widget=self.clips_widget,
+                timer_widget=self.timer_widget,
+                sermon_theme_widget=self.sermon_theme_widget,
+                playlist_widget=self.playlist_widget,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                screen_manager=self.screen_mgr,
+                language_manager=self.lang,
+                settings_widget=self.settings_widget,
+                obs_service=self._obs_service,
+                ndi_service=self._ndi_service,
+                camera_service=self._camera_service,
+                auto_share_finished=self._auto_share_finished,
+            ),
+            MainWindowSignalHandlers(
+                media_projection=self._media_projection,
+                timer_theme=self._timer_theme_controller,
+                playlist_imports=self._playlist_imports,
+                auto_key_projection=self._auto_key_projection,
+                projection_stop=self._projection_stop,
+                projection_targets=self._projection_targets,
+                language_controller=self._language_controller,
+                live_integrations=self._live_integrations,
+                background_song_service=self._background_song_service,
+                projection_integrations=self._projection_integrations,
+                timer_output=self.timer_output,
+                timer_bridge=self.timer_bridge,
+            ),
+        )
+        self._signal_connections.connect_signals()
 
         self._bootstrap_controller = MainWindowBootstrapController(self)
         self._bootstrap_controller.finish_startup()
@@ -268,25 +304,7 @@ class MainWindow(QMainWindow):
     # Signal emitted when user wants to return to profile selector.
     switch_profile_requested = Signal()
 
-    # ── Signals ───────────────────────────────────────────────────────────
-
-    def _connect_signals(self):
-        self._signal_connections.connect_signals()
-
     # ── Projection ────────────────────────────────────────────────────────
-
-    @Slot(str, str, object, str)
-    def _on_song_project(self, url: str, title: str, playlist: list, order: str):
-        self._media_projection.on_song_project(url, title, playlist, order)
-
-    def _on_sjjm_project(self, url: str, title: str, playlist: list, order: str):
-        self._media_projection.on_sjjm_project(url, title, playlist, order)
-
-    def _on_meeting_media_project(self, item):
-        self._media_projection.on_meeting_media_project(item)
-
-    def _on_playlist_project(self, url: str, title: str, playlist: list, order: str):
-        self._media_projection.on_playlist_project(url, title, playlist, order)
 
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()
@@ -303,10 +321,6 @@ class MainWindow(QMainWindow):
             playback_order,
             from_saved_playlist=from_saved_playlist,
         )
-
-    @Slot(str, str, str)
-    def _project_next_auto(self, url: str, title: str, media_type: str):
-        self._media_projection.project_next_auto(url, title, media_type)
 
     def _project_video_core(self, url: str, title: str, keep_expanded: bool = False, is_audio: bool = False):
         self._media_projection.project_video_core(
@@ -327,18 +341,6 @@ class MainWindow(QMainWindow):
     def _stop_projection(self):
         self._projection_stop.stop_projection()
 
-    @Slot(float, float, float)
-    def _on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float):
-        self._media_projection.on_image_apply_transform(zoom, norm_x, norm_y)
-
-    @Slot()
-    def _on_image_reset_transform(self):
-        self._media_projection.on_image_reset_transform()
-
-    @Slot()
-    def _on_image_reset_transform_instant(self):
-        self._media_projection.on_image_reset_transform_instant()
-
     def _on_cache_play(self, path: str, media_type: str, original_url: str = "", display_title: str = ""):
         self._media_projection.on_cache_play(
             path,
@@ -358,31 +360,6 @@ class MainWindow(QMainWindow):
 
     def _on_wifi_send_all_to_playlist(self, items: list) -> None:
         self._wifi_playlist_controller.on_wifi_send_all_to_playlist(items)
-
-    def _stop_any(self):
-        self._projection_stop.stop_any()
-
-    def _start_timer(self, target_dt: QDateTime):
-        self._timer_theme_controller.start_timer(target_dt)
-
-    @Slot(int, int)
-    def _on_timer_update_proj(self, remaining: int, total: int):
-        self._timer_theme_controller.on_timer_update_proj(remaining, total)
-
-    @Slot(bool)
-    def _on_timer_blink_proj(self, on: bool):
-        self._timer_theme_controller.on_timer_blink_proj(on)
-
-    @Slot(str)
-    def _project_sermon_theme(self, text: str, subtitle: str = ""):
-        self._timer_theme_controller.project_sermon_theme(text, subtitle)
-
-    @Slot(str)
-    def _on_title_from_metadata(self, title: str):
-        self._media_projection.on_title_from_metadata(title)
-
-    def _distribute_frame(self, frame):
-        self._media_projection.distribute_frame(frame)
 
     def eventFilter(self, obj, event):
         if obj is self.right_col and event.type() == QEvent.Type.Resize:
@@ -423,10 +400,6 @@ class MainWindow(QMainWindow):
             keep_expanded=keep_expanded,
             playback_order=playback_order,
         )
-
-    @Slot(int)
-    def _on_playlist_navigate(self, index: int):
-        self._media_projection.on_playlist_navigate(index)
 
     def showEvent(self, event):
         super().showEvent(event)
