@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import (
-    Qt, QSettings, Signal, QEvent,
+    Qt, Signal, QEvent,
 )
 from pathlib import Path
 
@@ -72,7 +72,6 @@ class SettingsWidget(
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
                  ndi_service: NDIReceiverService | None = None, *,
-                 prefs: QSettings,
                  obs_settings: OBSSettingsStore,
                  zoom_settings: ZoomSettingsStore,
                  auto_share_settings: AutoShareSettingsStore,
@@ -91,7 +90,6 @@ class SettingsWidget(
         self._obs       = obs_service
         self._ndi       = ndi_service
         self._yeartext_cache_file = Path(yeartext_cache_file)
-        self._prefs     = prefs
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
         self._auto_share_settings = auto_share_settings

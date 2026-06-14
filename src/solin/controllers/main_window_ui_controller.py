@@ -212,7 +212,6 @@ class MainWindowUiController:
             window.screen_mgr,
             obs_service=window._obs_service,
             ndi_service=window._ndi_service,
-            prefs=window.profile_prefs,
             obs_settings=window._obs_settings,
             zoom_settings=window._zoom_settings,
             auto_share_settings=window._auto_share_settings,
