@@ -22,6 +22,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
+from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
 class _Notifications:
@@ -54,6 +55,10 @@ widget = WifiReceiveWidget(
     profile_media_store=ProfileMediaStore(
         profile_paths.embedded_dir,
         profile_paths.images_dir,
+    ),
+    wifi_receive_server_factory=lambda parent: WifiReceiveServer(
+        embedded_dir=profile_paths.embedded_dir,
+        parent=parent,
     ),
     media_info_service_factory=lambda parent: MediaInfoService(
         lambda owner: MediaInfoQueue(

@@ -75,6 +75,7 @@ from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvi
 from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
+    from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.meetings.memorial import MemorialService
@@ -659,6 +660,7 @@ class MeetingsWidget(QWidget):
         *,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
+        watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -681,6 +683,7 @@ class MeetingsWidget(QWidget):
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
+        self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -723,8 +726,7 @@ class MeetingsWidget(QWidget):
         self._auto_download_timer.timeout.connect(self._service.auto_download_if_enabled)
         self._auto_download_timer.start(3000)
 
-        from ...core.ingest.watched_folder import WatchedFolderWatcher
-        self._folder_watcher = WatchedFolderWatcher(self)
+        self._folder_watcher = self._watched_folder_watcher_factory(self)
         self._folder_watcher.changed.connect(self._on_folder_changed)
         self._folder_watcher.subfolder_changed.connect(self._on_folder_changed)
         self._wf_debounce = QTimer(self)

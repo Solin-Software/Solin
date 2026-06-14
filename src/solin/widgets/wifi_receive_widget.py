@@ -46,11 +46,11 @@ from ..core.media.formats import (
     media_kind_from_path,
     mime_to_ext,
 )
-from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
+    from ..core.ingest.wifi_server import WifiReceiveServer
     from ..core.media.profile_store import ProfileMediaStore
     from ..core.ui.notifications import NotificationCenter
 
@@ -517,6 +517,7 @@ class WifiReceiveWidget(QWidget):
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         profile_media_store: ProfileMediaStore,
+        wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent: QWidget | None = None,
     ) -> None:
@@ -526,10 +527,7 @@ class WifiReceiveWidget(QWidget):
         self._profile_paths   = profile_paths
         self._runtime_paths   = runtime_paths
         self._profile_media_store = profile_media_store
-        self._server          = WifiReceiveServer(
-            embedded_dir=profile_paths.embedded_dir,
-            parent=self,
-        )
+        self._server = wifi_receive_server_factory(self)
         self._session_url     = ""
         self._received_files: list[dict] = []
         self._cards:          list[_MediaCard] = []

@@ -102,6 +102,9 @@ class MainWindowUiContext:
     playlist_repository: Any
     meeting_tree_store: Any
     profile_media_store: Any
+    wifi_receive_server_factory: Callable[[QObject], Any]
+    watched_folder_watcher_factory: Callable[[QObject], Any]
+    playlist_cleanup_queue_factory: Callable[..., Any]
     jw_catalog_cache_paths: Any
     jw_catalog_service_factory: Callable[[QObject], Any]
     jw_songs_store: Any
@@ -316,6 +319,7 @@ class MainWindowUiController:
                 runtime_paths=context.runtime_paths,
                 media_cache_manager=context.media_cache_manager,
                 profile_media_store=context.profile_media_store,
+                wifi_receive_server_factory=context.wifi_receive_server_factory,
                 browser_download_service_factory=(
                     self._browser_download_service_factory
                 ),
@@ -401,6 +405,8 @@ class MainWindowUiController:
             storage_paths=context.playlist_storage_paths,
             playlist_repository=context.playlist_repository,
             profile_media_store=context.profile_media_store,
+            watched_folder_watcher_factory=context.watched_folder_watcher_factory,
+            playlist_cleanup_queue_factory=context.playlist_cleanup_queue_factory,
             media_cache_manager=context.media_cache_manager,
             jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
@@ -413,6 +419,7 @@ class MainWindowUiController:
             context.lang_manager,
             meeting_tree_store=context.meeting_tree_store,
             profile_media_store=context.profile_media_store,
+            watched_folder_watcher_factory=context.watched_folder_watcher_factory,
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             cache_manager=context.media_cache_manager,

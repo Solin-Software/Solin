@@ -674,6 +674,32 @@ def test_profile_media_bytes_are_persisted_outside_widgets():
     assert violations == []
 
 
+def test_widgets_do_not_construct_infrastructure_services_or_repositories():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    forbidden_constructors = {
+        "JWMediaCatalogService",
+        "JwpubService",
+        "MemorialService",
+        "PlaylistCleanupQueue",
+        "PlaylistRepository",
+        "WatchedFolderWatcher",
+        "WifiReceiveServer",
+        "YeartextService",
+    }
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in forbidden_constructors
+            ):
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

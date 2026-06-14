@@ -55,6 +55,9 @@ def _launch_main_window(
     from solin.core.meetings.tree_store import MeetingTreeStore
     from solin.core.media.settings import MediaSettingsStore
     from solin.core.media.profile_store import ProfileMediaStore
+    from solin.core.ingest.watched_folder import WatchedFolderWatcher
+    from solin.core.ingest.wifi_server import WifiReceiveServer
+    from solin.core.playlists.cleanup import PlaylistCleanupQueue
     from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
     from solin.core.ui.titlebar import apply_titlebar_color
 
@@ -92,6 +95,12 @@ def _launch_main_window(
         playlist_repository,
         meeting_tree_store,
         profile_media_store,
+        lambda parent: WifiReceiveServer(
+            embedded_dir=profile_paths.embedded_dir,
+            parent=parent,
+        ),
+        WatchedFolderWatcher,
+        PlaylistCleanupQueue,
         timer_session,
         active_profile,
     )

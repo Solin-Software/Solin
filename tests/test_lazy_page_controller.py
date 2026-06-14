@@ -52,6 +52,7 @@ class _WindowStub:
             lambda: self.browser_image_fetch_service
         )
         self.profile_media_store = object()
+        self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
             cache_dir="cache",
@@ -82,6 +83,7 @@ def _controller(window):
             runtime_paths=object(),
             media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
+            wifi_receive_server_factory=window.wifi_receive_server_factory,
             browser_download_service_factory=(
                 window.browser_download_service_factory
             ),

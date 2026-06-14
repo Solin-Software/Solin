@@ -128,8 +128,11 @@ from .widgets.timer_bridge import TimerBridge
 from .widgets.projection.monitor_manager import MonitorManagerPopup
 
 if TYPE_CHECKING:
+    from .core.ingest.watched_folder import WatchedFolderWatcher
+    from .core.ingest.wifi_server import WifiReceiveServer
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.network.browser_images import BrowserImageFetchService
+    from .core.playlists.cleanup import PlaylistCleanupQueue
     from .ui.media_info import MediaInfoQueue, MediaInfoService
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
@@ -162,6 +165,9 @@ class MainWindow(QMainWindow):
         playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
+        wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
+        watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
+        playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         timer_session: TimerSession,
         active_profile: ProfileInfo,
     ):
@@ -376,6 +382,9 @@ class MainWindow(QMainWindow):
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
                 profile_media_store=profile_media_store,
+                wifi_receive_server_factory=wifi_receive_server_factory,
+                watched_folder_watcher_factory=watched_folder_watcher_factory,
+                playlist_cleanup_queue_factory=playlist_cleanup_queue_factory,
                 jw_catalog_cache_paths=self.jw_catalog_cache_paths,
                 jw_catalog_service_factory=lambda parent: JWMediaCatalogService(
                     self.jw_catalog_cache_paths,

@@ -106,6 +106,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             playlist_repository,
             meeting_tree_store,
             profile_media_store,
+            wifi_receive_server_factory,
+            watched_folder_watcher_factory,
+            playlist_cleanup_queue_factory,
             received_timer_session,
             received_active_profile,
         ):
@@ -133,6 +136,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
+            self.wifi_receive_server_factory = wifi_receive_server_factory
+            self.watched_folder_watcher_factory = watched_folder_watcher_factory
+            self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 
@@ -206,6 +212,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
     assert str(window.profile_media_store.embedded_dir) == "embedded"
     assert str(window.profile_media_store.images_dir) == "images"
+    assert callable(window.wifi_receive_server_factory)
+    assert callable(window.watched_folder_watcher_factory)
+    assert callable(window.playlist_cleanup_queue_factory)
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert events == [
@@ -271,6 +280,9 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             playlist_repository,
             meeting_tree_store,
             profile_media_store,
+            wifi_receive_server_factory,
+            watched_folder_watcher_factory,
+            playlist_cleanup_queue_factory,
             received_timer_session,
             received_active_profile,
         ):
@@ -298,6 +310,9 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
+            self.wifi_receive_server_factory = wifi_receive_server_factory
+            self.watched_folder_watcher_factory = watched_folder_watcher_factory
+            self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
 

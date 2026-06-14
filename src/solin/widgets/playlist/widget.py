@@ -51,7 +51,6 @@ from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
 from .list_view import _PlaylistListView
-from ...core.playlists.cleanup import PlaylistCleanupQueue
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import (
@@ -68,10 +67,12 @@ _ITEM_H            = 77   # altura fixa de cada item
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
+    from ...core.playlists.cleanup import PlaylistCleanupQueue
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
@@ -922,6 +923,8 @@ class PlaylistWidget(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
+        playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
@@ -939,13 +942,14 @@ class PlaylistWidget(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
         self._thumb_cache_dir = Path(thumb_cache_dir)
         self._media_info_queue_factory = media_info_queue_factory
-        self._cleanup_queue = PlaylistCleanupQueue(
+        self._cleanup_queue = playlist_cleanup_queue_factory(
             storage_paths,
             self._thumb_cache_dir,
         )
@@ -1012,8 +1016,7 @@ class PlaylistWidget(QWidget):
         self._edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
 
     def _setup_watcher(self):
-        from ...core.ingest.watched_folder import WatchedFolderWatcher
-        self._folder_watcher = WatchedFolderWatcher(self)
+        self._folder_watcher = self._watched_folder_watcher_factory(self)
         if self._watched_folder:
             self._folder_watcher.set_root(self._watched_folder)
         self._folder_watcher.changed.connect(self._on_folder_changed)
