@@ -23,8 +23,8 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu, QDialog, QMessageBox,
 )
 
-from ..core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_APP
-from ..core.foundation.settings_keys import SettingsKey
+from ..core.integrations.automation.settings import OBSSettingsStore
+from ..core.jw.language_settings import JWLanguageSettingsStore
 from ..core.ui.helpers import fade_in as _fade_in
 from ..core.profiles.manager import ProfileManager
 from ..widgets.common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
@@ -1264,15 +1264,13 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         iface_code = getattr(self, "_ob_iface_selected_code", self._lang.current_code if self._lang else "en")
         if self._lang:
             self._lang.set_language(iface_code)
-        s = profile_settings.prefs(QSETTINGS_APP_APP)
-        s.setValue(SettingsKey.APP_LANGUAGE, iface_code)
-        s.sync()
+        profile_settings.app_settings().set_app_language(iface_code)
 
         media_code = getattr(self, "_ob_media_selected_code", "") or self._interface_api_code(iface_code)
         if media_code:
-            s2 = profile_settings.prefs(QSETTINGS_APP_APP)
-            s2.setValue(SettingsKey.MEDIA_LANGUAGE_CODE, media_code)
-            s2.sync()
+            JWLanguageSettingsStore.for_profile_settings(
+                profile_settings
+            ).set_media_language_code(media_code)
 
         # Save OBS config only when integration was enabled and not skipped
         if not skip and self._ob_obs_toggle.is_checked:
@@ -1286,13 +1284,10 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             default_scene = self._ob_obs_default_combo.currentText()
             media_scene   = self._ob_obs_media_combo.currentText()
 
-            s3 = profile_settings.prefs(QSETTINGS_PREFS_APP)
-            s3.setValue(SettingsKey.OBS_ENABLED, True)
-            s3.setValue(SettingsKey.OBS_PORT, port)
-            s3.setValue(SettingsKey.OBS_PASSWORD, pwd)
-            s3.setValue(SettingsKey.OBS_DEFAULT_SCENE, default_scene)
-            s3.setValue(SettingsKey.OBS_MEDIA_WINDOW_SCENE, media_scene)
-            s3.sync()
+            obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
+            obs_settings.set_connection(port, pwd)
+            obs_settings.set_scenes(default_scene, media_scene)
+            obs_settings.set_enabled(True)
 
         # Clean up the temporary OBS service before handing off
         self._ob_obs_teardown()
