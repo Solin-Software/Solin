@@ -209,6 +209,25 @@ def test_clean_architecture_layer_dependencies():
     )
 
 
+def test_shell_composition_controllers_do_not_store_main_window():
+    controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
+    controller_files = (
+        "ipc_controller.py",
+        "main_window_bootstrap_controller.py",
+        "remote_services_controller.py",
+        "signal_connection_controller.py",
+    )
+    violations: list[str] = []
+
+    for filename in controller_files:
+        path = controller_root / filename
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Attribute) and node.attr == "_window":
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_meeting_domain_has_no_framework_or_application_dependencies():
     meeting_root = PROJECT_ROOT / "src" / "solin" / "core" / "meetings"
     domain_files = (

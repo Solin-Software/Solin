@@ -1,133 +1,138 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 from PySide6.QtCore import QCoreApplication
 
 from ..styles.theme import STYLESHEET
-from ..widgets.projection.monitor_manager import MonitorManagerPopup
-from .ipc_controller import IpcController
-from .remote_services_controller import RemoteServicesController
 
-if TYPE_CHECKING:
-    from solin.main_window import MainWindow
+
+@dataclass(frozen=True, slots=True)
+class MainWindowStartupDependencies:
+    """Services and factories required for post-UI application startup."""
+
+    projection_session: Any
+    projection_targets: Any
+    obs_settings: Any
+    obs_service: Any
+    live_integrations: Any
+    zoom_settings: Any
+    zoom_service: Any
+    background_song_service: Any
+    monitor_popup_factory: Callable[[], Any]
+    ipc_controller_factory: Callable[[], Any]
+    remote_services_factory: Callable[[], Any]
+    apply_stylesheet: Callable[[str], None]
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowStartupResources:
+    """Long-lived resources created while completing main-window startup."""
+
+    monitor_popup: Any
+    ipc_controller: Any
+    remote_services: Any
 
 
 class MainWindowBootstrapController:
-    """Runs post-UI startup steps that depend on constructed MainWindow widgets."""
+    """Runs ordered post-UI startup without locating services on MainWindow."""
 
     def __init__(
         self,
-        window: MainWindow,
+        dependencies: MainWindowStartupDependencies,
         *,
         app_getter: Callable[[], object | None] | None = None,
         platform: str | None = None,
-        monitor_popup_factory=MonitorManagerPopup,
-        ipc_controller_factory=IpcController,
-        remote_services_factory=RemoteServicesController,
         stylesheet: str = STYLESHEET,
     ) -> None:
-        self._window = window
+        self._dependencies = dependencies
         self._app_getter = app_getter or QCoreApplication.instance
         self._platform = platform or sys.platform
-        self._monitor_popup_factory = monitor_popup_factory
-        self._ipc_controller_factory = ipc_controller_factory
-        self._remote_services_factory = remote_services_factory
         self._stylesheet = stylesheet
 
-    def finish_startup(self) -> None:
+    def finish_startup(self) -> MainWindowStartupResources:
         self.initialize_projection_session()
         self.start_obs_integration()
         self.connect_zoom_signals()
         self.start_zoom_if_enabled()
         self.start_background_song_service()
-        self.build_monitor_popup()
-        self.initialize_open_media_state()
-        self.initialize_ipc_controller()
-        self.initialize_obs_scene_memory()
-        self.start_ipc_if_needed()
-        self.start_remote_services()
+        monitor_popup = self.build_monitor_popup()
+        ipc_controller = self.create_ipc_controller()
+        self.start_ipc_if_needed(ipc_controller)
+        remote_services = self.start_remote_services()
         self.apply_stylesheet()
+        return MainWindowStartupResources(
+            monitor_popup=monitor_popup,
+            ipc_controller=ipc_controller,
+            remote_services=remote_services,
+        )
 
     def initialize_projection_session(self) -> None:
-        window = self._window
-        # Must be set before opening projection targets because startup restore
-        # reads session state while rebuilding the projection windows.
-        window.projection_session.set_idle_media_path("")
-        window.projection_session.floating_preview_window = None
-        window.projection_session.reset_state()
-        window._projection_targets.open_projection_windows()
-        window.projection_session.set_tab_projection_active(False)
+        dependencies = self._dependencies
+        session = dependencies.projection_session
+        # Startup restore reads session state while rebuilding projection windows.
+        session.set_idle_media_path("")
+        session.floating_preview_window = None
+        session.reset_state()
+        dependencies.projection_targets.open_projection_windows()
+        session.set_tab_projection_active(False)
 
     def start_obs_integration(self) -> None:
-        window = self._window
-        if window._obs_settings.is_enabled():
-            window._obs_service.start()
-        window._live_integrations.refresh_obs_btn_availability()
-        window._live_integrations.refresh_obs_stream_availability()
+        dependencies = self._dependencies
+        if dependencies.obs_settings.is_enabled():
+            dependencies.obs_service.start()
+        dependencies.live_integrations.refresh_obs_btn_availability()
+        dependencies.live_integrations.refresh_obs_stream_availability()
 
     def connect_zoom_signals(self) -> None:
-        window = self._window
-        zoom = window._zoom_service
-        live = window._live_integrations
+        dependencies = self._dependencies
+        zoom = dependencies.zoom_service
+        live = dependencies.live_integrations
         zoom.connection_changed.connect(live.on_zoom_connection_changed)
         zoom.participants_updated.connect(live.on_zoom_participants_updated)
         zoom.sharing_state_changed.connect(live.on_zoom_sharing_state_changed)
         zoom.share_error.connect(live.on_zoom_share_error)
 
     def start_zoom_if_enabled(self) -> None:
-        window = self._window
-        if (
-            window._zoom_settings.is_enabled()
-            and self._platform == "win32"
-        ):
-            window._zoom_service.start()
+        dependencies = self._dependencies
+        if dependencies.zoom_settings.is_enabled() and self._platform == "win32":
+            dependencies.zoom_service.start()
 
     def start_background_song_service(self) -> None:
-        self._window._background_song_service.start()
+        self._dependencies.background_song_service.start()
 
-    def build_monitor_popup(self) -> None:
-        window = self._window
-        window._monitor_popup = self._monitor_popup_factory(window)
-        window._monitor_popup.projection_toggle_requested.connect(
-            window._projection_targets.on_monitor_toggle
+    def build_monitor_popup(self):
+        dependencies = self._dependencies
+        popup = dependencies.monitor_popup_factory()
+        popup.projection_toggle_requested.connect(
+            dependencies.projection_targets.on_monitor_toggle
         )
-        window._monitor_popup.projection_all_requested.connect(
-            window._projection_targets.on_monitor_all
+        popup.projection_all_requested.connect(
+            dependencies.projection_targets.on_monitor_all
         )
-        window._monitor_popup.floating_toggle_requested.connect(
-            window._projection_targets.on_floating_toggle
+        popup.floating_toggle_requested.connect(
+            dependencies.projection_targets.on_floating_toggle
         )
-        window._monitor_popup.idle_media_changed.connect(
-            window._projection_targets.on_idle_media_changed
+        popup.idle_media_changed.connect(
+            dependencies.projection_targets.on_idle_media_changed
         )
+        return popup
 
-    def initialize_open_media_state(self) -> None:
-        window = self._window
-        window._jwl_tmp_files = set()
-        window._next_is_sjjm = False
+    def create_ipc_controller(self):
+        return self._dependencies.ipc_controller_factory()
 
-    def initialize_ipc_controller(self) -> None:
-        self._window._ipc_controller = self._ipc_controller_factory(self._window)
-
-    def start_ipc_if_needed(self) -> None:
-        window = self._window
+    def start_ipc_if_needed(self, ipc_controller) -> None:
         app = self._app_getter()
         if not getattr(app, "_solin_app_ipc_server_active", False):
-            window._ipc_controller.start()
+            ipc_controller.start()
 
-    def initialize_ipc(self) -> None:
-        self.initialize_ipc_controller()
-        self.start_ipc_if_needed()
-
-    def initialize_obs_scene_memory(self) -> None:
-        self._window._obs_pre_media_scene = ""
-
-    def start_remote_services(self) -> None:
-        window = self._window
-        window._remote_services = self._remote_services_factory(window, window.lang)
-        window._remote_services.start()
+    def start_remote_services(self):
+        remote_services = self._dependencies.remote_services_factory()
+        remote_services.start()
+        return remote_services
 
     def apply_stylesheet(self) -> None:
-        self._window.setStyleSheet(self._stylesheet)
+        self._dependencies.apply_stylesheet(self._stylesheet)

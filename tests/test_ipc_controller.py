@@ -76,7 +76,11 @@ def test_ipc_controller_brings_window_forward_and_opens_valid_payload_paths(tmp_
             self.opened.append(paths)
 
     window = _Window()
-    controller = IpcController(window)
+    controller = IpcController(
+        window,
+        bring_to_front=window._bring_to_front,
+        open_media_files=window.open_media_files,
+    )
 
     controller._on_data(
         _Conn(f"{media_file}\nC:/missing.mp4\nhttps://example.test/song.mp3\n")
@@ -99,7 +103,11 @@ def test_ipc_controller_ignores_empty_payload_without_focus_or_open():
             self.opened.append(paths)
 
     window = _Window()
-    controller = IpcController(window)
+    controller = IpcController(
+        window,
+        bring_to_front=window._bring_to_front,
+        open_media_files=window.open_media_files,
+    )
 
     controller._on_data(_Conn(""))
 

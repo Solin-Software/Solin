@@ -11,7 +11,11 @@ from PySide6.QtCore import (
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageController
 from .controllers.live_integration_controller import LiveIntegrationController
-from .controllers.main_window_bootstrap_controller import MainWindowBootstrapController
+from .controllers.ipc_controller import IpcController
+from .controllers.main_window_bootstrap_controller import (
+    MainWindowBootstrapController,
+    MainWindowStartupDependencies,
+)
 from .controllers.main_window_ui_controller import MainWindowUiController
 from .controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
@@ -23,6 +27,7 @@ from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.projection_integration_controller import ProjectionIntegrationController
 from .controllers.projection_stop_controller import ProjectionStopController
 from .controllers.projection_window_controller import ProjectionWindowController
+from .controllers.remote_services_controller import RemoteServicesController
 from .controllers.shutdown_controller import ShutdownController
 from .controllers.signal_connection_controller import (
     MainWindowSignalHandlers,
@@ -76,6 +81,7 @@ from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
 from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 from .widgets.timer_bridge import TimerBridge
+from .widgets.projection.monitor_manager import MonitorManagerPopup
 
 if TYPE_CHECKING:
     from .widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
@@ -160,6 +166,12 @@ class MainWindow(QMainWindow):
                 ScreenManager.secondary_screens()
             ),
         )
+        self._monitor_popup = None
+        self._ipc_controller = None
+        self._remote_services = None
+        self._jwl_tmp_files: set[str] = set()
+        self._next_is_sjjm = False
+        self._obs_pre_media_scene = ""
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
         self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
@@ -283,8 +295,34 @@ class MainWindow(QMainWindow):
         )
         self._signal_connections.connect_signals()
 
-        self._bootstrap_controller = MainWindowBootstrapController(self)
-        self._bootstrap_controller.finish_startup()
+        self._bootstrap_controller = MainWindowBootstrapController(
+            MainWindowStartupDependencies(
+                projection_session=self.projection_session,
+                projection_targets=self._projection_targets,
+                obs_settings=self._obs_settings,
+                obs_service=self._obs_service,
+                live_integrations=self._live_integrations,
+                zoom_settings=self._zoom_settings,
+                zoom_service=self._zoom_service,
+                background_song_service=self._background_song_service,
+                monitor_popup_factory=lambda: MonitorManagerPopup(self),
+                ipc_controller_factory=lambda: IpcController(
+                    self,
+                    bring_to_front=self._bring_to_front,
+                    open_media_files=self.open_media_files,
+                ),
+                remote_services_factory=lambda: RemoteServicesController(
+                    self,
+                    self.lang,
+                    self.profile_settings,
+                ),
+                apply_stylesheet=self.setStyleSheet,
+            )
+        )
+        startup_resources = self._bootstrap_controller.finish_startup()
+        self._monitor_popup = startup_resources.monitor_popup
+        self._ipc_controller = startup_resources.ipc_controller
+        self._remote_services = startup_resources.remote_services
 
         # Show the clock window on any monitor reserved for the timer once the
         # screens have settled (mirrors the media projection startup timing).

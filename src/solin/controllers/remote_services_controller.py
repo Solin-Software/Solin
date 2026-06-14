@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QWidget
 
 from ..core.foundation.constants import NOTIFICATION_CHECK_DELAY_MS, UPDATE_CHECK_DELAY_MS
 from ..core.remote.notifications import NotificationService
@@ -12,23 +13,28 @@ from ..widgets.update_dialog import UpdateDialog
 
 if TYPE_CHECKING:
     from solin.core.i18n.manager import LanguageManager
-    from solin.main_window import MainWindow
+    from solin.core.profiles.settings import ProfileSettings
 
 
 class RemoteServicesController:
     """Starts and stops delayed remote notification/update checks."""
 
-    def __init__(self, window: MainWindow, lang_manager: LanguageManager) -> None:
-        self._window = window
+    def __init__(
+        self,
+        parent: QWidget,
+        lang_manager: LanguageManager,
+        profile_settings: ProfileSettings,
+    ) -> None:
+        self._dialog_parent = parent
         self._notification_service = NotificationService(
             lang_manager,
-            window.profile_settings,
-            window,
+            profile_settings,
+            parent,
         )
-        self._notification_queue = NotificationQueue(lang_manager, window)
-        self._notification_timer = QTimer(window)
-        self._update_service = UpdateService(window)
-        self._update_timer = QTimer(window)
+        self._notification_queue = NotificationQueue(lang_manager, parent)
+        self._notification_timer = QTimer(parent)
+        self._update_service = UpdateService(parent)
+        self._update_timer = QTimer(parent)
 
     def start(self) -> None:
         self._notification_service.notifications_ready.connect(
@@ -50,7 +56,7 @@ class RemoteServicesController:
             self._stop_service(service)
 
     def _on_update_available(self, info) -> None:
-        dlg = UpdateDialog(info, self._window)
+        dlg = UpdateDialog(info, self._dialog_parent)
         dlg.show()
 
     @staticmethod

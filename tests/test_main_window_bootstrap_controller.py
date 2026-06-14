@@ -1,4 +1,7 @@
-from solin.controllers.main_window_bootstrap_controller import MainWindowBootstrapController
+from solin.controllers.main_window_bootstrap_controller import (
+    MainWindowBootstrapController,
+    MainWindowStartupDependencies,
+)
 from solin.core.projection.application import ProjectionSession
 
 
@@ -142,6 +145,9 @@ class _Window:
         self._zoom_settings = _EnabledSettings(zoom_enabled)
         self._background_song_service = _Startable(self, "background-song")
         self.projection_session = ProjectionSession()
+        self._jwl_tmp_files = set()
+        self._next_is_sjjm = False
+        self._obs_pre_media_scene = ""
         self.stylesheets = []
 
     def setStyleSheet(self, stylesheet):
@@ -151,12 +157,22 @@ class _Window:
 
 def _make_controller(window, *, ipc_active=False, platform="win32"):
     return MainWindowBootstrapController(
-        window,
+        MainWindowStartupDependencies(
+            projection_session=window.projection_session,
+            projection_targets=window._projection_targets,
+            obs_settings=window._obs_settings,
+            obs_service=window._obs_service,
+            live_integrations=window._live_integrations,
+            zoom_settings=window._zoom_settings,
+            zoom_service=window._zoom_service,
+            background_song_service=window._background_song_service,
+            monitor_popup_factory=lambda: _MonitorPopup(window),
+            ipc_controller_factory=lambda: _IpcController(window),
+            remote_services_factory=lambda: _RemoteServices(window, window.lang),
+            apply_stylesheet=window.setStyleSheet,
+        ),
         app_getter=lambda: _App(ipc_active),
         platform=platform,
-        monitor_popup_factory=_MonitorPopup,
-        ipc_controller_factory=_IpcController,
-        remote_services_factory=_RemoteServices,
         stylesheet="test-stylesheet",
     )
 
@@ -164,7 +180,7 @@ def _make_controller(window, *, ipc_active=False, platform="win32"):
 def test_finish_startup_preserves_startup_order_and_initializes_state():
     window = _Window(obs_enabled=True, zoom_enabled=True)
 
-    _make_controller(window).finish_startup()
+    resources = _make_controller(window).finish_startup()
 
     assert window.events == [
         "projection",
@@ -189,26 +205,32 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
     assert window._jwl_tmp_files == set()
     assert window._next_is_sjjm is False
     assert window._obs_pre_media_scene == ""
-    assert window._ipc_controller.obs_scene_memory_at_start == ""
+    assert resources.ipc_controller.obs_scene_memory_at_start == ""
+    assert resources.monitor_popup is not None
+    assert resources.remote_services.started is True
     assert window.stylesheets == ["test-stylesheet"]
 
 
 def test_finish_startup_skips_disabled_services_and_app_owned_ipc():
     window = _Window(obs_enabled=False, zoom_enabled=True)
 
-    _make_controller(window, ipc_active=True, platform="linux").finish_startup()
+    resources = _make_controller(
+        window,
+        ipc_active=True,
+        platform="linux",
+    ).finish_startup()
 
     assert "obs" not in window.events
     assert "zoom" not in window.events
     assert "ipc" not in window.events
-    assert window._ipc_controller.started is False
-    assert window._remote_services.started is True
+    assert resources.ipc_controller.started is False
+    assert resources.remote_services.started is True
 
 
 def test_finish_startup_wires_zoom_and_monitor_signals():
     window = _Window()
 
-    _make_controller(window).finish_startup()
+    resources = _make_controller(window).finish_startup()
 
     assert window._zoom_service.connection_changed.connected_names == [
         "on_zoom_connection_changed"
@@ -220,15 +242,21 @@ def test_finish_startup_wires_zoom_and_monitor_signals():
         "on_zoom_sharing_state_changed"
     ]
     assert window._zoom_service.share_error.connected_names == ["on_zoom_share_error"]
-    assert window._monitor_popup.projection_toggle_requested.connected_names == [
+    assert resources.monitor_popup.projection_toggle_requested.connected_names == [
         "on_monitor_toggle"
     ]
-    assert window._monitor_popup.projection_all_requested.connected_names == [
+    assert resources.monitor_popup.projection_all_requested.connected_names == [
         "on_monitor_all"
     ]
-    assert window._monitor_popup.floating_toggle_requested.connected_names == [
+    assert resources.monitor_popup.floating_toggle_requested.connected_names == [
         "on_floating_toggle"
     ]
-    assert window._monitor_popup.idle_media_changed.connected_names == [
+    assert resources.monitor_popup.idle_media_changed.connected_names == [
         "on_idle_media_changed"
     ]
+
+
+def test_bootstrap_uses_explicit_dependencies_instead_of_main_window():
+    controller = _make_controller(_Window())
+
+    assert not hasattr(controller, "_window")
