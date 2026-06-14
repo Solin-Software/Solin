@@ -13,6 +13,7 @@ from solin.core.media.downloader import SongDownloader
 from solin.core.media.playback import MediaController
 from solin.core.media.qt_contracts import PlaybackDownloader
 from solin.core.media.settings import MediaPlaybackSettings
+from solin.core.network.browser_images import BrowserImageFetchService
 
 if TYPE_CHECKING:
     from solin.widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
@@ -55,6 +56,10 @@ class MediaComposition:
             self._media_cache_dir,
             notify_cached=self.cache_manager.notify_cached_threadsafe,
         )
+
+    @staticmethod
+    def create_browser_image_fetch_service() -> BrowserImageFetchService:
+        return BrowserImageFetchService()
 
     def create_info_queue(self, parent: QObject) -> MediaInfoQueue:
         from solin.widgets.media_info_extractor import MediaInfoQueue

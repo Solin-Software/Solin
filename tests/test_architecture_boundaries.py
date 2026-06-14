@@ -607,7 +607,7 @@ def test_update_dialog_has_no_network_persistence_or_process_adapters():
 
 
 def test_browser_download_widget_has_no_transfer_or_storage_adapters():
-    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser" / "downloads.py"
+    browser_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser"
     forbidden_modules = {
         "os",
         "tempfile",
@@ -617,14 +617,15 @@ def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     }
     violations: list[str] = []
 
-    for node in _imports(path):
-        modules = (
-            [alias.name for alias in node.names]
-            if isinstance(node, ast.Import)
-            else [node.module or ""]
-        )
-        if any(module in forbidden_modules for module in modules):
-            violations.append(_display(path, node))
+    for path in (browser_root / "downloads.py", browser_root / "widget.py"):
+        for node in _imports(path):
+            modules = (
+                [alias.name for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [node.module or ""]
+            )
+            if any(module in forbidden_modules for module in modules):
+                violations.append(_display(path, node))
 
     assert violations == []
 

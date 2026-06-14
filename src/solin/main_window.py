@@ -128,6 +128,7 @@ from .widgets.projection.monitor_manager import MonitorManagerPopup
 
 if TYPE_CHECKING:
     from .core.media.browser_downloads import BrowserDownloadService
+    from .core.network.browser_images import BrowserImageFetchService
     from .widgets.media_info_extractor import MediaInfoQueue, MediaInfoService
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ class MainWindow(QMainWindow):
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         browser_download_service_factory: Callable[[], BrowserDownloadService],
+        browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService],
         media_settings: MediaSettingsStore,
         font_manager: FontManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
@@ -471,6 +473,7 @@ class MainWindow(QMainWindow):
             media_info_queue_factory=media_info_queue_factory,
             media_info_service_factory=media_info_service_factory,
             browser_download_service_factory=browser_download_service_factory,
+            browser_image_fetch_service_factory=browser_image_fetch_service_factory,
         )
         self._build_ui()
         self._playlist_imports = PlaylistImportController(

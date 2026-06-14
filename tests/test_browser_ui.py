@@ -2,6 +2,7 @@ import threading
 from pathlib import Path
 
 import solin.widgets.browser.widget as browser_widget
+from solin.core.network.browser_images import BrowserImageFetchService
 from solin.widgets.browser.ui import _BrowserUiMixin
 
 
@@ -38,7 +39,7 @@ def test_image_fetch_coordinator_drops_replaced_worker_result():
         if payload == b"new":
             delivered_new.set()
 
-    coordinator = browser_widget._ImageFetchCoordinator(_fetch)
+    coordinator = BrowserImageFetchService(_fetch)
     first_generation = coordinator.start("old", _deliver)
     assert first_generation is not None
     assert old_started.wait(1)

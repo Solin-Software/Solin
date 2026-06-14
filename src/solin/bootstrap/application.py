@@ -77,6 +77,7 @@ def _launch_main_window(
         media.create_info_queue,
         media.create_info_service,
         media.create_browser_download_service,
+        media.create_browser_image_fetch_service,
         media_settings,
         font_manager,
         jw_catalog_cache_paths,

@@ -4,9 +4,6 @@ import binascii
 import logging
 import re
 import sys
-import threading
-import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, Slot, QEvent, QTimer
@@ -14,7 +11,6 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
-from ...core.network.http import HttpError, get_bytes
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
 from .crop_overlay import _CropOverlay
 from .downloads import _BrowserDownloadsMixin
@@ -27,93 +23,7 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.media.browser_downloads import BrowserDownloadService
-
-
-class _ImageFetchCoordinator:
-    """Owns browser image-fetch generations and worker threads."""
-
-    _MAX_IMAGE_BYTES = 25 * 1024 * 1024
-
-    def __init__(
-        self,
-        fetch_url: Callable[[str], bytes] | None = None,
-    ) -> None:
-        self._fetch_url = fetch_url or self._read_url
-        self._lock = threading.Lock()
-        self._generation = 0
-        self._shutdown = False
-        self._threads: set[threading.Thread] = set()
-
-    @classmethod
-    def _read_url(cls, url: str) -> bytes:
-        return get_bytes(
-            url,
-            timeout=15,
-            max_bytes=cls._MAX_IMAGE_BYTES,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-
-    def claim(self) -> int | None:
-        with self._lock:
-            if self._shutdown:
-                return None
-            self._generation += 1
-            return self._generation
-
-    def start(
-        self,
-        url: str,
-        deliver: Callable[[int, bytes], None],
-    ) -> int | None:
-        generation = self.claim()
-        if generation is None:
-            return None
-
-        def fetch() -> None:
-            try:
-                payload = self._fetch_url(url)
-                if self.is_current(generation):
-                    deliver(generation, payload)
-            except (HttpError, OSError, ValueError) as exc:
-                log.warning("Image fetch error: %s", exc)
-            finally:
-                with self._lock:
-                    self._threads.discard(threading.current_thread())
-
-        thread = threading.Thread(
-            target=fetch,
-            daemon=True,
-            name=f"browser-image-fetch-{generation}",
-        )
-        with self._lock:
-            if self._shutdown or generation != self._generation:
-                return None
-            self._threads.add(thread)
-        thread.start()
-        return generation
-
-    def is_current(self, generation: int) -> bool:
-        with self._lock:
-            return not self._shutdown and generation == self._generation
-
-    def invalidate(self) -> None:
-        with self._lock:
-            self._generation += 1
-
-    def shutdown(self, timeout: float = 2.0) -> list[str]:
-        with self._lock:
-            self._shutdown = True
-            self._generation += 1
-            threads = list(self._threads)
-        deadline = time.monotonic() + max(0.0, timeout)
-        for thread in threads:
-            if thread is threading.current_thread():
-                continue
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            thread.join(timeout=remaining)
-        return [thread.name for thread in threads if thread.is_alive()]
+    from ...core.network.browser_images import BrowserImageFetchService
 
 # ── Overlay JavaScript ─────────────────────────────────────────────────────────
 #
@@ -809,6 +719,7 @@ class BrowserWidget(
         *,
         profile_paths: ProfilePaths,
         download_service: BrowserDownloadService,
+        image_fetch_service: BrowserImageFetchService,
         parent=None,
         projection_fps: int | None = None,
     ):
@@ -818,7 +729,7 @@ class BrowserWidget(
 
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root
-        self._image_fetches = _ImageFetchCoordinator()
+        self._image_fetches = image_fetch_service
 
         self._browser_aspect_16_9_active: bool = False
 

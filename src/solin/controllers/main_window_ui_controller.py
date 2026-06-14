@@ -63,6 +63,7 @@ from .navigation_controller import NavigationController
 
 if TYPE_CHECKING:
     from ..core.media.browser_downloads import BrowserDownloadService
+    from ..core.network.browser_images import BrowserImageFetchService
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,12 +215,14 @@ class MainWindowUiController:
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         browser_download_service_factory: Callable[[], BrowserDownloadService],
+        browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService],
     ) -> None:
         self._context = context
         self._handlers = handlers
         self._media_info_queue_factory = media_info_queue_factory
         self._media_info_service_factory = media_info_service_factory
         self._browser_download_service_factory = browser_download_service_factory
+        self._browser_image_fetch_service_factory = browser_image_fetch_service_factory
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
@@ -313,6 +316,9 @@ class MainWindowUiController:
                 media_cache_manager=context.media_cache_manager,
                 browser_download_service_factory=(
                     self._browser_download_service_factory
+                ),
+                browser_image_fetch_service_factory=(
+                    self._browser_image_fetch_service_factory
                 ),
                 media_info_service_factory=self._media_info_service_factory,
             ),
