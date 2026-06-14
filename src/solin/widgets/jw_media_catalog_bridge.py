@@ -22,8 +22,9 @@ Architecture
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from collections import deque
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from PySide6.QtCore import (
     QAbstractListModel,
@@ -42,10 +43,12 @@ from PySide6.QtCore import (
 
 from ..core.jw.catalog import (
     JWMediaCatalogCachePaths,
-    JWMediaCatalogService,
     ensure_thumbnail_cached,
 )
 from ..core.meetings.colors import accent_from_hue
+
+if TYPE_CHECKING:
+    from ..core.jw.catalog import JWMediaCatalogService
 
 log = logging.getLogger(__name__)
 
@@ -356,13 +359,14 @@ class JWMediaCatalogBridge(QObject):
     def __init__(
         self,
         cache_paths: JWMediaCatalogCachePaths,
+        catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
         self._cache_paths = cache_paths
 
         # Catalog service (async fetch backend)
-        self._catalog_service = JWMediaCatalogService(cache_paths, self)
+        self._catalog_service = catalog_service_factory(self)
         self._catalog_service.videos_progress.connect(self._on_videos_progress)
         self._catalog_service.videos_ready.connect(self._on_videos_ready)
         self._catalog_service.fetch_failed.connect(self._on_fetch_failed)

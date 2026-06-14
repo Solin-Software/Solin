@@ -68,6 +68,7 @@ _ITEM_H            = 77   # altura fixa de cada item
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from ...core.jw.catalog import JWMediaCatalogService
     from ...core.ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
 
@@ -95,6 +96,7 @@ class _PlaylistEditView(
         playlist_repository: PlaylistRepository,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_songs_store: JWSongsStore,
         thumb_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
@@ -142,7 +144,11 @@ class _PlaylistEditView(
         )
         self.bridge = PlaylistEditBridge(self)
         self.bridge.attach_model(self.model)
-        self.catalog_bridge = JWMediaCatalogBridge(jw_catalog_cache_paths, self)
+        self.catalog_bridge = JWMediaCatalogBridge(
+            jw_catalog_cache_paths,
+            jw_catalog_service_factory,
+            self,
+        )
         self.songs_bridge = JWSongsBridge(jw_songs_store, self)
 
         self._apply_media_language_context()
@@ -914,6 +920,7 @@ class PlaylistWidget(QWidget):
         playlist_repository: PlaylistRepository,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_songs_store: JWSongsStore,
         thumb_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
@@ -929,6 +936,7 @@ class PlaylistWidget(QWidget):
         self._playlist_repository = playlist_repository
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
         self._thumb_cache_dir = Path(thumb_cache_dir)
         self._media_info_queue_factory = media_info_queue_factory
@@ -977,6 +985,7 @@ class PlaylistWidget(QWidget):
             playlist_repository=self._playlist_repository,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+            jw_catalog_service_factory=self._jw_catalog_service_factory,
             jw_songs_store=self._jw_songs_store,
             thumb_cache_dir=self._thumb_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,

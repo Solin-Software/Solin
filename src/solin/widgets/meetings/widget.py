@@ -75,6 +75,7 @@ from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvi
 from ..media_info_extractor import MediaInfoQueue
 
 if TYPE_CHECKING:
+    from ...core.jw.catalog import JWMediaCatalogService
     from ...core.meetings.memorial import MemorialService
     from ...core.meetings.publications import JwpubService
 
@@ -115,6 +116,7 @@ class StudyDetailView(QWidget):
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+                 jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_songs_store: JWSongsStore,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
@@ -129,6 +131,7 @@ class StudyDetailView(QWidget):
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
@@ -177,7 +180,11 @@ class StudyDetailView(QWidget):
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.set_sync_root(self._watched_folder)
 
-        self.catalog_bridge = JWMediaCatalogBridge(self._jw_catalog_cache_paths, self)
+        self.catalog_bridge = JWMediaCatalogBridge(
+            self._jw_catalog_cache_paths,
+            self._jw_catalog_service_factory,
+            self,
+        )
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
@@ -391,6 +398,7 @@ class _MemorialDetailView(QWidget):
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+                 jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_songs_store: JWSongsStore,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
@@ -404,6 +412,7 @@ class _MemorialDetailView(QWidget):
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
@@ -449,7 +458,11 @@ class _MemorialDetailView(QWidget):
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
 
-        self.catalog_bridge = JWMediaCatalogBridge(self._jw_catalog_cache_paths, self)
+        self.catalog_bridge = JWMediaCatalogBridge(
+            self._jw_catalog_cache_paths,
+            self._jw_catalog_service_factory,
+            self,
+        )
         self.catalog_bridge.set_language_code(lang_code)
         self.catalog_bridge.jwMediaConfirmed.connect(
             self.controller.add_from_jw_catalog
@@ -642,6 +655,7 @@ class MeetingsWidget(QWidget):
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_songs_store: JWSongsStore,
         media_settings: MediaSettingsStore,
         meeting_schedule_settings: MeetingScheduleSettingsStore,
@@ -662,6 +676,7 @@ class MeetingsWidget(QWidget):
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
+        self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
         self._media_settings = media_settings
         self._meeting_schedule_settings = meeting_schedule_settings
@@ -896,6 +911,7 @@ class MeetingsWidget(QWidget):
                                 runtime_paths=self._runtime_paths,
                                 cache_manager=self._cache_manager,
                                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+                                jw_catalog_service_factory=self._jw_catalog_service_factory,
                                 jw_songs_store=self._jw_songs_store,
                                 meeting_schedule_settings=self._meeting_schedule_settings,
                                 media_info_queue_factory=self._media_info_queue_factory,
@@ -934,6 +950,7 @@ class MeetingsWidget(QWidget):
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,
                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
+                jw_catalog_service_factory=self._jw_catalog_service_factory,
                 jw_songs_store=self._jw_songs_store,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 media_info_queue_factory=self._media_info_queue_factory,

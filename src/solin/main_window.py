@@ -89,7 +89,7 @@ from .core.ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
-from .core.jw.catalog import JWMediaCatalogCachePaths
+from .core.jw.catalog import JWMediaCatalogCachePaths, JWMediaCatalogService
 from .core.jw.songs import JWSongsStore
 from .core.jw.yeartext import YeartextService
 from .core.jw.yeartext_settings import YeartextSettingsStore
@@ -370,6 +370,10 @@ class MainWindow(QMainWindow):
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
                 jw_catalog_cache_paths=self.jw_catalog_cache_paths,
+                jw_catalog_service_factory=lambda parent: JWMediaCatalogService(
+                    self.jw_catalog_cache_paths,
+                    parent,
+                ),
                 jw_songs_store=self.jw_songs_store,
                 jwpub_service_factory=lambda parent: JwpubService(
                     self._media_settings,
