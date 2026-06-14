@@ -23,7 +23,10 @@ from solin.core.jw.songs import JWSongsStore
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 from solin.core.media.settings import MediaSettingsStore
-from solin.core.meetings.schedule import MeetingOccurrence, load_meeting_schedule
+from solin.core.meetings.schedule import (
+    MeetingOccurrence,
+    MeetingScheduleSettingsStore,
+)
 
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50
@@ -70,7 +73,7 @@ class BackgroundSongService(QObject):
         lang_manager: object,
         settings: BackgroundSongSettingsStore,
         media_settings: MediaSettingsStore,
-        schedule_prefs: Any,
+        schedule_settings: MeetingScheduleSettingsStore,
         songs_store: JWSongsStore,
         cache_manager: MediaCacheManager,
         parent: QObject | None = None,
@@ -78,7 +81,7 @@ class BackgroundSongService(QObject):
         super().__init__(parent)
         self._lang = lang_manager
         self._settings = settings
-        self._schedule_prefs = schedule_prefs
+        self._schedule_settings = schedule_settings
         self._store = songs_store
 
         self._media = MediaController(media_settings, cache_manager, self)
@@ -281,7 +284,7 @@ class BackgroundSongService(QObject):
         if not self._enabled:
             return
 
-        schedule = load_meeting_schedule(self._schedule_prefs)
+        schedule = self._schedule_settings.load()
         if not schedule.has_configured_slot:
             self._auto_stop_timer.stop()
             if not self.is_playing:
@@ -466,7 +469,7 @@ class BackgroundSongService(QObject):
 
     def _can_start_new_track(self) -> bool:
         now = datetime.now().astimezone()
-        occurrence = load_meeting_schedule(self._schedule_prefs).pre_meeting_occurrence(now)
+        occurrence = self._schedule_settings.load().pre_meeting_occurrence(now)
         if occurrence is None:
             active = self._active_occurrence
             if not self._manual_session and active is not None and now >= active.starts_at:
@@ -549,7 +552,7 @@ class BackgroundSongService(QObject):
         self.stop()
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
-        return load_meeting_schedule(self._schedule_prefs).pre_meeting_occurrence(
+        return self._schedule_settings.load().pre_meeting_occurrence(
             datetime.now().astimezone()
         )
 

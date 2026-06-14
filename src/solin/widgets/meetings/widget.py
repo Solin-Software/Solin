@@ -21,7 +21,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import (
-    Signal, Slot, QSettings, QTimer,
+    Signal, Slot, QTimer,
     QCoreApplication, QUrl, QEvent
 )
 from PySide6.QtGui import (
@@ -56,6 +56,7 @@ from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.memorial import MemorialData, MemorialService
+from ...core.meetings.schedule import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
 from ...core.media.settings import MediaSettingsStore
@@ -111,7 +112,7 @@ class StudyDetailView(QWidget):
                  cache_manager: MediaCacheManager,
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
                  jw_songs_store: JWSongsStore,
-                 prefs: QSettings,
+                 meeting_schedule_settings: MeetingScheduleSettingsStore,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
         self._pub   = pub_type
@@ -124,7 +125,7 @@ class StudyDetailView(QWidget):
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
-        self._prefs = prefs
+        self._meeting_schedule_settings = meeting_schedule_settings
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
@@ -159,7 +160,7 @@ class StudyDetailView(QWidget):
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
-            prefs=self._prefs,
+            schedule_settings=self._meeting_schedule_settings,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -384,7 +385,7 @@ class _MemorialDetailView(QWidget):
                  cache_manager: MediaCacheManager,
                  jw_catalog_cache_paths: JWMediaCatalogCachePaths,
                  jw_songs_store: JWSongsStore,
-                 prefs: QSettings,
+                 meeting_schedule_settings: MeetingScheduleSettingsStore,
                  parent=None):
         super().__init__(parent)
         self._md  = md
@@ -396,7 +397,7 @@ class _MemorialDetailView(QWidget):
         self._cache_manager = cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
-        self._prefs = prefs
+        self._meeting_schedule_settings = meeting_schedule_settings
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -429,7 +430,7 @@ class _MemorialDetailView(QWidget):
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
-            prefs=self._prefs,
+            schedule_settings=self._meeting_schedule_settings,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -634,7 +635,7 @@ class MeetingsWidget(QWidget):
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
         media_settings: MediaSettingsStore,
-        prefs: QSettings,
+        meeting_schedule_settings: MeetingScheduleSettingsStore,
         parent=None,
     ):
         super().__init__(parent)
@@ -652,7 +653,7 @@ class MeetingsWidget(QWidget):
         self._jw_songs_store = jw_songs_store
         self._jwpub_checksum_store = jwpub_checksum_store
         self._media_settings = media_settings
-        self._prefs = prefs
+        self._meeting_schedule_settings = meeting_schedule_settings
 
         self._service = JwpubService(
             media_settings,
@@ -894,7 +895,7 @@ class MeetingsWidget(QWidget):
                                 cache_manager=self._cache_manager,
                                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
                                 jw_songs_store=self._jw_songs_store,
-                                prefs=self._prefs,
+                                meeting_schedule_settings=self._meeting_schedule_settings,
                                 watched_folder=self._watched_folder)
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -931,7 +932,7 @@ class MeetingsWidget(QWidget):
                 cache_manager=self._cache_manager,
                 jw_catalog_cache_paths=self._jw_catalog_cache_paths,
                 jw_songs_store=self._jw_songs_store,
-                prefs=self._prefs,
+                meeting_schedule_settings=self._meeting_schedule_settings,
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)

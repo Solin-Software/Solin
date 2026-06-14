@@ -219,6 +219,7 @@ class MainWindowUiController:
             camera_settings=window._camera_settings,
             auto_key_settings=window._auto_key_settings,
             media_settings=window._media_settings,
+            meeting_schedule_settings=window._meeting_schedule_settings,
             background_song_settings=window._background_song_settings,
             yeartext_cache_file=(
                 window.runtime_paths.cache_dir / "yeartext_cache.json"
@@ -259,7 +260,7 @@ class MainWindowUiController:
             jw_songs_store=window.jw_songs_store,
             jwpub_checksum_store=window.jwpub_checksum_store,
             media_settings=window._media_settings,
-            prefs=window.profile_prefs,
+            meeting_schedule_settings=window._meeting_schedule_settings,
             parent=window,
         )
         window.meetings_widget.set_watched_folder(watched_folder)

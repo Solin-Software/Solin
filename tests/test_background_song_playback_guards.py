@@ -32,7 +32,9 @@ def _guard_service(occurrence: MeetingOccurrence):
     service = SimpleNamespace(
         _fade_seconds=5,
         _stop_before_seconds=10,
-        _schedule_prefs=object(),
+        _schedule_settings=SimpleNamespace(
+            load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence)
+        ),
         _active_occurrence=None,
         _suppressed_slot_id="",
         _desired_playing=True,
@@ -45,15 +47,11 @@ def _guard_service(occurrence: MeetingOccurrence):
     return service, timer, statuses
 
 
-def test_new_track_is_allowed_during_final_fade_window(monkeypatch):
+def test_new_track_is_allowed_during_final_fade_window():
     occurrence = _occurrence(12)
     service, timer, statuses = _guard_service(occurrence)
     service._scheduled_fade_deadline = None
-    monkeypatch.setattr(
-        service_module,
-        "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence),
-    )
+
     allowed = BackgroundSongService._can_start_new_track(service)
 
     assert allowed is True
@@ -63,15 +61,11 @@ def test_new_track_is_allowed_during_final_fade_window(monkeypatch):
     assert statuses == []
 
 
-def test_new_track_rearms_stop_timer_before_fade_window(monkeypatch):
+def test_new_track_rearms_stop_timer_before_fade_window():
     occurrence = _occurrence(30)
     service, timer, statuses = _guard_service(occurrence)
     service._scheduled_fade_deadline = None
-    monkeypatch.setattr(
-        service_module,
-        "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence),
-    )
+
     allowed = BackgroundSongService._can_start_new_track(service)
 
     assert allowed is True
@@ -80,16 +74,15 @@ def test_new_track_rearms_stop_timer_before_fade_window(monkeypatch):
     assert statuses == []
 
 
-def test_manual_track_is_allowed_after_meeting_start(monkeypatch):
+def test_manual_track_is_allowed_after_meeting_start():
     occurrence = _occurrence(-30)
     service, timer, statuses = _guard_service(occurrence)
     service._active_occurrence = occurrence
     service._scheduled_fade_deadline = None
-    monkeypatch.setattr(
-        service_module,
-        "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: None),
+    service._schedule_settings = SimpleNamespace(
+        load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: None)
     )
+
     allowed = BackgroundSongService._can_start_new_track(service)
 
     assert allowed is True
@@ -98,16 +91,14 @@ def test_manual_track_is_allowed_after_meeting_start(monkeypatch):
     assert statuses == []
 
 
-def test_delayed_automatic_track_is_rejected_after_meeting_start(monkeypatch):
+def test_delayed_automatic_track_is_rejected_after_meeting_start():
     occurrence = _occurrence(-30)
     service, timer, statuses = _guard_service(occurrence)
     service._manual_session = False
     service._active_occurrence = occurrence
     service._scheduled_fade_deadline = None
-    monkeypatch.setattr(
-        service_module,
-        "load_meeting_schedule",
-        lambda _prefs: SimpleNamespace(pre_meeting_occurrence=lambda _now: None),
+    service._schedule_settings = SimpleNamespace(
+        load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: None)
     )
 
     allowed = BackgroundSongService._can_start_new_track(service)
@@ -141,9 +132,7 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
     assert statuses == ["Stopping background song..."]
 
 
-def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade(
-    monkeypatch,
-):
+def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
     occurrence = _occurrence(12)
     loaded: list[bool] = []
     timer = _TimerStub()
@@ -151,10 +140,9 @@ def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade(
         has_configured_slot=True,
         pre_meeting_occurrence=lambda _now: occurrence,
     )
-    monkeypatch.setattr(service_module, "load_meeting_schedule", lambda _prefs: schedule)
     service = SimpleNamespace(
         _enabled=True,
-        _schedule_prefs=object(),
+        _schedule_settings=SimpleNamespace(load=lambda: schedule),
         _active_occurrence=None,
         _scheduled_fade_deadline=None,
         _suppressed_slot_id="",

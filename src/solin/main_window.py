@@ -57,6 +57,7 @@ from .core.integrations.automation.shortcuts import (
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistStoragePaths
+from .core.meetings.schedule import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.manager import ProfileManager
@@ -107,6 +108,9 @@ class MainWindow(QMainWindow):
         )
         self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
         self._media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
+        self._meeting_schedule_settings = (
+            MeetingScheduleSettingsStore.for_profile_settings(profile_settings)
+        )
         self._background_song_settings = (
             BackgroundSongSettingsStore.for_profile_settings(profile_settings)
         )
@@ -163,7 +167,7 @@ class MainWindow(QMainWindow):
             self.lang,
             self._background_song_settings,
             self._media_settings,
-            profile_prefs,
+            self._meeting_schedule_settings,
             jw_songs_store,
             media_cache_manager,
             self,

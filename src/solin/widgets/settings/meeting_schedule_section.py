@@ -14,14 +14,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...core.foundation.settings_keys import SettingsKey
 from ...core.meetings.schedule import (
     DEFAULT_MIDWEEK_TIME,
     DEFAULT_WEEKEND_TIME,
     MIDWEEK,
     UNCONFIGURED_WEEKDAY,
     WEEKEND,
-    load_meeting_schedule,
     parse_time_text,
 )
 from ...styles.icons import ICON_CALENDAR, ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, make_icon
@@ -400,8 +398,6 @@ class MeetingScheduleSectionMixin:
             MIDWEEK,
             self.tr("Midweek meeting"),
             self.tr("Day and time for the midweek meeting."),
-            SettingsKey.MEETING_MIDWEEK_DAY,
-            SettingsKey.MEETING_MIDWEEK_TIME,
             DEFAULT_MIDWEEK_TIME,
         ))
         lay.addWidget(self._divider())
@@ -409,8 +405,6 @@ class MeetingScheduleSectionMixin:
             WEEKEND,
             self.tr("Weekend meeting"),
             self.tr("Day and time for the weekend meeting."),
-            SettingsKey.MEETING_WEEKEND_DAY,
-            SettingsKey.MEETING_WEEKEND_TIME,
             DEFAULT_WEEKEND_TIME,
         ))
         return card
@@ -420,8 +414,6 @@ class MeetingScheduleSectionMixin:
         kind: str,
         title: str,
         desc: str,
-        day_key: str,
-        time_key: str,
         default_time: str,
     ) -> QFrame:
         row = QFrame()
@@ -462,12 +454,11 @@ class MeetingScheduleSectionMixin:
 
         time_button = _ScheduleTimeButton()
 
-        saved_day = self._prefs.value(day_key, UNCONFIGURED_WEEKDAY)
-        saved_time = self._prefs.value(time_key, "", str)
+        saved_day, saved_time = self._meeting_schedule_settings.slot_values(kind)
         self._apply_schedule_controls(day_button, time_button, saved_day, saved_time, default_time)
 
         def on_changed() -> None:
-            self._on_schedule_control_changed(kind, day_key, time_key, default_time)
+            self._on_schedule_control_changed(kind, default_time)
 
         day_button.dayChanged.connect(lambda _day: on_changed())
         time_button.timeChanged.connect(lambda _minutes: on_changed())
@@ -503,8 +494,6 @@ class MeetingScheduleSectionMixin:
     def _on_schedule_control_changed(
         self,
         kind: str,
-        day_key: str,
-        time_key: str,
         default_time: str,
     ) -> None:
         day_button, time_button = self._schedule_rows[kind]
@@ -513,11 +502,9 @@ class MeetingScheduleSectionMixin:
         time_button.setEnabled(configured)
         if configured:
             time_text = time_button.time_text()
-            self._prefs.setValue(day_key, day)
-            self._prefs.setValue(time_key, time_text or default_time)
+            self._meeting_schedule_settings.set_slot(kind, day, time_text or default_time)
         else:
-            self._prefs.setValue(day_key, UNCONFIGURED_WEEKDAY)
-            self._prefs.setValue(time_key, "")
+            self._meeting_schedule_settings.set_slot(kind, UNCONFIGURED_WEEKDAY, "")
         self._sync_background_song_desc()
         self.meeting_schedule_changed.emit()
 
@@ -547,7 +534,7 @@ class MeetingScheduleSectionMixin:
             self._populate_day_button(day_button)
 
     def get_meeting_schedule(self):
-        return load_meeting_schedule(self._prefs)
+        return self._meeting_schedule_settings.load()
 
     def _meeting_schedule_configured(self) -> bool:
         return self.get_meeting_schedule().has_configured_slot

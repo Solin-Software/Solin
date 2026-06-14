@@ -21,7 +21,6 @@ from PySide6.QtCore import (
     QObject,
     Property,
     QCoreApplication,
-    QSettings,
     Signal,
     Slot,
 )
@@ -56,6 +55,7 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncError,
     MeetingSyncIdentity,
 )
+from ...core.meetings.schedule import MeetingScheduleSettingsStore
 from ...core.meetings.publications import MeetingMedia, WeekData
 from ...core.meetings.thumbnails import (
     meeting_thumb_cache_key,
@@ -160,7 +160,7 @@ class MeetingTreeController(QObject):
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
-        prefs: QSettings,
+        schedule_settings: MeetingScheduleSettingsStore,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -173,9 +173,8 @@ class MeetingTreeController(QObject):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
-        self._prefs = prefs
         self._builder = MeetingTreeBuilder()
-        self._sync_service = MeetingLinkedFolderSync(prefs)
+        self._sync_service = MeetingLinkedFolderSync(schedule_settings)
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""

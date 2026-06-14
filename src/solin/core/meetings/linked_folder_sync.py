@@ -23,7 +23,7 @@ from solin.core.ingest.manifest import (
 )
 
 from .folder_matcher import match_meeting_folder
-from .schedule import UNCONFIGURED_WEEKDAY, load_meeting_schedule
+from .schedule import MeetingScheduleSettingsStore, UNCONFIGURED_WEEKDAY
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
@@ -75,8 +75,8 @@ def meeting_tag_for_pub_type(pub_type: str) -> str:
 class MeetingLinkedFolderSync:
     """Domain service for meeting state stored in a watched meeting folder."""
 
-    def __init__(self, prefs: Any) -> None:
-        self._prefs = prefs
+    def __init__(self, schedule_settings: MeetingScheduleSettingsStore) -> None:
+        self._schedule_settings = schedule_settings
 
     def folder_date_for(self, monday: date, pub_type: str) -> date:
         weekday = self._configured_weekday(pub_type)
@@ -296,7 +296,7 @@ class MeetingLinkedFolderSync:
         return detached
 
     def _configured_weekday(self, pub_type: str) -> int:
-        schedule = load_meeting_schedule(self._prefs)
+        schedule = self._schedule_settings.load()
         slot = schedule.midweek if pub_type == "mwb" else schedule.weekend
         if 0 <= slot.weekday <= 6:
             return slot.weekday

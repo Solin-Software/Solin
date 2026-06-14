@@ -20,6 +20,7 @@ from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
 from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.media.settings import MediaSettingsStore
+from ..core.meetings.schedule import MeetingScheduleSettingsStore
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin
@@ -76,6 +77,7 @@ class SettingsWidget(
                  camera_settings: CameraSettingsStore,
                  auto_key_settings: AutoKeySettingsStore,
                  media_settings: MediaSettingsStore,
+                 meeting_schedule_settings: MeetingScheduleSettingsStore,
                  background_song_settings: BackgroundSongSettingsStore,
                  yeartext_cache_file: str | Path,
                  parent=None):
@@ -92,6 +94,7 @@ class SettingsWidget(
         self._camera_settings = camera_settings
         self._auto_key_settings = auto_key_settings
         self._media_settings = media_settings
+        self._meeting_schedule_settings = meeting_schedule_settings
         self._background_song_settings = background_song_settings
         self._init_yearly_text_section()
         self._build_ui()

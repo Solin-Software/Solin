@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Any
 
+from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.settings_store import SettingsStore
+from solin.core.profiles.settings import ProfileSettings
 
 MIDWEEK = "midweek"
 WEEKEND = "weekend"
@@ -128,21 +131,73 @@ class MeetingSchedule:
         return min(candidates, key=lambda occurrence: occurrence.starts_at)
 
 
-def load_meeting_schedule(prefs) -> MeetingSchedule:
-    """Read the profile meeting schedule from QSettings-like preferences."""
+@dataclass(frozen=True, slots=True)
+class MeetingScheduleSettingsStore:
+    settings: SettingsStore
 
-    return MeetingSchedule(
-        midweek=MeetingSlot.from_values(
-            MIDWEEK,
-            prefs.value(SettingsKey.MEETING_MIDWEEK_DAY, UNCONFIGURED_WEEKDAY),
-            prefs.value(SettingsKey.MEETING_MIDWEEK_TIME, "", str),
-        ),
-        weekend=MeetingSlot.from_values(
-            WEEKEND,
-            prefs.value(SettingsKey.MEETING_WEEKEND_DAY, UNCONFIGURED_WEEKDAY),
-            prefs.value(SettingsKey.MEETING_WEEKEND_TIME, "", str),
-        ),
-    )
+    @classmethod
+    def for_profile_settings(
+        cls,
+        profile_settings: ProfileSettings,
+    ) -> "MeetingScheduleSettingsStore":
+        return cls(
+            SettingsStore.for_namespace(
+                profile_settings.organization,
+                QSETTINGS_PREFS_APP,
+            )
+        )
+
+    def load(self) -> MeetingSchedule:
+        return MeetingSchedule(
+            midweek=MeetingSlot.from_values(
+                MIDWEEK,
+                self.settings.value(
+                    SettingsKey.MEETING_MIDWEEK_DAY,
+                    UNCONFIGURED_WEEKDAY,
+                ),
+                self.settings.string(SettingsKey.MEETING_MIDWEEK_TIME),
+            ),
+            weekend=MeetingSlot.from_values(
+                WEEKEND,
+                self.settings.value(
+                    SettingsKey.MEETING_WEEKEND_DAY,
+                    UNCONFIGURED_WEEKDAY,
+                ),
+                self.settings.string(SettingsKey.MEETING_WEEKEND_TIME),
+            ),
+        )
+
+    def slot_values(self, kind: str) -> tuple[int, str]:
+        day_key, time_key = self._keys_for(kind)
+        return (
+            normalize_weekday(self.settings.value(day_key, UNCONFIGURED_WEEKDAY)),
+            self.settings.string(time_key),
+        )
+
+    def set_slot(self, kind: str, weekday: int, time_text: str) -> None:
+        day_key, time_key = self._keys_for(kind)
+        normalized_weekday = normalize_weekday(weekday)
+        if normalized_weekday == UNCONFIGURED_WEEKDAY:
+            self.settings.set_value(day_key, UNCONFIGURED_WEEKDAY, sync=False)
+            self.settings.set_value(time_key, "", sync=False)
+        else:
+            self.settings.set_value(day_key, normalized_weekday, sync=False)
+            self.settings.set_value(time_key, time_text, sync=False)
+        self.settings.sync()
+
+    @staticmethod
+    def _keys_for(kind: str) -> tuple[str, str]:
+        if kind == MIDWEEK:
+            return (
+                SettingsKey.MEETING_MIDWEEK_DAY,
+                SettingsKey.MEETING_MIDWEEK_TIME,
+            )
+        if kind == WEEKEND:
+            return (
+                SettingsKey.MEETING_WEEKEND_DAY,
+                SettingsKey.MEETING_WEEKEND_TIME,
+            )
+        raise ValueError(f"Unknown meeting schedule kind: {kind}")
 
 
 __all__ = [
@@ -153,8 +208,8 @@ __all__ = [
     "WEEKEND",
     "MeetingOccurrence",
     "MeetingSchedule",
+    "MeetingScheduleSettingsStore",
     "MeetingSlot",
-    "load_meeting_schedule",
     "minutes_to_time_text",
     "normalize_weekday",
     "parse_time_text",
