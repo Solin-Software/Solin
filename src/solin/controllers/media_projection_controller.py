@@ -9,8 +9,8 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
-    AUDIO_EXTS,
 )
+from ..core.media.formats import AUDIO_EXTS
 
 #: Projection states that carry a zoom/pan transform (so it is persisted in
 #: _proj_state and replayed onto surfaces created later).  Both render through a

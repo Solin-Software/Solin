@@ -13,13 +13,11 @@ from pathlib import Path
 from PySide6.QtCore import Slot
 
 from ...core.foundation.constants import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
     JWPUB_EXTS,
     PDF_EXTS,
     PLAYLIST_EXTS,
-    VIDEO_EXTS,
 )
+from ...core.media.formats import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 from ...core.network.http import HttpError, stream_get
 
 log = logging.getLogger(__name__)

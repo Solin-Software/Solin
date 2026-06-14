@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
+from ...core.playlists.items import create_playlist_item
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
@@ -31,7 +32,7 @@ from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.media.cache import MediaCacheManager
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
-from .items import _enrich_items_for_export, new_playlist_item
+from .item_visuals import enrich_items_for_export
 
 _BTN_STYLE = (
     "QPushButton{border:1px solid #30363d;border-radius:6px;"
@@ -368,7 +369,7 @@ class _PlaylistListView(QWidget):
         if not path:
             return
         try:
-            items = _enrich_items_for_export(
+            items = enrich_items_for_export(
                 pl.get("items", []),
                 {},
                 self._thumb_cache_dir,
@@ -408,7 +409,7 @@ class _PlaylistListView(QWidget):
                 items = []
                 for raw in data.get("items", []):
                     url = raw.get("url") or raw.get("jworg_url") or ""
-                    item = new_playlist_item(
+                    item = create_playlist_item(
                         title=raw.get("title", ""),
                         url=url,
                         type=raw.get("type", "video"),
@@ -510,7 +511,7 @@ class _PlaylistListView(QWidget):
         if not path:
             return
         try:
-            enriched = _enrich_items_for_export(
+            enriched = enrich_items_for_export(
                 items,
                 {},
                 self._thumb_cache_dir,

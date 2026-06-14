@@ -12,8 +12,8 @@ from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
-from ..core.media.mime import mime_to_ext
-from ..widgets.playlist.items import media_type_from_url, new_playlist_item
+from ..core.media.formats import media_type_from_path, mime_to_ext
+from ..core.playlists.items import create_playlist_item
 
 
 class PlaylistImportController:
@@ -31,9 +31,9 @@ class PlaylistImportController:
             return
 
         meta_dict = dict(meta) if isinstance(meta, dict) else {}
-        mtype = meta_dict.get("type") or media_type_from_url(url)
+        mtype = meta_dict.get("type") or media_type_from_path(url, default="video")
         kw = {k: value for k, value in meta_dict.items() if k != "type"}
-        item = new_playlist_item(title=title, url=url, type=mtype, **kw)
+        item = create_playlist_item(title=title, url=url, type=mtype, **kw)
 
         if target.create_new:
             self._window.playlist_widget.create_playlist_with_item(
@@ -135,7 +135,7 @@ class PlaylistImportController:
         skipped = []
         for raw in data.get("items", []):
             url = raw.get("url") or raw.get("jworg_url") or ""
-            item = new_playlist_item(
+            item = create_playlist_item(
                 title=raw.get("title", "") or os.path.basename(jwl_path),
                 url=url,
                 type=raw.get("type", "video"),
@@ -297,7 +297,7 @@ class PlaylistImportController:
         def _on_ready(items: list, file_stem: str):
             new_items = []
             for raw in items:
-                item = new_playlist_item(
+                item = create_playlist_item(
                     title=raw.get("title", file_stem),
                     url=raw.get("url", ""),
                     type=raw.get("type", "video"),
@@ -353,7 +353,7 @@ class PlaylistImportController:
     @staticmethod
     def _items_from_pages(pages: list[str], stem: str) -> list:
         return [
-            new_playlist_item(
+            create_playlist_item(
                 title=f"{stem} - p. {index + 1}",
                 url=page_path,
                 type="image",

@@ -45,8 +45,13 @@ from typing import Callable, Iterable
 from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 
 from solin.core.foundation.constants import (
-    VIDEO_EXTS, AUDIO_EXTS, IMAGE_EXTS, PDF_EXTS, PPTX_EXTS, DOCX_EXTS,
-    JWPUB_EXTS, PLAYLIST_EXTS,
+    PDF_EXTS, PPTX_EXTS, DOCX_EXTS, JWPUB_EXTS, PLAYLIST_EXTS,
+)
+from solin.core.media.formats import (
+    AUDIO_EXTS,
+    IMAGE_EXTS,
+    VIDEO_EXTS,
+    media_type_from_path,
 )
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
@@ -87,12 +92,7 @@ def _path_id(path: str | Path) -> str:
 
 
 def _media_type(path: str | Path) -> str:
-    ext = Path(path).suffix.lower()
-    if ext in VIDEO_EXTS:
-        return "video"
-    if ext in AUDIO_EXTS:
-        return "audio"
-    return "image"
+    return media_type_from_path(path, default="image")
 
 
 def _meeting_folder_source_key(path: Path) -> str:

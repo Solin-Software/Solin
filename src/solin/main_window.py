@@ -63,7 +63,7 @@ from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.manager import ProfileManager
-from .core.foundation.constants import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
+from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
 

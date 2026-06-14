@@ -5,7 +5,7 @@ import pytest
 
 from solin.controllers.open_media_controller import OpenMediaController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.media.mime import mime_to_ext
+from solin.core.media.formats import mime_to_ext
 
 _PROFILE_PATHS = ProfilePaths.from_roots(
     data_dir="data",

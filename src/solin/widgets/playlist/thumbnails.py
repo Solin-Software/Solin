@@ -9,7 +9,7 @@ from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.playlists.thumbnails import playlist_thumb_path
 
 
-def _load_thumb_from_disk(
+def load_thumb_from_disk(
     item_id: str,
     thumb_cache_dir: str | Path,
 ) -> QPixmap | None:
@@ -21,7 +21,7 @@ def _load_thumb_from_disk(
     return None
 
 
-def _save_thumb_to_disk(
+def save_thumb_to_disk(
     item_id: str,
     pixmap: QPixmap,
     thumb_cache_dir: str | Path,
@@ -36,7 +36,7 @@ def _save_thumb_to_disk(
         log_ignored_exception(__name__, "Could not save playlist thumbnail")
 
 
-def _thumb_to_bytes(pixmap: QPixmap) -> bytes | None:
+def thumb_to_bytes(pixmap: QPixmap) -> bytes | None:
     if pixmap is None or pixmap.isNull():
         return None
     from PySide6.QtCore import QBuffer, QIODevice

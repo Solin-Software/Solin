@@ -122,21 +122,6 @@ def _embedded_image_is_complete(data: bytes) -> bool:
     return bool(data)
 
 
-def is_filename_title(title: str) -> bool:
-    """
-    Heurística: retorna True se o título parece ser um nome de arquivo bruto
-    (ex: '502100025_T_cnt_1_r720P.mp4') em vez de um título legível.
-    Usado pela playlist para decidir se deve substituir pelo título dos metadados.
-    """
-    if not title:
-        return True
-    ext = Path(title).suffix.lower()
-    return ext in {
-        ".mp4", ".mp3", ".m4a", ".m4v", ".mkv", ".webm", ".mov", ".avi",
-        ".flv", ".wmv", ".ogg", ".opus", ".flac", ".aac", ".wav",
-    }
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Parsers de metadado (operam em bytes — zero I/O de arquivo, zero player)
 # ─────────────────────────────────────────────────────────────────────────────

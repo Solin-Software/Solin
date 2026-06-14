@@ -33,7 +33,7 @@ from solin.core.profiles import manager as profile_manager
 from solin.core.profiles import models as profile_models
 from solin.core.profiles import settings as profile_settings_module
 from solin.core.profiles.settings import ProfileSettings
-from solin.widgets.playlist.items import new_playlist_item
+from solin.core.playlists.items import create_playlist_item
 
 
 EXPECTED_SETTINGS_KEYS = {
@@ -279,7 +279,7 @@ def test_internal_playlist_file_and_item_schema_are_stable(
     )
     repository = playlist_storage.PlaylistRepository.from_paths(storage_paths)
 
-    item = new_playlist_item("Welcome", "C:/media/welcome.mp4")
+    item = create_playlist_item("Welcome", "C:/media/welcome.mp4")
     playlist = {
         "id": "playlist-1",
         "name": "Main Meeting",

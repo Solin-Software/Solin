@@ -7,10 +7,10 @@ from PySide6.QtCore import QEvent
 from ...core.foundation.constants import (
     DOCX_EXTS as _DOCX_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
-    MEDIA_EXTS as _MEDIA_EXTS,
     PDF_EXTS as _PDF_EXTS,
     PPTX_EXTS as _PPTX_EXTS,
 )
+from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS
 from ...core.rendering.libreoffice import libreoffice_available
 
 

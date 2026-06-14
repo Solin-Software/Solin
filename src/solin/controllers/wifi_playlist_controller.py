@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.foundation.constants import AUDIO_EXTS, IMAGE_EXTS
-from ..widgets.playlist.items import media_type_from_url, new_playlist_item
+from ..core.media.formats import AUDIO_EXTS, IMAGE_EXTS, media_type_from_path
+from ..core.playlists.items import create_playlist_item
 
 
 class WifiPlaylistController:
@@ -206,9 +206,12 @@ class WifiPlaylistController:
     ) -> dict:
         item_path = path or entry["path"]
         item_title = title or entry["title"]
-        media_type = entry.get("type") or media_type_from_url(item_path)
+        media_type = entry.get("type") or media_type_from_path(
+            item_path,
+            default="video",
+        )
         kwargs = self._metadata_kwargs(entry, orig_name)
-        return new_playlist_item(
+        return create_playlist_item(
             title=item_title,
             url=item_path,
             type=media_type,

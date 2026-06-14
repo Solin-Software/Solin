@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.projection.window import media_type_for
+from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_CLOSE, ICON_IMAGE, ICON_MONITOR, ICON_TV, ICON_VIDEO, make_icon
 
 # ── Monitor Manager Popup ─────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ class MonitorManagerPopup(QWidget):
                 "color: #c9d1d9; font-size: 11px; background: transparent;"
             )
             # Pick icon based on extension
-            mtype = media_type_for(path)
+            mtype = media_type_from_path(path)
             icon_svg = ICON_VIDEO if mtype == "video" else ICON_IMAGE
             icon_color = "#3fb950" if mtype == "video" else "#58a6ff"
             self._idle_type_icon.setPixmap(make_icon(icon_svg, 14, icon_color).pixmap(14, 14))

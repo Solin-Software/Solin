@@ -25,7 +25,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import re
 import sqlite3
 import struct   as _struct
 import uuid
@@ -37,12 +36,11 @@ log = logging.getLogger(__name__)
 
 # ── Resolução de metadados JW.org (compartilhado com media_info_extractor) ────
 from solin.core.jw.metadata import (
-    MEPS_FROM_LANG      as _MEPS,
-    parse_jworg_url,
     resolve_jworg_meta  as _resolve_jworg_meta,
     JW_DOMAINS          as _JW_DOMAINS,
 )
 
+from .media_reference import parse_jw_media_reference
 from .schema import create_jwlplaylist_schema
 
 
@@ -61,100 +59,6 @@ def _get_cached_media_path(
     path = os.path.join(os.fspath(media_cache_dir), filename)
     if os.path.exists(path) and os.path.exists(path + ".done"):
         return path
-    return None
-
-
-# Regexes para reconhecer padrão JW no nome de arquivo, independente do domínio.
-# Usados para caminhos locais como "C:/Downloads/rr_T_43.mp3" que NÃO passam
-# pela checagem de domínio do parse_jworg_url.
-_JW_FILENAME_RE = re.compile(
-    r"^([A-Za-z][A-Za-z0-9]{1,11})_([A-Z]{1,4})_(\d{1,4})(?:_.*)?$",
-    re.IGNORECASE,
-)
-_JW_DOCID_FILENAME_RE = re.compile(
-    r"^(\d{5,12})_([A-Z]{1,4})_[A-Za-z]+_(\d+)",
-    re.IGNORECASE,
-)
-_JW_PUB_FILENAME_RE = re.compile(
-    r"pub-([A-Za-z0-9]+)_([A-Z]{1,4})_(\d{1,4})(?:_.*)?",
-    re.IGNORECASE,
-)
-
-
-def _parse_jw_filename(url: str, orig_name: str = "") -> Optional[dict]:
-    """
-    Extrai referência JW.org do NOME DE ARQUIVO de uma URL ou caminho local,
-    sem exigir que o domínio seja do JW.org.
-
-    Cobre caminhos como:
-      C:/Downloads/rr_T_43.mp3       → key_symbol=rr, track=43, lang=T
-      /home/user/osg_T_108.mp3       → key_symbol=osg, track=108, lang=T
-      sjjm_T_002_r720P.mp4           → key_symbol=sjjm, track=2, lang=T
-      502100025_T_cnt_1_r720P.mp4    → doc_id=502100025, track=1, lang=T
-
-    orig_name: nome original do arquivo antes de ser renomeado para hash
-      (ex: recebido via WiFi como "7dfda495.mp3" mas orig_name="rr_T_43.mp3").
-      Usado como fallback quando o basename do url é opaco (hash, uuid, etc.).
-
-    Retorna None se o nome não corresponde a nenhum padrão JW conhecido.
-    Usa MEPS_FROM_LANG de jw.metadata para converter código de língua em ID MEPS.
-    """
-    # Primeiro tenta via parse_jworg_url normal (para URLs http JW.org)
-    if url.startswith(("http://", "https://")):
-        result = parse_jworg_url(url)
-        if result:
-            return result
-
-    # Candidatos de nome a testar, em ordem de prioridade:
-    #   1. orig_name (nome original antes de ser renomeado para hash/uuid)
-    #   2. basename do url (pode ser hash opaco ou nome JW original)
-    candidates = []
-    if orig_name:
-        candidates.append(Path(orig_name.split("?")[0]).stem)
-    url_stem = Path(url.split("?")[0]).stem
-    if url_stem and url_stem not in candidates:
-        candidates.append(url_stem)
-
-    if not candidates:
-        return None
-
-    for basename in candidates:
-        # Formato pub-: pub-sjjm_T_1
-        m = _JW_PUB_FILENAME_RE.search(basename)
-        if m:
-            lang_code = m.group(2).upper()
-            return {
-                "key_symbol": m.group(1).lower(),
-                "track":      int(m.group(3)),
-                "issue_tag":  None,
-                "doc_id":     None,
-                "meps_language": _MEPS.get(lang_code, 0),
-            }
-
-        # Formato DocumentId: 502100025_T_cnt_1
-        m = _JW_DOCID_FILENAME_RE.match(basename)
-        if m:
-            lang_code = m.group(2).upper()
-            return {
-                "key_symbol": None,
-                "track":      int(m.group(3)),
-                "issue_tag":  None,
-                "doc_id":     int(m.group(1)),
-                "meps_language": _MEPS.get(lang_code, 0),
-            }
-
-        # Formato geral: SYMBOL_LANG_TRACK[_qualidade]
-        m = _JW_FILENAME_RE.match(basename)
-        if m:
-            lang_code = m.group(2).upper()
-            return {
-                "key_symbol": m.group(1).lower(),
-                "track":      int(m.group(3)),
-                "issue_tag":  None,
-                "doc_id":     None,
-                "meps_language": _MEPS.get(lang_code, 0),
-            }
-
     return None
 
 
@@ -593,13 +497,15 @@ def _write_jwlplaylist(
         thumbnail_path = None
 
         # ── PASSO 1: tenta extrair key_symbol/doc_id da URL se não fornecido ──
-        # _parse_jw_filename funciona tanto para URLs http JW.org quanto para
-        # caminhos locais como "C:/Downloads/rr_T_43.mp3" — parse_jworg_url
-        # normal rejeita caminhos locais porque não contêm o domínio jw-cdn.org.
+        # parse_jw_media_reference funciona para URLs JW e caminhos locais como
+        # "C:/Downloads/rr_T_43.mp3".
         # original_filename: nome antes de ser renomeado para hash (ex: via WiFi).
         orig_filename = item.get("original_filename", "")
         if not key_symbol and url:
-            parsed = _parse_jw_filename(url, orig_name=orig_filename)
+            parsed = parse_jw_media_reference(
+                url,
+                original_filename=orig_filename,
+            )
             if parsed:
                 key_symbol = parsed.get("key_symbol")   # pode ser None (docid-only)
                 track      = parsed.get("track",    track)

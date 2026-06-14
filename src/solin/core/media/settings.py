@@ -17,6 +17,8 @@ _PLAYBACK_ORDERS = frozenset({ORDER_OFF, ORDER_NEXT, ORDER_RANDOM})
 
 
 def _float_setting(value: object, default: float) -> float:
+    if not isinstance(value, (int, float, str)):
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):

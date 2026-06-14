@@ -5,11 +5,11 @@ import sqlite3
 import pytest
 
 from solin.core.playlists import writer
-from solin.core.playlists.writer import _parse_jw_filename
+from solin.core.playlists.media_reference import parse_jw_media_reference
 
 
-def test_parse_jw_filename_handles_standard_cdn_filename():
-    assert _parse_jw_filename("C:/Downloads/sjjm_T_002_r720P.mp4") == {
+def test_parse_jw_media_reference_handles_standard_cdn_filename():
+    assert parse_jw_media_reference("C:/Downloads/sjjm_T_002_r720P.mp4") == {
         "key_symbol": "sjjm",
         "track": 2,
         "issue_tag": None,
@@ -18,8 +18,8 @@ def test_parse_jw_filename_handles_standard_cdn_filename():
     }
 
 
-def test_parse_jw_filename_handles_legacy_pub_prefix():
-    assert _parse_jw_filename("C:/Downloads/pub-sjjm_T_1_r720P.mp4") == {
+def test_parse_jw_media_reference_handles_legacy_pub_prefix():
+    assert parse_jw_media_reference("C:/Downloads/pub-sjjm_T_1_r720P.mp4") == {
         "key_symbol": "sjjm",
         "track": 1,
         "issue_tag": None,
@@ -28,10 +28,10 @@ def test_parse_jw_filename_handles_legacy_pub_prefix():
     }
 
 
-def test_parse_jw_filename_uses_original_name_for_opaque_cached_files():
-    assert _parse_jw_filename(
+def test_parse_jw_media_reference_uses_original_name_for_opaque_cached_files():
+    assert parse_jw_media_reference(
         "C:/cache/7dfda495.mp3",
-        orig_name="rr_T_43.mp3",
+        original_filename="rr_T_43.mp3",
     ) == {
         "key_symbol": "rr",
         "track": 43,

@@ -29,16 +29,14 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
 from ...core.foundation.constants import (
-    AUDIO_EXTS,
     DOCX_EXTS,
-    IMAGE_EXTS,
     JWPUB_EXTS,
-    MEDIA_EXTS,
     PDF_EXTS,
     PLAYLIST_EXTS,
     PPTX_EXTS,
     THUMB_JPEG_QUALITY,
 )
+from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -65,6 +63,7 @@ from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
+from ...core.playlists.items import looks_like_filename_title
 from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
 from ...core.rendering.libreoffice import (
     LoConvertThread,
@@ -73,7 +72,7 @@ from ...core.rendering.libreoffice import (
 )
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
-from ..media_info_extractor import MediaInfoQueue, is_filename_title
+from ..media_info_extractor import MediaInfoQueue
 from ..playlist.edit_visuals import _format_duration
 
 _BIG_INDEX = 2**31 - 1
@@ -94,12 +93,7 @@ def _clean_title(value: str) -> str:
 
 
 def _media_type_from_path(path: str) -> str:
-    ext = Path(path).suffix.lower()
-    if ext in IMAGE_EXTS:
-        return "image"
-    if ext in AUDIO_EXTS:
-        return "audio"
-    return "video"
+    return media_type_from_path(path, default="video")
 
 
 def _mime_for(path: str, media_type: str) -> str:
@@ -2222,7 +2216,7 @@ class MeetingTreeController(QObject):
         return (
             bool(node.get("auto_title"))
             or (not _ref_title(ref) and title in placeholder_titles)
-            or is_filename_title(title)
+            or looks_like_filename_title(title)
         )
 
     @Slot(int, int)

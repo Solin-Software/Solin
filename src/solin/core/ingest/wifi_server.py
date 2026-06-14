@@ -33,13 +33,11 @@ from urllib.parse import unquote
 from PySide6.QtCore import QObject, Signal, QTimer
 
 from solin.core.foundation.constants import (
-    AUDIO_EXTS,
-    IMAGE_EXTS,
     JWPUB_EXTS,
     PDF_EXTS,
     PLAYLIST_EXTS,
-    VIDEO_EXTS,
 )
+from solin.core.media.formats import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 
 log = logging.getLogger(__name__)
 
@@ -50,12 +48,6 @@ _POLL_INTERVAL_MS: int = 30_000          # checa inatividade a cada 30 s
 _PORT_RANGE: tuple[int, int] = (8765, 8865)
 _ALLOWED_EXTS: frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS | PDF_EXTS | PLAYLIST_EXTS | JWPUB_EXTS
 _MAX_BODY_BYTES: int = 2 * 1024 ** 3    # 2 GB
-
-_MEDIA_TYPE_MAP: dict[str, str] = {}
-for _e in VIDEO_EXTS: _MEDIA_TYPE_MAP[_e] = "video"
-for _e in AUDIO_EXTS: _MEDIA_TYPE_MAP[_e] = "audio"
-for _e in IMAGE_EXTS: _MEDIA_TYPE_MAP[_e] = "image"
-
 
 # ── Helpers de rede ───────────────────────────────────────────────────────────
 

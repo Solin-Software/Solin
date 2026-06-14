@@ -43,8 +43,9 @@ from ...core.jw.catalog import JWMediaCatalogCachePaths
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
-from ..media_info_extractor import MediaInfoQueue, is_filename_title
-from .items import media_type_from_url
+from ...core.media.formats import media_type_from_path
+from ...core.playlists.items import looks_like_filename_title
+from ..media_info_extractor import MediaInfoQueue
 from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
@@ -58,8 +59,8 @@ from ...core.playlists.storage import (
 )
 from ...core.playlists.thumbnails import playlist_thumb_path
 from .thumbnails import (
-    _load_thumb_from_disk,
-    _save_thumb_to_disk,
+    load_thumb_from_disk,
+    save_thumb_to_disk,
 )
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
@@ -236,7 +237,7 @@ class _PlaylistEditView(
             "playlistthumbs",
             PlaylistThumbnailProvider(
                 self._id_to_thumb,
-                disk_loader_cb=lambda item_id: _load_thumb_from_disk(
+                disk_loader_cb=lambda item_id: load_thumb_from_disk(
                     item_id,
                     self._thumb_cache_dir,
                 ),
@@ -496,7 +497,10 @@ class _PlaylistEditView(
         needs_save = False
         from ...core.jw.metadata import JW_DOMAINS as _JW_DOMAINS_CHECK
         for item in items:
-            detected = media_type_from_url(item.get("url", ""))
+            detected = media_type_from_path(
+                item.get("url", ""),
+                default="video",
+            )
             if item.get("type") == "video" and detected != "video":
                 item["type"] = detected
                 needs_save = True
@@ -574,7 +578,7 @@ class _PlaylistEditView(
         media_changed = False
         if pixmap and not pixmap.isNull():
             self._id_to_thumb[item_id] = pixmap
-            _save_thumb_to_disk(item_id, pixmap, self._thumb_cache_dir)
+            save_thumb_to_disk(item_id, pixmap, self._thumb_cache_dir)
             self.model.update_thumb(item_id)
             media_changed = True
 
@@ -583,7 +587,10 @@ class _PlaylistEditView(
                 if item.get("id") != item_id:
                     continue
                 current = item.get("title", "")
-                if (is_filename_title(current) or item.get("auto_title")) and title != current:
+                if (
+                    looks_like_filename_title(current)
+                    or item.get("auto_title")
+                ) and title != current:
                     item["title"] = title
                     item["auto_title"] = False
                     self._save()

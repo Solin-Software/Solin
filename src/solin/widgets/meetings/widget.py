@@ -43,11 +43,11 @@ from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ...core.foundation.constants import (
     DOCX_EXTS as _DOCX_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
-    MEDIA_EXTS as _MEDIA_EXTS,
     PDF_EXTS as _PDF_EXTS,
     PLAYLIST_EXTS as _PLAYLIST_EXTS,
     PPTX_EXTS as _PPTX_EXTS,
 )
+from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS
 from ...core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,

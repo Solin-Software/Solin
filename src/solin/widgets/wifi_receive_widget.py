@@ -37,14 +37,16 @@ from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ..core.foundation.constants import (
-    AUDIO_EXTS as _AUDIO_EXTS,
     JWPUB_EXTS as _JWPUB_EXTS,
     PDF_EXTS as _PDF_EXTS,
     PLAYLIST_EXTS as _JWL_EXTS,
-    VIDEO_EXTS as _VIDEO_EXTS,
 )
 from ..core.jw.language_context import jw_media_language_context
-from ..core.media.mime import mime_to_ext
+from ..core.media.formats import (
+    MediaKind,
+    media_kind_from_path,
+    mime_to_ext,
+)
 from ..core.ingest.wifi_server import WifiReceiveServer
 from ..styles.icons import make_icon
 from .media_info_extractor import MediaInfoService
@@ -175,8 +177,9 @@ _I_PLAYLIST = (
 
 def _file_media_type(path: str) -> str:
     ext = Path(path).suffix.lower()
-    if ext in _VIDEO_EXTS: return "video"
-    if ext in _AUDIO_EXTS: return "audio"
+    media_kind = media_kind_from_path(path)
+    if media_kind is not MediaKind.UNKNOWN:
+        return media_kind.value
     if ext in _PDF_EXTS:   return "pdf"
     if ext in _JWL_EXTS:   return "playlist"
     return "image"

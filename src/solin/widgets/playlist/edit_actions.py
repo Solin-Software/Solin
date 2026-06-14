@@ -11,14 +11,15 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from ...core.foundation.constants import (
     JWPUB_EXTS as _JWPUB_EXTS,
-    MEDIA_EXTS as _MEDIA_EXTS,
     PDF_EXTS as _PDF_EXTS,
 )
+from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS, media_type_from_path
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.items import create_playlist_item
 from ...core.playlists.thumbnails import playlist_thumb_path
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
-from .items import _enrich_items_for_export, media_type_from_url, new_playlist_item
+from .item_visuals import enrich_items_for_export
 
 
 class _PlaylistEditActionsMixin:
@@ -102,7 +103,11 @@ class _PlaylistEditActionsMixin:
                 continue
             kw = {"section_id": section_id} if section_id else {}
             new_items.append(
-                new_playlist_item(title=Path(actual_path).stem, url=actual_path, **kw)
+                create_playlist_item(
+                    title=Path(actual_path).stem,
+                    url=actual_path,
+                    **kw,
+                )
             )
             added += 1
         if added:
@@ -325,7 +330,7 @@ class _PlaylistEditActionsMixin:
         if not path:
             return
         try:
-            items = _enrich_items_for_export(
+            items = enrich_items_for_export(
                 self._pl.get("items", []),
                 self._id_to_thumb,
                 self._thumb_cache_dir,
@@ -362,7 +367,10 @@ class _PlaylistEditActionsMixin:
             if not item.get("id"):
                 item["id"] = str(uuid.uuid4())
             if not item.get("type"):
-                item["type"] = media_type_from_url(item.get("url", ""))
+                item["type"] = media_type_from_path(
+                    item.get("url", ""),
+                    default="video",
+                )
             norm.append(item)
         pl = {"id": "__temp__", "name": display_name, "items": norm, "_temp": True}
         self.load_playlist(pl)

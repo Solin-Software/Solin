@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import time
+from typing import Any, Callable, Protocol, cast
 from PySide6.QtCore import QObject, Signal, Slot
 
 MAX_CONCURRENT_PREFETCHES = 3
@@ -44,6 +45,16 @@ def is_url_cached(url: str, media_cache_dir: str | os.PathLike[str]) -> bool:
         return False
 
 
+class _Downloader(Protocol):
+    progress: Any
+    finished: Any
+    error: Any
+
+    def cancel(self) -> None: ...
+
+    def start(self, url: str) -> None: ...
+
+
 @dataclass
 class _QueuedPrefetch:
     url: str
@@ -53,7 +64,7 @@ class _QueuedPrefetch:
 
 @dataclass
 class _ActivePrefetch:
-    downloader: object
+    downloader: _Downloader
     batch_id: str = ""
     retries: int = 0
     had_progress: bool = False
@@ -106,7 +117,7 @@ class MediaCacheManager(QObject):
         self._queued: dict[str, _QueuedPrefetch] = {}
         self._active: dict[str, _ActivePrefetch] = {}
         self._batches: dict[str, _BatchState] = {}
-        self._downloader_factory = None
+        self._downloader_factory: Callable[[QObject], _Downloader] | None = None
         self._batch_signal_suppressed = 0
         self._dirty_batches: set[str] = set()
         self._notify_cached_requested.connect(self.notify_cached)
@@ -303,7 +314,7 @@ class MediaCacheManager(QObject):
 
     # ── Slots internos ────────────────────────────────────────────────────
 
-    def _create_downloader(self):
+    def _create_downloader(self) -> _Downloader:
         if self._downloader_factory is not None:
             return self._downloader_factory(self)
 
@@ -312,8 +323,10 @@ class MediaCacheManager(QObject):
         from PySide6.QtCore import QCoreApplication
 
         dl = SongDownloader(self.media_cache_dir, self)
-        dl.moveToThread(QCoreApplication.instance().thread())
-        return dl
+        app = QCoreApplication.instance()
+        if app is not None:
+            dl.moveToThread(app.thread())
+        return cast(_Downloader, dl)
 
     def _pump_queue(self) -> None:
         while self._queue and len(self._active) < self.max_concurrent_prefetches:

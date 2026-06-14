@@ -73,6 +73,7 @@ include = [
     "src/solin/bootstrap",
     "src/solin/core/foundation",
     "src/solin/core/jw",
+    "src/solin/core/media",
     "src/solin/core/meetings",
     "src/solin/core/playlists",
     "src/solin/core/timer",

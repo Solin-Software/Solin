@@ -36,9 +36,7 @@ from PySide6.QtWidgets import (
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.media.cache import MediaCacheManager
-from ..core.foundation.constants import (
-    VIDEO_EXTS, AUDIO_EXTS, IMAGE_EXTS,
-)
+from ..core.media.formats import media_type_from_path
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import make_icon, ICON_MUSIC, ICON_VIDEO, ICON_IMAGE
 from .media_info_extractor import MediaInfoService
@@ -68,11 +66,7 @@ def _fmt_size(n: int) -> str:
 
 
 def _media_type(path: str) -> str:
-    ext = Path(path).suffix.lower()
-    if ext in VIDEO_EXTS:  return "video"
-    if ext in AUDIO_EXTS:  return "audio"
-    if ext in IMAGE_EXTS:  return "image"
-    return "other"
+    return media_type_from_path(path, default="other")
 
 
 def _rounded_pixmap(pixmap: QPixmap, w: int, h: int, radius: int = 6) -> QPixmap:

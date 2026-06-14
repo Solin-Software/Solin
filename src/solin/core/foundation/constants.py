@@ -9,7 +9,7 @@ ATENÇÃO — caminhos de dados/cache:
     injetados pelo bootstrap. Constantes neste módulo devem permanecer puras.
 
 Uso:
-    from solin.core.foundation.constants import VIDEO_EXTS, AUDIO_EXTS, APP_VERSION, ...
+    from solin.core.foundation.constants import APP_VERSION, QSETTINGS_ORG_NAME, ...
 """
 from __future__ import annotations
 
@@ -97,19 +97,6 @@ ALLOW_ZOOM_PAN_ON_LIVE_TAB: bool = False
 # configurada em Settings, nunca memorizando a anterior.
 MEMORIZE_PRE_MEDIA_SCENE: bool = True
 
-# ── Formatos de mídia suportados ───────────────────────────────────────────────
-VIDEO_EXTS: frozenset[str] = frozenset({
-    ".mp4", ".mkv", ".avi", ".mov", ".webm", ".wmv", ".flv", ".m4v",
-    ".ts", ".mts", ".m2ts", ".3gp", ".ogv",
-})
-AUDIO_EXTS: frozenset[str] = frozenset({
-    ".mp3", ".aac", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".opus",
-})
-IMAGE_EXTS: frozenset[str] = frozenset({
-    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
-    ".tiff", ".tif", ".ico", ".svg",
-})
-MEDIA_EXTS:    frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
 PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
 PDF_EXTS:      frozenset[str] = frozenset({".pdf"})
 JWPUB_EXTS:    frozenset[str] = frozenset({".jwpub"})

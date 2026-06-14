@@ -9,22 +9,24 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import (
-    AUDIO_EXTS,
     DOCX_EXTS,
-    IMAGE_EXTS,
     JWPUB_EXTS,
     PDF_EXTS,
     PLAYLIST_EXTS,
     PPTX_EXTS,
-    VIDEO_EXTS,
 )
 from ..core.foundation.runtime_paths import ProfilePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
-from ..core.media.mime import mime_to_ext
-from ..widgets.playlist.items import new_playlist_item
+from ..core.media.formats import (
+    AUDIO_EXTS,
+    IMAGE_EXTS,
+    VIDEO_EXTS,
+    mime_to_ext,
+)
+from ..core.playlists.items import create_playlist_item
 
 
 class OpenMediaController:
@@ -166,7 +168,7 @@ class OpenMediaController:
 
     def on_pdf_ready(self, pages: list, pdf_stem: str) -> None:
         items = [
-            new_playlist_item(
+            create_playlist_item(
                 title=f"{pdf_stem} — p. {index + 1}",
                 url=page_path,
                 type="image",
@@ -212,7 +214,7 @@ class OpenMediaController:
 
             new_items = []
             for raw in items:
-                item = new_playlist_item(
+                item = create_playlist_item(
                     title=raw.get("title", file_stem),
                     url=raw.get("url", ""),
                     type=raw.get("type", "video"),
@@ -303,7 +305,7 @@ class OpenMediaController:
 
     def on_lo_ready(self, pages: list, stem: str) -> None:
         items = [
-            new_playlist_item(
+            create_playlist_item(
                 title=f"{stem} — p. {index + 1}",
                 url=page_path,
                 type="image",

@@ -9,7 +9,6 @@ from ..core.rendering.fonts import FontManager
 
 _WT_CLEAR_TEXT = "Wt-ClearText-Bold"
 
-import os
 import sys
 import ctypes
 
@@ -188,26 +187,6 @@ class YearlyTextWidget(QWidget):
 # Supports images (static) and videos (looped, muted).
 # Created once per projection surface; hidden by default.
 # ─────────────────────────────────────────────────────────────────────────────
-
-#: Extensions recognised as image files
-_IMAGE_EXTS = frozenset({
-    ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".tif"
-})
-#: Extensions recognised as video files
-_VIDEO_EXTS = frozenset({
-    ".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".wmv", ".flv"
-})
-
-
-def media_type_for(path: str) -> str:
-    """Return 'image', 'video', or 'unknown' based on file extension."""
-    ext = os.path.splitext(path)[1].lower()
-    if ext in _IMAGE_EXTS:
-        return "image"
-    if ext in _VIDEO_EXTS:
-        return "video"
-    return "unknown"
-
 
 class IdleMediaWidget(QWidget):
     """

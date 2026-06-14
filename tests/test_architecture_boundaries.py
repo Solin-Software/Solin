@@ -298,3 +298,38 @@ def test_profile_domain_has_no_framework_or_application_dependencies():
             violations.append(_display(path, node))
 
     assert violations == []
+
+
+def test_media_and_playlist_item_domains_have_no_framework_dependencies():
+    domain_files = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "media" / "formats.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "playlists" / "items.py",
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "playlists"
+        / "media_reference.py",
+    )
+    violations: list[str] = []
+
+    for path in domain_files:
+        for node in _imports(path):
+            imported_module = (
+                node.module or ""
+                if isinstance(node, ast.ImportFrom)
+                else ""
+            )
+            roots = (
+                [alias.name.split(".", 1)[0] for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [(node.module or "").split(".", 1)[0]]
+            )
+            if (
+                "PySide6" in roots
+                or imported_module == "widgets"
+                or imported_module.startswith("solin.widgets")
+            ):
+                violations.append(_display(path, node))
+
+    assert violations == []
