@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from solin.core.jw.songs import JWSongsStore
     from solin.core.media.cache import MediaCacheManager
     from solin.core.meetings.publications import JwpubChecksumStore
-    from solin.core.profiles.manager import ProfileManager
+    from solin.core.onboarding.application import OnboardingService
+    from solin.core.profiles.application import ProfileService
+    from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
     from solin.core.rendering.fonts import FontManager
 
 log = logging.getLogger(__name__)
@@ -32,7 +34,9 @@ class ApplicationContainer:
     jw_catalog_cache_paths: JWMediaCatalogCachePaths
     jw_songs_store: JWSongsStore
     jwpub_checksum_store: JwpubChecksumStore
-    profile_manager: ProfileManager
+    profile_service: ProfileService
+    profile_runtime: ProfileRuntimeContextFactory
+    onboarding_service: OnboardingService
     lifecycle: ApplicationLifecycle
     window_ref: list[Any | None] = field(default_factory=lambda: [None])
 
@@ -43,7 +47,10 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.jw.songs import JWSongsStore
     from solin.core.media.cache import MediaCacheManager
     from solin.core.meetings.publications import JwpubChecksumStore
-    from solin.core.profiles.manager import ProfileManager
+    from solin.core.profiles.infrastructure import create_local_profile_service
+    from solin.core.onboarding.application import OnboardingService
+    from solin.core.onboarding.infrastructure import QSettingsOnboardingSettings
+    from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
     from solin.core.rendering.fonts import FontManager
 
     runtime_paths = RuntimePaths.from_standard_locations()
@@ -52,11 +59,20 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     configure_logging(os.fspath(runtime_paths.log_dir))
     log.info("Starting %s %s", config.display_name, config.version)
 
-    profile_manager = ProfileManager(
+    global_settings = GlobalSettingsStore.create()
+    profile_service = create_local_profile_service(
         os.fspath(runtime_paths.data_dir),
         cache_dir=os.fspath(runtime_paths.cache_dir),
+        global_settings=global_settings,
     )
-    global_settings = GlobalSettingsStore.create()
+    profile_runtime = ProfileRuntimeContextFactory(
+        runtime_paths.data_dir,
+        runtime_paths.cache_dir,
+    )
+    onboarding_service = OnboardingService(
+        profile_service,
+        QSettingsOnboardingSettings(),
+    )
     media_cache_manager = MediaCacheManager(runtime_paths.media_cache_dir)
     font_manager = FontManager(runtime_paths.cache_dir)
     jw_catalog_cache_paths = JWMediaCatalogCachePaths(
@@ -84,6 +100,8 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
-        profile_manager=profile_manager,
+        profile_service=profile_service,
+        profile_runtime=profile_runtime,
+        onboarding_service=onboarding_service,
         lifecycle=lifecycle,
     )

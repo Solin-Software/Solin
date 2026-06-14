@@ -62,7 +62,7 @@ from .core.playlists.storage import PlaylistStoragePaths
 from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
-from .core.profiles.manager import ProfileManager
+from .core.profiles.models import ProfileInfo
 from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
         jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
         meeting_tree_store: MeetingTreeStore,
-        profile_manager: ProfileManager,
+        active_profile: ProfileInfo,
     ):
         super().__init__()
         self.lang = lang_manager
@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
         self.jwpub_checksum_store = jwpub_checksum_store
         self.playlist_storage_paths = playlist_storage_paths
         self.meeting_tree_store = meeting_tree_store
-        self.profile_manager = profile_manager
+        self.active_profile = active_profile
         self._obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
         self._zoom_settings = ZoomSettingsStore.for_profile_settings(profile_settings)
         self._auto_share_settings = AutoShareSettingsStore.for_profile_settings(
@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
             self,
         )
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
-        self._profile_switch = ProfileSwitchController(self, profile_manager)
+        self._profile_switch = ProfileSwitchController(self)
         self._projection_targets = ProjectionWindowController(self)
         self._live_integrations = LiveIntegrationController(self)
         self._playlist_imports = PlaylistImportController(self, profile_paths)
@@ -200,13 +200,13 @@ class MainWindow(QMainWindow):
         )
         self._media_download_notifications.start()
 
-        self._ui_controller = MainWindowUiController(self, profile_manager)
+        self._ui_controller = MainWindowUiController(self, active_profile)
         self._build_ui()
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(self)
         self._projection_stop = ProjectionStopController(self)
         self._language_controller = LanguageController(self)
-        self._signal_connections = SignalConnectionController(self, profile_manager)
+        self._signal_connections = SignalConnectionController(self)
         self._connect_signals()
 
         self._bootstrap_controller = MainWindowBootstrapController(self)

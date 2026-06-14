@@ -30,6 +30,7 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
+from solin.core.profiles.application import ProfileRegistryLoadError
 
 def _launch_main_window(
     app,
@@ -43,7 +44,7 @@ def _launch_main_window(
     jw_catalog_cache_paths,
     jw_songs_store,
     jwpub_checksum_store,
-    profile_manager,
+    active_profile,
 ):
     """
     Cria e exibe o MainWindow para o perfil já ativo.
@@ -71,7 +72,7 @@ def _launch_main_window(
         jwpub_checksum_store,
         playlist_storage_paths,
         meeting_tree_store,
-        profile_manager,
+        active_profile,
     )
     window.show()
 
@@ -94,6 +95,53 @@ def _run_zoom_poll_standalone(app, filepath: str, lang_manager) -> int:
     return app.exec()
 
 
+def _create_profile_screen(container, lang_manager):
+    from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
+    from solin.ui.profile_screen import ProfileScreen
+
+    obs_probe = OnboardingOBSProbe()
+    container.lifecycle.register_cleanup(obs_probe.shutdown)
+    return ProfileScreen(
+        lang_manager,
+        profile_service=container.profile_service,
+        profile_settings_for=lambda profile_id: (
+            container.profile_runtime.create(profile_id).settings
+        ),
+        onboarding_service=container.onboarding_service,
+        obs_probe=obs_probe,
+    )
+
+
+def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
+    profile_context = container.profile_runtime.create(profile_id)
+    active_profile = container.profile_service.get_profile(profile_id)
+    if active_profile is None:
+        raise RuntimeError(f"Profile disappeared during startup: {profile_id}")
+
+    lang_manager.activate_profile(profile_context.settings)
+    window = _launch_main_window(
+        container.app,
+        lang_manager,
+        file_args,
+        container.runtime_paths,
+        profile_context.paths,
+        profile_context.settings,
+        container.media_cache_manager,
+        container.font_manager,
+        container.jw_catalog_cache_paths,
+        container.jw_songs_store,
+        container.jwpub_checksum_store,
+        active_profile,
+    )
+    container.window_ref[0] = window
+    wire_profile_switch(
+        container.app,
+        container.window_ref,
+        container.profile_service,
+    )
+    return window
+
+
 def main():
     # High-DPI support
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
@@ -106,8 +154,20 @@ def main():
     config = default_app_config()
     app = QApplication(sys.argv)
     config.apply_to(app)
-    container = initialize_application_container(app, config)
-    _pm = container.profile_manager
+    try:
+        container = initialize_application_container(app, config)
+    except ProfileRegistryLoadError as exc:
+        from PySide6.QtWidgets import QMessageBox
+
+        QMessageBox.critical(
+            None,
+            "Solin",
+            "Solin could not read the profile registry. The existing file was "
+            "preserved and no profile data was changed.\n\n"
+            f"{exc}",
+        )
+        return
+    profile_service = container.profile_service
 
     # ── Imports dependentes de caminhos ───────────────────────────────────────
     from solin.core.i18n.manager import LanguageManager
@@ -166,9 +226,7 @@ def main():
     #   • 2+ perfis              → Seletor Netflix
 
     if create_profile_mode:
-        from solin.ui.profile_screen import ProfileScreen
-
-        screen = ProfileScreen(lang_manager, profile_manager=_pm)
+        screen = _create_profile_screen(container, lang_manager)
         _main_window_ref[0] = screen
         screen.setWindowTitle("Solin")
         screen.setMinimumSize(860, 580)
@@ -184,81 +242,45 @@ def main():
 
         def _on_profile_ready(profile_id: str):
             screen.hide()
-            window = _launch_main_window(
-                app,
+            _launch_profile_window(
+                container,
                 lang_manager,
                 file_args,
-                container.runtime_paths,
-                _pm.paths_for(),
-                _pm.settings_for(),
-                container.media_cache_manager,
-                container.font_manager,
-                container.jw_catalog_cache_paths,
-                container.jw_songs_store,
-                container.jwpub_checksum_store,
-                _pm,
+                profile_id,
             )
-            _main_window_ref[0] = window
-            wire_profile_switch(app, _main_window_ref, _pm)
             QTimer.singleShot(400, screen.close)
 
         screen.profile_ready.connect(_on_profile_ready)
         _pm_screen = screen
         screen.start_new_profile()
 
-    elif requested_profile_id and _pm.get_profile(requested_profile_id):
+    elif requested_profile_id and profile_service.get_profile(requested_profile_id):
         # Relaunch controlado: abre diretamente no perfil solicitado.
-        _pm.set_active(requested_profile_id)
-        profile_settings = _pm.settings_for()
-        lang_manager.activate_profile(profile_settings)
-
-        window = _launch_main_window(
-            app,
+        profile_service.set_active(requested_profile_id)
+        _launch_profile_window(
+            container,
             lang_manager,
             file_args,
-            container.runtime_paths,
-            _pm.paths_for(),
-            profile_settings,
-            container.media_cache_manager,
-            container.font_manager,
-            container.jw_catalog_cache_paths,
-            container.jw_songs_store,
-            container.jwpub_checksum_store,
-            _pm,
+            requested_profile_id,
         )
-        _main_window_ref[0] = window
-        wire_profile_switch(app, _main_window_ref, _pm)
 
-    elif _pm.has_profiles() and len(_pm.profiles) == 1:
+    elif profile_service.has_profiles() and len(profile_service.profiles) == 1:
         # ── Caso rápido: perfil único → pula seletor ──────────────────────
-        last_id = _pm.restore_last_active()
+        last_id = profile_service.restore_last_active()
         if last_id is not None:
-            _pm.set_active(last_id)
-        profile_settings = _pm.settings_for()
-        lang_manager.activate_profile(profile_settings)
-
-        window = _launch_main_window(
-            app,
+            profile_service.set_active(last_id)
+        if last_id is None:
+            raise RuntimeError("Profile selection returned no active profile.")
+        _launch_profile_window(
+            container,
             lang_manager,
             file_args,
-            container.runtime_paths,
-            _pm.paths_for(),
-            profile_settings,
-            container.media_cache_manager,
-            container.font_manager,
-            container.jw_catalog_cache_paths,
-            container.jw_songs_store,
-            container.jwpub_checksum_store,
-            _pm,
+            last_id,
         )
-        _main_window_ref[0] = window
-        wire_profile_switch(app, _main_window_ref, _pm)
 
     else:
         # ── Mostra ProfileScreen ───────────────────────────────────────────
-        from solin.ui.profile_screen import ProfileScreen
-
-        screen = ProfileScreen(lang_manager, profile_manager=_pm)
+        screen = _create_profile_screen(container, lang_manager)
         _main_window_ref[0] = screen
         screen.setWindowTitle("Solin")
         screen.setMinimumSize(860, 580)
@@ -275,22 +297,12 @@ def main():
 
         def _on_profile_ready(profile_id: str):
             screen.hide()
-            window = _launch_main_window(
-                app,
+            _launch_profile_window(
+                container,
                 lang_manager,
                 file_args,
-                container.runtime_paths,
-                _pm.paths_for(),
-                _pm.settings_for(),
-                container.media_cache_manager,
-                container.font_manager,
-                container.jw_catalog_cache_paths,
-                container.jw_songs_store,
-                container.jwpub_checksum_store,
-                _pm,
+                profile_id,
             )
-            _main_window_ref[0] = window
-            wire_profile_switch(app, _main_window_ref, _pm)
             # Fecha a tela de perfil de vez depois da animação
             QTimer.singleShot(400, screen.close)
 

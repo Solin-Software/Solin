@@ -126,14 +126,15 @@ def test_application_container_initializes_runtime_services(
         def __init__(self):
             self.aboutToQuit = _Signal()
 
-    class _ProfileManager:
-        def __init__(self, data_dir, cache_dir=None):
+    class _ProfileService:
+        def __init__(self, data_dir, cache_dir=None, *, global_settings):
             self.constructor_args = (data_dir, cache_dir)
+            self.global_settings = global_settings
 
     constructed = []
 
     import solin.core.foundation.logging_config as logging_config
-    import solin.core.profiles.manager as profile_manager_module
+    import solin.core.profiles.infrastructure as profile_infrastructure
 
     monkeypatch.setattr(
         RuntimePaths,
@@ -146,10 +147,16 @@ def test_application_container_initializes_runtime_services(
         lambda log_dir: events.append(("logging", log_dir)),
     )
     monkeypatch.setattr(
-        profile_manager_module,
-        "ProfileManager",
-        lambda data_dir, cache_dir=None: (
-            constructed.append(_ProfileManager(data_dir, cache_dir))
+        profile_infrastructure,
+        "create_local_profile_service",
+        lambda data_dir, cache_dir=None, *, global_settings: (
+            constructed.append(
+                _ProfileService(
+                    data_dir,
+                    cache_dir,
+                    global_settings=global_settings,
+                )
+            )
             or constructed[-1]
         ),
     )
@@ -171,7 +178,9 @@ def test_application_container_initializes_runtime_services(
     )
     assert container.config is config
     assert container.app is app
-    assert container.profile_manager is constructed[0]
+    assert container.profile_service is constructed[0]
+    assert container.profile_runtime is not None
+    assert container.onboarding_service is not None
     assert container.global_settings is not None
     assert container.jwpub_checksum_store is not None
     assert container.runtime_paths.data_dir == tmp_path / "data"

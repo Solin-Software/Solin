@@ -16,7 +16,7 @@ from solin.core.foundation.constants import (
 )
 from solin.core.foundation import settings_store
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.profiles import manager as profile_manager
+from solin.core.profiles import infrastructure as profile_infrastructure
 from solin.core.profiles import models as profile_models
 
 
@@ -110,6 +110,9 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
         def clear(self) -> None:
             cleared.append((self.organization, self.application))
 
+        def allKeys(self):
+            return []
+
         def sync(self) -> None:
             pass
 
@@ -121,12 +124,15 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
 
     monkeypatch.setattr(settings_store, "QSettings", FakeSettings)
 
-    manager = profile_manager.ProfileManager(tmp_path)
-    manager._active_id = "kept"
-    manager._profiles = [
-        profile_models.ProfileInfo("kept", "Kept"),
-        profile_models.ProfileInfo("removed", "Removed"),
-    ]
+    registry = profile_infrastructure.JsonProfileRegistry(tmp_path / "profiles.json")
+    registry.save(
+        [
+            profile_models.ProfileInfo("kept", "Kept"),
+            profile_models.ProfileInfo("removed", "Removed"),
+        ]
+    )
+    manager = profile_infrastructure.create_local_profile_service(tmp_path)
+    manager.set_active("kept")
 
     assert manager.delete_profile("removed") is True
 

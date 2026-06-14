@@ -12,6 +12,8 @@ Fluxo:
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from PySide6.QtCore import Qt, Signal, QEvent, QRectF, QSize
 from PySide6.QtGui import (
     QPainter, QColor, QFont, QFontMetrics, QPen, QBrush,
@@ -24,7 +26,7 @@ from PySide6.QtWidgets import (
 from ..core.ui.helpers import avatar_colors as _avatar_colors
 from ..core.ui.helpers import fade_in as _fade_in
 from ..core.ui.helpers import initials as _initials
-from ..core.profiles.manager import ProfileManager
+from ..core.profiles.models import ProfileInfo
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
 
 _BG     = "#0d1117"
@@ -275,11 +277,11 @@ class ProfileSwitchOverlay(QWidget):
         parent_window: QWidget,
         current_profile_id: str,
         *,
-        profile_manager: ProfileManager,
+        profiles: Sequence[ProfileInfo],
     ):
         super().__init__(parent_window)
         self._current_id = current_profile_id
-        self._pm = profile_manager
+        self._profiles = tuple(profiles)
 
         self.setGeometry(parent_window.rect())
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -354,7 +356,7 @@ class ProfileSwitchOverlay(QWidget):
         grid_lay.setSpacing(20)
         grid_lay.setContentsMargins(0, 0, 0, 0)
 
-        for prof in self._pm.profiles:
+        for prof in self._profiles:
             card = _SwitchProfileCard(prof, is_active=(prof.id == self._current_id))
             card.clicked.connect(self._on_card_clicked)
             grid_lay.addWidget(card)
@@ -381,7 +383,6 @@ class ProfileSwitchOverlay(QWidget):
     def retranslateUi(self) -> None:
         self._close_btn.setToolTip(self.tr("Cancel profile switch"))
         self._title_lbl.setText(self.tr("Who is using Solin?"))
-        self._subtitle_lbl.setText(self.tr("Select a profile to continue."))
         self._add_card.set_label(self.tr("New Profile"))
 
     def changeEvent(self, event: QEvent) -> None:

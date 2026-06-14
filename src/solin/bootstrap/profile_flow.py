@@ -7,8 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication, QProcess
 
 from solin.bootstrap import single_instance
-from solin.core.foundation.settings_store import GlobalSettingsStore
-from solin.core.profiles.manager import ProfileManager
+from solin.core.profiles.application import ProfileService
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ def relaunch_with_profile(
     app,
     profile_id: str,
     window,
-    profile_manager: ProfileManager,
+    profile_service: ProfileService,
 ) -> None:
     """
     Switch profiles across a process boundary.
@@ -32,10 +31,10 @@ def relaunch_with_profile(
     The old window is closed in the current profile context and a new process is
     started with --profile <id>, avoiding native browser resource reuse.
     """
-    if not profile_manager.get_profile(profile_id):
+    if not profile_service.get_profile(profile_id):
         return
 
-    GlobalSettingsStore.create().set_last_active_profile(profile_id)
+    profile_service.remember_profile_for_next_launch(profile_id)
 
     ipc_server = single_instance.stop_process_ipc(app, window)
 
@@ -65,17 +64,11 @@ def relaunch_with_profile(
 def relaunch_to_profile_creator(
     app,
     window,
-    profile_manager: ProfileManager,
+    profile_service: ProfileService,
 ) -> None:
     """Reopen Solin directly in onboarding for creating an additional profile."""
     try:
-        current_lang = (
-            profile_manager.settings_for().app_settings().app_language()
-            if profile_manager.active_id
-            else ""
-        )
-        if current_lang:
-            GlobalSettingsStore.create().set_bootstrap_language(current_lang)
+        profile_service.prepare_profile_creation()
     except Exception:  # noqa: BLE001 - Qt settings adapter boundary
         _log_ignored_exception("Could not persist bootstrap language for profile creation")
 
@@ -123,7 +116,7 @@ def detached_launch_command(runtime_args: list[str]) -> tuple[str, list[str], st
 def wire_profile_switch(
     app,
     window_ref,
-    profile_manager: ProfileManager,
+    profile_service: ProfileService,
 ):
     """
     Connect MainWindow's switch request signal to the profile-selection overlay.
@@ -136,8 +129,8 @@ def wire_profile_switch(
         from solin.ui.profile_switch_overlay import ProfileSwitchOverlay
 
         current_id = (
-            profile_manager.active_profile.id
-            if profile_manager.active_profile
+            profile_service.active_profile.id
+            if profile_service.active_profile
             else ""
         )
 
@@ -148,7 +141,7 @@ def wire_profile_switch(
         overlay = ProfileSwitchOverlay(
             old_win,
             current_id,
-            profile_manager=profile_manager,
+            profiles=profile_service.profiles,
         )
         overlay.show()
         overlay.raise_()
@@ -172,7 +165,7 @@ def wire_profile_switch(
                 app,
                 profile_id,
                 old_win,
-                profile_manager,
+                profile_service,
             )
 
         def _on_create_profile_requested():
@@ -183,7 +176,7 @@ def wire_profile_switch(
             overlay.deleteLater()
 
             old_win.setEnabled(False)
-            relaunch_to_profile_creator(app, old_win, profile_manager)
+            relaunch_to_profile_creator(app, old_win, profile_service)
 
         overlay.cancelled.connect(_on_cancelled)
         overlay.profile_selected.connect(_on_profile_selected)

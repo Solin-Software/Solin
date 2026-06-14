@@ -31,7 +31,6 @@ def _signal_namespace(prefix, *names):
 
 class _WindowStub:
     def __init__(self):
-        self._profile_switch = SimpleNamespace(update_avatar=_slot("update_avatar"))
         self.songs_widget = _signal_namespace("songs", "project_video_signal")
         self.meetings_widget = _signal_namespace("meetings", "project_media")
         self.clips_widget = _signal_namespace("clips", "project_video_signal")
@@ -165,16 +164,12 @@ class _WindowStub:
 def test_connect_signals_wires_expected_signal_graph():
     _Signal.registry = []
     window = _WindowStub()
-    profile_manager = SimpleNamespace(profile_switched=_Signal("profile_switched"))
-    controller = SignalConnectionController(window, profile_manager)
+    controller = SignalConnectionController(window)
 
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 49
-    assert profile_manager.profile_switched.connected == [
-        window._profile_switch.update_avatar
-    ]
+    assert total_connections == 48
     assert window.songs_widget.project_video_signal.connected == [
         window._on_sjjm_project
     ]

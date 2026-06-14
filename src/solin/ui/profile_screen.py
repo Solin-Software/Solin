@@ -12,6 +12,8 @@ e pronto para iniciar o MainWindow.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import (
     Qt, Signal, QTimer,
     QEvent, QT_TRANSLATE_NOOP,
@@ -23,10 +25,15 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu, QDialog, QMessageBox,
 )
 
-from ..core.integrations.automation.settings import OBSSettingsStore
-from ..core.jw.language_settings import JWLanguageSettingsStore
 from ..core.ui.helpers import fade_in as _fade_in
-from ..core.profiles.manager import ProfileManager
+from ..core.onboarding.application import (
+    OBSOnboardingConfiguration,
+    OnboardingService,
+    ProfileOnboardingCommand,
+)
+from ..core.profiles.application import ProfileService
+from ..core.profiles.settings import ProfileSettings
+from ..controllers.onboarding_obs_probe import OnboardingOBSProbe
 from ..widgets.common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
 from ..styles.icons import (
     make_icon,
@@ -82,12 +89,18 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self,
         lang_manager=None,
         *,
-        profile_manager: ProfileManager,
+        profile_service: ProfileService,
+        profile_settings_for: Callable[[str], ProfileSettings],
+        onboarding_service: OnboardingService,
+        obs_probe: OnboardingOBSProbe,
         parent=None,
     ):
         super().__init__(parent)
         self._lang = lang_manager
-        self._pm = profile_manager
+        self._profiles = profile_service
+        self._profile_settings_for = profile_settings_for
+        self._onboarding = onboarding_service
+        self._obs_probe = obs_probe
         self._creating_additional_profile = False
         self._ob_cancel_buttons: list[QPushButton] = []
         self._tr_labels: list[tuple[QLabel, str]] = []
@@ -192,7 +205,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             if item and item.widget():
                 item.widget().deleteLater()
 
-        for p in self._pm.profiles:
+        for p in self._profiles.profiles:
             card = ProfileCard(p)
             card.clicked.connect(self._on_profile_selected)
             card.context_requested.connect(self._show_profile_context_menu)
@@ -224,7 +237,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             btn.setVisible(visible)
 
     def _cancel_onboarding_profile_creation(self) -> None:
-        if not self._pm.has_profiles():
+        if not self._profiles.has_profiles():
             return
         self._creating_additional_profile = False
         self._set_onboarding_cancel_visible(False)
@@ -891,7 +904,6 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         scenes_lay.addWidget(self._ob_obs_default_hint)
         self._ob_obs_default_combo = _NoScrollComboBox()
         self._ob_obs_default_combo.setStyleSheet(_obs_combo_style())
-        self._ob_obs_default_combo.currentTextChanged.connect(self._ob_obs_save_scenes)
         scenes_lay.addWidget(self._ob_obs_default_combo)
 
         # Media window scene
@@ -913,7 +925,6 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         scenes_lay.addWidget(self._ob_obs_media_hint)
         self._ob_obs_media_combo = _NoScrollComboBox()
         self._ob_obs_media_combo.setStyleSheet(_obs_combo_style())
-        self._ob_obs_media_combo.currentTextChanged.connect(self._ob_obs_save_scenes)
         scenes_lay.addWidget(self._ob_obs_media_combo)
 
         f_lay.addWidget(self._ob_obs_scenes_frame)
@@ -1042,11 +1053,11 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
     def start(self) -> None:
         """
         Decide qual tela mostrar baseado no estado do sistema.
-        Deve ser chamado após ProfileManager.init().
+        Deve ser chamado após a composição do ProfileService.
         """
-        pm = self._pm
-        if not pm.has_profiles():
-            if pm.has_legacy_settings():
+        profiles = self._profiles
+        if not profiles.has_profiles():
+            if profiles.has_legacy_settings():
                 # Dados legados existem → migração
                 self._stack.setCurrentIndex(2)
                 _fade_in(self)
@@ -1061,9 +1072,9 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 self._stack.setCurrentIndex(1)
                 _fade_in(self)
                 QTimer.singleShot(100, lambda: self._ob_name_field.setFocus())
-        elif len(pm.profiles) == 1:
+        elif len(profiles.profiles) == 1:
             # Apenas 1 perfil → entra direto (sem mostrar seletor)
-            self._activate_and_emit(pm.profiles[0].id)
+            self._activate_and_emit(profiles.profiles[0].id)
         else:
             # Múltiplos perfis → seletor
             self._populate_selector()
@@ -1076,7 +1087,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._activate_and_emit(profile_id)
 
     def _show_profile_context_menu(self, profile_id: str, global_pos) -> None:
-        profile = self._pm.get_profile(profile_id)
+        profile = self._profiles.get_profile(profile_id)
         if not profile:
             return
 
@@ -1109,7 +1120,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         rename_action = QAction(make_icon(ICON_EDIT, 15, _MUTED), self.tr("Rename"), menu)
         delete_action = QAction(make_icon(ICON_TRASH, 15, _RED), self.tr("Delete"), menu)
-        delete_action.setEnabled(len(self._pm.profiles) > 1)
+        delete_action.setEnabled(len(self._profiles.profiles) > 1)
         menu.addAction(rename_action)
         menu.addSeparator()
         menu.addAction(delete_action)
@@ -1121,7 +1132,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             self._delete_profile(profile_id)
 
     def _rename_profile(self, profile_id: str) -> None:
-        profile = self._pm.get_profile(profile_id)
+        profile = self._profiles.get_profile(profile_id)
         if not profile:
             return
         dlg = _ProfileNameDialog(
@@ -1133,12 +1144,12 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new_name = dlg.result_name()
             if new_name:
-                self._pm.rename_profile(profile_id, new_name)
+                self._profiles.rename_profile(profile_id, new_name)
                 self._populate_selector()
 
     def _delete_profile(self, profile_id: str) -> None:
-        profile = self._pm.get_profile(profile_id)
-        if not profile or len(self._pm.profiles) <= 1:
+        profile = self._profiles.get_profile(profile_id)
+        if not profile or len(self._profiles.profiles) <= 1:
             return
 
         box = QMessageBox(self)
@@ -1163,7 +1174,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             QPushButton:hover {{ background: #21262d; }}
         """)
         if box.exec() == QMessageBox.StandardButton.Yes:
-            if self._pm.delete_profile(profile_id):
+            if self._profiles.delete_profile(profile_id):
                 self._populate_selector()
 
     def _on_new_profile_clicked(self) -> None:
@@ -1171,10 +1182,10 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def start_new_profile(self) -> None:
         """Abre o onboarding para criar um perfil adicional."""
-        if not self._pm.has_profiles():
+        if not self._profiles.has_profiles():
             self.start()
             return
-        existing = len(self._pm.profiles)
+        existing = len(self._profiles.profiles)
         self._populate_selector()
         self._creating_additional_profile = True
         self._set_onboarding_cancel_visible(True)
@@ -1196,7 +1207,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             self._mig_error.show()
             return
         self._mig_error.hide()
-        profile = self._pm.migrate_legacy(name)
+        profile = self._profiles.migrate_legacy(name)
         self._activate_and_emit(profile.id)
 
     def _ob_step0_next(self) -> None:
@@ -1255,39 +1266,33 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def _finish_onboarding(self, skip: bool = False) -> None:
         name = getattr(self, "_ob_pending_name", self.tr("My Profile"))
-        profile = self._pm.create_profile(name)
-        self._pm.set_active(profile.id)
-        profile_settings = self._pm.settings_for()
+        iface_code = getattr(self, "_ob_iface_selected_code", self._lang.current_code if self._lang else "en")
+        media_code = getattr(self, "_ob_media_selected_code", "") or self._interface_api_code(iface_code)
+        obs_enabled = not skip and self._ob_obs_toggle.is_checked
+        port_text = self._ob_obs_port.text().strip()
+        try:
+            obs_port = int(port_text) if port_text else 4455
+        except ValueError:
+            obs_port = 4455
+
+        profile = self._onboarding.complete(
+            ProfileOnboardingCommand(
+                name=name,
+                interface_language=iface_code,
+                media_language=media_code,
+                obs=OBSOnboardingConfiguration(
+                    enabled=obs_enabled,
+                    port=obs_port,
+                    password=self._ob_obs_pwd.text(),
+                    default_scene=self._ob_obs_default_combo.currentText(),
+                    media_scene=self._ob_obs_media_combo.currentText(),
+                ),
+            )
+        )
+        profile_settings = self._profile_settings_for(profile.id)
         if self._lang:
             self._lang.activate_profile(profile_settings)
-
-        iface_code = getattr(self, "_ob_iface_selected_code", self._lang.current_code if self._lang else "en")
-        if self._lang:
             self._lang.set_language(iface_code)
-        profile_settings.app_settings().set_app_language(iface_code)
-
-        media_code = getattr(self, "_ob_media_selected_code", "") or self._interface_api_code(iface_code)
-        if media_code:
-            JWLanguageSettingsStore.for_profile_settings(
-                profile_settings
-            ).set_media_language_code(media_code)
-
-        # Save OBS config only when integration was enabled and not skipped
-        if not skip and self._ob_obs_toggle.is_checked:
-            port_text = self._ob_obs_port.text().strip()
-            try:
-                port = int(port_text) if port_text else 4455
-            except ValueError:
-                port = 4455
-            pwd = self._ob_obs_pwd.text()
-
-            default_scene = self._ob_obs_default_combo.currentText()
-            media_scene   = self._ob_obs_media_combo.currentText()
-
-            obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
-            obs_settings.set_connection(port, pwd)
-            obs_settings.set_scenes(default_scene, media_scene)
-            obs_settings.set_enabled(True)
 
         # Clean up the temporary OBS service before handing off
         self._ob_obs_teardown()
@@ -1295,9 +1300,11 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self.profile_ready.emit(profile.id)
 
     def _activate_and_emit(self, profile_id: str) -> None:
-        self._pm.set_active(profile_id)
+        self._profiles.set_active(profile_id)
         if self._lang:
-            self._lang.activate_profile(self._pm.settings_for())
+            self._lang.activate_profile(
+                self._profile_settings_for(profile_id)
+            )
 
         self.profile_ready.emit(profile_id)
 
@@ -1327,8 +1334,8 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._refresh_ob_obs_status()
         if hasattr(self, "_ob_obs_default_combo") and hasattr(self, "_ob_obs_media_combo"):
             scenes = []
-            if self._ob_obs_svc is not None:
-                scenes = self._ob_obs_svc.scenes
+            if self._obs_probe.scenes:
+                scenes = self._obs_probe.scenes
             elif self._ob_obs_default_combo.count() > 0:
                 scenes = [
                     self._ob_obs_default_combo.itemText(i)

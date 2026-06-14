@@ -20,3 +20,9 @@ def test_profile_screen_onboarding_uses_typed_settings_stores():
 
     assert "SettingsKey" not in source
     assert ".setValue(" not in source
+
+
+def test_profile_widgets_do_not_construct_obs_services():
+    source = Path("src/solin/ui/profile_obs_setup.py").read_text(encoding="utf-8")
+
+    assert "OBSWebSocketService" not in source

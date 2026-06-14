@@ -3,41 +3,16 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 
-from ..core.integrations.automation.obs import OBSConnectionState, OBSWebSocketService
+from ..core.integrations.automation.obs import OBSConnectionState
 from .profile_widgets import _AMBER, _DIM, _GREEN, _RED
-
-
-class _TransientOBSSettings:
-    def __init__(self) -> None:
-        self._port = 0
-        self._password = ""
-        self.default_scene = ""
-        self.media_scene = ""
-
-    def set_connection(self, port: int, password: str) -> None:
-        self._port = int(port)
-        self._password = password
-
-    def set_scene_names(self, default_scene: str, media_scene: str) -> None:
-        self.default_scene = default_scene
-        self.media_scene = media_scene
-
-    def is_configured(self) -> bool:
-        return self._port > 0
-
-    def websocket_port(self, default: int = 4455) -> int:
-        return self._port if self._port > 0 else default
-
-    def password(self) -> str:
-        return self._password
 
 
 class ProfileOBSSetupMixin:
     def _init_ob_obs_setup(self) -> None:
         self._ob_obs_last_state = OBSConnectionState.DISCONNECTED
         self._ob_obs_last_message = ""
-        self._ob_obs_svc: OBSWebSocketService | None = None
-        self._ob_obs_settings = _TransientOBSSettings()
+        self._obs_probe.state_changed.connect(self._ob_obs_on_state)
+        self._obs_probe.scenes_updated.connect(self._ob_obs_on_scenes)
         self._ob_obs_reconnect_timer = QTimer(self)
         self._ob_obs_reconnect_timer.setSingleShot(True)
         self._ob_obs_reconnect_timer.setInterval(800)
@@ -48,27 +23,7 @@ class ProfileOBSSetupMixin:
     def _ob_obs_teardown(self) -> None:
         """Stop and discard the onboarding OBS service, cancel pending reconnect."""
         self._ob_obs_reconnect_timer.stop()
-        if self._ob_obs_svc is not None:
-            try:
-                self._ob_obs_svc.state_changed.disconnect(self._ob_obs_on_state)
-                self._ob_obs_svc.scenes_updated.disconnect(self._ob_obs_on_scenes)
-            except RuntimeError:
-                pass
-            self._ob_obs_svc.stop()
-            self._ob_obs_svc.deleteLater()
-            self._ob_obs_svc = None
-
-    def _ob_obs_ensure_service(self) -> OBSWebSocketService:
-        """Return (creating if needed) the onboarding-owned OBS service."""
-        if self._ob_obs_svc is None:
-            svc = OBSWebSocketService(
-                self._ob_obs_settings,
-                parent=self,
-            )
-            svc.state_changed.connect(self._ob_obs_on_state)
-            svc.scenes_updated.connect(self._ob_obs_on_scenes)
-            self._ob_obs_svc = svc
-        return self._ob_obs_svc
+        self._obs_probe.stop()
 
     def _ob_obs_start(self) -> None:
         """Apply current port/password to prefs then start the service."""
@@ -79,12 +34,8 @@ class ProfileOBSSetupMixin:
             port = 4455
         pwd = self._ob_obs_pwd.text()
 
-        self._ob_obs_settings.set_connection(port, pwd)
-
-        svc = self._ob_obs_ensure_service()
-        svc.stop()
         if port > 0:
-            svc.start()
+            self._obs_probe.connect_to(port, pwd)
 
     def _ob_obs_do_reconnect(self) -> None:
         """Debounced slot: reconnect after field changes."""
@@ -163,10 +114,3 @@ class ProfileOBSSetupMixin:
             if idx >= 0:
                 combo.setCurrentIndex(idx)
             combo.blockSignals(False)
-
-    def _ob_obs_save_scenes(self) -> None:
-        """Keep scene selections in the onboarding session state."""
-        self._ob_obs_settings.set_scene_names(
-            self._ob_obs_default_combo.currentText(),
-            self._ob_obs_media_combo.currentText(),
-        )

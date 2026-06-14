@@ -75,7 +75,9 @@ include = [
     "src/solin/core/jw",
     "src/solin/core/media",
     "src/solin/core/meetings",
+    "src/solin/core/onboarding",
     "src/solin/core/playlists",
+    "src/solin/core/profiles",
     "src/solin/core/timer",
 ]
 exclude = [

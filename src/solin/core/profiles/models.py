@@ -57,22 +57,26 @@ def unique_profile_slug(slug: str, existing: set[str]) -> str:
     return f"{candidate}_{suffix}"
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class ProfileInfo:
     id: str
     name: str
     created_at: float = field(default_factory=time.time)
 
     def __post_init__(self) -> None:
-        self.id = validate_profile_id(self.id)
-        self.name = normalize_profile_name(self.name)
+        object.__setattr__(self, "id", validate_profile_id(self.id))
+        object.__setattr__(self, "name", normalize_profile_name(self.name))
         if not math.isfinite(self.created_at):
             raise ValueError("Profile creation time must be finite.")
         if self.created_at <= 0:
-            self.created_at = time.time()
+            object.__setattr__(self, "created_at", time.time())
 
-    def rename(self, name: str) -> None:
-        self.name = normalize_profile_name(name)
+    def renamed(self, name: str) -> "ProfileInfo":
+        return ProfileInfo(
+            id=self.id,
+            name=normalize_profile_name(name),
+            created_at=self.created_at,
+        )
 
     def to_dict(self) -> dict[str, str | float]:
         return {
@@ -90,6 +94,8 @@ class ProfileInfo:
         if not isinstance(profile_id, str) or not isinstance(name, str):
             raise ValueError("Profile registry entry requires string id and name.")
         created_at = data.get("created_at", time.time())
+        if not isinstance(created_at, (str, int, float)):
+            raise ValueError("Profile registry entry has an invalid creation time.")
         try:
             created = float(created_at)
         except (TypeError, ValueError) as exc:

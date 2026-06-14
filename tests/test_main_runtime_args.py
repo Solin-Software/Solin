@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
-from solin.core.foundation import settings_store
 from solin.bootstrap import application as main
 from solin.bootstrap import profile_flow
 from solin.bootstrap.runtime_args import parse_runtime_args
@@ -56,7 +55,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
-    profile_manager = object()
+    active_profile = object()
 
     class _MainWindow:
         def __init__(
@@ -72,7 +71,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
-            received_profile_manager,
+            received_active_profile,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
@@ -85,7 +84,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
-            self.profile_manager = received_profile_manager
+            self.active_profile = received_active_profile
 
         def show(self):
             events.append("show")
@@ -122,7 +121,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
-        profile_manager=profile_manager,
+        active_profile=active_profile,
     )
 
     assert window.lang_manager == "lang"
@@ -137,7 +136,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
-    assert window.profile_manager is profile_manager
+    assert window.active_profile is active_profile
     assert events == [
         "show",
         ("titlebar", window, "#1A231F"),
@@ -159,7 +158,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
-    profile_manager = object()
+    active_profile = object()
 
     class _MainWindow:
         def __init__(
@@ -175,7 +174,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jwpub_checksum_store,
             playlist_storage_paths,
             meeting_tree_store,
-            received_profile_manager,
+            received_active_profile,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
@@ -188,7 +187,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.meeting_tree_store = meeting_tree_store
-            self.profile_manager = received_profile_manager
+            self.active_profile = received_active_profile
 
         def show(self):
             events.append("show")
@@ -222,7 +221,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
-        profile_manager=profile_manager,
+        active_profile=active_profile,
     )
 
     assert events == ["show", ("titlebar", "#1A231F")]
@@ -256,27 +255,18 @@ def test_run_zoom_poll_standalone_keeps_window_alive_until_event_loop(monkeypatc
 def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_quits(
     monkeypatch,
 ):
-    settings = []
     launches = []
     stopped = []
 
-    class _Settings:
-        def __init__(self, org_name, app_name):
-            self.org_name = org_name
-            self.app_name = app_name
-            self.values = {}
-            self.synced = False
-            settings.append(self)
+    class _ProfileService:
+        def __init__(self):
+            self.remembered = []
 
-        def setValue(self, key, value):
-            self.values[key] = value
-
-        def sync(self):
-            self.synced = True
-
-    class _ProfileManager:
         def get_profile(self, profile_id):
             return object() if profile_id == "profile-b" else None
+
+        def remember_profile_for_next_launch(self, profile_id):
+            self.remembered.append(profile_id)
 
     class _App:
         def __init__(self):
@@ -305,8 +295,7 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
 
     app = _App()
     window = _Window()
-    profile_manager = _ProfileManager()
-    monkeypatch.setattr(settings_store, "QSettings", _Settings)
+    profile_service = _ProfileService()
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -330,11 +319,10 @@ def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_qu
         app,
         "profile-b",
         window,
-        profile_manager,
+        profile_service,
     )
 
-    assert settings[0].values == {"last_active_profile": "profile-b"}
-    assert settings[0].synced is True
+    assert profile_service.remembered == ["profile-b"]
     assert stopped == [(app, window)]
     assert launches[0][0] == "python.exe"
     assert launches[0][1][-2:] == ["--profile", "profile-b"]
@@ -350,19 +338,15 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
 ):
     restored = []
 
-    class _Settings:
-        def __init__(self, *_args):
-            pass
+    class _ProfileService:
+        def __init__(self):
+            self.remembered = []
 
-        def setValue(self, *_args):
-            pass
-
-        def sync(self):
-            pass
-
-    class _ProfileManager:
         def get_profile(self, profile_id):
             return object()
+
+        def remember_profile_for_next_launch(self, profile_id):
+            self.remembered.append(profile_id)
 
     class _App:
         def __init__(self):
@@ -391,8 +375,7 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
 
     app = _App()
     window = _Window()
-    profile_manager = _ProfileManager()
-    monkeypatch.setattr(settings_store, "QSettings", _Settings)
+    profile_service = _ProfileService()
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -413,9 +396,10 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
         app,
         "profile-b",
         window,
-        profile_manager,
+        profile_service,
     )
 
+    assert profile_service.remembered == ["profile-b"]
     assert window.enabled == [True]
     assert window.shown == 1
     assert window.closed == 0
@@ -426,11 +410,11 @@ def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
 def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
     launches = []
 
-    class _ProfileManager:
+    class _ProfileService:
         def get_profile(self, profile_id):
             return None
 
-    profile_manager = _ProfileManager()
+    profile_service = _ProfileService()
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -446,7 +430,7 @@ def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
         app=object(),
         profile_id="missing",
         window=object(),
-        profile_manager=profile_manager,
+        profile_service=profile_service,
     )
 
     assert launches == []
@@ -455,33 +439,15 @@ def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
 def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
     monkeypatch,
 ):
-    settings = []
     launches = []
     stopped = []
 
-    class _Settings:
-        def __init__(self, org_name, app_name):
-            self.org_name = org_name
-            self.app_name = app_name
-            self.values = {}
-            self.synced = False
-            settings.append(self)
+    class _ProfileService:
+        def __init__(self):
+            self.prepared = 0
 
-        def setValue(self, key, value):
-            self.values[key] = value
-
-        def sync(self):
-            self.synced = True
-
-    class _ProfileManager:
-        active_id = "main_hall"
-
-        def settings_for(self):
-            return SimpleNamespace(
-                app_settings=lambda: SimpleNamespace(
-                    app_language=lambda: "pt_BR",
-                )
-            )
+        def prepare_profile_creation(self):
+            self.prepared += 1
 
     class _App:
         def __init__(self):
@@ -502,8 +468,7 @@ def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
 
     app = _App()
     window = _Window()
-    profile_manager = _ProfileManager()
-    monkeypatch.setattr(settings_store, "QSettings", _Settings)
+    profile_service = _ProfileService()
     monkeypatch.setattr(
         profile_flow.single_instance,
         "stop_process_ipc",
@@ -523,10 +488,9 @@ def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
     monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
     monkeypatch.delattr(profile_flow.sys, "frozen", raising=False)
 
-    profile_flow.relaunch_to_profile_creator(app, window, profile_manager)
+    profile_flow.relaunch_to_profile_creator(app, window, profile_service)
 
-    assert settings[0].values == {"bootstrap_language": "pt_BR"}
-    assert settings[0].synced is True
+    assert profile_service.prepared == 1
     assert stopped == [(app, window)]
     assert launches[0][0] == "python.exe"
     assert launches[0][1][-1:] == ["--create-profile"]
