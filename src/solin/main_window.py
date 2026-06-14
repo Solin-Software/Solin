@@ -201,7 +201,9 @@ class MainWindow(QMainWindow):
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
         self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
-        self._profile_switch = ProfileSwitchController(self)
+        self._profile_switch = ProfileSwitchController(
+            self.switch_profile_requested.emit
+        )
         self._projection_targets = ProjectionWindowController(self)
         self._media_projection = MediaProjectionController(self)
         self._projection_stop = ProjectionStopController(self)

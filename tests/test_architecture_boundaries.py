@@ -220,6 +220,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "navigation_controller.py",
         "open_media_controller.py",
         "playlist_import_controller.py",
+        "profile_switch_controller.py",
         "projection_integration_controller.py",
         "remote_services_controller.py",
         "shutdown_controller.py",

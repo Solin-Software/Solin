@@ -42,11 +42,17 @@ class _WindowStub:
 
 def test_request_switch_emits_main_window_signal():
     window = _WindowStub()
-    controller = ProfileSwitchController(window)
+    controller = ProfileSwitchController(window.switch_profile_requested.emit)
 
     controller.request_switch()
 
     assert window.switch_profile_requested.emitted == 1
+
+
+def test_profile_switch_controller_uses_explicit_dependencies():
+    controller = ProfileSwitchController(lambda: None)
+
+    assert not hasattr(controller, "_window")
 
 
 def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatch):
