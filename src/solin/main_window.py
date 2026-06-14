@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtCore import QObject, QTimer, Signal, QEvent
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
-from .controllers.language_controller import LanguageController
+from .controllers.language_controller import LanguageContext, LanguageController
 from .controllers.live_integration_controller import (
     LiveIntegrationContext,
     LiveIntegrationController,
@@ -378,7 +378,15 @@ class MainWindow(QMainWindow):
                 ),
             ),
         )
-        self._language_controller = LanguageController(self)
+        self._language_controller = LanguageController(
+            LanguageContext(
+                set_window_title=self.setWindowTitle,
+                sidebar_title_label=self._sidebar_title_lbl,
+                sidebar_subtitle_label=self._sidebar_subtitle_lbl,
+                nav_buttons=self._nav_buttons_by_name,
+                translate=self.tr,
+            )
+        )
         self._signal_connections = SignalConnectionController(
             MainWindowSignalSources(
                 songs_widget=self.songs_widget,

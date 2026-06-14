@@ -440,6 +440,7 @@ class MainWindowUiController:
 
     def _build_nav_buttons(self) -> None:
         window = self._window
+        window._nav_buttons_by_name = {}
         for attr_name, icon, label, page_index in self._NAV_BUTTON_SPECS:
             button = SidebarButton(icon, window.tr(label))
             button.clicked.connect(
@@ -448,6 +449,7 @@ class MainWindowUiController:
                 )
             )
             setattr(window, attr_name, button)
+            window._nav_buttons_by_name[attr_name] = button
 
     @staticmethod
     def _separator() -> QFrame:

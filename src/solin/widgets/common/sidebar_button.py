@@ -29,6 +29,10 @@ class SidebarButton(QPushButton):
         self.style().unpolish(self)
         self.style().polish(self)
 
+    def set_label(self, label: str) -> None:
+        self._label = label
+        self._update_icon_and_text()
+
     def _update_icon_and_text(self) -> None:
         color = "#e6edf3" if self._active else "#8b949e"
         self.setIcon(make_icon(self._svg_icon, 16, color))

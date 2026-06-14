@@ -214,6 +214,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
     controller_files = (
         "ipc_controller.py",
         "lazy_page_controller.py",
+        "language_controller.py",
         "live_integration_controller.py",
         "main_window_bootstrap_controller.py",
         "navigation_controller.py",
