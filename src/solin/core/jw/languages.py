@@ -31,7 +31,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -41,7 +40,7 @@ from solin.core.foundation.constants import QSETTINGS_APP_APP, QSETTINGS_PREFS_A
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 from solin.core.profiles.settings import ProfileSettings
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import get_json
 
 log = logging.getLogger(__name__)
 
@@ -71,12 +70,11 @@ class _FetchWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            req = urllib.request.Request(
+            data = get_json(
                 _LANGUAGES_URL,
+                timeout=_FETCH_TIMEOUT,
                 headers={"User-Agent": "Solin/1.0"},
             )
-            with _urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
 
             languages: list[dict] = data.get("languages", [])
             if not languages:

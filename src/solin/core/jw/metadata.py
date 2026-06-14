@@ -14,15 +14,12 @@ Exporta:
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import re
-import urllib.error   as _url_err
 import urllib.parse   as _url_parse
-import urllib.request as _url_req
 from typing import Optional
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpError, get_json
 
 log = logging.getLogger(__name__)
 
@@ -1622,10 +1619,8 @@ def resolve_jworg_meta(
     log.debug("[jw_api] Resolving JW.org metadata: %s", api_url)
 
     try:
-        req = _url_req.Request(api_url, headers={"User-Agent": "Solin/1.0"})
-        with _urlopen(req, timeout=JW_API_TIMEOUT) as resp:
-            data = _json.loads(resp.read().decode("utf-8"))
-    except (_url_err.URLError, _json.JSONDecodeError, OSError) as e:
+        data = get_json(api_url, timeout=JW_API_TIMEOUT, headers={"User-Agent": "Solin/1.0"})
+    except HttpError as e:
         log.debug("[jw_api] JW.org API unavailable (%s/%s): %s", key_symbol, doc_id, e)
         _RESOLVE_CACHE[cache_key] = None
         return None

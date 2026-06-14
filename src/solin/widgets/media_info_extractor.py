@@ -36,14 +36,13 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, cast
-from urllib.request import Request as _UrlRequest
 
 from PySide6.QtCore import QObject, Signal, QTimer, QUrl
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.network.http import urlopen
+from ..core.network.http import HttpError, get as http_get, get_bytes
 
 log = logging.getLogger(__name__)
 
@@ -523,15 +522,15 @@ class RemoteAudioInfoExtractor(_ThreadedRemoteInfoExtractor):
         super().__init__(index, url, parent)
 
     def _fetch_info(self) -> tuple[bytes | None, str]:
-        req = _UrlRequest(
+        data = get_bytes(
             self._url,
+            timeout=self._TIMEOUT_S,
+            max_bytes=self._MAX_BYTES,
             headers={
                 "Range": f"bytes=0-{self._MAX_BYTES - 1}",
                 "User-Agent": "Mozilla/5.0",
             },
         )
-        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-            data = resp.read(self._MAX_BYTES)
         return _audio_info_from_bytes(data, self._ext)
 
 
@@ -547,16 +546,16 @@ class RemoteImageInfoExtractor(_ThreadedRemoteInfoExtractor):
     _TIMEOUT_S = 12
 
     def _fetch_info(self) -> tuple[bytes | None, str]:
-        req = _UrlRequest(
+        return get_bytes(
             self._url,
+            timeout=self._TIMEOUT_S,
+            max_bytes=self._MAX_BYTES,
             headers={
                 "Range": f"bytes=0-{self._MAX_BYTES - 1}",
                 "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
                 "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
             },
-        )
-        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-            return resp.read(self._MAX_BYTES), ""
+        ), ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -815,8 +814,10 @@ class RemotePageMetaExtractor(_ThreadedRemoteInfoExtractor):
     _TIMEOUT_S       = 12
 
     def _fetch_info(self) -> tuple[bytes | None, str]:
-        req = _UrlRequest(
+        response = http_get(
             self._url,
+            timeout=self._TIMEOUT_S,
+            max_bytes=self._MAX_HTML_BYTES,
             headers={
                 "Range": f"bytes=0-{self._MAX_HTML_BYTES - 1}",
                 "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
@@ -824,9 +825,8 @@ class RemotePageMetaExtractor(_ThreadedRemoteInfoExtractor):
                 "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
             },
         )
-        with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-            content_type = resp.headers.get("Content-Type", "").lower()
-            data = resp.read(self._MAX_HTML_BYTES)
+        content_type = response.headers.get("Content-Type", "").lower()
+        data = response.content
 
         if "html" in content_type or data.lstrip()[:5].lower() in (b"<!doc", b"<html"):
             thumb_url, title = _extract_og_meta(data)
@@ -841,16 +841,16 @@ class RemotePageMetaExtractor(_ThreadedRemoteInfoExtractor):
 
     def _fetch_image_bytes(self, img_url: str) -> bytes | None:
         try:
-            req = _UrlRequest(
+            return get_bytes(
                 img_url,
+                timeout=self._TIMEOUT_S,
+                max_bytes=self._MAX_IMG_BYTES,
                 headers={
                     "Range": f"bytes=0-{self._MAX_IMG_BYTES - 1}",
                     "User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)",
                 }
             )
-            with urlopen(req, timeout=self._TIMEOUT_S) as resp:
-                return resp.read(self._MAX_IMG_BYTES)
-        except (OSError, ValueError) as exc:
+        except (HttpError, OSError, ValueError) as exc:
             log.debug("Remote og:image fetch failed for %s: %s", img_url, exc)
             return None
 

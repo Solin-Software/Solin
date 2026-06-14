@@ -20,11 +20,11 @@ import logging
 import tempfile
 import threading
 import time
-import requests
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 
 from solin.core.foundation.constants import TEMP_STREAM_PREFIX
+from solin.core.network.http import stream_get
 
 PROGRESS_EMIT_MIN_INTERVAL_SECONDS = 0.20
 PROGRESS_EMIT_MIN_BYTES = 512 * 1024
@@ -232,50 +232,47 @@ class SongDownloader(QObject):
         try:
             if job.cancel_event.is_set():
                 return
-            resp = requests.get(url, stream=True, timeout=30)
-            resp.raise_for_status()
-            total      = int(resp.headers.get("content-length", 0))
-            downloaded = 0
-            last_progress_at = 0.0
-            last_progress_pct = -1
-            last_progress_bytes = 0
+            with stream_get(url, timeout=30) as resp:
+                total      = int(resp.headers.get("content-length", 0))
+                downloaded = 0
+                last_progress_at = 0.0
+                last_progress_pct = -1
+                last_progress_bytes = 0
 
-            def emit_progress(force: bool = False) -> None:
-                nonlocal last_progress_at, last_progress_pct, last_progress_bytes
-                if downloaded <= 0 or job.cancel_event.is_set():
-                    return
-                now = time.monotonic()
-                if total > 0:
-                    pct = int(downloaded * 100 / total)
-                    if force or pct != last_progress_pct:
-                        last_progress_pct = pct
+                def emit_progress(force: bool = False) -> None:
+                    nonlocal last_progress_at, last_progress_pct, last_progress_bytes
+                    if downloaded <= 0 or job.cancel_event.is_set():
+                        return
+                    now = time.monotonic()
+                    if total > 0:
+                        pct = int(downloaded * 100 / total)
+                        if force or pct != last_progress_pct:
+                            last_progress_pct = pct
+                            last_progress_at = now
+                            last_progress_bytes = downloaded
+                            self._worker_progress.emit(job.job_id, downloaded, total)
+                        return
+                    if (
+                        force
+                        or last_progress_at <= 0
+                        or downloaded - last_progress_bytes >= PROGRESS_EMIT_MIN_BYTES
+                        or now - last_progress_at >= PROGRESS_EMIT_MIN_INTERVAL_SECONDS
+                    ):
                         last_progress_at = now
                         last_progress_bytes = downloaded
                         self._worker_progress.emit(job.job_id, downloaded, total)
-                    return
-                if (
-                    force
-                    or last_progress_at <= 0
-                    or downloaded - last_progress_bytes >= PROGRESS_EMIT_MIN_BYTES
-                    or now - last_progress_at >= PROGRESS_EMIT_MIN_INTERVAL_SECONDS
-                ):
-                    last_progress_at = now
-                    last_progress_bytes = downloaded
-                    self._worker_progress.emit(job.job_id, downloaded, total)
 
-            with open(write_tmp, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=131_072):
-                    if job.cancel_event.is_set():
-                        return
-                    if chunk:
+                with open(write_tmp, "wb") as f:
+                    for chunk in resp.iter_bytes(131_072):
+                        if job.cancel_event.is_set():
+                            return
                         f.write(chunk)
                         downloaded += len(chunk)
                         emit_progress()
 
             if job.cancel_event.is_set():
                 return
-            # urllib3 validates the encoded transfer length before requests
-            # transparently decodes Content-Encoding for iter_content().
+            # The transport validates encoded transfer length before exposing chunks.
             emit_progress(force=True)
 
             if persist:

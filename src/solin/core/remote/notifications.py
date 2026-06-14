@@ -14,7 +14,7 @@ Fluxo completo:
   7. A MainWindow conecta esse signal e enfileira os dialogs (não-modais).
 
 Segurança:
-  - HTTPS + verificação de certificado (padrão do requests).
+  - HTTPS + verificação de certificado pelo adaptador HTTP central.
   - Timeout agressivo (FETCH_TIMEOUT_S) para não atrasar a inicialização.
   - Nenhum dado sensível é enviado ao servidor.
   - IDs marcados como vistos ANTES de emitir o signal — evita re-exibição
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     
 from solin.core.foundation.constants import NOTIFICATION_API_URL, QSETTINGS_NOTIFICATIONS_APP
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.network.http import HttpError, get_json
 from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
@@ -155,7 +156,6 @@ class NotificationWorker(QObject):
     def run(self) -> None:
         """Chamado pela thread. Faz fetch, processa, emite resultado."""
         try:
-            import requests  # importação local — não polui o namespace global
             from solin.core.foundation.identity import get_install_id
             from solin.core.foundation.constants import APP_PLATFORM, APP_VERSION
 
@@ -167,7 +167,7 @@ class NotificationWorker(QObject):
                 "v":        APP_VERSION,
                 "platform": APP_PLATFORM,
             }
-            resp = requests.get(
+            payload = get_json(
                 NOTIFICATION_API_URL,
                 params=params,
                 timeout=FETCH_TIMEOUT_S,
@@ -176,9 +176,7 @@ class NotificationWorker(QObject):
                     "User-Agent": f"Solin/{APP_VERSION}",
                 },
             )
-            resp.raise_for_status()
-            payload = resp.json()
-        except (requests.RequestException, ValueError) as exc:
+        except HttpError as exc:
             log.debug("[Notifications] fetch failed: %s", exc)
             self.fetch_failed.emit(str(exc))
             return

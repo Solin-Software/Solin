@@ -4,7 +4,6 @@ import re
 import sys
 import threading
 import time
-import urllib.request
 from collections.abc import Callable
 from typing import cast
 from PySide6.QtWidgets import QWidget, QApplication
@@ -14,7 +13,7 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...core.media.cache import MediaCacheManager
-from ...core.network.http import urlopen as _urlopen
+from ...core.network.http import HttpError, get_bytes
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
 from .crop_overlay import _CropOverlay
 from .downloads import _BrowserDownloadsMixin
@@ -43,15 +42,12 @@ class _ImageFetchCoordinator:
 
     @classmethod
     def _read_url(cls, url: str) -> bytes:
-        req = urllib.request.Request(
+        return get_bytes(
             url,
+            timeout=15,
+            max_bytes=cls._MAX_IMAGE_BYTES,
             headers={"User-Agent": "Mozilla/5.0"},
         )
-        with _urlopen(req, timeout=15) as resp:
-            payload = resp.read(cls._MAX_IMAGE_BYTES + 1)
-        if len(payload) > cls._MAX_IMAGE_BYTES:
-            raise ValueError("Image exceeds the browser projection size limit")
-        return payload
 
     def claim(self) -> int | None:
         with self._lock:
@@ -74,7 +70,7 @@ class _ImageFetchCoordinator:
                 payload = self._fetch_url(url)
                 if self.is_current(generation):
                     deliver(generation, payload)
-            except (OSError, ValueError) as exc:
+            except (HttpError, OSError, ValueError) as exc:
                 log.warning("Image fetch error: %s", exc)
             finally:
                 with self._lock:

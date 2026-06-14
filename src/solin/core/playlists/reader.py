@@ -47,20 +47,17 @@ Resolução de URLs JW.org:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 import sqlite3
-import urllib.error
 import urllib.parse
-import urllib.request
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpError, get_json
 from solin.core.foundation.constants import (
     VIDEO_PREFERRED_QUALITY,
     VIDEO_QUALITY_FALLBACK_DIR,
@@ -775,10 +772,8 @@ def resolve_jworg_url(
     log.debug("Resolving JW.org URL (%s): %s", fileformat, api_url)
 
     try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "Solin/1.0"})
-        with _urlopen(req, timeout=_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+        data = get_json(api_url, timeout=_TIMEOUT, headers={"User-Agent": "Solin/1.0"})
+    except HttpError as e:
         log.warning("Could not resolve JW.org URL for '%s': %s", key_symbol, e)
         return None
 
@@ -833,10 +828,8 @@ def resolve_jworg_metadata(
     log.debug("Resolving JW.org metadata (%s): %s", fileformat, api_url)
 
     try:
-        req = urllib.request.Request(api_url, headers={"User-Agent": "Solin/1.0"})
-        with _urlopen(req, timeout=_TIMEOUT) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+        data = get_json(api_url, timeout=_TIMEOUT, headers={"User-Agent": "Solin/1.0"})
+    except HttpError as e:
         log.warning("Could not resolve JW.org metadata for '%s': %s", key_symbol, e)
         return None
 

@@ -26,15 +26,12 @@ from __future__ import annotations
 
 import io
 import hashlib
-import http.client
 import json
 import logging
 import os
 import shutil
 import sqlite3
 import threading
-import urllib.error
-import urllib.request
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -45,7 +42,7 @@ from PySide6.QtCore import (
     QObject, QSettings, QThread, Signal, Slot,
 )
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpError, stream_get
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.jw.publication_links import (
     DEFAULT_USER_AGENT,
@@ -1587,16 +1584,12 @@ class _JwpubWorker(QObject):
         """
         dest = self._cache.jwpub_path(pub, lang, issue)
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": _UA})
-            with _urlopen(req, timeout=60) as resp:
+            with stream_get(url, timeout=60, headers={"User-Agent": _UA}) as resp:
                 total  = int(resp.headers.get("Content-Length") or 0)
                 done   = 0
                 chunks = []
                 last_pct = -1
-                while True:
-                    chunk = resp.read(256 * 1024)
-                    if not chunk:
-                        break
+                for chunk in resp.iter_bytes(256 * 1024):
                     chunks.append(chunk)
                     done += len(chunk)
                     pct = int(done / total * 100) if total else 0
@@ -1610,12 +1603,7 @@ class _JwpubWorker(QObject):
             # returning the old x_<issue> directory.
             self._cache.invalidate_extract(pub, lang, issue)
             return True
-        except (
-            http.client.HTTPException,
-            OSError,
-            ValueError,
-            urllib.error.URLError,
-        ) as exc:
+        except (HttpError, OSError, ValueError) as exc:
             if emit_error:
                 self.error.emit(key, pub_ui, str(exc))
             else:

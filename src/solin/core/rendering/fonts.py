@@ -33,15 +33,13 @@ import hashlib
 import logging
 import os
 import threading
-import urllib.error as _url_err
-import urllib.request as _url_req
 from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QFontDatabase
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpError, stream_get
 
 log = logging.getLogger(__name__)
 
@@ -126,19 +124,21 @@ class _DownloadWorker(QThread):
 
         # 1. Download do WOFF2
         log.debug("[font_manager] Downloading %s", url)
-        req = _url_req.Request(url, headers={"User-Agent": _USER_AGENT})
         try:
-            with _urlopen(req, timeout=_DOWNLOAD_TIMEOUT) as resp:
+            with stream_get(
+                url,
+                timeout=_DOWNLOAD_TIMEOUT,
+                headers={"User-Agent": _USER_AGENT},
+            ) as resp:
                 with self._response_lock:
                     self._response = resp
                 chunks: list[bytes] = []
-                while not self.isInterruptionRequested():
-                    chunk = resp.read(131_072)
-                    if not chunk:
+                for chunk in resp.iter_bytes(131_072):
+                    if self.isInterruptionRequested():
                         break
                     chunks.append(chunk)
                 woff2_data = b"".join(chunks)
-        except (_url_err.URLError, OSError) as exc:
+        except (HttpError, OSError) as exc:
             if self.isInterruptionRequested():
                 return
             log.warning("[font_manager] Failed to download '%s': %s", font_name, exc)

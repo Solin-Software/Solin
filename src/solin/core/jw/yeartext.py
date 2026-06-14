@@ -4,16 +4,14 @@ from __future__ import annotations
 import json
 import logging
 import re
-import urllib.error as _url_err
 import urllib.parse as _url_parse
-import urllib.request as _url_req
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpDecodeError, HttpError, get_json
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 log = logging.getLogger(__name__)
@@ -86,26 +84,24 @@ class _FetchWorker(QThread):
         url = f"{_WOL_API_URL}?{_url_parse.urlencode(params)}"
         log.debug("[yeartext] GET %s", url)
 
-        req = _url_req.Request(url, headers={
-            "User-Agent":       _USER_AGENT,
-            "Accept":           "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language":  "pt-BR,pt;q=0.9,en;q=0.8",
-            "Referer":          "https://wol.jw.org/",
-            "X-Requested-With": "XMLHttpRequest",
-        })
-
         try:
-            with _urlopen(req, timeout=_API_TIMEOUT) as resp:
-                raw = resp.read().decode("utf-8")
-        except (_url_err.URLError, OSError) as exc:
+            data = get_json(
+                url,
+                timeout=_API_TIMEOUT,
+                headers={
+                    "User-Agent":       _USER_AGENT,
+                    "Accept":           "application/json, text/javascript, */*; q=0.01",
+                    "Accept-Language":  "pt-BR,pt;q=0.9,en;q=0.8",
+                    "Referer":          "https://wol.jw.org/",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            )
+        except HttpDecodeError as exc:
+            self.failed.emit(api_code, year, f"JSON invalido: {exc}")
+            return
+        except HttpError as exc:
             log.warning("[yeartext] Request failed (%s/%d): %s", api_code, year, exc)
             self.failed.emit(api_code, year, str(exc))
-            return
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            self.failed.emit(api_code, year, f"JSON invalido: {exc}")
             return
 
         log.debug("[yeartext] JSON response (%s/%d): %s", api_code, year, data)

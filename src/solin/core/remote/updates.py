@@ -25,7 +25,7 @@ Formato esperado da API (GET /v1/version):
   }
 
 Segurança:
-  - HTTPS + verificação de certificado (padrão do requests).
+  - HTTPS + verificação de certificado pelo adaptador HTTP central.
   - Timeout agressivo para não atrasar a inicialização.
   - Nenhum dado do usuário é enviado.
 """
@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, QThread, Signal
 
 from solin.core.foundation.constants import APP_PLATFORM, APP_VERSION, UPDATE_CHECK_URL
+from solin.core.network.http import HttpError, get_json
 
 if TYPE_CHECKING:
     pass
@@ -101,7 +102,6 @@ class UpdateWorker(QObject):
 
     def run(self) -> None:
         try:
-            import requests
             from solin.core.foundation.identity import get_install_id
 
             params = {
@@ -109,7 +109,7 @@ class UpdateWorker(QObject):
                 "id":       get_install_id(),
                 "platform": APP_PLATFORM,
             }
-            resp = requests.get(
+            payload = get_json(
                 UPDATE_CHECK_URL,
                 params=params,
                 timeout=FETCH_TIMEOUT_S,
@@ -118,9 +118,7 @@ class UpdateWorker(QObject):
                     "User-Agent": f"Solin/{APP_VERSION}",
                 },
             )
-            resp.raise_for_status()
-            payload = resp.json()
-        except (requests.RequestException, ValueError) as exc:
+        except HttpError as exc:
             log.debug("[Update] fetch failed: %s", exc)
             self.fetch_failed.emit(str(exc))
             return

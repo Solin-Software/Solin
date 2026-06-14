@@ -27,9 +27,7 @@ import os
 import re
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
@@ -42,7 +40,7 @@ from solin.core.foundation.constants import (
     VIDEO_QUALITY_FALLBACK_DIR,
     VIDEO_QUALITY_ORDER,
 )
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpDecodeError, HttpError, get_json, stream_get
 
 log = logging.getLogger(__name__)
 
@@ -95,10 +93,10 @@ class _FetchCancelled(Exception):
 
 
 _EXPECTED_FETCH_ERRORS = (
+    HttpError,
     OSError,
     UnicodeError,
     ValueError,
-    urllib.error.URLError,
 )
 
 
@@ -476,16 +474,15 @@ def ensure_thumbnail_cached(
     cache_key = hashlib.sha256(thumbnail_url.encode("utf-8")).hexdigest()
     temp_path = os.path.join(cache_dir, f"{cache_key}.tmp")
 
-    req = urllib.request.Request(
-        thumbnail_url,
-        headers={
-            "User-Agent": _USER_AGENT,
-            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        },
-    )
-
     try:
-        with _urlopen(req, timeout=_THUMB_TIMEOUT_S) as resp:
+        with stream_get(
+            thumbnail_url,
+            timeout=_THUMB_TIMEOUT_S,
+            headers={
+                "User-Agent": _USER_AGENT,
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            },
+        ) as resp:
             content_type = resp.headers.get("Content-Type", "").split(";", 1)[0].lower()
             ext = _guess_image_ext(thumbnail_url, content_type) or guessed_ext
             final_path = os.path.join(cache_dir, f"{cache_key}{ext}")
@@ -494,10 +491,7 @@ def ensure_thumbnail_cached(
 
             total = 0
             with open(temp_path, "wb") as f:
-                while True:
-                    chunk = resp.read(64 * 1024)
-                    if not chunk:
-                        break
+                for chunk in resp.iter_bytes(64 * 1024):
                     total += len(chunk)
                     if total > _MAX_THUMB_BYTES:
                         raise ValueError("Thumbnail is larger than the allowed cache limit")
@@ -1457,21 +1451,20 @@ def _fetch_json_cached(
         if cached is not None:
             return cached["data"], float(cached["_fetched_at"]), True
 
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": _USER_AGENT,
-            "Accept": "application/json,text/plain,*/*",
-        },
-    )
     try:
         raise_if_cancelled()
-        with _urlopen(req, timeout=_FETCH_TIMEOUT_S) as resp:
-            raise_if_cancelled()
-            raw = resp.read()
-            raise_if_cancelled()
-            data = json.loads(raw.decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+        data = get_json(
+            url,
+            timeout=_FETCH_TIMEOUT_S,
+            headers={
+                "User-Agent": _USER_AGENT,
+                "Accept": "application/json,text/plain,*/*",
+            },
+        )
+        raise_if_cancelled()
+        if not isinstance(data, dict):
+            raise HttpDecodeError(f"GET {url} returned a non-object JSON payload")
+    except HttpError as exc:
         raise_if_cancelled()
         cached = _load_json_cache(cache_path, ignore_ttl=True)
         if cached is not None:

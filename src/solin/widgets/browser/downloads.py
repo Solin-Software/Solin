@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import re
+import tempfile
 import threading
 import urllib.parse
 import urllib.request
@@ -19,8 +20,21 @@ from ...core.foundation.constants import (
     PLAYLIST_EXTS,
     VIDEO_EXTS,
 )
+from ...core.network.http import HttpError, stream_get
 
 log = logging.getLogger(__name__)
+
+
+def _make_download_temp_path(dest_path: str) -> str:
+    directory = os.path.dirname(dest_path)
+    filename = os.path.basename(dest_path)
+    fd, path = tempfile.mkstemp(
+        prefix=f".{filename}.",
+        suffix=".tmp",
+        dir=directory,
+    )
+    os.close(fd)
+    return path
 
 
 class _BrowserDownloadsMixin:
@@ -84,6 +98,37 @@ class _BrowserDownloadsMixin:
         tab_title = tab.view.title().strip() if tab else ""
         return tab_title or self.tr("Downloaded file")
 
+    def _download_http_to_cache(
+        self,
+        url: str,
+        dest_path: str,
+        done_path: str,
+        *,
+        timeout: int,
+        chunk_size: int,
+    ) -> None:
+        tmp_path = _make_download_temp_path(dest_path)
+        try:
+            with stream_get(
+                url,
+                timeout=timeout,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)"},
+            ) as resp:
+                with open(tmp_path, "wb") as fh:
+                    for chunk in resp.iter_bytes(chunk_size):
+                        fh.write(chunk)
+            os.replace(tmp_path, dest_path)
+            with open(done_path, "w", encoding="utf-8") as fh:
+                fh.write(url)
+            self._media_cache_manager.notify_cached_threadsafe(url)
+        except (HttpError, OSError, ValueError):
+            try:
+                if os.path.isfile(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def _download_file_then_playlist(self, url: str, title: str, kind: str) -> None:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme == "file":
@@ -93,8 +138,6 @@ class _BrowserDownloadsMixin:
 
         if parsed.scheme not in ("http", "https"):
             return
-
-        import requests as _req
 
         os.makedirs(self._media_cache_dir(), exist_ok=True)
         dest_path = self._browser_download_cache_path(url, title, kind)
@@ -113,31 +156,17 @@ class _BrowserDownloadsMixin:
         failed = self.download_failed_signal
 
         def _worker():
-            tmp_path = dest_path + ".tmp"
             try:
-                resp = _req.get(
+                self._download_http_to_cache(
                     url,
-                    stream=True,
                     timeout=45,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)"},
+                    dest_path=dest_path,
+                    done_path=done_path,
+                    chunk_size=131_072,
                 )
-                resp.raise_for_status()
-                with open(tmp_path, "wb") as fh:
-                    for chunk in resp.iter_content(chunk_size=131_072):
-                        if chunk:
-                            fh.write(chunk)
-                os.replace(tmp_path, dest_path)
-                with open(done_path, "w", encoding="utf-8") as fh:
-                    fh.write(url)
-                self._media_cache_manager.notify_cached_threadsafe(url)
                 ready.emit(dest_path, title, kind)
-            except (OSError, ValueError) as exc:
+            except (HttpError, OSError, ValueError) as exc:
                 log.warning('Download for playlist failed "%s": %s', title, exc)
-                try:
-                    if os.path.isfile(tmp_path):
-                        os.remove(tmp_path)
-                except OSError:
-                    pass
                 failed.emit(title, str(exc))
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -164,8 +193,6 @@ class _BrowserDownloadsMixin:
         if not url or not url.startswith("http"):
             return
 
-        import requests as _req
-
         os.makedirs(self._media_cache_dir(), exist_ok=True)
         filename = url.split("/")[-1].split("?")[0] or "media_file"
         dest_path = os.path.join(self._media_cache_dir(), filename)
@@ -175,30 +202,16 @@ class _BrowserDownloadsMixin:
             return
 
         def _worker():
-            tmp_path = dest_path + ".tmp"
             try:
-                resp = _req.get(
+                self._download_http_to_cache(
                     url,
-                    stream=True,
                     timeout=30,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)"},
+                    dest_path=dest_path,
+                    done_path=done_path,
+                    chunk_size=131_072,
                 )
-                resp.raise_for_status()
-                with open(tmp_path, "wb") as fh:
-                    for chunk in resp.iter_content(chunk_size=131_072):
-                        if chunk:
-                            fh.write(chunk)
-                os.replace(tmp_path, dest_path)
-                with open(done_path, "w") as fh:
-                    fh.write(url)
-                self._media_cache_manager.notify_cached_threadsafe(url)
-            except (OSError, ValueError) as exc:
+            except (HttpError, OSError, ValueError) as exc:
                 log.warning('Cache save failed for "%s": %s', filename, exc)
-                try:
-                    if os.path.isfile(tmp_path):
-                        os.remove(tmp_path)
-                except OSError:
-                    pass
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -212,8 +225,6 @@ class _BrowserDownloadsMixin:
             self.add_to_playlist_signal.emit(url, title, media_type)
 
     def _download_image_then_playlist(self, url: str, title: str):
-        import requests as _req
-
         os.makedirs(self._media_cache_dir(), exist_ok=True)
         raw_name = url.split("/")[-1].split("?")[0] or "image"
         if not any(
@@ -231,31 +242,17 @@ class _BrowserDownloadsMixin:
         sig = self.add_to_playlist_signal
 
         def _worker():
-            tmp_path = dest_path + ".tmp"
             try:
-                resp = _req.get(
+                self._download_http_to_cache(
                     url,
-                    stream=True,
                     timeout=30,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; Solin/1.0)"},
+                    dest_path=dest_path,
+                    done_path=done_path,
+                    chunk_size=65_536,
                 )
-                resp.raise_for_status()
-                with open(tmp_path, "wb") as fh:
-                    for chunk in resp.iter_content(chunk_size=65_536):
-                        if chunk:
-                            fh.write(chunk)
-                os.replace(tmp_path, dest_path)
-                with open(done_path, "w") as fh:
-                    fh.write(url)
-                self._media_cache_manager.notify_cached_threadsafe(url)
                 sig.emit(dest_path, title, "image")
-            except (OSError, ValueError) as exc:
+            except (HttpError, OSError, ValueError) as exc:
                 log.warning('Image download for playlist failed "%s": %s', raw_name, exc)
-                try:
-                    if os.path.isfile(tmp_path):
-                        os.remove(tmp_path)
-                except OSError:
-                    pass
                 sig.emit(url, title, "image")
 
         threading.Thread(target=_worker, daemon=True).start()

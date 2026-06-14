@@ -37,7 +37,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 log = logging.getLogger(__name__)
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import get_bytes
 from solin.core.jw.publication_links import (
     DEFAULT_TIMEOUT,
     DEFAULT_USER_AGENT,
@@ -59,7 +59,6 @@ try:
     from curl_cffi import requests as _cffi  # type: ignore[reportMissingImports]
     _HAS_CFFI = True
 except ImportError:
-    import urllib.request as _urllib_req  # type: ignore
     _HAS_CFFI = False
 
 
@@ -99,7 +98,7 @@ def _chrome_headers() -> dict:
 def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
     """
     GET com TLS browser impersonation via curl_cffi.
-    Fallback para urllib quando curl_cffi não estiver disponível.
+    Fallback para o adaptador HTTP central quando curl_cffi não estiver disponível.
     """
     import time
     last: Optional[Exception] = None
@@ -114,13 +113,12 @@ def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
                 r.raise_for_status()
                 return r.content
             else:
-                req = _urllib_req.Request(
+                return get_bytes(
                     url,
+                    timeout=timeout,
                     headers={"User-Agent": DEFAULT_USER_AGENT},
                 )
-                with _urlopen(req, timeout=timeout) as resp:
-                    return resp.read()
-        except Exception as exc:  # noqa: BLE001 - curl_cffi/urllib transport boundary
+        except Exception as exc:  # noqa: BLE001 - curl_cffi/HTTP transport boundary
             last = exc
             if attempt < retries:
                 time.sleep(2.0 ** attempt)

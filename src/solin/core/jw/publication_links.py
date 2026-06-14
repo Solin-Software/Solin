@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import http.client
-import json
 import logging
-import urllib.error
 import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from solin.core.network.http import urlopen as _urlopen
+from solin.core.network.http import HttpError, get_json
 
 log = logging.getLogger(__name__)
 
@@ -40,17 +36,9 @@ def fetch_pub_media_json(
     user_agent: str = DEFAULT_USER_AGENT,
 ) -> dict | None:
     url = build_pub_media_url(params, base_url)
-    req = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
-        with _urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode())
-    except (
-        http.client.HTTPException,
-        OSError,
-        UnicodeError,
-        urllib.error.URLError,
-        json.JSONDecodeError,
-    ) as exc:
+        data = get_json(url, timeout=timeout, headers={"User-Agent": user_agent})
+    except HttpError as exc:
         log.warning("GET %s -> %s", url, exc)
         return None
 
