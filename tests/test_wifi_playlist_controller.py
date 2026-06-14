@@ -77,7 +77,6 @@ class _NotificationsStub:
 
 class _WindowStub:
     def __init__(self):
-        self._AUDIO_EXTS = frozenset({".mp3", ".m4a"})
         self._media_projection = _MediaProjectionStub()
         self.playlist_widget = _PlaylistWidgetStub()
         self.wifi_receive_widget = _WifiReceiveWidgetStub()

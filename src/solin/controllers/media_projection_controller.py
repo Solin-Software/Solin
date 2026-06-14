@@ -152,7 +152,7 @@ class MediaProjectionController:
             from_saved_playlist=from_saved_playlist,
         )
         ext = os.path.splitext(url.split("?")[0])[1].lower()
-        self.project_video_core(url, title, is_audio=ext in self._audio_exts())
+        self.project_video_core(url, title, is_audio=ext in AUDIO_EXTS)
 
     def project_next_auto(self, url: str, title: str, media_type: str) -> None:
         window = self._window
@@ -164,7 +164,7 @@ class MediaProjectionController:
             if current is None:
                 return
             current_ext = os.path.splitext(current.get("url", ""))[1].lower()
-            if current_ext not in self._audio_exts():
+            if current_ext not in AUDIO_EXTS:
                 for projection_window in window._all_windows():
                     projection_window.begin_video()
             window.media_ctrl.play_url(current["url"])
@@ -183,7 +183,7 @@ class MediaProjectionController:
             url,
             title,
             keep_expanded=window.proj_bar.is_expanded(),
-            is_audio=ext in self._audio_exts(),
+            is_audio=ext in AUDIO_EXTS,
         )
 
     def project_video_core(
@@ -368,7 +368,7 @@ class MediaProjectionController:
             item["url"],
             item["title"],
             keep_expanded=keep_expanded,
-            is_audio=ext in self._audio_exts(),
+            is_audio=ext in AUDIO_EXTS,
         )
 
     def on_playlist_navigate(self, index: int) -> None:
@@ -392,7 +392,7 @@ class MediaProjectionController:
             item["url"],
             item["title"],
             keep_expanded=window.proj_bar.is_expanded(),
-            is_audio=ext in self._audio_exts(),
+            is_audio=ext in AUDIO_EXTS,
         )
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:
@@ -488,6 +488,3 @@ class MediaProjectionController:
         self._session.set_state(
             {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
         )
-
-    def _audio_exts(self):
-        return getattr(self._window, "_AUDIO_EXTS", AUDIO_EXTS)

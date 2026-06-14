@@ -196,7 +196,6 @@ class _PlaylistWidgetStub:
 class _WindowStub:
     def __init__(self):
         self.events = []
-        self._AUDIO_EXTS = frozenset({".mp3", ".m4a"})
         self.projection_session = ProjectionSession()
         self.projection_session.set_tab_projection_active(True)
         self._navigation = _NavigationStub()

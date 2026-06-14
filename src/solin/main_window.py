@@ -109,7 +109,6 @@ from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
-from .core.media.formats import AUDIO_EXTS as _AUDIO_EXTS_LOCAL
 from .widgets.timer_bridge import TimerBridge
 from .widgets.projection.monitor_manager import MonitorManagerPopup
 
@@ -610,8 +609,6 @@ class MainWindow(QMainWindow):
         self._window_state.bring_to_front()
 
     # ── Open-with / Drag-to-exe ───────────────────────────────────────────
-
-    _AUDIO_EXTS = _AUDIO_EXTS_LOCAL
 
     def open_media_files(self, paths: list):
         self._open_media_controller.open_media_files(paths)
