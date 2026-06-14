@@ -3,6 +3,7 @@ from pathlib import Path
 
 from solin.core.playlists import cleanup as playlist_cleanup
 from solin.core.playlists import storage as playlist_storage
+from solin.core.playlists.cleanup import PlaylistCleanupQueue
 from solin.core.playlists.storage import (
     PlaylistStoragePaths,
     load_playlists,
@@ -10,6 +11,7 @@ from solin.core.playlists.storage import (
     save_playlists,
     save_pending_deletions,
 )
+from solin.core.playlists.thumbnails import playlist_thumb_path
 
 
 def test_playlist_storage_roundtrips_playlists(tmp_path):
@@ -70,6 +72,65 @@ def test_try_remove_file_queues_after_retries(monkeypatch, tmp_path):
         is False
     )
     assert saved == [["locked.mp4"]]
+
+
+def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=tmp_path / "playlists.json",
+        pending_deletions_file=tmp_path / "pending.json",
+    )
+    embedded_dir = tmp_path / "embedded"
+    thumb_dir = tmp_path / "thumbs"
+    embedded_dir.mkdir()
+    media_path = embedded_dir / "clip.mp4"
+    media_path.write_bytes(b"media")
+    item = {"id": "item-1", "url": str(media_path)}
+    thumb_path = playlist_thumb_path(
+        item["id"],
+        thumb_cache_dir=str(thumb_dir),
+    )
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    thumb_path.write_bytes(b"thumb")
+    queue = PlaylistCleanupQueue(
+        storage_paths,
+        thumb_dir,
+    )
+
+    queue.enqueue_items([item])
+    save_playlists([{"id": "p1", "items": [item]}], storage_paths)
+    queue.flush()
+
+    assert media_path.exists()
+    assert thumb_path.exists()
+
+    save_playlists([{"id": "p1", "items": []}], storage_paths)
+    queue.enqueue_items([item])
+    queue.flush()
+
+    assert media_path.exists()
+    assert not thumb_path.exists()
+
+
+def test_cleanup_queue_fails_closed_when_playlist_storage_is_corrupt(tmp_path):
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=tmp_path / "playlists.json",
+        pending_deletions_file=tmp_path / "pending.json",
+    )
+    thumb_dir = tmp_path / "thumbs"
+    thumb_path = playlist_thumb_path(
+        "item-1",
+        thumb_cache_dir=str(thumb_dir),
+    )
+    thumb_path.parent.mkdir(parents=True, exist_ok=True)
+    thumb_path.write_bytes(b"thumb")
+    storage_paths.playlists_file.write_text("{broken", encoding="utf-8")
+    queue = PlaylistCleanupQueue(storage_paths, thumb_dir)
+
+    queue.enqueue_items([{"id": "item-1"}])
+    queue.flush()
+
+    assert thumb_path.exists()
+    assert queue.pending_count == 1
 
 
 def test_playlist_storage_has_no_implicit_current_context():

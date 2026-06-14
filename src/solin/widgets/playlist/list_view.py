@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -27,7 +28,6 @@ from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
-from ...core.playlists.cleanup import cleanup_playlist_files
 from ...core.media.cache import MediaCacheManager
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
@@ -68,6 +68,7 @@ class _PlaylistListView(QWidget):
         storage_paths: PlaylistStoragePaths,
         media_cache_manager: MediaCacheManager,
         thumb_cache_dir: str | os.PathLike[str],
+        schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
     ):
         super().__init__(parent)
@@ -79,6 +80,7 @@ class _PlaylistListView(QWidget):
         self._storage_paths = storage_paths
         self._media_cache_manager = media_cache_manager
         self._thumb_cache_dir = thumb_cache_dir
+        self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[_PlaylistCard] = []
         self._wf_cards: list[_WatchedFolderCard] = []
         self._build_ui()
@@ -344,14 +346,9 @@ class _PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        cleanup_playlist_files(
-            pl,
-            self._storage_paths,
-            self._profile_paths,
-            self._thumb_cache_dir,
-        )
         self._playlists.remove(pl)
         save_playlists(self._playlists, self._storage_paths)
+        self._schedule_cleanup(list(pl.get("items", [])))
         self._rebuild_app_cards()
 
     def _export_playlist(self, pl_id: str) -> None:

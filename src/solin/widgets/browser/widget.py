@@ -1,9 +1,12 @@
 import binascii
-import threading
-import urllib.request
-import sys
-import re
 import logging
+import re
+import sys
+import threading
+import time
+import urllib.request
+from collections.abc import Callable
+from typing import cast
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, Slot, QEvent, QTimer
 from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
@@ -21,6 +24,96 @@ from .tab import BrowserTab
 from .ui import _BrowserUiMixin
 
 log = logging.getLogger(__name__)
+
+
+class _ImageFetchCoordinator:
+    """Owns browser image-fetch generations and worker threads."""
+
+    _MAX_IMAGE_BYTES = 25 * 1024 * 1024
+
+    def __init__(
+        self,
+        fetch_url: Callable[[str], bytes] | None = None,
+    ) -> None:
+        self._fetch_url = fetch_url or self._read_url
+        self._lock = threading.Lock()
+        self._generation = 0
+        self._shutdown = False
+        self._threads: set[threading.Thread] = set()
+
+    @classmethod
+    def _read_url(cls, url: str) -> bytes:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with _urlopen(req, timeout=15) as resp:
+            payload = resp.read(cls._MAX_IMAGE_BYTES + 1)
+        if len(payload) > cls._MAX_IMAGE_BYTES:
+            raise ValueError("Image exceeds the browser projection size limit")
+        return payload
+
+    def claim(self) -> int | None:
+        with self._lock:
+            if self._shutdown:
+                return None
+            self._generation += 1
+            return self._generation
+
+    def start(
+        self,
+        url: str,
+        deliver: Callable[[int, bytes], None],
+    ) -> int | None:
+        generation = self.claim()
+        if generation is None:
+            return None
+
+        def fetch() -> None:
+            try:
+                payload = self._fetch_url(url)
+                if self.is_current(generation):
+                    deliver(generation, payload)
+            except (OSError, ValueError) as exc:
+                log.warning("Image fetch error: %s", exc)
+            finally:
+                with self._lock:
+                    self._threads.discard(threading.current_thread())
+
+        thread = threading.Thread(
+            target=fetch,
+            daemon=True,
+            name=f"browser-image-fetch-{generation}",
+        )
+        with self._lock:
+            if self._shutdown or generation != self._generation:
+                return None
+            self._threads.add(thread)
+        thread.start()
+        return generation
+
+    def is_current(self, generation: int) -> bool:
+        with self._lock:
+            return not self._shutdown and generation == self._generation
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._generation += 1
+
+    def shutdown(self, timeout: float = 2.0) -> list[str]:
+        with self._lock:
+            self._shutdown = True
+            self._generation += 1
+            threads = list(self._threads)
+        deadline = time.monotonic() + max(0.0, timeout)
+        for thread in threads:
+            if thread is threading.current_thread():
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            thread.join(timeout=remaining)
+        return [thread.name for thread in threads if thread.is_alive()]
 
 # ── Overlay JavaScript ─────────────────────────────────────────────────────────
 #
@@ -707,7 +800,7 @@ class BrowserWidget(
     add_downloaded_file_to_playlist_signal = Signal(str, str, str)  # path, title, kind
     download_failed_signal     = Signal(str, str)  # title, error
 
-    _image_fetched_signal = Signal(bytes)
+    _image_fetched_signal = Signal(int, bytes)
     _OVERLAY_JS = OVERLAY_JS
 
     def __init__(
@@ -725,6 +818,7 @@ class BrowserWidget(
 
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root
+        self._image_fetches = _ImageFetchCoordinator()
 
         self._browser_aspect_16_9_active: bool = False
 
@@ -836,6 +930,7 @@ class BrowserWidget(
 
     def _start_tab_projection(self):
         """Pina a aba atual e começa captura no FPS configurado."""
+        self._image_fetches.invalidate()
         tab = self._current_tab()
         if not tab:
             # Sem aba válida — desfaz o toggle silenciosamente
@@ -929,9 +1024,13 @@ class BrowserWidget(
 
     def cleanup_browser(self) -> None:
         """Compatibility cleanup hook kept for MainWindow shutdown."""
-        import logging
-        log = logging.getLogger(__name__)
         log.debug("BrowserWidget.cleanup_browser() - disposing native webviews")
+        alive_fetches = self._image_fetches.shutdown()
+        if alive_fetches:
+            log.warning(
+                "Browser image fetches still running during shutdown: %s",
+                alive_fetches,
+            )
 
         try:
             self._stop_tab_projection_internal()
@@ -949,11 +1048,15 @@ class BrowserWidget(
 
     def _update_cast_btn_visual(self, active: bool):
         if active:
-            self.cast_btn.setIcon(make_icon(ICON_CAST, 16, "#388bfd"))
+            self.cast_btn.setIcon(
+                make_icon(cast(str, ICON_CAST), 16, "#388bfd")
+            )
             self.cast_btn.setStyleSheet(self._cast_btn_style_on)
             self.cast_btn.setToolTip(self.tr("Stop tab projection"))
         else:
-            self.cast_btn.setIcon(make_icon(ICON_CAST, 16, "#8b949e"))
+            self.cast_btn.setIcon(
+                make_icon(cast(str, ICON_CAST), 16, "#8b949e")
+            )
             self.cast_btn.setStyleSheet(self._cast_btn_style_off)
             self.cast_btn.setToolTip(self.tr("Project this tab live"))
 
@@ -1045,7 +1148,7 @@ class BrowserWidget(
         self._update_cursor_btn_visual(False)
         for i in range(self._stack.count()):
             w = self._stack.widget(i)
-            if w and hasattr(w, "view"):
+            if isinstance(w, BrowserTab):
                 w.view.page().runJavaScript(self._CURSOR_SPOTLIGHT_REMOVE_JS)
 
     def _update_cursor_btn_visual(self, active: bool):
@@ -1170,28 +1273,27 @@ class BrowserWidget(
             import base64
             try:
                 _, b64 = data.split(",", 1)
-                self._deliver_image(base64.b64decode(b64))
+                generation = self._image_fetches.claim()
+                if generation is not None:
+                    self._deliver_image(generation, base64.b64decode(b64))
             except (ValueError, binascii.Error) as e:
                 log.warning("Base64 decode error: %s", e)
         else:
-            def fetch():
-                try:
-                    req = urllib.request.Request(
-                        data, headers={"User-Agent": "Mozilla/5.0"})
-                    with _urlopen(req, timeout=15) as resp:
-                        self._image_fetched_signal.emit(resp.read())
-                except (OSError, ValueError) as e:
-                    log.warning("Image fetch error: %s", e)
-            threading.Thread(target=fetch, daemon=True).start()
+            self._image_fetches.start(
+                data,
+                self._image_fetched_signal.emit,
+            )
 
-    @Slot(bytes)
-    def _deliver_image(self, raw: bytes):
-        self.project_image_signal.emit(raw)
+    @Slot(int, bytes)
+    def _deliver_image(self, generation: int, raw: bytes):
+        if self._image_fetches.is_current(generation):
+            self.project_image_signal.emit(raw)
 
     @Slot(str)
     def _on_project_video(self, url: str):
         if not url:
             return
+        self._image_fetches.invalidate()
         # Usa o título da aba como fallback; metadados do arquivo sobrescrevem depois
         tab = self._current_tab()
         tab_title = tab.view.title().strip() if tab else ""
@@ -1199,6 +1301,7 @@ class BrowserWidget(
         self.project_video_signal.emit(url, title)
 
     def _do_stop_projection(self):
+        self._image_fetches.invalidate()
         self.stop_projection_signal.emit()
 
     # ── Spotlight de cursor ────────────────────────────────────────────────────
@@ -1291,10 +1394,14 @@ class BrowserWidget(
 
     def _update_crop_btn_visual(self, active: bool):
         if active:
-            self.crop_btn.setIcon(make_icon(ICON_CROP, 16, "#f0883e"))
+            self.crop_btn.setIcon(
+                make_icon(cast(str, ICON_CROP), 16, "#f0883e")
+            )
             self.crop_btn.setStyleSheet(self._crop_btn_style_on)
         else:
-            self.crop_btn.setIcon(make_icon(ICON_CROP, 16, "#8b949e"))
+            self.crop_btn.setIcon(
+                make_icon(cast(str, ICON_CROP), 16, "#8b949e")
+            )
             self.crop_btn.setStyleSheet(self._crop_btn_style_off)
 
     @Slot(float, float, float, float)
@@ -1328,6 +1435,7 @@ class BrowserWidget(
             self._resume_tab_projection_after_pause()
 
     def _do_stop_projection_real(self):
+        self._image_fetches.invalidate()
         self.stop_projection_signal.emit()
 
     # ── i18n ────────────────────────────────────────────────────────────────────

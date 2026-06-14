@@ -24,6 +24,19 @@ def load_playlists(paths: PlaylistStoragePaths) -> list[dict]:
     return []
 
 
+def load_playlists_strict(paths: PlaylistStoragePaths) -> list[dict]:
+    """Load playlists while preserving read/parse failures for destructive callers."""
+    if not paths.playlists_file.exists():
+        return []
+    data = read_json_file(paths.playlists_file)
+    if not isinstance(data, dict):
+        raise ValueError("Playlist storage root must be an object")
+    playlists = data.get("playlists", [])
+    if not isinstance(playlists, list):
+        raise ValueError("Playlist storage 'playlists' must be a list")
+    return playlists
+
+
 def save_playlists(
     playlists: list[dict],
     paths: PlaylistStoragePaths,

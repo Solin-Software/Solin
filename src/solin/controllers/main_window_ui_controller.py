@@ -363,8 +363,8 @@ class MainWindowUiController:
     def _flush_orphaned_media_files(self) -> None:
         storage_paths = self._window.playlist_storage_paths
         runtime_paths = self._window.runtime_paths
-        flush_pending_deletions(storage_paths)
         meeting_tree_store = self._window.meeting_tree_store
+        flush_pending_deletions(storage_paths, meeting_tree_store)
         profile_paths = self._window.profile_paths
         flush_images_dir(storage_paths, meeting_tree_store, profile_paths)
         flush_thumbs_dir(storage_paths, runtime_paths.thumb_cache_dir)

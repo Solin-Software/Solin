@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from solin.core.integrations.automation.zoom.controls import ZoomSession
 from solin.core.integrations.automation.zoom.i18n_labels import (
     AUDIO_MUTED_TEXT,
     AUDIO_UNMUTED_TEXT,
@@ -12,7 +15,7 @@ from solin.core.integrations.automation.zoom.i18n_labels import (
 from solin.core.integrations.automation.zoom.toolbar_cache import (
     PARTICIPANTS_PANEL_CONTROL_IDS,
     TOOLBAR_CORE_CONTROL_IDS,
-    _ToolbarCache,
+    ToolbarCache,
 )
 from solin.core.integrations.automation.zoom.text_match import (
     _audio_button_state_from_text,
@@ -63,7 +66,7 @@ def test_zoom_toolbar_cache_tracks_live_elements_by_handle():
         def rectangle(self):
             return _Rect()
 
-    cache = _ToolbarCache()
+    cache = ToolbarCache()
     element = _Element()
 
     cache.put(10, "btn_muteAudio", element)
@@ -103,3 +106,14 @@ def test_zoom_controls_uses_package_local_zoom_modules():
     assert "from .toolbar_cache import" in source
     assert "from .text_match import" in source
     assert "from .types import AudioState, MeetingState, ShareState, VideoState" in source
+
+
+def test_cancelled_zoom_session_rejects_ui_actions():
+    session = ZoomSession()
+    calls = []
+    session.cancel()
+
+    with pytest.raises(RuntimeError, match="no longer active"):
+        session.perform_action(lambda: calls.append("invoked"))
+
+    assert calls == []

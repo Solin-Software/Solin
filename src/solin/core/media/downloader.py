@@ -48,6 +48,19 @@ def _make_temp_path(url: str) -> str:
     return path
 
 
+def _make_persistent_temp_path(final_path: str) -> str:
+    """Create a job-unique staging file beside the persistent destination."""
+    directory = os.path.dirname(final_path)
+    filename = os.path.basename(final_path)
+    fd, path = tempfile.mkstemp(
+        prefix=f".{filename}.",
+        suffix=".tmp",
+        dir=directory,
+    )
+    os.close(fd)
+    return path
+
+
 def _lock_path(temp_path: str) -> str:
     """Retorna o caminho do lockfile correspondente ao tempfile."""
     return temp_path + ".lock"
@@ -206,7 +219,7 @@ class SongDownloader(QObject):
                 except RuntimeError:
                     return
                 return
-            write_tmp = final_path + ".tmp"
+            write_tmp = _make_persistent_temp_path(final_path)
         else:
             write_tmp = _make_temp_path(url)
             final_path = write_tmp
@@ -217,6 +230,8 @@ class SongDownloader(QObject):
 
         succeeded = False
         try:
+            if job.cancel_event.is_set():
+                return
             resp = requests.get(url, stream=True, timeout=30)
             resp.raise_for_status()
             total      = int(resp.headers.get("content-length", 0))
@@ -264,9 +279,15 @@ class SongDownloader(QObject):
             emit_progress(force=True)
 
             if persist:
-                os.replace(write_tmp, final_path)
-                with open(final_path + ".done", "w") as _f:
-                    _f.write(url)
+                with self._lock:
+                    if (
+                        self._job is not job
+                        or job.cancel_event.is_set()
+                    ):
+                        return
+                    os.replace(write_tmp, final_path)
+                    with open(final_path + ".done", "w") as marker:
+                        marker.write(url)
 
             succeeded = True
             try:

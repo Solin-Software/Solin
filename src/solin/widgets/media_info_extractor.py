@@ -31,9 +31,11 @@ import os
 import re
 import struct
 import threading
+import time
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, cast
 from urllib.request import Request as _UrlRequest
 
 from PySide6.QtCore import QObject, Signal, QTimer, QUrl
@@ -428,6 +430,7 @@ class _ThreadedRemoteInfoExtractor(QObject):
         self._index = index
         self._url = url
         self._cancelled = threading.Event()
+        self._thread: threading.Thread | None = None
         cancelled = self._cancelled
         self.destroyed.connect(lambda *_: cancelled.set())
         self._worker_ready.connect(self._deliver_worker_result)
@@ -435,13 +438,30 @@ class _ThreadedRemoteInfoExtractor(QObject):
         QTimer.singleShot(0, self._start)
 
     def _start(self) -> None:
-        threading.Thread(
+        if self._cancelled.is_set():
+            return
+        thread = threading.Thread(
             target=self._run,
             daemon=True,
             name=type(self).__name__,
-        ).start()
+        )
+        self._thread = thread
+        thread.start()
+
+    def cancel(self, *, wait: bool = False, timeout: float = 2.0) -> None:
+        self._cancelled.set()
+        thread = self._thread
+        if (
+            wait
+            and thread is not None
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=max(0.0, timeout))
+        self.deleteLater()
 
     def _run(self) -> None:
+        if self._cancelled.is_set():
+            return
         try:
             image_bytes, title = self._fetch_info()
         except Exception as exc:  # noqa: BLE001 - media metadata worker boundary
@@ -703,6 +723,13 @@ class MediaInfoExtractor(QObject):
             self._finish()
             self.thumbnail_failed.emit(self._index)
 
+    def cancel(self) -> None:
+        if self._done:
+            return
+        self._done = True
+        self._pending_frame = None
+        self._finish()
+
     def _finish(self):
         self._t_global.stop(); self._t_seek.stop(); self._t_cover.stop()
         self._player.stop()
@@ -853,6 +880,7 @@ class _RemoteVideoMetaThenStream(QObject):
         self._url        = url
         self._media_type = media_type
         self._done       = False
+        self._stream_ex: MediaInfoExtractor | None = None
 
         # Estágio 1: tenta og:image + og:title
         self._page_ex = RemotePageMetaExtractor(index, url, self)
@@ -888,6 +916,24 @@ class _RemoteVideoMetaThenStream(QObject):
         self._done = True
         self.thumbnail_failed.emit(index)
         QTimer.singleShot(0, self.deleteLater)
+
+    def cancel(self, *, wait: bool = False, timeout: float = 2.0) -> None:
+        if self._done:
+            return
+        self._done = True
+        deadline = time.monotonic() + max(0.0, timeout)
+        for extractor in (self._page_ex, self._stream_ex):
+            if extractor is not None:
+                cancel = getattr(extractor, "cancel", None)
+                if callable(cancel):
+                    try:
+                        remaining = max(0.0, deadline - time.monotonic())
+                        cancel(wait=wait, timeout=remaining)
+                    except TypeError:
+                        cancel()
+                    except RuntimeError:
+                        pass
+        self.deleteLater()
 
 
 ExtractorFactory = Callable[[int, str, str, QObject], QObject]
@@ -925,6 +971,16 @@ def _create_extractor(index: int, url: str, media_type: str, parent: QObject) ->
     return factory(index, url, media_type, parent)
 
 
+@dataclass(slots=True)
+class _MediaInfoJob:
+    generation: int
+    revision: int
+    index: int
+    url: str
+    media_type: str
+    extractor: QObject | None = None
+
+
 
 
 class MediaInfoQueue(QObject):
@@ -958,9 +1014,11 @@ class MediaInfoQueue(QObject):
         super().__init__(parent)
         self._media_cache_dir = os.fspath(media_cache_dir)
         self._thumb_cache_dir = os.fspath(thumb_cache_dir)
+        self._generation = 0
+        self._index_revisions: dict[int, int] = {}
         self._cache:   dict[int, tuple[QPixmap, str]] = {}   # index → (pixmap, title)
-        self._pending: list[tuple[int, str, str]]     = []   # (index, url, type)
-        self._active:  dict[int, str]                 = {}   # index → url
+        self._pending: list[_MediaInfoJob] = []
+        self._active: dict[int, _MediaInfoJob] = {}
 
     # ── Disk Cache ────────────────────────────────────────────────────────────
 
@@ -1018,11 +1076,15 @@ class MediaInfoQueue(QObject):
             return
 
         # Fast-Path: Tenta carregar do cache de disco ANTES de qualquer coisa
-        disk_result = self._load_from_disk_cache(url)
-        if disk_result[0] is not None:
-            disk_px, disk_title = disk_result
+        disk_px, disk_title = self._load_from_disk_cache(url)
+        if disk_px is not None:
             self._cache[index] = (disk_px, disk_title)
-            self._emit_info_later(index, disk_px, disk_title)
+            self._emit_info_later(
+                self._generation,
+                index,
+                disk_px,
+                disk_title,
+            )
             return
 
         is_remote = url.startswith(("http://", "https://"))
@@ -1038,10 +1100,10 @@ class MediaInfoQueue(QObject):
                 px = QPixmap(target)
                 self._cache[index] = (px if not px.isNull() else QPixmap(), "")
                 if not px.isNull():
-                    self._emit_info_later(index, px, "")
+                    self._emit_info_later(self._generation, index, px, "")
                 return
             if is_remote:
-                self._pending.append((index, url, media_type))
+                self._enqueue(index, url, media_type)
                 self._pump()
                 return
             self._cache[index] = (QPixmap(), "")
@@ -1055,7 +1117,12 @@ class MediaInfoQueue(QObject):
                 if px.loadFromData(cover_bytes) and not px.isNull():
                     self._save_to_disk_cache(url, px, title)
                     self._cache[index] = (px, title)
-                    self._emit_info_later(index, px, title)
+                    self._emit_info_later(
+                        self._generation,
+                        index,
+                        px,
+                        title,
+                    )
                     return
             # Sem cover nos bytes brutos → extrator (tenta QMediaMetaData)
 
@@ -1063,12 +1130,12 @@ class MediaInfoQueue(QObject):
         if is_remote:
             cached_path = _get_cached_media_path(url, self._media_cache_dir)
             target = cached_path if cached_path else url
-            self._pending.append((index, target, media_type))
+            self._enqueue(index, target, media_type)
             self._pump()
             return
 
         # ── Local (vídeo ou áudio sem cover nos bytes) → fila ───────────────
-        self._pending.append((index, url, media_type))
+        self._enqueue(index, url, media_type)
         self._pump()
 
     def feed_live_frame(self, index: int, pixmap: QPixmap) -> bool:
@@ -1081,6 +1148,7 @@ class MediaInfoQueue(QObject):
         existing_px, existing_title = self._cache.get(index, (None, ""))
         if existing_px is not None and not existing_px.isNull():
             return False
+        self.invalidate(index)
         self._cache[index] = (pixmap, existing_title or "")
         self.info_ready.emit(index, pixmap, "")
         return True
@@ -1092,6 +1160,7 @@ class MediaInfoQueue(QObject):
         if not pixmap or pixmap.isNull():
             return False
         _, existing_title = self._cache.get(index, (None, ""))
+        self.invalidate(index)
         self._cache[index] = (pixmap, existing_title or "")
         self.info_ready.emit(index, pixmap, "")
         return True
@@ -1112,53 +1181,165 @@ class MediaInfoQueue(QObject):
         return px is not None and not px.isNull()
 
     def invalidate(self, index: int):
+        self._index_revisions[index] = self._index_revisions.get(index, 0) + 1
+        self._pending = [job for job in self._pending if job.index != index]
+        active = self._active.pop(index, None)
+        if active is not None:
+            self._cancel_job(active)
         self._cache.pop(index, None)
 
     def clear(self):
+        self._generation += 1
         self._pending.clear()
         self._cache.clear()
+        self._index_revisions.clear()
+        active_jobs = list(self._active.values())
         self._active.clear()
+        for job in active_jobs:
+            self._cancel_job(job)
+
+    def shutdown(self, timeout: float = 2.0) -> None:
+        self._generation += 1
+        self._pending.clear()
+        self._cache.clear()
+        self._index_revisions.clear()
+        active_jobs = list(self._active.values())
+        self._active.clear()
+        deadline = time.monotonic() + max(0.0, timeout)
+        for job in active_jobs:
+            remaining = max(0.0, deadline - time.monotonic())
+            self._cancel_job(job, wait=True, timeout=remaining)
 
     # ── Interno ───────────────────────────────────────────────────────────────
 
-    def _emit_info_later(self, index: int, pixmap: QPixmap, title: str) -> None:
+    def _enqueue(self, index: int, url: str, media_type: str) -> None:
+        self._pending.append(
+            _MediaInfoJob(
+                generation=self._generation,
+                revision=self._index_revisions.get(index, 0),
+                index=index,
+                url=url,
+                media_type=media_type,
+            )
+        )
+
+    def _emit_info_later(
+        self,
+        generation: int,
+        index: int,
+        pixmap: QPixmap,
+        title: str,
+    ) -> None:
         """Emit fast-path results asynchronously, matching queued extractors."""
         queued_pixmap = QPixmap(pixmap)
         QTimer.singleShot(
             0,
-            lambda i=index, px=queued_pixmap, t=title:
-                self.info_ready.emit(i, px, t)
+            lambda g=generation, i=index, px=queued_pixmap, t=title:
+                self._emit_info_if_current(g, i, px, t)
         )
+
+    def _emit_info_if_current(
+        self,
+        generation: int,
+        index: int,
+        pixmap: QPixmap,
+        title: str,
+    ) -> None:
+        if generation == self._generation and index in self._cache:
+            self.info_ready.emit(index, pixmap, title)
 
     def _pump(self):
         while self._pending and len(self._active) < self._MAX_CONCURRENT:
-            index, url, media_type = self._pending.pop(0)
-            if index in self._cache or index in self._active:
+            job = self._pending.pop(0)
+            if job.generation != self._generation:
                 continue
-            self._active[index] = url
-            ex = _create_extractor(index, url, media_type, self)
-            ex.info_ready.connect(self._on_ready)
-            ex.thumbnail_failed.connect(self._on_failed)
+            if job.index in self._cache or job.index in self._active:
+                continue
+            ex = _create_extractor(
+                job.index,
+                job.url,
+                job.media_type,
+                self,
+            )
+            job.extractor = ex
+            self._active[job.index] = job
+            extractor_signals = cast(Any, ex)
+            extractor_signals.info_ready.connect(
+                lambda index, pixmap, title, current=job:
+                    self._on_ready(current, index, pixmap, title)
+            )
+            extractor_signals.thumbnail_failed.connect(
+                lambda index, current=job:
+                    self._on_failed(current, index)
+            )
             duration_ready = getattr(ex, "duration_ready", None)
             if duration_ready is not None:
-                duration_ready.connect(self._on_duration_ext)
+                duration_ready.connect(
+                    lambda index, dur_ms, current=job:
+                        self._on_duration_ext(current, index, dur_ms)
+                )
 
-    def _on_duration_ext(self, index: int, dur_ms: int):
-        if dur_ms > 0:
+    def _job_is_current(self, job: _MediaInfoJob, index: int) -> bool:
+        return (
+            job.generation == self._generation
+            and job.revision == self._index_revisions.get(index, 0)
+            and job.index == index
+            and self._active.get(index) is job
+        )
+
+    @staticmethod
+    def _cancel_job(
+        job: _MediaInfoJob,
+        *,
+        wait: bool = False,
+        timeout: float = 0.0,
+    ) -> None:
+        extractor = job.extractor
+        if extractor is None:
+            return
+        cancel = getattr(extractor, "cancel", None)
+        if callable(cancel):
+            try:
+                cancel(wait=wait, timeout=timeout)
+            except TypeError:
+                cancel()
+            except RuntimeError:
+                pass
+        else:
+            try:
+                extractor.deleteLater()
+            except RuntimeError:
+                pass
+
+    def _on_duration_ext(
+        self,
+        job: _MediaInfoJob,
+        index: int,
+        dur_ms: int,
+    ):
+        if self._job_is_current(job, index) and dur_ms > 0:
             self.duration_ready.emit(index, dur_ms)
 
-    def _on_ready(self, index: int, pixmap: QPixmap, title: str):
-        url = self._active.pop(index, "")
-        if url:
-            self._save_to_disk_cache(url, pixmap, title)
+    def _on_ready(
+        self,
+        job: _MediaInfoJob,
+        index: int,
+        pixmap: QPixmap,
+        title: str,
+    ):
+        if not self._job_is_current(job, index):
+            return
+        self._active.pop(index, None)
+        self._save_to_disk_cache(job.url, pixmap, title)
         self._cache[index] = (pixmap, title)
         self.info_ready.emit(index, pixmap, title)
         self._pump()
 
-    def _on_failed(self, index: int):
-        url = self._active.pop(index, "")
-        if url:
-            self._save_to_disk_cache(url, QPixmap(), "")
+    def _on_failed(self, job: _MediaInfoJob, index: int):
+        if not self._job_is_current(job, index):
+            return
+        self._active.pop(index, None)
+        self._save_to_disk_cache(job.url, QPixmap(), "")
         self._cache[index] = (QPixmap(), "")
         self._pump()
 

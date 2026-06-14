@@ -6,6 +6,7 @@ Thumbnails persistem através de reordenações; botões com SVG real.
 from __future__ import annotations
 
 import copy, logging, os, uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -48,7 +49,7 @@ from .drag_drop import _PlaylistDragDropMixin
 from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
 from .list_view import _PlaylistListView
-from ...core.playlists.cleanup import cleanup_item_files
+from ...core.playlists.cleanup import PlaylistCleanupQueue
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import (
@@ -95,6 +96,7 @@ class _PlaylistEditView(
         jw_songs_store: JWSongsStore,
         thumb_cache_dir: str | os.PathLike[str],
         all_playlists: list[dict],
+        schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
     ):
         super().__init__(parent)
@@ -109,6 +111,7 @@ class _PlaylistEditView(
         self._jw_songs_store = jw_songs_store
         self._thumb_cache_dir = Path(thumb_cache_dir)
         self._all_playlists = all_playlists
+        self._schedule_cleanup = schedule_cleanup
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
         self._is_watched: bool = False          # linked folder mode
@@ -177,6 +180,7 @@ class _PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self._thumb_queue.shutdown()
         self._stop_owned_thread(self._wf_sync_thread, wait_ms=10_000)
         self._wf_sync_thread = None
         for threads in (self._pdf_threads, self._lo_threads):
@@ -836,13 +840,7 @@ class _PlaylistEditView(
             from ...core.ingest.watched_folder import remove_item_from_manifest
             remove_item_from_manifest(self._watched_path, item)
         elif item:
-            cleanup_item_files(
-                item,
-                self._all_playlists,
-                self._storage_paths,
-                self._profile_paths,
-                self._thumb_cache_dir,
-            )
+            self._schedule_cleanup([item])
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
         self.bridge.emit_node_replaced(item_id, [])
@@ -925,6 +923,14 @@ class PlaylistWidget(QWidget):
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._thumb_cache_dir = Path(thumb_cache_dir)
+        self._cleanup_queue = PlaylistCleanupQueue(
+            storage_paths,
+            self._thumb_cache_dir,
+        )
+        self._cleanup_timer = QTimer(self)
+        self._cleanup_timer.setSingleShot(True)
+        self._cleanup_timer.setInterval(750)
+        self._cleanup_timer.timeout.connect(self._cleanup_queue.flush)
         self._playlists = load_playlists(storage_paths)
         self._watched_folder = watched_folder
         self._build_ui()
@@ -947,6 +953,7 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             media_cache_manager=self._media_cache_manager,
             thumb_cache_dir=self._thumb_cache_dir,
+            schedule_cleanup=self._schedule_cleanup,
             parent=self,
         )
         # Index 1: playlist edit (also used for watched folders)
@@ -962,6 +969,7 @@ class PlaylistWidget(QWidget):
             jw_songs_store=self._jw_songs_store,
             thumb_cache_dir=self._thumb_cache_dir,
             all_playlists=self._playlists,
+            schedule_cleanup=self._schedule_cleanup,
             parent=self,
         )
 
@@ -995,6 +1003,10 @@ class PlaylistWidget(QWidget):
         self._wf_debounce_sub.setInterval(600)
         self._wf_debounce_sub.timeout.connect(self._do_subfolder_refresh)
         self._wf_pending_sub_path: str = ""
+
+    def _schedule_cleanup(self, items: list[dict]) -> None:
+        self._cleanup_queue.enqueue_items(items)
+        self._cleanup_timer.start()
 
     # ── Navigation ─────────────────────────────────────────────────────────
 
@@ -1135,7 +1147,9 @@ class PlaylistWidget(QWidget):
 
     def cleanup(self) -> None:
         """Stop background work owned by child views."""
+        self._cleanup_timer.stop()
         try:
             self._edit_view.cleanup()
         except Exception:  # noqa: BLE001 - widget cleanup boundary
             log_ignored_exception(__name__, "Could not cleanup playlist edit view")
+        self._cleanup_queue.flush()

@@ -7,6 +7,7 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.core.integrations.automation.obs import OBSWebSocketService
+from solin.core.integrations.automation.zoom import controls as zoom_controls
 from solin.core.integrations.automation.zoom import service as zoom_module
 from solin.core.integrations.automation.zoom.service import ZoomService
 from solin.core.integrations.ndi import NDIReceiverService
@@ -175,7 +176,7 @@ def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
     calls: list[str] = []
 
     def _worker(name):
-        def _run(_generation):
+        def _run(_generation, _session):
             nonlocal active, max_active
             with lock:
                 active += 1
@@ -198,6 +199,45 @@ def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
 
     assert calls == ["connection", "participants"]
     assert max_active == 1
+
+
+def test_zoom_session_is_owned_by_one_service_generation(monkeypatch):
+    _app()
+    monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
+
+    class _Session:
+        def __init__(self):
+            self.cancelled = False
+            sessions.append(self)
+
+        def cancel(self):
+            self.cancelled = True
+
+    sessions: list[_Session] = []
+    monkeypatch.setattr(zoom_controls, "ZoomSession", _Session)
+    service = ZoomService(_prefs())
+    monkeypatch.setattr(service, "_poll_connection", lambda: None)
+
+    service.start()
+    first_generation = service._generation
+    first = service._session_for_generation(first_generation)
+
+    assert first is not None
+    assert first is service._session_for_generation(first_generation)
+    assert len(sessions) == 1
+
+    service.stop()
+    assert sessions[0].cancelled is True
+    assert service._session is None
+
+    service.start()
+    second = service._session_for_generation(service._generation)
+    service.stop()
+
+    assert second is not None
+    assert second is not first
+    assert len(sessions) == 2
+    assert sessions[1].cancelled is True
 
 
 def test_zoom_rejects_callback_from_stopped_generation(monkeypatch):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+from typing import Any
 
 # ── Cache de elementos da toolbar ──────────────────────────────
 # Evita re-scan de descendants + legacy_properties() a cada operacao.
@@ -23,11 +23,11 @@ PARTICIPANTS_PANEL_CONTROL_IDS = {
 }
 
 
-class _ToolbarCache:
+class ToolbarCache:
     __slots__ = ("_handle", "_elements", "_validated_at")
 
     def __init__(self):
-        self._handle: Optional[int] = None
+        self._handle: int | None = None
         self._elements: dict = {}  # cid -> element wrapper
         self._validated_at: dict = {}  # cid -> monotonic timestamp
 
@@ -45,7 +45,7 @@ class _ToolbarCache:
         self._elements = {}
         self._validated_at = {}
 
-    def get(self, win, handle: int, control_id: str) -> Optional[object]:
+    def get(self, win, handle: int, control_id: str) -> Any | None:
         if handle != self._handle:
             self._reset_for_handle(handle)
         el = self._elements.get(control_id)
@@ -100,5 +100,6 @@ class _ToolbarCache:
         self._elements = {}
         self._validated_at = {}
 
-
-_toolbar_cache = _ToolbarCache()
+    def invalidate_control(self, control_id: str) -> None:
+        self._elements.pop(control_id, None)
+        self._validated_at.pop(control_id, None)

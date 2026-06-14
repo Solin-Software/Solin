@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 import os
-import threading
 import time
 from typing import TYPE_CHECKING
 
@@ -10,6 +11,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.playlists.storage import (
     PlaylistStoragePaths,
     load_playlists,
+    load_playlists_strict,
     load_pending_deletions,
     save_pending_deletions,
 )
@@ -41,13 +43,47 @@ def try_remove_file(
     return False
 
 
-def flush_pending_deletions(storage_paths: PlaylistStoragePaths) -> None:
+def flush_pending_deletions(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+) -> None:
     pending = load_pending_deletions(storage_paths)
     if not pending:
         return
 
+    try:
+        playlists = load_playlists_strict(storage_paths)
+    except (OSError, UnicodeError, ValueError):
+        log_ignored_exception(
+            __name__,
+            "Could not validate playlist references for pending deletions",
+        )
+        return
+    referenced_urls = {
+        os.path.normcase(os.path.normpath(item["url"]))
+        for playlist in playlists
+        for item in playlist.get("items", [])
+        if isinstance(item.get("url"), str)
+        and os.path.isabs(item["url"])
+    }
+    referenced_ids = {
+        item["id"]
+        for playlist in playlists
+        for item in playlist.get("items", [])
+        if isinstance(item.get("id"), str) and item["id"]
+    }
+    referenced_urls.update(
+        os.path.normcase(path)
+        for path in _meeting_tree_referenced_urls(meeting_tree_store)
+    )
     still_pending = []
     for path in pending:
+        normalized = os.path.normcase(os.path.normpath(path))
+        if (
+            normalized in referenced_urls
+            or os.path.splitext(os.path.basename(path))[0] in referenced_ids
+        ):
+            continue
         try:
             if os.path.isfile(path):
                 os.remove(path)
@@ -156,74 +192,63 @@ def flush_embedded_dir(
                 pass
 
 
-def try_remove_file_async(
-    path: str,
-    storage_paths: PlaylistStoragePaths,
-) -> None:
-    def _worker() -> None:
-        try_remove_file(path, storage_paths, retries=4, delay=0.6)
+class PlaylistCleanupQueue:
+    """Defers and deduplicates cleanup until playlist writes have settled."""
 
-    threading.Thread(target=_worker, daemon=True).start()
+    def __init__(
+        self,
+        storage_paths: PlaylistStoragePaths,
+        thumb_cache_dir: str | os.PathLike[str],
+    ) -> None:
+        self._storage_paths = storage_paths
+        self._thumb_cache_dir = os.fspath(thumb_cache_dir)
+        self._pending_ids: set[str] = set()
 
+    @property
+    def pending_count(self) -> int:
+        return len(self._pending_ids)
 
-def cleanup_playlist_files(
-    playlist: dict,
-    storage_paths: PlaylistStoragePaths,
-    profile_paths: ProfilePaths,
-    thumb_cache_dir: str | os.PathLike[str],
-) -> None:
-    embedded_dir = os.fspath(profile_paths.embedded_dir)
-    for item in playlist.get("items", []):
-        item_id = item.get("id", "")
-        if item_id:
+    def enqueue_items(self, items: list[dict]) -> None:
+        for item in items:
+            item_id = item.get("id", "")
+            if isinstance(item_id, str) and item_id:
+                self._pending_ids.add(item_id)
+
+    def flush(self) -> None:
+        if not self.pending_count:
+            return
+
+        try:
+            playlists = load_playlists_strict(self._storage_paths)
+        except (OSError, UnicodeError, ValueError):
+            log_ignored_exception(
+                __name__,
+                "Could not validate playlist references for cleanup",
+            )
+            return
+        referenced_ids: set[str] = set()
+        for playlist in playlists:
+            for item in playlist.get("items", []):
+                item_id = item.get("id", "")
+                if isinstance(item_id, str) and item_id:
+                    referenced_ids.add(item_id)
+
+        pending_ids = self._pending_ids
+        self._pending_ids = set()
+
+        for item_id in pending_ids - referenced_ids:
             thumb = playlist_thumb_path(
                 item_id,
-                thumb_cache_dir=os.fspath(thumb_cache_dir),
+                thumb_cache_dir=self._thumb_cache_dir,
             )
             if thumb.exists():
-                try_remove_file(os.fspath(thumb), storage_paths)
+                try_remove_file(
+                    os.fspath(thumb),
+                    self._storage_paths,
+                    retries=1,
+                    delay=0,
+                )
 
-        url = item.get("url", "")
-        if url and os.path.isabs(url):
-            norm = os.path.normpath(url)
-            norm_embedded = os.path.normpath(embedded_dir)
-            if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-                try_remove_file(norm, storage_paths)
-
-
-def cleanup_item_files(
-    item: dict,
-    all_playlists: list,
-    storage_paths: PlaylistStoragePaths,
-    profile_paths: ProfilePaths,
-    thumb_cache_dir: str | os.PathLike[str],
-) -> None:
-    embedded_dir = os.fspath(profile_paths.embedded_dir)
-    item_id = item.get("id", "")
-    url = item.get("url", "")
-
-    all_ids: set[str] = set()
-    all_urls: set[str] = set()
-    for playlist in all_playlists:
-        for other in playlist.get("items", []):
-            if other.get("id"):
-                all_ids.add(other["id"])
-            if other.get("url"):
-                all_urls.add(other["url"])
-
-    if item_id and item_id not in all_ids:
-        thumb = playlist_thumb_path(
-            item_id,
-            thumb_cache_dir=os.fspath(thumb_cache_dir),
-        )
-        if thumb.exists():
-            try_remove_file(os.fspath(thumb), storage_paths)
-
-    if url and os.path.isabs(url) and url not in all_urls:
-        norm = os.path.normpath(url)
-        norm_embedded = os.path.normpath(embedded_dir)
-        if norm.startswith(norm_embedded + os.sep) and os.path.isfile(norm):
-            try_remove_file_async(norm, storage_paths)
 
 
 def _referenced_playlist_urls(

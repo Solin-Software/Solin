@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import gzip
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from solin.core.media.downloader import SongDownloader, _DownloadJob
+from solin.core.media.downloader import (
+    SongDownloader,
+    _DownloadJob,
+    _make_persistent_temp_path,
+    _safe_remove,
+)
 
 
 def _download_from_server(
@@ -87,4 +93,22 @@ def test_downloader_rejects_truncated_encoded_transfer(tmp_path):
     assert errors
     assert not (tmp_path / "media.mp3").exists()
     assert not (tmp_path / "media.mp3.done").exists()
-    assert not (tmp_path / "media.mp3.tmp").exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_persistent_download_jobs_use_isolated_staging_files(tmp_path):
+    final_path = str(tmp_path / "media.mp3")
+
+    first = _make_persistent_temp_path(final_path)
+    second = _make_persistent_temp_path(final_path)
+
+    assert first != second
+    assert os.path.dirname(first) == str(tmp_path)
+    assert first.endswith(".tmp")
+    assert second.endswith(".tmp")
+
+    _safe_remove(first)
+
+    assert not os.path.exists(first)
+    assert os.path.exists(second)
+    _safe_remove(second)

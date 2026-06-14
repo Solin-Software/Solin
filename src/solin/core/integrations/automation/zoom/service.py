@@ -17,10 +17,14 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QSettings, QTimer, Signal
 
 from solin.core.foundation.settings_keys import SettingsKey
+
+if TYPE_CHECKING:
+    from .controls import ZoomSession
 
 log = logging.getLogger(__name__)
 
@@ -83,7 +87,10 @@ class ZoomService(QObject):
 
         self._stop_evt = threading.Event()
         self._operation_lock = threading.Lock()
+        self._session_lock = threading.Lock()
         self._generation = 0
+        self._session_generation = 0
+        self._session: ZoomSession | None = None
         self._active = False
         self._inflight: set[str] = set()
         self._threads_lock = threading.Lock()
@@ -140,17 +147,24 @@ class ZoomService(QObject):
             return
         if self._active:
             return
-        self._generation += 1
-        self._active = True
-        self._stop_evt.clear()
+        with self._session_lock:
+            self._generation += 1
+            self._active = True
+            self._stop_evt.clear()
         self._conn_timer.start(5000)
         self._poll_connection()  # immediate first attempt
 
     def stop(self, *, wait: bool = False, timeout: float = 8.0):
         """Stop all polling and disconnect."""
-        self._active = False
-        self._generation += 1
-        self._stop_evt.set()
+        with self._session_lock:
+            self._active = False
+            self._generation += 1
+            self._stop_evt.set()
+            session = self._session
+            self._session = None
+            self._session_generation = 0
+        if session is not None:
+            session.cancel()
         self._conn_timer.stop()
         self._part_timer.stop()
         self._share_timer.stop()
@@ -201,7 +215,11 @@ class ZoomService(QObject):
             return
         self._launch_worker("stop-share", self._worker_stop_share)
 
-    def _launch_worker(self, kind: str, worker: Callable[[int], None]) -> None:
+    def _launch_worker(
+        self,
+        kind: str,
+        worker: Callable[[int, ZoomSession], None],
+    ) -> None:
         if not self._active or self._stop_evt.is_set() or kind in self._inflight:
             return
         generation = self._generation
@@ -210,8 +228,9 @@ class ZoomService(QObject):
         def _run() -> None:
             try:
                 with self._operation_lock:
-                    if self._is_current_generation(generation):
-                        worker(generation)
+                    session = self._session_for_generation(generation)
+                    if session is not None:
+                        worker(generation, session)
             finally:
                 with self._threads_lock:
                     self._threads.discard(threading.current_thread())
@@ -228,6 +247,27 @@ class ZoomService(QObject):
         with self._threads_lock:
             self._threads.add(thread)
         thread.start()
+
+    def _session_for_generation(
+        self,
+        generation: int,
+    ) -> ZoomSession | None:
+        with self._session_lock:
+            if (
+                not self._active
+                or self._stop_evt.is_set()
+                or generation != self._generation
+            ):
+                return None
+            if (
+                self._session is None
+                or self._session_generation != generation
+            ):
+                from .controls import ZoomSession
+
+                self._session = ZoomSession()
+                self._session_generation = generation
+            return self._session
 
     def _is_current_generation(self, generation: int) -> bool:
         return (
@@ -248,12 +288,16 @@ class ZoomService(QObject):
             return
         self._launch_worker("connection", self._worker_check_connection)
 
-    def _worker_check_connection(self, generation: int) -> None:
+    def _worker_check_connection(
+        self,
+        generation: int,
+        session: ZoomSession,
+    ) -> None:
         from . import controls as _zc
         _init_com()
         try:
-            windows, pids = _zc._find_zoom_windows_fast()
-            main, _ = _zc._find_main_window(windows)
+            windows, pids = _zc._find_zoom_windows_fast(session)
+            main, _ = _zc._find_main_window(session, windows)
             connected = main is not None
         except Exception:  # noqa: BLE001 - Zoom UIA connection boundary
             connected = False
@@ -302,7 +346,11 @@ class ZoomService(QObject):
             return  # pause during sharing
         self._launch_worker("participants", self._worker_get_participants)
 
-    def _worker_get_participants(self, generation: int) -> None:
+    def _worker_get_participants(
+        self,
+        generation: int,
+        session: ZoomSession,
+    ) -> None:
         """
         Get participant names from Zoom.
         Opens the participant panel if closed and KEEPS IT OPEN
@@ -319,16 +367,17 @@ class ZoomService(QObject):
         _init_com()
         try:
             # Abre painel se necessário (detecção robusta impede toggle acidental)
-            _zc._open_participants_panel()
+            _zc._open_participants_panel(session)
             time.sleep(0.1)
 
             # get_participant_names() detecta painel já aberto → não fecha
-            names = _zc.get_participant_names()
+            names = _zc.get_participant_names(session)
             count = _zc.count_people(names, exclude_host=True) if names else 0
 
             # Cache proativo: toolbar + botões do painel de participantes
             try:
                 _zc.warm_toolbar_cache(
+                    session,
                     {"btn_paticipants", "btn_muteAudio", "btn_audioMenu"},
                     reveal=True,
                     include_participants=True,
@@ -349,7 +398,11 @@ class ZoomService(QObject):
 
     # ── Share state ─────────────────────────────────────────────────────────
 
-    def _worker_stop_share(self, generation: int) -> None:
+    def _worker_stop_share(
+        self,
+        generation: int,
+        session: ZoomSession,
+    ) -> None:
         """
         Click Zoom's Stop Share button using the public API.
         Uses the fast Win32 FindWindowW check (~0ms) instead of full UIA scan.
@@ -373,7 +426,7 @@ class ZoomService(QObject):
             
             log.info("[ZStop] Calling stop_screen_share()...")
             t0 = time.perf_counter()
-            _zc.stop_screen_share()
+            _zc.stop_screen_share(session)
             log.info(f"[ZStop] stop_screen_share() returned in {(time.perf_counter()-t0)*1000:.1f}ms")
             log.info(f"[ZStop] Total worker time: {(time.perf_counter()-t_start)*1000:.1f}ms")
             
@@ -396,14 +449,18 @@ class ZoomService(QObject):
             return
         self._launch_worker("share-state", self._worker_check_share)
 
-    def _worker_check_share(self, generation: int) -> None:
+    def _worker_check_share(
+        self,
+        generation: int,
+        session: ZoomSession,
+    ) -> None:
         """Check if sharing is still active. Uses fast Win32 check + cache refresh."""
         from . import controls as _zc
         import ctypes
         _init_com()
         try:
             # _is_sharing() now uses FindWindowW (~0ms) + validates/refreshes cache
-            still_sharing = _zc._is_sharing()
+            still_sharing = _zc._is_sharing(session)
             if not still_sharing:
                 # Pode ser que a pessoa apenas começou a compartilhar e está com a 
                 # caixa de seleção do que compartilhar (ZPShareEntranceClass) aberta.
@@ -438,17 +495,21 @@ class ZoomService(QObject):
 
     # ── Open Audio for All ────────────────────────────────────────────────
 
-    def _worker_open_audio(self, _generation: int) -> None:
+    def _worker_open_audio(
+        self,
+        _generation: int,
+        session: ZoomSession,
+    ) -> None:
         """Leave computer audio + unmute all."""
         from . import controls as _zc
         _init_com()
         try:
-            _zc.leave_computer_audio()
+            _zc.leave_computer_audio(session)
             time.sleep(0.3)
         except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom leave_computer_audio failed: %s", e)
 
         try:
-            _zc.unmute_all()
+            _zc.unmute_all(session)
         except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom unmute_all failed: %s", e)
