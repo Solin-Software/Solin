@@ -10,35 +10,22 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
-from PySide6.QtCore import QCoreApplication
-
-from .publications import MeetingMedia, WeekData
+from .models import MeetingMedia, MemorialData, WeekData
 from .section_meta import SECTION_META
 from .tree_types import Node, clean_dict, stable_node_id, source_hash
 
-if TYPE_CHECKING:
-    from .memorial import MemorialData
-else:
-    MemorialData = Any  # type: ignore
-
 _STRIP = re.compile(r"<[^>]+>")
-
-def _tr_section(source: str) -> str:
-    if source == "PUBLIC TALK":
-        return QCoreApplication.translate("SermonThemeWidget", source)
-    return QCoreApplication.translate("_Section", source)
 
 
 def _strip(value: str) -> str:
     return _STRIP.sub("", value or "").strip()
 
 
-def _media_title(item: MeetingMedia) -> str:
-    return _strip(item.label or item.caption) or QCoreApplication.translate(
-        "_MediaRow", "Media"
-    )
+def _media_title(item: MeetingMedia, fallback_title: str) -> str:
+    return _strip(item.label or item.caption) or fallback_title
 
 
 def _media_type(item: MeetingMedia) -> str:
@@ -74,12 +61,13 @@ def _section_node(
     hue: int | None = None,
     children: list[Node] | None = None,
     collapsed: bool | None = None,
+    section_title: Callable[[str], str],
 ) -> Node:
     source_key = f"section:{meeting_type}:{section_code}"
     label, default_hue = SECTION_META.get(section_code, (section_code, 215))
     payload = {
         "type": "section",
-        "title": title or _tr_section(label),
+        "title": title or section_title(label),
         "section_code": section_code,
         "color_hue": default_hue if hue is None else hue,
     }
@@ -132,9 +120,15 @@ def _marker_node(source_key: str, text: str) -> Node:
     }
 
 
-def _media_node(source_key: str, item: MeetingMedia, *, scope: str) -> Node:
+def _media_node(
+    source_key: str,
+    item: MeetingMedia,
+    *,
+    scope: str,
+    fallback_title: str,
+) -> Node:
     ref = _media_to_ref(item)
-    title = _media_title(item)
+    title = _media_title(item, fallback_title)
     has_source_title = bool(_strip(item.label or item.caption))
     payload = {
         "type": "media",
@@ -166,6 +160,15 @@ def _ref_attr(ref: Any, name: str, default: Any = None) -> Any:
 class MeetingTreeBuilder:
     """Build canonical meeting trees from service data objects."""
 
+    def __init__(
+        self,
+        *,
+        section_title: Callable[[str], str] | None = None,
+        media_fallback_title: Callable[[], str] | None = None,
+    ) -> None:
+        self._section_title = section_title or (lambda source: source)
+        self._media_fallback_title = media_fallback_title or (lambda: "Media")
+
     def build_midweek(self, wd: WeekData) -> list[Node]:
         cbs_start = 999999
         if wd.cbs_ref:
@@ -195,6 +198,7 @@ class MeetingTreeBuilder:
                         f"media:mwb:{code}:{_media_identity(item)}",
                         item,
                         scope=f"mwb:{code}",
+                        fallback_title=self._media_fallback_title(),
                     ),
                 ))
                 seq += 1
@@ -211,7 +215,14 @@ class MeetingTreeBuilder:
                     key=lambda entry: (entry[0], entry[1]),
                 )
             ]
-            nodes.append(_section_node("mwb", code, children=children))
+            nodes.append(
+                _section_node(
+                    "mwb",
+                    code,
+                    children=children,
+                    section_title=self._section_title,
+                )
+            )
         return nodes
 
     def build_weekend(self, wd: WeekData) -> list[Node]:
@@ -220,12 +231,24 @@ class MeetingTreeBuilder:
                 f"media:wt:{_media_identity(item)}",
                 item,
                 scope="wt",
+                fallback_title=self._media_fallback_title(),
             )
             for item in wd.wt_all_media
         ]
         return [
-            _section_node("wt", "public_talk", children=[], collapsed=False),
-            _section_node("wt", "wt", children=children),
+            _section_node(
+                "wt",
+                "public_talk",
+                children=[],
+                collapsed=False,
+                section_title=self._section_title,
+            ),
+            _section_node(
+                "wt",
+                "wt",
+                children=children,
+                section_title=self._section_title,
+            ),
         ]
 
     def build_memorial(self, md: MemorialData) -> list[Node]:
@@ -234,10 +257,18 @@ class MeetingTreeBuilder:
                 f"media:memorial:{_media_identity(item)}",
                 item,
                 scope="memorial",
+                fallback_title=self._media_fallback_title(),
             )
             for item in getattr(md, "videos", [])
         ]
-        return [_section_node("memorial", "memorial", children=children)]
+        return [
+            _section_node(
+                "memorial",
+                "memorial",
+                children=children,
+                section_title=self._section_title,
+            )
+        ]
 
     def _build_cbs_subsection(self, wd: WeekData) -> Node | None:
         ref = wd.cbs_ref or {}
@@ -271,7 +302,14 @@ class MeetingTreeBuilder:
                 media_key = (
                     f"media:cbs:{pub}:{story_id or idx}:{_media_identity(item)}"
                 )
-                children.append(_media_node(media_key, item, scope=f"cbs:{pub}"))
+                children.append(
+                    _media_node(
+                        media_key,
+                        item,
+                        scope=f"cbs:{pub}",
+                        fallback_title=self._media_fallback_title(),
+                    )
+                )
 
         return _subsection_node(
             f"subsection:cbs:{pub}",
@@ -339,7 +377,12 @@ class MeetingTreeBuilder:
                         )
                         scope = f"ref:{section}:{pub}"
                     children.append(
-                        _media_node(media_key, item, scope=scope)
+                        _media_node(
+                            media_key,
+                            item,
+                            scope=scope,
+                            fallback_title=self._media_fallback_title(),
+                        )
                     )
             if not children:
                 continue

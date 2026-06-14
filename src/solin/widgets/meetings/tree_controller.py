@@ -48,7 +48,7 @@ from ...core.i18n.strings import (
     tr_offline_downloading_progress,
 )
 from ...core.ingest.manifest import ManifestError, cache_dir
-from ...core.meetings.memorial import MemorialData
+from ...core.meetings.models import MeetingMedia, MemorialData, WeekData
 from ...core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncRecord,
@@ -56,7 +56,6 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncIdentity,
 )
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
-from ...core.meetings.publications import MeetingMedia, WeekData
 from ...core.meetings.thumbnails import (
     meeting_thumb_cache_key,
     meeting_thumb_dir,
@@ -83,6 +82,11 @@ _MEDIA_FIELDS = set(MeetingMedia.__dataclass_fields__.keys())
 
 def _tr(context: str, source: str) -> str:
     return QCoreApplication.translate(context, source)
+
+
+def _translate_section_title(source: str) -> str:
+    context = "SermonThemeWidget" if source == "PUBLIC TALK" else "_Section"
+    return _tr(context, source)
 
 
 def _clean_title(value: str) -> str:
@@ -173,7 +177,10 @@ class MeetingTreeController(QObject):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
-        self._builder = MeetingTreeBuilder()
+        self._builder = MeetingTreeBuilder(
+            section_title=_translate_section_title,
+            media_fallback_title=lambda: _tr("_MediaRow", "Media"),
+        )
         self._sync_service = MeetingLinkedFolderSync(schedule_settings)
         self._nodes: list[Node] = []
         self._tree_key = ""

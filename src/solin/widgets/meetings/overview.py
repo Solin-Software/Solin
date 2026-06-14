@@ -30,8 +30,7 @@ from .visuals import (
 )
 
 if TYPE_CHECKING:
-    from ...core.meetings.memorial import MemorialData
-    from ...core.meetings.publications import WeekData
+    from ...core.meetings.models import MemorialData, WeekData
 
 
 class _PubCard(QFrame):

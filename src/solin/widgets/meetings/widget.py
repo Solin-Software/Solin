@@ -33,9 +33,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from ...core.meetings.publications import (
-    JwpubChecksumStore, JwpubService, WeekData,
+    JwpubChecksumStore, JwpubService,
     current_monday,
 )
+from ...core.meetings.models import MemorialData, WeekData
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -55,7 +56,7 @@ from ...core.jw.catalog import JWMediaCatalogCachePaths
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.rendering.libreoffice import libreoffice_available
-from ...core.meetings.memorial import MemorialData, MemorialService
+from ...core.meetings.memorial import MemorialService
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager

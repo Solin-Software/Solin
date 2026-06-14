@@ -33,7 +33,6 @@ import shutil
 import sqlite3
 import threading
 import zipfile
-from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -52,6 +51,11 @@ from solin.core.jw.publication_links import (
 from solin.core.media.cache import MediaCacheManager, is_url_cached
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.storage.json_repository import JsonFileRepository
+from .models import (
+    MeetingMedia as _MeetingMedia,
+    MeetingPublicationRef as _MeetingPublicationRef,
+    WeekData as _WeekData,
+)
 
 log = logging.getLogger(__name__)
 
@@ -65,61 +69,6 @@ _WT_CLASS  = 40
 _MWB_AYFM  = 18
 _SKIP_MEETING_REF_PUBS = {"th", "lmd"}
 _MWB_STUDY_REF_TYPES = {"Book", "Brochure", "Watchtower", "Article"}
-
-
-# ── Data model ────────────────────────────────────────────────────────────────
-
-@dataclass
-class MeetingMedia:
-    multimedia_id:     int  = 0
-    mime_type:         str  = ""
-    file_path:         str  = ""
-    label:             str  = ""
-    caption:           str  = ""
-    begin_ordinal:     int  = 0
-    key_symbol:        str  = ""
-    track:             int  = 0
-    issue_tag:         int  = 0
-    meps_doc_id:       int  = 0
-    section:           str  = ""
-    is_song:           bool = False
-    cbs_article_title: str  = ""
-
-
-@dataclass
-class MeetingPublicationRef:
-    section:           str  = ""
-    begin_ordinal:     int  = 0
-    pub:               str  = ""
-    issue:             str  = "0"
-    publication_title: str  = ""
-    caption:           str  = ""
-    meps_doc_id:       int  = 0
-    is_cbs:            bool = False
-    items:             list = field(default_factory=list)
-
-
-@dataclass
-class WeekData:
-    monday:          date            = field(default_factory=date.today)
-    mwb_pub_dir:     Optional[Path]  = None
-    mwb_cover_bytes: Optional[bytes] = None
-    mwb_date_label:  str             = ""
-    mwb_week_title:  str             = ""
-    mwb_all_media:   list            = field(default_factory=list)
-    mwb_publication_refs: list       = field(default_factory=list)
-    mwb_status:      str             = "idle"
-    mwb_issue:       str             = ""
-    wt_pub_dir:      Optional[Path]  = None
-    wt_cover_bytes:  Optional[bytes] = None
-    wt_study_title:  str             = ""
-    wt_issue:        str             = ""
-    wt_all_media:    list            = field(default_factory=list)
-    wt_status:       str             = "idle"
-    cbs_ref:         Optional[dict]  = None
-    cbs_pub_dir:     Optional[Path]  = None
-    cbs_items:       list            = field(default_factory=list)
-    cbs_status:      str             = "idle"
 
 
 # ── Filesystem cache ──────────────────────────────────────────────────────────
@@ -723,7 +672,7 @@ def _get_mwb_publication_refs(
     mid_ord: Optional[int] = None,
     final_song_ord: Optional[int] = None,
     cbs_start: Optional[int] = None,
-) -> list[MeetingPublicationRef]:
+) -> list[_MeetingPublicationRef]:
     if rows is None:
         rows = _mwb_publication_ref_rows(conn, doc_id, include_web=True)
     if not rows:
@@ -740,7 +689,7 @@ def _get_mwb_publication_refs(
             or _mwb_cbs_start_from_rows(rows, final_song_ord)
         )
 
-    refs_by_key: dict[tuple[str, str, str, int, bool], MeetingPublicationRef] = {}
+    refs_by_key: dict[tuple[str, str, str, int, bool], _MeetingPublicationRef] = {}
     order: list[tuple[str, str, str, int, bool]] = []
     for row in rows:
         pub = str(row["undated"] or "").strip()
@@ -759,7 +708,7 @@ def _get_mwb_publication_refs(
             if len(caption) > len(ref.caption):
                 ref.caption = caption
             continue
-        refs_by_key[key] = MeetingPublicationRef(
+        refs_by_key[key] = _MeetingPublicationRef(
             section=section,
             begin_ordinal=par,
             pub=pub,
@@ -827,11 +776,11 @@ def _media_file_path(raw_path: str, pub_dir: Path) -> str:
 
 
 def _make_media_item(r, pub_dir: Path, section: str,
-                     is_song: bool, cbs_title: str = "") -> MeetingMedia:
+                     is_song: bool, cbs_title: str = "") -> _MeetingMedia:
     mime   = (r["MimeType"] or "").lower()
     fp     = r["FilePath"] or ""
     file_path = _media_file_path(fp, pub_dir)
-    return MeetingMedia(
+    return _MeetingMedia(
         multimedia_id     = r["MultimediaId"],
         mime_type         = mime,
         file_path         = file_path,
@@ -908,7 +857,7 @@ def _parse_mwb_media(
     pub_dir: Path,
     mid_ord: Optional[int] = None,
     cbs_start: Optional[int] = None,
-) -> list[MeetingMedia]:
+) -> list[_MeetingMedia]:
     if mid_ord is None:
         mid_ord = _mwb_mid_ordinal(conn, doc_id)
     if cbs_start is None:
@@ -922,7 +871,7 @@ def _parse_mwb_media(
         result.append(_make_media_item(r, pub_dir, section, is_song))
     return result
 
-def _parse_wt_media(conn, doc_id: int, pub_dir: Path) -> list[MeetingMedia]:
+def _parse_wt_media(conn, doc_id: int, pub_dir: Path) -> list[_MeetingMedia]:
     return [
         _make_media_item(r, pub_dir, "wt", (r["KeySymbol"] or "").lower() in SONG_SYMS)
         for r in _dedup_multimedia_rows(_query_multimedia(conn, doc_id))
@@ -934,7 +883,7 @@ def _parse_publication_ref_items(
     meps_doc_id: int,
     section: str,
     marker_title: str,
-) -> list[MeetingMedia]:
+) -> list[_MeetingMedia]:
     result = []
     try:
         conn = _conn(db_path)
@@ -956,7 +905,7 @@ def _parse_publication_ref_items(
     return result
 
 
-def _sync_cbs_from_publication_refs(wd: WeekData) -> None:
+def _sync_cbs_from_publication_refs(wd: _WeekData) -> None:
     refs = [
         ref for ref in getattr(wd, "mwb_publication_refs", []) or []
         if getattr(ref, "is_cbs", False)
@@ -966,7 +915,7 @@ def _sync_cbs_from_publication_refs(wd: WeekData) -> None:
         return
 
     refs = sorted(refs, key=lambda ref: int(ref.begin_ordinal or 0))
-    items: list[MeetingMedia] = []
+    items: list[_MeetingMedia] = []
     meps_doc_ids: list[int] = []
     doc_titles: dict[int, str] = {}
     for ref in refs:
@@ -1146,7 +1095,7 @@ class _JwpubWorker(QObject):
         if not self._cache.is_cached("mwb", lang, issue):
             return False
         self._parse_mwb(
-            WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+            _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
             monday, issue, lang,
         )
         return True
@@ -1169,7 +1118,7 @@ class _JwpubWorker(QObject):
             if self._cache.is_cached("mwb", lang, issue):
                 log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
                 self._parse_mwb(
-                    WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+                    _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
                     monday, issue, lang,
                 )
                 return
@@ -1182,7 +1131,7 @@ class _JwpubWorker(QObject):
             # Cópia local confirmada atual. Se já a servimos, "nada acontece".
             if not served:
                 self._parse_mwb(
-                    WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+                    _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
                     monday, issue, lang,
                 )
             return
@@ -1192,11 +1141,11 @@ class _JwpubWorker(QObject):
             return  # falhou; se já servimos cache, ele permanece na tela
         self._checksum_store.save("mwb", lang, issue, checksum)
         self._parse_mwb(
-            WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+            _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
             monday, issue, lang,
         )
 
-    def _parse_mwb(self, wd: WeekData, monday: date, issue: str, lang: str):
+    def _parse_mwb(self, wd: _WeekData, monday: date, issue: str, lang: str):
         key     = monday.isoformat()
         pub_dir = self._ensure_extract("mwb", lang, issue)
         db_path = self._cache.db_path("mwb", lang, issue) if pub_dir else None
@@ -1283,7 +1232,7 @@ class _JwpubWorker(QObject):
         for issue in _wt_candidates(monday):
             if not self._cache.is_cached("w", lang, issue):
                 continue
-            wd = WeekData(monday=monday, wt_status="loading")
+            wd = _WeekData(monday=monday, wt_status="loading")
             if self._try_wt_cached(wd, monday, issue, lang):
                 return issue
         return None
@@ -1302,14 +1251,14 @@ class _JwpubWorker(QObject):
                 if self._download("w", lang, served_issue, url, key, "wt", emit_error=False):
                     self._checksum_store.save("w", lang, served_issue, checksum)
                     self._try_wt_cached(
-                        WeekData(monday=monday, wt_status="loading"),
+                        _WeekData(monday=monday, wt_status="loading"),
                         monday, served_issue, lang,
                     )
             return
         # Caminho frio: sem cache utilizável → sonda candidatos e baixa pela rede.
         self._download_wt_chain(monday, lang, _wt_candidates(monday)[:], force=force)
 
-    def _try_wt_cached(self, wd: WeekData, monday: date,
+    def _try_wt_cached(self, wd: _WeekData, monday: date,
                         issue: str, lang: str) -> bool:
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
@@ -1359,7 +1308,7 @@ class _JwpubWorker(QObject):
                         "wt %s: API unreachable, falling back to cached copy",
                         issue,
                     )
-                    wd = WeekData(monday=monday, wt_status="loading")
+                    wd = _WeekData(monday=monday, wt_status="loading")
                     if self._try_wt_cached(wd, monday, issue, lang):
                         return
                 continue
@@ -1369,15 +1318,15 @@ class _JwpubWorker(QObject):
                     continue
                 self._checksum_store.save("w", lang, issue, checksum)
 
-            wd = WeekData(monday=monday, wt_status="loading")
+            wd = _WeekData(monday=monday, wt_status="loading")
             if self._try_wt_cached(wd, monday, issue, lang):
                 return
 
-        wd = WeekData(monday=monday, wt_status="not_found" if had_api else "error")
+        wd = _WeekData(monday=monday, wt_status="not_found" if had_api else "error")
         msg = "NOT_FOUND" if had_api else "No WT issue found for this week"
         self.error.emit(key, "wt", msg)
 
-    def _parse_wt(self, wd: WeekData, monday: date, issue: str, lang: str):
+    def _parse_wt(self, wd: _WeekData, monday: date, issue: str, lang: str):
         key     = monday.isoformat()
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
@@ -1409,7 +1358,7 @@ class _JwpubWorker(QObject):
         wd.wt_status      = "ready"
         self.wt_done.emit(key, wd)
 
-    def _sync_loaded_publication_refs(self, wd: WeekData, lang: str) -> None:
+    def _sync_loaded_publication_refs(self, wd: _WeekData, lang: str) -> None:
         _sync_cbs_from_publication_refs(wd)
         cbs_ref = next(
             (
@@ -1428,14 +1377,14 @@ class _JwpubWorker(QObject):
     def _load_mwb_publication_refs(
         self,
         monday: date,
-        wd: WeekData,
-        refs: list[MeetingPublicationRef],
+        wd: _WeekData,
+        refs: list[_MeetingPublicationRef],
     ):
         key = monday.isoformat()
         lang = self._lang
 
-        def build(cache_only: bool) -> tuple[list[MeetingPublicationRef], bool]:
-            out: list[MeetingPublicationRef] = []
+        def build(cache_only: bool) -> tuple[list[_MeetingPublicationRef], bool]:
+            out: list[_MeetingPublicationRef] = []
             downloaded = False
             for ref in refs:
                 items, did_dl = self._load_publication_ref_items(
@@ -1467,9 +1416,9 @@ class _JwpubWorker(QObject):
         self,
         key: str,
         lang: str,
-        ref: MeetingPublicationRef,
+        ref: _MeetingPublicationRef,
         cache_only: bool = False,
-    ) -> tuple[list[MeetingMedia], bool]:
+    ) -> tuple[list[_MeetingMedia], bool]:
         """
         Resolve os itens de mídia de uma referência de publicação.
 
@@ -1517,8 +1466,8 @@ class _JwpubWorker(QObject):
         return self._parse_ref_items(pub, lang, issue, ref), downloaded
 
     def _parse_ref_items(
-        self, pub: str, lang: str, issue: str, ref: MeetingPublicationRef
-    ) -> list[MeetingMedia]:
+        self, pub: str, lang: str, issue: str, ref: _MeetingPublicationRef
+    ) -> list[_MeetingMedia]:
         pub_dir = self._ensure_extract(pub, lang, issue)
         db_path = self._cache.db_path(pub, lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
@@ -1550,10 +1499,10 @@ class _JwpubWorker(QObject):
     # ── Auto-prefetch ─────────────────────────────────────────────────────────
 
     @Slot(object)
-    def prefetch_week_media(self, wd: WeekData):
+    def prefetch_week_media(self, wd: _WeekData):
         """Resolve URLs e emite prefetch_requested para cada item não cacheado."""
         all_items = list(wd.mwb_all_media) + list(wd.wt_all_media)
-        ref_items: list[MeetingMedia] = []
+        ref_items: list[_MeetingMedia] = []
         for ref in getattr(wd, "mwb_publication_refs", []):
             ref_items.extend(getattr(ref, "items", []) or [])
         all_items.extend(ref_items or list(wd.cbs_items))
@@ -1660,7 +1609,7 @@ class JwpubService(QObject):
         super().__init__(parent)
         self._media_settings = media_settings
         self._cache_manager = cache_manager
-        self._active: dict[str, WeekData] = {}
+        self._active: dict[str, _WeekData] = {}
         self._lang   = "T"
         self._is_sign_language = False
 
@@ -1749,14 +1698,14 @@ class JwpubService(QObject):
             existing = self._active[key]
             if existing.mwb_status not in ("error",) and existing.wt_status not in ("error",):
                 return
-        wd = WeekData(monday=monday)
+        wd = _WeekData(monday=monday)
         self._active[key] = wd
         self._sig_load_week.emit(monday, force)
 
-    def get_week_data(self, monday: date) -> Optional[WeekData]:
+    def get_week_data(self, monday: date) -> Optional[_WeekData]:
         return self._active.get(monday.isoformat())
 
-    def resolve_video_async(self, request_id: str, item: "MeetingMedia"):
+    def resolve_video_async(self, request_id: str, item: "_MeetingMedia"):
         """
         Resolve URL de vídeo de forma assíncrona.
         Resultado chega via signal video_resolved(request_id, url, title, thumb).
@@ -1768,7 +1717,7 @@ class JwpubService(QObject):
             item.meps_doc_id, self._lang,
         )
 
-    def resolve_video(self, item: "MeetingMedia") -> dict:
+    def resolve_video(self, item: "_MeetingMedia") -> dict:
         """
         Resolve URL de vídeo de forma SÍNCRONA (bloqueia a main thread ~200ms).
         Use apenas para ações pontuais do usuário (ex: clique em reproduzir),
@@ -1820,7 +1769,7 @@ class JwpubService(QObject):
     # ── Worker callbacks (chegam na main thread via QueuedConnection) ─────────
 
     @Slot(str, object)
-    def _on_mwb_done(self, key: str, wd: WeekData):
+    def _on_mwb_done(self, key: str, wd: _WeekData):
         existing = self._active.get(key)
         if existing:
             existing.mwb_pub_dir     = wd.mwb_pub_dir
@@ -1841,7 +1790,7 @@ class JwpubService(QObject):
             self._check_complete(key)
 
     @Slot(str, object)
-    def _on_wt_done(self, key: str, wd: WeekData):
+    def _on_wt_done(self, key: str, wd: _WeekData):
         existing = self._active.get(key)
         if existing:
             existing.wt_pub_dir     = wd.wt_pub_dir
@@ -1858,7 +1807,7 @@ class JwpubService(QObject):
             self._check_complete(key)
 
     @Slot(str, object)
-    def _on_cbs_done(self, key: str, wd: WeekData):
+    def _on_cbs_done(self, key: str, wd: _WeekData):
         existing = self._active.get(key)
         if existing:
             existing.cbs_pub_dir = wd.cbs_pub_dir

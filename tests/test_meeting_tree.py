@@ -11,10 +11,10 @@ from datetime import date
 from pathlib import Path
 
 import solin.core.meetings.tree_store as tree_store_module
+import solin.core.meetings.memorial as memorial_module
+import solin.core.meetings.publications as publications_module
+from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
 from solin.core.meetings.publications import (
-    MeetingMedia,
-    MeetingPublicationRef,
-    WeekData,
     _conn,
     _find_mwb_doc_id,
     _get_cbs_ref,
@@ -137,6 +137,26 @@ class MeetingMediaPathTests(unittest.TestCase):
 
 
 class MeetingTreeBuilderTests(unittest.TestCase):
+    def test_meeting_models_are_not_reexported_by_service_modules(self):
+        self.assertFalse(hasattr(publications_module, "MeetingMedia"))
+        self.assertFalse(hasattr(publications_module, "MeetingPublicationRef"))
+        self.assertFalse(hasattr(publications_module, "WeekData"))
+        self.assertFalse(hasattr(memorial_module, "MeetingMedia"))
+        self.assertFalse(hasattr(memorial_module, "MemorialData"))
+
+    def test_builder_uses_injected_presentation_text(self):
+        builder = MeetingTreeBuilder(
+            section_title=lambda source: f"translated:{source}",
+            media_fallback_title=lambda: "Translated media",
+        )
+        tree = builder.build_weekend(
+            WeekData(wt_all_media=[media(label="", caption="")])
+        )
+
+        self.assertEqual(tree[0]["title"], "translated:PUBLIC TALK")
+        self.assertEqual(tree[1]["title"], "translated:Watchtower Study")
+        self.assertEqual(tree[1]["children"][0]["title"], "Translated media")
+
     def test_midweek_builds_sections_and_cbs_markers(self):
         wd = WeekData(
             monday=date(2026, 5, 25),

@@ -28,7 +28,6 @@ import json
 import logging
 import sqlite3
 import zipfile
-from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -50,8 +49,9 @@ from solin.core.jw.publication_links import (
 # ── Reutiliza constantes e helpers de publications.py ─────────────────────────
 from .publications import (
     JwpubCache, JwpubChecksumStore,
-    MeetingMedia,
 )
+from .models import MeetingMedia as _MeetingMedia
+from .models import MemorialData as _MemorialData
 
 # ── HTTP com curl_cffi (browser-friendly) ──────────────────────────────────────
 
@@ -201,27 +201,6 @@ def memorial_date_for_year(year: int) -> Optional[date]:
 
 def _monday_of(d: date) -> date:
     return d - timedelta(days=d.weekday())
-
-
-# ── Data model ────────────────────────────────────────────────────────────────
-
-@dataclass
-class MemorialData:
-    year:         int             = 0
-    memorial_date: Optional[date] = None   # data exata (14 Nisan)
-    memorial_week: Optional[date] = None   # segunda-feira da semana
-    # Capa: bytes PNG/JPG para exibir no card
-    cover_bytes:  Optional[bytes] = None
-    # Vídeos: lista de MeetingMedia (resolvidos ou a resolver)
-    videos:       list            = field(default_factory=list)
-    # URL do thumbnail quadrado (para a capa do card, ~270px)
-    thumb_url:    str             = ""
-    # Status: "idle" | "loading" | "ready" | "empty" | "error"
-    #        | "not_yet" | "past" | "not_found" | "deleted"
-    #  not_found → API confirmed the pub doesn't exist (yet) for this year/lang
-    #  deleted   → API 404 + memorial date already passed (JW removed the files)
-    status:       str             = "idle"
-    pub_dir:      Optional[Path]  = None
 
 
 # ── JWPUB helpers (worker-thread only) ────────────────────────────────────────
@@ -395,11 +374,11 @@ def _query_memorial_sqlite(pub_dir: Path) -> dict:
     return result
 
 
-def _make_memorial_media(v: dict, pub_dir: Path) -> MeetingMedia:
+def _make_memorial_media(v: dict, pub_dir: Path) -> _MeetingMedia:
     mime  = (v.get("MimeType") or "").lower()
     fp    = v.get("FilePath") or ""
     abs_fp = str(pub_dir / fp) if fp and mime.startswith("image") else fp
-    return MeetingMedia(
+    return _MeetingMedia(
         multimedia_id = v.get("MultimediaId") or 0,
         mime_type     = mime,
         file_path     = abs_fp,
@@ -447,7 +426,7 @@ class _MemorialWorker(QObject):
         pub   = _mi_pub(year)
         issue = "0"   # mi<YY> não tem issue numérico — usa "0" como chave de cache
 
-        md = MemorialData(year=year)
+        md = _MemorialData(year=year)
 
         # ── Calcular data ──────────────────────────────────────────────────────
         memorial_date = memorial_date_for_year(year)
@@ -627,7 +606,7 @@ class MemorialService(QObject):
         super().__init__(parent)
         self._lang   = "T"
         self._year   = date.today().year
-        self._data:  Optional[MemorialData] = None
+        self._data:  Optional[_MemorialData] = None
 
         self._thread = QThread(self)
         self._worker = _MemorialWorker(jwpub_cache_dir, checksum_store)
@@ -695,7 +674,7 @@ class MemorialService(QObject):
             return
         self._sig_load.emit(self._year)
 
-    def get_data(self) -> Optional[MemorialData]:
+    def get_data(self) -> Optional[_MemorialData]:
         return self._data
 
     def memorial_date(self) -> Optional[date]:
@@ -718,7 +697,7 @@ class MemorialService(QObject):
     # ── Slots ─────────────────────────────────────────────────────────────────
 
     @Slot(object)
-    def _on_done(self, data: MemorialData):
+    def _on_done(self, data: _MemorialData):
         self._data = data
         self.memorial_status.emit(data.status)
         if data.status == "ready":

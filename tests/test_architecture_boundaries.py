@@ -209,18 +209,43 @@ def test_clean_architecture_layer_dependencies():
     )
 
 
-def test_meeting_schedule_domain_has_no_framework_or_application_dependencies():
-    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "schedule.py"
+def test_meeting_domain_has_no_framework_or_application_dependencies():
+    meeting_root = PROJECT_ROOT / "src" / "solin" / "core" / "meetings"
+    domain_files = (
+        "models.py",
+        "schedule.py",
+        "section_meta.py",
+        "tree_builder.py",
+        "tree_merger.py",
+        "tree_types.py",
+    )
+    forbidden_relative = {
+        "linked_folder_sync",
+        "memorial",
+        "publications",
+        "schedule_settings",
+        "tree_store",
+    }
     violations: list[str] = []
 
-    for node in _imports(path):
-        roots = (
-            [alias.name.split(".", 1)[0] for alias in node.names]
-            if isinstance(node, ast.Import)
-            else [(node.module or "").split(".", 1)[0]]
-        )
-        if any(root in {"PySide6", "solin"} for root in roots):
-            violations.append(_display(path, node))
+    for filename in domain_files:
+        path = meeting_root / filename
+        for node in _imports(path):
+            roots = (
+                [alias.name.split(".", 1)[0] for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [(node.module or "").split(".", 1)[0]]
+            )
+            relative_root = (
+                (node.module or "").split(".", 1)[0]
+                if isinstance(node, ast.ImportFrom) and node.level
+                else ""
+            )
+            if (
+                any(root in {"PySide6", "solin"} for root in roots)
+                or relative_root in forbidden_relative
+            ):
+                violations.append(_display(path, node))
 
     assert violations == []
 
@@ -234,6 +259,7 @@ def test_timer_domain_has_no_framework_or_application_dependencies():
         "schedule_factory.py",
         "state_machine.py",
     )
+    forbidden_relative = {"engine", "store", "i18n"}
     violations: list[str] = []
 
     for filename in domain_files:
@@ -244,7 +270,15 @@ def test_timer_domain_has_no_framework_or_application_dependencies():
                 if isinstance(node, ast.Import)
                 else [(node.module or "").split(".", 1)[0]]
             )
-            if any(root in {"PySide6", "solin"} for root in roots):
+            relative_root = (
+                (node.module or "").split(".", 1)[0]
+                if isinstance(node, ast.ImportFrom) and node.level
+                else ""
+            )
+            if (
+                any(root in {"PySide6", "solin"} for root in roots)
+                or relative_root in forbidden_relative
+            ):
                 violations.append(_display(path, node))
 
     assert violations == []
