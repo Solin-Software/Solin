@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtWidgets import (
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
+from ...core.playlists.storage import PlaylistStoragePaths
 from ...core.playlists.items import create_playlist_item
 from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
@@ -33,6 +33,9 @@ from ...core.media.cache import MediaCacheManager
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
 from .dialogs import _NameDialog
 from .item_visuals import enrich_items_for_export
+
+if TYPE_CHECKING:
+    from ...core.playlists.storage import PlaylistRepository
 
 _BTN_STYLE = (
     "QPushButton{border:1px solid #30363d;border-radius:6px;"
@@ -67,6 +70,7 @@ class _PlaylistListView(QWidget):
         *,
         profile_paths: ProfilePaths,
         storage_paths: PlaylistStoragePaths,
+        playlist_repository: PlaylistRepository,
         media_cache_manager: MediaCacheManager,
         thumb_cache_dir: str | os.PathLike[str],
         schedule_cleanup: Callable[[list[dict]], None],
@@ -79,7 +83,7 @@ class _PlaylistListView(QWidget):
         self._watched_folder = watched_folder
         self._profile_paths = profile_paths
         self._storage_paths = storage_paths
-        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
+        self._playlist_repository = playlist_repository
         self._media_cache_manager = media_cache_manager
         self._thumb_cache_dir = thumb_cache_dir
         self._schedule_cleanup = schedule_cleanup

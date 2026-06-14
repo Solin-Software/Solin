@@ -116,7 +116,7 @@ from .core.integrations.automation.shortcuts import (
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.profiles.settings import ProfileSettings
-from .core.playlists.storage import PlaylistStoragePaths
+from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.publications import JwpubChecksumStore
@@ -152,6 +152,7 @@ class MainWindow(QMainWindow):
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
+        playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
         timer_session: TimerSession,
         active_profile: ProfileInfo,
@@ -169,6 +170,7 @@ class MainWindow(QMainWindow):
         self.jw_songs_store = jw_songs_store
         self.jwpub_checksum_store = jwpub_checksum_store
         self.playlist_storage_paths = playlist_storage_paths
+        self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
         self.timer_session = timer_session
         self.active_profile = active_profile
@@ -359,6 +361,7 @@ class MainWindow(QMainWindow):
                 background_song_service=self._background_song_service,
                 timer_bridge=self.timer_bridge,
                 playlist_storage_paths=self.playlist_storage_paths,
+                playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
                 jw_catalog_cache_paths=self.jw_catalog_cache_paths,
                 jw_songs_store=self.jw_songs_store,

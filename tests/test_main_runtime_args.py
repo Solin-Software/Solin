@@ -97,6 +97,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jw_songs_store,
             received_jwpub_checksum_store,
             playlist_storage_paths,
+            playlist_repository,
             meeting_tree_store,
             received_timer_session,
             received_active_profile,
@@ -116,6 +117,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
+            self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
@@ -178,6 +180,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.jwpub_checksum_store is jwpub_checksum_store
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
+    assert str(window.playlist_repository.path) == "playlists.json"
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
@@ -235,6 +238,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jw_songs_store,
             received_jwpub_checksum_store,
             playlist_storage_paths,
+            playlist_repository,
             meeting_tree_store,
             received_timer_session,
             received_active_profile,
@@ -254,6 +258,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
+            self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile

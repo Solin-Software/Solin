@@ -54,13 +54,14 @@ def _launch_main_window(
     from solin.main_window import MainWindow
     from solin.core.meetings.tree_store import MeetingTreeStore
     from solin.core.media.settings import MediaSettingsStore
-    from solin.core.playlists.storage import PlaylistStoragePaths
+    from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
     from solin.core.ui.titlebar import apply_titlebar_color
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,
         pending_deletions_file=runtime_paths.pending_del_file,
     )
+    playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
     meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
     media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
     media_controller = media.create_playback(media_settings)
@@ -81,6 +82,7 @@ def _launch_main_window(
         jw_songs_store,
         jwpub_checksum_store,
         playlist_storage_paths,
+        playlist_repository,
         meeting_tree_store,
         timer_session,
         active_profile,

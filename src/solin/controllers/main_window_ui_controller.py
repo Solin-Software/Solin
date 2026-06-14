@@ -94,6 +94,7 @@ class MainWindowUiContext:
     background_song_service: Any
     timer_bridge: Any
     playlist_storage_paths: Any
+    playlist_repository: Any
     meeting_tree_store: Any
     jw_catalog_cache_paths: Any
     jw_songs_store: Any
@@ -381,6 +382,7 @@ class MainWindowUiController:
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             storage_paths=context.playlist_storage_paths,
+            playlist_repository=context.playlist_repository,
             media_cache_manager=context.media_cache_manager,
             jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_songs_store=context.jw_songs_store,

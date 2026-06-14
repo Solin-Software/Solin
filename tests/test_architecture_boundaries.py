@@ -488,6 +488,30 @@ def test_media_cache_and_playback_do_not_import_concrete_downloader():
     assert violations == []
 
 
+def test_playlist_widgets_do_not_construct_playlist_repository():
+    playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
+    violations: list[str] = []
+
+    for path in sorted(playlist_widget_root.rglob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            owner = node.func.value
+            if (
+                node.func.attr == "from_paths"
+                and isinstance(owner, ast.Name)
+                and owner.id == "PlaylistRepository"
+            ):
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Playlist widgets must receive repository instances from composition:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

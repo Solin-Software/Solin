@@ -55,7 +55,6 @@ from ...core.playlists.cleanup import PlaylistCleanupQueue
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import (
-    PlaylistRepository,
     PlaylistStoragePaths,
 )
 from ...core.playlists.thumbnails import playlist_thumb_path
@@ -70,6 +69,7 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.ui.notifications import NotificationCenter
+    from ...core.playlists.storage import PlaylistRepository
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
@@ -92,6 +92,7 @@ class _PlaylistEditView(
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
+        playlist_repository: PlaylistRepository,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
@@ -108,7 +109,7 @@ class _PlaylistEditView(
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
-        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
+        self._playlist_repository = playlist_repository
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -910,6 +911,7 @@ class PlaylistWidget(QWidget):
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         storage_paths: PlaylistStoragePaths,
+        playlist_repository: PlaylistRepository,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_songs_store: JWSongsStore,
@@ -924,7 +926,7 @@ class PlaylistWidget(QWidget):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._storage_paths = storage_paths
-        self._playlist_repository = PlaylistRepository.from_paths(storage_paths)
+        self._playlist_repository = playlist_repository
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -958,6 +960,7 @@ class PlaylistWidget(QWidget):
             watched_folder=self._watched_folder,
             profile_paths=self._profile_paths,
             storage_paths=self._storage_paths,
+            playlist_repository=self._playlist_repository,
             media_cache_manager=self._media_cache_manager,
             thumb_cache_dir=self._thumb_cache_dir,
             schedule_cleanup=self._schedule_cleanup,
@@ -971,6 +974,7 @@ class PlaylistWidget(QWidget):
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             storage_paths=self._storage_paths,
+            playlist_repository=self._playlist_repository,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_songs_store=self._jw_songs_store,
