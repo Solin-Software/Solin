@@ -7,66 +7,22 @@ It is the timer-side counterpart of :class:`solin.projection.window.ProjectionWi
 (media) and mirrors the same lifecycle: frameless always-on-top fullscreen on a
 specific ``QScreen``, fade-in, refit on resolution change, exclusion from Windows
 Aero Peek, and a fade-out close. The visible content is ``ClockFace.qml`` driven
-by a shared :class:`ClockRenderBridge`.
+by a shared :class:`solin.ui.qml.timer_output.ClockRenderBridge`.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import (
-    QEasingCurve, QObject, QPropertyAnimation, QTimer, Property, Signal, Slot, Qt
+    QEasingCurve, QPropertyAnimation, QTimer, Slot, Qt
 )
 from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..core.ui.fonts import timer_digit_font_family
-from ..core.timer.models import TimerSnapshot
-from ..core.timer.render import build_render_model
 from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.timer_output import ClockRenderBridge
 from .window import _exclude_from_aero_peek
-
-
-# ── Render bridge ─────────────────────────────────────────────────────────────
-
-class ClockRenderBridge(QObject):
-    """Exposes the live render model to ClockFace.qml.
-
-    One bridge feeds *every* timer window (they all show the same clock), so the
-    engine is read once per tick and fanned out to all surfaces — mirroring the
-    single-decoder idle-media pattern on the media side.
-    """
-
-    modelChanged = Signal()
-
-    def __init__(self, engine, config_provider, parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self._engine = engine
-        self._config_provider = config_provider
-        self._model: dict = {}
-        self._engine.tick.connect(self._refresh)
-        self.refresh_now()
-
-    def _refresh(self, _snapshot_dict=None) -> None:
-        config = self._config_provider()
-        snapshot = (
-            TimerSnapshot.from_dict(_snapshot_dict)
-            if isinstance(_snapshot_dict, dict)
-            else self._engine.snapshot()
-        )
-        model = build_render_model(snapshot, config)
-        if model == self._model:
-            return
-        self._model = model
-        self.modelChanged.emit()
-
-    @Slot()
-    def refresh_now(self) -> None:
-        self._refresh()
-
-    def _get_model(self) -> dict:
-        return self._model
-
-    model = Property("QVariant", _get_model, notify=modelChanged)
 
 
 # ── Output window ─────────────────────────────────────────────────────────────

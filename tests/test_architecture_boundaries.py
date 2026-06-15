@@ -374,6 +374,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "quick_toolbar.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_bridge.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_icons.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_output.py",
     )
     violations: list[str] = []
 
@@ -394,6 +395,12 @@ def test_qml_presentation_adapters_live_under_ui_qml():
             violations.append(
                 f"{media_library_widget.relative_to(PROJECT_ROOT)} contains {fragment}"
             )
+
+    timer_window = PROJECT_ROOT / "src" / "solin" / "projection" / "timer_window.py"
+    if "class ClockRenderBridge" in timer_window.read_text(encoding="utf-8"):
+        violations.append(
+            f"{timer_window.relative_to(PROJECT_ROOT)} contains class ClockRenderBridge"
+        )
 
     forbidden_modules = {
         ("solin", "qml_module"),
