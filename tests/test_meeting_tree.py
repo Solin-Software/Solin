@@ -1002,6 +1002,100 @@ class MeetingTreeStoreTests(unittest.TestCase):
         self.assertTrue(any("Synthetic study - Part 2" in title for title in titles))
 
 
+class JwpubImportFactoryWiringTests(unittest.TestCase):
+    class _Signal:
+        def __init__(self):
+            self.callbacks = []
+
+        def connect(self, callback):
+            self.callbacks.append(callback)
+
+    class _Thread:
+        def __init__(self):
+            self.items_ready = JwpubImportFactoryWiringTests._Signal()
+            self.failed = JwpubImportFactoryWiringTests._Signal()
+            self.finished = JwpubImportFactoryWiringTests._Signal()
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+    class _Factory:
+        def __init__(self):
+            self.calls = []
+            self.threads = []
+
+        def create(self, path, **kwargs):
+            thread = JwpubImportFactoryWiringTests._Thread()
+            self.calls.append((path, kwargs))
+            self.threads.append(thread)
+            return thread
+
+    def controller(self):
+        factory = self._Factory()
+
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._language_code = "T"
+        controller._jwpub_threads = []
+        controller._jwpub_import_thread_factory = factory
+        controller._jwpub_image_dir = lambda: "linked-folder-cache"
+        controller._on_playlist_items_ready = lambda *_args: None
+        controller._warn_import_failed = lambda *_args: None
+        controller._insert_meeting_folder_nodes = lambda *_args: None
+        controller._node_from_playlist_item = lambda *_args: {}
+        controller._record_meeting_folder_failure = lambda *_args: None
+        return controller, factory
+
+    def test_manual_import_uses_dynamic_linked_folder_destination(self):
+        controller, factory = self.controller()
+
+        MeetingTreeController._import_jwpubs(
+            controller,
+            ["publication.jwpub"],
+            "root",
+            4,
+        )
+
+        self.assertEqual(
+            factory.calls,
+            [
+                (
+                    "publication.jwpub",
+                    {
+                        "lang": "T",
+                        "dest_images_dir": "linked-folder-cache",
+                        "parent": controller,
+                    },
+                )
+            ],
+        )
+        self.assertTrue(factory.threads[0].started)
+
+    def test_meeting_folder_import_uses_factory_default_destination(self):
+        controller, factory = self.controller()
+
+        MeetingTreeController._import_meeting_folder_jwpub(
+            controller,
+            {"path": "meeting-folder/publication.jwpub"},
+            "root",
+            2,
+        )
+
+        self.assertEqual(
+            factory.calls,
+            [
+                (
+                    "meeting-folder/publication.jwpub",
+                    {"lang": "T", "parent": controller},
+                )
+            ],
+        )
+        self.assertTrue(factory.threads[0].started)
+
+
 class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
     class _Signal:
         def __init__(self):

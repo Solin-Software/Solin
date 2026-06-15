@@ -319,3 +319,31 @@ class JwpubImportThread:
                     self.failed.emit(str(exc))
 
         return _Thread(jwpub_path, lang, dest_images_dir, parent)
+
+
+class JwpubImportThreadFactory:
+    """Create JWPUB import workers for one profile image destination."""
+
+    def __init__(self, dest_images_dir: str | os.PathLike[str] | None) -> None:
+        self._dest_images_dir = (
+            os.fspath(dest_images_dir) if dest_images_dir is not None else None
+        )
+
+    def create(
+        self,
+        jwpub_path: str,
+        *,
+        lang: str = "T",
+        dest_images_dir: str | os.PathLike[str] | None = None,
+        parent=None,
+    ):
+        return JwpubImportThread.create(
+            jwpub_path,
+            lang=lang,
+            dest_images_dir=(
+                os.fspath(dest_images_dir)
+                if dest_images_dir is not None
+                else self._dest_images_dir
+            ),
+            parent=parent,
+        )

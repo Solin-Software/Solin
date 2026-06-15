@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from ...core.jw.language_context import jw_media_language_context
@@ -116,12 +115,9 @@ class _PlaylistEditImportMixin:
         self._notifications.information(
             self.tr("Opening {name}…").replace("{name}", stem)
         )
-        from ...core.jw.publication_reader import JwpubImportThread
-
-        thread = JwpubImportThread.create(
+        thread = self._jwpub_import_thread_factory.create(
             jwpub_path,
             lang=lang,
-            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self,
         )
         if not hasattr(self, "_jwpub_threads"):

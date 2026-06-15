@@ -22,6 +22,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
+from solin.core.jw.publication_reader import JwpubImportThreadFactory
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
@@ -50,10 +51,12 @@ widget = WifiReceiveWidget(
         jw_languages_cache_file=Path("jw_languages.json"),
     ),
     notifications=_Notifications(),
-    profile_paths=profile_paths,
     runtime_paths=runtime_paths,
     profile_media_store=ProfileMediaStore(
         profile_paths.embedded_dir,
+        profile_paths.images_dir,
+    ),
+    jwpub_import_thread_factory=JwpubImportThreadFactory(
         profile_paths.images_dir,
     ),
     wifi_receive_server_factory=lambda parent: WifiReceiveServer(

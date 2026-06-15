@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+    from solin.core.jw.publication_reader import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
     from solin.core.media.profile_store import ProfileMediaStore
@@ -29,6 +30,7 @@ class LazyPageContext:
     runtime_paths: RuntimePaths
     media_cache_manager: MediaCacheManager
     profile_media_store: ProfileMediaStore
+    jwpub_import_thread_factory: JwpubImportThreadFactory
     wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer]
     browser_download_service_factory: Callable[[], BrowserDownloadService]
     browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService]
@@ -143,9 +145,9 @@ class LazyPageController:
         self._wifi_receive_widget = WifiReceiveWidget(
             context.lang_manager,
             notifications=context.notifications,
-            profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             profile_media_store=context.profile_media_store,
+            jwpub_import_thread_factory=context.jwpub_import_thread_factory,
             wifi_receive_server_factory=context.wifi_receive_server_factory,
             media_info_service_factory=context.media_info_service_factory,
             parent=context.parent,

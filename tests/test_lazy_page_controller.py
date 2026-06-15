@@ -52,6 +52,7 @@ class _WindowStub:
             lambda: self.browser_image_fetch_service
         )
         self.profile_media_store = object()
+        self.jwpub_import_thread_factory = object()
         self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
@@ -83,6 +84,7 @@ def _controller(window):
             runtime_paths=object(),
             media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
+            jwpub_import_thread_factory=window.jwpub_import_thread_factory,
             wifi_receive_server_factory=window.wifi_receive_server_factory,
             browser_download_service_factory=(
                 window.browser_download_service_factory
@@ -207,3 +209,48 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser.download_service is window.browser_download_service
     assert browser.image_fetch_service is window.browser_image_fetch_service
     assert browser.parent is None
+
+
+def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatch):
+    import solin.widgets.wifi_receive_widget as wifi_module
+
+    class _WifiFactory:
+        def __init__(
+            self,
+            lang_manager,
+            *,
+            notifications,
+            runtime_paths,
+            profile_media_store,
+            jwpub_import_thread_factory,
+            wifi_receive_server_factory,
+            media_info_service_factory,
+            parent,
+        ):
+            self.lang_manager = lang_manager
+            self.notifications = notifications
+            self.runtime_paths = runtime_paths
+            self.profile_media_store = profile_media_store
+            self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.wifi_receive_server_factory = wifi_receive_server_factory
+            self.media_info_service_factory = media_info_service_factory
+            self.parent = parent
+
+    window = _WindowStub()
+    controller = _controller(window)
+    monkeypatch.setattr(wifi_module, "WifiReceiveWidget", _WifiFactory)
+    monkeypatch.setattr(controller, "_connect_wifi_receive_signals", lambda: None)
+
+    wifi = controller.ensure_wifi_receive_widget()
+
+    assert wifi is controller.wifi_receive_widget
+    assert wifi.lang_manager is window.lang
+    assert wifi.notifications is window.notifications
+    assert wifi.profile_media_store is window.profile_media_store
+    assert (
+        wifi.jwpub_import_thread_factory
+        is window.jwpub_import_thread_factory
+    )
+    assert wifi.wifi_receive_server_factory is window.wifi_receive_server_factory
+    assert wifi.media_info_service_factory is window.media_info_service_factory
+    assert wifi.parent is window

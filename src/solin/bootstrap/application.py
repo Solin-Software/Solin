@@ -56,6 +56,7 @@ def _launch_main_window(
     from solin.core.media.settings import MediaSettingsStore
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.media.thumbnail_store import ThumbnailStore
+    from solin.core.jw.publication_reader import JwpubImportThreadFactory
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
     from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
@@ -72,6 +73,9 @@ def _launch_main_window(
     meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
     profile_media_store = ProfileMediaStore(
         profile_paths.embedded_dir,
+        profile_paths.images_dir,
+    )
+    jwpub_import_thread_factory = JwpubImportThreadFactory(
         profile_paths.images_dir,
     )
     playlist_thumbnail_store = ThumbnailStore(runtime_paths.thumb_cache_dir)
@@ -104,6 +108,7 @@ def _launch_main_window(
         playlist_repository,
         meeting_tree_store,
         profile_media_store,
+        jwpub_import_thread_factory,
         playlist_thumbnail_store,
         meeting_thumbnail_store,
         watched_folder_file_store,

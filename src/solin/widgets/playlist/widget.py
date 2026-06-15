@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog import JWMediaCatalogService
+    from ...core.jw.publication_reader import JwpubImportThreadFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.ui.notifications import NotificationCenter
@@ -95,6 +96,7 @@ class _PlaylistEditView(
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        jwpub_import_thread_factory: JwpubImportThreadFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -116,6 +118,7 @@ class _PlaylistEditView(
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -925,6 +928,7 @@ class PlaylistWidget(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        jwpub_import_thread_factory: JwpubImportThreadFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -946,6 +950,7 @@ class PlaylistWidget(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -1002,6 +1007,7 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
+            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             watched_folder_playlist_store=self._watched_folder_playlist_store,

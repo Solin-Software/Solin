@@ -15,7 +15,7 @@ import os
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import (
     QObject,
@@ -72,6 +72,9 @@ from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
 from ..playlist.edit_visuals import _format_duration
+
+if TYPE_CHECKING:
+    from ...core.jw.publication_reader import JwpubImportThreadFactory
 
 _BIG_INDEX = 2**31 - 1
 _MEDIA_FIELDS = set(MeetingMedia.__dataclass_fields__.keys())
@@ -156,6 +159,7 @@ class MeetingTreeController(QObject):
         profile_media_store: ProfileMediaStore,
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
+        jwpub_import_thread_factory: JwpubImportThreadFactory,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -173,6 +177,7 @@ class MeetingTreeController(QObject):
         self._profile_media_store = profile_media_store
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
@@ -815,14 +820,11 @@ class MeetingTreeController(QObject):
     def _import_meeting_folder_jwpub(
         self, source: dict[str, Any], list_id: str, insert_index: int
     ) -> None:
-        from ...core.jw.publication_reader import JwpubImportThread
-
         path = str(source.get("path") or "")
         stem = Path(path).stem
-        thread = JwpubImportThread.create(
+        thread = self._jwpub_import_thread_factory.create(
             path,
             lang=self._language_code,
-            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self,
         )
         self._jwpub_threads.append(thread)
@@ -1092,11 +1094,9 @@ class MeetingTreeController(QObject):
             self._insert_nodes(list_id or "root", insert_index, nodes)
 
     def _import_jwpubs(self, paths: list[str], list_id: str, insert_index: int) -> None:
-        from ...core.jw.publication_reader import JwpubImportThread
-
         for path in paths:
             stem = Path(path).stem
-            thread = JwpubImportThread.create(
+            thread = self._jwpub_import_thread_factory.create(
                 path,
                 lang=self._language_code,
                 dest_images_dir=self._jwpub_image_dir(),

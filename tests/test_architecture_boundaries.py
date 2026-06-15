@@ -251,6 +251,24 @@ def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
     )
 
 
+def test_widgets_do_not_construct_jwpub_import_threads_directly():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported = {alias.name for alias in node.names}
+            if "JwpubImportThread" in imported:
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Widgets must receive JWPUB import worker factories from composition "
+        "instead of constructing concrete threads:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

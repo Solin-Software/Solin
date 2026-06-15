@@ -18,7 +18,6 @@ Sinais públicos:
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -34,7 +33,7 @@ from PySide6.QtWidgets import (
 from ..core.i18n.manager import LanguageManager
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
-from ..core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.foundation.constants import (
     JWPUB_EXTS as _JWPUB_EXTS,
     PDF_EXTS as _PDF_EXTS,
@@ -51,6 +50,7 @@ from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
     from ..core.ingest.wifi_server import WifiReceiveServer
+    from ..core.jw.publication_reader import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
     from ..core.ui.notifications import NotificationCenter
 
@@ -514,9 +514,9 @@ class WifiReceiveWidget(QWidget):
         lang: LanguageManager,
         *,
         notifications: NotificationCenter,
-        profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         profile_media_store: ProfileMediaStore,
+        jwpub_import_thread_factory: JwpubImportThreadFactory,
         wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent: QWidget | None = None,
@@ -524,9 +524,9 @@ class WifiReceiveWidget(QWidget):
         super().__init__(parent)
         self._lang            = lang
         self._notifications   = notifications
-        self._profile_paths   = profile_paths
         self._runtime_paths   = runtime_paths
         self._profile_media_store = profile_media_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._server = wifi_receive_server_factory(self)
         self._session_url     = ""
         self._received_files: list[dict] = []
@@ -954,19 +954,16 @@ class WifiReceiveWidget(QWidget):
     def _expand_jwpub(self, path: str, orig_name: str) -> None:
         """
         Parse a .jwpub received via Wi-Fi and add each media item as a card.
-        Uses JwpubImportThread (QThread) so signals reach the main thread reliably.
+        Uses an injected QThread factory so signals reach the main thread reliably.
         Images are copied to data/images (persistent). Videos resolved via API.
         """
-        from ..core.jw.publication_reader import JwpubImportThread
-
         stem = Path(orig_name).stem or Path(path).stem
         self._notifications.information(f"{stem}…")
         lang = jw_media_language_context(self._lang).api_code
 
-        thread = JwpubImportThread.create(
+        thread = self._jwpub_import_thread_factory.create(
             path,
             lang=lang,
-            dest_images_dir=os.fspath(self._profile_paths.images_dir),
             parent=self,
         )
 

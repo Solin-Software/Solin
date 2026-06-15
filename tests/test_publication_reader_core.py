@@ -67,3 +67,39 @@ def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
 
     assert extraction_dirs
     assert all(not path.exists() for path in extraction_dirs)
+
+
+def test_jwpub_import_thread_factory_uses_default_and_override_destinations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = []
+    default_destination = tmp_path / "profile-images"
+    override_destination = tmp_path / "linked-folder-cache"
+    parent = object()
+    threads = [object(), object()]
+
+    monkeypatch.setattr(
+        publication_reader.JwpubImportThread,
+        "create",
+        lambda path, *, lang, dest_images_dir, parent: calls.append(
+            (path, lang, dest_images_dir, parent)
+        )
+        or threads.pop(0),
+    )
+
+    factory = publication_reader.JwpubImportThreadFactory(default_destination)
+
+    first = factory.create("first.jwpub", lang="T", parent=parent)
+    second = factory.create(
+        "second.jwpub",
+        lang="E",
+        dest_images_dir=override_destination,
+        parent=parent,
+    )
+
+    assert first is not second
+    assert calls == [
+        ("first.jwpub", "T", str(default_destination), parent),
+        ("second.jwpub", "E", str(override_destination), parent),
+    ]

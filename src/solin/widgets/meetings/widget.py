@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog import JWMediaCatalogService
+    from ...core.jw.publication_reader import JwpubImportThreadFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.meetings.memorial import MemorialService
@@ -119,6 +120,7 @@ class StudyDetailView(QWidget):
                  profile_media_store: ProfileMediaStore,
                  meeting_thumbnail_store: ThumbnailStore,
                  watched_folder_file_store: WatchedFolderFileStore,
+                 jwpub_import_thread_factory: JwpubImportThreadFactory,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -137,6 +139,7 @@ class StudyDetailView(QWidget):
         self._profile_media_store = profile_media_store
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -179,6 +182,7 @@ class StudyDetailView(QWidget):
             profile_media_store=self._profile_media_store,
             meeting_thumbnail_store=self._meeting_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
+            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -410,6 +414,7 @@ class _MemorialDetailView(QWidget):
                  profile_media_store: ProfileMediaStore,
                  meeting_thumbnail_store: ThumbnailStore,
                  watched_folder_file_store: WatchedFolderFileStore,
+                 jwpub_import_thread_factory: JwpubImportThreadFactory,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -427,6 +432,7 @@ class _MemorialDetailView(QWidget):
         self._profile_media_store = profile_media_store
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -467,6 +473,7 @@ class _MemorialDetailView(QWidget):
             profile_media_store=self._profile_media_store,
             meeting_thumbnail_store=self._meeting_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
+            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -676,6 +683,7 @@ class MeetingsWidget(QWidget):
         profile_media_store: ProfileMediaStore,
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
+        jwpub_import_thread_factory: JwpubImportThreadFactory,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
@@ -701,6 +709,7 @@ class MeetingsWidget(QWidget):
         self._profile_media_store = profile_media_store
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
@@ -939,6 +948,7 @@ class MeetingsWidget(QWidget):
                                 profile_media_store=self._profile_media_store,
                                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                                 watched_folder_file_store=self._watched_folder_file_store,
+                                jwpub_import_thread_factory=self._jwpub_import_thread_factory,
                                 profile_paths=self._profile_paths,
                                 runtime_paths=self._runtime_paths,
                                 cache_manager=self._cache_manager,
@@ -981,6 +991,7 @@ class MeetingsWidget(QWidget):
                 profile_media_store=self._profile_media_store,
                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                 watched_folder_file_store=self._watched_folder_file_store,
+                jwpub_import_thread_factory=self._jwpub_import_thread_factory,
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,
