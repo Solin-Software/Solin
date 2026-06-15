@@ -5,23 +5,26 @@ from pathlib import Path
 from PySide6.QtCore import QEvent
 
 from ...core.foundation.constants import (
-    DOCX_EXTS as _DOCX_EXTS,
-    JWPUB_EXTS as _JWPUB_EXTS,
-    PDF_EXTS as _PDF_EXTS,
-    PPTX_EXTS as _PPTX_EXTS,
+    DOCX_EXTS,
+    JWPUB_EXTS,
+    PDF_EXTS,
+    PLAYLIST_EXTS,
+    PPTX_EXTS,
 )
-from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS
+from ...core.media.formats import MEDIA_EXTS
 
 
-class _PlaylistDragDropMixin:
+__all__ = ("PlaylistDragDropMixin",)
+
+
+class PlaylistDragDropMixin:
     def _has_valid_urls(self, mime) -> bool:
         if not mime or not mime.hasUrls():
             return False
-        from ...core.foundation.constants import PLAYLIST_EXTS as _PLAYLIST_EXTS
 
-        accepted = _MEDIA_EXTS | _PDF_EXTS | _JWPUB_EXTS | _PLAYLIST_EXTS
+        accepted = MEDIA_EXTS | PDF_EXTS | JWPUB_EXTS | PLAYLIST_EXTS
         if self._document_conversion_service.office_conversion_available():
-            accepted = accepted | _PPTX_EXTS | _DOCX_EXTS
+            accepted = accepted | PPTX_EXTS | DOCX_EXTS
         return any(
             Path(u.toLocalFile()).suffix.lower() in accepted
             for u in mime.urls()
@@ -92,26 +95,24 @@ class _PlaylistDragDropMixin:
 
     def dropEvent(self, event) -> None:
         if self._has_valid_urls(event.mimeData()):
-            from ...core.foundation.constants import PLAYLIST_EXTS as _PLAYLIST_EXTS
-
             all_paths = [u.toLocalFile() for u in event.mimeData().urls()]
-            media_paths = [p for p in all_paths if Path(p).suffix.lower() in _MEDIA_EXTS]
-            pdf_paths = [p for p in all_paths if Path(p).suffix.lower() in _PDF_EXTS]
-            jwpub_paths = [p for p in all_paths if Path(p).suffix.lower() in _JWPUB_EXTS]
+            media_paths = [p for p in all_paths if Path(p).suffix.lower() in MEDIA_EXTS]
+            pdf_paths = [p for p in all_paths if Path(p).suffix.lower() in PDF_EXTS]
+            jwpub_paths = [p for p in all_paths if Path(p).suffix.lower() in JWPUB_EXTS]
             office_conversion_available = (
                 self._document_conversion_service.office_conversion_available()
             )
             pptx_paths = [
                 p for p in all_paths
-                if Path(p).suffix.lower() in _PPTX_EXTS
+                if Path(p).suffix.lower() in PPTX_EXTS
                 and office_conversion_available
             ]
             docx_paths = [
                 p for p in all_paths
-                if Path(p).suffix.lower() in _DOCX_EXTS
+                if Path(p).suffix.lower() in DOCX_EXTS
                 and office_conversion_available
             ]
-            jwl_paths = [p for p in all_paths if Path(p).suffix.lower() in _PLAYLIST_EXTS]
+            jwl_paths = [p for p in all_paths if Path(p).suffix.lower() in PLAYLIST_EXTS]
 
             target_idx = -1
             section_id = ""

@@ -10,10 +10,11 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
 
 from ...core.foundation.constants import (
-    JWPUB_EXTS as _JWPUB_EXTS,
-    PDF_EXTS as _PDF_EXTS,
+    JWPUB_EXTS,
+    PDF_EXTS,
+    PLAYLIST_EXTS,
 )
-from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS, media_type_from_path
+from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.jwl_files import PlaylistWriteError, write_jwlplaylist_document
@@ -22,7 +23,10 @@ from .dialogs import NameDialog
 from .item_visuals import enrich_items_for_export
 
 
-class _PlaylistEditActionsMixin:
+__all__ = ("PlaylistEditActionsMixin",)
+
+
+class PlaylistEditActionsMixin:
     def _list_id_for_section(self, section_id: str) -> str:
         if not section_id or not self._pl:
             return "root"
@@ -65,7 +69,7 @@ class _PlaylistEditActionsMixin:
         added = skipped = 0
         new_items = []
         for path in paths:
-            if Path(path).suffix.lower() not in _MEDIA_EXTS:
+            if Path(path).suffix.lower() not in MEDIA_EXTS:
                 continue
 
             actual_path = path
@@ -246,12 +250,11 @@ class _PlaylistEditActionsMixin:
         )
         if not paths:
             return
-        from ...core.foundation.constants import PLAYLIST_EXTS as _PLAYLIST_EXTS
 
-        media = [p for p in paths if Path(p).suffix.lower() in _MEDIA_EXTS]
-        pdfs = [p for p in paths if Path(p).suffix.lower() in _PDF_EXTS]
-        jwpubs = [p for p in paths if Path(p).suffix.lower() in _JWPUB_EXTS]
-        jwl_files = [p for p in paths if Path(p).suffix.lower() in _PLAYLIST_EXTS]
+        media = [p for p in paths if Path(p).suffix.lower() in MEDIA_EXTS]
+        pdfs = [p for p in paths if Path(p).suffix.lower() in PDF_EXTS]
+        jwpubs = [p for p in paths if Path(p).suffix.lower() in JWPUB_EXTS]
+        jwl_files = [p for p in paths if Path(p).suffix.lower() in PLAYLIST_EXTS]
         if media:
             self._add_files(media, insert_at=-1)
         if pdfs:

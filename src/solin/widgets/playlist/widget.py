@@ -45,10 +45,10 @@ from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
 from ...ui.media_info import MediaInfoQueue
-from .drag_drop import _PlaylistDragDropMixin
-from .edit_actions import _PlaylistEditActionsMixin
-from .import_export import _PlaylistEditImportMixin
-from .list_view import _PlaylistListView
+from .drag_drop import PlaylistDragDropMixin
+from .edit_actions import PlaylistEditActionsMixin
+from .import_export import PlaylistEditImportMixin
+from .list_view import PlaylistListView
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import HuePickerDialog, NameDialog
 from ...core.playlists.storage import (
@@ -59,6 +59,11 @@ _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
 
 log = logging.getLogger(__name__)
+
+__all__ = (
+    "PlaylistEditView",
+    "PlaylistWidget",
+)
 
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder import WatchedFolderWatcher
@@ -76,10 +81,10 @@ if TYPE_CHECKING:
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
-class _PlaylistEditView(
-    _PlaylistEditActionsMixin,
-    _PlaylistDragDropMixin,
-    _PlaylistEditImportMixin,
+class PlaylistEditView(
+    PlaylistEditActionsMixin,
+    PlaylistDragDropMixin,
+    PlaylistEditImportMixin,
     QWidget,
 ):
     back_requested = Signal()
@@ -984,7 +989,7 @@ class PlaylistWidget(QWidget):
         self._stack = QStackedWidget(self)
 
         # Index 0: list view
-        self._list_view = _PlaylistListView(
+        self._list_view = PlaylistListView(
             self._playlists, self.lang,
             media_ctrl=self._media_ctrl,
             watched_folder=self._watched_folder,
@@ -1000,7 +1005,7 @@ class PlaylistWidget(QWidget):
             parent=self,
         )
         # Index 1: playlist edit (also used for watched folders)
-        self._edit_view = _PlaylistEditView(
+        self._edit_view = PlaylistEditView(
             self.lang,
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,

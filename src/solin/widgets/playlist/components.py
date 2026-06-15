@@ -23,7 +23,7 @@ from ...styles.icons import (
     make_icon,
 )
 
-_MENU_STYLE = (
+PLAYLIST_CARD_MENU_STYLESHEET = (
     "QMenu{background:#161b22;border:1px solid #30363d;border-radius:6px;"
     "padding:4px;color:#c9d1d9;font-size:11px;}"
     "QMenu::item{padding:7px 18px;border-radius:4px;}"
@@ -31,8 +31,15 @@ _MENU_STYLE = (
     "QMenu::separator{height:1px;background:#21262d;margin:3px 8px;}"
 )
 
+__all__ = (
+    "CollapsibleSection",
+    "PLAYLIST_CARD_MENU_STYLESHEET",
+    "PlaylistCard",
+    "WatchedFolderCard",
+)
 
-class _PlaylistCard(QFrame):
+
+class PlaylistCard(QFrame):
     clicked = Signal(str)
     rename_req = Signal(str)
     delete_req = Signal(str)
@@ -126,7 +133,7 @@ class _PlaylistCard(QFrame):
 
     def _show_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
+        menu.setStyleSheet(PLAYLIST_CARD_MENU_STYLESHEET)
         ar = QAction(self)
         ar.setIcon(make_icon(ICON_EDIT, 13, "#c9d1d9"))
         ar.setText("  " + self.tr("Rename"))
@@ -152,7 +159,7 @@ class _PlaylistCard(QFrame):
         super().mousePressEvent(event)
 
 
-class _CollapsibleSection(QWidget):
+class CollapsibleSection(QWidget):
     def __init__(self, title: str, parent=None):
         super().__init__(parent)
         self._collapsed = False
@@ -237,7 +244,7 @@ class _CollapsibleSection(QWidget):
         self._toggle_btn.setIconSize(QSize(11, 11))
 
 
-class _WatchedFolderCard(QFrame):
+class WatchedFolderCard(QFrame):
     clicked = Signal(str)
     rename_req = Signal(str)
     delete_req = Signal(str)
@@ -329,7 +336,7 @@ class _WatchedFolderCard(QFrame):
 
     def _show_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
+        menu.setStyleSheet(PLAYLIST_CARD_MENU_STYLESHEET)
 
         ar = QAction(self)
         ar.setIcon(make_icon(ICON_EDIT, 13, "#c9d1d9"))

@@ -33,7 +33,7 @@ from ...core.playlists.items import create_playlist_item
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.media.cache import MediaCacheManager
-from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
+from .components import CollapsibleSection, PlaylistCard, WatchedFolderCard
 from .dialogs import NameDialog
 from .item_visuals import enrich_items_for_export
 
@@ -44,7 +44,13 @@ if TYPE_CHECKING:
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.playlists.storage import PlaylistRepository
 
-_BTN_STYLE = (
+__all__ = (
+    "PLAYLIST_PRIMARY_BUTTON_STYLESHEET",
+    "PLAYLIST_SECONDARY_BUTTON_STYLESHEET",
+    "PlaylistListView",
+)
+
+PLAYLIST_SECONDARY_BUTTON_STYLESHEET = (
     "QPushButton{border:1px solid #30363d;border-radius:6px;"
     "background:#21262d;padding:0 10px;min-height:28px;"
     "color:#8b949e;font-size:11px;}"
@@ -52,7 +58,7 @@ _BTN_STYLE = (
     "QPushButton:pressed{background:#161b22;}"
     "QPushButton:disabled{opacity:0.4;}"
 )
-_BTN_PRIMARY = (
+PLAYLIST_PRIMARY_BUTTON_STYLESHEET = (
     "QPushButton{border:1px solid #388bfd;border-radius:6px;"
     "background:#1f3a5f;padding:0 10px;min-height:28px;"
     "color:#79c0ff;font-size:11px;font-weight:600;}"
@@ -62,7 +68,7 @@ _BTN_PRIMARY = (
 )
 
 
-class _PlaylistListView(QWidget):
+class PlaylistListView(QWidget):
     open_playlist = Signal(str)
     open_watched_folder = Signal(str)
 
@@ -100,8 +106,8 @@ class _PlaylistListView(QWidget):
         self._watched_folder_playlist_store = watched_folder_playlist_store
         self._media_cache_manager = media_cache_manager
         self._schedule_cleanup = schedule_cleanup
-        self._pl_cards: list[_PlaylistCard] = []
-        self._wf_cards: list[_WatchedFolderCard] = []
+        self._pl_cards: list[PlaylistCard] = []
+        self._wf_cards: list[WatchedFolderCard] = []
         self._build_ui()
 
     def set_watched_folder(self, path: str) -> None:
@@ -128,7 +134,7 @@ class _PlaylistListView(QWidget):
         self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, "#8b949e"))
         self._import_btn.setIconSize(QSize(14, 14))
         self._import_btn.setText("  " + self.tr("Import"))
-        self._import_btn.setStyleSheet(_BTN_STYLE)
+        self._import_btn.setStyleSheet(PLAYLIST_SECONDARY_BUTTON_STYLESHEET)
         self._import_btn.setFixedHeight(30)
         self._import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._import_btn.setToolTip(self.tr("Import .jwlplaylist"))
@@ -139,7 +145,7 @@ class _PlaylistListView(QWidget):
         self._new_btn.setIcon(make_icon(ICON_PLUS, 14, "#79c0ff"))
         self._new_btn.setIconSize(QSize(14, 14))
         self._new_btn.setText("  " + self.tr("New Playlist"))
-        self._new_btn.setStyleSheet(_BTN_PRIMARY)
+        self._new_btn.setStyleSheet(PLAYLIST_PRIMARY_BUTTON_STYLESHEET)
         self._new_btn.setFixedHeight(30)
         self._new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._new_btn.clicked.connect(self._create_playlist)
@@ -164,7 +170,7 @@ class _PlaylistListView(QWidget):
         wrap_lay.setContentsMargins(0, 0, 0, 0)
         wrap_lay.setSpacing(20)
 
-        self._app_section = _CollapsibleSection(self.tr("My Playlists"), parent=self._scroll_wrap)
+        self._app_section = CollapsibleSection(self.tr("My Playlists"), parent=self._scroll_wrap)
         self._app_grid_cont = QWidget(self._scroll_wrap)
         self._app_grid_cont.setStyleSheet("background:transparent;")
         self._app_grid_lay = QGridLayout(self._app_grid_cont)
@@ -186,7 +192,7 @@ class _PlaylistListView(QWidget):
         )
         wrap_lay.addWidget(self._empty_lbl)
 
-        self._wf_section = _CollapsibleSection(self.tr("Link Folder"), parent=self._scroll_wrap)
+        self._wf_section = CollapsibleSection(self.tr("Link Folder"), parent=self._scroll_wrap)
         self._wf_grid_cont = QWidget(self._scroll_wrap)
         self._wf_grid_cont.setStyleSheet("background:transparent;")
         self._wf_grid_lay = QGridLayout(self._wf_grid_cont)
@@ -229,7 +235,7 @@ class _PlaylistListView(QWidget):
         self._app_section.set_count(len(self._playlists))
 
         for i, pl in enumerate(self._playlists):
-            card = _PlaylistCard(pl["id"], pl["name"], len(pl.get("items", [])), self.lang)
+            card = PlaylistCard(pl["id"], pl["name"], len(pl.get("items", [])), self.lang)
             card.clicked.connect(self.open_playlist.emit)
             card.rename_req.connect(self._rename_playlist)
             card.delete_req.connect(self._delete_playlist)
@@ -265,7 +271,7 @@ class _PlaylistListView(QWidget):
         self._wf_section.set_count(len(subfolders))
 
         for i, sf in enumerate(subfolders):
-            card = _WatchedFolderCard(
+            card = WatchedFolderCard(
                 sf["path"], sf["name"], sf["item_count"], self.lang
             )
             card.clicked.connect(self.open_watched_folder.emit)

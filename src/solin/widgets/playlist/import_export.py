@@ -7,7 +7,10 @@ from ...core.playlists.jwl_files import read_jwlplaylist_document
 from ...core.playlists.items import create_playlist_item
 
 
-class _PlaylistEditImportMixin:
+__all__ = ("PlaylistEditImportMixin",)
+
+
+class PlaylistEditImportMixin:
     def _import_pdfs(
         self,
         pdf_paths: list[str],

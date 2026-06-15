@@ -1,15 +1,15 @@
 from types import SimpleNamespace
 
 from solin.widgets.playlist import widget as playlist_widget
-from solin.widgets.playlist.edit_actions import _PlaylistEditActionsMixin
+from solin.widgets.playlist.edit_actions import PlaylistEditActionsMixin
 
 
 def test_playlist_edit_view_uses_actions_mixin():
-    assert playlist_widget._PlaylistEditActionsMixin is _PlaylistEditActionsMixin
-    assert issubclass(playlist_widget._PlaylistEditView, _PlaylistEditActionsMixin)
-    assert playlist_widget._PlaylistEditView._add_files is _PlaylistEditActionsMixin._add_files
-    assert playlist_widget._PlaylistEditView.load_temp_playlist is (
-        _PlaylistEditActionsMixin.load_temp_playlist
+    assert playlist_widget.PlaylistEditActionsMixin is PlaylistEditActionsMixin
+    assert issubclass(playlist_widget.PlaylistEditView, PlaylistEditActionsMixin)
+    assert playlist_widget.PlaylistEditView._add_files is PlaylistEditActionsMixin._add_files
+    assert playlist_widget.PlaylistEditView.load_temp_playlist is (
+        PlaylistEditActionsMixin.load_temp_playlist
     )
 
 
@@ -21,8 +21,8 @@ def test_temp_playlist_sessions_receive_unique_ids():
         load_playlist=loaded.append,
     )
 
-    first = _PlaylistEditActionsMixin.load_temp_playlist(view, [])
-    second = _PlaylistEditActionsMixin.load_temp_playlist(view, [])
+    first = PlaylistEditActionsMixin.load_temp_playlist(view, [])
+    second = PlaylistEditActionsMixin.load_temp_playlist(view, [])
 
     assert first != second
     assert loaded[0]["id"] == first
