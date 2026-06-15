@@ -24,6 +24,7 @@ from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.jw.publication_reader import JwpubImportThreadFactory
 from solin.core.rendering.document_conversion import DocumentConversionService
+from solin.core.ingest.qr_generation import QrGenerationSessionFactory
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
@@ -64,6 +65,7 @@ widget = WifiReceiveWidget(
     jwpub_import_thread_factory=JwpubImportThreadFactory(
         profile_paths.images_dir,
     ),
+    qr_generation_session_factory=QrGenerationSessionFactory(),
     wifi_receive_server_factory=lambda parent: WifiReceiveServer(
         embedded_dir=profile_paths.embedded_dir,
         parent=parent,

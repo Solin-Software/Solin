@@ -65,6 +65,7 @@ def _launch_main_window(
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
     from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
+    from solin.core.ingest.qr_generation import QrGenerationSessionFactory
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.playlists.cleanup import PlaylistCleanupQueue
     from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
@@ -96,6 +97,7 @@ def _launch_main_window(
     )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
+    qr_generation_session_factory = QrGenerationSessionFactory()
     playlist_thumbnail_store = ThumbnailStore(runtime_paths.thumb_cache_dir)
     meeting_thumbnail_store = ThumbnailStore(
         runtime_paths.meeting_thumb_cache_dir,
@@ -131,6 +133,7 @@ def _launch_main_window(
         document_conversion_service,
         clip_fetch_thread_factory,
         cache_scan_session_factory,
+        qr_generation_session_factory,
         playlist_thumbnail_store,
         meeting_thumbnail_store,
         watched_folder_file_store,

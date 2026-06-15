@@ -132,6 +132,7 @@ if TYPE_CHECKING:
     from .core.ingest.watched_folder_files import WatchedFolderFileStore
     from .core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from .core.ingest.wifi_server import WifiReceiveServer
+    from .core.ingest.qr_generation import QrGenerationSessionFactory
     from .core.jw.clip_fetch import ClipFetchThreadFactory
     from .core.jw.catalog import JWMediaCatalogService
     from .core.jw.publication_reader import JwpubImportThreadFactory
@@ -178,6 +179,7 @@ class MainWindow(QMainWindow):
         document_conversion_service: DocumentConversionService,
         clip_fetch_thread_factory: ClipFetchThreadFactory,
         cache_scan_session_factory: CacheScanSessionFactory,
+        qr_generation_session_factory: QrGenerationSessionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
@@ -402,6 +404,7 @@ class MainWindow(QMainWindow):
                 document_conversion_service=document_conversion_service,
                 clip_fetch_thread_factory=clip_fetch_thread_factory,
                 cache_scan_session_factory=cache_scan_session_factory,
+                qr_generation_session_factory=qr_generation_session_factory,
                 playlist_thumbnail_store=playlist_thumbnail_store,
                 meeting_thumbnail_store=meeting_thumbnail_store,
                 watched_folder_file_store=watched_folder_file_store,

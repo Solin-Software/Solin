@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal, Slot, QThread, QObject, QTimer, QSize, QEvent
+from PySide6.QtCore import Qt, Signal, Slot, QObject, QTimer, QSize, QEvent
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -48,6 +48,7 @@ from ..styles.icons import make_icon
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
+    from ..core.ingest.qr_generation import QrGenerationSessionFactory
     from ..core.ingest.wifi_server import WifiReceiveServer
     from ..core.jw.publication_reader import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
@@ -214,38 +215,6 @@ def _rounded_pixmap(src: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
     painter.drawPixmap(0, 0, cropped)
     painter.end()
     return result
-
-
-# ── QR worker ─────────────────────────────────────────────────────────────────
-
-class _QrWorker(QObject):
-    done   = Signal(bytes)
-    failed = Signal()
-
-    def __init__(self, url: str) -> None:
-        super().__init__()
-        self._url = url
-
-    @Slot()
-    def run(self) -> None:
-        png_data = _generate_qr_png(self._url)
-        self.done.emit(png_data) if png_data else self.failed.emit()
-
-
-def _generate_qr_png(url: str) -> bytes | None:
-    try:
-        import qrcode  # type: ignore[import]
-        import io as _io
-        qr = qrcode.QRCode(version=None,
-                           error_correction=qrcode.constants.ERROR_CORRECT_M,
-                           box_size=6, border=2)
-        qr.add_data(url); qr.make(fit=True)
-        buf = _io.BytesIO()
-        qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
-        return buf.getvalue()
-    except Exception:  # noqa: BLE001 - qrcode/Pillow codec boundary
-        log_ignored_exception(__name__, "Could not generate Wi-Fi QR code")
-        return None
 
 
 # ── Clickable frame (URL field) ───────────────────────────────────────────────
@@ -517,6 +486,7 @@ class WifiReceiveWidget(QWidget):
         document_conversion_service: DocumentConversionService,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        qr_generation_session_factory: QrGenerationSessionFactory,
         wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent: QWidget | None = None,
@@ -527,14 +497,15 @@ class WifiReceiveWidget(QWidget):
         self._document_conversion_service = document_conversion_service
         self._profile_media_store = profile_media_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._qr_generation_session = qr_generation_session_factory.create(
+            parent=self,
+        )
         self._server = wifi_receive_server_factory(self)
         self._session_url     = ""
         self._received_files: list[dict] = []
         self._cards:          list[_MediaCard] = []
         self._thumb_service = media_info_service_factory(self)
         self._wifi_tmp_files: set[str] = set()   # temp files criados por PDF/JWL expansion
-        self._qr_thread:      Optional[QThread]   = None
-        self._qr_worker:      Optional[_QrWorker] = None
 
         self._server.server_started.connect(self._on_server_started)
         self._server.server_stopped.connect(self._on_server_stopped)
@@ -542,6 +513,8 @@ class WifiReceiveWidget(QWidget):
         self._server.error_occurred.connect(self._on_error)
         self._server.inactivity_stopped.connect(self._on_inactivity_stopped)
         self._thumb_service.info_ready.connect(self._on_thumb_ready)
+        self._qr_generation_session.ready.connect(self._on_qr_done)
+        self._qr_generation_session.failed.connect(self._on_qr_failed)
 
         self._build_ui()
 
@@ -952,7 +925,7 @@ class WifiReceiveWidget(QWidget):
     def _expand_jwpub(self, path: str, orig_name: str) -> None:
         """
         Parse a .jwpub received via Wi-Fi and add each media item as a card.
-        Uses an injected QThread factory so signals reach the main thread reliably.
+        Uses an injected worker factory so signals reach the main thread reliably.
         Images are copied to data/images (persistent). Videos resolved via API.
         """
         stem = Path(orig_name).stem or Path(path).stem
@@ -1256,29 +1229,11 @@ class WifiReceiveWidget(QWidget):
     # ── QR ────────────────────────────────────────────────────────────────
 
     def _start_qr_generation(self, url: str) -> None:
-        self._cancel_qr_generation()
         self._set_qr_placeholder()
-        worker = _QrWorker(url)
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        worker.done.connect(self._on_qr_done)
-        worker.failed.connect(self._on_qr_failed)
-        thread.started.connect(worker.run)
-        thread.finished.connect(thread.deleteLater)
-        worker.done.connect(worker.deleteLater)
-        worker.failed.connect(worker.deleteLater)
-        worker.done.connect(thread.quit)
-        worker.failed.connect(thread.quit)
-        thread.start()
-        self._qr_thread = thread; self._qr_worker = worker
+        self._qr_generation_session.start(url)
 
     def _cancel_qr_generation(self) -> None:
-        if self._qr_thread and self._qr_thread.isRunning():
-            self._qr_thread.quit(); self._qr_thread.wait(500)
-            if self._qr_thread.isRunning():
-                self._qr_thread.setParent(None)
-                self._qr_thread.finished.connect(self._qr_thread.deleteLater)
-        self._qr_thread = None; self._qr_worker = None
+        self._qr_generation_session.cancel()
 
     @Slot(bytes)
     def _on_qr_done(self, png_data: bytes) -> None:
@@ -1296,7 +1251,6 @@ class WifiReceiveWidget(QWidget):
         self._qr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._qr_lbl.setWordWrap(False)
         self._qr_lbl.setPixmap(pix)
-        self._qr_thread = None; self._qr_worker = None
 
     @Slot()
     def _on_qr_failed(self) -> None:
@@ -1307,7 +1261,6 @@ class WifiReceiveWidget(QWidget):
         self._qr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._qr_lbl.setWordWrap(True)
         self._qr_lbl.setText(self._session_url)
-        self._qr_thread = None; self._qr_worker = None
 
     # ── Reflow do grid ao redimensionar ───────────────────────────────────
 
@@ -1373,7 +1326,7 @@ class WifiReceiveWidget(QWidget):
             self._server.stop(wait=True)
         except Exception:  # noqa: BLE001 - background server shutdown boundary
             log_ignored_exception(__name__, "Could not stop Wi-Fi receive server")
-        self._cancel_qr_generation()
+        self._qr_generation_session.close()
         for attr in ("_pdf_threads", "_jwpub_threads"):
             for thread in list(getattr(self, attr, [])):
                 stop_owned_qthread(

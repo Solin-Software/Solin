@@ -55,6 +55,7 @@ class _WindowStub:
         self.jwpub_import_thread_factory = object()
         self.document_conversion_service = object()
         self.cache_scan_session_factory = object()
+        self.qr_generation_session_factory = object()
         self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
@@ -88,6 +89,7 @@ def _controller(window):
             jwpub_import_thread_factory=window.jwpub_import_thread_factory,
             document_conversion_service=window.document_conversion_service,
             cache_scan_session_factory=window.cache_scan_session_factory,
+            qr_generation_session_factory=window.qr_generation_session_factory,
             wifi_receive_server_factory=window.wifi_receive_server_factory,
             browser_download_service_factory=(
                 window.browser_download_service_factory
@@ -226,6 +228,7 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
             document_conversion_service,
             profile_media_store,
             jwpub_import_thread_factory,
+            qr_generation_session_factory,
             wifi_receive_server_factory,
             media_info_service_factory,
             parent,
@@ -235,6 +238,7 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
             self.document_conversion_service = document_conversion_service
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.qr_generation_session_factory = qr_generation_session_factory
             self.wifi_receive_server_factory = wifi_receive_server_factory
             self.media_info_service_factory = media_info_service_factory
             self.parent = parent
@@ -257,6 +261,10 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
     assert (
         wifi.jwpub_import_thread_factory
         is window.jwpub_import_thread_factory
+    )
+    assert (
+        wifi.qr_generation_session_factory
+        is window.qr_generation_session_factory
     )
     assert wifi.wifi_receive_server_factory is window.wifi_receive_server_factory
     assert wifi.media_info_service_factory is window.media_info_service_factory

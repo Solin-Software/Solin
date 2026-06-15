@@ -106,6 +106,7 @@ class MainWindowUiContext:
     document_conversion_service: Any
     clip_fetch_thread_factory: Any
     cache_scan_session_factory: Any
+    qr_generation_session_factory: Any
     playlist_thumbnail_store: Any
     meeting_thumbnail_store: Any
     watched_folder_file_store: Any
@@ -329,6 +330,7 @@ class MainWindowUiController:
                 jwpub_import_thread_factory=context.jwpub_import_thread_factory,
                 document_conversion_service=context.document_conversion_service,
                 cache_scan_session_factory=context.cache_scan_session_factory,
+                qr_generation_session_factory=context.qr_generation_session_factory,
                 wifi_receive_server_factory=context.wifi_receive_server_factory,
                 browser_download_service_factory=(
                     self._browser_download_service_factory

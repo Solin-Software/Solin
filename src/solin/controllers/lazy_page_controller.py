@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths
+    from solin.core.ingest.qr_generation import QrGenerationSessionFactory
     from solin.core.jw.publication_reader import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
@@ -34,6 +35,7 @@ class LazyPageContext:
     jwpub_import_thread_factory: JwpubImportThreadFactory
     document_conversion_service: DocumentConversionService
     cache_scan_session_factory: CacheScanSessionFactory
+    qr_generation_session_factory: QrGenerationSessionFactory
     wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer]
     browser_download_service_factory: Callable[[], BrowserDownloadService]
     browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService]
@@ -152,6 +154,7 @@ class LazyPageController:
             document_conversion_service=context.document_conversion_service,
             profile_media_store=context.profile_media_store,
             jwpub_import_thread_factory=context.jwpub_import_thread_factory,
+            qr_generation_session_factory=context.qr_generation_session_factory,
             wifi_receive_server_factory=context.wifi_receive_server_factory,
             media_info_service_factory=context.media_info_service_factory,
             parent=context.parent,

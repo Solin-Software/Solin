@@ -353,6 +353,32 @@ def test_widgets_do_not_own_jw_catalog_thumbnail_download_workers():
     )
 
 
+def test_wifi_widget_does_not_own_qr_generation_workers():
+    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "wifi_receive_widget.py"
+    forbidden_imports = {"QThread", "qrcode"}
+    violations: list[str] = []
+
+    for node in _imports(path):
+        imported = (
+            {alias.name for alias in node.names}
+            if isinstance(node, ast.Import)
+            else {alias.name for alias in node.names}
+        )
+        blocked = sorted(imported & forbidden_imports)
+        if blocked:
+            violations.append(f"{_display(path, node)} [{', '.join(blocked)}]")
+
+    source = path.read_text(encoding="utf-8")
+    for fragment in ("_QrWorker", "moveToThread("):
+        if fragment in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)}: {fragment}")
+
+    assert violations == [], (
+        "Wi-Fi widgets must receive QR generation sessions from composition "
+        "instead of owning QR workers or QThreads:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (
