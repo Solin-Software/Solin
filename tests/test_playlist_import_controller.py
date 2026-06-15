@@ -73,6 +73,22 @@ class _WindowStub:
         return text
 
 
+class _ProfileMediaStoreStub:
+    def __init__(self):
+        self.saved = []
+
+    def save_embedded(
+        self,
+        data,
+        filename_hint="media",
+        *,
+        identifier=None,
+        default_suffix=".mp4",
+    ):
+        self.saved.append((data, filename_hint, identifier, default_suffix))
+        return f"embedded/{identifier}{default_suffix}"
+
+
 def _target(create_new=False):
     return SimpleNamespace(
         create_new=create_new,
@@ -81,12 +97,13 @@ def _target(create_new=False):
     )
 
 
-def _controller(window):
+def _controller(window, profile_media_store=None):
     return PlaylistImportController(
         PlaylistImportContext(
             dialog_parent=window,
             runtime_paths=SimpleNamespace(pdf_pages_dir="cache/pdf"),
             profile_paths=_PROFILE_PATHS,
+            profile_media_store=profile_media_store or _ProfileMediaStoreStub(),
             language_manager=window.lang,
             notifications=window.notifications,
             playlist_widget=window.playlist_widget,
@@ -190,6 +207,36 @@ def test_add_browser_downloaded_file_routes_by_kind(monkeypatch):
         ("items", [{"title": "Item"}], "playlist.jwlplaylist"),
         ("pdf", "doc.pdf"),
         ("jwpub", "pub.jwpub"),
+    ]
+
+
+def test_items_from_jwlplaylist_persists_embedded_media_via_profile_store(
+    monkeypatch,
+):
+    window = _WindowStub()
+    profile_media_store = _ProfileMediaStoreStub()
+    controller = _controller(window, profile_media_store=profile_media_store)
+    monkeypatch.setattr(
+        "solin.core.playlists.reader.read_jwlplaylist",
+        lambda *_args, **_kwargs: {
+            "items": [
+                {
+                    "title": "Embedded clip",
+                    "type": "video",
+                    "data": b"video",
+                    "filename": "clip.mp4",
+                    "mime_type": "video/mp4",
+                }
+            ]
+        },
+    )
+
+    items = controller.items_from_jwlplaylist_for_playlist("playlist.jwlplaylist")
+
+    assert len(items) == 1
+    assert items[0]["url"].startswith("embedded/")
+    assert profile_media_store.saved == [
+        (b"video", "clip.mp4", items[0]["id"], ".mp4")
     ]
 
 

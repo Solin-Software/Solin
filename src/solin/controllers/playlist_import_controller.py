@@ -31,6 +31,7 @@ class PlaylistImportContext:
     dialog_parent: Any
     runtime_paths: RuntimePaths
     profile_paths: ProfilePaths
+    profile_media_store: Any
     language_manager: Any
     notifications: Any
     playlist_widget: Any
@@ -190,18 +191,16 @@ class PlaylistImportController:
             )
 
             if raw.get("data") and not url:
-                context.profile_paths.embedded_dir.mkdir(parents=True, exist_ok=True)
-                ext = os.path.splitext(raw.get("filename", ""))[1].lower()
-                if not ext:
-                    ext = mime_to_ext(raw.get("mime_type", ""))
-                embedded_path = context.profile_paths.embedded_dir / f"{item['id']}{ext}"
                 try:
-                    with embedded_path.open("wb") as handle:
-                        handle.write(raw["data"])
-                except OSError:
+                    item["url"] = context.profile_media_store.save_embedded(
+                        raw["data"],
+                        raw.get("filename", "media"),
+                        identifier=item["id"],
+                        default_suffix=mime_to_ext(raw.get("mime_type", "")),
+                    )
+                except (OSError, ValueError):
                     skipped.append(item.get("title", "Item"))
                     continue
-                item["url"] = os.fspath(embedded_path)
                 item["type"] = raw.get("type", "video")
             elif not url:
                 skipped.append(item.get("title", "Item"))

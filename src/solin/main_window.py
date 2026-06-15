@@ -501,6 +501,7 @@ class MainWindow(QMainWindow):
                 dialog_parent=self,
                 runtime_paths=self.runtime_paths,
                 profile_paths=self.profile_paths,
+                profile_media_store=profile_media_store,
                 language_manager=self.lang,
                 notifications=self.notifications,
                 playlist_widget=self.playlist_widget,
