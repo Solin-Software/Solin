@@ -13,6 +13,19 @@ from solin.widgets.settings.zoom_section import ZoomSectionMixin
 from solin.widgets.settings_widget import SettingsWidget
 
 
+def test_settings_shared_visual_contracts_are_public():
+    from solin.widgets.settings import _shared as settings_shared
+    from solin.widgets.settings.auto_key_dialog import AutoKeyEditorDialog
+
+    assert settings_shared.SETTINGS_BG == "#0d1117"
+    assert settings_shared.SETTINGS_BORDER_STRONG == "#30363d"
+    assert settings_shared.SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET.startswith(
+        "QPushButton"
+    )
+    assert settings_shared.SettingsToggleSwitch.__name__ == "SettingsToggleSwitch"
+    assert AutoKeyEditorDialog.__name__ == "AutoKeyEditorDialog"
+
+
 def test_settings_widget_uses_shared_layout_helpers():
     assert issubclass(SettingsWidget, SettingsLayoutMixin)
     assert SettingsWidget._section_title is SettingsLayoutMixin._section_title

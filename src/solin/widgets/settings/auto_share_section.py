@@ -8,18 +8,18 @@ from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
 
 from ...styles.icons import ICON_CROSSHAIR, ICON_EDIT, ICON_SHARE_SCREEN, make_icon
 from ._shared import (
-    _BG,
-    _BORDER,
-    _BORDER2,
-    _DIM,
-    _GREEN,
-    _MUTED,
-    _RED,
-    _SURF,
-    _TEXT,
-    _ToggleSwitch,
+    SETTINGS_BG,
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_SUCCESS,
+    SETTINGS_MUTED,
+    SETTINGS_DANGER,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
+    SettingsToggleSwitch,
 )
-from .auto_key_dialog import _AutoKeyEditorDialog
+from .auto_key_dialog import AutoKeyEditorDialog
 
 
 class AutoShareSectionMixin:
@@ -45,7 +45,7 @@ class AutoShareSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         share_icon = QLabel()
-        share_icon.setPixmap(make_icon(ICON_SHARE_SCREEN, size=18, color=_MUTED).pixmap(18, 18))
+        share_icon.setPixmap(make_icon(ICON_SHARE_SCREEN, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         share_icon.setFixedSize(20, 20)
         share_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         share_icon.setStyleSheet("background: transparent; border: none;")
@@ -54,7 +54,7 @@ class AutoShareSectionMixin:
         col.setSpacing(1)
         self._autoshare_label = QLabel(self.tr("Auto Screen Share"))
         self._autoshare_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         col.addWidget(self._autoshare_label)
@@ -62,20 +62,20 @@ class AutoShareSectionMixin:
             self.tr("Automatically shares screen via hotkeys when projecting media.")
         )
         self._autoshare_desc.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         col.addWidget(self._autoshare_desc)
         header_lay.addLayout(col, stretch=1)
         saved_enabled = self._auto_share_settings.is_enabled()
-        self._autoshare_toggle = _ToggleSwitch(checked=saved_enabled)
+        self._autoshare_toggle = SettingsToggleSwitch(checked=saved_enabled)
         self._autoshare_toggle.toggled.connect(self._on_autoshare_toggled)
         header_lay.addWidget(self._autoshare_toggle)
         lay.addWidget(header)
 
         self._autoshare_container = QFrame()
         self._autoshare_container.setStyleSheet(
-            f"background: {_BG}; border: none;"
-            f" border-top: 1px solid {_BORDER};"
+            f"background: {SETTINGS_BG}; border: none;"
+            f" border-top: 1px solid {SETTINGS_BORDER};"
         )
         as_lay = QVBoxLayout(self._autoshare_container)
         as_lay.setContentsMargins(14, 12, 14, 12)
@@ -91,7 +91,7 @@ class AutoShareSectionMixin:
         hotkey_text_col.setSpacing(1)
         self._autoshare_hotkey_lbl = QLabel(self.tr("Share hotkey"))
         self._autoshare_hotkey_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         hotkey_text_col.addWidget(self._autoshare_hotkey_lbl)
@@ -99,7 +99,7 @@ class AutoShareSectionMixin:
             self.tr("Uses Zoom's single start/stop screen-share shortcut.")
         )
         self._autoshare_hotkey_hint.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._autoshare_hotkey_hint.setWordWrap(True)
         hotkey_text_col.addWidget(self._autoshare_hotkey_hint)
@@ -108,7 +108,7 @@ class AutoShareSectionMixin:
         saved_hotkey = self._autoshare_hotkey()
         self._autoshare_hotkey_value = QLabel(saved_hotkey or self.tr("Not configured"))
         self._autoshare_hotkey_value.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {_GREEN if saved_hotkey else _DIM};"
+            f"font-size: 11px; font-weight: 600; color: {SETTINGS_SUCCESS if saved_hotkey else SETTINGS_DIM};"
             " background: transparent; border: none;"
         )
         hotkey_row_lay.addWidget(self._autoshare_hotkey_value)
@@ -121,7 +121,7 @@ class AutoShareSectionMixin:
         if sys.platform == "darwin":
             self._autoshare_access_row = QFrame()
             self._autoshare_access_row.setStyleSheet(
-                f"background: {_SURF}; border: 1px solid {_BORDER}; border-radius: 8px;"
+                f"background: {SETTINGS_SURFACE}; border: 1px solid {SETTINGS_BORDER}; border-radius: 8px;"
             )
             access_lay = QHBoxLayout(self._autoshare_access_row)
             access_lay.setContentsMargins(10, 8, 8, 8)
@@ -135,14 +135,14 @@ class AutoShareSectionMixin:
             access_text_col.setSpacing(1)
             self._autoshare_access_title = QLabel(self.tr("Accessibility permission"))
             self._autoshare_access_title.setStyleSheet(
-                f"font-size: 12px; font-weight: 600; color: {_TEXT};"
+                f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
                 " background: transparent; border: none;"
             )
             access_text_col.addWidget(self._autoshare_access_title)
             self._autoshare_access_desc = QLabel()
             self._autoshare_access_desc.setWordWrap(True)
             self._autoshare_access_desc.setStyleSheet(
-                f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
             )
             access_text_col.addWidget(self._autoshare_access_desc)
             access_lay.addLayout(access_text_col, stretch=1)
@@ -152,9 +152,9 @@ class AutoShareSectionMixin:
             self._autoshare_access_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._autoshare_access_btn.setStyleSheet(
                 f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-                f" border: 1px solid {_BORDER2}; border-radius: 6px;"
-                f" background: {_BORDER}; color: #c9d1d9; }}"
-                f"QPushButton:hover {{ background: {_BORDER2}; }}"
+                f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+                f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
+                f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
             )
             self._autoshare_access_btn.clicked.connect(self._open_macos_accessibility_settings)
             access_lay.addWidget(self._autoshare_access_btn)
@@ -163,7 +163,7 @@ class AutoShareSectionMixin:
 
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background: {_BORDER}; border: none;")
+        sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
         as_lay.addWidget(sep)
 
         qc_row = QFrame()
@@ -173,7 +173,7 @@ class AutoShareSectionMixin:
         qc_row_lay.setSpacing(12)
 
         qc_icon = QLabel()
-        qc_icon.setPixmap(make_icon(ICON_CROSSHAIR, size=18, color=_MUTED).pixmap(18, 18))
+        qc_icon.setPixmap(make_icon(ICON_CROSSHAIR, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         qc_icon.setFixedSize(20, 20)
         qc_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         qc_icon.setStyleSheet("background: transparent; border: none;")
@@ -183,7 +183,7 @@ class AutoShareSectionMixin:
         qc_col.setSpacing(1)
         self._autoshare_pos_title = QLabel(self.tr("Click Position"))
         self._autoshare_pos_title.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         qc_col.addWidget(self._autoshare_pos_title)
@@ -191,7 +191,7 @@ class AutoShareSectionMixin:
             self.tr("Position to click after the share dialog opens to select the target.")
         )
         self._autoshare_pos_desc.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._autoshare_pos_desc.setWordWrap(True)
         qc_col.addWidget(self._autoshare_pos_desc)
@@ -209,7 +209,7 @@ class AutoShareSectionMixin:
 
         self._autoshare_pos_status = QLabel()
         self._autoshare_pos_status.setStyleSheet(
-            f"font-size: 11px; color: {_GREEN if has_pos else _DIM};"
+            f"font-size: 11px; color: {SETTINGS_SUCCESS if has_pos else SETTINGS_DIM};"
             " background: transparent; border: none;"
         )
         qc_cfg_lay.addWidget(self._autoshare_pos_status, stretch=1)
@@ -219,15 +219,15 @@ class AutoShareSectionMixin:
         self._autoshare_config_btn.setFixedHeight(28)
         self._autoshare_config_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._autoshare_config_btn.setIcon(
-            make_icon(ICON_CROSSHAIR, size=14, color=_MUTED)
+            make_icon(ICON_CROSSHAIR, size=14, color=SETTINGS_MUTED)
         )
         self._autoshare_config_btn.setStyleSheet(
             f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-            f" border: 1px solid {_BORDER2}; border-radius: 6px;"
-            f" background: {_BORDER}; color: #c9d1d9; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; }}"
-            f"QPushButton:disabled {{ color: {_DIM};"
-            f" border-color: {_BORDER}; background: transparent; }}"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+            f"QPushButton:disabled {{ color: {SETTINGS_DIM};"
+            f" border-color: {SETTINGS_BORDER}; background: transparent; }}"
         )
         self._autoshare_config_btn.clicked.connect(self._on_autoshare_configure)
         qc_cfg_lay.addWidget(self._autoshare_config_btn)
@@ -275,7 +275,7 @@ class AutoShareSectionMixin:
         self._autoshare_anim = anim
 
     def _on_autoshare_hotkey_edit(self):
-        dlg = _AutoKeyEditorDialog(
+        dlg = AutoKeyEditorDialog(
             self,
             sequence=self._autoshare_hotkey(),
             show_event=False,
@@ -292,7 +292,7 @@ class AutoShareSectionMixin:
         hotkey = self._autoshare_hotkey()
         self._autoshare_hotkey_value.setText(hotkey or self.tr("Not configured"))
         self._autoshare_hotkey_value.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {_GREEN if hotkey else _DIM};"
+            f"font-size: 11px; font-weight: 600; color: {SETTINGS_SUCCESS if hotkey else SETTINGS_DIM};"
             " background: transparent; border: none;"
         )
 
@@ -307,7 +307,7 @@ class AutoShareSectionMixin:
         )
         self._autoshare_pos_status.setText(text)
         self._autoshare_pos_status.setStyleSheet(
-            f"font-size: 11px; color: {_GREEN if has_pos else _DIM};"
+            f"font-size: 11px; color: {SETTINGS_SUCCESS if has_pos else SETTINGS_DIM};"
             " background: transparent; border: none;"
         )
 
@@ -315,7 +315,7 @@ class AutoShareSectionMixin:
         if sys.platform != "darwin" or not hasattr(self, "_autoshare_access_dot"):
             return
         trusted = self._macos_accessibility_trusted()
-        color = _GREEN if trusted else _RED
+        color = SETTINGS_SUCCESS if trusted else SETTINGS_DANGER
         self._autoshare_access_dot.setStyleSheet(
             f"background-color: {color}; border: none; border-radius: 4px;"
         )
@@ -324,7 +324,7 @@ class AutoShareSectionMixin:
                 self.tr("Solin can send the automatic click.")
             )
             self._autoshare_access_desc.setStyleSheet(
-                f"font-size: 11px; color: {_GREEN}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_SUCCESS}; background: transparent; border: none;"
             )
             self._autoshare_access_btn.setVisible(False)
         else:
@@ -332,7 +332,7 @@ class AutoShareSectionMixin:
                 self.tr("Allow Solin in macOS Accessibility so automatic clicks can work.")
             )
             self._autoshare_access_desc.setStyleSheet(
-                f"font-size: 11px; color: {_RED}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_DANGER}; background: transparent; border: none;"
             )
             self._autoshare_access_btn.setVisible(True)
 

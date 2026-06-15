@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...styles.icons import ICON_ZOOM, make_icon
-from ._shared import _DIM, _MUTED, _TEXT, _ToggleSwitch
+from ._shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT, SettingsToggleSwitch
 
 
 class ZoomSectionMixin:
@@ -19,7 +19,7 @@ class ZoomSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         zoom_icon = QLabel()
-        zoom_icon.setPixmap(make_icon(ICON_ZOOM, size=18, color=_MUTED).pixmap(18, 18))
+        zoom_icon.setPixmap(make_icon(ICON_ZOOM, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         zoom_icon.setFixedSize(20, 20)
         zoom_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         zoom_icon.setStyleSheet("background: transparent; border: none;")
@@ -28,7 +28,7 @@ class ZoomSectionMixin:
         col.setSpacing(1)
         self._zoom_enabled_label = QLabel(self.tr("Zoom Meetings"))
         self._zoom_enabled_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         col.addWidget(self._zoom_enabled_label)
@@ -36,12 +36,12 @@ class ZoomSectionMixin:
             self.tr("Audio controls and attendance count during meetings.")
         )
         self._zoom_enabled_desc.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         col.addWidget(self._zoom_enabled_desc)
         header_lay.addLayout(col, stretch=1)
         saved_zoom = self._zoom_settings.is_enabled()
-        self._zoom_enabled_toggle = _ToggleSwitch(checked=saved_zoom)
+        self._zoom_enabled_toggle = SettingsToggleSwitch(checked=saved_zoom)
         self._zoom_enabled_toggle.toggled.connect(self._on_zoom_enabled_toggled)
         header_lay.addWidget(self._zoom_enabled_toggle)
         lay.addWidget(header)

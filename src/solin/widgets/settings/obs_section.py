@@ -3,22 +3,22 @@ from __future__ import annotations
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
-from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA
+from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from ...core.integrations.automation.obs import OBSConnectionState
 from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
-from ..common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
+from ..common.no_scroll_combo_box import NoScrollComboBox
 from ._shared import (
-    _ACCENT,
-    _BG,
-    _BORDER,
-    _BORDER2,
-    _DIM,
-    _GREEN,
-    _MUTED,
-    _RED,
-    _SURF,
-    _TEXT,
-    _ToggleSwitch,
+    SETTINGS_ACCENT,
+    SETTINGS_BG,
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_SUCCESS,
+    SETTINGS_MUTED,
+    SETTINGS_DANGER,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
+    SettingsToggleSwitch,
 )
 
 
@@ -34,7 +34,7 @@ class ObsSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         obs_icon = QLabel()
-        obs_icon.setPixmap(make_icon(ICON_OBS, size=18, color=_MUTED).pixmap(18, 18))
+        obs_icon.setPixmap(make_icon(ICON_OBS, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         obs_icon.setFixedSize(20, 20)
         obs_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         obs_icon.setStyleSheet("background: transparent; border: none;")
@@ -43,7 +43,7 @@ class ObsSectionMixin:
         col.setSpacing(1)
         self._obs_header_lbl = QLabel(self.tr("OBS Studio"))
         self._obs_header_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         col.addWidget(self._obs_header_lbl)
@@ -51,20 +51,20 @@ class ObsSectionMixin:
             self.tr("Automatically switches scenes during projection")
         )
         self._obs_header_desc.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         col.addWidget(self._obs_header_desc)
         header_lay.addLayout(col, stretch=1)
         obs_enabled = self._obs_settings.is_enabled()
-        self._obs_toggle = _ToggleSwitch(checked=obs_enabled)
+        self._obs_toggle = SettingsToggleSwitch(checked=obs_enabled)
         self._obs_toggle.toggled.connect(self._on_obs_toggled)
         header_lay.addWidget(self._obs_toggle)
         lay.addWidget(header)
 
         self._obs_container = QFrame()
         self._obs_container.setStyleSheet(
-            f"background: {_BG}; border: none;"
-            f" border-top: 1px solid {_BORDER};"
+            f"background: {SETTINGS_BG}; border: none;"
+            f" border-top: 1px solid {SETTINGS_BORDER};"
         )
         obs_lay = QVBoxLayout(self._obs_container)
         obs_lay.setContentsMargins(14, 12, 14, 12)
@@ -75,11 +75,11 @@ class ObsSectionMixin:
         self._obs_dot = QLabel("\u25cf")
         self._obs_dot.setFixedWidth(14)
         self._obs_dot.setStyleSheet(
-            f"color: {_DIM}; font-size: 10px; background: transparent; border: none;"
+            f"color: {SETTINGS_DIM}; font-size: 10px; background: transparent; border: none;"
         )
         self._obs_status_lbl = QLabel(self.tr("Disconnected"))
         self._obs_status_lbl.setStyleSheet(
-            f"font-size: 12px; color: {_MUTED}; background: transparent; border: none;"
+            f"font-size: 12px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
         )
         status_row.addWidget(self._obs_dot)
         status_row.addWidget(self._obs_status_lbl, stretch=1)
@@ -87,7 +87,7 @@ class ObsSectionMixin:
 
         self._obs_port_lbl = QLabel(self.tr("WebSocket Port"))
         self._obs_port_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT}; background: transparent; border: none;"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent; border: none;"
         )
         obs_lay.addWidget(self._obs_port_lbl)
         self._obs_port_edit = QLineEdit()
@@ -101,7 +101,7 @@ class ObsSectionMixin:
 
         self._obs_pwd_lbl = QLabel(self.tr("Password (optional)"))
         self._obs_pwd_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT}; background: transparent; border: none;"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent; border: none;"
         )
         obs_lay.addWidget(self._obs_pwd_lbl)
         self._obs_pwd_edit = QLineEdit()
@@ -118,7 +118,7 @@ class ObsSectionMixin:
 
         self._obs_save_hint = QLabel(self.tr("\u25cf Changes saved automatically"))
         self._obs_save_hint.setStyleSheet(
-            f"color: {_DIM}; font-size: 10px; background: transparent; border: none;"
+            f"color: {SETTINGS_DIM}; font-size: 10px; background: transparent; border: none;"
         )
         self._obs_save_hint.hide()
         obs_lay.addWidget(self._obs_save_hint)
@@ -132,7 +132,7 @@ class ObsSectionMixin:
 
         stream_sep = QFrame()
         stream_sep.setFixedHeight(1)
-        stream_sep.setStyleSheet(f"background: {_BORDER}; border: none;")
+        stream_sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
         self._obs_stream_sep = stream_sep
 
         stream_header = QFrame()
@@ -143,7 +143,7 @@ class ObsSectionMixin:
         stream_header_lay.setSpacing(10)
 
         stream_icon = QLabel()
-        stream_icon.setPixmap(make_icon(ICON_CAST, size=16, color=_MUTED).pixmap(16, 16))
+        stream_icon.setPixmap(make_icon(ICON_CAST, size=16, color=SETTINGS_MUTED).pixmap(16, 16))
         stream_icon.setFixedSize(20, 20)
         stream_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         stream_icon.setStyleSheet("background: transparent; border: none;")
@@ -153,21 +153,21 @@ class ObsSectionMixin:
         stream_col.setSpacing(2)
         self._obs_stream_title_lbl = QLabel(self.tr("Program stream (NDI)"))
         self._obs_stream_title_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {_TEXT}; background: transparent; border: none;"
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT}; background: transparent; border: none;"
         )
         stream_col.addWidget(self._obs_stream_title_lbl)
         self._obs_stream_desc_lbl = QLabel(
             self.tr("Receive the DistroAV/NDI output from OBS as a live projection.")
         )
         self._obs_stream_desc_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._obs_stream_desc_lbl.setWordWrap(True)
         stream_col.addWidget(self._obs_stream_desc_lbl)
         stream_header_lay.addLayout(stream_col, stretch=1)
 
         stream_enabled = self._obs_settings.ndi_enabled()
-        self._obs_stream_toggle = _ToggleSwitch(checked=stream_enabled)
+        self._obs_stream_toggle = SettingsToggleSwitch(checked=stream_enabled)
         self._obs_stream_toggle.toggled.connect(self._on_obs_stream_toggled)
         stream_header_lay.addWidget(self._obs_stream_toggle)
 
@@ -181,20 +181,20 @@ class ObsSectionMixin:
             self.tr("Enable Main Output in DistroAV, then select the NDI source shown by OBS.")
         )
         self._obs_stream_hint_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._obs_stream_hint_lbl.setWordWrap(True)
         stream_lay.addWidget(self._obs_stream_hint_lbl)
 
         self._obs_stream_source_lbl = QLabel(self.tr("Available NDI sources"))
         self._obs_stream_source_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT}; background: transparent; border: none;"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent; border: none;"
         )
         stream_lay.addWidget(self._obs_stream_source_lbl)
 
         source_row = QHBoxLayout()
         source_row.setSpacing(8)
-        self._obs_stream_sources_combo = _NoScrollComboBox()
+        self._obs_stream_sources_combo = NoScrollComboBox()
         self._obs_stream_sources_combo.setMinimumHeight(34)
         self._obs_stream_sources_combo.setStyleSheet(self._obs_combo_style())
         saved_ndi_source = self._obs_settings.ndi_source()
@@ -210,12 +210,12 @@ class ObsSectionMixin:
         self._obs_stream_refresh_btn = QPushButton(self.tr("Find sources"))
         self._obs_stream_refresh_btn.setFixedHeight(34)
         self._obs_stream_refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._obs_stream_refresh_btn.setIcon(make_icon(ICON_CAST, size=13, color=_MUTED))
+        self._obs_stream_refresh_btn.setIcon(make_icon(ICON_CAST, size=13, color=SETTINGS_MUTED))
         self._obs_stream_refresh_btn.setIconSize(QSize(13, 13))
         self._obs_stream_refresh_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {_BORDER2}; border-radius: 7px;"
-            f" background: {_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; }}"
+            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 7px;"
+            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
         )
         self._obs_stream_refresh_btn.clicked.connect(self._refresh_obs_ndi_sources)
         source_row.addWidget(self._obs_stream_refresh_btn)
@@ -223,7 +223,7 @@ class ObsSectionMixin:
 
         self._obs_stream_status_lbl = QLabel("")
         self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._obs_stream_status_lbl.setWordWrap(True)
         stream_lay.addWidget(self._obs_stream_status_lbl)
@@ -236,23 +236,23 @@ class ObsSectionMixin:
         scenes_lay.setSpacing(8)
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background: {_BORDER}; border: none;")
+        sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
         scenes_lay.addWidget(sep)
 
         self._obs_default_lbl = QLabel(self.tr("Default scene (idle)"))
         self._obs_default_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT}; background: transparent;"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
         )
         scenes_lay.addWidget(self._obs_default_lbl)
         self._obs_default_hint = QLabel(
             self.tr("Scene shown when nothing is being projected.")
         )
         self._obs_default_hint.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent;"
         )
         self._obs_default_hint.setWordWrap(True)
         scenes_lay.addWidget(self._obs_default_hint)
-        self._obs_default_combo = _NoScrollComboBox()
+        self._obs_default_combo = NoScrollComboBox()
         self._obs_default_combo.setMinimumHeight(36)
         self._obs_default_combo.setStyleSheet(self._obs_combo_style())
         self._obs_default_combo.currentTextChanged.connect(self._save_obs_scenes)
@@ -260,7 +260,7 @@ class ObsSectionMixin:
 
         self._obs_media_lbl = QLabel(self.tr("Media window scene"))
         self._obs_media_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; margin-top: 4px;"
         )
         scenes_lay.addWidget(self._obs_media_lbl)
@@ -269,11 +269,11 @@ class ObsSectionMixin:
             "Activated when content is displayed."
         ))
         self._obs_media_hint.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent;"
         )
         self._obs_media_hint.setWordWrap(True)
         scenes_lay.addWidget(self._obs_media_hint)
-        self._obs_media_combo = _NoScrollComboBox()
+        self._obs_media_combo = NoScrollComboBox()
         self._obs_media_combo.setMinimumHeight(36)
         self._obs_media_combo.setStyleSheet(self._obs_combo_style())
         self._obs_media_combo.currentTextChanged.connect(self._save_obs_scenes)
@@ -305,25 +305,25 @@ class ObsSectionMixin:
     @staticmethod
     def _obs_field_style():
         return (
-            f"QLineEdit {{ background: {_SURF}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; border-radius: 8px;"
+            f"QLineEdit {{ background: {SETTINGS_SURFACE}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px;"
             f" padding: 0px 12px; font-size: 13px; }}"
-            f"QLineEdit:focus {{ border-color: {_ACCENT}; }}"
+            f"QLineEdit:focus {{ border-color: {SETTINGS_ACCENT}; }}"
         )
 
     @staticmethod
     def _obs_combo_style():
         return (
-            f"QComboBox {{ background: {_SURF}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; border-radius: 8px;"
+            f"QComboBox {{ background: {SETTINGS_SURFACE}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px;"
             f" padding: 0px 12px; font-size: 13px; }}"
-            f"QComboBox:focus {{ border-color: {_ACCENT}; }}"
+            f"QComboBox:focus {{ border-color: {SETTINGS_ACCENT}; }}"
             f"QComboBox::drop-down {{ border: none; width: 28px; }}"
             f"QComboBox::down-arrow {{ image: none; width: 0px; height: 0px;"
             f" border-left: 4px solid transparent; border-right: 4px solid transparent;"
-            f" border-top: 5px solid {_MUTED}; margin-right: 10px; }}"
-            f"QComboBox QAbstractItemView {{ background: {_SURF}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; selection-background-color: #1f3a6e; }}"
+            f" border-top: 5px solid {SETTINGS_MUTED}; margin-right: 10px; }}"
+            f"QComboBox QAbstractItemView {{ background: {SETTINGS_SURFACE}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: #1f3a6e; }}"
         )
 
     def _on_obs_toggled(self, checked):
@@ -377,14 +377,14 @@ class ObsSectionMixin:
             self.tr("\u2713 Configuration saved \u2014 reconnecting\u2026")
         )
         self._obs_save_hint.setStyleSheet(
-            f"color: {_GREEN}; font-size: 10px; background: transparent;"
+            f"color: {SETTINGS_SUCCESS}; font-size: 10px; background: transparent;"
         )
         QTimer.singleShot(2500, lambda: (
             self._obs_save_hint.setText(
                 self.tr("\u25cf Changes saved automatically")
             ),
             self._obs_save_hint.setStyleSheet(
-                f"color: {_DIM}; font-size: 10px; background: transparent;"
+                f"color: {SETTINGS_DIM}; font-size: 10px; background: transparent;"
             ),
             self._obs_save_hint.hide(),
         ))
@@ -435,7 +435,7 @@ class ObsSectionMixin:
         self._obs_stream_refresh_btn.setEnabled(False)
         self._obs_stream_refresh_btn.setText(self.tr("Searching\u2026"))
         self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._obs_stream_status_lbl.setText(self.tr("Looking for NDI sources on this network."))
         self._ndi.refresh_sources()
@@ -460,7 +460,7 @@ class ObsSectionMixin:
                 self._obs_settings.set_ndi_source(selected)
                 self.obs_stream_config_changed.emit()
             self._obs_stream_status_lbl.setStyleSheet(
-                f"font-size: 10px; color: {_GREEN}; background: transparent; border: none;"
+                f"font-size: 10px; color: {SETTINGS_SUCCESS}; background: transparent; border: none;"
             )
             self._obs_stream_status_lbl.setText(
                 self.tr("%n NDI source found.", None, len(sources))
@@ -468,7 +468,7 @@ class ObsSectionMixin:
         else:
             self._obs_stream_sources_combo.addItem(self.tr("No NDI sources found"), "")
             self._obs_stream_status_lbl.setStyleSheet(
-                f"font-size: 10px; color: {_DIM}; background: transparent; border: none;"
+                f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
             )
             self._obs_stream_status_lbl.setText(
                 self.tr("No NDI sources found. Check that DistroAV Main Output is enabled in OBS.")
@@ -481,7 +481,7 @@ class ObsSectionMixin:
         self._obs_stream_refresh_btn.setEnabled(True)
         self._obs_stream_refresh_btn.setText(self.tr("Find sources"))
         self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {_RED}; background: transparent; border: none;"
+            f"font-size: 10px; color: {SETTINGS_DANGER}; background: transparent; border: none;"
         )
         self._obs_stream_status_lbl.setText(message)
 
@@ -497,7 +497,7 @@ class ObsSectionMixin:
             self._obs_default_combo.currentText(),
             self._obs_media_combo.currentText(),
         )
-        if not _MEMORIZE_PRE_MEDIA:
+        if not MEMORIZE_PRE_MEDIA_SCENE:
             idle_set = bool(
                 self._obs_default_combo.currentText()
                 and not self._obs_default_combo.currentText().startswith("\u2014")
@@ -513,11 +513,11 @@ class ObsSectionMixin:
 
     def _sync_obs_ui_state(self, state, message):
         dot_color = {
-            OBSConnectionState.DISCONNECTED: _DIM,
+            OBSConnectionState.DISCONNECTED: SETTINGS_DIM,
             OBSConnectionState.CONNECTING: "#e3b341",
-            OBSConnectionState.CONNECTED: _GREEN,
-            OBSConnectionState.ERROR: _RED,
-        }.get(state, _DIM)
+            OBSConnectionState.CONNECTED: SETTINGS_SUCCESS,
+            OBSConnectionState.ERROR: SETTINGS_DANGER,
+        }.get(state, SETTINGS_DIM)
         label = {
             OBSConnectionState.DISCONNECTED: self.tr("Disconnected"),
             OBSConnectionState.CONNECTING: self.tr("Connecting\u2026"),
@@ -551,7 +551,7 @@ class ObsSectionMixin:
                 if idx >= 0:
                     combo.setCurrentIndex(idx)
             combo.blockSignals(False)
-        if not _MEMORIZE_PRE_MEDIA:
+        if not MEMORIZE_PRE_MEDIA_SCENE:
             idle_set = bool(saved_default and not saved_default.startswith("\u2014"))
             self._obs_media_combo.setEnabled(idle_set)
 

@@ -33,23 +33,42 @@ from ...core.jw.languages import JWLanguageService
 from ...core.i18n.manager import LanguageManager
 from ...styles.theme import SCROLLBAR_STYLESHEET
 
-_BG = "#0d1117"
-_SURF = "#161b22"
-_CARD = "#161b22"
-_BORDER = "#21262d"
-_ACCENT = "#388bfd"
-_BORDER2 = "#30363d"
-_MUTED = "#8b949e"
-_TEXT = "#e6edf3"
-_DIM = "#484f58"
-_GREEN = "#3fb950"
-_RED = "#f85149"
+SETTINGS_BG = "#0d1117"
+SETTINGS_SURFACE = "#161b22"
+SETTINGS_CARD = "#161b22"
+SETTINGS_BORDER = "#21262d"
+SETTINGS_ACCENT = "#388bfd"
+SETTINGS_BORDER_STRONG = "#30363d"
+SETTINGS_MUTED = "#8b949e"
+SETTINGS_TEXT = "#e6edf3"
+SETTINGS_DIM = "#484f58"
+SETTINGS_SUCCESS = "#3fb950"
+SETTINGS_DANGER = "#f85149"
+
+__all__ = (
+    "SETTINGS_ACCENT",
+    "SETTINGS_BG",
+    "SETTINGS_BORDER",
+    "SETTINGS_BORDER_STRONG",
+    "SETTINGS_CARD",
+    "SETTINGS_DANGER",
+    "SETTINGS_DIM",
+    "SETTINGS_MUTED",
+    "SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET",
+    "SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET",
+    "SETTINGS_SURFACE",
+    "SETTINGS_SUCCESS",
+    "SETTINGS_TEXT",
+    "SettingsToggleSwitch",
+    "create_interface_language_picker",
+    "create_jw_language_picker",
+)
 
 
-class _ToggleSwitch(QWidget):
+class SettingsToggleSwitch(QWidget):
     toggled = Signal(bool)
-    _TRACK_ON = QColor(_ACCENT)
-    _TRACK_OFF = QColor(_BORDER2)
+    _TRACK_ON = QColor(SETTINGS_ACCENT)
+    _TRACK_OFF = QColor(SETTINGS_BORDER_STRONG)
     _THUMB = QColor("#ffffff")
     _W, _H = 40, 22
 
@@ -120,10 +139,10 @@ class _ToggleSwitch(QWidget):
 
 class _LangItemDelegate(QStyledItemDelegate):
     _SELECTED_BG = QColor("#1f3a6e")
-    _HOVER_BG = QColor(_BORDER)
-    _TEXT_PRIMARY = QColor(_TEXT)
-    _TEXT_SECONDARY = QColor(_MUTED)
-    _CHECK_COLOR = QColor(_ACCENT)
+    _HOVER_BG = QColor(SETTINGS_BORDER)
+    _TEXT_PRIMARY = QColor(SETTINGS_TEXT)
+    _TEXT_SECONDARY = QColor(SETTINGS_MUTED)
+    _CHECK_COLOR = QColor(SETTINGS_ACCENT)
 
     def sizeHint(self, option, index):
         return QSize(option.rect.width(), 52)
@@ -180,36 +199,36 @@ class _LangItemDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-_PICKER_SEARCH_SS = (
+SETTINGS_PICKER_SEARCH_STYLESHEET = (
     "QLineEdit {"
-    f"  background: {_SURF};"
-    f"  color: {_TEXT};"
-    f"  border: 1px solid {_BORDER2};"
+    f"  background: {SETTINGS_SURFACE};"
+    f"  color: {SETTINGS_TEXT};"
+    f"  border: 1px solid {SETTINGS_BORDER_STRONG};"
     "  border-radius: 8px;"
     "  padding: 0 12px;"
     "}"
-    f"QLineEdit:focus {{ border-color: {_ACCENT}; }}"
+    f"QLineEdit:focus {{ border-color: {SETTINGS_ACCENT}; }}"
 )
 
-_PICKER_LIST_SS = (
-    f"QListWidget {{ background: {_BG}; border: 1px solid {_BORDER2};"
+SETTINGS_PICKER_LIST_STYLESHEET = (
+    f"QListWidget {{ background: {SETTINGS_BG}; border: 1px solid {SETTINGS_BORDER_STRONG};"
     f" border-radius: 10px; }}"
-    f"QListWidget::item {{ padding: 0; border-radius: 6px; color: {_TEXT}; }}"
+    f"QListWidget::item {{ padding: 0; border-radius: 6px; color: {SETTINGS_TEXT}; }}"
     f"QListWidget::item:selected {{ background: transparent; }}"
     f"QListWidget::item:hover:!selected {{ background: transparent; }}"
 ) + SCROLLBAR_STYLESHEET
 
-_PICKER_OK_SS = (
-    f"QPushButton {{ background: {_ACCENT}; color: white;"
+SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET = (
+    f"QPushButton {{ background: {SETTINGS_ACCENT}; color: white;"
     " border: none; border-radius: 8px; font-weight: 600; }"
     "QPushButton:hover { background: #58a6ff; }"
     "QPushButton:pressed { background: #2f7be0; }"
 )
 
-_PICKER_CANCEL_SS = (
-    f"QPushButton {{ background: {_BORDER}; color: #c9d1d9;"
-    f" border: 1px solid {_BORDER2}; border-radius: 8px; }}"
-    f"QPushButton:hover {{ background: {_BORDER2}; color: {_TEXT}; }}"
+SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET = (
+    f"QPushButton {{ background: {SETTINGS_BORDER}; color: #c9d1d9;"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px; }}"
+    f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; color: {SETTINGS_TEXT}; }}"
 )
 
 
@@ -218,12 +237,12 @@ def _make_picker_btn_row(dialog, ok_label: str):
     row.setSpacing(8)
     cancel = QPushButton(dialog.tr("Cancel"))
     cancel.setMinimumHeight(36)
-    cancel.setStyleSheet(_PICKER_CANCEL_SS)
+    cancel.setStyleSheet(SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET)
     cancel.clicked.connect(dialog.reject)
     ok = QPushButton(ok_label)
     ok.setMinimumHeight(36)
     ok.setDefault(True)
-    ok.setStyleSheet(_PICKER_OK_SS)
+    ok.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
     row.addWidget(cancel)
     row.addWidget(ok)
     return row, ok
@@ -258,17 +277,17 @@ class _LanguagePicker(QDialog):
         lay.setContentsMargins(20, 20, 20, 20)
         lay.setSpacing(12)
         title = QLabel(self.tr("Interface Language"))
-        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {_TEXT};")
+        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};")
         lay.addWidget(title)
         hint = QLabel(self.tr("Choose the language for the app interface."))
-        hint.setStyleSheet(f"font-size: 12px; color: {_MUTED};")
+        hint.setStyleSheet(f"font-size: 12px; color: {SETTINGS_MUTED};")
         hint.setWordWrap(True)
         lay.addWidget(hint)
         self._search = QLineEdit()
         self._search.setPlaceholderText(self.tr("Search\u2026"))
         self._search.setMinimumHeight(36)
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(_PICKER_SEARCH_SS)
+        self._search.setStyleSheet(SETTINGS_PICKER_SEARCH_STYLESHEET)
         self._search.textChanged.connect(self._filter)
         lay.addWidget(self._search)
         self._list = QListWidget()
@@ -276,7 +295,7 @@ class _LanguagePicker(QDialog):
         self._list.setSpacing(0)
         self._list.setMinimumHeight(300)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setStyleSheet(_PICKER_LIST_SS)
+        self._list.setStyleSheet(SETTINGS_PICKER_LIST_STYLESHEET)
         self._list.setItemDelegate(_LangItemDelegate(self._list))
         self._list.itemActivated.connect(self._accept_item)
         lay.addWidget(self._list)
@@ -350,20 +369,20 @@ class _JWLanguagePicker(QDialog):
         lay.setContentsMargins(20, 20, 20, 20)
         lay.setSpacing(12)
         title = QLabel(self.tr("Media Language"))
-        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {_TEXT};")
+        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};")
         lay.addWidget(title)
         hint = QLabel(self.tr(
             "Language for media from JW.org (songs, clips, meetings). "
             "Falls back to the interface language if unavailable."
         ))
-        hint.setStyleSheet(f"font-size: 12px; color: {_MUTED};")
+        hint.setStyleSheet(f"font-size: 12px; color: {SETTINGS_MUTED};")
         hint.setWordWrap(True)
         lay.addWidget(hint)
         self._search = QLineEdit()
         self._search.setPlaceholderText(self.tr("Search\u2026"))
         self._search.setMinimumHeight(36)
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(_PICKER_SEARCH_SS)
+        self._search.setStyleSheet(SETTINGS_PICKER_SEARCH_STYLESHEET)
         self._search.textChanged.connect(self._filter)
         lay.addWidget(self._search)
         self._list = QListWidget()
@@ -371,23 +390,23 @@ class _JWLanguagePicker(QDialog):
         self._list.setSpacing(0)
         self._list.setMinimumHeight(320)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setStyleSheet(_PICKER_LIST_SS)
+        self._list.setStyleSheet(SETTINGS_PICKER_LIST_STYLESHEET)
         self._list.setItemDelegate(_LangItemDelegate(self._list))
         self._list.itemActivated.connect(self._accept_item)
         lay.addWidget(self._list)
         self._loading_frame = QFrame(self._list)
-        self._loading_frame.setStyleSheet(f"background: {_BG}; border-radius: 10px;")
+        self._loading_frame.setStyleSheet(f"background: {SETTINGS_BG}; border-radius: 10px;")
         lf_lay = QVBoxLayout(self._loading_frame)
         lf_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._loading_spinner = QLabel("\u23f3")
         self._loading_spinner.setStyleSheet(
-            f"font-size: 24px; background: transparent; color: {_MUTED};"
+            f"font-size: 24px; background: transparent; color: {SETTINGS_MUTED};"
         )
         self._loading_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lf_lay.addWidget(self._loading_spinner)
         self._loading_lbl = QLabel(self.tr("Loading languages\u2026"))
         self._loading_lbl.setStyleSheet(
-            f"font-size: 13px; color: {_MUTED}; background: transparent;"
+            f"font-size: 13px; color: {SETTINGS_MUTED}; background: transparent;"
         )
         self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lf_lay.addWidget(self._loading_lbl)

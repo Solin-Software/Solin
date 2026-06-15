@@ -21,16 +21,16 @@ from ...styles.icons import (
     make_icon,
 )
 from ._shared import (
-    _ACCENT,
-    _BG,
-    _BORDER,
-    _BORDER2,
-    _DIM,
-    _GREEN,
-    _MUTED,
-    _RED,
-    _SURF,
-    _TEXT,
+    SETTINGS_ACCENT,
+    SETTINGS_BG,
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_SUCCESS,
+    SETTINGS_MUTED,
+    SETTINGS_DANGER,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
 )
 
 
@@ -57,7 +57,7 @@ class YearlyTextSectionMixin:
             self.tr("Text shown on the projection screen when idle.")
         )
         self._yearly_hint_lbl.setStyleSheet(
-            f"font-size: 12px; color: {_MUTED}; background: transparent;"
+            f"font-size: 12px; color: {SETTINGS_MUTED}; background: transparent;"
         )
         self._yearly_hint_lbl.setWordWrap(True)
         inner_lay.addWidget(self._yearly_hint_lbl)
@@ -74,12 +74,12 @@ class YearlyTextSectionMixin:
         yt_text_col.setSpacing(2)
         self._yt_status_lbl = QLabel(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT}; background: transparent;"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
         )
         yt_text_col.addWidget(self._yt_status_lbl)
         self._yt_preview_lbl = QLabel()
         self._yt_preview_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_MUTED}; background: transparent;"
+            f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent;"
         )
         self._yt_preview_lbl.setWordWrap(True)
         self._yt_preview_lbl.hide()
@@ -90,14 +90,14 @@ class YearlyTextSectionMixin:
         self._yt_refresh_btn.setFixedHeight(28)
         self._yt_refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._yt_refresh_btn.setIcon(
-            make_icon(ICON_CLOUD_DOWNLOAD, size=14, color=_MUTED)
+            make_icon(ICON_CLOUD_DOWNLOAD, size=14, color=SETTINGS_MUTED)
         )
         self._yt_refresh_btn.setIconSize(QSize(14, 14))
         self._yt_refresh_btn.setStyleSheet(
             f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-            f" border: 1px solid {_BORDER2}; border-radius: 6px;"
-            f" background: {_BORDER}; color: #c9d1d9; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; }}"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
         )
         self._yt_refresh_btn.clicked.connect(self._refresh_yeartext)
         status_row.addWidget(self._yt_refresh_btn)
@@ -107,9 +107,9 @@ class YearlyTextSectionMixin:
         self._manual_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._manual_toggle_btn.setMinimumHeight(32)
         self._manual_toggle_btn.setStyleSheet(
-            f"QPushButton {{ text-align: left; padding: 0 4px; color: {_DIM};"
+            f"QPushButton {{ text-align: left; padding: 0 4px; color: {SETTINGS_DIM};"
             f" font-size: 11px; background: transparent; border: none; }}"
-            f"QPushButton:hover {{ color: {_TEXT}; }}"
+            f"QPushButton:hover {{ color: {SETTINGS_TEXT}; }}"
         )
         self._manual_toggle_btn.clicked.connect(self._toggle_manual_section)
         inner_lay.addWidget(self._manual_toggle_btn)
@@ -117,7 +117,7 @@ class YearlyTextSectionMixin:
 
         self._manual_container = QFrame()
         self._manual_container.setStyleSheet(
-            f"background: {_BG}; border: 1px solid {_BORDER};"
+            f"background: {SETTINGS_BG}; border: 1px solid {SETTINGS_BORDER};"
             " border-radius: 8px;"
         )
         m_lay = QVBoxLayout(self._manual_container)
@@ -126,7 +126,7 @@ class YearlyTextSectionMixin:
 
         self._yearly_quote_lbl = QLabel(self.tr("Scripture:"))
         self._yearly_quote_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         m_lay.addWidget(self._yearly_quote_lbl)
@@ -138,15 +138,15 @@ class YearlyTextSectionMixin:
         self._yearly_quote_edit.setMinimumHeight(70)
         self._yearly_quote_edit.setMaximumHeight(100)
         self._yearly_quote_edit.setStyleSheet(
-            f"QPlainTextEdit {{ background: {_SURF}; border: 1px solid {_BORDER2};"
-            f" border-radius: 6px; color: {_TEXT}; font-size: 12px; padding: 6px; }}"
-            f"QPlainTextEdit:focus {{ border-color: {_ACCENT}; }}"
+            f"QPlainTextEdit {{ background: {SETTINGS_SURFACE}; border: 1px solid {SETTINGS_BORDER_STRONG};"
+            f" border-radius: 6px; color: {SETTINGS_TEXT}; font-size: 12px; padding: 6px; }}"
+            f"QPlainTextEdit:focus {{ border-color: {SETTINGS_ACCENT}; }}"
         )
         m_lay.addWidget(self._yearly_quote_edit)
 
         self._yearly_ref_lbl = QLabel(self.tr("Bible reference:"))
         self._yearly_ref_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         m_lay.addWidget(self._yearly_ref_lbl)
@@ -155,9 +155,9 @@ class YearlyTextSectionMixin:
         self._yearly_ref_edit.setPlaceholderText(self.tr("E.g.: Matthew 5:3."))
         self._yearly_ref_edit.setMinimumHeight(34)
         self._yearly_ref_edit.setStyleSheet(
-            f"QLineEdit {{ background: {_SURF}; border: 1px solid {_BORDER2};"
-            f" border-radius: 6px; color: {_TEXT}; font-size: 12px; padding: 0 8px; }}"
-            f"QLineEdit:focus {{ border-color: {_ACCENT}; }}"
+            f"QLineEdit {{ background: {SETTINGS_SURFACE}; border: 1px solid {SETTINGS_BORDER_STRONG};"
+            f" border-radius: 6px; color: {SETTINGS_TEXT}; font-size: 12px; padding: 0 8px; }}"
+            f"QLineEdit:focus {{ border-color: {SETTINGS_ACCENT}; }}"
         )
         m_lay.addWidget(self._yearly_ref_edit)
 
@@ -169,9 +169,9 @@ class YearlyTextSectionMixin:
         )
         self._yearly_save_btn.setIconSize(QSize(14, 14))
         self._yearly_save_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {_BORDER2}; border-radius: 6px;"
-            f" background: {_BORDER}; color: #c9d1d9; font-size: 12px; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; }}"
+            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 12px; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
         )
         self._yearly_save_btn.clicked.connect(self._save_yearly_text)
         m_lay.addWidget(self._yearly_save_btn)
@@ -219,10 +219,10 @@ class YearlyTextSectionMixin:
         self._yt_preview_lbl.hide()
         self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT}; background: transparent;"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
         )
         self._yt_icon_lbl.setPixmap(
-            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=_MUTED).pixmap(16, 16)
+            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
         )
         self._yearly_quote_edit.blockSignals(True)
         self._yearly_ref_edit.blockSignals(True)
@@ -262,13 +262,13 @@ class YearlyTextSectionMixin:
 
     def _apply_yeartext_to_ui(self, api_code, year, quote, ref):
         self._yt_icon_lbl.setPixmap(
-            make_icon(ICON_CLOUD_DONE, size=16, color=_GREEN).pixmap(16, 16)
+            make_icon(ICON_CLOUD_DONE, size=16, color=SETTINGS_SUCCESS).pixmap(16, 16)
         )
         self._yt_status_lbl.setText(
             self.tr("Annual text updated for {year}").replace("{year}", str(year))
         )
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_GREEN}; background: transparent;"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_SUCCESS}; background: transparent;"
         )
         preview_text = quote if not ref else f"{quote}  \u2014  {ref}"
         preview = preview_text[:120] + ("\u2026" if len(preview_text) > 120 else "")
@@ -287,11 +287,11 @@ class YearlyTextSectionMixin:
 
     def _set_status_loading(self):
         self._yt_icon_lbl.setPixmap(
-            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=_MUTED).pixmap(16, 16)
+            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
         )
         self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT}; background: transparent;"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
         )
         self._yt_preview_lbl.hide()
         self._yt_refresh_btn.setEnabled(False)
@@ -299,12 +299,12 @@ class YearlyTextSectionMixin:
 
     def _set_status_error(self, message):
         self._yt_icon_lbl.setPixmap(
-            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=_RED).pixmap(16, 16)
+            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_DANGER).pixmap(16, 16)
         )
         short_msg = message[:80] + ("\u2026" if len(message) > 80 else "")
         self._yt_status_lbl.setText(self.tr("Could not fetch annual text"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_RED}; background: transparent;"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_DANGER}; background: transparent;"
         )
         self._yt_preview_lbl.setText(short_msg)
         self._yt_preview_lbl.show()

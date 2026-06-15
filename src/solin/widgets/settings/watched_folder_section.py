@@ -3,10 +3,24 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from ...styles.icons import ICON_FOLDER_LINK, make_icon
-from ._shared import _BORDER, _BORDER2, _DIM, _MUTED, _RED, _TEXT
+from ._shared import (
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DANGER,
+    SETTINGS_DIM,
+    SETTINGS_MUTED,
+    SETTINGS_TEXT,
+)
 
 
 class WatchedFolderSectionMixin:
@@ -21,7 +35,7 @@ class WatchedFolderSectionMixin:
         row_lay.setSpacing(10)
 
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, size=18, color=_MUTED).pixmap(18, 18))
+        icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         icon_lbl.setFixedSize(20, 20)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_lbl.setStyleSheet("background: transparent; border: none;")
@@ -31,7 +45,7 @@ class WatchedFolderSectionMixin:
         col.setSpacing(2)
         self._watched_folder_title_lbl = QLabel(self.tr("Link Folder"))
         self._watched_folder_title_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         col.addWidget(self._watched_folder_title_lbl)
@@ -39,14 +53,14 @@ class WatchedFolderSectionMixin:
             self.tr("Sync folder (Dropbox, OneDrive, etc.) shown as playlists.")
         )
         self._watched_folder_desc_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._watched_folder_desc_lbl.setWordWrap(True)
         col.addWidget(self._watched_folder_desc_lbl)
         saved = self._watched_folder_settings.path()
         self._watched_folder_path_lbl = QLabel()
         self._watched_folder_path_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_MUTED}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
         )
         self._watched_folder_path_lbl.setWordWrap(False)
         self._sync_watched_folder_path_label(saved)
@@ -59,9 +73,9 @@ class WatchedFolderSectionMixin:
         self._watched_folder_pick_btn.setFixedHeight(28)
         self._watched_folder_pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._watched_folder_pick_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {_BORDER2}; border-radius: 6px;"
-            f" background: {_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; }}"
+            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
         )
         self._watched_folder_pick_btn.clicked.connect(self._pick_watched_folder)
         btn_col.addWidget(self._watched_folder_pick_btn)
@@ -70,10 +84,10 @@ class WatchedFolderSectionMixin:
         self._watched_folder_clear_btn.setFixedHeight(28)
         self._watched_folder_clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._watched_folder_clear_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {_BORDER2}; border-radius: 6px;"
-            f" background: {_BORDER}; color: {_MUTED}; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {_BORDER2}; color: {_RED};"
-            f" border-color: {_RED}; }}"
+            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: {SETTINGS_MUTED}; font-size: 11px; padding: 0 10px; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; color: {SETTINGS_DANGER};"
+            f" border-color: {SETTINGS_DANGER}; }}"
         )
         self._watched_folder_clear_btn.clicked.connect(self._clear_watched_folder)
         btn_col.addWidget(self._watched_folder_clear_btn)
@@ -89,11 +103,11 @@ class WatchedFolderSectionMixin:
         self._watched_folder_path_lbl.setText(path or self.tr("No folder selected"))
 
     def _pick_watched_folder(self):
-        from PySide6.QtWidgets import QFileDialog as _QFD
-
         current = self._watched_folder_settings.path()
         start = current if current else os.path.expanduser("~")
-        path = _QFD.getExistingDirectory(self, self.tr("Select folder to link"), start)
+        path = QFileDialog.getExistingDirectory(
+            self, self.tr("Select folder to link"), start
+        )
         if not path:
             return
         self._watched_folder_settings.set_path(path)

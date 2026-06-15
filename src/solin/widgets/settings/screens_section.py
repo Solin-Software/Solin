@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...core.ui.screens import ScreenManager
 from ...styles.icons import ICON_MONITOR, ICON_TV, make_icon
-from ._shared import _DIM, _MUTED, _TEXT
+from ._shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
 
 
 class ScreensSectionMixin:
@@ -27,7 +27,7 @@ class ScreensSectionMixin:
         p_lay.setSpacing(10)
         p_icon = QLabel()
         p_icon.setPixmap(
-            make_icon(ICON_MONITOR, size=18, color=_MUTED).pixmap(18, 18)
+            make_icon(ICON_MONITOR, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
         )
         p_icon.setFixedSize(20, 20)
         p_icon.setStyleSheet("background: transparent; border: none;")
@@ -36,7 +36,7 @@ class ScreensSectionMixin:
         p_col.setSpacing(1)
         p_title = QLabel(self.tr("Primary Screen (control)"))
         p_title.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         p_col.addWidget(p_title)
@@ -45,7 +45,7 @@ class ScreensSectionMixin:
             f"{p_geo.width()} \u00d7 {p_geo.height()} px  \u2022  {primary.name()}"
         )
         p_res.setStyleSheet(
-            f"font-size: 11px; color: {_MUTED}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
         )
         p_col.addWidget(p_res)
         p_lay.addLayout(p_col, stretch=1)
@@ -57,7 +57,7 @@ class ScreensSectionMixin:
                 self.tr("No secondary screen detected. Connect an external monitor.")
             )
             no_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_DIM}; padding: 8px 14px;"
+                f"font-size: 11px; color: {SETTINGS_DIM}; padding: 8px 14px;"
                 " background: transparent; border: none;"
             )
             no_lbl.setWordWrap(True)
@@ -73,7 +73,7 @@ class ScreensSectionMixin:
             s_lay_h.setSpacing(10)
             s_icon = QLabel()
             s_icon.setPixmap(
-                make_icon(ICON_TV, size=18, color=_MUTED).pixmap(18, 18)
+                make_icon(ICON_TV, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
             )
             s_icon.setFixedSize(20, 20)
             s_icon.setStyleSheet("background: transparent; border: none;")
@@ -84,7 +84,7 @@ class ScreensSectionMixin:
                 self.tr("Secondary {n} (projection)").replace("{n}", str(i))
             )
             s_title.setStyleSheet(
-                f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+                f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
                 " background: transparent; border: none;"
             )
             s_col.addWidget(s_title)
@@ -94,7 +94,7 @@ class ScreensSectionMixin:
                 f"  \u2022  {screen.name()}"
             )
             s_res.setStyleSheet(
-                f"font-size: 11px; color: {_MUTED};"
+                f"font-size: 11px; color: {SETTINGS_MUTED};"
                 " background: transparent; border: none;"
             )
             s_col.addWidget(s_res)

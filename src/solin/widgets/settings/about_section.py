@@ -5,7 +5,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from ...core.foundation.constants import APP_VERSION
-from ._shared import _ACCENT, _BORDER, _DIM, _MUTED, _TEXT
+from ._shared import SETTINGS_ACCENT, SETTINGS_BORDER, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
 
 
 class AboutSectionMixin:
@@ -23,12 +23,12 @@ class AboutSectionMixin:
         header_row.setSpacing(8)
         name_lbl = QLabel("Solin")
         name_lbl.setStyleSheet(
-            f"font-size: 16px; font-weight: 700; color: {_TEXT}; background: transparent;"
+            f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT}; background: transparent;"
         )
         header_row.addWidget(name_lbl)
         ver_badge = QLabel(APP_VERSION)
         ver_badge.setStyleSheet(
-            f"font-size: 10px; color: {_MUTED}; background: {_BORDER};"
+            f"font-size: 10px; color: {SETTINGS_MUTED}; background: {SETTINGS_BORDER};"
             " border-radius: 4px; padding: 2px 6px; font-weight: 600;"
         )
         header_row.addWidget(ver_badge)
@@ -39,7 +39,7 @@ class AboutSectionMixin:
             self.tr("Audio & Video app for Kingdom Hall meetings.")
         )
         self._about_desc_lbl.setStyleSheet(
-            f"font-size: 12px; color: {_MUTED}; background: transparent;"
+            f"font-size: 12px; color: {SETTINGS_MUTED}; background: transparent;"
         )
         self._about_desc_lbl.setWordWrap(True)
         inner_lay.addWidget(self._about_desc_lbl)
@@ -49,7 +49,7 @@ class AboutSectionMixin:
         self._link_site_btn = QPushButton(self.tr("Official Website"))
         self._link_site_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._link_site_btn.setStyleSheet(
-            f"QPushButton {{ color: {_ACCENT}; font-size: 12px; font-weight: 500;"
+            f"QPushButton {{ color: {SETTINGS_ACCENT}; font-size: 12px; font-weight: 500;"
             f" background: transparent; border: none; padding: 0px; }}"
             f"QPushButton:hover {{ color: #58a6ff; }}"
         )
@@ -60,7 +60,7 @@ class AboutSectionMixin:
         self._link_changelog_btn = QPushButton(self.tr("Changelog"))
         self._link_changelog_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._link_changelog_btn.setStyleSheet(
-            f"QPushButton {{ color: {_ACCENT}; font-size: 12px; font-weight: 500;"
+            f"QPushButton {{ color: {SETTINGS_ACCENT}; font-size: 12px; font-weight: 500;"
             f" background: transparent; border: none; padding: 0px; }}"
             f"QPushButton:hover {{ color: #58a6ff; }}"
         )
@@ -80,7 +80,7 @@ class AboutSectionMixin:
             "its associated organizations."
         ))
         self._disclaimer_lbl.setStyleSheet(
-            f"font-size: 10px; color: {_DIM}; background: transparent;"
+            f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent;"
         )
         self._disclaimer_lbl.setWordWrap(True)
         inner_lay.addWidget(self._disclaimer_lbl)

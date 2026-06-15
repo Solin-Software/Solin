@@ -23,37 +23,37 @@ from ...core.meetings.schedule import (
     parse_time_text,
 )
 from ...styles.icons import ICON_CALENDAR, ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, make_icon
-from ._shared import _ACCENT, _BG, _BORDER, _BORDER2, _DIM, _MUTED, _SURF, _TEXT
+from ._shared import SETTINGS_ACCENT, SETTINGS_BG, SETTINGS_BORDER, SETTINGS_BORDER_STRONG, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_SURFACE, SETTINGS_TEXT
 
 _DAY_DATA = tuple(range(7))
 _FIELD_BUTTON_STYLE = (
     "QPushButton {"
-    f" background: {_SURF};"
-    f" color: {_TEXT};"
-    f" border: 1px solid {_BORDER2};"
+    f" background: {SETTINGS_SURFACE};"
+    f" color: {SETTINGS_TEXT};"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
     " border-radius: 8px;"
     " padding: 0 10px;"
     " font-size: 12px;"
     " font-weight: 500;"
     "}"
     "QPushButton:hover {"
-    f" background: {_BORDER};"
-    f" border-color: {_ACCENT};"
+    f" background: {SETTINGS_BORDER};"
+    f" border-color: {SETTINGS_ACCENT};"
     "}"
     "QPushButton:pressed {"
-    f" background: {_BG};"
+    f" background: {SETTINGS_BG};"
     "}"
     "QPushButton:disabled {"
-    f" background: {_BG};"
-    f" color: {_DIM};"
-    f" border-color: {_BORDER};"
+    f" background: {SETTINGS_BG};"
+    f" color: {SETTINGS_DIM};"
+    f" border-color: {SETTINGS_BORDER};"
     "}"
 )
 _MENU_STYLE = (
     "QMenu {"
-    f" background: {_SURF};"
-    f" color: {_TEXT};"
-    f" border: 1px solid {_BORDER2};"
+    f" background: {SETTINGS_SURFACE};"
+    f" color: {SETTINGS_TEXT};"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
     " border-radius: 8px;"
     " padding: 6px;"
     "}"
@@ -62,31 +62,31 @@ _MENU_STYLE = (
     " border-radius: 6px;"
     "}"
     "QMenu::item:selected {"
-    f" background: {_BORDER};"
+    f" background: {SETTINGS_BORDER};"
     "}"
     "QMenu::indicator { width: 14px; height: 14px; }"
 )
 _TIME_POPUP_CARD_STYLE = (
     "QFrame#ScheduleTimePickerCard {"
-    f" background: {_SURF};"
-    f" border: 1px solid {_BORDER2};"
+    f" background: {SETTINGS_SURFACE};"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
     " border-radius: 12px;"
     "}"
 )
-_TIME_LABEL_STYLE = f"font-size: 11px; color: {_MUTED}; background: transparent; border: none;"
+_TIME_LABEL_STYLE = f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
 _TIME_PREVIEW_STYLE = (
-    f"font-size: 19px; font-weight: 700; color: {_TEXT};"
+    f"font-size: 19px; font-weight: 700; color: {SETTINGS_TEXT};"
     " background: transparent; border: none; padding: 0;"
 )
 _STEPPER_CARD_STYLE = (
     "QFrame {"
-    f" background: {_BG};"
-    f" border: 1px solid {_BORDER2};"
+    f" background: {SETTINGS_BG};"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
     " border-radius: 8px;"
     "}"
 )
 _STEPPER_VALUE_STYLE = (
-    f"font-size: 16px; font-weight: 700; color: {_TEXT};"
+    f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};"
     " background: transparent; border: none;"
 )
 _STEPPER_BUTTON_STYLE = (
@@ -96,12 +96,12 @@ _STEPPER_BUTTON_STYLE = (
     " border-radius: 5px;"
     " padding: 0;"
     "}"
-    f"QToolButton:hover {{ background: {_BORDER}; }}"
-    f"QToolButton:pressed {{ background: {_BORDER2}; }}"
+    f"QToolButton:hover {{ background: {SETTINGS_BORDER}; }}"
+    f"QToolButton:pressed {{ background: {SETTINGS_BORDER_STRONG}; }}"
 )
 _TIME_APPLY_STYLE = (
     "QPushButton {"
-    f" background: {_ACCENT};"
+    f" background: {SETTINGS_ACCENT};"
     " color: white;"
     " border: none;"
     " border-radius: 8px;"
@@ -112,12 +112,12 @@ _TIME_APPLY_STYLE = (
 )
 _TIME_CANCEL_STYLE = (
     "QPushButton {"
-    f" background: {_BORDER};"
-    f" color: {_TEXT};"
-    f" border: 1px solid {_BORDER2};"
+    f" background: {SETTINGS_BORDER};"
+    f" color: {SETTINGS_TEXT};"
+    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
     " border-radius: 8px;"
     "}"
-    f"QPushButton:hover {{ background: {_BORDER2}; }}"
+    f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
 )
 
 
@@ -237,7 +237,7 @@ class _TimeStepper(QWidget):
         button.setFixedSize(60, 24)
         button.setToolTip(tooltip)
         button.setStyleSheet(_STEPPER_BUTTON_STYLE)
-        button.setIcon(make_icon(icon_svg, size=14, color=_MUTED))
+        button.setIcon(make_icon(icon_svg, size=14, color=SETTINGS_MUTED))
         button.setIconSize(QSize(14, 14))
         return button
 
@@ -389,7 +389,7 @@ class MeetingScheduleSectionMixin:
         ))
         self._schedule_hint_lbl.setWordWrap(True)
         self._schedule_hint_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
             " padding: 12px 14px 2px 14px;"
         )
         lay.addWidget(self._schedule_hint_lbl)
@@ -424,7 +424,7 @@ class MeetingScheduleSectionMixin:
 
         icon_label = QLabel()
         icon_label.setPixmap(
-            make_icon(cast(str, ICON_CALENDAR), size=18, color=_MUTED).pixmap(18, 18)
+            make_icon(cast(str, ICON_CALENDAR), size=18, color=SETTINGS_MUTED).pixmap(18, 18)
         )
         icon_label.setFixedSize(20, 20)
         icon_label.setStyleSheet("background: transparent; border: none;")
@@ -434,13 +434,13 @@ class MeetingScheduleSectionMixin:
         text_col.setSpacing(1)
         title_label = QLabel(title)
         title_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         desc_label = QLabel(desc)
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         text_col.addWidget(title_label)
         text_col.addWidget(desc_label)

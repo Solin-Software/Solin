@@ -11,20 +11,20 @@ from ...core.integrations.automation.shortcuts import (
     AutoKeyAction,
     event_label,
 )
-from ..common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
+from ..common.no_scroll_combo_box import NoScrollComboBox
 from ._shared import (
-    _ACCENT,
-    _BG,
-    _BORDER2,
-    _DIM,
-    _GREEN,
-    _MUTED,
-    _PICKER_CANCEL_SS,
-    _PICKER_OK_SS,
-    _RED,
-    _SURF,
-    _TEXT,
-    _ToggleSwitch,
+    SETTINGS_ACCENT,
+    SETTINGS_BG,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_SUCCESS,
+    SETTINGS_MUTED,
+    SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET,
+    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
+    SETTINGS_DANGER,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
+    SettingsToggleSwitch,
 )
 
 
@@ -103,7 +103,7 @@ class _ShortcutSequenceEdit(QPushButton):
         self.focus_changed.emit(recording)
 
 
-class _AutoKeyEditorDialog(QDialog):
+class AutoKeyEditorDialog(QDialog):
     def __init__(
         self,
         parent=None,
@@ -139,39 +139,39 @@ class _AutoKeyEditorDialog(QDialog):
 
     def _build(self):
         self.setStyleSheet(
-            f"QDialog {{ background: {_SURF}; }}"
-            f"QLabel {{ color: {_TEXT}; background: transparent; }}"
-            f"QPushButton#AutoKeyShortcut {{ background-color: {_BG}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; border-radius: 8px;"
+            f"QDialog {{ background: {SETTINGS_SURFACE}; }}"
+            f"QLabel {{ color: {SETTINGS_TEXT}; background: transparent; }}"
+            f"QPushButton#AutoKeyShortcut {{ background-color: {SETTINGS_BG}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px;"
             f" padding: 0px 14px; font-size: 13px; font-weight: 600;"
             f" text-align: left;"
             f" min-height: 42px; }}"
-            f"QPushButton#AutoKeyShortcut:hover {{ border-color: {_MUTED}; }}"
-            f"QPushButton#AutoKeyShortcut:focus {{ border-color: {_ACCENT}; }}"
+            f"QPushButton#AutoKeyShortcut:hover {{ border-color: {SETTINGS_MUTED}; }}"
+            f"QPushButton#AutoKeyShortcut:focus {{ border-color: {SETTINGS_ACCENT}; }}"
             f"QPushButton#AutoKeyShortcut[recording=\"true\"] {{"
-            f" background-color: #0f1a2a; border-color: {_ACCENT}; color: #ffffff; }}"
+            f" background-color: #0f1a2a; border-color: {SETTINGS_ACCENT}; color: #ffffff; }}"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 20, 20, 16)
         lay.setSpacing(12)
 
         title = QLabel(self._title)
-        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {_TEXT};")
+        title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};")
         lay.addWidget(title)
 
         hint = QLabel(self._hint)
-        hint.setStyleSheet(f"font-size: 12px; color: {_MUTED};")
+        hint.setStyleSheet(f"font-size: 12px; color: {SETTINGS_MUTED};")
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
         if self._show_event:
             event_lbl = QLabel(self.tr("Event"))
             event_lbl.setStyleSheet(
-                f"font-size: 12px; font-weight: 600; color: {_TEXT};"
+                f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
                 " background: transparent; border: none;"
             )
             lay.addWidget(event_lbl)
-            self._event_combo = _NoScrollComboBox()
+            self._event_combo = NoScrollComboBox()
             self._event_combo.setMinimumHeight(40)
             self._event_combo.setStyleSheet(self._auto_key_combo_style())
             for event in AUTO_KEY_EVENTS:
@@ -182,7 +182,7 @@ class _AutoKeyEditorDialog(QDialog):
 
         shortcut_lbl = QLabel(self.tr("Shortcut"))
         shortcut_lbl.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         lay.addWidget(shortcut_lbl)
@@ -194,7 +194,7 @@ class _AutoKeyEditorDialog(QDialog):
 
         self._shortcut_hint_lbl = QLabel(self.tr("Click the field, then press one shortcut."))
         self._shortcut_hint_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         lay.addWidget(self._shortcut_hint_lbl)
 
@@ -202,17 +202,17 @@ class _AutoKeyEditorDialog(QDialog):
             enabled_row = QHBoxLayout()
             enabled_row.setSpacing(10)
             enabled_text = QLabel(self.tr("Enabled"))
-            enabled_text.setStyleSheet(f"font-size: 13px; color: {_TEXT};")
+            enabled_text.setStyleSheet(f"font-size: 13px; color: {SETTINGS_TEXT};")
             enabled_row.addWidget(enabled_text)
             enabled_row.addStretch()
-            self._enabled_toggle = _ToggleSwitch(True)
+            self._enabled_toggle = SettingsToggleSwitch(True)
             enabled_row.addWidget(self._enabled_toggle)
             lay.addLayout(enabled_row)
         else:
             self._enabled_toggle = None
 
         self._error_lbl = QLabel("")
-        self._error_lbl.setStyleSheet(f"font-size: 11px; color: {_RED};")
+        self._error_lbl.setStyleSheet(f"font-size: 11px; color: {SETTINGS_DANGER};")
         self._error_lbl.setWordWrap(True)
         lay.addWidget(self._error_lbl)
 
@@ -222,12 +222,12 @@ class _AutoKeyEditorDialog(QDialog):
         cancel = QPushButton(self.tr("Cancel"))
         cancel.setMinimumHeight(34)
         cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel.setStyleSheet(_PICKER_CANCEL_SS)
+        cancel.setStyleSheet(SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET)
         cancel.clicked.connect(self.reject)
         self._save_btn = QPushButton(self.tr("Save"))
         self._save_btn.setMinimumHeight(34)
         self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._save_btn.setStyleSheet(_PICKER_OK_SS)
+        self._save_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
         self._save_btn.clicked.connect(self._accept)
         btn_row.addWidget(cancel)
         btn_row.addWidget(self._save_btn)
@@ -255,17 +255,17 @@ class _AutoKeyEditorDialog(QDialog):
     @staticmethod
     def _auto_key_combo_style():
         return (
-            f"QComboBox {{ background-color: {_BG}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; border-radius: 8px;"
+            f"QComboBox {{ background-color: {SETTINGS_BG}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px;"
             f" padding: 0px 14px; font-size: 13px; min-height: 40px; }}"
-            f"QComboBox:hover {{ border-color: {_MUTED}; }}"
-            f"QComboBox:focus {{ border-color: {_ACCENT}; }}"
+            f"QComboBox:hover {{ border-color: {SETTINGS_MUTED}; }}"
+            f"QComboBox:focus {{ border-color: {SETTINGS_ACCENT}; }}"
             f"QComboBox::drop-down {{ border: none; width: 30px; }}"
             f"QComboBox::down-arrow {{ image: none; width: 0px; height: 0px;"
             f" border-left: 4px solid transparent; border-right: 4px solid transparent;"
-            f" border-top: 5px solid {_MUTED}; margin-right: 12px; }}"
-            f"QComboBox QAbstractItemView {{ background-color: {_BG}; color: {_TEXT};"
-            f" border: 1px solid {_BORDER2}; selection-background-color: #1f3a6e;"
+            f" border-top: 5px solid {SETTINGS_MUTED}; margin-right: 12px; }}"
+            f"QComboBox QAbstractItemView {{ background-color: {SETTINGS_BG}; color: {SETTINGS_TEXT};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: #1f3a6e;"
             f" outline: none; }}"
         )
 
@@ -284,12 +284,12 @@ class _AutoKeyEditorDialog(QDialog):
         if recording:
             self._shortcut_hint_lbl.setText(self.tr("Listening... press one shortcut."))
             self._shortcut_hint_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_ACCENT}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_ACCENT}; background: transparent; border: none;"
             )
         else:
             self._shortcut_hint_lbl.setText(self.tr("Click the field, then press one shortcut."))
             self._shortcut_hint_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
             )
 
     def _on_shortcut_changed(self, *_):
@@ -297,7 +297,7 @@ class _AutoKeyEditorDialog(QDialog):
         if self._sequence_text():
             self._shortcut_hint_lbl.setText(self.tr("Shortcut captured."))
             self._shortcut_hint_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_GREEN}; background: transparent; border: none;"
+                f"font-size: 11px; color: {SETTINGS_SUCCESS}; background: transparent; border: none;"
             )
             QTimer.singleShot(0, self._shortcut_edit.clearFocus)
 

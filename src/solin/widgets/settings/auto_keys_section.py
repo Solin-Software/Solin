@@ -15,20 +15,20 @@ from ...styles.icons import (
     make_icon,
 )
 from ._shared import (
-    _ACCENT,
-    _BG,
-    _BORDER,
-    _BORDER2,
-    _DIM,
-    _GREEN,
-    _MUTED,
-    _PICKER_OK_SS,
-    _RED,
-    _SURF,
-    _TEXT,
-    _ToggleSwitch,
+    SETTINGS_ACCENT,
+    SETTINGS_BG,
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_SUCCESS,
+    SETTINGS_MUTED,
+    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
+    SETTINGS_DANGER,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
+    SettingsToggleSwitch,
 )
-from .auto_key_dialog import _AutoKeyEditorDialog
+from .auto_key_dialog import AutoKeyEditorDialog
 
 
 class AutoKeysSectionMixin:
@@ -44,7 +44,7 @@ class AutoKeysSectionMixin:
         header_layout.setSpacing(12)
 
         icon = QLabel()
-        icon.setPixmap(make_icon(ICON_KEYBOARD, size=18, color=_MUTED).pixmap(18, 18))
+        icon.setPixmap(make_icon(ICON_KEYBOARD, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         icon.setFixedSize(20, 20)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet("background: transparent; border: none;")
@@ -54,7 +54,7 @@ class AutoKeysSectionMixin:
         text_col.setSpacing(1)
         self._auto_keys_header_lbl = QLabel(self.tr("Automatic Shortcuts"))
         self._auto_keys_header_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {_TEXT};"
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         text_col.addWidget(self._auto_keys_header_lbl)
@@ -62,21 +62,21 @@ class AutoKeysSectionMixin:
             self.tr("Sends keyboard shortcuts when visual media changes state.")
         )
         self._auto_keys_header_desc.setStyleSheet(
-            f"font-size: 11px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         self._auto_keys_header_desc.setWordWrap(True)
         text_col.addWidget(self._auto_keys_header_desc)
         header_layout.addLayout(text_col, stretch=1)
 
         enabled = self._auto_key_settings.is_enabled()
-        self._auto_keys_toggle = _ToggleSwitch(checked=enabled)
+        self._auto_keys_toggle = SettingsToggleSwitch(checked=enabled)
         self._auto_keys_toggle.toggled.connect(self._on_auto_keys_toggled)
         header_layout.addWidget(self._auto_keys_toggle)
         layout.addWidget(header)
 
         self._auto_keys_container = QFrame()
         self._auto_keys_container.setStyleSheet(
-            f"background: {_BG}; border: none; border-top: 1px solid {_BORDER};"
+            f"background: {SETTINGS_BG}; border: none; border-top: 1px solid {SETTINGS_BORDER};"
         )
         container_layout = QVBoxLayout(self._auto_keys_container)
         container_layout.setContentsMargins(14, 12, 14, 12)
@@ -86,7 +86,7 @@ class AutoKeysSectionMixin:
             self.tr("Create one or more shortcuts for start, end, pause and resume events.")
         )
         self._auto_keys_hint_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_MUTED}; background: transparent; border: none;"
+            f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
         )
         self._auto_keys_hint_lbl.setWordWrap(True)
         container_layout.addWidget(self._auto_keys_hint_lbl)
@@ -97,7 +97,7 @@ class AutoKeysSectionMixin:
 
         self._auto_keys_empty_lbl = QLabel(self.tr("No shortcuts configured."))
         self._auto_keys_empty_lbl.setStyleSheet(
-            f"font-size: 12px; color: {_DIM}; background: transparent; border: none;"
+            f"font-size: 12px; color: {SETTINGS_DIM}; background: transparent; border: none;"
         )
         container_layout.addWidget(self._auto_keys_empty_lbl)
 
@@ -107,7 +107,7 @@ class AutoKeysSectionMixin:
         self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, "#ffffff"))
         self._auto_keys_add_btn.setMinimumHeight(34)
         self._auto_keys_add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._auto_keys_add_btn.setStyleSheet(_PICKER_OK_SS)
+        self._auto_keys_add_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
         self._auto_keys_add_btn.clicked.connect(self._add_auto_key_action)
         add_row.addWidget(self._auto_keys_add_btn)
         container_layout.addLayout(add_row)
@@ -175,7 +175,7 @@ class AutoKeysSectionMixin:
     def _make_auto_key_row(self, action: AutoKeyAction) -> QFrame:
         row = QFrame()
         row.setStyleSheet(
-            f"background: {_SURF}; border: 1px solid {_BORDER};"
+            f"background: {SETTINGS_SURFACE}; border: 1px solid {SETTINGS_BORDER};"
             " border-radius: 8px;"
         )
         layout = QHBoxLayout(row)
@@ -183,7 +183,7 @@ class AutoKeysSectionMixin:
         layout.setSpacing(10)
 
         icon = QLabel()
-        icon.setPixmap(make_icon(ICON_KEYBOARD, 16, _MUTED).pixmap(16, 16))
+        icon.setPixmap(make_icon(ICON_KEYBOARD, 16, SETTINGS_MUTED).pixmap(16, 16))
         icon.setFixedSize(18, 18)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(icon)
@@ -192,13 +192,13 @@ class AutoKeysSectionMixin:
         text_col.setSpacing(2)
         event_label_widget = QLabel(self._event_label(action.event))
         event_label_widget.setStyleSheet(
-            f"font-size: 12px; font-weight: 600; color: {_TEXT};"
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         text_col.addWidget(event_label_widget)
         sequence_label = QLabel(action.sequence)
         sequence_label.setStyleSheet(
-            f"font-size: 11px; font-weight: 600; color: {_MUTED};"
+            f"font-size: 11px; font-weight: 600; color: {SETTINGS_MUTED};"
             " background: transparent; border: none; padding: 0;"
         )
         text_col.addWidget(sequence_label, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -208,7 +208,7 @@ class AutoKeysSectionMixin:
         status.setFixedSize(8, 8)
         status.setToolTip(self.tr("Enabled") if action.enabled else self.tr("Disabled"))
         status.setStyleSheet(
-            f"background-color: {_GREEN if action.enabled else _BORDER2};"
+            f"background-color: {SETTINGS_SUCCESS if action.enabled else SETTINGS_BORDER_STRONG};"
             " border: none; border-radius: 4px;"
         )
         layout.addWidget(status)
@@ -229,18 +229,18 @@ class AutoKeysSectionMixin:
     def _auto_key_icon_button(self, icon_svg, tooltip: str, danger: bool = False) -> QPushButton:
         button = QPushButton()
         button.setFixedSize(28, 28)
-        button.setIcon(make_icon(icon_svg, 14, _RED if danger else _MUTED))
+        button.setIcon(make_icon(icon_svg, 14, SETTINGS_DANGER if danger else SETTINGS_MUTED))
         button.setToolTip(tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setStyleSheet(
-            f"QPushButton {{ background-color: {_BG}; border: 1px solid {_BORDER2};"
+            f"QPushButton {{ background-color: {SETTINGS_BG}; border: 1px solid {SETTINGS_BORDER_STRONG};"
             " border-radius: 6px; padding: 0px; }"
-            f" QPushButton:hover {{ border-color: {_RED if danger else _ACCENT}; }}"
+            f" QPushButton:hover {{ border-color: {SETTINGS_DANGER if danger else SETTINGS_ACCENT}; }}"
         )
         return button
 
     def _add_auto_key_action(self):
-        dialog = _AutoKeyEditorDialog(self)
+        dialog = AutoKeyEditorDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_action:
             actions = self._auto_key_actions()
             actions.append(dialog.result_action)
@@ -251,7 +251,7 @@ class AutoKeysSectionMixin:
         action = next((candidate for candidate in actions if candidate.id == action_id), None)
         if action is None:
             return
-        dialog = _AutoKeyEditorDialog(self, action)
+        dialog = AutoKeyEditorDialog(self, action)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.result_action:
             updated = [
                 dialog.result_action if candidate.id == action_id else candidate
