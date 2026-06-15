@@ -26,8 +26,8 @@ from .edit_visuals import (
     PlaylistThumbnailProvider,
     PlaylistIconProvider,
 )
-from ..jw_media_catalog_bridge import JWMediaCatalogBridge
-from ..jw_songs_bridge import JWSongsBridge
+from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
+from solin.ui.qml.jw_songs import JWSongsBridge
 
 from solin.ui.qml.loader import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception

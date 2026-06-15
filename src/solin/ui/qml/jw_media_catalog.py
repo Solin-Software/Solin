@@ -1,5 +1,5 @@
 """
-jw_media_catalog_bridge.py — QML bridge + model for JW Media Catalog browsing.
+jw_media_catalog.py — QML bridge + model for JW Media Catalog browsing.
 
 Architecture
 ────────────
@@ -34,11 +34,11 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from ..core.meetings.colors import accent_from_hue
+from solin.core.meetings.colors import accent_from_hue
 
 if TYPE_CHECKING:
-    from ..core.jw.catalog import JWMediaCatalogService
-    from ..core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
+    from solin.core.jw.catalog import JWMediaCatalogService
+    from solin.core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
 
 log = logging.getLogger(__name__)
 

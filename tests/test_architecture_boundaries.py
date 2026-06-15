@@ -356,10 +356,14 @@ def test_qml_presentation_adapters_live_under_ui_qml():
     legacy_paths = (
         PROJECT_ROOT / "src" / "solin" / "qml_module.py",
         PROJECT_ROOT / "src" / "solin" / "quick_toolbar_bridge.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "jw_media_catalog_bridge.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "jw_songs_bridge.py",
         PROJECT_ROOT / "src" / "solin" / "widgets" / "timer_bridge.py",
     )
     expected_paths = (
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "loader.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_media_catalog.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_songs.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "quick_toolbar.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_bridge.py",
     )
@@ -372,6 +376,8 @@ def test_qml_presentation_adapters_live_under_ui_qml():
     forbidden_modules = {
         ("solin", "qml_module"),
         ("solin", "quick_toolbar_bridge"),
+        ("solin", "widgets", "jw_media_catalog_bridge"),
+        ("solin", "widgets", "jw_songs_bridge"),
         ("solin", "widgets", "timer_bridge"),
     }
     for codebase in CODEBASES:

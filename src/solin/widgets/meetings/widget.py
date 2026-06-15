@@ -58,8 +58,8 @@ from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
 from ...core.media.settings import MediaSettingsStore
 from solin.ui.qml.loader import load_qml_type
-from ..jw_media_catalog_bridge import JWMediaCatalogBridge
-from ..jw_songs_bridge import JWSongsBridge
+from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
+from solin.ui.qml.jw_songs import JWSongsBridge
 from .tree_controller import MeetingTreeController
 from .overview import _Overview
 from .visuals import (

@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.jw.songs import JWSongsStore
-from solin.widgets.jw_songs_bridge import JWSongsBridge
+from solin.ui.qml.jw_songs import JWSongsBridge
 
 
 def _app():

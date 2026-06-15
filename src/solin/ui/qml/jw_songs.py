@@ -16,10 +16,10 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from ..core.jw.media_api import song_publication_symbol
-from ..core.jw.identifiers import lang_to_meps, parse_jworg_url
-from ..core.jw.songs import JWSongsStore
-from .jw_media_catalog_bridge import build_jw_media_placement_options
+from solin.core.jw.media_api import song_publication_symbol
+from solin.core.jw.identifiers import lang_to_meps, parse_jworg_url
+from solin.core.jw.songs import JWSongsStore
+from solin.ui.qml.jw_media_catalog import build_jw_media_placement_options
 
 _BIG_INDEX = 2**31 - 1
 
