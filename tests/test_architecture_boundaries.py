@@ -331,6 +331,28 @@ def test_ui_workflows_do_not_import_document_conversion_adapters():
     )
 
 
+def test_widgets_do_not_own_jw_catalog_thumbnail_download_workers():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    forbidden_names = {
+        "ensure_thumbnail_cached",
+        "QRunnable",
+        "QThreadPool",
+    }
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in _imports(path):
+            imported = {alias.name for alias in node.names}
+            blocked = sorted(imported & forbidden_names)
+            if blocked:
+                violations.append(f"{_display(path, node)} [{', '.join(blocked)}]")
+
+    assert violations == [], (
+        "Widgets must delegate JW catalog thumbnail HTTP/cache workers to the "
+        "injected session:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

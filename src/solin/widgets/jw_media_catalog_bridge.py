@@ -6,12 +6,8 @@ Architecture
 - JWMediaCatalogModel(QAbstractListModel)
     Grid model exposing video items fetched from the JW.org media catalog.
     Each row represents a single video with thumbnail, title, duration, and
-    download metadata.  Thumbnails are lazily downloaded on a background
-    thread-pool and the model is updated in-place via ``dataChanged``.
-
-- _ThumbSignals / _ThumbWorker
-    QRunnable-based worker that downloads a single thumbnail in the background
-    and signals the main thread when done.
+    download metadata. Thumbnails are supplied by an injected owned session
+    and the model is updated in-place via ``dataChanged``.
 
 - JWMediaCatalogBridge(QObject)
     Main bridge exposed to QML as ``catalogBridge``.  Coordinates fetching the
@@ -23,7 +19,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from collections import deque
 from typing import Any, Optional, TYPE_CHECKING
 
 from PySide6.QtCore import (
@@ -31,9 +26,7 @@ from PySide6.QtCore import (
     QCoreApplication,
     QModelIndex,
     QObject,
-    QRunnable,
     Qt,
-    QThreadPool,
     QTimer,
     QUrl,
     Property,
@@ -41,14 +34,11 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from ..core.jw.catalog import (
-    JWMediaCatalogCachePaths,
-    ensure_thumbnail_cached,
-)
 from ..core.meetings.colors import accent_from_hue
 
 if TYPE_CHECKING:
     from ..core.jw.catalog import JWMediaCatalogService
+    from ..core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
 
 log = logging.getLogger(__name__)
 
@@ -275,48 +265,6 @@ class JWMediaCatalogModel(QAbstractListModel):
         return tuple(item.get(key) for key in cls._SIGNATURE_KEYS)
 
 
-# ── Thumbnail background worker ──────────────────────────────────────────────
-
-
-class _ThumbSignals(QObject):
-    """Signals emitted by ``_ThumbWorker`` on the main thread."""
-    ready = Signal(str, str)  # (item_id, local_file_path)
-
-
-class _ThumbWorker(QRunnable):
-    """Download a single thumbnail in a background thread."""
-
-    def __init__(
-        self,
-        item_id: str,
-        thumbnail_url: str,
-        cache_paths: JWMediaCatalogCachePaths,
-    ) -> None:
-        super().__init__()
-        self.item_id = item_id
-        self.thumbnail_url = thumbnail_url
-        self.cache_paths = cache_paths
-        self.signals = _ThumbSignals()
-        self.setAutoDelete(True)
-
-    def run(self) -> None:
-        """Execute the download and emit ``ready``."""
-        try:
-            local_path = ensure_thumbnail_cached(
-                self.thumbnail_url,
-                cache_paths=self.cache_paths,
-            )
-            self.signals.ready.emit(self.item_id, local_path)
-        except Exception:  # noqa: BLE001 - thumbnail worker boundary
-            log.debug(
-                "[CatalogBridge] Thumbnail download failed for %s",
-                self.thumbnail_url,
-                exc_info=True,
-            )
-            self.signals.ready.emit(self.item_id, "")
-
-
-_MAX_CONCURRENT_THUMBS = 4
 _PROGRESS_UI_UPDATE_INTERVAL_MS = 160
 
 
@@ -358,12 +306,11 @@ class JWMediaCatalogBridge(QObject):
 
     def __init__(
         self,
-        cache_paths: JWMediaCatalogCachePaths,
         catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
-        self._cache_paths = cache_paths
 
         # Catalog service (async fetch backend)
         self._catalog_service = catalog_service_factory(self)
@@ -406,12 +353,8 @@ class JWMediaCatalogBridge(QObject):
         self._pl: dict[str, Any] | None = None
         self._lang_code: str = "E"
 
-        # Thumbnail download queue
-        self._thumb_pending: set[str] = set()
-        self._thumb_queue: deque[tuple[str, str]] = deque()
-        self._thumb_active: int = 0
-        self._thumb_pool = QThreadPool(self)
-        self._thumb_pool.setMaxThreadCount(_MAX_CONCURRENT_THUMBS)
+        self._thumbnail_session = thumbnail_session_factory.create(parent=self)
+        self._thumbnail_session.ready.connect(self._on_thumb_ready)
 
     # ── QML Properties ────────────────────────────────────────────────────
 
@@ -672,10 +615,7 @@ class JWMediaCatalogBridge(QObject):
         self._pending_item = None
         self._placement_options = []
         self._show_placement = False
-        self._thumb_pending.clear()
-        self._thumb_queue.clear()
-        self._thumb_active = 0
-        self._thumb_pool.clear()
+        self._thumbnail_session.reset()
         self._model.clear()
 
         self.searchQueryChanged.emit()
@@ -698,11 +638,7 @@ class JWMediaCatalogBridge(QObject):
         self._active_catalog_request_id = ""
         self._progress_apply_timer.stop()
         self._pending_progress = None
-        self._thumb_pending.clear()
-        self._thumb_queue.clear()
-        self._thumb_active = 0
-        self._thumb_pool.clear()
-        self._thumb_pool.waitForDone()
+        self._thumbnail_session.close()
 
     # ── Python-facing setters (called by host view) ───────────────────────
 
@@ -844,27 +780,12 @@ class JWMediaCatalogBridge(QObject):
             item_id = item.get("id", "")
             thumb_url = item.get("thumbnail_url", "")
             thumb_path = item.get("thumbnail_path", "")
-            if not thumb_url or thumb_path or item_id in self._thumb_pending:
+            if not thumb_url or thumb_path:
                 continue
-            self._thumb_pending.add(item_id)
-            self._thumb_queue.append((item_id, thumb_url))
-
-        self._pump_thumb_queue()
-
-    def _pump_thumb_queue(self) -> None:
-        """Start workers up to the concurrency limit."""
-        while self._thumb_active < _MAX_CONCURRENT_THUMBS and self._thumb_queue:
-            item_id, thumb_url = self._thumb_queue.popleft()
-            worker = _ThumbWorker(item_id, thumb_url, self._cache_paths)
-            worker.signals.ready.connect(self._on_thumb_ready)
-            self._thumb_active += 1
-            self._thumb_pool.start(worker)
+            self._thumbnail_session.enqueue(item_id, thumb_url)
 
     def _on_thumb_ready(self, item_id: str, local_path: str) -> None:
         """Handle a completed thumbnail download."""
-        self._thumb_active = max(0, self._thumb_active - 1)
-        self._thumb_pending.discard(item_id)
-
         if local_path:
             # Update master list so re-filtering preserves the path.
             for item in self._all_items:
@@ -873,9 +794,6 @@ class JWMediaCatalogBridge(QObject):
                     break
 
             self._model.update_thumbnail(item_id, local_path)
-
-        # Start next queued download.
-        self._pump_thumb_queue()
 
     # ── Placement logic ───────────────────────────────────────────────────
 

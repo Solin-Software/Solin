@@ -113,8 +113,8 @@ class MainWindowUiContext:
     wifi_receive_server_factory: Callable[[QObject], Any]
     watched_folder_watcher_factory: Callable[[QObject], Any]
     playlist_cleanup_queue_factory: Callable[..., Any]
-    jw_catalog_cache_paths: Any
     jw_catalog_service_factory: Callable[[QObject], Any]
+    jw_catalog_thumbnail_session_factory: Any
     jw_songs_store: Any
     jwpub_service_factory: Callable[[QObject], Any]
     memorial_service_factory: Callable[[QObject], Any]
@@ -423,8 +423,10 @@ class MainWindowUiController:
             watched_folder_watcher_factory=context.watched_folder_watcher_factory,
             playlist_cleanup_queue_factory=context.playlist_cleanup_queue_factory,
             media_cache_manager=context.media_cache_manager,
-            jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory=(
+                context.jw_catalog_thumbnail_session_factory
+            ),
             jw_songs_store=context.jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
             parent=context.parent,
@@ -441,8 +443,10 @@ class MainWindowUiController:
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             cache_manager=context.media_cache_manager,
-            jw_catalog_cache_paths=context.jw_catalog_cache_paths,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory=(
+                context.jw_catalog_thumbnail_session_factory
+            ),
             jw_songs_store=context.jw_songs_store,
             media_settings=context.media_settings,
             meeting_schedule_settings=context.meeting_schedule_settings,

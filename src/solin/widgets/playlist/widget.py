@@ -38,7 +38,6 @@ from ...core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
-from ...core.jw.catalog import JWMediaCatalogCachePaths
 from ...core.jw.identifiers import is_jw_url
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
@@ -67,6 +66,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.jw.publication_reader import JwpubImportThreadFactory
+    from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.ui.notifications import NotificationCenter
@@ -102,8 +102,8 @@ class _PlaylistEditView(
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
         media_cache_manager: MediaCacheManager,
-        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         all_playlists: list[dict],
@@ -124,7 +124,6 @@ class _PlaylistEditView(
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
         self._media_cache_manager = media_cache_manager
-        self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
         self._all_playlists = all_playlists
         self._schedule_cleanup = schedule_cleanup
@@ -155,8 +154,8 @@ class _PlaylistEditView(
         self.bridge = PlaylistEditBridge(self)
         self.bridge.attach_model(self.model)
         self.catalog_bridge = JWMediaCatalogBridge(
-            jw_catalog_cache_paths,
             jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory,
             self,
         )
         self.songs_bridge = JWSongsBridge(jw_songs_store, self)
@@ -936,8 +935,8 @@ class PlaylistWidget(QWidget):
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         media_cache_manager: MediaCacheManager,
-        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
@@ -957,8 +956,10 @@ class PlaylistWidget(QWidget):
         self._watched_folder_playlist_store = watched_folder_playlist_store
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._media_cache_manager = media_cache_manager
-        self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_catalog_service_factory = jw_catalog_service_factory
+        self._jw_catalog_thumbnail_session_factory = (
+            jw_catalog_thumbnail_session_factory
+        )
         self._jw_songs_store = jw_songs_store
         self._media_info_queue_factory = media_info_queue_factory
         self._cleanup_queue = playlist_cleanup_queue_factory(
@@ -1013,8 +1014,10 @@ class PlaylistWidget(QWidget):
             watched_folder_file_store=self._watched_folder_file_store,
             watched_folder_playlist_store=self._watched_folder_playlist_store,
             media_cache_manager=self._media_cache_manager,
-            jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_catalog_service_factory=self._jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory=(
+                self._jw_catalog_thumbnail_session_factory
+            ),
             jw_songs_store=self._jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
             all_playlists=self._playlists,

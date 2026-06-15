@@ -58,7 +58,9 @@ def _launch_main_window(
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
     from solin.core.jw.clip_fetch import ClipFetchThreadFactory
+    from solin.core.jw.catalog import JWMediaCatalogService
     from solin.core.jw.publication_reader import JwpubImportThreadFactory
+    from solin.core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from solin.core.rendering.document_conversion import DocumentConversionService
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -86,6 +88,12 @@ def _launch_main_window(
         pptx_pages_dir=runtime_paths.pptx_pages_dir,
         docx_pages_dir=runtime_paths.docx_pages_dir,
     )
+    def jw_catalog_service_factory(parent):
+        return JWMediaCatalogService(jw_catalog_cache_paths, parent)
+
+    jw_catalog_thumbnail_session_factory = JWCatalogThumbnailSessionFactory(
+        jw_catalog_cache_paths,
+    )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
     playlist_thumbnail_store = ThumbnailStore(runtime_paths.thumb_cache_dir)
@@ -111,7 +119,8 @@ def _launch_main_window(
         media.create_browser_image_fetch_service,
         media_settings,
         font_manager,
-        jw_catalog_cache_paths,
+        jw_catalog_service_factory,
+        jw_catalog_thumbnail_session_factory,
         jw_songs_store,
         jwpub_checksum_store,
         playlist_storage_paths,

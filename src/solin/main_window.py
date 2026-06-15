@@ -89,7 +89,6 @@ from .core.ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
 from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
-from .core.jw.catalog import JWMediaCatalogCachePaths, JWMediaCatalogService
 from .core.jw.songs import JWSongsStore
 from .core.jw.yeartext import YeartextService
 from .core.jw.yeartext_settings import YeartextSettingsStore
@@ -134,7 +133,9 @@ if TYPE_CHECKING:
     from .core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from .core.ingest.wifi_server import WifiReceiveServer
     from .core.jw.clip_fetch import ClipFetchThreadFactory
+    from .core.jw.catalog import JWMediaCatalogService
     from .core.jw.publication_reader import JwpubImportThreadFactory
+    from .core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.media.cache_scan import CacheScanSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
@@ -165,7 +166,8 @@ class MainWindow(QMainWindow):
         browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService],
         media_settings: MediaSettingsStore,
         font_manager: FontManager,
-        jw_catalog_cache_paths: JWMediaCatalogCachePaths,
+        jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
+        jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
@@ -195,7 +197,6 @@ class MainWindow(QMainWindow):
         self.media_ctrl = media_controller
         self._background_media_controller = background_media_controller
         self.font_manager = font_manager
-        self.jw_catalog_cache_paths = jw_catalog_cache_paths
         self.jw_songs_store = jw_songs_store
         self.jwpub_checksum_store = jwpub_checksum_store
         self.playlist_storage_paths = playlist_storage_paths
@@ -408,10 +409,9 @@ class MainWindow(QMainWindow):
                 wifi_receive_server_factory=wifi_receive_server_factory,
                 watched_folder_watcher_factory=watched_folder_watcher_factory,
                 playlist_cleanup_queue_factory=playlist_cleanup_queue_factory,
-                jw_catalog_cache_paths=self.jw_catalog_cache_paths,
-                jw_catalog_service_factory=lambda parent: JWMediaCatalogService(
-                    self.jw_catalog_cache_paths,
-                    parent,
+                jw_catalog_service_factory=jw_catalog_service_factory,
+                jw_catalog_thumbnail_session_factory=(
+                    jw_catalog_thumbnail_session_factory
                 ),
                 jw_songs_store=self.jw_songs_store,
                 jwpub_service_factory=lambda parent: JwpubService(

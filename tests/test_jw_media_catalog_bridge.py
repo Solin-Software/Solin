@@ -14,6 +14,46 @@ from solin.widgets.jw_media_catalog_bridge import (
 )
 
 
+class _SignalStub:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+
+    def emit(self, *args):
+        for callback in self.callbacks:
+            callback(*args)
+
+
+class _ThumbnailSessionStub:
+    def __init__(self):
+        self.ready = _SignalStub()
+        self.enqueued = []
+        self.reset_count = 0
+        self.closed = False
+
+    def enqueue(self, item_id, thumbnail_url):
+        self.enqueued.append((item_id, thumbnail_url))
+        return True
+
+    def reset(self):
+        self.reset_count += 1
+
+    def close(self):
+        self.closed = True
+
+
+class _ThumbnailSessionFactoryStub:
+    def __init__(self):
+        self.session = _ThumbnailSessionStub()
+        self.parents = []
+
+    def create(self, *, parent=None):
+        self.parents.append(parent)
+        return self.session
+
+
 def item(key: str) -> dict:
     return {
         "id": f"id-{key}",
@@ -109,6 +149,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
             root / "cache",
             root / "thumbs",
         )
+        self.thumbnail_factory = _ThumbnailSessionFactoryStub()
 
     def tearDown(self):
         if hasattr(self, "bridge"):
@@ -119,7 +160,10 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         return JWMediaCatalogService(self.cache_paths, parent)
 
     def test_first_progress_applies_immediately(self):
-        self.bridge = JWMediaCatalogBridge(self.cache_paths, self._catalog_service)
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+        )
         self.bridge._active_catalog_request_id = "request"
 
         self.bridge._on_videos_progress("request", [item("a")], 1, 5)
@@ -128,7 +172,10 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.assertEqual([entry["id"] for entry in self.bridge._all_items], ["id-a"])
 
     def test_progress_is_coalesced_when_page_is_already_visible(self):
-        self.bridge = JWMediaCatalogBridge(self.cache_paths, self._catalog_service)
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+        )
         self.bridge._active_catalog_request_id = "request"
         self.bridge._model.set_items([item("visible")])
 
@@ -141,6 +188,35 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
 
         self.assertEqual(self.bridge._load_completed, 2)
         self.assertEqual([entry["id"] for entry in self.bridge._all_items], ["id-new"])
+
+    def test_thumbnail_work_is_delegated_to_injected_session(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+        )
+
+        self.bridge._queue_thumbnails([item("a"), item("b")])
+
+        self.assertEqual(
+            self.thumbnail_factory.session.enqueued,
+            [
+                ("id-a", "https://cdn.example/a.jpg"),
+                ("id-b", "https://cdn.example/b.jpg"),
+            ],
+        )
+        self.assertEqual(self.thumbnail_factory.parents, [self.bridge])
+
+    def test_reset_and_cleanup_delegate_thumbnail_lifecycle(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+        )
+
+        self.bridge.reset()
+        self.bridge.cleanup()
+
+        self.assertEqual(self.thumbnail_factory.session.reset_count, 1)
+        self.assertTrue(self.thumbnail_factory.session.closed)
 
 
 if __name__ == "__main__":

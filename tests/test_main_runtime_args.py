@@ -104,7 +104,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_browser_image_fetch_service_factory,
             received_media_settings,
             received_font_manager,
-            received_jw_catalog_cache_paths,
+            received_jw_catalog_service_factory,
+            received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
             playlist_storage_paths,
@@ -142,7 +143,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             )
             self.media_settings = received_media_settings
             self.font_manager = received_font_manager
-            self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
+            self.jw_catalog_service_factory = received_jw_catalog_service_factory
+            self.jw_catalog_thumbnail_session_factory = (
+                received_jw_catalog_thumbnail_session_factory
+            )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
@@ -224,7 +228,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     )
     assert all(controller.parent is window for controller in created_media_controllers)
     assert window.font_manager is font_manager
-    assert window.jw_catalog_cache_paths is jw_catalog_cache_paths
+    assert callable(window.jw_catalog_service_factory)
+    assert (
+        window.jw_catalog_thumbnail_session_factory.__class__.__name__
+        == "JWCatalogThumbnailSessionFactory"
+    )
     assert window.jw_songs_store is jw_songs_store
     assert window.jwpub_checksum_store is jwpub_checksum_store
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
@@ -325,7 +333,8 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_browser_image_fetch_service_factory,
             received_media_settings,
             received_font_manager,
-            received_jw_catalog_cache_paths,
+            received_jw_catalog_service_factory,
+            received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
             playlist_storage_paths,
@@ -363,7 +372,10 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             )
             self.media_settings = received_media_settings
             self.font_manager = received_font_manager
-            self.jw_catalog_cache_paths = received_jw_catalog_cache_paths
+            self.jw_catalog_service_factory = received_jw_catalog_service_factory
+            self.jw_catalog_thumbnail_session_factory = (
+                received_jw_catalog_thumbnail_session_factory
+            )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
