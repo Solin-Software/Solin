@@ -4,6 +4,7 @@ import os
 import random
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QAbstractListModel,
@@ -14,7 +15,6 @@ from PySide6.QtCore import (
     QByteArray,
     QUrl,
     QTimer,
-    QThread,
     Qt,
     Signal,
     Slot,
@@ -26,7 +26,6 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
 from ..core.jw.language_context import jw_media_language_context
-from ..core.jw.media_api import fetch_clips
 from ..core.jw.songs import JWSongsStore
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
@@ -48,6 +47,9 @@ from ..styles.icons import (
     ICON_PLAY_SHUFFLE,
     ICON_VIDEO,
 )
+
+if TYPE_CHECKING:
+    from ..core.jw.clip_fetch import ClipFetchThread, ClipFetchThreadFactory
 
 def _java_to_py_fmt(fmt: str) -> str:
     result = fmt
@@ -112,50 +114,6 @@ class MediaLibraryIconProvider(QQuickImageProvider):
         fallback = QPixmap(1, 1)
         fallback.fill(Qt.GlobalColor.transparent)
         return fallback
-
-
-class _ClipFetchThread(QThread):
-    items_ready = Signal(int, list, float, bool)
-    failed = Signal(int, str)
-
-    def __init__(
-        self,
-        generation: int,
-        *,
-        api_code: str,
-        fallback_code: str,
-        is_sign_language: bool,
-        force: bool,
-        cache_dir: str | os.PathLike[str],
-        parent=None,
-    ) -> None:
-        super().__init__(parent)
-        self._generation = generation
-        self._api_code = api_code
-        self._fallback_code = fallback_code
-        self._is_sign_language = is_sign_language
-        self._force = force
-        self._cache_dir = cache_dir
-
-    def run(self) -> None:
-        try:
-            items, fetched_at, from_cache = fetch_clips(
-                self._api_code,
-                self._force,
-                fallback_code=self._fallback_code,
-                is_sign_language=self._is_sign_language,
-                cache_dir=self._cache_dir,
-            )
-            if not self.isInterruptionRequested():
-                self.items_ready.emit(
-                    self._generation,
-                    items,
-                    fetched_at,
-                    from_cache,
-                )
-        except Exception as exc:  # noqa: BLE001 - worker reports transport failures via signal
-            if not self.isInterruptionRequested():
-                self.failed.emit(self._generation, str(exc))
 
 
 class MediaLibraryModel(QAbstractListModel):
@@ -532,6 +490,7 @@ class MediaLibraryWidget(QWidget):
         media_ctrl=None,
         *,
         songs_store: JWSongsStore | None = None,
+        clip_fetch_thread_factory: ClipFetchThreadFactory | None = None,
         jw_cache_dir: str | os.PathLike[str],
         parent=None,
     ) -> None:
@@ -554,10 +513,15 @@ class MediaLibraryWidget(QWidget):
         self._songs_store = songs_store if self.kind == "songs" else None
         if self.kind == "songs" and self._songs_store is None:
             raise ValueError("Songs media library requires a JWSongsStore")
+        self._clip_fetch_thread_factory = (
+            clip_fetch_thread_factory if self.kind == "clips" else None
+        )
+        if self.kind == "clips" and self._clip_fetch_thread_factory is None:
+            raise ValueError("Clips media library requires a ClipFetchThreadFactory")
         self._qml_pointer_depth = 0
         self._disposed = False
         self._clip_generation = 0
-        self._clip_threads: list[_ClipFetchThread] = []
+        self._clip_threads: list[ClipFetchThread] = []
         self._download_all_batch_ids: dict[str, str] = {"video": "", "audio": ""}
         self._download_all_error_batches: set[str] = set()
         self._download_all_refresh_timer = QTimer(self)
@@ -679,7 +643,10 @@ class MediaLibraryWidget(QWidget):
         generation = self._clip_generation
         for thread in self._clip_threads:
             thread.requestInterruption()
-        thread = _ClipFetchThread(
+        factory = self._clip_fetch_thread_factory
+        if factory is None:
+            raise RuntimeError("Clip fetch worker factory is not configured")
+        thread = factory.create(
             generation,
             api_code=context.api_code,
             fallback_code=context.fallback_code,

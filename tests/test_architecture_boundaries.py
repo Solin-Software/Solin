@@ -273,6 +273,23 @@ def test_ui_workflows_do_not_construct_jwpub_import_threads_directly():
     )
 
 
+def test_widgets_do_not_import_clip_http_fetcher():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if any(alias.name == "fetch_clips" for alias in node.names):
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Widgets must receive clip-loading workers from composition instead of "
+        "importing the HTTP fetcher:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

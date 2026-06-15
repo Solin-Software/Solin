@@ -103,6 +103,7 @@ class MainWindowUiContext:
     meeting_tree_store: Any
     profile_media_store: Any
     jwpub_import_thread_factory: Any
+    clip_fetch_thread_factory: Any
     playlist_thumbnail_store: Any
     meeting_thumbnail_store: Any
     watched_folder_file_store: Any
@@ -393,6 +394,7 @@ class MainWindowUiController:
             context.lang_manager,
             context.media_cache_manager,
             context.runtime_paths.cache_dir,
+            context.clip_fetch_thread_factory,
             context.media_controller,
             parent=context.parent,
         )
