@@ -26,7 +26,8 @@ from solin.core.meetings.publications import (
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
-from solin.widgets.meetings.tree_controller import MeetingTreeController, MeetingTreeMerger
+from solin.core.meetings.tree_merger import MeetingTreeMerger
+from solin.widgets.meetings.tree_controller import MeetingTreeController
 
 
 class PublicationSqlErrorBoundaryTests(unittest.TestCase):
@@ -708,59 +709,14 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         )
         return controller
 
-    def test_placement_playlist_ref_flattens_nested_structure(self):
+    def test_placement_playlist_ref_uses_current_tree_snapshot(self):
         controller = self.controller([
-            {
-                "id": "section",
-                "type": "section",
-                "title": "Section",
-                "color_hue": 210,
-                "children": [
-                    {
-                        "id": "media-1",
-                        "type": "media",
-                        "children": [],
-                    },
-                    {
-                        "id": "subsection",
-                        "type": "subsection",
-                        "title": "Subsection",
-                        "color_hue": 130,
-                        "children": [
-                            {
-                                "id": "media-2",
-                                "type": "media",
-                                "children": [],
-                            },
-                        ],
-                    },
-                ],
-            },
+            {"id": "media", "type": "media", "children": []},
         ])
 
         result = MeetingTreeController.placement_playlist_ref(controller)
 
-        self.assertEqual(
-            result["items"],
-            [{"id": "media-1"}, {"id": "media-2"}],
-        )
-        self.assertEqual(
-            result["sections"],
-            [
-                {
-                    "id": "section",
-                    "name": "Section",
-                    "parent_id": None,
-                    "color_hue": 210,
-                },
-                {
-                    "id": "subsection",
-                    "name": "Subsection",
-                    "parent_id": "section",
-                    "color_hue": 130,
-                },
-            ],
-        )
+        self.assertEqual(result, {"items": [{"id": "media"}], "sections": []})
 
     def test_move_node_reparents_media_and_emits_persistence_updates(self):
         nodes = [

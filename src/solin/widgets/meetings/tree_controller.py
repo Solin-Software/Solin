@@ -56,6 +56,10 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncIdentity,
 )
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
+from ...core.meetings.catalog_placement import (
+    MeetingCatalogPlaylistRef,
+    build_meeting_catalog_playlist_ref,
+)
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
@@ -261,30 +265,8 @@ class MeetingTreeController(QObject):
     def playlistData(self):
         return self.tree_data()
 
-    def placement_playlist_ref(self) -> dict[str, Any]:
-        items: list[dict[str, Any]] = []
-        sections: list[dict[str, Any]] = []
-
-        def visit(children: list[Node], parent_section_id: str = "") -> None:
-            for node in children:
-                node_type = node.get("type", "")
-                if node_type == "media":
-                    items.append({"id": node.get("id", "")})
-                    continue
-                if node_type in ("section", "subsection"):
-                    node_id = str(node.get("id", ""))
-                    sections.append({
-                        "id": node_id,
-                        "name": node.get("title", ""),
-                        "parent_id": parent_section_id or None,
-                        "color_hue": int(node.get("color_hue", 215)),
-                    })
-                    visit(node.get("children", []), node_id)
-                    continue
-                visit(node.get("children", []), parent_section_id)
-
-        visit(self._nodes)
-        return {"items": items, "sections": sections}
+    def placement_playlist_ref(self) -> MeetingCatalogPlaylistRef:
+        return build_meeting_catalog_playlist_ref(self._nodes)
 
     @Slot(str)
     def set_sync_root(self, watched_folder_path: str) -> None:

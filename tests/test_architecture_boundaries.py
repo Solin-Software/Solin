@@ -534,6 +534,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
 def test_meeting_domain_has_no_framework_or_application_dependencies():
     meeting_root = PROJECT_ROOT / "src" / "solin" / "core" / "meetings"
     domain_files = (
+        "catalog_placement.py",
         "models.py",
         "schedule.py",
         "section_meta.py",
