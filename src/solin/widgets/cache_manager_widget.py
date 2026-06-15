@@ -152,6 +152,7 @@ class MediaCard(QFrame):
         self._item     = item
         self._lang     = lang
         self._selected = False
+        self._display_title = item.display_title
         self.setObjectName("MediaCard")
         self.setFixedSize(_CARD_W, _CARD_H)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -202,11 +203,8 @@ class MediaCard(QFrame):
                 "border:1.5px solid rgba(255,255,255,0.25);}"
                 "QPushButton:hover{background:rgba(56,139,253,0.85);border-color:#388bfd;}"
             )
-            # Captura explícita evita closure sobre variável mutável
             play_btn.clicked.connect(
-                lambda _=False, p=self._item.path, t=self._item.media_type,
-                       u=self._item.original_url, d=self._item.display_title:
-                    self.play_requested.emit(p, t, u, d)
+                lambda _=False: self._emit_play_requested()
             )
 
         lay.addWidget(thumb_area)
@@ -218,13 +216,13 @@ class MediaCard(QFrame):
         )
         self._title_lbl.setFixedWidth(_THUMB_W - 4)
         elided = self._title_lbl.fontMetrics().elidedText(
-            self._item.display_title, Qt.TextElideMode.ElideRight, _THUMB_W - 8
+            self._display_title, Qt.TextElideMode.ElideRight, _THUMB_W - 8
         )
         self._title_lbl.setText(elided)
         
-        tt = self._item.display_title
-        if self._item.display_title != self._item.filename:
-            tt = f"{self._item.display_title}\n{self._item.filename}"
+        tt = self._display_title
+        if self._display_title != self._item.filename:
+            tt = f"{self._display_title}\n{self._item.filename}"
         self._title_lbl.setToolTip(tt)
         
         size_lbl = QLabel(_fmt_size(self._item.size))
@@ -241,7 +239,7 @@ class MediaCard(QFrame):
     def set_title(self, title: str):
         if not title:
             return
-        self._item.display_title = title
+        self._display_title = title
         elided = self._title_lbl.fontMetrics().elidedText(
             title, Qt.TextElideMode.ElideRight, _THUMB_W - 8
         )
@@ -251,6 +249,10 @@ class MediaCard(QFrame):
         if title != self._item.filename:
             tt = f"{title}\n{self._item.filename}"
         self._title_lbl.setToolTip(tt)
+
+    @property
+    def display_title(self) -> str:
+        return self._display_title
 
     def set_selected(self, selected: bool, emit: bool = False):
         if self._selected == selected:
@@ -270,6 +272,14 @@ class MediaCard(QFrame):
     def media_type(self) -> str: return self._item.media_type
     @property
     def file_size(self)  -> int: return self._item.size
+
+    def _emit_play_requested(self) -> None:
+        self.play_requested.emit(
+            self._item.path,
+            self._item.media_type,
+            self._item.original_url,
+            self._display_title,
+        )
 
     def _apply_style(self):
         if self._selected:
@@ -825,7 +835,7 @@ class CacheManagerWidget(QWidget):
 
         if failed:
             # Usa o título exibido no card em vez do nome de arquivo bruto
-            path_to_title = {c.path: c._item.display_title for c in self._all_cards}
+            path_to_title = {c.path: c.display_title for c in self._all_cards}
             names = "\n".join(
                 f"  • {path_to_title.get(p, Path(p).name)}" for p in failed
             )
