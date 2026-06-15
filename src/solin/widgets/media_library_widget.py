@@ -39,7 +39,7 @@ from ..core.i18n.strings import (
 )
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
-from ..qml_module import load_qml_type
+from solin.ui.qml.loader import load_qml_type
 from ..styles.icons import (
     ICON_CLOUD_DOWNLOAD,
     ICON_MUSIC,

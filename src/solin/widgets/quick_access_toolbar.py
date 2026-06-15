@@ -25,8 +25,8 @@ from solin.core.integrations.automation.settings import (
 from solin.core.integrations.camera import CameraOption
 from solin.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.core.ui.macos_layer import apply_corner_radius
-from solin.qml_module import load_qml_type
-from solin.quick_toolbar_bridge import QuickToolbarBridge, SvgIconProvider
+from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.camera_popup import CameraPopup
 from solin.widgets.obs_scene_popup import OBSScenePopup

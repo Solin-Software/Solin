@@ -352,6 +352,44 @@ def test_remote_services_controller_receives_concrete_adapters_from_composition(
     )
 
 
+def test_qml_presentation_adapters_live_under_ui_qml():
+    legacy_paths = (
+        PROJECT_ROOT / "src" / "solin" / "qml_module.py",
+        PROJECT_ROOT / "src" / "solin" / "quick_toolbar_bridge.py",
+    )
+    expected_paths = (
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "loader.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "quick_toolbar.py",
+    )
+    violations: list[str] = []
+
+    for path in legacy_paths:
+        if path.exists():
+            violations.append(f"{path.relative_to(PROJECT_ROOT)} still exists")
+
+    forbidden_modules = {
+        ("solin", "qml_module"),
+        ("solin", "quick_toolbar_bridge"),
+    }
+    for codebase in CODEBASES:
+        for path in codebase.python_files():
+            for node in _imports(path):
+                for target, _ in _dependency_targets(codebase, path, node):
+                    if target in forbidden_modules:
+                        violations.append(_display(path, node))
+
+    missing = [
+        str(path.relative_to(PROJECT_ROOT))
+        for path in expected_paths
+        if not path.exists()
+    ]
+    assert not missing, "Missing UI QML adapter modules:\n" + "\n".join(missing)
+    assert violations == [], (
+        "QML presentation adapters must live under solin.ui.qml instead of the "
+        "package root:\n" + "\n".join(violations)
+    )
+
+
 def test_widgets_do_not_own_jw_catalog_thumbnail_download_workers():
     widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
     forbidden_names = {

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.fonts import timer_digit_font_family
-from ..qml_module import load_qml_type
+from solin.ui.qml.loader import load_qml_type
 from ..styles.icons import (
     ICON_CALENDAR,
     ICON_CHEVRON_LEFT,

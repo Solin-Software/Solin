@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtQuick import QQuickImageProvider
 
-from .styles.icons import (
+from solin.styles.icons import (
     ICON_MONITOR, ICON_OBS, ICON_ZOOM, ICON_CAMERA, ICON_MUSIC,
     ICON_CHEVRON_DOWN, ICON_CHEVRON_LEFT,
 )

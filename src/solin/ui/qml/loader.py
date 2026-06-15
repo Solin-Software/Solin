@@ -7,8 +7,12 @@ from PySide6.QtCore import QUrl
 QML_MODULE_URI = "Solin"
 
 
+def _package_dir() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def qml_import_roots() -> list[str]:
-    package_dir = Path(__file__).resolve().parent
+    package_dir = _package_dir()
     project_root = package_dir.parents[1]
     candidates = [
         package_dir / "qml",
@@ -22,7 +26,7 @@ def qml_import_roots() -> list[str]:
 
 def load_qml_type(widget, type_name: str) -> None:
     engine = widget.engine()
-    qml_file = Path(__file__).resolve().parent / "qml" / f"{type_name}.qml"
+    qml_file = _package_dir() / "qml" / f"{type_name}.qml"
     if qml_file.exists():
         widget.setSource(QUrl.fromLocalFile(str(qml_file)))
         return

@@ -57,7 +57,7 @@ from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
 from ...core.media.settings import MediaSettingsStore
-from ...qml_module import load_qml_type
+from solin.ui.qml.loader import load_qml_type
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
 from ..jw_songs_bridge import JWSongsBridge
 from .tree_controller import MeetingTreeController

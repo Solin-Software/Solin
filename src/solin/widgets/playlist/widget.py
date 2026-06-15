@@ -29,7 +29,7 @@ from .edit_visuals import (
 from ..jw_media_catalog_bridge import JWMediaCatalogBridge
 from ..jw_songs_bridge import JWSongsBridge
 
-from ...qml_module import load_qml_type
+from solin.ui.qml.loader import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths

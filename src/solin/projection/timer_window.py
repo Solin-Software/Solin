@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ..core.ui.fonts import timer_digit_font_family
 from ..core.timer.models import TimerSnapshot
 from ..core.timer.render import build_render_model
-from ..qml_module import load_qml_type
+from solin.ui.qml.loader import load_qml_type
 from .window import _exclude_from_aero_peek
 
 
