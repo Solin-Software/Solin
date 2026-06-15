@@ -74,21 +74,11 @@ class _PlaylistEditActionsMixin:
                 try:
                     Path(path).relative_to(watched_sub)
                 except ValueError:
-                    dest = watched_sub / Path(path).name
-                    if dest.exists():
-                        stem = Path(path).stem
-                        suffix = Path(path).suffix
-                        counter = 1
-                        while dest.exists():
-                            dest = watched_sub / f"{stem} ({counter}){suffix}"
-                            counter += 1
                     try:
-                        import shutil
-
-                        tmp_dest = watched_sub / f"{dest.name}.solin_tmp"
-                        shutil.copy2(path, tmp_dest)
-                        tmp_dest.rename(dest)
-                        actual_path = str(dest)
+                        actual_path = self._watched_folder_file_store.copy_file_into_folder(
+                            path,
+                            watched_sub,
+                        )
                     except OSError as e:
                         import logging
 

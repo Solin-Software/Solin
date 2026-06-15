@@ -721,6 +721,27 @@ def test_thumbnail_persistence_is_outside_widgets():
     assert violations == []
 
 
+def test_widget_file_mutations_go_through_injected_stores():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    forbidden_fragments = {
+        "os.remove(",
+        "os.unlink(",
+        "_os.unlink(",
+        ".unlink(",
+        "shutil.copy2(",
+        "shutil.rmtree(",
+    }
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for fragment in forbidden_fragments:
+            if fragment in source:
+                violations.append(f"{path.relative_to(PROJECT_ROOT)}: {fragment}")
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

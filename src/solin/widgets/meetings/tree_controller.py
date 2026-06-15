@@ -30,6 +30,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 from ...core.media.cache import MediaCacheManager
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
+from ...core.ingest.watched_folder_files import WatchedFolderFileStore
 from ...core.foundation.constants import (
     DOCX_EXTS,
     JWPUB_EXTS,
@@ -154,6 +155,7 @@ class MeetingTreeController(QObject):
         store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
         meeting_thumbnail_store: ThumbnailStore,
+        watched_folder_file_store: WatchedFolderFileStore,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -170,6 +172,7 @@ class MeetingTreeController(QObject):
         self._store = store
         self._profile_media_store = profile_media_store
         self._meeting_thumbnail_store = meeting_thumbnail_store
+        self._watched_folder_file_store = watched_folder_file_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
@@ -1457,17 +1460,13 @@ class MeetingTreeController(QObject):
         linked_source = node.get("linked_folder_source", "")
         if linked_source:
             file_path = self._url_for_node(node)
-            removed_physical_file = bool(file_path and not os.path.exists(file_path))
-            if (
-                file_path
-                and os.path.isfile(file_path)
-                and self._path_is_inside(file_path, linked_source)
-            ):
-                try:
-                    os.remove(file_path)
-                    removed_physical_file = True
-                except OSError:
-                    pass
+            try:
+                removed_physical_file = self._watched_folder_file_store.remove_file_inside(
+                    file_path,
+                    linked_source,
+                )
+            except OSError:
+                removed_physical_file = False
             # Remove from tracking
             self._linked_folder_files.pop(file_path, None)
             self._cleanup_meeting_folder_import_for_removed_node(

@@ -63,6 +63,7 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder import WatchedFolderWatcher
+    from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
@@ -94,6 +95,7 @@ class _PlaylistEditView(
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
+        watched_folder_file_store: WatchedFolderFileStore,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
@@ -113,6 +115,7 @@ class _PlaylistEditView(
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
+        self._watched_folder_file_store = watched_folder_file_store
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -920,6 +923,7 @@ class PlaylistWidget(QWidget):
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
+        watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         media_cache_manager: MediaCacheManager,
@@ -939,6 +943,7 @@ class PlaylistWidget(QWidget):
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
+        self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
@@ -976,6 +981,7 @@ class PlaylistWidget(QWidget):
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
+            watched_folder_file_store=self._watched_folder_file_store,
             media_cache_manager=self._media_cache_manager,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
@@ -991,6 +997,7 @@ class PlaylistWidget(QWidget):
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
+            watched_folder_file_store=self._watched_folder_file_store,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_catalog_service_factory=self._jw_catalog_service_factory,

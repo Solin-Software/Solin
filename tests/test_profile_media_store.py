@@ -39,6 +39,23 @@ def test_profile_media_store_persists_projected_images_as_png(tmp_path):
     assert result.read_bytes() == b"png"
 
 
+def test_profile_media_store_removes_owned_temp_file(tmp_path):
+    store = ProfileMediaStore(tmp_path / "embedded", tmp_path / "images")
+    path = store.save_embedded(b"content", "clip.mp4")
+
+    assert store.remove_file(path) is True
+    assert store.remove_file(path) is False
+
+
+def test_profile_media_store_does_not_remove_external_files(tmp_path):
+    store = ProfileMediaStore(tmp_path / "embedded", tmp_path / "images")
+    outside = tmp_path / "outside.mp4"
+    outside.write_bytes(b"content")
+
+    assert store.remove_file(outside) is False
+    assert outside.exists()
+
+
 def test_profile_media_store_rejects_invalid_fallback_suffix(tmp_path):
     store = ProfileMediaStore(tmp_path / "embedded", tmp_path / "images")
 

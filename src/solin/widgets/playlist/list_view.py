@@ -35,6 +35,7 @@ from .dialogs import _NameDialog
 from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
+    from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.playlists.storage import PlaylistRepository
@@ -75,6 +76,7 @@ class _PlaylistListView(QWidget):
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
+        watched_folder_file_store: WatchedFolderFileStore,
         media_cache_manager: MediaCacheManager,
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
@@ -89,6 +91,7 @@ class _PlaylistListView(QWidget):
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
+        self._watched_folder_file_store = watched_folder_file_store
         self._media_cache_manager = media_cache_manager
         self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[_PlaylistCard] = []
@@ -463,10 +466,9 @@ class _PlaylistListView(QWidget):
         new_name = dlg.get_name()
         if not new_name or new_name == current_name:
             return
-        new_path = Path(folder_path).parent / new_name
         try:
-            Path(folder_path).rename(new_path)
-        except OSError as exc:
+            self._watched_folder_file_store.rename_folder(folder_path, new_name)
+        except (OSError, ValueError) as exc:
             QMessageBox.critical(self, self.tr("Error"), str(exc))
             return
         self._rebuild_watched_section()
@@ -485,9 +487,7 @@ class _PlaylistListView(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            import shutil as _shutil
-
-            _shutil.rmtree(folder_path, ignore_errors=False)
+            self._watched_folder_file_store.delete_folder(folder_path)
         except OSError as exc:
             QMessageBox.critical(self, self.tr("Error"), str(exc))
             return

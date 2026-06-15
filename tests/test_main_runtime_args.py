@@ -110,6 +110,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             profile_media_store,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
+            watched_folder_file_store,
             wifi_receive_server_factory,
             watched_folder_watcher_factory,
             playlist_cleanup_queue_factory,
@@ -142,6 +143,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.profile_media_store = profile_media_store
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
+            self.watched_folder_file_store = watched_folder_file_store
             self.wifi_receive_server_factory = wifi_receive_server_factory
             self.watched_folder_watcher_factory = watched_folder_watcher_factory
             self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory
@@ -220,6 +222,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert str(window.profile_media_store.images_dir) == "images"
     assert str(window.playlist_thumbnail_store.root) == "thumbs"
     assert str(window.meeting_thumbnail_store.root) == "meeting_thumbs"
+    assert (
+        window.watched_folder_file_store.__class__.__name__
+        == "WatchedFolderFileStore"
+    )
     assert callable(window.wifi_receive_server_factory)
     assert callable(window.watched_folder_watcher_factory)
     assert callable(window.playlist_cleanup_queue_factory)
@@ -292,6 +298,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             profile_media_store,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
+            watched_folder_file_store,
             wifi_receive_server_factory,
             watched_folder_watcher_factory,
             playlist_cleanup_queue_factory,
@@ -324,6 +331,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.profile_media_store = profile_media_store
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
+            self.watched_folder_file_store = watched_folder_file_store
             self.wifi_receive_server_factory = wifi_receive_server_factory
             self.watched_folder_watcher_factory = watched_folder_watcher_factory
             self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory

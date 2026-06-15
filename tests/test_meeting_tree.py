@@ -13,6 +13,7 @@ from pathlib import Path
 import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
 import solin.core.meetings.publications as publications_module
+from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
 from solin.core.meetings.publications import (
     _conn,
@@ -1010,6 +1011,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.calls.append(args)
 
     def _wire_remove_item_controller(self, controller) -> None:
+        controller._watched_folder_file_store = WatchedFolderFileStore()
         controller._find_node = (
             lambda node_id, nodes=None: MeetingTreeController._find_node(
                 controller,

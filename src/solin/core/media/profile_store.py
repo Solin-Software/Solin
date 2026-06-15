@@ -50,6 +50,26 @@ class ProfileMediaStore:
             data,
         )
 
+    def remove_file(self, path: str | Path) -> bool:
+        target = Path(path)
+        if not self._owns(target) or not target.is_file():
+            return False
+        try:
+            target.unlink()
+            return True
+        except OSError:
+            return False
+
+    def _owns(self, path: Path) -> bool:
+        try:
+            resolved = path.resolve()
+            return any(
+                resolved.is_relative_to(root.resolve())
+                for root in (self._embedded_dir, self._images_dir)
+            )
+        except OSError:
+            return False
+
     @staticmethod
     def _safe_identifier(identifier: str | None) -> str:
         if identifier:

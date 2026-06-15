@@ -130,6 +130,7 @@ from .widgets.projection.monitor_manager import MonitorManagerPopup
 
 if TYPE_CHECKING:
     from .core.ingest.watched_folder import WatchedFolderWatcher
+    from .core.ingest.watched_folder_files import WatchedFolderFileStore
     from .core.ingest.wifi_server import WifiReceiveServer
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.network.browser_images import BrowserImageFetchService
@@ -168,6 +169,7 @@ class MainWindow(QMainWindow):
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
         meeting_thumbnail_store: ThumbnailStore,
+        watched_folder_file_store: WatchedFolderFileStore,
         wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
@@ -387,6 +389,7 @@ class MainWindow(QMainWindow):
                 profile_media_store=profile_media_store,
                 playlist_thumbnail_store=playlist_thumbnail_store,
                 meeting_thumbnail_store=meeting_thumbnail_store,
+                watched_folder_file_store=watched_folder_file_store,
                 wifi_receive_server_factory=wifi_receive_server_factory,
                 watched_folder_watcher_factory=watched_folder_watcher_factory,
                 playlist_cleanup_queue_factory=playlist_cleanup_queue_factory,

@@ -1188,13 +1188,8 @@ class WifiReceiveWidget(QWidget):
             self._cards.remove(card_to_remove)
             self._received_files = [f for f in self._received_files if f["path"] != path]
             self._rebuild_grid()
-            # Remove temp file se existir
-            import os as _os
             if path in self._wifi_tmp_files:
-                try:
-                    _os.unlink(path)
-                except OSError:
-                    pass
+                self._profile_media_store.remove_file(path)
                 self._wifi_tmp_files.discard(path)
             cnt = len(self._cards)
             if cnt == 0:
@@ -1215,13 +1210,8 @@ class WifiReceiveWidget(QWidget):
         self._content_stack.setCurrentIndex(0)  # mostra placeholder
         self._count_badge.hide()
         self._send_all_btn.setEnabled(False)
-        # Limpa arquivos temporários criados por expansão de JWL/PDF
-        import os as _os
         for tmp in list(self._wifi_tmp_files):
-            try:
-                _os.unlink(tmp)
-            except OSError:
-                pass
+            self._profile_media_store.remove_file(tmp)
         self._wifi_tmp_files.clear()
 
     @Slot(str, QPixmap, str)
