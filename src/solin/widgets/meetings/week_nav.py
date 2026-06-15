@@ -21,14 +21,22 @@ from ...styles.icons import (
     ICON_HOME,
     make_icon,
 )
-from .visuals import _ACCENT, _BG, _BORDER, _GREEN, _MUTED, _SUB, _TEXT
+from .visuals import (
+    MEETING_ACCENT,
+    MEETING_BG,
+    MEETING_BORDER,
+    MEETING_MUTED,
+    MEETING_SUBTLE_TEXT,
+    MEETING_SUCCESS,
+    MEETING_TEXT,
+)
 
 
 def _ghost_btn(
     svg: str,
     size: int = 30,
     icon_px: int = 15,
-    color: str = _MUTED,
+    color: str = MEETING_MUTED,
     tip: str = "",
 ) -> QPushButton:
     btn = QPushButton()
@@ -76,7 +84,7 @@ class _WeekPicker(QWidget):
 
         hdr = QLabel(self.tr("Jump to week"))
         hdr.setStyleSheet(
-            f"color:{_MUTED};font-size:10px;font-weight:700;"
+            f"color:{MEETING_MUTED};font-size:10px;font-weight:700;"
             "letter-spacing:1.2px;background:transparent;"
             "padding-left:16px;padding-right:16px;"
         )
@@ -86,7 +94,7 @@ class _WeekPicker(QWidget):
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background:{_BORDER};border:none;")
+        sep.setStyleSheet(f"background:{MEETING_BORDER};border:none;")
         cl.addWidget(sep)
         cl.addSpacing(6)
 
@@ -129,17 +137,17 @@ class _WeekPicker(QWidget):
             )
         elif is_now:
             date_lbl.setStyleSheet(
-                f"color:{_TEXT};font-size:12px;font-weight:600;"
+                f"color:{MEETING_TEXT};font-size:12px;font-weight:600;"
                 "background:transparent;"
             )
         elif is_past:
             date_lbl.setStyleSheet(
-                f"color:{_MUTED};font-size:12px;font-weight:400;"
+                f"color:{MEETING_MUTED};font-size:12px;font-weight:400;"
                 "background:transparent;"
             )
         else:
             date_lbl.setStyleSheet(
-                f"color:{_SUB};font-size:12px;font-weight:500;"
+                f"color:{MEETING_SUBTLE_TEXT};font-size:12px;font-weight:500;"
                 "background:transparent;"
             )
 
@@ -159,7 +167,7 @@ class _WeekPicker(QWidget):
         elif is_now:
             badge = QLabel(self.tr("Now"))
             badge.setStyleSheet(
-                f"color:{_GREEN};"
+                f"color:{MEETING_SUCCESS};"
                 "background:#0f2d16;"
                 "border:1px solid #1a5c2a;"
                 "font-size:9px;font-weight:700;"
@@ -232,7 +240,7 @@ class WeekNavBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedHeight(68)
-        self.setStyleSheet(f"background:{_BG};")
+        self.setStyleSheet(f"background:{MEETING_BG};")
         self._build()
 
     def _build(self):
@@ -240,9 +248,9 @@ class WeekNavBar(QWidget):
         lay.setContentsMargins(20, 0, 20, 0)
         lay.setSpacing(0)
 
-        self.home_btn = _ghost_btn(ICON_HOME, 32, 16, _MUTED, self.tr("This week"))
+        self.home_btn = _ghost_btn(ICON_HOME, 32, 16, MEETING_MUTED, self.tr("This week"))
         self.home_btn.clicked.connect(self.home_requested)
-        self.prev_btn = _ghost_btn(ICON_CHEVRON_LEFT, 32, 16, _MUTED, self.tr("Previous week"))
+        self.prev_btn = _ghost_btn(ICON_CHEVRON_LEFT, 32, 16, MEETING_MUTED, self.tr("Previous week"))
         self.prev_btn.clicked.connect(self.prev_week)
 
         left = QWidget()
@@ -264,7 +272,7 @@ class WeekNavBar(QWidget):
         self._date_lbl = QLabel("")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._date_lbl.setStyleSheet(
-            f"color:{_TEXT};font-size:15px;font-weight:700;background:transparent;"
+            f"color:{MEETING_TEXT};font-size:15px;font-weight:700;background:transparent;"
         )
 
         self._badge_lbl = QLabel("")
@@ -280,7 +288,7 @@ class WeekNavBar(QWidget):
             if e.button() == Qt.MouseButton.LeftButton else None
         )
 
-        self.next_btn = _ghost_btn(ICON_CHEVRON_RIGHT, 32, 16, _MUTED, self.tr("Next week"))
+        self.next_btn = _ghost_btn(ICON_CHEVRON_RIGHT, 32, 16, MEETING_MUTED, self.tr("Next week"))
         self.next_btn.clicked.connect(self.next_week)
 
         right = QWidget()
@@ -305,19 +313,19 @@ class WeekNavBar(QWidget):
         if is_now:
             self._badge_lbl.setText(self.tr("This week"))
             self._badge_lbl.setStyleSheet(
-                f"background:transparent;color:{_GREEN};font-size:10px;font-weight:600;"
+                f"background:transparent;color:{MEETING_SUCCESS};font-size:10px;font-weight:600;"
             )
             self._badge_lbl.setVisible(True)
         else:
             self._badge_lbl.setVisible(False)
 
-        home_color = _ACCENT if not is_now else _MUTED
+        home_color = MEETING_ACCENT if not is_now else MEETING_MUTED
         self.home_btn.setIcon(make_icon(ICON_HOME, 16, home_color))
 
         self.prev_btn.setEnabled(monday > today_mon - timedelta(weeks=self._MAX_BACK))
         self.next_btn.setEnabled(monday < today_mon + timedelta(weeks=self._MAX_FORWARD))
 
-        prev_col = _SUB if self.prev_btn.isEnabled() else "#484f58"
-        next_col = _SUB if self.next_btn.isEnabled() else "#484f58"
+        prev_col = MEETING_SUBTLE_TEXT if self.prev_btn.isEnabled() else "#484f58"
+        next_col = MEETING_SUBTLE_TEXT if self.next_btn.isEnabled() else "#484f58"
         self.prev_btn.setIcon(make_icon(ICON_CHEVRON_LEFT, 16, prev_col))
         self.next_btn.setIcon(make_icon(ICON_CHEVRON_RIGHT, 16, next_col))

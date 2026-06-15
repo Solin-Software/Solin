@@ -59,10 +59,10 @@ from solin.ui.qml.meeting_detail import MeetingDetailQmlHost
 from .tree_controller import MeetingTreeController
 from .overview import _Overview
 from .visuals import (
-    _ACCENT,
-    _BG,
-    _GOLD,
-    _PURPLE,
+    MEETING_ACCENT,
+    MEETING_BG,
+    MEETING_GOLD,
+    MEETING_PURPLE,
 )
 from .week_nav import WeekNavBar, _WeekPicker
 from ...ui.media_info import MediaInfoQueue
@@ -161,7 +161,7 @@ class StudyDetailView(QWidget):
         root.setSpacing(0)
 
         is_mwb = self._pub == "mwb"
-        self.pill_color = _ACCENT if is_mwb else _PURPLE
+        self.pill_color = MEETING_ACCENT if is_mwb else MEETING_PURPLE
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
@@ -426,7 +426,7 @@ class _MemorialDetailView(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.pill_color = _GOLD
+        self.pill_color = MEETING_GOLD
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
@@ -739,7 +739,7 @@ class MeetingsWidget(QWidget):
         root.addWidget(self._navbar)
 
         self._stack = QStackedWidget()
-        self._stack.setStyleSheet(f"background:{_BG};")
+        self._stack.setStyleSheet(f"background:{MEETING_BG};")
         self._overview = _Overview()
         self._overview.open_mwb.connect(lambda: self._open_detail("mwb"))
         self._overview.open_wt.connect(lambda: self._open_detail("wt"))
