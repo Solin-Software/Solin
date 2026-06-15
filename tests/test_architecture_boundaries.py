@@ -742,6 +742,23 @@ def test_widget_file_mutations_go_through_injected_stores():
     assert violations == []
 
 
+def test_widgets_do_not_read_files_directly():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            if isinstance(function, ast.Name) and function.id == "open":
+                violations.append(_display(path, node))
+            elif isinstance(function, ast.Attribute) and function.attr == "open":
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

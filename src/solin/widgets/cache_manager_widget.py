@@ -23,7 +23,6 @@ Decisões técnicas importantes:
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,9 +34,8 @@ from PySide6.QtWidgets import (
     QButtonGroup, QGridLayout,
 )
 
-from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.media.cache import MediaCacheManager
-from ..core.media.formats import media_type_from_path
+from ..core.media.cache_listing import CachedMediaItem, scan_cached_media_items
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import make_icon, ICON_MUSIC, ICON_VIDEO, ICON_IMAGE
 from ..ui.media_info import MediaInfoService
@@ -66,10 +64,6 @@ def _fmt_size(n: int) -> str:
     return f"{n / 1024 ** 3:.2f} GB"
 
 
-def _media_type(path: str) -> str:
-    return media_type_from_path(path, default="other")
-
-
 def _rounded_pixmap(pixmap: QPixmap, w: int, h: int, radius: int = 6) -> QPixmap:
     scaled = pixmap.scaled(w, h,
                            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
@@ -89,35 +83,6 @@ def _rounded_pixmap(pixmap: QPixmap, w: int, h: int, radius: int = 6) -> QPixmap
     p.end()
     return out
 
-
-def _read_title(path: str, fallback: str) -> str:
-    """Extrai título dos metadados usando mutagen. Fallback = stem do arquivo."""
-    try:
-        from mutagen import File as MFile
-        tags = MFile(path, easy=True)
-        if tags and tags.get("title"):
-            val = tags["title"]
-            return (val[0] if isinstance(val, list) else str(val)).strip() or fallback
-    except Exception:  # noqa: BLE001 - third-party media metadata parser boundary
-        log_ignored_exception(__name__, "Could not extract cached media title")
-    return fallback
-
-
-# ── Modelo de dados ───────────────────────────────────────────────────────────
-
-class _Item:
-    __slots__ = ("path", "filename", "display_title", "size", "media_type", "original_url")
-
-    def __init__(self, path: str, filename: str, display_title: str,
-                 size: int, media_type: str, original_url: str = ""):
-        self.path          = path
-        self.filename      = filename
-        self.display_title = display_title
-        self.size          = size
-        self.media_type    = media_type
-        self.original_url  = original_url  # URL remota original (lida do .done)
-
-
 # ── Worker de scan ───────────────────────────────────────────────────────────
 
 class _ScanWorker(QObject):
@@ -125,53 +90,23 @@ class _ScanWorker(QObject):
     Scans the explicit media cache directory and extracts titles via mutagen.
     Não carrega thumbs — isso é feito pelo MediaThumbService na main thread.
     """
-    results_ready = Signal(list)   # list[_Item]
+    results_ready = Signal(list)   # list[CachedMediaItem]
 
-    def __init__(self, media_cache_dir: str | os.PathLike[str]) -> None:
+    def __init__(self, media_cache_dir: str | Path) -> None:
         super().__init__()
-        self._media_cache_dir = os.fspath(media_cache_dir)
+        self._media_cache_dir = media_cache_dir
         self._cancelled = False
 
     def cancel(self):
         self._cancelled = True
 
     def run(self):
-        items: list[_Item] = []
-        if not os.path.isdir(self._media_cache_dir):
-            self.results_ready.emit([])
-            return
-
-        for fname in sorted(os.listdir(self._media_cache_dir)):
-            if self._cancelled:
-                break
-            if fname.endswith(".done") or fname.endswith(".tmp"):
-                continue
-            fpath = os.path.join(self._media_cache_dir, fname)
-            if not os.path.isfile(fpath):
-                continue
-            if not os.path.isfile(fpath + ".done"):
-                continue
-            try:
-                size = os.path.getsize(fpath)
-            except OSError:
-                size = 0
-            mtype = _media_type(fpath)
-            if mtype == "other":
-                continue
-            title = _read_title(fpath, Path(fname).stem)
-            # Lê a URL original do marcador .done (gravada pelo downloader)
-            original_url = ""
-            done_path = fpath + ".done"
-            try:
-                with open(done_path) as _f:
-                    content = _f.read().strip()
-                    if content.startswith("http"):
-                        original_url = content
-            except (OSError, UnicodeError):
-                log_ignored_exception(__name__, "Could not read cached media origin sidecar")
-            items.append(_Item(fpath, fname, title, size, mtype, original_url))
-
-        self.results_ready.emit(items)
+        self.results_ready.emit(
+            scan_cached_media_items(
+                self._media_cache_dir,
+                is_cancelled=lambda: self._cancelled,
+            )
+        )
 
 
 # ── SVG Icons locais ──────────────────────────────────────────────────────────
@@ -234,7 +169,7 @@ class MediaCard(QFrame):
     selection_changed = Signal(str, bool)           # path, selected
     play_requested    = Signal(str, str, str, str)  # path, media_type, original_url, display_title
 
-    def __init__(self, item: _Item, lang: LanguageManager, parent=None):
+    def __init__(self, item: CachedMediaItem, lang: LanguageManager, parent=None):
         super().__init__(parent)
         self._item     = item
         self._lang     = lang
@@ -917,7 +852,7 @@ class CacheManagerWidget(QWidget):
             # Usa o título exibido no card em vez do nome de arquivo bruto
             path_to_title = {c.path: c._item.display_title for c in self._all_cards}
             names = "\n".join(
-                f"  • {path_to_title.get(p, os.path.basename(p))}" for p in failed
+                f"  • {path_to_title.get(p, Path(p).name)}" for p in failed
             )
             QMessageBox.warning(
                 self,
