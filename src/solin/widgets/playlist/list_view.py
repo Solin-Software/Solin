@@ -23,10 +23,13 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.jwl_files import read_jwlplaylist_document
+from ...core.playlists.jwl_files import (
+    PlaylistWriteError,
+    read_jwlplaylist_document,
+    write_jwlplaylist_document,
+)
 from ...core.playlists.storage import PlaylistStoragePaths
 from ...core.playlists.items import create_playlist_item
-from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.media.cache import MediaCacheManager
@@ -386,7 +389,7 @@ class _PlaylistListView(QWidget):
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist(
+            write_jwlplaylist_document(
                 pl["name"],
                 items,
                 path,
@@ -524,7 +527,7 @@ class _PlaylistListView(QWidget):
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist(
+            write_jwlplaylist_document(
                 name,
                 enriched,
                 path,

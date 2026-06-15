@@ -16,8 +16,8 @@ from ...core.foundation.constants import (
 from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS, media_type_from_path
 from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.jwl_files import PlaylistWriteError, write_jwlplaylist_document
 from ...core.playlists.items import create_playlist_item
-from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
 from .item_visuals import enrich_items_for_export
 
@@ -317,7 +317,7 @@ class _PlaylistEditActionsMixin:
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist(
+            write_jwlplaylist_document(
                 self._pl["name"],
                 items,
                 path,

@@ -759,13 +759,19 @@ def test_widgets_do_not_read_files_directly():
     assert violations == []
 
 
-def test_widgets_do_not_call_raw_jwlplaylist_reader():
+def test_widgets_do_not_call_raw_jwlplaylist_reader_or_writer():
     widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
     violations: list[str] = []
 
     for path in sorted(widget_root.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
-        if "core.playlists.reader" in source or "read_jwlplaylist(" in source:
+        forbidden = (
+            "core.playlists.reader",
+            "core.playlists.writer",
+            "read_jwlplaylist(",
+            "write_jwlplaylist(",
+        )
+        if any(fragment in source for fragment in forbidden):
             violations.append(str(path.relative_to(PROJECT_ROOT)))
 
     assert violations == []
