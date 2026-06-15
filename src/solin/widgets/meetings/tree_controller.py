@@ -10,7 +10,6 @@ and merge rules while sharing the same tree surface.
 from __future__ import annotations
 
 import copy
-import mimetypes
 import os
 import uuid
 from collections.abc import Callable
@@ -38,7 +37,7 @@ from ...core.foundation.constants import (
     PLAYLIST_EXTS,
     PPTX_EXTS,
 )
-from ...core.media.formats import MEDIA_EXTS, media_type_from_path
+from ...core.media.formats import MEDIA_EXTS
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -59,6 +58,13 @@ from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.catalog_placement import (
     MeetingCatalogPlaylistRef,
     build_meeting_catalog_playlist_ref,
+)
+from ...core.meetings.media_nodes import (
+    clean_media_title,
+    create_manual_media_node,
+    media_ref_title,
+    meeting_media_type_from_path,
+    mime_for_meeting_media,
 )
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_editing import (
@@ -97,25 +103,6 @@ def _translate_section_title(source: str) -> str:
     return _tr(context, source)
 
 
-def _clean_title(value: str) -> str:
-    return (value or "").strip()
-
-
-def _media_type_from_path(path: str) -> str:
-    return media_type_from_path(path, default="video")
-
-
-def _mime_for(path: str, media_type: str) -> str:
-    guessed, _ = mimetypes.guess_type(path)
-    if guessed:
-        return guessed
-    if media_type == "image":
-        return "image/*"
-    if media_type == "audio":
-        return "audio/*"
-    return "video/*"
-
-
 def _meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
     data = {key: ref.get(key) for key in _MEDIA_FIELDS if key in ref}
     return MeetingMedia(**data)
@@ -134,10 +121,6 @@ def _usable_ref_file_path(ref: dict[str, Any]) -> str:
     if _has_jw_media_identity(ref):
         return ""
     return path
-
-
-def _ref_title(ref: dict[str, Any]) -> str:
-    return _clean_title(str(ref.get("label") or ref.get("caption") or ""))
 
 
 class MeetingTreeController(QObject):
@@ -1142,11 +1125,11 @@ class MeetingTreeController(QObject):
             )
         media_type = str(raw.get("type") or "").lower()
         if media_type not in ("image", "audio", "video"):
-            media_type = _media_type_from_path(url)
-        title = _clean_title(str(raw.get("title") or fallback_title or Path(url).stem))
+            media_type = meeting_media_type_from_path(url)
+        title = clean_media_title(str(raw.get("title") or fallback_title or Path(url).stem))
         ref = {
             "multimedia_id": self._to_int(raw.get("multimedia_id")),
-            "mime_type": str(raw.get("mime_type") or _mime_for(url, media_type)),
+            "mime_type": str(raw.get("mime_type") or mime_for_meeting_media(url, media_type)),
             "file_path": url,
             "label": title,
             "caption": "",
@@ -1733,33 +1716,7 @@ class MeetingTreeController(QObject):
         )
 
     def _manual_media_node(self, path: str, title: str = "") -> Node:
-        media_type = _media_type_from_path(path)
-        title = _clean_title(title) or Path(path).stem
-        node_id = new_node_id()
-        ref = {
-            "multimedia_id": 0,
-            "mime_type": _mime_for(path, media_type),
-            "file_path": path,
-            "label": title,
-            "caption": "",
-            "begin_ordinal": 0,
-            "key_symbol": "",
-            "track": 0,
-            "issue_tag": 0,
-            "meps_doc_id": 0,
-            "section": "",
-            "is_song": False,
-            "cbs_article_title": "",
-        }
-        return {
-            "id": node_id,
-            "type": "media",
-            "title": title,
-            "media_type": media_type,
-            "media_ref": ref,
-            "children": [],
-            "meeting_generated": False,
-        }
+        return create_manual_media_node(path, title)
 
     def _insert_nodes(
         self,
@@ -1855,7 +1812,7 @@ class MeetingTreeController(QObject):
         return {
             "id": item_id,
             "type": "media",
-            "title": node.get("title") or _ref_title(ref) or _tr("_MediaRow", "Media"),
+            "title": node.get("title") or media_ref_title(ref) or _tr("_MediaRow", "Media"),
             "mediaType": media_type,
             "badge": self._badge_for(ref, media_type),
             "duration": self._duration_for(node),
@@ -2092,7 +2049,7 @@ class MeetingTreeController(QObject):
         }
         return (
             bool(node.get("auto_title"))
-            or (not _ref_title(ref) and title in placeholder_titles)
+            or (not media_ref_title(ref) and title in placeholder_titles)
             or looks_like_filename_title(title)
         )
 
