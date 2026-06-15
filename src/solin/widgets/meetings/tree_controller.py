@@ -61,6 +61,15 @@ from ...core.meetings.catalog_placement import (
     build_meeting_catalog_playlist_ref,
 )
 from ...core.meetings.tree_builder import MeetingTreeBuilder
+from ...core.meetings.tree_editing import (
+    can_drop_tree_node,
+    children_for_tree_target,
+    find_tree_node,
+    media_descendants,
+    move_tree_node,
+    parse_tree_list_id,
+    replace_tree_node,
+)
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
@@ -1604,29 +1613,11 @@ class MeetingTreeController(QObject):
 
     @Slot(str, str, str, result=bool)
     def canDrop(self, node_id: str, node_type: str, target_list_id: str) -> bool:
-        kind, _ = self._parse_list_id(target_list_id)
-        if kind == "root":
-            return node_type in ("media", "section")
-        if kind == "section":
-            return node_type in ("media", "subsection")
-        if kind == "subsection":
-            return node_type in ("media", "marker")
-        return False
+        return can_drop_tree_node(node_type, target_list_id)
 
     @Slot(str, str, int, result=bool)
     def moveNode(self, node_id: str, target_list_id: str, insert_index: int) -> bool:
-        source, parent_children, original_index = self._pop_node_with_parent(node_id)
-        if source is None or parent_children is None or original_index < 0:
-            return False
-        if not self.canDrop(node_id, source.get("type", ""), target_list_id):
-            parent_children.insert(original_index, source)
-            return False
-        kind, target_id = self._parse_list_id(target_list_id)
-        if target_id and self._contains_node(source, target_id):
-            parent_children.insert(original_index, source)
-            return False
-        if not self._insert_existing_node(source, kind, target_id, insert_index):
-            parent_children.insert(original_index, source)
+        if not move_tree_node(self._nodes, node_id, target_list_id, insert_index):
             return False
         self._save()
         self.chromeChanged.emit()
@@ -1799,81 +1790,19 @@ class MeetingTreeController(QObject):
         self._emit_section_counts()
 
     def _children_for_target(self, kind: str, node_id: str) -> list[Node] | None:
-        if kind == "root":
-            return self._nodes
-        target = self._find_node(node_id)
-        if not target or target.get("type") != kind:
-            return None
-        return target.setdefault("children", [])
-
-    def _insert_existing_node(
-        self,
-        node: Node,
-        target_kind: str,
-        target_id: str,
-        insert_index: int,
-    ) -> bool:
-        target_children = self._children_for_target(target_kind, target_id)
-        if target_children is None:
-            return False
-        index = max(0, min(insert_index, len(target_children)))
-        target_children.insert(index, node)
-        return True
+        return children_for_tree_target(self._nodes, kind, node_id)
 
     def _parse_list_id(self, list_id: str) -> tuple[str, str]:
-        if list_id == "root" or not list_id:
-            return "root", ""
-        if ":" not in list_id:
-            return "", ""
-        return tuple(list_id.split(":", 1))  # type: ignore[return-value]
+        return parse_tree_list_id(list_id)
 
     def _find_node(self, node_id: str, nodes: list[Node] | None = None) -> Node | None:
-        for node in self._nodes if nodes is None else nodes:
-            if node.get("id") == node_id:
-                return node
-            found = self._find_node(node_id, node.get("children", []))
-            if found:
-                return found
-        return None
-
-    def _pop_node_with_parent(self, node_id: str) -> tuple[Node | None, list[Node] | None, int]:
-        def visit(children: list[Node]) -> tuple[Node | None, list[Node] | None, int]:
-            for idx, child in enumerate(children):
-                if child.get("id") == node_id:
-                    return children.pop(idx), children, idx
-                found, parent, index = visit(child.get("children", []))
-                if found is not None:
-                    return found, parent, index
-            return None, None, -1
-        return visit(self._nodes)
+        return find_tree_node(self._nodes, node_id, nodes)
 
     def _replace_node(self, node_id: str, replacement: list[Node]) -> bool:
-        def visit(children: list[Node]) -> bool:
-            for idx, child in enumerate(children):
-                if child.get("id") == node_id:
-                    children[idx:idx + 1] = replacement
-                    return True
-                if visit(child.get("children", [])):
-                    return True
-            return False
-        return visit(self._nodes)
-
-    def _contains_node(self, node: Node, target_id: str) -> bool:
-        if not target_id:
-            return False
-        if node.get("id") == target_id:
-            return True
-        return any(self._contains_node(child, target_id)
-                   for child in node.get("children", []))
+        return replace_tree_node(self._nodes, node_id, replacement)
 
     def _media_descendants(self, node: Node) -> list[Node]:
-        result: list[Node] = []
-        for child in node.get("children", []):
-            if child.get("type") == "media":
-                result.append(child)
-            else:
-                result.extend(self._media_descendants(child))
-        return result
+        return media_descendants(node)
 
     def _save_and_emit_replace(self, node_id: str, replacement: list[Node]) -> None:
         self._save()

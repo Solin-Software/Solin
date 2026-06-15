@@ -673,40 +673,6 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             "count_updates",
             controller.count_updates + 1,
         )
-        controller._parse_list_id = lambda list_id: (
-            MeetingTreeController._parse_list_id(controller, list_id)
-        )
-        controller._find_node = lambda node_id, nodes=None: (
-            MeetingTreeController._find_node(controller, node_id, nodes)
-        )
-        controller._children_for_target = lambda kind, node_id: (
-            MeetingTreeController._children_for_target(controller, kind, node_id)
-        )
-        controller._pop_node_with_parent = lambda node_id: (
-            MeetingTreeController._pop_node_with_parent(controller, node_id)
-        )
-        controller._contains_node = lambda node, target_id: (
-            MeetingTreeController._contains_node(controller, node, target_id)
-        )
-        controller._insert_existing_node = (
-            lambda node, kind, target_id, index: (
-                MeetingTreeController._insert_existing_node(
-                    controller,
-                    node,
-                    kind,
-                    target_id,
-                    index,
-                )
-            )
-        )
-        controller.canDrop = lambda node_id, node_type, target: (
-            MeetingTreeController.canDrop(
-                controller,
-                node_id,
-                node_type,
-                target,
-            )
-        )
         return controller
 
     def test_placement_playlist_ref_uses_current_tree_snapshot(self):

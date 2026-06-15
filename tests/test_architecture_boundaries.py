@@ -539,6 +539,7 @@ def test_meeting_domain_has_no_framework_or_application_dependencies():
         "schedule.py",
         "section_meta.py",
         "tree_builder.py",
+        "tree_editing.py",
         "tree_merger.py",
         "tree_types.py",
     )
