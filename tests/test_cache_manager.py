@@ -7,7 +7,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.media.cache import MediaCacheManager
 from solin.core.i18n.strings import tr_offline_queued
-from solin.widgets.media_library_widget import MediaLibraryModel
+from solin.ui.qml.media_library import MediaLibraryModel
 
 
 class FakeDownloader(QObject):
