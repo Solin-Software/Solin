@@ -34,18 +34,6 @@ _SUBSECTION_BG     = "#0f1318"
 _SUBSECTION_BORDER = "#1a1f28"
 
 
-def format_duration(ticks: int) -> str:
-    if not ticks or ticks <= 0:
-        return ""
-    total_seconds = ticks // 10_000_000
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
-    if hours > 0:
-        return f"{hours}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes}:{seconds:02d}"
-
-
 def _media_badge(media_type: str) -> str:
     if media_type == "image":
         return QCoreApplication.translate("PlaylistPanel", "Image")

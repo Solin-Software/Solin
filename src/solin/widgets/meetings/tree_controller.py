@@ -27,6 +27,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
+from ...core.media.duration import format_duration_ticks
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -85,7 +86,6 @@ from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
-from solin.ui.qml.playlist.visuals import format_duration
 
 if TYPE_CHECKING:
     from ...core.jw.publication_reader import JwpubImportThreadFactory
@@ -1814,7 +1814,7 @@ class MeetingTreeController(QObject):
 
     def _duration_for(self, node: Node) -> str:
         ticks = self._duration_ticks(node)
-        return format_duration(ticks)
+        return format_duration_ticks(ticks)
 
     def _duration_ticks(self, node: Node | None) -> int:
         if not node:
