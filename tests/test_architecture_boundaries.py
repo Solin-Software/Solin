@@ -209,6 +209,48 @@ def test_clean_architecture_layer_dependencies():
     )
 
 
+def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
+    playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
+    forbidden_module = (
+        "solin",
+        "core",
+        "ingest",
+        "watched_folder",
+    )
+    raw_helpers = {
+        "WatchedFolderSyncThread",
+        "get_pending_files",
+        "load_manifest_playlist",
+        "local_file_availability_signature",
+        "remove_item_from_manifest",
+        "save_manifest_playlist",
+        "scan_root",
+    }
+    violations: list[str] = []
+
+    for path in sorted(playlist_widget_root.rglob("*.py")):
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            base = _resolve_from(
+                CODEBASES[0],
+                CODEBASES[0].module_for(path),
+                path.name == "__init__.py",
+                node,
+            )
+            if base != forbidden_module:
+                continue
+            imported = {alias.name for alias in node.names}
+            blocked = sorted(raw_helpers.intersection(imported))
+            if blocked:
+                violations.append(f"{_display(path, node)} [{', '.join(blocked)}]")
+
+    assert violations == [], (
+        "Playlist widgets must use WatchedFolderPlaylistStore instead of raw "
+        "watched-folder manifest/sync helpers:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

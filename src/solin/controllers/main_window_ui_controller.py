@@ -105,6 +105,7 @@ class MainWindowUiContext:
     playlist_thumbnail_store: Any
     meeting_thumbnail_store: Any
     watched_folder_file_store: Any
+    watched_folder_playlist_store: Any
     wifi_receive_server_factory: Callable[[QObject], Any]
     watched_folder_watcher_factory: Callable[[QObject], Any]
     playlist_cleanup_queue_factory: Callable[..., Any]
@@ -410,6 +411,7 @@ class MainWindowUiController:
             profile_media_store=context.profile_media_store,
             playlist_thumbnail_store=context.playlist_thumbnail_store,
             watched_folder_file_store=context.watched_folder_file_store,
+            watched_folder_playlist_store=context.watched_folder_playlist_store,
             watched_folder_watcher_factory=context.watched_folder_watcher_factory,
             playlist_cleanup_queue_factory=context.playlist_cleanup_queue_factory,
             media_cache_manager=context.media_cache_manager,

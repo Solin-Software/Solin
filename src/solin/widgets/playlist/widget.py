@@ -64,6 +64,7 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
+    from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
@@ -96,6 +97,7 @@ class _PlaylistEditView(
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
+        watched_folder_playlist_store: WatchedFolderPlaylistStore,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
@@ -116,6 +118,7 @@ class _PlaylistEditView(
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._watched_folder_playlist_store = watched_folder_playlist_store
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
@@ -125,7 +128,7 @@ class _PlaylistEditView(
         self._is_temp: bool = False
         self._is_watched: bool = False          # linked folder mode
         self._watched_path: str = ""            # physical subfolder path
-        self._wf_sync_thread: object = None     # WatchedFolderSyncThread
+        self._wf_sync_thread: object = None
         self._id_to_thumb:     dict[str, QPixmap] = {}   # cache de thumbnails por ID
         self._thumb_idx_to_id: dict[int, str] = {}       # request token → item ID
         self._thumb_pending_item_ids: set[str] = set()
@@ -221,8 +224,10 @@ class _PlaylistEditView(
         if self._is_temp:
             return
         if self._is_watched:
-            from ...core.ingest.watched_folder import save_manifest_playlist
-            save_manifest_playlist(self._watched_path, self._pl)
+            self._watched_folder_playlist_store.save_playlist(
+                self._watched_path,
+                self._pl,
+            )
         else:
             self._playlist_repository.save(self._all_playlists)
 
@@ -369,11 +374,10 @@ class _PlaylistEditView(
 
     def load_watched_folder(self, folder_path: str):
         """Load a linked folder as a full playlist with drag-reorder + sections."""
-        from ...core.ingest.watched_folder import load_manifest_playlist
         self._is_watched = True
         self._watched_path = folder_path
         self._is_temp = False
-        pl = load_manifest_playlist(folder_path)
+        pl = self._watched_folder_playlist_store.load_playlist(folder_path)
         self._pl = pl
         self._wf_file_availability = self._watched_file_availability(pl)
         self._thumb_queue.clear()
@@ -384,17 +388,16 @@ class _PlaylistEditView(
 
     def _start_wf_sync(self):
         """Start background sync for pending processable files in linked folder."""
-        from ...core.ingest.watched_folder import WatchedFolderSyncThread, get_pending_files
         if not self._watched_path:
             return
-        pending = get_pending_files(self._watched_path)
+        pending = self._watched_folder_playlist_store.pending_files(self._watched_path)
         if not pending:
             return
         context = self._current_media_context()
         self._notifications.information(
             self.tr("Processing %n file(s)...", None, len(pending))
         )
-        thread = WatchedFolderSyncThread(
+        thread = self._watched_folder_playlist_store.create_sync_thread(
             self._watched_path,
             media_lang=context.api_code,
             fallback_lang_code=context.fallback_code,
@@ -454,13 +457,12 @@ class _PlaylistEditView(
 
     def _watched_file_availability(self, pl: dict | None = None) -> tuple[tuple[str, bool], ...]:
         """Snapshot machine-local file availability for linked-folder items."""
-        from ...core.ingest.watched_folder import local_file_availability_signature
         source = pl if pl is not None else self._pl
         urls = [
             item.get("url", "")
             for item in (source or {}).get("items", [])
         ]
-        return local_file_availability_signature(urls)
+        return self._watched_folder_playlist_store.file_availability_signature(urls)
 
     def refresh_watched_folder(self):
         """Re-scan and reconcile linked folder (called by watcher)."""
@@ -469,8 +471,7 @@ class _PlaylistEditView(
         if self._wf_sync_thread is not None:
             self._wf_refresh_pending = True
             return
-        from ...core.ingest.watched_folder import load_manifest_playlist
-        pl = load_manifest_playlist(self._watched_path)
+        pl = self._watched_folder_playlist_store.load_playlist(self._watched_path)
         if self._watched_playlist_equivalent(pl):
             availability = self._watched_file_availability(pl)
             if availability != self._wf_file_availability:
@@ -851,8 +852,10 @@ class _PlaylistEditView(
         self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
         self._save()
         if self._is_watched and self._watched_path and item:
-            from ...core.ingest.watched_folder import remove_item_from_manifest
-            remove_item_from_manifest(self._watched_path, item)
+            self._watched_folder_playlist_store.remove_item(
+                self._watched_path,
+                item,
+            )
         elif item:
             self._schedule_cleanup([item])
         self.model.rebuild(self._pl)
@@ -924,6 +927,7 @@ class PlaylistWidget(QWidget):
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
+        watched_folder_playlist_store: WatchedFolderPlaylistStore,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         media_cache_manager: MediaCacheManager,
@@ -944,6 +948,7 @@ class PlaylistWidget(QWidget):
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._watched_folder_playlist_store = watched_folder_playlist_store
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
@@ -982,6 +987,7 @@ class PlaylistWidget(QWidget):
             profile_media_store=self._profile_media_store,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
+            watched_folder_playlist_store=self._watched_folder_playlist_store,
             media_cache_manager=self._media_cache_manager,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
@@ -998,6 +1004,7 @@ class PlaylistWidget(QWidget):
             profile_media_store=self._profile_media_store,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
+            watched_folder_playlist_store=self._watched_folder_playlist_store,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_catalog_service_factory=self._jw_catalog_service_factory,

@@ -39,6 +39,7 @@ from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
+    from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.playlists.storage import PlaylistRepository
@@ -80,6 +81,7 @@ class _PlaylistListView(QWidget):
         profile_media_store: ProfileMediaStore,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
+        watched_folder_playlist_store: WatchedFolderPlaylistStore,
         media_cache_manager: MediaCacheManager,
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
@@ -95,6 +97,7 @@ class _PlaylistListView(QWidget):
         self._profile_media_store = profile_media_store
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
+        self._watched_folder_playlist_store = watched_folder_playlist_store
         self._media_cache_manager = media_cache_manager
         self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[_PlaylistCard] = []
@@ -236,8 +239,6 @@ class _PlaylistListView(QWidget):
             self._pl_cards.append(card)
 
     def _rebuild_watched_section(self) -> None:
-        from ...core.ingest.watched_folder import scan_root
-
         while self._wf_grid_lay.count():
             it = self._wf_grid_lay.takeAt(0)
             if it and it.widget():
@@ -255,7 +256,9 @@ class _PlaylistListView(QWidget):
             self._empty_lbl.setVisible(not bool(self._playlists))
             return
 
-        subfolders = scan_root(self._watched_folder)
+        subfolders = self._watched_folder_playlist_store.scan_root(
+            self._watched_folder,
+        )
         has_subs = bool(subfolders)
         self._wf_empty_lbl.setVisible(not has_subs)
         self._wf_grid_cont.setVisible(has_subs)
@@ -500,10 +503,8 @@ class _PlaylistListView(QWidget):
         self._rebuild_watched_section()
 
     def _export_watched_folder(self, folder_path: str) -> None:
-        from ...core.ingest.watched_folder import load_manifest_playlist
-
         name = Path(folder_path).name
-        pl = load_manifest_playlist(folder_path)
+        pl = self._watched_folder_playlist_store.load_playlist(folder_path)
         items = pl.get("items", [])
         if not items:
             QMessageBox.information(
