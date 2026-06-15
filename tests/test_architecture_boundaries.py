@@ -368,6 +368,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_media_catalog.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_songs.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_library.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "meeting_detail.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "bridge.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "model.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "visuals.py",
@@ -401,6 +402,22 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         violations.append(
             f"{timer_window.relative_to(PROJECT_ROOT)} contains class ClockRenderBridge"
         )
+
+    meetings_widget = (
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "widget.py"
+    )
+    meetings_source = meetings_widget.read_text(encoding="utf-8")
+    for fragment in (
+        "QQuickWidget",
+        "addImageProvider",
+        "setContextProperty",
+        "load_qml_type",
+        "rootObject",
+    ):
+        if fragment in meetings_source:
+            violations.append(
+                f"{meetings_widget.relative_to(PROJECT_ROOT)} contains {fragment}"
+            )
 
     forbidden_modules = {
         ("solin", "qml_module"),

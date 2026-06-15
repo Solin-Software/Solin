@@ -24,15 +24,11 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QObject, Signal, Slot, QTimer,
-    QCoreApplication, QUrl, QEvent
-)
-from PySide6.QtGui import (
-    QColor, QSurfaceFormat
+    QCoreApplication, QEvent
 )
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget,
 )
-from PySide6.QtQuickWidgets import QQuickWidget
 
 from ...core.meetings.publications import current_monday
 from ...core.meetings.models import MemorialData, WeekData
@@ -57,9 +53,9 @@ from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
 from ...core.media.settings import MediaSettingsStore
-from solin.ui.qml.loader import load_qml_type
 from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
+from solin.ui.qml.meeting_detail import MeetingDetailQmlHost
 from .tree_controller import MeetingTreeController
 from .overview import _Overview
 from .visuals import (
@@ -69,7 +65,6 @@ from .visuals import (
     _PURPLE,
 )
 from .week_nav import WeekNavBar, _WeekPicker
-from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
@@ -169,16 +164,6 @@ class StudyDetailView(QWidget):
         self.pill_color = _ACCENT if is_mwb else _PURPLE
         self._refresh_shell_texts(update_context=False)
 
-        self.qml_widget = QQuickWidget()
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self.qml_widget.setFormat(fmt)
-        self.qml_widget.setParent(self)
-        self.qml_widget.setClearColor(QColor("#0d1117"))
-        self.qml_widget.setMouseTracking(True)
-        self.qml_widget.setAcceptDrops(False)
-        self.qml_widget.installEventFilter(self)
-
         lang_code = self._language_context.api_code
         self.controller = MeetingTreeController(
             self._svc,
@@ -221,27 +206,17 @@ class StudyDetailView(QWidget):
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 
-        self.qml_widget.engine().addImageProvider(
-            "playlistthumbs",
-            PlaylistThumbnailProvider(
-                self.controller.thumb_cache,
-                self.controller.disk_thumbnail,
-            ),
+        self.qml_widget = MeetingDetailQmlHost(
+            controller=self.controller,
+            catalog_bridge=self.catalog_bridge,
+            songs_bridge=self.songs_bridge,
+            meeting_pill=self.pill_text,
+            meeting_date=self.date_text,
+            pill_color=self.pill_color,
+            no_items_text=self.no_items_text,
+            parent=self,
         )
-        self.qml_widget.engine().addImageProvider("playlisticons", PlaylistIconProvider())
-
-        ctx = self.qml_widget.rootContext()
-        ctx.setContextProperty("controller", self.controller)
-        ctx.setContextProperty("catalogBridge", self.catalog_bridge)
-        ctx.setContextProperty("songsBridge", self.songs_bridge)
-        ctx.setContextProperty("meetingPill", self.pill_text)
-        ctx.setContextProperty("meetingDate", self.date_text)
-        ctx.setContextProperty("pillColor", self.pill_color)
-        ctx.setContextProperty("noItemsText", self.no_items_text)
-        
-        load_qml_type(self.qml_widget, "MeetingDetailView")
-        self.qml_widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-        
+        self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
         self.controller.load_week(self._pub, self._wd)
         if self._watched_folder:
@@ -297,13 +272,11 @@ class StudyDetailView(QWidget):
             "StudyDetailView", "No media items found for this week."
         )
         if update_context and hasattr(self, "qml_widget"):
-            ctx = self.qml_widget.rootContext()
-            ctx.setContextProperty("meetingPill", self.pill_text)
-            ctx.setContextProperty("meetingDate", self.date_text)
-            ctx.setContextProperty("noItemsText", self.no_items_text)
-            engine = self.qml_widget.engine()
-            if hasattr(engine, "retranslate"):
-                engine.retranslate()
+            self.qml_widget.update_shell_texts(
+                meeting_pill=self.pill_text,
+                meeting_date=self.date_text,
+                no_items_text=self.no_items_text,
+            )
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -351,16 +324,13 @@ class StudyDetailView(QWidget):
             super().dragMoveEvent(event)
             return
         event.acceptProposedAction()
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            local_pos = self.qml_widget.mapFrom(self, event.position().toPoint())
-            delegate_idx = root_obj.getIndexAt(local_pos.y())
-            root_obj.setProperty("dropIndicatorIndex", delegate_idx)
+        self.qml_widget.preview_external_drop(
+            self,
+            event.position().toPoint(),
+        )
 
     def dragLeaveEvent(self, event):
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            root_obj.clearExternalDropPreview()
+        self.qml_widget.clear_external_drop_preview()
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -374,17 +344,10 @@ class StudyDetailView(QWidget):
             if url.isLocalFile()
             and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id = "root"
-        insert_idx = 2**31 - 1
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            local_pos = self.qml_widget.mapFrom(self, event.position().toPoint())
-            root_obj.getIndexAt(local_pos.y())
-            list_id = root_obj.property("externalDropListId") or "root"
-            value = root_obj.property("externalDropIndex")
-            if isinstance(value, int) and value >= 0:
-                insert_idx = value
-            root_obj.clearExternalDropPreview()
+        list_id, insert_idx = self.qml_widget.external_drop_target(
+            self,
+            event.position().toPoint(),
+        )
         self.controller.add_files(paths, list_id, insert_idx)
         event.acceptProposedAction()
 
@@ -403,7 +366,7 @@ class StudyDetailView(QWidget):
                 self.qml_widget.removeEventFilter(self)
             except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 log_ignored_exception(__name__, "Could not remove meeting overview event filter")
-            self.qml_widget.setSource(QUrl())
+            self.qml_widget.clear_scene()
 
     def deleteLater(self):
         self.dispose()
@@ -466,16 +429,6 @@ class _MemorialDetailView(QWidget):
         self.pill_color = _GOLD
         self._refresh_shell_texts(update_context=False)
 
-        self.qml_widget = QQuickWidget()
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self.qml_widget.setFormat(fmt)
-        self.qml_widget.setParent(self)
-        self.qml_widget.setClearColor(QColor("#0d1117"))
-        self.qml_widget.setMouseTracking(True)
-        self.qml_widget.setAcceptDrops(False)
-        self.qml_widget.installEventFilter(self)
-
         lang_code = self._language_context.api_code
         self.controller = MeetingTreeController(
             self._svc,
@@ -517,27 +470,17 @@ class _MemorialDetailView(QWidget):
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 
-        self.qml_widget.engine().addImageProvider(
-            "playlistthumbs",
-            PlaylistThumbnailProvider(
-                self.controller.thumb_cache,
-                self.controller.disk_thumbnail,
-            ),
+        self.qml_widget = MeetingDetailQmlHost(
+            controller=self.controller,
+            catalog_bridge=self.catalog_bridge,
+            songs_bridge=self.songs_bridge,
+            meeting_pill=self.pill_text,
+            meeting_date=self.date_text,
+            pill_color=self.pill_color,
+            no_items_text=self.no_items_text,
+            parent=self,
         )
-        self.qml_widget.engine().addImageProvider("playlisticons", PlaylistIconProvider())
-
-        ctx = self.qml_widget.rootContext()
-        ctx.setContextProperty("controller", self.controller)
-        ctx.setContextProperty("catalogBridge", self.catalog_bridge)
-        ctx.setContextProperty("songsBridge", self.songs_bridge)
-        ctx.setContextProperty("meetingPill", self.pill_text)
-        ctx.setContextProperty("meetingDate", self.date_text)
-        ctx.setContextProperty("pillColor", self.pill_color)
-        ctx.setContextProperty("noItemsText", self.no_items_text)
-        
-        load_qml_type(self.qml_widget, "MeetingDetailView")
-        self.qml_widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-        
+        self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
         self.controller.load_memorial(self._md)
         self._sync_catalog_placement()
@@ -568,13 +511,11 @@ class _MemorialDetailView(QWidget):
         )
         self.no_items_text = _tr_ctx("_MemorialDetailView", "No media items found.")
         if update_context and hasattr(self, "qml_widget"):
-            ctx = self.qml_widget.rootContext()
-            ctx.setContextProperty("meetingPill", self.pill_text)
-            ctx.setContextProperty("meetingDate", self.date_text)
-            ctx.setContextProperty("noItemsText", self.no_items_text)
-            engine = self.qml_widget.engine()
-            if hasattr(engine, "retranslate"):
-                engine.retranslate()
+            self.qml_widget.update_shell_texts(
+                meeting_pill=self.pill_text,
+                meeting_date=self.date_text,
+                no_items_text=self.no_items_text,
+            )
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -622,16 +563,13 @@ class _MemorialDetailView(QWidget):
             super().dragMoveEvent(event)
             return
         event.acceptProposedAction()
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            local_pos = self.qml_widget.mapFrom(self, event.position().toPoint())
-            delegate_idx = root_obj.getIndexAt(local_pos.y())
-            root_obj.setProperty("dropIndicatorIndex", delegate_idx)
+        self.qml_widget.preview_external_drop(
+            self,
+            event.position().toPoint(),
+        )
 
     def dragLeaveEvent(self, event):
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            root_obj.clearExternalDropPreview()
+        self.qml_widget.clear_external_drop_preview()
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -645,17 +583,10 @@ class _MemorialDetailView(QWidget):
             if url.isLocalFile()
             and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id = "root"
-        insert_idx = 2**31 - 1
-        root_obj = self.qml_widget.rootObject()
-        if root_obj:
-            local_pos = self.qml_widget.mapFrom(self, event.position().toPoint())
-            root_obj.getIndexAt(local_pos.y())
-            list_id = root_obj.property("externalDropListId") or "root"
-            value = root_obj.property("externalDropIndex")
-            if isinstance(value, int) and value >= 0:
-                insert_idx = value
-            root_obj.clearExternalDropPreview()
+        list_id, insert_idx = self.qml_widget.external_drop_target(
+            self,
+            event.position().toPoint(),
+        )
         self.controller.add_files(paths, list_id, insert_idx)
         event.acceptProposedAction()
 
@@ -674,7 +605,7 @@ class _MemorialDetailView(QWidget):
                 self.qml_widget.removeEventFilter(self)
             except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary
                 log_ignored_exception(__name__, "Could not remove meeting detail event filter")
-            self.qml_widget.setSource(QUrl())
+            self.qml_widget.clear_scene()
 
     def deleteLater(self):
         self.dispose()
@@ -717,7 +648,7 @@ class MeetingsWidget(QWidget):
         self._lang_mgr  = lang_manager
         self._monday    = current_monday()
         self._cache:   dict[str, WeekData]       = {}
-        self._details: dict[str, StudyDetailView] = {}
+        self._details: dict[str, StudyDetailView | _MemorialDetailView] = {}
         self._clear_details_pending = False
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
@@ -1042,7 +973,7 @@ class MeetingsWidget(QWidget):
         # instead of discarding it — so a background update never yanks the user
         # back to the overview. On the first (cache) emit no detail exists yet.
         detail = self._details.get(f"mwb:{key}")
-        if detail is not None:
+        if isinstance(detail, StudyDetailView):
             detail.update_week(wd)
         if key == self._monday.isoformat():
             self._navbar.update_week(
@@ -1054,7 +985,7 @@ class MeetingsWidget(QWidget):
     def _on_wt_ready(self, key: str, wd: "WeekData"):
         self._cache[key] = wd
         detail = self._details.get(f"wt:{key}")
-        if detail is not None:
+        if isinstance(detail, StudyDetailView):
             detail.update_week(wd)
         if key == self._monday.isoformat():
             self._refresh_overview_cards(self._monday)
@@ -1066,7 +997,7 @@ class MeetingsWidget(QWidget):
             self._overview.mwb_card.set_ready(wd)
         dk = f"mwb:{key}"
         detail = self._details.get(dk)
-        if detail:
+        if isinstance(detail, StudyDetailView):
             detail.refresh_cbs()
 
     @Slot(str, str, int)
