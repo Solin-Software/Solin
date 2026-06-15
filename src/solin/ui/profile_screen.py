@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu, QDialog, QMessageBox,
 )
 
-from ..core.ui.helpers import fade_in as _fade_in
+from ..core.ui.helpers import fade_in
 from ..core.onboarding.application import (
     OBSOnboardingConfiguration,
     OnboardingService,
@@ -34,7 +34,7 @@ from ..core.onboarding.application import (
 from ..core.profiles.application import ProfileService
 from ..core.profiles.settings import ProfileSettings
 from ..controllers.onboarding_obs_probe import OnboardingOBSProbe
-from ..widgets.common.no_scroll_combo_box import NoScrollComboBox as _NoScrollComboBox
+from ..widgets.common.no_scroll_combo_box import NoScrollComboBox
 from ..styles.icons import (
     make_icon,
     ICON_EDIT, ICON_TRASH,
@@ -48,24 +48,24 @@ from .profile_widgets import (
     AddProfileCard,
     ProfileCard,
     StepProgress,
-    _ACCENT,
-    _BG,
-    _BORDER,
-    _DIM,
-    _FlowLayout,
-    _MUTED,
-    _OBSToggle,
-    _ProfileNameDialog,
-    _RED,
-    _SCROLLBAR_SS,
-    _SURF,
-    _TEXT,
-    _btn,
-    _field,
-    _lbl,
-    _obs_combo_style,
-    _obs_field_style,
-    _section_card,
+    PROFILE_ACCENT,
+    PROFILE_BG,
+    PROFILE_BORDER,
+    PROFILE_DIM,
+    ProfileFlowLayout,
+    PROFILE_MUTED,
+    OBSToggle,
+    ProfileNameDialog,
+    PROFILE_DANGER,
+    PROFILE_SCROLLBAR_STYLESHEET,
+    PROFILE_SURFACE,
+    PROFILE_TEXT,
+    profile_button,
+    profile_field,
+    profile_label,
+    obs_combo_style,
+    obs_field_style,
+    profile_section_card,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -111,7 +111,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._ob_skip_buttons: list[QPushButton] = []
         self._init_ob_obs_setup()
 
-        self.setStyleSheet(f"background: {_BG}; color: {_TEXT};")
+        self.setStyleSheet(f"background: {PROFILE_BG}; color: {PROFILE_TEXT};")
         self.setMinimumSize(800, 560)
 
         root = QVBoxLayout(self)
@@ -157,7 +157,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def _build_selector_page(self) -> QWidget:
         page = QWidget()
-        page.setStyleSheet(f"background: {_BG};")
+        page.setStyleSheet(f"background: {PROFILE_BG};")
         lay  = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -165,7 +165,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         # Header
         header = QWidget()
         header.setFixedHeight(72)
-        header.setStyleSheet(f"background: {_SURF}; border-bottom: 1px solid #21262d;")
+        header.setStyleSheet(f"background: {PROFILE_SURFACE}; border-bottom: 1px solid #21262d;")
         hlay = QHBoxLayout(header)
         hlay.setContentsMargins(32, 0, 32, 0)
         logo = QLabel("Solin")
@@ -181,7 +181,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         blay.setContentsMargins(40, 60, 40, 40)
         blay.setSpacing(0)
 
-        title = _lbl("", 28, _TEXT, 700, Qt.AlignmentFlag.AlignHCenter)
+        title = profile_label("", 28, PROFILE_TEXT, 700, Qt.AlignmentFlag.AlignHCenter)
         self._selector_title = self._tr_label(
             title,
             QT_TRANSLATE_NOOP("ProfileScreen", "Who is using Solin?"),
@@ -191,7 +191,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         # Grid de cards
         self._selector_grid = QWidget()
-        self._grid_lay = _FlowLayout(self._selector_grid, h_spacing=18, v_spacing=18)
+        self._grid_lay = ProfileFlowLayout(self._selector_grid, h_spacing=18, v_spacing=18)
         blay.addWidget(self._selector_grid, 0, Qt.AlignmentFlag.AlignHCenter)
         lay.addWidget(body, 1)
 
@@ -225,7 +225,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._ob_media_touched = False
         if hasattr(self, "_ob_name_error"):
             self._ob_name_error.hide()
-        if hasattr(self, "_ob_iface_btn"):
+        if hasattr(self, "_ob_iface_button"):
             self._refresh_ob_language_buttons()
         if hasattr(self, "_ob_obs_toggle") and self._ob_obs_toggle.is_checked:
             self._ob_obs_toggle.set_checked(False)
@@ -248,7 +248,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
     def _build_onboard_pages(self) -> QStackedWidget:
         """Retorna um QStackedWidget com as 3 etapas do onboarding."""
         stack = QStackedWidget()
-        stack.setStyleSheet(f"background: {_BG};")
+        stack.setStyleSheet(f"background: {PROFILE_BG};")
 
         self._ob_steps = []
         self._ob_dots  = None    # criado abaixo
@@ -269,7 +269,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                        body: QWidget, show_skip: bool = True) -> QWidget:
         """Frame padrão para cada etapa do onboarding — estilo premium."""
         page = QWidget()
-        page.setStyleSheet(f"background: {_BG};")
+        page.setStyleSheet(f"background: {PROFILE_BG};")
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -278,7 +278,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         header = QWidget()
         header.setFixedHeight(56)
         header.setStyleSheet(
-            f"background: {_SURF}; border-bottom: 1px solid #21262d;"
+            f"background: {PROFILE_SURFACE}; border-bottom: 1px solid #21262d;"
         )
         hlay = QHBoxLayout(header)
         hlay.setContentsMargins(32, 0, 32, 0)
@@ -303,7 +303,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         # Step counter — sem pill, integrado ao fundo do header
         step_counter = QLabel(f"{step + 1} / 3")
         step_counter.setStyleSheet(
-            f"color: {_MUTED}; font-size: 11px; font-weight: 600; "
+            f"color: {PROFILE_MUTED}; font-size: 11px; font-weight: 600; "
             "background: transparent; border: none;"
         )
         hlay.addWidget(step_counter)
@@ -316,26 +316,26 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        scroll.setStyleSheet(_SCROLLBAR_SS)
+        scroll.setStyleSheet(PROFILE_SCROLLBAR_STYLESHEET)
 
         inner = QWidget()
-        inner.setStyleSheet(f"background: {_BG};")
+        inner.setStyleSheet(f"background: {PROFILE_BG};")
         ilay = QVBoxLayout(inner)
         ilay.setContentsMargins(56, 44, 56, 40)
         ilay.setSpacing(0)
         ilay.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Title
-        t = _lbl(
-            self.tr(title), 26, _TEXT, 700,
+        t = profile_label(
+            self.tr(title), 26, PROFILE_TEXT, 700,
             Qt.AlignmentFlag.AlignHCenter,
         )
         ilay.addWidget(t)
         ilay.addSpacing(8)
 
         # Subtitle
-        s = _lbl(
-            self.tr(subtitle), 13, _MUTED, 400,
+        s = profile_label(
+            self.tr(subtitle), 13, PROFILE_MUTED, 400,
             Qt.AlignmentFlag.AlignHCenter,
         )
         ilay.addWidget(s)
@@ -351,35 +351,35 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         footer = QWidget()
         footer.setFixedHeight(56)
         footer.setStyleSheet(
-            f"background: {_SURF}; border-top: 1px solid #21262d;"
+            f"background: {PROFILE_SURFACE}; border-top: 1px solid #21262d;"
         )
         flay = QHBoxLayout(footer)
         flay.setContentsMargins(32, 0, 32, 0)
 
-        cancel_btn = _btn(self.tr("Cancel"), primary=False)
-        self._tr_buttons.append((cancel_btn, "Cancel"))
-        cancel_btn.clicked.connect(self._cancel_onboarding_profile_creation)
-        cancel_btn.hide()
-        self._ob_cancel_buttons.append(cancel_btn)
-        flay.addWidget(cancel_btn)
+        cancel_button = profile_button(self.tr("Cancel"), primary=False)
+        self._tr_buttons.append((cancel_button, "Cancel"))
+        cancel_button.clicked.connect(self._cancel_onboarding_profile_creation)
+        cancel_button.hide()
+        self._ob_cancel_buttons.append(cancel_button)
+        flay.addWidget(cancel_button)
         flay.addStretch()
 
         if show_skip:
-            skip_btn = QPushButton(self.tr("Skip setup"))
-            skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            skip_btn.setStyleSheet(f"""
+            skip_button = QPushButton(self.tr("Skip setup"))
+            skip_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            skip_button.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
-                    color: {_DIM};
+                    color: {PROFILE_DIM};
                     border: none;
                     font-size: 12px;
                     padding: 0 8px;
                 }}
-                QPushButton:hover {{ color: {_MUTED}; }}
+                QPushButton:hover {{ color: {PROFILE_MUTED}; }}
             """)
-            skip_btn.clicked.connect(self._on_skip_setup)
-            self._ob_skip_buttons.append(skip_btn)
-            flay.addWidget(skip_btn)
+            skip_button.clicked.connect(self._on_skip_setup)
+            self._ob_skip_buttons.append(skip_button)
+            flay.addWidget(skip_button)
 
         lay.addWidget(footer)
         return page
@@ -394,11 +394,11 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         blay.setSpacing(14)
 
         self._ob_name_label = self._tr_label(
-            _lbl("", 12, _MUTED, 500),
+            profile_label("", 12, PROFILE_MUTED, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Profile name"),
         )
         blay.addWidget(self._ob_name_label)
-        self._ob_name_field = _field()
+        self._ob_name_field = profile_field()
         self._tr_placeholder(
             self._ob_name_field,
             QT_TRANSLATE_NOOP("ProfileScreen", "Example: Congregation A, Name, \u2026"),
@@ -407,18 +407,18 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._ob_name_field.selectAll()
         blay.addWidget(self._ob_name_field)
 
-        self._ob_name_error = _lbl("", 12, _RED)
+        self._ob_name_error = profile_label("", 12, PROFILE_DANGER)
         self._ob_name_error.hide()
         blay.addWidget(self._ob_name_error)
 
         blay.addSpacing(8)
 
-        cont_btn = _btn("")
+        continue_button = profile_button("")
         self._tr_button(
-            cont_btn, QT_TRANSLATE_NOOP("ProfileScreen", "Continue \u2192")
+            continue_button, QT_TRANSLATE_NOOP("ProfileScreen", "Continue \u2192")
         )
-        cont_btn.clicked.connect(self._ob_step0_next)
-        blay.addWidget(cont_btn)
+        continue_button.clicked.connect(self._ob_step0_next)
+        blay.addWidget(continue_button)
 
         self._ob_name_field.returnPressed.connect(self._ob_step0_next)
 
@@ -450,7 +450,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             "ProfileScreen",
             "Controls menus, buttons, and all text displayed throughout the app.",
         )
-        iface_card = _section_card(
+        iface_card = profile_section_card(
             self.tr(iface_title),
             ICON_NAV_BROWSER,
             self.tr(iface_desc),
@@ -470,7 +470,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             "Language for songs, videos, and other media "
             "downloaded from JW.org."
         )
-        media_card = _section_card(
+        media_card = profile_section_card(
             self.tr(media_title),
             ICON_BOOK,
             self.tr(media_desc),
@@ -485,12 +485,12 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         blay.addSpacing(8)
 
-        cont_btn = _btn("")
+        continue_button = profile_button("")
         self._tr_button(
-            cont_btn, QT_TRANSLATE_NOOP("ProfileScreen", "Continue \u2192")
+            continue_button, QT_TRANSLATE_NOOP("ProfileScreen", "Continue \u2192")
         )
-        cont_btn.clicked.connect(self._ob_step1_next)
-        blay.addWidget(cont_btn)
+        continue_button.clicked.connect(self._ob_step1_next)
+        blay.addWidget(continue_button)
 
         page = self._onboard_shell(
             1,
@@ -512,21 +512,21 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: #13161c;
-                color: {_TEXT};
+                color: {PROFILE_TEXT};
                 border: 1.5px solid #21262d;
                 border-radius: 10px;
                 font-size: 13px;
                 text-align: left;
                 padding: 0 14px;
             }}
-            QPushButton:hover {{ border-color: {_ACCENT}; background: #181d27; }}
+            QPushButton:hover {{ border-color: {PROFILE_ACCENT}; background: #181d27; }}
             QPushButton:pressed {{ background: #0d1520; }}
         """)
         if interface:
-            self._ob_iface_btn = btn
+            self._ob_iface_button = btn
             btn.clicked.connect(self._open_ob_interface_picker)
         else:
-            self._ob_media_btn = btn
+            self._ob_media_button = btn
             btn.clicked.connect(self._open_ob_media_picker)
             svc = self._lang.jw_lang_service if self._lang else None
             if svc:
@@ -536,19 +536,19 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         return btn
 
     def _refresh_ob_language_buttons(self) -> None:
-        if hasattr(self, "_ob_iface_btn"):
+        if hasattr(self, "_ob_iface_button"):
             code = getattr(self, "_ob_iface_selected_code", "pt_BR")
             name = self._interface_language_name(code)
-            self._ob_iface_btn.setText(f"  {name}")#    ({code})")
-        if hasattr(self, "_ob_media_btn"):
+            self._ob_iface_button.setText(f"  {name}")#    ({code})")
+        if hasattr(self, "_ob_media_button"):
             self._refresh_ob_media_button()
 
     def _refresh_ob_media_button(self) -> None:
-        if not hasattr(self, "_ob_media_btn"):
+        if not hasattr(self, "_ob_media_button"):
             return
         code = getattr(self, "_ob_media_selected_code", "T")
         name = self._media_language_name(code)
-        self._ob_media_btn.setText(f"  {name}")#    ({code})")
+        self._ob_media_button.setText(f"  {name}")#    ({code})")
 
     def _interface_language_items(self) -> list[tuple[str, str, str]]:
         if self._lang:
@@ -654,7 +654,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             "switch scenes during media playback \u2014 songs, videos, and "
             "images are sent seamlessly to your live output."
         )
-        intro = _lbl(self.tr(intro_source), 13, _MUTED)
+        intro = profile_label(self.tr(intro_source), 13, PROFILE_MUTED)
         self._tr_labels.append((intro, intro_source))
         blay.addWidget(intro)
 
@@ -701,8 +701,8 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 "font-size: 11px; font-weight: 700; border: none;"
             )
             row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
-            step_lbl = self._tr_label(_lbl("", 12, _TEXT), text)
-            row.addWidget(step_lbl, 1)
+            step_label = self._tr_label(profile_label("", 12, PROFILE_TEXT), text)
+            row.addWidget(step_label, 1)
             s_lay.addLayout(row)
 
         # RTSP code example
@@ -721,7 +721,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         rtsp_hint = QLabel(self.tr("RTSP URL example:"))
         rtsp_hint.setStyleSheet(
-            f"color: {_DIM}; font-size: 10px; font-weight: 600; "
+            f"color: {PROFILE_DIM}; font-size: 10px; font-weight: 600; "
             "letter-spacing: 0.5px; background: transparent; border: none;"
         )
         self._tr_labels.append((rtsp_hint, "RTSP URL example:"))
@@ -736,7 +736,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         rtsp_url.setStyleSheet(
-            f"color: {_ACCENT}; "
+            f"color: {PROFILE_ACCENT}; "
             "font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace; "
             "font-size: 11.5px; background: transparent; border: none;"
         )
@@ -749,7 +749,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             "Configure your camera sources and create scene layouts "
             "in OBS before connecting."
         )
-        scene_card = _section_card(
+        scene_card = profile_section_card(
             self.tr(scene_title),
             ICON_CLAPPERBOARD,
             self.tr(scene_desc),
@@ -792,15 +792,15 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 "font-size: 11px; font-weight: 700; border: none;"
             )
             row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
-            step_lbl = self._tr_label(_lbl("", 12, _TEXT), text)
-            row.addWidget(step_lbl, 1)
+            step_label = self._tr_label(profile_label("", 12, PROFILE_TEXT), text)
+            row.addWidget(step_label, 1)
             w_lay.addLayout(row)
 
         ws_title = QT_TRANSLATE_NOOP("ProfileScreen", "Enable the WebSocket server")
         ws_desc = QT_TRANSLATE_NOOP(
             "ProfileScreen", "Solin communicates with OBS through this protocol."
         )
-        ws_card = _section_card(
+        ws_card = profile_section_card(
             self.tr(ws_title),
             ICON_PLUG,
             self.tr(ws_desc),
@@ -818,13 +818,13 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         # Enable toggle row
         tog_row = QHBoxLayout()
-        self._ob_obs_enable_lbl = self._tr_label(
-            _lbl("", 13, _TEXT, 500),
+        self._ob_obs_enable_label = self._tr_label(
+            profile_label("", 13, PROFILE_TEXT, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Enable OBS integration"),
         )
-        tog_row.addWidget(self._ob_obs_enable_lbl)
+        tog_row.addWidget(self._ob_obs_enable_label)
         tog_row.addStretch()
-        self._ob_obs_toggle = _OBSToggle(False)
+        self._ob_obs_toggle = OBSToggle(False)
         self._ob_obs_toggle.toggled.connect(self._on_ob_obs_toggled)
         tog_row.addWidget(self._ob_obs_toggle)
         c_lay.addLayout(tog_row)
@@ -838,22 +838,22 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         # Port
         f_lay.addWidget(self._tr_label(
-            _lbl("", 12, _MUTED, 500),
+            profile_label("", 12, PROFILE_MUTED, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "WebSocket port"),
         ))
-        self._ob_obs_port = _field("4455")
-        self._ob_obs_port.setStyleSheet(_obs_field_style())
+        self._ob_obs_port = profile_field("4455")
+        self._ob_obs_port.setStyleSheet(obs_field_style())
         self._ob_obs_port.setText("4455")
         self._ob_obs_port.textChanged.connect(self._ob_obs_field_changed)
         f_lay.addWidget(self._ob_obs_port)
 
         # Password
         f_lay.addWidget(self._tr_label(
-            _lbl("", 12, _MUTED, 500),
+            profile_label("", 12, PROFILE_MUTED, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Password (optional)"),
         ))
-        self._ob_obs_pwd = _field("")
-        self._ob_obs_pwd.setStyleSheet(_obs_field_style())
+        self._ob_obs_pwd = profile_field("")
+        self._ob_obs_pwd.setStyleSheet(obs_field_style())
         self._ob_obs_pwd.setEchoMode(QLineEdit.EchoMode.Password)
         self._tr_placeholder(
             self._ob_obs_pwd,
@@ -868,12 +868,12 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         self._ob_obs_status_dot = QLabel("\u25cf")
         self._ob_obs_status_dot.setFixedWidth(14)
         self._ob_obs_status_dot.setStyleSheet(
-            f"color: {_DIM}; font-size: 10px; background: transparent; border: none;"
+            f"color: {PROFILE_DIM}; font-size: 10px; background: transparent; border: none;"
         )
-        self._ob_obs_status_lbl = _lbl("", 12, _MUTED)
-        self._ob_obs_status_lbl.setText(self.tr("Disconnected"))
+        self._ob_obs_status_label = profile_label("", 12, PROFILE_MUTED)
+        self._ob_obs_status_label.setText(self.tr("Disconnected"))
         status_row.addWidget(self._ob_obs_status_dot)
-        status_row.addWidget(self._ob_obs_status_lbl, 1)
+        status_row.addWidget(self._ob_obs_status_label, 1)
         f_lay.addLayout(status_row)
 
         # ── Scene selectors (visible only when connected) ───────────────
@@ -890,31 +890,31 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         scenes_lay.addWidget(sep)
 
         # Default / idle scene
-        self._ob_obs_default_lbl = self._tr_label(
-            _lbl("", 12, _TEXT, 500),
+        self._ob_obs_default_label = self._tr_label(
+            profile_label("", 12, PROFILE_TEXT, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Default scene (idle)"),
         )
-        scenes_lay.addWidget(self._ob_obs_default_lbl)
+        scenes_lay.addWidget(self._ob_obs_default_label)
         self._ob_obs_default_hint = self._tr_label(
-            _lbl("", 11, _DIM),
+            profile_label("", 11, PROFILE_DIM),
             QT_TRANSLATE_NOOP(
                 "ProfileScreen", "Scene shown when nothing is being projected."
             ),
         )
         scenes_lay.addWidget(self._ob_obs_default_hint)
-        self._ob_obs_default_combo = _NoScrollComboBox()
-        self._ob_obs_default_combo.setStyleSheet(_obs_combo_style())
+        self._ob_obs_default_combo = NoScrollComboBox()
+        self._ob_obs_default_combo.setStyleSheet(obs_combo_style())
         scenes_lay.addWidget(self._ob_obs_default_combo)
 
         # Media window scene
-        self._ob_obs_media_lbl = self._tr_label(
-            _lbl("", 12, _TEXT, 500),
+        self._ob_obs_media_label = self._tr_label(
+            profile_label("", 12, PROFILE_TEXT, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Media window scene"),
         )
-        self._ob_obs_media_lbl.setContentsMargins(0, 4, 0, 0)
-        scenes_lay.addWidget(self._ob_obs_media_lbl)
+        self._ob_obs_media_label.setContentsMargins(0, 4, 0, 0)
+        scenes_lay.addWidget(self._ob_obs_media_label)
         self._ob_obs_media_hint = self._tr_label(
-            _lbl("", 11, _DIM),
+            profile_label("", 11, PROFILE_DIM),
             QT_TRANSLATE_NOOP(
                 "ProfileScreen",
                 "Scene that captures the projection monitor. "
@@ -923,8 +923,8 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         )
         self._ob_obs_media_hint.setWordWrap(True)
         scenes_lay.addWidget(self._ob_obs_media_hint)
-        self._ob_obs_media_combo = _NoScrollComboBox()
-        self._ob_obs_media_combo.setStyleSheet(_obs_combo_style())
+        self._ob_obs_media_combo = NoScrollComboBox()
+        self._ob_obs_media_combo.setStyleSheet(obs_combo_style())
         scenes_lay.addWidget(self._ob_obs_media_combo)
 
         f_lay.addWidget(self._ob_obs_scenes_frame)
@@ -936,7 +936,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         conn_desc = QT_TRANSLATE_NOOP(
             "ProfileScreen", "Enter the same port and password you configured in OBS."
         )
-        conn_card = _section_card(
+        conn_card = profile_section_card(
             self.tr(conn_title),
             ICON_OBS,
             self.tr(conn_desc),
@@ -947,12 +947,12 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         blay.addSpacing(10)
 
-        finish_btn = _btn("")
+        finish_button = profile_button("")
         self._tr_button(
-            finish_btn, QT_TRANSLATE_NOOP("ProfileScreen", "Complete setup")
+            finish_button, QT_TRANSLATE_NOOP("ProfileScreen", "Complete setup")
         )
-        finish_btn.clicked.connect(self._ob_step2_finish)
-        blay.addWidget(finish_btn)
+        finish_button.clicked.connect(self._ob_step2_finish)
+        blay.addWidget(finish_button)
 
         page = self._onboard_shell(
             2,
@@ -969,7 +969,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def _build_migration_page(self) -> QWidget:
         page = QWidget()
-        page.setStyleSheet(f"background: {_BG};")
+        page.setStyleSheet(f"background: {PROFILE_BG};")
         lay  = QVBoxLayout(page)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.setContentsMargins(60, 60, 60, 60)
@@ -980,7 +980,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         card.setMaximumWidth(480)
         card.setStyleSheet(f"""
             QFrame {{
-                background: {_SURF};
+                background: {PROFILE_SURFACE};
                 border: 1px solid #21262d;
                 border-radius: 14px;
             }}
@@ -989,27 +989,27 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         clay.setContentsMargins(36, 36, 36, 36)
         clay.setSpacing(16)
 
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(52, 52)
-        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setStyleSheet(
+        icon_label = QLabel()
+        icon_label.setFixedSize(52, 52)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setStyleSheet(
             "background: #13161c; border: 1px solid #21262d; "
             "border-radius: 14px;"
         )
-        icon_lbl.setPixmap(make_icon(ICON_PACKAGE, size=24, color=_ACCENT).pixmap(24, 24))
+        icon_label.setPixmap(make_icon(ICON_PACKAGE, size=24, color=PROFILE_ACCENT).pixmap(24, 24))
         _wrap = QHBoxLayout()
         _wrap.addStretch()
-        _wrap.addWidget(icon_lbl)
+        _wrap.addWidget(icon_label)
         _wrap.addStretch()
         clay.addLayout(_wrap)
 
         clay.addWidget(self._tr_label(
-            _lbl("", 18, _TEXT, 700, Qt.AlignmentFlag.AlignHCenter),
+            profile_label("", 18, PROFILE_TEXT, 700, Qt.AlignmentFlag.AlignHCenter),
             QT_TRANSLATE_NOOP("ProfileScreen", "Existing settings found"),
         ))
         clay.addSpacing(4)
         clay.addWidget(self._tr_label(
-            _lbl("", 13, _MUTED, 400, Qt.AlignmentFlag.AlignHCenter),
+            profile_label("", 13, PROFILE_MUTED, 400, Qt.AlignmentFlag.AlignHCenter),
             QT_TRANSLATE_NOOP(
                 "ProfileScreen",
                 "Solin found settings and playlists from a previous version. "
@@ -1019,10 +1019,10 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         clay.addSpacing(8)
         clay.addWidget(self._tr_label(
-            _lbl("", 12, _MUTED, 500),
+            profile_label("", 12, PROFILE_MUTED, 500),
             QT_TRANSLATE_NOOP("ProfileScreen", "Profile name"),
         ))
-        self._mig_name_field = _field()
+        self._mig_name_field = profile_field()
         self._tr_placeholder(
             self._mig_name_field,
             QT_TRANSLATE_NOOP("ProfileScreen", "Example: Central Congregation"),
@@ -1030,18 +1030,18 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         # self._mig_name_field.setText(self.tr("My Profile"))
         clay.addWidget(self._mig_name_field)
 
-        self._mig_error = _lbl("", 12, _RED)
+        self._mig_error = profile_label("", 12, PROFILE_DANGER)
         self._mig_error.hide()
         clay.addWidget(self._mig_error)
 
         clay.addSpacing(4)
-        confirm_btn = _btn("")
+        confirm_button = profile_button("")
         self._tr_button(
-            confirm_btn,
+            confirm_button,
             QT_TRANSLATE_NOOP("ProfileScreen", "Confirm and migrate data"),
         )
-        confirm_btn.clicked.connect(self._on_migrate_confirm)
-        clay.addWidget(confirm_btn)
+        confirm_button.clicked.connect(self._on_migrate_confirm)
+        clay.addWidget(confirm_button)
 
         self._mig_name_field.returnPressed.connect(self._on_migrate_confirm)
 
@@ -1060,7 +1060,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             if profiles.has_legacy_settings():
                 # Dados legados existem → migração
                 self._stack.setCurrentIndex(2)
-                _fade_in(self)
+                fade_in(self)
             else:
                 # Primeira vez — onboarding
                 self._creating_additional_profile = False
@@ -1070,7 +1070,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 self._ob_name_field.selectAll()
                 self._ob_stack.setCurrentIndex(0)
                 self._stack.setCurrentIndex(1)
-                _fade_in(self)
+                fade_in(self)
                 QTimer.singleShot(100, lambda: self._ob_name_field.setFocus())
         elif len(profiles.profiles) == 1:
             # Apenas 1 perfil → entra direto (sem mostrar seletor)
@@ -1079,7 +1079,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             # Múltiplos perfis → seletor
             self._populate_selector()
             self._stack.setCurrentIndex(0)
-            _fade_in(self)
+            fade_in(self)
 
     # ── Handlers ──────────────────────────────────────────────────────────
 
@@ -1095,9 +1095,9 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         menu.setStyleSheet(f"""
             QMenu {{
-                background: {_SURF};
-                color: {_TEXT};
-                border: 1px solid {_BORDER};
+                background: {PROFILE_SURFACE};
+                color: {PROFILE_TEXT};
+                border: 1px solid {PROFILE_BORDER};
                 border-radius: 8px;
                 padding: 6px;
                 font-size: 13px;
@@ -1109,17 +1109,17 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             }}
             QMenu::item:selected {{
                 background: #21262d;
-                color: {_TEXT};
+                color: {PROFILE_TEXT};
             }}
             QMenu::separator {{
                 height: 1px;
-                background: {_BORDER};
+                background: {PROFILE_BORDER};
                 margin: 6px 8px;
             }}
         """)
 
-        rename_action = QAction(make_icon(ICON_EDIT, 15, _MUTED), self.tr("Rename"), menu)
-        delete_action = QAction(make_icon(ICON_TRASH, 15, _RED), self.tr("Delete"), menu)
+        rename_action = QAction(make_icon(ICON_EDIT, 15, PROFILE_MUTED), self.tr("Rename"), menu)
+        delete_action = QAction(make_icon(ICON_TRASH, 15, PROFILE_DANGER), self.tr("Delete"), menu)
         delete_action.setEnabled(len(self._profiles.profiles) > 1)
         menu.addAction(rename_action)
         menu.addSeparator()
@@ -1135,7 +1135,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         profile = self._profiles.get_profile(profile_id)
         if not profile:
             return
-        dlg = _ProfileNameDialog(
+        dlg = ProfileNameDialog(
             current=profile.name,
             parent=self,
             title="Rename profile",
@@ -1164,11 +1164,11 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         box.setDefaultButton(QMessageBox.StandardButton.No)
         box.setStyleSheet(f"""
-            QMessageBox {{ background: {_SURF}; }}
-            QLabel {{ color: {_TEXT}; font-size: 13px; background: transparent; }}
+            QMessageBox {{ background: {PROFILE_SURFACE}; }}
+            QLabel {{ color: {PROFILE_TEXT}; font-size: 13px; background: transparent; }}
             QPushButton {{
-                background: {_BG}; color: {_TEXT};
-                border: 1px solid {_BORDER}; border-radius: 7px;
+                background: {PROFILE_BG}; color: {PROFILE_TEXT};
+                border: 1px solid {PROFILE_BORDER}; border-radius: 7px;
                 padding: 7px 18px; min-width: 82px;
             }}
             QPushButton:hover {{ background: #21262d; }}
@@ -1243,16 +1243,16 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         )
         dlg.setDefaultButton(QMessageBox.StandardButton.No)
         dlg.setStyleSheet(f"""
-            QMessageBox {{ background: {_SURF}; }}
+            QMessageBox {{ background: {PROFILE_SURFACE}; }}
             QMessageBox QLabel {{
-                color: {_TEXT};
+                color: {PROFILE_TEXT};
                 background: transparent;
                 border: none;
                 font-size: 13px;
             }}
             QPushButton {{
-                background: {_SURF}; color: {_TEXT};
-                border: 1px solid {_BORDER}; border-radius: 6px;
+                background: {PROFILE_SURFACE}; color: {PROFILE_TEXT};
+                border: 1px solid {PROFILE_BORDER}; border-radius: 6px;
                 padding: 6px 18px; min-width: 80px;
             }}
             QPushButton:hover {{ background: #21262d; }}
@@ -1317,15 +1317,15 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         for field, source in self._tr_placeholders:
             field.setPlaceholderText(self.tr(source))
         for card, title_source, desc_source in self._tr_sections:
-            title_lbl = getattr(card, "_title_lbl", None)
-            desc_lbl = getattr(card, "_desc_lbl", None)
-            if title_lbl is not None:
-                title_lbl.setText(self.tr(title_source))
-            if desc_lbl is not None:
-                desc_lbl.setText(self.tr(desc_source))
-        for title_lbl, title_source, subtitle_lbl, subtitle_source in self._onboard_headers:
-            title_lbl.setText(self.tr(title_source))
-            subtitle_lbl.setText(self.tr(subtitle_source))
+            title_label = getattr(card, "title_label", None)
+            description_label = getattr(card, "description_label", None)
+            if title_label is not None:
+                title_label.setText(self.tr(title_source))
+            if description_label is not None:
+                description_label.setText(self.tr(desc_source))
+        for title_label, title_source, subtitle_label, subtitle_source in self._onboard_headers:
+            title_label.setText(self.tr(title_source))
+            subtitle_label.setText(self.tr(subtitle_source))
         for btn in self._ob_skip_buttons:
             btn.setText(self.tr("Skip setup"))
         if hasattr(self, "_selector_add_card"):

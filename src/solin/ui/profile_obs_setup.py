@@ -4,7 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 
 from ..core.integrations.automation.obs import OBSConnectionState
-from .profile_widgets import _AMBER, _DIM, _GREEN, _RED
+from .profile_widgets import PROFILE_WARNING, PROFILE_DIM, PROFILE_SUCCESS, PROFILE_DANGER
 
 
 class ProfileOBSSetupMixin:
@@ -69,16 +69,16 @@ class ProfileOBSSetupMixin:
             self._ob_obs_scenes_frame.setVisible(False)
 
     def _refresh_ob_obs_status(self) -> None:
-        if not hasattr(self, "_ob_obs_status_lbl"):
+        if not hasattr(self, "_ob_obs_status_label"):
             return
         state = getattr(self, "_ob_obs_last_state", OBSConnectionState.DISCONNECTED)
         message = getattr(self, "_ob_obs_last_message", "")
         dot_color = {
-            OBSConnectionState.DISCONNECTED: _DIM,
-            OBSConnectionState.CONNECTING:   _AMBER,
-            OBSConnectionState.CONNECTED:    _GREEN,
-            OBSConnectionState.ERROR:        _RED,
-        }.get(state, _DIM)
+            OBSConnectionState.DISCONNECTED: PROFILE_DIM,
+            OBSConnectionState.CONNECTING:   PROFILE_WARNING,
+            OBSConnectionState.CONNECTED:    PROFILE_SUCCESS,
+            OBSConnectionState.ERROR:        PROFILE_DANGER,
+        }.get(state, PROFILE_DIM)
         label = {
             OBSConnectionState.DISCONNECTED: self.tr("Disconnected"),
             OBSConnectionState.CONNECTING:   self.tr("Connecting\u2026"),
@@ -93,7 +93,7 @@ class ProfileOBSSetupMixin:
             f"color: {dot_color}; font-size: 10px;"
             " background: transparent; border: none;"
         )
-        self._ob_obs_status_lbl.setText(label)
+        self._ob_obs_status_label.setText(label)
 
     def _ob_obs_on_scenes(self, scenes: list[str]) -> None:
         self._ob_obs_populate_combos(scenes)
