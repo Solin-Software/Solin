@@ -110,6 +110,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             profile_media_store,
             jwpub_import_thread_factory,
             clip_fetch_thread_factory,
+            cache_scan_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
             watched_folder_file_store,
@@ -146,6 +147,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
+            self.cache_scan_session_factory = cache_scan_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
             self.watched_folder_file_store = watched_folder_file_store
@@ -234,6 +236,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         window.clip_fetch_thread_factory.__class__.__name__
         == "ClipFetchThreadFactory"
     )
+    assert (
+        window.cache_scan_session_factory.__class__.__name__
+        == "CacheScanSessionFactory"
+    )
     assert str(window.playlist_thumbnail_store.root) == "thumbs"
     assert str(window.meeting_thumbnail_store.root) == "meeting_thumbs"
     assert (
@@ -316,6 +322,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             profile_media_store,
             jwpub_import_thread_factory,
             clip_fetch_thread_factory,
+            cache_scan_session_factory,
             playlist_thumbnail_store,
             meeting_thumbnail_store,
             watched_folder_file_store,
@@ -352,6 +359,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
+            self.cache_scan_session_factory = cache_scan_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
             self.meeting_thumbnail_store = meeting_thumbnail_store
             self.watched_folder_file_store = watched_folder_file_store

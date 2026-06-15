@@ -136,6 +136,7 @@ if TYPE_CHECKING:
     from .core.jw.clip_fetch import ClipFetchThreadFactory
     from .core.jw.publication_reader import JwpubImportThreadFactory
     from .core.media.browser_downloads import BrowserDownloadService
+    from .core.media.cache_scan import CacheScanSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
     from .core.playlists.cleanup import PlaylistCleanupQueue
     from .ui.media_info import MediaInfoQueue, MediaInfoService
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
         clip_fetch_thread_factory: ClipFetchThreadFactory,
+        cache_scan_session_factory: CacheScanSessionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
@@ -395,6 +397,7 @@ class MainWindow(QMainWindow):
                 profile_media_store=profile_media_store,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
                 clip_fetch_thread_factory=clip_fetch_thread_factory,
+                cache_scan_session_factory=cache_scan_session_factory,
                 playlist_thumbnail_store=playlist_thumbnail_store,
                 meeting_thumbnail_store=meeting_thumbnail_store,
                 watched_folder_file_store=watched_folder_file_store,

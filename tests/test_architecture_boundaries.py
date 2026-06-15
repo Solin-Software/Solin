@@ -290,6 +290,23 @@ def test_widgets_do_not_import_clip_http_fetcher():
     )
 
 
+def test_widgets_do_not_import_cache_scanner():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if any(alias.name == "scan_cached_media_items" for alias in node.names):
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "Widgets must receive cache scan sessions from composition instead of "
+        "calling filesystem scanners directly:\n" + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

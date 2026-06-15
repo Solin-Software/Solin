@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from solin.core.jw.publication_reader import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
+    from solin.core.media.cache_scan import CacheScanSessionFactory
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.network.browser_images import BrowserImageFetchService
@@ -31,6 +32,7 @@ class LazyPageContext:
     media_cache_manager: MediaCacheManager
     profile_media_store: ProfileMediaStore
     jwpub_import_thread_factory: JwpubImportThreadFactory
+    cache_scan_session_factory: CacheScanSessionFactory
     wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer]
     browser_download_service_factory: Callable[[], BrowserDownloadService]
     browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService]
@@ -128,6 +130,7 @@ class LazyPageController:
         self._cache_manager_widget = CacheManagerWidget(
             context.lang_manager,
             context.media_cache_manager,
+            cache_scan_session_factory=context.cache_scan_session_factory,
             media_info_service_factory=context.media_info_service_factory,
             parent=context.parent,
         )

@@ -25,8 +25,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal, QThread, QObject, QSize, QTimer, QEvent
+from PySide6.QtCore import Qt, Signal, QObject, QSize, QTimer, QEvent
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -35,10 +36,13 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.media.cache import MediaCacheManager
-from ..core.media.cache_listing import CachedMediaItem, scan_cached_media_items
+from ..core.media.cache_listing import CachedMediaItem
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import make_icon, ICON_MUSIC, ICON_VIDEO, ICON_IMAGE
 from ..ui.media_info import MediaInfoService
+
+if TYPE_CHECKING:
+    from ..core.media.cache_scan import CacheScanSession, CacheScanSessionFactory
 
 
 # ── Constantes visuais ────────────────────────────────────────────────────────
@@ -82,32 +86,6 @@ def _rounded_pixmap(pixmap: QPixmap, w: int, h: int, radius: int = 6) -> QPixmap
     p.drawPixmap(0, 0, scaled)
     p.end()
     return out
-
-# ── Worker de scan ───────────────────────────────────────────────────────────
-
-class _ScanWorker(QObject):
-    """
-    Scans the explicit media cache directory and extracts titles via mutagen.
-    Não carrega thumbs — isso é feito pelo MediaThumbService na main thread.
-    """
-    results_ready = Signal(list)   # list[CachedMediaItem]
-
-    def __init__(self, media_cache_dir: str | Path) -> None:
-        super().__init__()
-        self._media_cache_dir = media_cache_dir
-        self._cancelled = False
-
-    def cancel(self):
-        self._cancelled = True
-
-    def run(self):
-        self.results_ready.emit(
-            scan_cached_media_items(
-                self._media_cache_dir,
-                is_cancelled=lambda: self._cancelled,
-            )
-        )
-
 
 # ── SVG Icons locais ──────────────────────────────────────────────────────────
 
@@ -352,6 +330,7 @@ class CacheManagerWidget(QWidget):
         lang: LanguageManager,
         cache_manager: MediaCacheManager,
         *,
+        cache_scan_session_factory: CacheScanSessionFactory,
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         parent=None,
     ) -> None:
@@ -363,8 +342,8 @@ class CacheManagerWidget(QWidget):
         self._selected:    set[str]        = set()
         self._cur_filter:  str             = "all"
         self._type_counts: dict[str, int]  = {}
-        self._scan_thread: QThread | None  = None
-        self._scan_worker: _ScanWorker | None = None
+        self._cache_scan_session_factory = cache_scan_session_factory
+        self._scan_session: CacheScanSession | None = None
         self._thumb_service = media_info_service_factory(self)
         self._thumb_service.info_ready.connect(self._on_thumb_ready)
         self._build_ui()
@@ -587,31 +566,27 @@ class CacheManagerWidget(QWidget):
         self._size_badge.setVisible(False)
         self._stack.setCurrentIndex(0)
 
-        worker = _ScanWorker(self._cache_manager.media_cache_dir)
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        worker.results_ready.connect(self._on_results)
-        worker.results_ready.connect(worker.deleteLater)
-        worker.results_ready.connect(thread.quit)
-        thread.started.connect(worker.run)
-        thread.finished.connect(lambda: setattr(self, "_scan_thread", None))
-        thread.finished.connect(lambda: setattr(self, "_scan_worker", None))
-        thread.finished.connect(thread.deleteLater)
-        thread.start()
-        self._scan_thread = thread
-        self._scan_worker = worker
+        session = self._cache_scan_session_factory.create(
+            self._cache_manager.media_cache_dir,
+            parent=self,
+        )
+        session.results_ready.connect(self._on_results)
+        session.finished.connect(
+            lambda current=session: self._clear_scan_session(current)
+        )
+        session.finished.connect(session.deleteLater)
+        self._scan_session = session
+        session.start()
 
     def _cancel_scan(self):
-        if self._scan_worker:
-            self._scan_worker.cancel()
-        if self._scan_thread:
-            self._scan_thread.quit()
-            self._scan_thread.wait(2000)
-            if self._scan_thread.isRunning():
-                self._scan_thread.setParent(None)
-                self._scan_thread.finished.connect(self._scan_thread.deleteLater)
-        self._scan_thread = None
-        self._scan_worker = None
+        session = self._scan_session
+        self._scan_session = None
+        if session is not None:
+            session.cancel()
+
+    def _clear_scan_session(self, session: CacheScanSession) -> None:
+        if self._scan_session is session:
+            self._scan_session = None
 
     def cleanup(self):
         """Para threads/serviços internos antes da janela ser destruída."""

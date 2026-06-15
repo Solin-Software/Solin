@@ -53,6 +53,7 @@ class _WindowStub:
         )
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
+        self.cache_scan_session_factory = object()
         self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
             data_dir="data",
@@ -85,6 +86,7 @@ def _controller(window):
             media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
             jwpub_import_thread_factory=window.jwpub_import_thread_factory,
+            cache_scan_session_factory=window.cache_scan_session_factory,
             wifi_receive_server_factory=window.wifi_receive_server_factory,
             browser_download_service_factory=(
                 window.browser_download_service_factory
@@ -254,3 +256,37 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
     assert wifi.wifi_receive_server_factory is window.wifi_receive_server_factory
     assert wifi.media_info_service_factory is window.media_info_service_factory
     assert wifi.parent is window
+
+
+def test_lazy_page_controller_builds_cache_with_injected_scan_factory(monkeypatch):
+    import solin.widgets.cache_manager_widget as cache_module
+
+    class _CacheFactory:
+        def __init__(
+            self,
+            lang_manager,
+            media_cache_manager,
+            *,
+            cache_scan_session_factory,
+            media_info_service_factory,
+            parent,
+        ):
+            self.lang_manager = lang_manager
+            self.media_cache_manager = media_cache_manager
+            self.cache_scan_session_factory = cache_scan_session_factory
+            self.media_info_service_factory = media_info_service_factory
+            self.parent = parent
+
+    window = _WindowStub()
+    controller = _controller(window)
+    monkeypatch.setattr(cache_module, "CacheManagerWidget", _CacheFactory)
+    monkeypatch.setattr(controller, "_connect_cache_manager_signals", lambda: None)
+
+    cache = controller.ensure_cache_manager_widget()
+
+    assert cache is controller.cache_manager_widget
+    assert cache.lang_manager is window.lang
+    assert cache.media_cache_manager is window.media_cache_manager
+    assert cache.cache_scan_session_factory is window.cache_scan_session_factory
+    assert cache.media_info_service_factory is window.media_info_service_factory
+    assert cache.parent is window
