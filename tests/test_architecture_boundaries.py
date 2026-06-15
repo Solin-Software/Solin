@@ -372,6 +372,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "visuals.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "quick_toolbar.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_bridge.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_icons.py",
     )
     violations: list[str] = []
 
