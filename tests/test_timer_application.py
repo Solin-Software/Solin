@@ -144,7 +144,7 @@ def test_timer_source_boundaries_keep_application_pure_and_widget_injected() -> 
         root / "src" / "solin" / "widgets" / "timer_widget.py"
     ).read_text(encoding="utf-8")
     bridge_source = (
-        root / "src" / "solin" / "widgets" / "timer_bridge.py"
+        root / "src" / "solin" / "ui" / "qml" / "timer_bridge.py"
     ).read_text(encoding="utf-8")
 
     assert "PySide6" not in application_source

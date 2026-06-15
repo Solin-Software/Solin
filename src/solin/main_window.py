@@ -131,10 +131,10 @@ from .core.remote.patch_installer import (
     save_pending_patch_cleanup,
 )
 from .core.remote.updates import UpdateService
-from .widgets.timer_bridge import TimerBridge
 from .widgets.projection.monitor_manager import MonitorManagerPopup
 from .ui.dialogs.notifications import RemoteNotificationQueue
 from .ui.dialogs.update import UpdateDialog
+from .ui.qml.timer_bridge import TimerBridge
 
 if TYPE_CHECKING:
     from .core.ingest.watched_folder import WatchedFolderWatcher

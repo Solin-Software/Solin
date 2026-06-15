@@ -39,7 +39,7 @@ from ..styles.icons import (
     ICON_SEC_TREASURES,
     ICON_SEC_WATCHTOWER,
 )
-from .timer_bridge import TimerBridge
+from solin.ui.qml.timer_bridge import TimerBridge
 
 
 _ICON_PDF = """

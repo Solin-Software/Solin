@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
 
-from ..core.i18n.date import format_time_with_seconds, week_label
-from ..core.meetings.publications import current_monday
-from ..core.meetings.section_meta import SECTION_META
-from ..core.timer.application import TimerSession
-from ..core.timer.models import (
+from solin.core.i18n.date import format_time_with_seconds, week_label
+from solin.core.meetings.publications import current_monday
+from solin.core.meetings.section_meta import SECTION_META
+from solin.core.timer.application import TimerSession
+from solin.core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
     PART_TIMER_DISPLAY_OPTIONS,
@@ -30,14 +30,14 @@ from ..core.timer.models import (
     PartState,
     Section,
 )
-from ..core.timer.schedule_factory import (
+from solin.core.timer.schedule_factory import (
     configurable_count_for,
 )
-from ..core.i18n.timer_part_titles import display_part_title
-from ..core.meetings.colors import section_colors
-from ..core.timer.part_titles import is_indexed_part_title_source
-from ..controllers.timer_monitor_controller import TimerMonitorController
-from ..controllers.timer_pdf_export_controller import TimerPdfExportController
+from solin.core.i18n.timer_part_titles import display_part_title
+from solin.core.meetings.colors import section_colors
+from solin.core.timer.part_titles import is_indexed_part_title_source
+from solin.controllers.timer_monitor_controller import TimerMonitorController
+from solin.controllers.timer_pdf_export_controller import TimerPdfExportController
 
 if TYPE_CHECKING:
     _QVARIANT = object

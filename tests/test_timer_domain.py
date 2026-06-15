@@ -127,7 +127,7 @@ def test_weekend_default_parts():
 def test_timer_section_palette_uses_meeting_section_hues():
     from solin.core.meetings.section_meta import SECTION_META
     from solin.core.meetings.colors import section_colors
-    from solin.widgets.timer_bridge import _section_palette
+    from solin.ui.qml.timer_bridge import _section_palette
 
     section_codes = {
         Section.OPENING_COMMENTS: "opening_comments",
@@ -150,7 +150,7 @@ def test_timer_section_palette_uses_meeting_section_hues():
 
 def test_timer_parts_model_uses_global_display_numbers():
     _app()
-    from solin.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     rows = _parts_model_for_schedule(sch)
@@ -184,7 +184,7 @@ def test_timer_parts_model_uses_global_display_numbers():
 
 def test_timer_parts_model_formats_default_timer_part_titles():
     _app()
-    from solin.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     set_section_part_count(sch, Section.TREASURES, 4)
@@ -209,7 +209,7 @@ def test_timer_part_i18n_sources_cover_canonical_titles():
 
 def test_timer_parts_model_formats_started_time_with_locale_pattern():
     import time as _time
-    from solin.widgets.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
 
     epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
