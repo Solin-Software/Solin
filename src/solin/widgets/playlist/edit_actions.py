@@ -17,7 +17,6 @@ from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS, media_type_from_pat
 from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.items import create_playlist_item
-from ...core.playlists.thumbnails import playlist_thumb_path
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from .dialogs import _NameDialog
 from .item_visuals import enrich_items_for_export
@@ -204,14 +203,7 @@ class _PlaylistEditActionsMixin:
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
             try:
-                import shutil
-
-                target_path = playlist_thumb_path(
-                    pl_item_id,
-                    thumb_cache_dir=self._thumb_cache_dir,
-                )
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(thumb_path, target_path)
+                self._playlist_thumbnail_store.copy_from(pl_item_id, thumb_path)
             except OSError as e:
                 import logging
 
@@ -332,7 +324,7 @@ class _PlaylistEditActionsMixin:
             items = enrich_items_for_export(
                 self._pl.get("items", []),
                 self._id_to_thumb,
-                self._thumb_cache_dir,
+                self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(

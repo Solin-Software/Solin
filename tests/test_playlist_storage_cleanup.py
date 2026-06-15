@@ -4,6 +4,7 @@ from pathlib import Path
 from solin.core.playlists import cleanup as playlist_cleanup
 from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.cleanup import PlaylistCleanupQueue
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.playlists.storage import (
     PendingDeletionRepository,
     PlaylistRepository,
@@ -89,7 +90,7 @@ def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
     thumb_path.write_bytes(b"thumb")
     queue = PlaylistCleanupQueue(
         storage_paths,
-        thumb_dir,
+        ThumbnailStore(thumb_dir),
     )
 
     queue.enqueue_items([item])
@@ -121,7 +122,7 @@ def test_cleanup_queue_fails_closed_when_playlist_storage_is_corrupt(tmp_path):
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
     thumb_path.write_bytes(b"thumb")
     storage_paths.playlists_file.write_text("{broken", encoding="utf-8")
-    queue = PlaylistCleanupQueue(storage_paths, thumb_dir)
+    queue = PlaylistCleanupQueue(storage_paths, ThumbnailStore(thumb_dir))
 
     queue.enqueue_items([{"id": "item-1"}])
     queue.flush()

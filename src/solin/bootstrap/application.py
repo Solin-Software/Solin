@@ -55,6 +55,7 @@ def _launch_main_window(
     from solin.core.meetings.tree_store import MeetingTreeStore
     from solin.core.media.settings import MediaSettingsStore
     from solin.core.media.profile_store import ProfileMediaStore
+    from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.playlists.cleanup import PlaylistCleanupQueue
@@ -70,6 +71,10 @@ def _launch_main_window(
     profile_media_store = ProfileMediaStore(
         profile_paths.embedded_dir,
         profile_paths.images_dir,
+    )
+    playlist_thumbnail_store = ThumbnailStore(runtime_paths.thumb_cache_dir)
+    meeting_thumbnail_store = ThumbnailStore(
+        runtime_paths.meeting_thumb_cache_dir,
     )
     media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
     media_controller = media.create_playback(media_settings)
@@ -95,6 +100,8 @@ def _launch_main_window(
         playlist_repository,
         meeting_tree_store,
         profile_media_store,
+        playlist_thumbnail_store,
+        meeting_thumbnail_store,
         lambda parent: WifiReceiveServer(
             embedded_dir=profile_paths.embedded_dir,
             parent=parent,

@@ -98,6 +98,7 @@ from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
 from .core.media.profile_store import ProfileMediaStore
+from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
 from .core.ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
@@ -165,6 +166,8 @@ class MainWindow(QMainWindow):
         playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
+        playlist_thumbnail_store: ThumbnailStore,
+        meeting_thumbnail_store: ThumbnailStore,
         wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
@@ -382,6 +385,8 @@ class MainWindow(QMainWindow):
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
                 profile_media_store=profile_media_store,
+                playlist_thumbnail_store=playlist_thumbnail_store,
+                meeting_thumbnail_store=meeting_thumbnail_store,
                 wifi_receive_server_factory=wifi_receive_server_factory,
                 watched_folder_watcher_factory=watched_folder_watcher_factory,
                 playlist_cleanup_queue_factory=playlist_cleanup_queue_factory,

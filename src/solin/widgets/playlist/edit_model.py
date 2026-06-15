@@ -5,13 +5,12 @@ This module owns the flat/tree model used by PlaylistEditView.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
 
 from ...core.media.cache import MediaCacheManager
-from ...core.playlists.thumbnails import playlist_thumb_path
+from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,
@@ -31,19 +30,6 @@ from .edit_visuals import (
 )
 
 _MARKER_POSITION_FALLBACK = 1_000_000_000
-
-
-def _playlist_thumb_exists(
-    item_id: str,
-    thumb_cache_dir: str | Path,
-) -> bool:
-    try:
-        return playlist_thumb_path(
-            item_id,
-            thumb_cache_dir=thumb_cache_dir,
-        ).exists()
-    except OSError:
-        return False
 
 
 # ── Flat model ─────────────────────────────────────────────────────────────────
@@ -165,12 +151,12 @@ class PlaylistEditModel(QAbstractListModel):
     def __init__(
         self,
         cache_manager: MediaCacheManager,
-        thumb_cache_dir: str | Path,
+        thumbnail_store: ThumbnailStore,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._cache_manager = cache_manager
-        self._thumb_cache_dir = Path(thumb_cache_dir)
+        self._thumbnail_store = thumbnail_store
         self._entries: list[dict] = []
         self._pl: Optional[dict] = None
         self._thumb_versions: dict[str, int] = {}
@@ -409,7 +395,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def _thumb_source_for(self, item_id: str) -> str:
         version = self._thumb_versions.get(item_id, 0)
-        if version > 0 or _playlist_thumb_exists(item_id, self._thumb_cache_dir):
+        if version > 0 or self._thumbnail_store.exists(item_id):
             return f"image://playlistthumbs/{item_id}/{version}"
         return ""
 

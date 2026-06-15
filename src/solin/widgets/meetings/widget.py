@@ -78,6 +78,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
+    from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.meetings.memorial import MemorialService
     from ...core.meetings.publications import JwpubService
 
@@ -115,6 +116,7 @@ class StudyDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_media_store: ProfileMediaStore,
+                 meeting_thumbnail_store: ThumbnailStore,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -131,6 +133,7 @@ class StudyDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
+        self._meeting_thumbnail_store = meeting_thumbnail_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -171,6 +174,7 @@ class StudyDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_media_store=self._profile_media_store,
+            meeting_thumbnail_store=self._meeting_thumbnail_store,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -400,6 +404,7 @@ class _MemorialDetailView(QWidget):
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_media_store: ProfileMediaStore,
+                 meeting_thumbnail_store: ThumbnailStore,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -415,6 +420,7 @@ class _MemorialDetailView(QWidget):
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
+        self._meeting_thumbnail_store = meeting_thumbnail_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -453,6 +459,7 @@ class _MemorialDetailView(QWidget):
             language_code=lang_code,
             store=self._meeting_tree_store,
             profile_media_store=self._profile_media_store,
+            meeting_thumbnail_store=self._meeting_thumbnail_store,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -660,6 +667,7 @@ class MeetingsWidget(QWidget):
         *,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
+        meeting_thumbnail_store: ThumbnailStore,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
@@ -683,6 +691,7 @@ class MeetingsWidget(QWidget):
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
+        self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
@@ -919,6 +928,7 @@ class MeetingsWidget(QWidget):
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
                                 profile_media_store=self._profile_media_store,
+                                meeting_thumbnail_store=self._meeting_thumbnail_store,
                                 profile_paths=self._profile_paths,
                                 runtime_paths=self._runtime_paths,
                                 cache_manager=self._cache_manager,
@@ -959,6 +969,7 @@ class MeetingsWidget(QWidget):
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
                 profile_media_store=self._profile_media_store,
+                meeting_thumbnail_store=self._meeting_thumbnail_store,
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,

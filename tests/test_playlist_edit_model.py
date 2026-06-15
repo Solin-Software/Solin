@@ -1,6 +1,7 @@
 import copy
 
 from solin.core.media.cache import MediaCacheManager
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.widgets.playlist.edit_model import PlaylistEditModel
 
 
@@ -10,7 +11,7 @@ def _model(tmp_path) -> PlaylistEditModel:
             tmp_path / "media",
             downloader_factory=lambda _parent: None,
         ),
-        tmp_path / "thumbs",
+        ThumbnailStore(tmp_path / "thumbs"),
     )
 
 

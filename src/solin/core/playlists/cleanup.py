@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.playlists.storage import (
     PendingDeletionRepository,
     PlaylistRepository,
     PlaylistStoragePaths,
 )
-from solin.core.playlists.thumbnails import playlist_thumb_path
 
 if TYPE_CHECKING:
     from solin.core.meetings.tree_store import MeetingTreeStore
@@ -204,10 +204,10 @@ class PlaylistCleanupQueue:
     def __init__(
         self,
         storage_paths: PlaylistStoragePaths,
-        thumb_cache_dir: str | os.PathLike[str],
+        thumbnail_store: ThumbnailStore,
     ) -> None:
         self._storage_paths = storage_paths
-        self._thumb_cache_dir = os.fspath(thumb_cache_dir)
+        self._thumbnail_store = thumbnail_store
         self._pending_ids: set[str] = set()
 
     @property
@@ -243,10 +243,7 @@ class PlaylistCleanupQueue:
         self._pending_ids = set()
 
         for item_id in pending_ids - referenced_ids:
-            thumb = playlist_thumb_path(
-                item_id,
-                thumb_cache_dir=self._thumb_cache_dir,
-            )
+            thumb = self._thumbnail_store.path(item_id)
             if thumb.exists():
                 try_remove_file(
                     os.fspath(thumb),

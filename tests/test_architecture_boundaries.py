@@ -700,6 +700,27 @@ def test_widgets_do_not_construct_infrastructure_services_or_repositories():
     assert violations == []
 
 
+def test_thumbnail_persistence_is_outside_widgets():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    legacy_path = widget_root / "playlist" / "thumbnails.py"
+    forbidden_fragments = {
+        "meeting_thumb_path(",
+        "playlist_thumb_path(",
+        "shutil.copy2(thumb_path",
+        ".save(os.fspath(path), \"JPEG\"",
+    }
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for fragment in forbidden_fragments:
+            if fragment in source:
+                violations.append(f"{path.relative_to(PROJECT_ROOT)}: {fragment}")
+
+    assert not legacy_path.exists()
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

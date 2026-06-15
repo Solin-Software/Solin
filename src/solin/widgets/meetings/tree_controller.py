@@ -12,7 +12,6 @@ from __future__ import annotations
 import copy
 import mimetypes
 import os
-import shutil
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -30,13 +29,13 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
 from ...core.media.profile_store import ProfileMediaStore
+from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.foundation.constants import (
     DOCX_EXTS,
     JWPUB_EXTS,
     PDF_EXTS,
     PLAYLIST_EXTS,
     PPTX_EXTS,
-    THUMB_JPEG_QUALITY,
 )
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.foundation.exception_logging import log_ignored_exception
@@ -56,11 +55,6 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncIdentity,
 )
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
-from ...core.meetings.thumbnails import (
-    meeting_thumb_cache_key,
-    meeting_thumb_dir,
-    meeting_thumb_path,
-)
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
@@ -75,6 +69,7 @@ from ...core.rendering.libreoffice import (
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ...ui.media_info import MediaInfoQueue
+from ...ui.thumbnail_images import save_thumbnail
 from ..playlist.edit_visuals import _format_duration
 
 _BIG_INDEX = 2**31 - 1
@@ -158,6 +153,7 @@ class MeetingTreeController(QObject):
         language_code: str,
         store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
+        meeting_thumbnail_store: ThumbnailStore,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -173,6 +169,7 @@ class MeetingTreeController(QObject):
         self._fallback_language_code = fallback_language_code or self._language_code
         self._store = store
         self._profile_media_store = profile_media_store
+        self._meeting_thumbnail_store = meeting_thumbnail_store
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
@@ -994,16 +991,12 @@ class MeetingTreeController(QObject):
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
             try:
-                target_path = meeting_thumb_path(
+                target_path = self._meeting_thumbnail_store.copy_from(
                     node_id,
-                    meeting_thumb_cache_dir=(
-                        self._runtime_paths.meeting_thumb_cache_dir
-                    ),
+                    thumb_path,
                 )
-                target_path.parent.mkdir(parents=True, exist_ok=True)
                 target = os.fspath(target_path)
-                shutil.copy2(thumb_path, target)
-                node["thumbnail_cache_key"] = meeting_thumb_cache_key(node_id)
+                node["thumbnail_cache_key"] = target_path.name
                 node["thumbnail_local_path"] = target
             except OSError:
                 log_ignored_exception(__name__, "Could not copy meeting item thumbnail")
@@ -1773,13 +1766,7 @@ class MeetingTreeController(QObject):
                 os.fspath(self._runtime_paths.cache_dir),
                 os.fspath(self._profile_paths.images_dir),
                 os.fspath(self._profile_paths.embedded_dir),
-                os.fspath(
-                    meeting_thumb_dir(
-                        meeting_thumb_cache_dir=(
-                            self._runtime_paths.meeting_thumb_cache_dir
-                        ),
-                    )
-                ),
+                os.fspath(self._meeting_thumbnail_store.root),
             )
             if root
         )
@@ -2019,12 +2006,7 @@ class MeetingTreeController(QObject):
             return stored
         if not item_id:
             return ""
-        return os.fspath(
-            meeting_thumb_path(
-                item_id,
-                meeting_thumb_cache_dir=self._runtime_paths.meeting_thumb_cache_dir,
-            )
-        )
+        return os.fspath(self._meeting_thumbnail_store.path(item_id))
 
     def _has_local_thumbnail(self, node: Node | None) -> bool:
         item_id = str((node or {}).get("id", ""))
@@ -2035,18 +2017,14 @@ class MeetingTreeController(QObject):
         item_id = str(node.get("id", ""))
         if not item_id or pixmap is None or pixmap.isNull():
             return ""
-        path = meeting_thumb_path(
-            item_id,
-            meeting_thumb_cache_dir=self._runtime_paths.meeting_thumb_cache_dir,
-        )
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            if not pixmap.save(os.fspath(path), "JPEG", THUMB_JPEG_QUALITY):
+            if not save_thumbnail(self._meeting_thumbnail_store, item_id, pixmap):
                 return ""
         except Exception:  # noqa: BLE001 - Qt image codec boundary
             log_ignored_exception(__name__, "Could not save meeting thumbnail")
             return ""
-        node["thumbnail_cache_key"] = meeting_thumb_cache_key(item_id)
+        path = self._meeting_thumbnail_store.path(item_id)
+        node["thumbnail_cache_key"] = path.name
         node["thumbnail_local_path"] = os.fspath(path)
         return os.fspath(path)
 

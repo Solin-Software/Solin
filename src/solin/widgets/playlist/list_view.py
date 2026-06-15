@@ -36,6 +36,7 @@ from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
     from ...core.media.profile_store import ProfileMediaStore
+    from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.playlists.storage import PlaylistRepository
 
 _BTN_STYLE = (
@@ -73,8 +74,8 @@ class _PlaylistListView(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        playlist_thumbnail_store: ThumbnailStore,
         media_cache_manager: MediaCacheManager,
-        thumb_cache_dir: str | os.PathLike[str],
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
     ):
@@ -87,8 +88,8 @@ class _PlaylistListView(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._playlist_thumbnail_store = playlist_thumbnail_store
         self._media_cache_manager = media_cache_manager
-        self._thumb_cache_dir = thumb_cache_dir
         self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[_PlaylistCard] = []
         self._wf_cards: list[_WatchedFolderCard] = []
@@ -379,7 +380,7 @@ class _PlaylistListView(QWidget):
             items = enrich_items_for_export(
                 pl.get("items", []),
                 {},
-                self._thumb_cache_dir,
+                self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(
@@ -517,7 +518,7 @@ class _PlaylistListView(QWidget):
             enriched = enrich_items_for_export(
                 items,
                 {},
-                self._thumb_cache_dir,
+                self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
             write_jwlplaylist(

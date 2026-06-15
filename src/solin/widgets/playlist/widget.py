@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import copy, logging, os, uuid
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
@@ -56,11 +55,7 @@ from .dialogs import _HuePickerDialog, _NameDialog
 from ...core.playlists.storage import (
     PlaylistStoragePaths,
 )
-from ...core.playlists.thumbnails import playlist_thumb_path
-from .thumbnails import (
-    load_thumb_from_disk,
-    save_thumb_to_disk,
-)
+from ...ui.thumbnail_images import load_thumbnail, save_thumbnail
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
 
@@ -70,6 +65,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog import JWMediaCatalogService
     from ...core.media.profile_store import ProfileMediaStore
+    from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
     from ...core.playlists.cleanup import PlaylistCleanupQueue
@@ -97,11 +93,11 @@ class _PlaylistEditView(
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        playlist_thumbnail_store: ThumbnailStore,
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_songs_store: JWSongsStore,
-        thumb_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         all_playlists: list[dict],
         schedule_cleanup: Callable[[list[dict]], None],
@@ -116,10 +112,10 @@ class _PlaylistEditView(
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._playlist_thumbnail_store = playlist_thumbnail_store
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_songs_store = jw_songs_store
-        self._thumb_cache_dir = Path(thumb_cache_dir)
         self._all_playlists = all_playlists
         self._schedule_cleanup = schedule_cleanup
         self._pl: Optional[dict] = None
@@ -143,7 +139,7 @@ class _PlaylistEditView(
         # QML Integration
         self.model = PlaylistEditModel(
             media_cache_manager,
-            self._thumb_cache_dir,
+            self._playlist_thumbnail_store,
             self,
         )
         self.bridge = PlaylistEditBridge(self)
@@ -246,9 +242,9 @@ class _PlaylistEditView(
             "playlistthumbs",
             PlaylistThumbnailProvider(
                 self._id_to_thumb,
-                disk_loader_cb=lambda item_id: load_thumb_from_disk(
+                disk_loader_cb=lambda item_id: load_thumbnail(
+                    self._playlist_thumbnail_store,
                     item_id,
-                    self._thumb_cache_dir,
                 ),
             )
         )
@@ -557,10 +553,7 @@ class _PlaylistEditView(
                     self._request_thumbnail(item_id, url, media_type)
                 continue
 
-            has_disk = playlist_thumb_path(
-                item_id,
-                thumb_cache_dir=self._thumb_cache_dir,
-            ).exists()
+            has_disk = self._playlist_thumbnail_store.exists(item_id)
             if has_disk:
                 if needs_title:
                     self._request_thumbnail(item_id, url, media_type)
@@ -586,7 +579,10 @@ class _PlaylistEditView(
         media_changed = False
         if pixmap and not pixmap.isNull():
             self._id_to_thumb[item_id] = pixmap
-            save_thumb_to_disk(item_id, pixmap, self._thumb_cache_dir)
+            try:
+                save_thumbnail(self._playlist_thumbnail_store, item_id, pixmap)
+            except OSError:
+                log_ignored_exception(__name__, "Could not save playlist thumbnail")
             self.model.update_thumb(item_id)
             media_changed = True
 
@@ -923,13 +919,13 @@ class PlaylistWidget(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
+        playlist_thumbnail_store: ThumbnailStore,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         media_cache_manager: MediaCacheManager,
         jw_catalog_cache_paths: JWMediaCatalogCachePaths,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_songs_store: JWSongsStore,
-        thumb_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         parent=None,
     ):
@@ -942,16 +938,16 @@ class PlaylistWidget(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
+        self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._media_cache_manager = media_cache_manager
         self._jw_catalog_cache_paths = jw_catalog_cache_paths
         self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_songs_store = jw_songs_store
-        self._thumb_cache_dir = Path(thumb_cache_dir)
         self._media_info_queue_factory = media_info_queue_factory
         self._cleanup_queue = playlist_cleanup_queue_factory(
             storage_paths,
-            self._thumb_cache_dir,
+            self._playlist_thumbnail_store,
         )
         self._cleanup_timer = QTimer(self)
         self._cleanup_timer.setSingleShot(True)
@@ -979,8 +975,8 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
+            playlist_thumbnail_store=self._playlist_thumbnail_store,
             media_cache_manager=self._media_cache_manager,
-            thumb_cache_dir=self._thumb_cache_dir,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
         )
@@ -994,11 +990,11 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
+            playlist_thumbnail_store=self._playlist_thumbnail_store,
             media_cache_manager=self._media_cache_manager,
             jw_catalog_cache_paths=self._jw_catalog_cache_paths,
             jw_catalog_service_factory=self._jw_catalog_service_factory,
             jw_songs_store=self._jw_songs_store,
-            thumb_cache_dir=self._thumb_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,
             all_playlists=self._playlists,
             schedule_cleanup=self._schedule_cleanup,
