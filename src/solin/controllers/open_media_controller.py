@@ -20,7 +20,6 @@ from ..core.foundation.constants import (
     PPTX_EXTS,
 )
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
-from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -35,6 +34,7 @@ from ..core.playlists.items import create_playlist_item, playlist_items_from_jwp
 
 if TYPE_CHECKING:
     from ..core.jw.publication_reader import JwpubImportThreadFactory
+    from ..core.rendering.document_conversion import DocumentConversionService
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +42,7 @@ class OpenMediaContext:
     """Stable services and paths used by file-open workflows."""
 
     dialog_parent: Any
-    runtime_paths: RuntimePaths
+    document_conversion_service: DocumentConversionService
     jwpub_import_thread_factory: JwpubImportThreadFactory
     language_manager: Any
     notifications: Any
@@ -99,9 +99,7 @@ class OpenMediaController:
             elif ext in PDF_EXTS:
                 pdf_paths.append(path)
             elif ext in (PPTX_EXTS | DOCX_EXTS):
-                from ..core.rendering.libreoffice import libreoffice_available
-
-                if libreoffice_available():
+                if self._context.document_conversion_service.office_conversion_available():
                     lo_paths.append(path)
                 else:
                     unsupported.append(path)
@@ -163,19 +161,16 @@ class OpenMediaController:
             self._handlers.send_to_temp_playlist(playlist)
 
     def open_pdf_as_temp(self, pdf_path: str) -> None:
-        from ..core.rendering.pdf import PdfConvertThread, cached_pages
-
         context = self._context
         pdf_stem = os.path.splitext(os.path.basename(pdf_path))[0]
-        pages = cached_pages(pdf_path, context.runtime_paths.pdf_pages_dir)
+        pages = context.document_conversion_service.cached_pdf_pages(pdf_path)
         if pages:
             self.on_pdf_ready(pages, pdf_stem)
             return
 
         self._handlers.switch_to_playlist()
-        thread = PdfConvertThread(
+        thread = context.document_conversion_service.create_pdf_thread(
             pdf_path,
-            context.runtime_paths.pdf_pages_dir,
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)
@@ -234,26 +229,16 @@ class OpenMediaController:
         thread.start()
 
     def open_lo_as_temp(self, lo_path: str) -> None:
-        from ..core.rendering.libreoffice import LoConvertThread, cached_pages
-
         context = self._context
         lo_stem = os.path.splitext(os.path.basename(lo_path))[0]
-        runtime_paths = context.runtime_paths
-        pages = cached_pages(
-            lo_path,
-            pptx_pages_dir=runtime_paths.pptx_pages_dir,
-            docx_pages_dir=runtime_paths.docx_pages_dir,
-        )
+        pages = context.document_conversion_service.cached_office_pages(lo_path)
         if pages:
             self.on_lo_ready(pages, lo_stem)
             return
 
         self._handlers.switch_to_playlist()
-        thread = LoConvertThread(
+        thread = context.document_conversion_service.create_office_thread(
             lo_path,
-            pptx_pages_dir=runtime_paths.pptx_pages_dir,
-            docx_pages_dir=runtime_paths.docx_pages_dir,
-            pdf_pages_dir=runtime_paths.pdf_pages_dir,
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)

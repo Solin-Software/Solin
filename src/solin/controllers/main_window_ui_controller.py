@@ -103,6 +103,7 @@ class MainWindowUiContext:
     meeting_tree_store: Any
     profile_media_store: Any
     jwpub_import_thread_factory: Any
+    document_conversion_service: Any
     clip_fetch_thread_factory: Any
     cache_scan_session_factory: Any
     playlist_thumbnail_store: Any
@@ -323,10 +324,10 @@ class MainWindowUiController:
                 lang_manager=context.lang_manager,
                 notifications=context.notifications,
                 profile_paths=context.profile_paths,
-                runtime_paths=context.runtime_paths,
                 media_cache_manager=context.media_cache_manager,
                 profile_media_store=context.profile_media_store,
                 jwpub_import_thread_factory=context.jwpub_import_thread_factory,
+                document_conversion_service=context.document_conversion_service,
                 cache_scan_session_factory=context.cache_scan_session_factory,
                 wifi_receive_server_factory=context.wifi_receive_server_factory,
                 browser_download_service_factory=(
@@ -411,7 +412,7 @@ class MainWindowUiController:
             watched_folder=watched_folder,
             notifications=context.notifications,
             profile_paths=context.profile_paths,
-            runtime_paths=context.runtime_paths,
+            document_conversion_service=context.document_conversion_service,
             storage_paths=context.playlist_storage_paths,
             playlist_repository=context.playlist_repository,
             profile_media_store=context.profile_media_store,
@@ -433,6 +434,7 @@ class MainWindowUiController:
             meeting_tree_store=context.meeting_tree_store,
             profile_media_store=context.profile_media_store,
             jwpub_import_thread_factory=context.jwpub_import_thread_factory,
+            document_conversion_service=context.document_conversion_service,
             meeting_thumbnail_store=context.meeting_thumbnail_store,
             watched_folder_file_store=context.watched_folder_file_store,
             watched_folder_watcher_factory=context.watched_folder_watcher_factory,

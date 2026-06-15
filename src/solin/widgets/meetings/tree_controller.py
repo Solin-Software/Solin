@@ -61,12 +61,6 @@ from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
-from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
-from ...core.rendering.libreoffice import (
-    LoConvertThread,
-    cached_pages as lo_cached_pages,
-    libreoffice_available,
-)
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ...ui.media_info import MediaInfoQueue
@@ -75,6 +69,7 @@ from ..playlist.edit_visuals import _format_duration
 
 if TYPE_CHECKING:
     from ...core.jw.publication_reader import JwpubImportThreadFactory
+    from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
 _MEDIA_FIELDS = set(MeetingMedia.__dataclass_fields__.keys())
@@ -160,6 +155,7 @@ class MeetingTreeController(QObject):
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        document_conversion_service: DocumentConversionService,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
@@ -178,6 +174,7 @@ class MeetingTreeController(QObject):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._document_conversion_service = document_conversion_service
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
@@ -209,9 +206,9 @@ class MeetingTreeController(QObject):
         self._resolve_to_node_id: dict[str, str] = {}
         self._resolved_urls: dict[str, str] = {}
         self._cloud_progress_by_url: dict[str, float] = {}
-        self._pdf_threads: list[PdfConvertThread] = []
+        self._pdf_threads: list[Any] = []
         self._jwpub_threads: list[Any] = []
-        self._lo_threads: list[LoConvertThread] = []
+        self._lo_threads: list[Any] = []
         self._linked_folder_files: dict[str, str] = {}  # file_path → node_id
         self._linked_folder_availability: tuple[tuple[str, bool], ...] = ()
         self._meeting_folder_imports: dict[str, dict[str, Any]] = {}
@@ -554,7 +551,7 @@ class MeetingTreeController(QObject):
         if kind in {"media", "pdf", "jwpub", "jwlplaylist"}:
             return True
         if kind == "lo":
-            return libreoffice_available()
+            return self._document_conversion_service.office_conversion_available()
         return False
 
     def _meeting_folder_record_for_source(
@@ -754,13 +751,13 @@ class MeetingTreeController(QObject):
     ) -> None:
         path = str(source.get("path") or "")
         stem = Path(path).stem
-        pages = pdf_cached_pages(path, self._runtime_paths.pdf_pages_dir)
+        pages = self._document_conversion_service.cached_pdf_pages(path)
         if pages:
             self._insert_meeting_folder_nodes(
                 source, self._page_nodes(pages, stem), list_id, insert_index
             )
             return
-        thread = PdfConvertThread(path, self._runtime_paths.pdf_pages_dir, parent=self)
+        thread = self._document_conversion_service.create_pdf_thread(path, parent=self)
         self._pdf_threads.append(thread)
         thread.pages_ready.connect(
             lambda pages, pdf_stem, _source=dict(source), _list=list_id, _index=insert_index:
@@ -783,21 +780,14 @@ class MeetingTreeController(QObject):
     ) -> None:
         path = str(source.get("path") or "")
         stem = Path(path).stem
-        pages = lo_cached_pages(
-            path,
-            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-            docx_pages_dir=self._runtime_paths.docx_pages_dir,
-        )
+        pages = self._document_conversion_service.cached_office_pages(path)
         if pages:
             self._insert_meeting_folder_nodes(
                 source, self._page_nodes(pages, stem), list_id, insert_index
             )
             return
-        thread = LoConvertThread(
+        thread = self._document_conversion_service.create_office_thread(
             path,
-            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-            docx_pages_dir=self._runtime_paths.docx_pages_dir,
-            pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
             parent=self,
         )
         self._lo_threads.append(thread)
@@ -939,7 +929,10 @@ class MeetingTreeController(QObject):
                 jwpub_paths.append(path)
             elif ext in PLAYLIST_EXTS:
                 jwl_paths.append(path)
-            elif ext in (PPTX_EXTS | DOCX_EXTS) and libreoffice_available():
+            elif (
+                ext in (PPTX_EXTS | DOCX_EXTS)
+                and self._document_conversion_service.office_conversion_available()
+            ):
                 lo_paths.append(path)
 
         cursor = insert_index
@@ -1010,13 +1003,16 @@ class MeetingTreeController(QObject):
     def _import_pdfs(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:
             stem = Path(path).stem
-            pages = pdf_cached_pages(path, self._runtime_paths.pdf_pages_dir)
+            pages = self._document_conversion_service.cached_pdf_pages(path)
             if pages:
                 self._on_pdf_pages_ready(pages, stem, list_id, insert_index)
                 if insert_index < _BIG_INDEX:
                     insert_index += len(pages)
                 continue
-            thread = PdfConvertThread(path, self._runtime_paths.pdf_pages_dir, parent=self)
+            thread = self._document_conversion_service.create_pdf_thread(
+                path,
+                parent=self,
+            )
             self._pdf_threads.append(thread)
             thread.pages_ready.connect(
                 lambda pages, pdf_stem, _list=list_id, _index=insert_index:
@@ -1048,21 +1044,14 @@ class MeetingTreeController(QObject):
     def _import_lo_files(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:
             stem = Path(path).stem
-            pages = lo_cached_pages(
-                path,
-                pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-                docx_pages_dir=self._runtime_paths.docx_pages_dir,
-            )
+            pages = self._document_conversion_service.cached_office_pages(path)
             if pages:
                 self._on_lo_pages_ready(pages, stem, list_id, insert_index)
                 if insert_index < _BIG_INDEX:
                     insert_index += len(pages)
                 continue
-            thread = LoConvertThread(
+            thread = self._document_conversion_service.create_office_thread(
                 path,
-                pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-                docx_pages_dir=self._runtime_paths.docx_pages_dir,
-                pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
                 parent=self,
             )
             self._lo_threads.append(thread)

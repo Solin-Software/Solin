@@ -5,8 +5,6 @@ from pathlib import Path
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.jwl_files import read_jwlplaylist_document
 from ...core.playlists.items import create_playlist_item
-from ...core.rendering.libreoffice import LoConvertThread, cached_pages as lo_cached_pages
-from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
 
 
 class _PlaylistEditImportMixin:
@@ -26,19 +24,15 @@ class _PlaylistEditImportMixin:
         section_id: str = "",
     ) -> None:
         stem = Path(pdf_path).stem
-        pages = pdf_cached_pages(
-            pdf_path,
-            self._runtime_paths.pdf_pages_dir,
-        )
+        pages = self._document_conversion_service.cached_pdf_pages(pdf_path)
         if pages:
             self._on_pdf_pages_ready(pages, stem, insert_at, section_id)
             return
         self._notifications.information(
             self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
-        thread = PdfConvertThread(
+        thread = self._document_conversion_service.create_pdf_thread(
             pdf_path,
-            self._runtime_paths.pdf_pages_dir,
             parent=self,
         )
         self._pdf_threads.append(thread)
@@ -201,22 +195,15 @@ class _PlaylistEditImportMixin:
         section_id: str = "",
     ) -> None:
         stem = Path(lo_path).stem
-        pages = lo_cached_pages(
-            lo_path,
-            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-            docx_pages_dir=self._runtime_paths.docx_pages_dir,
-        )
+        pages = self._document_conversion_service.cached_office_pages(lo_path)
         if pages:
             self._on_lo_pages_ready(pages, stem, insert_at, section_id)
             return
         self._notifications.information(
             self.tr("Converting PDF: {name}…").replace("{name}", str(stem))
         )
-        thread = LoConvertThread(
+        thread = self._document_conversion_service.create_office_thread(
             lo_path,
-            pptx_pages_dir=self._runtime_paths.pptx_pages_dir,
-            docx_pages_dir=self._runtime_paths.docx_pages_dir,
-            pdf_pages_dir=self._runtime_paths.pdf_pages_dir,
             parent=self,
         )
         self._lo_threads.append(thread)

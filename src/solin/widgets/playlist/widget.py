@@ -32,7 +32,7 @@ from ..jw_songs_bridge import JWSongsBridge
 from ...qml_module import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
-from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...core.jw.language_context import (
     JWMediaLanguageContext,
@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from ...core.ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
     from ...core.playlists.cleanup import PlaylistCleanupQueue
+    from ...core.rendering.document_conversion import DocumentConversionService
 
 # ── Tela de edição ─────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ class _PlaylistEditView(
         *,
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
-        runtime_paths: RuntimePaths,
+        document_conversion_service: DocumentConversionService,
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
@@ -114,7 +115,7 @@ class _PlaylistEditView(
         self._media_ctrl = media_ctrl
         self._notifications = notifications
         self._profile_paths = profile_paths
-        self._runtime_paths = runtime_paths
+        self._document_conversion_service = document_conversion_service
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
@@ -924,7 +925,7 @@ class PlaylistWidget(QWidget):
         *,
         notifications: NotificationCenter,
         profile_paths: ProfilePaths,
-        runtime_paths: RuntimePaths,
+        document_conversion_service: DocumentConversionService,
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
@@ -946,7 +947,7 @@ class PlaylistWidget(QWidget):
         self._media_ctrl = media_ctrl
         self._notifications = notifications
         self._profile_paths = profile_paths
-        self._runtime_paths = runtime_paths
+        self._document_conversion_service = document_conversion_service
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
@@ -1003,7 +1004,7 @@ class PlaylistWidget(QWidget):
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
             profile_paths=self._profile_paths,
-            runtime_paths=self._runtime_paths,
+            document_conversion_service=self._document_conversion_service,
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,

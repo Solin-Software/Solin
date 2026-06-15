@@ -11,7 +11,6 @@ from ...core.foundation.constants import (
     PPTX_EXTS as _PPTX_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS
-from ...core.rendering.libreoffice import libreoffice_available
 
 
 class _PlaylistDragDropMixin:
@@ -21,7 +20,7 @@ class _PlaylistDragDropMixin:
         from ...core.foundation.constants import PLAYLIST_EXTS as _PLAYLIST_EXTS
 
         accepted = _MEDIA_EXTS | _PDF_EXTS | _JWPUB_EXTS | _PLAYLIST_EXTS
-        if libreoffice_available():
+        if self._document_conversion_service.office_conversion_available():
             accepted = accepted | _PPTX_EXTS | _DOCX_EXTS
         return any(
             Path(u.toLocalFile()).suffix.lower() in accepted
@@ -99,13 +98,18 @@ class _PlaylistDragDropMixin:
             media_paths = [p for p in all_paths if Path(p).suffix.lower() in _MEDIA_EXTS]
             pdf_paths = [p for p in all_paths if Path(p).suffix.lower() in _PDF_EXTS]
             jwpub_paths = [p for p in all_paths if Path(p).suffix.lower() in _JWPUB_EXTS]
+            office_conversion_available = (
+                self._document_conversion_service.office_conversion_available()
+            )
             pptx_paths = [
                 p for p in all_paths
-                if Path(p).suffix.lower() in _PPTX_EXTS and libreoffice_available()
+                if Path(p).suffix.lower() in _PPTX_EXTS
+                and office_conversion_available
             ]
             docx_paths = [
                 p for p in all_paths
-                if Path(p).suffix.lower() in _DOCX_EXTS and libreoffice_available()
+                if Path(p).suffix.lower() in _DOCX_EXTS
+                and office_conversion_available
             ]
             jwl_paths = [p for p in all_paths if Path(p).suffix.lower() in _PLAYLIST_EXTS]
 

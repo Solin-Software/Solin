@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
 from ..core.i18n.manager import LanguageManager
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
-from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.foundation.constants import (
     JWPUB_EXTS as _JWPUB_EXTS,
     PDF_EXTS as _PDF_EXTS,
@@ -52,6 +51,7 @@ if TYPE_CHECKING:
     from ..core.ingest.wifi_server import WifiReceiveServer
     from ..core.jw.publication_reader import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
+    from ..core.rendering.document_conversion import DocumentConversionService
     from ..core.ui.notifications import NotificationCenter
 
 _PDF_EXTS_SET = _PDF_EXTS
@@ -514,7 +514,7 @@ class WifiReceiveWidget(QWidget):
         lang: LanguageManager,
         *,
         notifications: NotificationCenter,
-        runtime_paths: RuntimePaths,
+        document_conversion_service: DocumentConversionService,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
         wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer],
@@ -524,7 +524,7 @@ class WifiReceiveWidget(QWidget):
         super().__init__(parent)
         self._lang            = lang
         self._notifications   = notifications
-        self._runtime_paths   = runtime_paths
+        self._document_conversion_service = document_conversion_service
         self._profile_media_store = profile_media_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
         self._server = wifi_receive_server_factory(self)
@@ -910,17 +910,15 @@ class WifiReceiveWidget(QWidget):
 
     def _expand_pdf(self, path: str, orig_name: str) -> None:
         """Converte o PDF em imagens de páginas e adiciona cada uma como card."""
-        from ..core.rendering.pdf import PdfConvertThread, cached_pages
         pdf_stem = Path(orig_name).stem or Path(path).stem
 
-        pages = cached_pages(path, self._runtime_paths.pdf_pages_dir)
+        pages = self._document_conversion_service.cached_pdf_pages(path)
         if pages:
             self._on_pdf_pages_ready(pages, pdf_stem, orig_name)
             return
 
-        thread = PdfConvertThread(
+        thread = self._document_conversion_service.create_pdf_thread(
             path,
-            self._runtime_paths.pdf_pages_dir,
             parent=self,
         )
         thread.pages_ready.connect(

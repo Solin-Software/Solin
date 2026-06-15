@@ -76,6 +76,8 @@ class _ThreadStub:
     def __init__(self):
         self.items_ready = _SignalStub()
         self.failed = _SignalStub()
+        self.pages_ready = _SignalStub()
+        self.conversion_failed = _SignalStub()
         self.finished = _SignalStub()
         self.started = False
 
@@ -91,6 +93,36 @@ class _JwpubImportThreadFactoryStub:
     def create(self, path, **kwargs):
         thread = _ThreadStub()
         self.calls.append((path, kwargs))
+        self.threads.append(thread)
+        return thread
+
+
+class _DocumentConversionServiceStub:
+    def __init__(self):
+        self.pdf_pages = None
+        self.office_pages = None
+        self.pdf_calls = []
+        self.office_calls = []
+        self.threads = []
+
+    def office_conversion_available(self):
+        return True
+
+    def cached_pdf_pages(self, path):
+        return self.pdf_pages
+
+    def create_pdf_thread(self, path, **kwargs):
+        thread = _ThreadStub()
+        self.pdf_calls.append((path, kwargs))
+        self.threads.append(thread)
+        return thread
+
+    def cached_office_pages(self, path):
+        return self.office_pages
+
+    def create_office_thread(self, path, **kwargs):
+        thread = _ThreadStub()
+        self.office_calls.append((path, kwargs))
         self.threads.append(thread)
         return thread
 
@@ -122,14 +154,17 @@ class _WindowStub:
         self.projected = (playlist, index, keep_expanded, playback_order)
 
 
-def _controller(window, jwpub_import_thread_factory=None):
+def _controller(
+    window,
+    jwpub_import_thread_factory=None,
+    document_conversion_service=None,
+):
     return OpenMediaController(
         OpenMediaContext(
             dialog_parent=window,
-            runtime_paths=SimpleNamespace(
-                pdf_pages_dir="cache/pdf",
-                pptx_pages_dir="cache/pptx",
-                docx_pages_dir="cache/docx",
+            document_conversion_service=(
+                document_conversion_service
+                or _DocumentConversionServiceStub()
             ),
             jwpub_import_thread_factory=(
                 jwpub_import_thread_factory
@@ -317,6 +352,22 @@ def test_on_pdf_ready_builds_temp_playlist_and_switches_page():
         ("document — p. 1", "/tmp/page-1.png", "image"),
         ("document — p. 2", "/tmp/page-2.png", "image"),
     ]
+
+
+def test_open_pdf_uses_injected_document_conversion_service():
+    window = _WindowStub()
+    service = _DocumentConversionServiceStub()
+    controller = _controller(
+        window,
+        document_conversion_service=service,
+    )
+
+    controller.open_pdf_as_temp("document.pdf")
+
+    assert service.pdf_calls == [("document.pdf", {"parent": window})]
+    assert service.threads[0].started is True
+    assert controller._context.thread_registry.active_count == 1
+    assert window._navigation.pages == [7]
 
 
 def test_open_jwpub_uses_injected_worker_factory(monkeypatch):

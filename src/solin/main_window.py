@@ -139,6 +139,7 @@ if TYPE_CHECKING:
     from .core.media.cache_scan import CacheScanSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
     from .core.playlists.cleanup import PlaylistCleanupQueue
+    from .core.rendering.document_conversion import DocumentConversionService
     from .ui.media_info import MediaInfoQueue, MediaInfoService
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        document_conversion_service: DocumentConversionService,
         clip_fetch_thread_factory: ClipFetchThreadFactory,
         cache_scan_session_factory: CacheScanSessionFactory,
         playlist_thumbnail_store: ThumbnailStore,
@@ -396,6 +398,7 @@ class MainWindow(QMainWindow):
                 meeting_tree_store=self.meeting_tree_store,
                 profile_media_store=profile_media_store,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
+                document_conversion_service=document_conversion_service,
                 clip_fetch_thread_factory=clip_fetch_thread_factory,
                 cache_scan_session_factory=cache_scan_session_factory,
                 playlist_thumbnail_store=playlist_thumbnail_store,
@@ -511,7 +514,7 @@ class MainWindow(QMainWindow):
         self._playlist_imports = PlaylistImportController(
             PlaylistImportContext(
                 dialog_parent=self,
-                runtime_paths=self.runtime_paths,
+                document_conversion_service=document_conversion_service,
                 profile_media_store=profile_media_store,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
                 language_manager=self.lang,
@@ -546,7 +549,7 @@ class MainWindow(QMainWindow):
         self._open_media_controller = OpenMediaController(
             OpenMediaContext(
                 dialog_parent=self,
-                runtime_paths=self.runtime_paths,
+                document_conversion_service=document_conversion_service,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
                 language_manager=self.lang,
                 notifications=self.notifications,

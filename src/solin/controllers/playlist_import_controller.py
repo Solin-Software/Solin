@@ -12,7 +12,6 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
-from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -25,6 +24,7 @@ from ..core.playlists.items import (
 
 if TYPE_CHECKING:
     from ..core.jw.publication_reader import JwpubImportThreadFactory
+    from ..core.rendering.document_conversion import DocumentConversionService
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +32,7 @@ class PlaylistImportContext:
     """Stable services used by playlist import workflows."""
 
     dialog_parent: Any
-    runtime_paths: RuntimePaths
+    document_conversion_service: DocumentConversionService
     profile_media_store: Any
     jwpub_import_thread_factory: JwpubImportThreadFactory
     language_manager: Any
@@ -265,11 +265,9 @@ class PlaylistImportController:
             )
 
     def add_pdf_file_to_playlist_target(self, pdf_path: str, target) -> None:
-        from ..core.rendering.pdf import PdfConvertThread, cached_pages
-
         context = self._context
         pdf_stem = os.path.splitext(os.path.basename(pdf_path))[0]
-        pages = cached_pages(pdf_path, context.runtime_paths.pdf_pages_dir)
+        pages = context.document_conversion_service.cached_pdf_pages(pdf_path)
         if pages:
             self.add_items_to_playlist_target(
                 target,
@@ -281,9 +279,8 @@ class PlaylistImportController:
         context.notifications.information(
             context.translate("Opening {name}...").replace("{name}", pdf_stem)
         )
-        thread = PdfConvertThread(
+        thread = context.document_conversion_service.create_pdf_thread(
             pdf_path,
-            context.runtime_paths.pdf_pages_dir,
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)

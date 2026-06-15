@@ -59,6 +59,7 @@ def _launch_main_window(
     from solin.core.media.cache_scan import CacheScanSessionFactory
     from solin.core.jw.clip_fetch import ClipFetchThreadFactory
     from solin.core.jw.publication_reader import JwpubImportThreadFactory
+    from solin.core.rendering.document_conversion import DocumentConversionService
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
     from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
@@ -79,6 +80,11 @@ def _launch_main_window(
     )
     jwpub_import_thread_factory = JwpubImportThreadFactory(
         profile_paths.images_dir,
+    )
+    document_conversion_service = DocumentConversionService(
+        pdf_pages_dir=runtime_paths.pdf_pages_dir,
+        pptx_pages_dir=runtime_paths.pptx_pages_dir,
+        docx_pages_dir=runtime_paths.docx_pages_dir,
     )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
@@ -113,6 +119,7 @@ def _launch_main_window(
         meeting_tree_store,
         profile_media_store,
         jwpub_import_thread_factory,
+        document_conversion_service,
         clip_fetch_thread_factory,
         cache_scan_session_factory,
         playlist_thumbnail_store,

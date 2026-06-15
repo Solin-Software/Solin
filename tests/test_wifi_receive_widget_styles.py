@@ -23,6 +23,7 @@ from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.jw.publication_reader import JwpubImportThreadFactory
+from solin.core.rendering.document_conversion import DocumentConversionService
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 
@@ -51,7 +52,11 @@ widget = WifiReceiveWidget(
         jw_languages_cache_file=Path("jw_languages.json"),
     ),
     notifications=_Notifications(),
-    runtime_paths=runtime_paths,
+    document_conversion_service=DocumentConversionService(
+        pdf_pages_dir=runtime_paths.pdf_pages_dir,
+        pptx_pages_dir=runtime_paths.pptx_pages_dir,
+        docx_pages_dir=runtime_paths.docx_pages_dir,
+    ),
     profile_media_store=ProfileMediaStore(
         profile_paths.embedded_dir,
         profile_paths.images_dir,

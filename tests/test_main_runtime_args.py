@@ -53,6 +53,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     )
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
+    runtime_paths.pdf_pages_dir = "pdf_pages"
+    runtime_paths.pptx_pages_dir = "pptx_pages"
+    runtime_paths.docx_pages_dir = "docx_pages"
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
@@ -109,6 +112,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             meeting_tree_store,
             profile_media_store,
             jwpub_import_thread_factory,
+            document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
             playlist_thumbnail_store,
@@ -146,6 +150,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store
@@ -233,6 +238,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         == "JwpubImportThreadFactory"
     )
     assert (
+        window.document_conversion_service.__class__.__name__
+        == "DocumentConversionService"
+    )
+    assert (
         window.clip_fetch_thread_factory.__class__.__name__
         == "ClipFetchThreadFactory"
     )
@@ -274,6 +283,9 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     )
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
+    runtime_paths.pdf_pages_dir = "pdf_pages"
+    runtime_paths.pptx_pages_dir = "pptx_pages"
+    runtime_paths.docx_pages_dir = "docx_pages"
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
@@ -321,6 +333,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             meeting_tree_store,
             profile_media_store,
             jwpub_import_thread_factory,
+            document_conversion_service,
             clip_fetch_thread_factory,
             cache_scan_session_factory,
             playlist_thumbnail_store,
@@ -358,6 +371,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
             self.playlist_thumbnail_store = playlist_thumbnail_store

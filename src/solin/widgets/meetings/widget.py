@@ -54,7 +54,6 @@ from ...core.jw.language_context import (
 from ...core.jw.catalog import JWMediaCatalogCachePaths
 from ...core.jw.songs import JWSongsStore
 from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
-from ...core.rendering.libreoffice import libreoffice_available
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager
@@ -83,11 +82,14 @@ if TYPE_CHECKING:
     from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.meetings.memorial import MemorialService
     from ...core.meetings.publications import JwpubService
+    from ...core.rendering.document_conversion import DocumentConversionService
 
 
-def _meeting_drop_exts() -> frozenset[str]:
+def _meeting_drop_exts(
+    document_conversion_service: DocumentConversionService,
+) -> frozenset[str]:
     exts = _MEDIA_EXTS | _PDF_EXTS | _JWPUB_EXTS | _PLAYLIST_EXTS
-    if libreoffice_available():
+    if document_conversion_service.office_conversion_available():
         exts = exts | _PPTX_EXTS | _DOCX_EXTS
     return frozenset(exts)
 
@@ -121,6 +123,7 @@ class StudyDetailView(QWidget):
                  meeting_thumbnail_store: ThumbnailStore,
                  watched_folder_file_store: WatchedFolderFileStore,
                  jwpub_import_thread_factory: JwpubImportThreadFactory,
+                 document_conversion_service: DocumentConversionService,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -140,6 +143,7 @@ class StudyDetailView(QWidget):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._document_conversion_service = document_conversion_service
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -183,6 +187,7 @@ class StudyDetailView(QWidget):
             meeting_thumbnail_store=self._meeting_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+            document_conversion_service=self._document_conversion_service,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -322,7 +327,7 @@ class StudyDetailView(QWidget):
         return super().eventFilter(obj, event)
 
     def _has_valid_urls(self, mime_data) -> bool:
-        accepted = _meeting_drop_exts()
+        accepted = _meeting_drop_exts(self._document_conversion_service)
         return bool(
             mime_data
             and mime_data.hasUrls()
@@ -360,11 +365,12 @@ class StudyDetailView(QWidget):
         if not self._has_valid_urls(event.mimeData()):
             super().dropEvent(event)
             return
+        accepted = _meeting_drop_exts(self._document_conversion_service)
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()
             if url.isLocalFile()
-            and Path(url.toLocalFile()).suffix.lower() in _meeting_drop_exts()
+            and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
         list_id = "root"
         insert_idx = 2**31 - 1
@@ -415,6 +421,7 @@ class _MemorialDetailView(QWidget):
                  meeting_thumbnail_store: ThumbnailStore,
                  watched_folder_file_store: WatchedFolderFileStore,
                  jwpub_import_thread_factory: JwpubImportThreadFactory,
+                 document_conversion_service: DocumentConversionService,
                  profile_paths: ProfilePaths,
                  runtime_paths: RuntimePaths,
                  cache_manager: MediaCacheManager,
@@ -433,6 +440,7 @@ class _MemorialDetailView(QWidget):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._document_conversion_service = document_conversion_service
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
@@ -474,6 +482,7 @@ class _MemorialDetailView(QWidget):
             meeting_thumbnail_store=self._meeting_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+            document_conversion_service=self._document_conversion_service,
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
@@ -587,7 +596,7 @@ class _MemorialDetailView(QWidget):
         return super().eventFilter(obj, event)
 
     def _has_valid_urls(self, mime_data) -> bool:
-        accepted = _meeting_drop_exts()
+        accepted = _meeting_drop_exts(self._document_conversion_service)
         return bool(
             mime_data
             and mime_data.hasUrls()
@@ -625,11 +634,12 @@ class _MemorialDetailView(QWidget):
         if not self._has_valid_urls(event.mimeData()):
             super().dropEvent(event)
             return
+        accepted = _meeting_drop_exts(self._document_conversion_service)
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()
             if url.isLocalFile()
-            and Path(url.toLocalFile()).suffix.lower() in _meeting_drop_exts()
+            and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
         list_id = "root"
         insert_idx = 2**31 - 1
@@ -684,6 +694,7 @@ class MeetingsWidget(QWidget):
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        document_conversion_service: DocumentConversionService,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
@@ -710,6 +721,7 @@ class MeetingsWidget(QWidget):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._document_conversion_service = document_conversion_service
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
@@ -949,6 +961,7 @@ class MeetingsWidget(QWidget):
                                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                                 watched_folder_file_store=self._watched_folder_file_store,
                                 jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+                                document_conversion_service=self._document_conversion_service,
                                 profile_paths=self._profile_paths,
                                 runtime_paths=self._runtime_paths,
                                 cache_manager=self._cache_manager,
@@ -992,6 +1005,7 @@ class MeetingsWidget(QWidget):
                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                 watched_folder_file_store=self._watched_folder_file_store,
                 jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+                document_conversion_service=self._document_conversion_service,
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,

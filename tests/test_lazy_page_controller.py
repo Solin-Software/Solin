@@ -53,6 +53,7 @@ class _WindowStub:
         )
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
+        self.document_conversion_service = object()
         self.cache_scan_session_factory = object()
         self.wifi_receive_server_factory = lambda _parent: object()
         self.profile_paths = ProfilePaths.from_roots(
@@ -82,10 +83,10 @@ def _controller(window):
             lang_manager=window.lang,
             notifications=window.notifications,
             profile_paths=window.profile_paths,
-            runtime_paths=object(),
             media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
             jwpub_import_thread_factory=window.jwpub_import_thread_factory,
+            document_conversion_service=window.document_conversion_service,
             cache_scan_session_factory=window.cache_scan_session_factory,
             wifi_receive_server_factory=window.wifi_receive_server_factory,
             browser_download_service_factory=(
@@ -222,7 +223,7 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
             lang_manager,
             *,
             notifications,
-            runtime_paths,
+            document_conversion_service,
             profile_media_store,
             jwpub_import_thread_factory,
             wifi_receive_server_factory,
@@ -231,7 +232,7 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
         ):
             self.lang_manager = lang_manager
             self.notifications = notifications
-            self.runtime_paths = runtime_paths
+            self.document_conversion_service = document_conversion_service
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
             self.wifi_receive_server_factory = wifi_receive_server_factory
@@ -248,6 +249,10 @@ def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatc
     assert wifi is controller.wifi_receive_widget
     assert wifi.lang_manager is window.lang
     assert wifi.notifications is window.notifications
+    assert (
+        wifi.document_conversion_service
+        is window.document_conversion_service
+    )
     assert wifi.profile_media_store is window.profile_media_store
     assert (
         wifi.jwpub_import_thread_factory

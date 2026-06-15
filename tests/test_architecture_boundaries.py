@@ -307,6 +307,30 @@ def test_widgets_do_not_import_cache_scanner():
     )
 
 
+def test_ui_workflows_do_not_import_document_conversion_adapters():
+    workflow_roots = (
+        PROJECT_ROOT / "src" / "solin" / "controllers",
+        PROJECT_ROOT / "src" / "solin" / "widgets",
+    )
+    forbidden_modules = {"core.rendering.pdf", "core.rendering.libreoffice"}
+    violations: list[str] = []
+
+    for workflow_root in workflow_roots:
+        for path in sorted(workflow_root.rglob("*.py")):
+            for node in _imports(path):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                module = node.module or ""
+                if any(module.endswith(blocked) for blocked in forbidden_modules):
+                    violations.append(_display(path, node))
+
+    assert violations == [], (
+        "UI workflows must receive document conversion services from composition "
+        "instead of importing cache and worker adapters directly:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

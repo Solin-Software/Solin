@@ -95,6 +95,8 @@ class _ThreadStub:
     def __init__(self):
         self.items_ready = _SignalStub()
         self.failed = _SignalStub()
+        self.pages_ready = _SignalStub()
+        self.conversion_failed = _SignalStub()
         self.finished = _SignalStub()
         self.started = False
 
@@ -114,6 +116,22 @@ class _JwpubImportThreadFactoryStub:
         return thread
 
 
+class _DocumentConversionServiceStub:
+    def __init__(self):
+        self.pdf_pages = None
+        self.pdf_calls = []
+        self.threads = []
+
+    def cached_pdf_pages(self, path):
+        return self.pdf_pages
+
+    def create_pdf_thread(self, path, **kwargs):
+        thread = _ThreadStub()
+        self.pdf_calls.append((path, kwargs))
+        self.threads.append(thread)
+        return thread
+
+
 def _target(create_new=False):
     return SimpleNamespace(
         create_new=create_new,
@@ -126,11 +144,15 @@ def _controller(
     window,
     profile_media_store=None,
     jwpub_import_thread_factory=None,
+    document_conversion_service=None,
 ):
     return PlaylistImportController(
         PlaylistImportContext(
             dialog_parent=window,
-            runtime_paths=SimpleNamespace(pdf_pages_dir="cache/pdf"),
+            document_conversion_service=(
+                document_conversion_service
+                or _DocumentConversionServiceStub()
+            ),
             profile_media_store=profile_media_store or _ProfileMediaStoreStub(),
             jwpub_import_thread_factory=(
                 jwpub_import_thread_factory
@@ -281,6 +303,21 @@ def test_send_to_temp_playlist_switches_to_playlist_page():
 
     assert window._navigation.pages == [7]
     assert window.playlist_widget.temp_opened == (items, window.lang)
+
+
+def test_pdf_import_uses_injected_document_conversion_service():
+    window = _WindowStub()
+    service = _DocumentConversionServiceStub()
+    controller = _controller(
+        window,
+        document_conversion_service=service,
+    )
+
+    controller.add_pdf_file_to_playlist_target("document.pdf", _target())
+
+    assert service.pdf_calls == [("document.pdf", {"parent": window})]
+    assert service.threads[0].started is True
+    assert controller._context.thread_registry.active_count == 1
 
 
 def test_jwpub_import_uses_injected_worker_factory(monkeypatch):
