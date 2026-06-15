@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..media.formats import media_type_from_path
+from .models import MeetingMedia
 from .tree_types import Node, new_node_id
 
 
@@ -32,6 +33,35 @@ def mime_for_meeting_media(path: str, media_type: str) -> str:
 
 def media_ref_title(ref: dict[str, Any]) -> str:
     return clean_media_title(str(ref.get("label") or ref.get("caption") or ""))
+
+
+def int_or_zero(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
+    return MeetingMedia(
+        multimedia_id=int_or_zero(ref.get("multimedia_id")),
+        mime_type=str(ref.get("mime_type") or ""),
+        file_path=str(ref.get("file_path") or ""),
+        label=str(ref.get("label") or ""),
+        caption=str(ref.get("caption") or ""),
+        begin_ordinal=int_or_zero(ref.get("begin_ordinal")),
+        key_symbol=str(ref.get("key_symbol") or ""),
+        track=int_or_zero(ref.get("track")),
+        issue_tag=int_or_zero(ref.get("issue_tag")),
+        meps_doc_id=int_or_zero(ref.get("meps_doc_id")),
+        section=str(ref.get("section") or ""),
+        is_song=bool(ref.get("is_song", False)),
+        cbs_article_title=str(ref.get("cbs_article_title") or ""),
+    )
+
+
+def playlist_item_media_url(raw: dict[str, Any]) -> str:
+    return str(raw.get("url") or raw.get("jworg_url") or "")
 
 
 def create_manual_media_node(
@@ -66,4 +96,43 @@ def create_manual_media_node(
         "media_ref": ref,
         "children": [],
         "meeting_generated": False,
+    }
+
+
+def create_playlist_media_node(
+    raw: dict[str, Any],
+    fallback_title: str,
+    *,
+    node_id: str,
+    url: str,
+    media_fallback_title: str,
+) -> Node:
+    media_type = str(raw.get("type") or "").lower()
+    if media_type not in ("image", "audio", "video"):
+        media_type = meeting_media_type_from_path(url)
+    title = clean_media_title(str(raw.get("title") or fallback_title or Path(url).stem))
+    ref = {
+        "multimedia_id": int_or_zero(raw.get("multimedia_id")),
+        "mime_type": str(raw.get("mime_type") or mime_for_meeting_media(url, media_type)),
+        "file_path": url,
+        "label": title,
+        "caption": "",
+        "begin_ordinal": 0,
+        "key_symbol": raw.get("key_symbol") or raw.get("pub") or "",
+        "track": int_or_zero(raw.get("track")),
+        "issue_tag": int_or_zero(raw.get("issue_tag") or raw.get("issue")),
+        "meps_doc_id": int_or_zero(raw.get("doc_id") or raw.get("meps_doc_id")),
+        "section": "",
+        "is_song": False,
+        "cbs_article_title": "",
+    }
+    return {
+        "id": node_id,
+        "type": "media",
+        "title": title or media_fallback_title,
+        "media_type": media_type,
+        "media_ref": ref,
+        "children": [],
+        "meeting_generated": False,
+        "auto_title": bool(raw.get("auto_title", False)),
     }

@@ -47,7 +47,7 @@ from ...core.i18n.strings import (
     tr_offline_downloading_progress,
 )
 from ...core.ingest.manifest import ManifestError, cache_dir
-from ...core.meetings.models import MeetingMedia, MemorialData, WeekData
+from ...core.meetings.models import MemorialData, WeekData
 from ...core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncRecord,
@@ -60,11 +60,12 @@ from ...core.meetings.catalog_placement import (
     build_meeting_catalog_playlist_ref,
 )
 from ...core.meetings.media_nodes import (
-    clean_media_title,
     create_manual_media_node,
+    create_playlist_media_node,
+    int_or_zero,
+    meeting_media_from_ref,
     media_ref_title,
-    meeting_media_type_from_path,
-    mime_for_meeting_media,
+    playlist_item_media_url,
 )
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_editing import (
@@ -91,9 +92,6 @@ if TYPE_CHECKING:
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
-_MEDIA_FIELDS = set(MeetingMedia.__dataclass_fields__.keys())
-
-
 def _tr(context: str, source: str) -> str:
     return QCoreApplication.translate(context, source)
 
@@ -101,11 +99,6 @@ def _tr(context: str, source: str) -> str:
 def _translate_section_title(source: str) -> str:
     context = "SermonThemeWidget" if source == "PUBLIC TALK" else "_Section"
     return _tr(context, source)
-
-
-def _meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
-    data = {key: ref.get(key) for key in _MEDIA_FIELDS if key in ref}
-    return MeetingMedia(**data)
 
 
 def _has_jw_media_identity(ref: dict[str, Any]) -> bool:
@@ -933,9 +926,9 @@ class MeetingTreeController(QObject):
         insert_index: int = _BIG_INDEX,
     ) -> None:
         node_id = new_node_id()
-        track = self._to_int(item_data.get("track"))
-        issue = self._to_int(item_data.get("issue"))
-        doc_id = self._to_int(item_data.get("docid"))
+        track = int_or_zero(item_data.get("track"))
+        issue = int_or_zero(item_data.get("issue"))
+        doc_id = int_or_zero(item_data.get("docid"))
         ref = {
             "multimedia_id": 0,
             "mime_type": "video/mp4",
@@ -1116,42 +1109,20 @@ class MeetingTreeController(QObject):
 
     def _node_from_playlist_item(self, raw: dict[str, Any], fallback_title: str) -> Node:
         node_id = new_node_id()
-        url = str(raw.get("url") or raw.get("jworg_url") or "")
+        url = playlist_item_media_url(raw)
         if raw.get("data") and not url:
             url = self._profile_media_store.save_embedded(
                 raw["data"],
                 str(raw.get("filename") or "media"),
                 identifier=node_id,
             )
-        media_type = str(raw.get("type") or "").lower()
-        if media_type not in ("image", "audio", "video"):
-            media_type = meeting_media_type_from_path(url)
-        title = clean_media_title(str(raw.get("title") or fallback_title or Path(url).stem))
-        ref = {
-            "multimedia_id": self._to_int(raw.get("multimedia_id")),
-            "mime_type": str(raw.get("mime_type") or mime_for_meeting_media(url, media_type)),
-            "file_path": url,
-            "label": title,
-            "caption": "",
-            "begin_ordinal": 0,
-            "key_symbol": raw.get("key_symbol") or raw.get("pub") or "",
-            "track": self._to_int(raw.get("track")),
-            "issue_tag": self._to_int(raw.get("issue_tag") or raw.get("issue")),
-            "meps_doc_id": self._to_int(raw.get("doc_id") or raw.get("meps_doc_id")),
-            "section": "",
-            "is_song": False,
-            "cbs_article_title": "",
-        }
-        return {
-            "id": node_id,
-            "type": "media",
-            "title": title or _tr("_MediaRow", "Media"),
-            "media_type": media_type,
-            "media_ref": ref,
-            "children": [],
-            "meeting_generated": False,
-            "auto_title": bool(raw.get("auto_title", False)),
-        }
+        return create_playlist_media_node(
+            raw,
+            fallback_title,
+            node_id=node_id,
+            url=url,
+            media_fallback_title=_tr("_MediaRow", "Media"),
+        )
 
     def _warn_import_failed(self, name: str, error: str) -> None:
         parent = self.parent()
@@ -1412,7 +1383,7 @@ class MeetingTreeController(QObject):
         resolved = self._resolved_urls.get(item_id) or node.get("resolved_url", "")
         if resolved:
             ref["file_path"] = resolved
-        self.projectRequested.emit(_meeting_media_from_ref(ref))
+        self.projectRequested.emit(meeting_media_from_ref(ref))
 
     @Slot(str)
     def removeItem(self, item_id: str):
@@ -1966,7 +1937,7 @@ class MeetingTreeController(QObject):
         if ref.get("key_symbol") or ref.get("meps_doc_id"):
             request_id = f"meetingtree:{item_id}:{uuid.uuid4().hex}"
             self._resolve_to_node_id[request_id] = item_id
-            self._svc.resolve_video_async(request_id, _meeting_media_from_ref(ref))
+            self._svc.resolve_video_async(request_id, meeting_media_from_ref(ref))
 
     def _queue_info(
         self,
@@ -2133,9 +2104,3 @@ class MeetingTreeController(QObject):
         }
         self.sectionCountsChanged.emit(counts)
         self.chromeChanged.emit()
-
-    def _to_int(self, value: Any) -> int:
-        try:
-            return int(value or 0)
-        except (TypeError, ValueError):
-            return 0
