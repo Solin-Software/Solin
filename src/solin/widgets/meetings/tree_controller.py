@@ -65,7 +65,7 @@ from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import _HuePickerDialog, _NameDialog
 from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
-from ..playlist.edit_visuals import _format_duration
+from solin.ui.qml.playlist.visuals import format_duration
 
 if TYPE_CHECKING:
     from ...core.jw.publication_reader import JwpubImportThreadFactory
@@ -1975,7 +1975,7 @@ class MeetingTreeController(QObject):
 
     def _duration_for(self, node: Node) -> str:
         ticks = self._duration_ticks(node)
-        return _format_duration(ticks)
+        return format_duration(ticks)
 
     def _duration_ticks(self, node: Node | None) -> int:
         if not node:

@@ -5,7 +5,7 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtQuick import QQuickImageProvider
 from PySide6.QtSvg import QSvgRenderer
 
-from ...styles.icons import (
+from solin.styles.icons import (
     ICON_ARROW_LEFT,
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_UP,
@@ -34,7 +34,7 @@ _SUBSECTION_BG     = "#0f1318"
 _SUBSECTION_BORDER = "#1a1f28"
 
 
-def _format_duration(ticks: int) -> str:
+def format_duration(ticks: int) -> str:
     if not ticks or ticks <= 0:
         return ""
     total_seconds = ticks // 10_000_000

@@ -9,22 +9,22 @@ from typing import Optional
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
 
-from ...core.media.cache import MediaCacheManager
-from ...core.media.thumbnail_store import ThumbnailStore
-from ...core.i18n.strings import (
+from solin.core.media.cache import MediaCacheManager
+from solin.core.media.thumbnail_store import ThumbnailStore
+from solin.core.i18n.strings import (
     tr_offline_download,
     tr_offline_downloading,
     tr_offline_downloading_progress,
 )
-from ...core.meetings.colors import (
+from solin.core.meetings.colors import (
     accent_from_hue,
     badge_bg_from_hue,
     card_bg_from_hue,
     card_border_from_hue,
     section_text_from_hue,
 )
-from .edit_visuals import (
-    _format_duration,
+from solin.ui.qml.playlist.visuals import (
+    format_duration,
     _media_badge,
     _UNSECTIONED_BG,
 )
@@ -382,7 +382,7 @@ class PlaylistEditModel(QAbstractListModel):
             "title": item.get("title", ""),
             "mediaType": media_type,
             "badge": _media_badge(media_type),
-            "duration": _format_duration(item.get("base_duration_ticks", 0)),
+            "duration": format_duration(item.get("base_duration_ticks", 0)),
             "thumbSource": self._thumb_source_for(item["id"]),
             "url": url,
             "cloudVisible": cloud_visible,
@@ -935,7 +935,7 @@ class PlaylistEditModel(QAbstractListModel):
             "cloud_active":  cloud_active,
             "cloud_progress": cloud_progress,
             "cloud_tooltip": cloud_tooltip,
-            "duration_text": _format_duration(item.get("base_duration_ticks", 0)),
+            "duration_text": format_duration(item.get("base_duration_ticks", 0)),
             "section_id":    sid,
             "parent_id":     "",
             "section_text":  "",

@@ -4,7 +4,7 @@ Architecture
 ────────────
 - PlaylistEditModel owns the row data.
 - PlaylistEditBridge exposes playlist actions and state to QML.
-- PlaylistThumbnailProvider / PlaylistIconProvider live in edit_visuals.py.
+- PlaylistThumbnailProvider / PlaylistIconProvider live in playlist.visuals.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
 if TYPE_CHECKING:
-    from .edit_model import PlaylistEditModel
+    from solin.ui.qml.playlist.model import PlaylistEditModel
 
 
 # ── Bridge ─────────────────────────────────────────────────────────────────────

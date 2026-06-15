@@ -20,9 +20,9 @@ from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtGui import QSurfaceFormat
 
-from .edit_bridge import PlaylistEditBridge
-from .edit_model import PlaylistEditModel
-from .edit_visuals import (
+from solin.ui.qml.playlist.bridge import PlaylistEditBridge
+from solin.ui.qml.playlist.model import PlaylistEditModel
+from solin.ui.qml.playlist.visuals import (
     PlaylistThumbnailProvider,
     PlaylistIconProvider,
 )

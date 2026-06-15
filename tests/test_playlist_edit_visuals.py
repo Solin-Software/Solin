@@ -1,10 +1,10 @@
 from solin.core.meetings.colors import _hsl_to_hex
-from solin.widgets.playlist.edit_visuals import (
+from solin.ui.qml.playlist.visuals import (
     PlaylistIconProvider,
     PlaylistThumbnailProvider,
     _ICON_MAP,
     _UNSECTIONED_BG,
-    _format_duration,
+    format_duration,
     _media_badge,
     _round_pixmap,
 )
@@ -17,9 +17,9 @@ def test_playlist_edit_visual_providers_are_available():
 
 
 def test_playlist_edit_visual_helpers_stay_stable():
-    assert _format_duration(0) == ""
-    assert _format_duration(65 * 10_000_000) == "1:05"
-    assert _format_duration(3661 * 10_000_000) == "1:01:01"
+    assert format_duration(0) == ""
+    assert format_duration(65 * 10_000_000) == "1:05"
+    assert format_duration(3661 * 10_000_000) == "1:01:01"
     assert _hsl_to_hex(0, 100, 50) == "#ff0000"
     assert _media_badge("image") == "Image"
     assert _media_badge("audio") == "Audio"

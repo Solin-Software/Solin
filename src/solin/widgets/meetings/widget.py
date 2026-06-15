@@ -69,7 +69,7 @@ from .visuals import (
     _PURPLE,
 )
 from .week_nav import WeekNavBar, _WeekPicker
-from ..playlist.edit_visuals import PlaylistIconProvider, PlaylistThumbnailProvider
+from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
