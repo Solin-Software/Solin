@@ -759,6 +759,18 @@ def test_widgets_do_not_read_files_directly():
     assert violations == []
 
 
+def test_widgets_do_not_call_raw_jwlplaylist_reader():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "core.playlists.reader" in source or "read_jwlplaylist(" in source:
+            violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

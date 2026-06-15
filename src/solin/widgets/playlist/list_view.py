@@ -23,9 +23,9 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.jwl_files import read_jwlplaylist_document
 from ...core.playlists.storage import PlaylistStoragePaths
 from ...core.playlists.items import create_playlist_item
-from ...core.playlists.reader import read_jwlplaylist
 from ...core.playlists.writer import PlaylistWriteError, write_jwlplaylist
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
@@ -415,10 +415,13 @@ class _PlaylistListView(QWidget):
         imported = 0
         for path in paths:
             try:
-                data = read_jwlplaylist(path, fallback_lang_code=fallback_lang)
-                pl_name = data.get("name", Path(path).stem)
+                document = read_jwlplaylist_document(
+                    path,
+                    fallback_lang_code=fallback_lang,
+                )
+                pl_name = document.name or Path(path).stem
                 items = []
-                for raw in data.get("items", []):
+                for raw in document.items:
                     url = raw.get("url") or raw.get("jworg_url") or ""
                     item = create_playlist_item(
                         title=raw.get("title", ""),

@@ -848,17 +848,17 @@ class MeetingTreeController(QObject):
     def _import_meeting_folder_jwlplaylist(
         self, source: dict[str, Any], list_id: str, insert_index: int
     ) -> None:
-        from ...core.playlists.reader import read_jwlplaylist
+        from ...core.playlists.jwl_files import read_jwlplaylist_document
 
         path = str(source.get("path") or "")
         try:
-            data = read_jwlplaylist(
+            document = read_jwlplaylist_document(
                 path,
                 fallback_lang_code=self._fallback_language_code,
             )
             nodes = [
                 self._node_from_playlist_item(raw, Path(path).stem)
-                for raw in data.get("items", [])
+                for raw in document.items
             ]
         except (OSError, ValueError) as exc:
             self._record_meeting_folder_failure(source, Path(path).name, str(exc))
@@ -1117,18 +1117,18 @@ class MeetingTreeController(QObject):
             thread.start()
 
     def _import_jwlplaylists(self, paths: list[str], list_id: str, insert_index: int) -> int:
-        from ...core.playlists.reader import read_jwlplaylist
+        from ...core.playlists.jwl_files import read_jwlplaylist_document
 
         total = 0
         for path in paths:
             try:
-                data = read_jwlplaylist(
+                document = read_jwlplaylist_document(
                     path,
                     fallback_lang_code=self._fallback_language_code,
                 )
                 nodes = [
                     self._node_from_playlist_item(raw, Path(path).stem)
-                    for raw in data.get("items", [])
+                    for raw in document.items
                 ]
             except (OSError, ValueError) as exc:
                 self._warn_import_failed(Path(path).name, str(exc))

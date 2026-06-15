@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.jwl_files import read_jwlplaylist_document
 from ...core.playlists.items import create_playlist_item
-from ...core.playlists.reader import read_jwlplaylist
 from ...core.rendering.libreoffice import LoConvertThread, cached_pages as lo_cached_pages
 from ...core.rendering.pdf import PdfConvertThread, cached_pages as pdf_cached_pages
 
@@ -279,9 +279,12 @@ class _PlaylistEditImportMixin:
         total_added = 0
         for jwl_path in jwl_paths:
             try:
-                data = read_jwlplaylist(jwl_path, fallback_lang_code=fallback_lang)
+                document = read_jwlplaylist_document(
+                    jwl_path,
+                    fallback_lang_code=fallback_lang,
+                )
                 new_items = []
-                for raw in data.get("items", []):
+                for raw in document.items:
                     url = raw.get("url") or raw.get("jworg_url") or ""
                     item = create_playlist_item(
                         title=raw.get("title", ""),
