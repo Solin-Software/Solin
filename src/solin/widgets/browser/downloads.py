@@ -9,7 +9,10 @@ from ...core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from ...core.media.formats import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 
 
-class _BrowserDownloadsMixin:
+__all__ = ("BrowserDownloadsMixin",)
+
+
+class BrowserDownloadsMixin:
     @Slot(str)
     def _on_download_requested(self, url: str):
         """Route native WebView downloads to presentation actions."""

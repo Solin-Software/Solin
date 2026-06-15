@@ -8,12 +8,12 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from native_webview_widget import NativeWebView, NativeWebViewError
 
-from .aspect_frame import _AspectRatioViewFrame
+from .aspect_frame import AspectRatioViewFrame
 from .native_adapters import (
     BrowserBridge,
-    _HistoryAdapter,
-    _NativePageAdapter,
-    _UrlValue,
+    HistoryAdapter,
+    NativePageAdapter,
+    UrlValue,
 )
 from .url_utils import normalize_browser_input
 
@@ -43,8 +43,8 @@ class ProjectableWebView(NativeWebView):
             session_data_root=session_data_root,
         )
         self.bridge = BrowserBridge(self)
-        self._history = _HistoryAdapter(self)
-        self._page = _NativePageAdapter(self)
+        self._history = HistoryAdapter(self)
+        self._page = NativePageAdapter(self)
         self._current_url = "about:blank"
         self._current_title = ""
         self._projection_active = False
@@ -74,13 +74,13 @@ class ProjectableWebView(NativeWebView):
     def _on_navigation_started(self, url: str) -> None:
         if url:
             self._current_url = url
-            self.urlChanged.emit(_UrlValue(url))
+            self.urlChanged.emit(UrlValue(url))
         self.loadProgress.emit(10)
 
     def _on_navigation_finished(self, url: str) -> None:
         if url:
             self._current_url = url
-            self.urlChanged.emit(_UrlValue(url))
+            self.urlChanged.emit(UrlValue(url))
         self.loadProgress.emit(100)
         self.loadFinished.emit(True)
         self._push_overlay_labels()
@@ -161,14 +161,14 @@ class ProjectableWebView(NativeWebView):
     def stop(self) -> None:
         pass
 
-    def history(self) -> _HistoryAdapter:
+    def history(self) -> HistoryAdapter:
         return self._history
 
-    def page(self) -> _NativePageAdapter:
+    def page(self) -> NativePageAdapter:
         return self._page
 
-    def url(self) -> _UrlValue:
-        return _UrlValue(self._current_url)
+    def url(self) -> UrlValue:
+        return UrlValue(self._current_url)
 
     def title(self) -> str:
         return self._current_title
@@ -216,7 +216,7 @@ class BrowserTab(QWidget):
         self.lang = lang_manager
         self._deferred_url = ""
 
-        self._view_frame = _AspectRatioViewFrame(self)
+        self._view_frame = AspectRatioViewFrame(self)
         self.view = ProjectableWebView(
             session_id=session_id,
             session_data_root=session_data_root,

@@ -3,7 +3,10 @@ from __future__ import annotations
 from PySide6.QtWidgets import QWidget
 
 
-class _AspectRatioViewFrame(QWidget):
+__all__ = ("AspectRatioViewFrame",)
+
+
+class AspectRatioViewFrame(QWidget):
     """Container that optionally forces the native webview to stay in 16:9."""
 
     _RATIO_W = 16

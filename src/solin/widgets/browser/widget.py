@@ -12,12 +12,12 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
-from .crop_overlay import _CropOverlay
-from .downloads import _BrowserDownloadsMixin
-from .navigation import _BrowserNavigationMixin
+from .crop_overlay import CropOverlay
+from .downloads import BrowserDownloadsMixin
+from .navigation import BrowserNavigationMixin
 from .scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
 from .tab import BrowserTab
-from .ui import _BrowserUiMixin
+from .ui import BrowserUiMixin
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 #     3. Ao clicar, enviar o URL direto ao bridge Python → QMediaPlayer.
 #
 import json as _json
-from ...styles.icons import JS_SVG_IMAGE as _JS_SVG_IMAGE, JS_SVG_VIDEO as _JS_SVG_VIDEO
+from ...styles.icons import JS_SVG_IMAGE, JS_SVG_VIDEO
 
 
 def _build_overlay_js(body: str) -> str:
@@ -64,8 +64,8 @@ def _build_overlay_js(body: str) -> str:
         r"// ── Ícones SVG.*?\.join\(''\);",
         (
             f"// ── Ícones SVG (fonte: solin/styles/icons.py) ──────────────────────────\n"
-            f"    var SVG_IMAGE = {_json.dumps(_JS_SVG_IMAGE)};\n"
-            f"    var SVG_VIDEO = {_json.dumps(_JS_SVG_VIDEO)};"
+            f"    var SVG_IMAGE = {_json.dumps(JS_SVG_IMAGE)};\n"
+            f"    var SVG_VIDEO = {_json.dumps(JS_SVG_VIDEO)};"
         ),
         body,
         flags=re.DOTALL,
@@ -687,7 +687,7 @@ OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 #
 #  tab_row (QFrame, fundo #161b22):
 #    QHBoxLayout:
-#      [_TabBar — setExpanding(False), scroll buttons]
+#      [BrowserTabBar — setExpanding(False), scroll buttons]
 #      [QPushButton "+"]
 #      [stretch — preenche o espaço restante com a cor de fundo]
 #
@@ -695,9 +695,9 @@ OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 #  loading_bar
 
 class BrowserWidget(
-    _BrowserUiMixin,
-    _BrowserNavigationMixin,
-    _BrowserDownloadsMixin,
+    BrowserUiMixin,
+    BrowserNavigationMixin,
+    BrowserDownloadsMixin,
     QWidget,
 ):
     project_image_signal       = Signal(bytes)
@@ -1232,7 +1232,7 @@ class BrowserWidget(
     #   • 4 painéis escuros ao redor da seleção (efeito "buraco")
     #   • Borda tracejada animada na seleção
     #   • Cancelamento via ESC / clique sem arrastar / blur da aba
-    # Legacy JS crop overlay removed: crop selection is handled by _CropOverlay
+    # Legacy JS crop overlay removed: crop selection is handled by CropOverlay
     # and capture is performed by NativeWebView.capture_region().
     _CROP_JS = ""
 
@@ -1265,7 +1265,7 @@ class BrowserWidget(
         self._update_crop_btn_visual(True)
 
         # Cria overlay Qt sobre o view — funciona com HTML, PDF ou qualquer conteúdo
-        overlay = _CropOverlay(tab.view, toggle_btn=self.crop_btn)
+        overlay = CropOverlay(tab.view, toggle_btn=self.crop_btn)
         overlay.crop_confirmed.connect(self._on_crop_selected)
         overlay.crop_cancelled.connect(self._on_crop_cancelled)
         overlay.crop_confirmed.connect(lambda *_: overlay.deleteLater())

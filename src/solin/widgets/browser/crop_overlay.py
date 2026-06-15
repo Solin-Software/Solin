@@ -5,7 +5,10 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
 
-class _CropOverlay(QWidget):
+__all__ = ("CropOverlay",)
+
+
+class CropOverlay(QWidget):
     """
     Transparent native overlay shown above the webview while selecting a crop.
     Emits crop_confirmed(x, y, w, h) in physical pixels, or crop_cancelled().

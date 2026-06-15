@@ -8,7 +8,10 @@ from .tab import BrowserTab
 from .url_utils import normalize_browser_input
 
 
-class _BrowserNavigationMixin:
+__all__ = ("BrowserNavigationMixin",)
+
+
+class BrowserNavigationMixin:
     def _new_tab(self, url: str = "", page=None, focus: bool = True) -> "BrowserTab":
         if isinstance(page, str) and not url:
             url = page

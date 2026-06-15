@@ -15,10 +15,13 @@ from PySide6.QtWidgets import (
 )
 
 from ...styles.icons import ICON_CAST, ICON_CROP, make_icon
-from .tab_bar import _TabBar
+from .tab_bar import BrowserTabBar
 
 
-class _BrowserUiMixin:
+__all__ = ("BrowserUiMixin",)
+
+
+class BrowserUiMixin:
     @staticmethod
     def _std_icon(sp) -> QIcon:
         return QApplication.style().standardIcon(sp)
@@ -183,7 +186,7 @@ class _BrowserUiMixin:
         tab_lay.setContentsMargins(0, 0, gap, 0)
         tab_lay.setSpacing(0)
 
-        self._tab_bar = _TabBar()
+        self._tab_bar = BrowserTabBar()
         self._tab_bar.setFixedHeight(row_h)
         self._tab_bar.setSizePolicy(
             QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed

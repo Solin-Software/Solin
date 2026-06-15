@@ -6,7 +6,7 @@ import threading
 import solin.widgets.browser.widget as browser_widget
 from solin.core.media.browser_downloads import BrowserDownloadService
 from solin.core.network.http import HttpError
-from solin.widgets.browser.downloads import _BrowserDownloadsMixin
+from solin.widgets.browser.downloads import BrowserDownloadsMixin
 
 
 class _ByteStream:
@@ -25,11 +25,11 @@ class _ByteStream:
 
 
 def test_browser_widget_uses_downloads_mixin():
-    assert browser_widget._BrowserDownloadsMixin is _BrowserDownloadsMixin
-    assert issubclass(browser_widget.BrowserWidget, _BrowserDownloadsMixin)
+    assert browser_widget.BrowserDownloadsMixin is BrowserDownloadsMixin
+    assert issubclass(browser_widget.BrowserWidget, BrowserDownloadsMixin)
     assert (
         browser_widget.BrowserWidget._on_download_requested
-        is _BrowserDownloadsMixin._on_download_requested
+        is BrowserDownloadsMixin._on_download_requested
     )
 
 

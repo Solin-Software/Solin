@@ -4,7 +4,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTabBar, QToolButton
 
 
-class _TabBar(QTabBar):
+__all__ = ("BrowserTabBar",)
+
+
+class BrowserTabBar(QTabBar):
     """QTabBar that scrolls the tab row with the mouse wheel without switching tabs."""
 
     def __init__(self, parent=None):

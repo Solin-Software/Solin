@@ -1,14 +1,14 @@
 import solin.widgets.browser.widget as browser_widget
-from solin.widgets.browser.navigation import _BrowserNavigationMixin
+from solin.widgets.browser.navigation import BrowserNavigationMixin
 
 
 def test_browser_widget_uses_navigation_mixin():
-    assert browser_widget._BrowserNavigationMixin is _BrowserNavigationMixin
-    assert issubclass(browser_widget.BrowserWidget, _BrowserNavigationMixin)
-    assert browser_widget.BrowserWidget._new_tab is _BrowserNavigationMixin._new_tab
+    assert browser_widget.BrowserNavigationMixin is BrowserNavigationMixin
+    assert issubclass(browser_widget.BrowserWidget, BrowserNavigationMixin)
+    assert browser_widget.BrowserWidget._new_tab is BrowserNavigationMixin._new_tab
     assert (
         browser_widget.BrowserWidget._url_from_mime_data
-        is _BrowserNavigationMixin._url_from_mime_data
+        is BrowserNavigationMixin._url_from_mime_data
     )
 
 

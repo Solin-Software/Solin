@@ -3,6 +3,14 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal, Slot
 
 
+__all__ = (
+    "BrowserBridge",
+    "HistoryAdapter",
+    "NativePageAdapter",
+    "UrlValue",
+)
+
+
 class BrowserBridge(QObject):
     project_image_signal = Signal(str)
     project_video_signal = Signal(str)
@@ -36,7 +44,7 @@ class BrowserBridge(QObject):
         self.add_to_playlist_signal.emit(url, title, media_type)
 
 
-class _UrlValue:
+class UrlValue:
     """Small compatibility wrapper for the old QUrl.toString() call sites."""
 
     def __init__(self, value: str = ""):
@@ -46,7 +54,7 @@ class _UrlValue:
         return self._value
 
 
-class _HistoryAdapter:
+class HistoryAdapter:
     def __init__(self, view):
         self._view = view
 
@@ -57,7 +65,7 @@ class _HistoryAdapter:
         return self._view.can_go_forward()
 
 
-class _NativePageAdapter:
+class NativePageAdapter:
     def __init__(self, view):
         self._view = view
 
