@@ -5,14 +5,14 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import JWPUB_EXTS, PDF_EXTS, PLAYLIST_EXTS
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
-from ..core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -23,6 +23,9 @@ from ..core.playlists.items import (
     playlist_items_from_jwpub,
 )
 
+if TYPE_CHECKING:
+    from ..core.jw.publication_reader import JwpubImportThreadFactory
+
 
 @dataclass(frozen=True, slots=True)
 class PlaylistImportContext:
@@ -30,8 +33,8 @@ class PlaylistImportContext:
 
     dialog_parent: Any
     runtime_paths: RuntimePaths
-    profile_paths: ProfilePaths
     profile_media_store: Any
+    jwpub_import_thread_factory: JwpubImportThreadFactory
     language_manager: Any
     notifications: Any
     playlist_widget: Any
@@ -303,17 +306,14 @@ class PlaylistImportController:
         thread.start()
 
     def add_jwpub_file_to_playlist_target(self, jwpub_path: str, target) -> None:
-        from ..core.jw.publication_reader import JwpubImportThread
-
         context = self._context
         stem = Path(jwpub_path).stem
         context.notifications.information(
             context.translate("Opening {name}...").replace("{name}", stem)
         )
-        thread = JwpubImportThread.create(
+        thread = context.jwpub_import_thread_factory.create(
             jwpub_path,
             lang=self._media_language_context().api_code,
-            dest_images_dir=os.fspath(context.profile_paths.images_dir),
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)

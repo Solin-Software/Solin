@@ -6,13 +6,6 @@ from solin.controllers.playlist_import_controller import (
     PlaylistImportHandlers,
 )
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
-from solin.core.foundation.runtime_paths import ProfilePaths
-
-_PROFILE_PATHS = ProfilePaths.from_roots(
-    data_dir="data",
-    cache_dir="cache",
-    profile_id="test",
-)
 
 
 class _PlaylistWidgetStub:
@@ -89,6 +82,38 @@ class _ProfileMediaStoreStub:
         return f"embedded/{identifier}{default_suffix}"
 
 
+class _SignalStub:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+        return callback
+
+
+class _ThreadStub:
+    def __init__(self):
+        self.items_ready = _SignalStub()
+        self.failed = _SignalStub()
+        self.finished = _SignalStub()
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+
+class _JwpubImportThreadFactoryStub:
+    def __init__(self):
+        self.calls = []
+        self.threads = []
+
+    def create(self, path, **kwargs):
+        thread = _ThreadStub()
+        self.calls.append((path, kwargs))
+        self.threads.append(thread)
+        return thread
+
+
 def _target(create_new=False):
     return SimpleNamespace(
         create_new=create_new,
@@ -97,13 +122,20 @@ def _target(create_new=False):
     )
 
 
-def _controller(window, profile_media_store=None):
+def _controller(
+    window,
+    profile_media_store=None,
+    jwpub_import_thread_factory=None,
+):
     return PlaylistImportController(
         PlaylistImportContext(
             dialog_parent=window,
             runtime_paths=SimpleNamespace(pdf_pages_dir="cache/pdf"),
-            profile_paths=_PROFILE_PATHS,
             profile_media_store=profile_media_store or _ProfileMediaStoreStub(),
+            jwpub_import_thread_factory=(
+                jwpub_import_thread_factory
+                or _JwpubImportThreadFactoryStub()
+            ),
             language_manager=window.lang,
             notifications=window.notifications,
             playlist_widget=window.playlist_widget,
@@ -249,6 +281,34 @@ def test_send_to_temp_playlist_switches_to_playlist_page():
 
     assert window._navigation.pages == [7]
     assert window.playlist_widget.temp_opened == (items, window.lang)
+
+
+def test_jwpub_import_uses_injected_worker_factory(monkeypatch):
+    window = _WindowStub()
+    factory = _JwpubImportThreadFactoryStub()
+    controller = _controller(
+        window,
+        jwpub_import_thread_factory=factory,
+    )
+    monkeypatch.setattr(
+        controller,
+        "_media_language_context",
+        lambda: SimpleNamespace(api_code="T"),
+    )
+
+    controller.add_jwpub_file_to_playlist_target(
+        "publication.jwpub",
+        _target(),
+    )
+
+    assert factory.calls == [
+        (
+            "publication.jwpub",
+            {"lang": "T", "parent": window},
+        )
+    ]
+    assert factory.threads[0].started is True
+    assert controller._context.thread_registry.active_count == 1
 
 
 def test_playlist_import_controller_uses_explicit_dependencies():

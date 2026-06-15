@@ -9,14 +9,7 @@ from solin.controllers.open_media_controller import (
     OpenMediaHandlers,
 )
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
-from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.media.formats import mime_to_ext
-
-_PROFILE_PATHS = ProfilePaths.from_roots(
-    data_dir="data",
-    cache_dir="cache",
-    profile_id="test",
-)
 
 
 class _NavigationStub:
@@ -70,6 +63,38 @@ class _NotificationsStub:
         self.successes.append(message)
 
 
+class _SignalStub:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+        return callback
+
+
+class _ThreadStub:
+    def __init__(self):
+        self.items_ready = _SignalStub()
+        self.failed = _SignalStub()
+        self.finished = _SignalStub()
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+
+class _JwpubImportThreadFactoryStub:
+    def __init__(self):
+        self.calls = []
+        self.threads = []
+
+    def create(self, path, **kwargs):
+        thread = _ThreadStub()
+        self.calls.append((path, kwargs))
+        self.threads.append(thread)
+        return thread
+
+
 class _WindowStub:
     def __init__(self):
         self._jwl_tmp_files = set()
@@ -97,7 +122,7 @@ class _WindowStub:
         self.projected = (playlist, index, keep_expanded, playback_order)
 
 
-def _controller(window):
+def _controller(window, jwpub_import_thread_factory=None):
     return OpenMediaController(
         OpenMediaContext(
             dialog_parent=window,
@@ -106,7 +131,10 @@ def _controller(window):
                 pptx_pages_dir="cache/pptx",
                 docx_pages_dir="cache/docx",
             ),
-            profile_paths=_PROFILE_PATHS,
+            jwpub_import_thread_factory=(
+                jwpub_import_thread_factory
+                or _JwpubImportThreadFactoryStub()
+            ),
             language_manager=window.lang,
             notifications=window.notifications,
             thread_registry=OwnedQThreadRegistry(),
@@ -288,6 +316,35 @@ def test_on_pdf_ready_builds_temp_playlist_and_switches_page():
     assert [(item["title"], item["url"], item["type"]) for item in items] == [
         ("document — p. 1", "/tmp/page-1.png", "image"),
         ("document — p. 2", "/tmp/page-2.png", "image"),
+    ]
+
+
+def test_open_jwpub_uses_injected_worker_factory(monkeypatch):
+    window = _WindowStub()
+    factory = _JwpubImportThreadFactoryStub()
+    controller = _controller(
+        window,
+        jwpub_import_thread_factory=factory,
+    )
+    monkeypatch.setattr(
+        controller,
+        "_media_language_context",
+        lambda: SimpleNamespace(api_code="T"),
+    )
+
+    controller.open_jwpub_as_temp("publication.jwpub")
+
+    assert factory.calls == [
+        (
+            "publication.jwpub",
+            {"lang": "T", "parent": window},
+        )
+    ]
+    assert factory.threads[0].started is True
+    assert controller._context.thread_registry.active_count == 1
+    assert window._navigation.pages == [7]
+    assert window.playlist_widget.opened_named_playlists == [
+        ([], "📖  publication")
     ]
 
 

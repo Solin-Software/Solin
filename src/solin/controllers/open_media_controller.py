@@ -6,7 +6,7 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
 from PySide6.QtCore import QTimer
@@ -20,7 +20,7 @@ from ..core.foundation.constants import (
     PPTX_EXTS,
 )
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
-from ..core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from ..core.foundation.runtime_paths import RuntimePaths
 from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -33,6 +33,9 @@ from ..core.media.formats import (
 )
 from ..core.playlists.items import create_playlist_item, playlist_items_from_jwpub
 
+if TYPE_CHECKING:
+    from ..core.jw.publication_reader import JwpubImportThreadFactory
+
 
 @dataclass(frozen=True, slots=True)
 class OpenMediaContext:
@@ -40,7 +43,7 @@ class OpenMediaContext:
 
     dialog_parent: Any
     runtime_paths: RuntimePaths
-    profile_paths: ProfilePaths
+    jwpub_import_thread_factory: JwpubImportThreadFactory
     language_manager: Any
     notifications: Any
     thread_registry: OwnedQThreadRegistry
@@ -188,16 +191,13 @@ class OpenMediaController:
         self._handlers.open_pdf_temp_playlist(items, pdf_stem)
 
     def open_jwpub_as_temp(self, jwpub_path: str) -> None:
-        from ..core.jw.publication_reader import JwpubImportThread
-
         context = self._context
         stem = Path(jwpub_path).stem
         self._handlers.switch_to_playlist()
         playlist_id = self._handlers.open_named_temp_playlist([], f"📖  {stem}")
-        thread = JwpubImportThread.create(
+        thread = context.jwpub_import_thread_factory.create(
             jwpub_path,
             lang=self._media_language_context().api_code,
-            dest_images_dir=os.fspath(context.profile_paths.images_dir),
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)

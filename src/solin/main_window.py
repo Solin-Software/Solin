@@ -506,8 +506,8 @@ class MainWindow(QMainWindow):
             PlaylistImportContext(
                 dialog_parent=self,
                 runtime_paths=self.runtime_paths,
-                profile_paths=self.profile_paths,
                 profile_media_store=profile_media_store,
+                jwpub_import_thread_factory=jwpub_import_thread_factory,
                 language_manager=self.lang,
                 notifications=self.notifications,
                 playlist_widget=self.playlist_widget,
@@ -541,7 +541,7 @@ class MainWindow(QMainWindow):
             OpenMediaContext(
                 dialog_parent=self,
                 runtime_paths=self.runtime_paths,
-                profile_paths=self.profile_paths,
+                jwpub_import_thread_factory=jwpub_import_thread_factory,
                 language_manager=self.lang,
                 notifications=self.notifications,
                 thread_registry=self._conversion_threads,

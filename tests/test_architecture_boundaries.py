@@ -251,20 +251,24 @@ def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
     )
 
 
-def test_widgets_do_not_construct_jwpub_import_threads_directly():
-    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+def test_ui_workflows_do_not_construct_jwpub_import_threads_directly():
+    workflow_roots = (
+        PROJECT_ROOT / "src" / "solin" / "controllers",
+        PROJECT_ROOT / "src" / "solin" / "widgets",
+    )
     violations: list[str] = []
 
-    for path in sorted(widget_root.rglob("*.py")):
-        for node in _imports(path):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            imported = {alias.name for alias in node.names}
-            if "JwpubImportThread" in imported:
-                violations.append(_display(path, node))
+    for workflow_root in workflow_roots:
+        for path in sorted(workflow_root.rglob("*.py")):
+            for node in _imports(path):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                imported = {alias.name for alias in node.names}
+                if "JwpubImportThread" in imported:
+                    violations.append(_display(path, node))
 
     assert violations == [], (
-        "Widgets must receive JWPUB import worker factories from composition "
+        "UI workflows must receive JWPUB import worker factories from composition "
         "instead of constructing concrete threads:\n" + "\n".join(violations)
     )
 
