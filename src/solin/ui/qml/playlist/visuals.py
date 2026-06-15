@@ -28,13 +28,11 @@ from solin.styles.icons import (
     ICON_VIDEO,
 )
 
-_PLACEHOLDER_COLOR = "#0a0e14"
-_UNSECTIONED_BG    = "transparent"
-_SUBSECTION_BG     = "#0f1318"
-_SUBSECTION_BORDER = "#1a1f28"
+PLAYLIST_PLACEHOLDER_COLOR = "#0a0e14"
+UNSECTIONED_CARD_BACKGROUND = "transparent"
 
 
-def _media_badge(media_type: str) -> str:
+def playlist_media_badge(media_type: str) -> str:
     if media_type == "image":
         return QCoreApplication.translate("PlaylistPanel", "Image")
     if media_type == "audio":
@@ -44,14 +42,14 @@ def _media_badge(media_type: str) -> str:
 
 # ── Thumbnail provider ────────────────────────────────────────────────────────
 
-_THUMB_W, _THUMB_H = 208, 120
+PLAYLIST_THUMBNAIL_WIDTH, PLAYLIST_THUMBNAIL_HEIGHT = 208, 120
 
 
-def _round_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:
+def round_playlist_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:
     """Return a copy with rounded corners."""
     if pixmap is None or pixmap.isNull() or pixmap.width() <= 0 or pixmap.height() <= 0:
-        fallback = QPixmap(_THUMB_W, _THUMB_H)
-        fallback.fill(QColor(_PLACEHOLDER_COLOR))
+        fallback = QPixmap(PLAYLIST_THUMBNAIL_WIDTH, PLAYLIST_THUMBNAIL_HEIGHT)
+        fallback.fill(QColor(PLAYLIST_PLACEHOLDER_COLOR))
         pixmap = fallback
     result = QPixmap(pixmap.size())
     result.fill(Qt.GlobalColor.transparent)
@@ -79,8 +77,16 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
 
     def requestPixmap(self, id_str: str, size, requestedSize):
         item_id = id_str.split("/")[0]
-        w = requestedSize.width() if requestedSize.width() > 0 else _THUMB_W
-        h = requestedSize.height() if requestedSize.height() > 0 else _THUMB_H
+        w = (
+            requestedSize.width()
+            if requestedSize.width() > 0
+            else PLAYLIST_THUMBNAIL_WIDTH
+        )
+        h = (
+            requestedSize.height()
+            if requestedSize.height() > 0
+            else PLAYLIST_THUMBNAIL_HEIGHT
+        )
         pixmap = self._cache.get(item_id)
         if (not pixmap or pixmap.isNull()) and self._disk_loader_cb:
             pixmap = self._disk_loader_cb(item_id)
@@ -96,16 +102,16 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
             x = max(0, (scaled.width()  - w) // 2)
             y = max(0, (scaled.height() - h) // 2)
             cropped = scaled.copy(x, y, w, h)
-            return _round_pixmap(cropped, 7)
+            return round_playlist_pixmap(cropped, 7)
         # Placeholder
         ph = QPixmap(w, h)
-        ph.fill(QColor(_PLACEHOLDER_COLOR))
-        return _round_pixmap(ph, 7)
+        ph.fill(QColor(PLAYLIST_PLACEHOLDER_COLOR))
+        return round_playlist_pixmap(ph, 7)
 
 
 # ── Icon provider ─────────────────────────────────────────────────────────────
 
-_ICON_MAP = {
+PLAYLIST_ICON_SVGS = {
     "grip":           ICON_GRIP,
     "more":           ICON_MORE_VERT,
     "play_all":       ICON_PLAY_ALL,
@@ -145,7 +151,7 @@ class PlaylistIconProvider(QQuickImageProvider):
         px_size = int(parts[1]) if len(parts) > 1 else 16
         color = f"#{parts[2]}" if len(parts) > 2 else "#8b949e"
 
-        svg_str = _ICON_MAP.get(name, ICON_GRIP)
+        svg_str = PLAYLIST_ICON_SVGS.get(name, ICON_GRIP)
         svg = svg_str.replace("currentColor", color)
         data = QByteArray(svg.encode("utf-8"))
         renderer = QSvgRenderer(data)

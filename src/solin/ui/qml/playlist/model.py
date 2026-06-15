@@ -25,8 +25,8 @@ from solin.core.meetings.colors import (
     section_text_from_hue,
 )
 from solin.ui.qml.playlist.visuals import (
-    _media_badge,
-    _UNSECTIONED_BG,
+    UNSECTIONED_CARD_BACKGROUND,
+    playlist_media_badge,
 )
 
 _MARKER_POSITION_FALLBACK = 1_000_000_000
@@ -381,7 +381,7 @@ class PlaylistEditModel(QAbstractListModel):
             "type": "media",
             "title": item.get("title", ""),
             "mediaType": media_type,
-            "badge": _media_badge(media_type),
+            "badge": playlist_media_badge(media_type),
             "duration": format_duration_ticks(item.get("base_duration_ticks", 0)),
             "thumbSource": self._thumb_source_for(item["id"]),
             "url": url,
@@ -922,7 +922,11 @@ class PlaylistEditModel(QAbstractListModel):
             "depth":         depth,
             "card_top":      False,
             "card_bottom":   False,
-            "card_bg":       card_bg_from_hue(hue) if section else _UNSECTIONED_BG,
+            "card_bg": (
+                card_bg_from_hue(hue)
+                if section
+                else UNSECTIONED_CARD_BACKGROUND
+            ),
             "card_border":   card_border_from_hue(hue) if section else "transparent",
             "gap_above":     0,
             "show_accent":   bool(section),
@@ -1194,7 +1198,7 @@ class PlaylistEditModel(QAbstractListModel):
             entry["_card_group"] = ""
             entry["show_accent"] = False
             entry["accent_color"] = ""
-            entry["card_bg"] = _UNSECTIONED_BG
+            entry["card_bg"] = UNSECTIONED_CARD_BACKGROUND
             entry["card_border"] = "transparent"
             entry["depth"] = 0
 

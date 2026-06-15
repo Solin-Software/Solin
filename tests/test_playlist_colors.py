@@ -4,7 +4,7 @@ from solin.core.meetings.colors import (
     card_bg_from_hue,
     card_border_from_hue,
     generate_section_hue,
-    _hsl_to_hex,
+    hsl_to_hex,
     section_colors,
     section_text_from_hue,
 )
@@ -29,7 +29,7 @@ def test_section_colors_returns_complete_dark_theme_palette():
 def test_section_color_helpers_share_the_same_hsl_formula():
     hue = 188
 
-    assert _hsl_to_hex(0, 100, 50) == "#ff0000"
+    assert hsl_to_hex(0, 100, 50) == "#ff0000"
     assert accent_from_hue(hue) == section_colors(hue)["accent"]
     assert section_text_from_hue(hue) == section_colors(hue)["text"]
     assert badge_bg_from_hue(hue) == section_colors(hue)["badge"]
