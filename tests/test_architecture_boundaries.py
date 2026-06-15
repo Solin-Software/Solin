@@ -331,6 +331,27 @@ def test_ui_workflows_do_not_import_document_conversion_adapters():
     )
 
 
+def test_remote_services_controller_receives_concrete_adapters_from_composition():
+    path = PROJECT_ROOT / "src" / "solin" / "controllers" / "remote_services_controller.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        for target, _ in _dependency_targets(CODEBASES[0], path, node):
+            if len(target) < 2 or target[0] != "solin":
+                continue
+            imports_widget = target[1] == "widgets"
+            imports_ui_dialog = len(target) > 2 and target[1:3] == ("ui", "dialogs")
+            imports_remote_service = len(target) > 2 and target[1:3] == ("core", "remote")
+            if imports_widget or imports_ui_dialog or imports_remote_service:
+                violations.append(_display(path, node))
+
+    assert violations == [], (
+        "RemoteServicesController must receive remote services, notification "
+        "queues, and update dialogs from composition instead of importing "
+        "concrete adapters:\n" + "\n".join(violations)
+    )
+
+
 def test_widgets_do_not_own_jw_catalog_thumbnail_download_workers():
     widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
     forbidden_names = {
@@ -756,7 +777,7 @@ def test_widgets_do_not_construct_jw_catalog_service():
 
 
 def test_update_dialog_has_no_network_persistence_or_process_adapters():
-    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "update_dialog.py"
+    path = PROJECT_ROOT / "src" / "solin" / "ui" / "dialogs" / "update.py"
     forbidden_modules = {
         "subprocess",
         "PySide6.QtNetwork",

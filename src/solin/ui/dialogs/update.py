@@ -1,5 +1,5 @@
 """
-update_dialog.py
+update.py
 ================
 Update dialogs for Solin.
 
@@ -14,6 +14,7 @@ Temp-file cleanup:
   On next launch, bootstrap delegates deletion to the same remote adapter.
   (Cannot delete while patch.exe is running on Windows.)
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,13 +22,23 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
-    Qt, QUrl, QObject,
-    QPropertyAnimation, QEasingCurve, QByteArray, QPoint,
+    Qt,
+    QUrl,
+    QObject,
+    QPropertyAnimation,
+    QEasingCurve,
+    QByteArray,
+    QPoint,
 )
 from PySide6.QtGui import QDesktopServices, QMouseEvent
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QProgressBar, QFrame,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QProgressBar,
+    QFrame,
     QGraphicsOpacityEffect,
 )
 
@@ -39,16 +50,16 @@ log = logging.getLogger(__name__)
 
 # ── Palette (mirrors theme.py without circular import) ────────────────────────
 _C = {
-    "bg0":    "#0d1117",
-    "bg1":    "#161b22",
-    "bg2":    "#21262d",
+    "bg0": "#0d1117",
+    "bg1": "#161b22",
+    "bg2": "#21262d",
     "border": "#30363d",
-    "text":   "#e6edf3",
-    "muted":  "#8b949e",
+    "text": "#e6edf3",
+    "muted": "#8b949e",
     "accent": "#388bfd",
-    "green":  "#3fb950",
+    "green": "#3fb950",
     "yellow": "#d29922",
-    "red":    "#f85149",
+    "red": "#f85149",
 }
 
 # The QDialog itself must be transparent (WA_TranslucentBackground is set).
@@ -60,24 +71,24 @@ QDialog {{
     background: transparent;
 }}
 QFrame#card {{
-    background: {_C['bg1']};
-    border: 1px solid {_C['border']};
+    background: {_C["bg1"]};
+    border: 1px solid {_C["border"]};
     border-radius: 10px;
 }}
 QLabel {{
     background: transparent;
 }}
 QLabel#title {{
-    color: {_C['text']};
+    color: {_C["text"]};
     font-size: 15px;
     font-weight: 700;
 }}
 QLabel#body {{
-    color: {_C['muted']};
+    color: {_C["muted"]};
     font-size: 12px;
 }}
 QLabel#version_badge {{
-    color: {_C['green']};
+    color: {_C["green"]};
     font-size: 11px;
     font-weight: 600;
     background: rgba(63,185,80,0.12);
@@ -86,7 +97,7 @@ QLabel#version_badge {{
     padding: 2px 8px;
 }}
 QPushButton#btn_primary {{
-    background: {_C['accent']};
+    background: {_C["accent"]};
     color: #ffffff;
     border: none;
     border-radius: 6px;
@@ -99,29 +110,30 @@ QPushButton#btn_primary:hover   {{ background: #4d9fff; }}
 QPushButton#btn_primary:pressed {{ background: #2c7de0; }}
 QPushButton#btn_secondary {{
     background: transparent;
-    color: {_C['muted']};
-    border: 1px solid {_C['border']};
+    color: {_C["muted"]};
+    border: 1px solid {_C["border"]};
     border-radius: 6px;
     padding: 8px 16px;
     font-size: 12px;
     min-width: 80px;
 }}
-QPushButton#btn_secondary:hover {{ color: {_C['text']}; border-color: {_C['muted']}; }}
+QPushButton#btn_secondary:hover {{ color: {_C["text"]}; border-color: {_C["muted"]}; }}
 QProgressBar {{
-    background: {_C['bg2']};
-    border: 1px solid {_C['border']};
+    background: {_C["bg2"]};
+    border: 1px solid {_C["border"]};
     border-radius: 4px;
     height: 8px;
     text-align: center;
     color: transparent;
 }}
 QProgressBar::chunk {{
-    background: {_C['accent']};
+    background: {_C["accent"]};
     border-radius: 3px;
 }}
 """
 
 # ── Update dialog ─────────────────────────────────────────────────────────────
+
 
 class UpdateDialog(QDialog):
     """
@@ -144,7 +156,7 @@ class UpdateDialog(QDialog):
         launch_patch: Callable[[str], None],
     ) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self._info       = info
+        self._info = info
         self._patch_downloader_factory = patch_downloader_factory
         self._save_cleanup_path = save_cleanup_path
         self._launch_patch = launch_patch
@@ -263,6 +275,7 @@ class UpdateDialog(QDialog):
 
     def _on_action(self) -> None:
         from solin.core.remote.update_policy import UpdateKind
+
         if self._info.kind == UpdateKind.SETUP:
             QDesktopServices.openUrl(QUrl(self._info.url))
             self.close()
@@ -297,6 +310,7 @@ class UpdateDialog(QDialog):
         self._save_cleanup_path(path)
 
         from PySide6.QtCore import QTimer
+
         QTimer.singleShot(800, self._launch_patch_and_quit)
 
     def _on_download_failed(self, msg: str) -> None:
@@ -324,6 +338,7 @@ class UpdateDialog(QDialog):
             return
 
         from PySide6.QtWidgets import QApplication
+
         QApplication.quit()
 
     # ── Drag to move ───────────────────────────────────────────────────────────
@@ -332,9 +347,7 @@ class UpdateDialog(QDialog):
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_active = True
             # Store the offset between the cursor and the top-left of the window
-            self._drag_start_pos = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
+            self._drag_start_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -372,6 +385,6 @@ class UpdateDialog(QDialog):
         if self.parent():
             p = self.parent()
             geo = p.geometry()
-            x = geo.x() + (geo.width()  - self.width())  // 2
+            x = geo.x() + (geo.width() - self.width()) // 2
             y = geo.y() + (geo.height() - self.height()) // 2
             self.move(x, y)

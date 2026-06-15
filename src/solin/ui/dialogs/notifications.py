@@ -1,7 +1,7 @@
 """
-notification_dialog.py
+notifications.py
 ======================
-Dialog não-modal de notificação para o Solin.
+Dialog não-modal de notificação remota para o Solin.
 
 Características:
   - Não bloqueia a janela principal (show(), não exec()).
@@ -16,17 +16,24 @@ Características:
     notificações que merecem atenção).
   - Pequena animação de fade-in para não assustar o usuário.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSizePolicy, QWidget, QGraphicsOpacityEffect, QScrollArea
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QSizePolicy,
+    QWidget,
+    QGraphicsOpacityEffect,
+    QScrollArea,
 )
-from PySide6.QtCore import (
-    Qt, QUrl, QPropertyAnimation, QEasingCurve, QTimer, QObject, QByteArray
-)
+from PySide6.QtCore import Qt, QUrl, QPropertyAnimation, QEasingCurve, QTimer, QObject, QByteArray
 from PySide6.QtGui import QDesktopServices, QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
@@ -36,18 +43,18 @@ if TYPE_CHECKING:
 
 # ── Paleta interna (espelha theme.py sem import circular) ──────────────────────
 _C = {
-    "bg0":      "#0d1117",
-    "bg1":      "#161b22",
-    "bg2":      "#21262d",
-    "bg3":      "#2d333b",
-    "border":   "#30363d",
-    "text":     "#e6edf3",
-    "muted":    "#8b949e",
-    "accent":   "#388bfd",
-    "info":     "#388bfd",
-    "warning":  "#d29922",
-    "error":    "#f85149",
-    "success":  "#3fb950",
+    "bg0": "#0d1117",
+    "bg1": "#161b22",
+    "bg2": "#21262d",
+    "bg3": "#2d333b",
+    "border": "#30363d",
+    "text": "#e6edf3",
+    "muted": "#8b949e",
+    "accent": "#388bfd",
+    "info": "#388bfd",
+    "warning": "#d29922",
+    "error": "#f85149",
+    "success": "#3fb950",
 }
 
 # Ícone SVG inline para cada tipo de notificação
@@ -83,9 +90,9 @@ _ICONS: dict[str, str] = {
 }
 
 _ACCENT_COLOR: dict[str, str] = {
-    "info":    _C["info"],
+    "info": _C["info"],
     "warning": _C["warning"],
-    "error":   _C["error"],
+    "error": _C["error"],
 }
 
 
@@ -114,31 +121,31 @@ def _make_stylesheet(accent: str) -> str:
     accent_hover = _darken(accent, 0.78)
     return f"""
         QDialog {{
-            background-color: {_C['bg1']};
-            border: 1px solid {_C['border']};
+            background-color: {_C["bg1"]};
+            border: 1px solid {_C["border"]};
             border-radius: 10px;
         }}
         QLabel {{
             background-color: transparent;
         }}
         QLabel#title {{
-            color: {_C['text']};
+            color: {_C["text"]};
             font-size: 14px;
             font-weight: 600;
             background-color: transparent;
         }}
         QLabel#detail {{
-            color: {_C['muted']};
+            color: {_C["muted"]};
             font-size: 12px;
             background-color: transparent;
         }}
         QFrame#separator {{
-            background-color: {_C['border']};
+            background-color: {_C["border"]};
         }}
         QPushButton {{
-            background-color: {_C['bg2']};
-            color: {_C['text']};
-            border: 1px solid {_C['border']};
+            background-color: {_C["bg2"]};
+            color: {_C["text"]};
+            border: 1px solid {_C["border"]};
             border-radius: 6px;
             padding: 6px 18px;
             font-size: 12px;
@@ -146,8 +153,8 @@ def _make_stylesheet(accent: str) -> str:
             min-width: 72px;
         }}
         QPushButton:hover {{
-            background-color: {_C['bg3']};
-            border-color: {_C['muted']};
+            background-color: {_C["bg3"]};
+            border-color: {_C["muted"]};
         }}
         QPushButton#action_btn {{
             background-color: {accent};
@@ -165,18 +172,18 @@ def _make_stylesheet(accent: str) -> str:
             background-color: transparent;
         }}
         QScrollBar:vertical {{
-            background: {_C['bg2']};
+            background: {_C["bg2"]};
             width: 6px;
             border-radius: 3px;
             margin: 0px;
         }}
         QScrollBar::handle:vertical {{
-            background: {_C['bg3']};
+            background: {_C["bg3"]};
             border-radius: 3px;
             min-height: 24px;
         }}
         QScrollBar::handle:vertical:hover {{
-            background: {_C['muted']};
+            background: {_C["muted"]};
         }}
         QScrollBar::add-line:vertical,
         QScrollBar::sub-line:vertical {{
@@ -188,7 +195,7 @@ def _make_stylesheet(accent: str) -> str:
 class NotificationDialog(QDialog):
     """
     Dialog não-modal para uma única notificação.
-    A fila de múltiplas notificações é gerenciada pelo NotificationQueue.
+    A fila de múltiplas notificações é gerenciada pelo RemoteNotificationQueue.
     """
 
     def __init__(
@@ -256,13 +263,9 @@ class NotificationDialog(QDialog):
             detail_label = QLabel(n.detail)
             detail_label.setObjectName("detail")
             detail_label.setWordWrap(True)
-            detail_label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
+            detail_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             # Garante que o label respeite a largura do scroll
-            detail_label.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
+            detail_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             scroll_layout.addWidget(detail_label)
 
         scroll_layout.addStretch()
@@ -294,18 +297,13 @@ class NotificationDialog(QDialog):
 
         if n.action_url:
             # Com URL: botão de ação (Sim / label) + botão de fechar (Não)
-            action_label = (
-                n.action_label
-                or self.tr("Open Link")
-            )
+            action_label = n.action_label or self.tr("Open Link")
             action_btn = QPushButton(action_label)
             action_btn.setObjectName("action_btn")
             action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             action_btn.clicked.connect(lambda: self._open_url(n.action_url))
 
-            close_btn = QPushButton(
-                self.tr("No, thanks")
-            )
+            close_btn = QPushButton(self.tr("No, thanks"))
             close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             close_btn.clicked.connect(self.close)
 
@@ -313,9 +311,7 @@ class NotificationDialog(QDialog):
             btn_row.addWidget(action_btn)
         else:
             # Sem URL: apenas OK
-            ok_btn = QPushButton(
-                self.tr("OK")
-            )
+            ok_btn = QPushButton(self.tr("OK"))
             ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             ok_btn.clicked.connect(self.close)
             btn_row.addWidget(ok_btn)
@@ -356,29 +352,31 @@ class NotificationDialog(QDialog):
         parent = self.parent()
         if parent and hasattr(parent, "frameGeometry"):
             pg = parent.frameGeometry()
-            cx = pg.left() + (pg.width()  - self.width())  // 2
-            cy = pg.top()  + (pg.height() - self.height()) // 2
+            cx = pg.left() + (pg.width() - self.width()) // 2
+            cy = pg.top() + (pg.height() - self.height()) // 2
             self.move(cx, cy)
         else:
             from PySide6.QtGui import QGuiApplication
+
             screen = QGuiApplication.primaryScreen()
             if screen:
                 sg = screen.availableGeometry()
                 self.move(
-                    sg.left() + (sg.width()  - self.width())  // 2,
-                    sg.top()  + (sg.height() - self.height()) // 2,
+                    sg.left() + (sg.width() - self.width()) // 2,
+                    sg.top() + (sg.height() - self.height()) // 2,
                 )
 
 
 # ── Gerenciador de fila ────────────────────────────────────────────────────────
 
-class NotificationQueue(QObject):
+
+class RemoteNotificationQueue(QObject):
     """
     Gerencia a exibição sequencial de múltiplas notificações.
     Quando uma dialog é fechada, exibe a próxima da fila.
 
     Uso:
-        queue = NotificationQueue(lang_manager, parent_window)
+        queue = RemoteNotificationQueue(lang_manager, parent_window)
         queue.enqueue(list_of_notifications)
     """
 
@@ -388,6 +386,7 @@ class NotificationQueue(QObject):
         parent: QWidget | None = None,
     ):
         from PySide6.QtCore import QObject as _QO
+
         _QO.__init__(self, parent)
         self._lang = lang
         self._parent = parent

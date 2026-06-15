@@ -124,8 +124,17 @@ from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.memorial import MemorialService
 from .core.meetings.publications import JwpubChecksumStore, JwpubService
 from .core.profiles.models import ProfileInfo
+from .core.remote.notifications import NotificationService
+from .core.remote.patch_installer import (
+    PatchDownloadWorker,
+    launch_patch_installer,
+    save_pending_patch_cleanup,
+)
+from .core.remote.updates import UpdateService
 from .widgets.timer_bridge import TimerBridge
 from .widgets.projection.monitor_manager import MonitorManagerPopup
+from .ui.dialogs.notifications import RemoteNotificationQueue
+from .ui.dialogs.update import UpdateDialog
 
 if TYPE_CHECKING:
     from .core.ingest.watched_folder import WatchedFolderWatcher
@@ -763,8 +772,20 @@ class MainWindow(QMainWindow):
                 ),
                 remote_services_factory=lambda: RemoteServicesController(
                     self,
-                    self.lang,
-                    self.profile_settings,
+                    notification_service=NotificationService(
+                        self.lang,
+                        self.profile_settings,
+                        self,
+                    ),
+                    notification_queue=RemoteNotificationQueue(self.lang, self),
+                    update_service=UpdateService(self),
+                    update_dialog_factory=lambda info: UpdateDialog(
+                        info,
+                        self,
+                        patch_downloader_factory=PatchDownloadWorker,
+                        save_cleanup_path=save_pending_patch_cleanup,
+                        launch_patch=launch_patch_installer,
+                    ),
                 ),
                 apply_stylesheet=self.setStyleSheet,
             )

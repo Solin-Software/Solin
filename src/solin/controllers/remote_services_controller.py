@@ -1,24 +1,40 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import Protocol
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QWidget
 
 from ..core.foundation.constants import NOTIFICATION_CHECK_DELAY_MS, UPDATE_CHECK_DELAY_MS
-from ..core.remote.notifications import NotificationService
-from ..core.remote.patch_installer import (
-    PatchDownloadWorker,
-    launch_patch_installer,
-    save_pending_patch_cleanup,
-)
-from ..core.remote.updates import UpdateService
-from ..widgets.notification_dialog import NotificationQueue
-from ..widgets.update_dialog import UpdateDialog
 
-if TYPE_CHECKING:
-    from solin.core.i18n.manager import LanguageManager
-    from solin.core.profiles.settings import ProfileSettings
+
+class SignalLike(Protocol):
+    def connect(self, slot: Callable[..., object]) -> object: ...
+
+
+class RemoteNotificationService(Protocol):
+    notifications_ready: SignalLike
+
+    def check(self) -> None: ...
+
+    def stop(self, *, wait_ms: int = 0, delete_when_stopped: bool = False) -> None: ...
+
+
+class RemoteUpdateService(Protocol):
+    update_available: SignalLike
+
+    def check(self) -> None: ...
+
+    def stop(self, *, wait_ms: int = 0, delete_when_stopped: bool = False) -> None: ...
+
+
+class RemoteNotificationQueue(Protocol):
+    def enqueue(self, notifications: list[object]) -> None: ...
+
+
+class UpdateDialogPresenter(Protocol):
+    def show(self) -> None: ...
 
 
 class RemoteServicesController:
@@ -27,24 +43,22 @@ class RemoteServicesController:
     def __init__(
         self,
         parent: QWidget,
-        lang_manager: LanguageManager,
-        profile_settings: ProfileSettings,
+        *,
+        notification_service: RemoteNotificationService,
+        notification_queue: RemoteNotificationQueue,
+        update_service: RemoteUpdateService,
+        update_dialog_factory: Callable[[object], UpdateDialogPresenter],
+        timer_factory: Callable[[QWidget], QTimer] = QTimer,
     ) -> None:
-        self._dialog_parent = parent
-        self._notification_service = NotificationService(
-            lang_manager,
-            profile_settings,
-            parent,
-        )
-        self._notification_queue = NotificationQueue(lang_manager, parent)
-        self._notification_timer = QTimer(parent)
-        self._update_service = UpdateService(parent)
-        self._update_timer = QTimer(parent)
+        self._notification_service = notification_service
+        self._notification_queue = notification_queue
+        self._notification_timer = timer_factory(parent)
+        self._update_service = update_service
+        self._update_dialog_factory = update_dialog_factory
+        self._update_timer = timer_factory(parent)
 
     def start(self) -> None:
-        self._notification_service.notifications_ready.connect(
-            self._notification_queue.enqueue
-        )
+        self._notification_service.notifications_ready.connect(self._notification_queue.enqueue)
         self._notification_timer.setSingleShot(True)
         self._notification_timer.timeout.connect(self._notification_service.check)
         self._notification_timer.start(NOTIFICATION_CHECK_DELAY_MS)
@@ -61,14 +75,7 @@ class RemoteServicesController:
             self._stop_service(service)
 
     def _on_update_available(self, info) -> None:
-        dlg = UpdateDialog(
-            info,
-            self._dialog_parent,
-            patch_downloader_factory=PatchDownloadWorker,
-            save_cleanup_path=save_pending_patch_cleanup,
-            launch_patch=launch_patch_installer,
-        )
-        dlg.show()
+        self._update_dialog_factory(info).show()
 
     @staticmethod
     def _stop_timer(timer) -> None:
