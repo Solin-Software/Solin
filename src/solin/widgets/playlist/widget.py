@@ -50,7 +50,7 @@ from .edit_actions import _PlaylistEditActionsMixin
 from .import_export import _PlaylistEditImportMixin
 from .list_view import _PlaylistListView
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
-from .dialogs import _HuePickerDialog, _NameDialog
+from .dialogs import HuePickerDialog, NameDialog
 from ...core.playlists.storage import (
     PlaylistStoragePaths,
 )
@@ -646,7 +646,7 @@ class _PlaylistEditView(
 
     def _create_section(self):
         if not self._pl: return
-        dlg = _NameDialog(lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
+        dlg = NameDialog(lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
         dlg.setWindowTitle(self.tr("New Section"))
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         name = dlg.get_name()
@@ -669,7 +669,7 @@ class _PlaylistEditView(
 
     def _create_subsection(self, parent_section_id: str):
         if not self._pl: return
-        dlg = _NameDialog(lang=self.lang, parent=self, label=self.tr("Subsection name:"), placeholder=self.tr("E.g.: Part 1"))
+        dlg = NameDialog(lang=self.lang, parent=self, label=self.tr("Subsection name:"), placeholder=self.tr("E.g.: Part 1"))
         dlg.setWindowTitle(self.tr("New Subsection"))
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         name = dlg.get_name()
@@ -756,7 +756,7 @@ class _PlaylistEditView(
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
         if not sec: return
-        dlg = _NameDialog(sec.get("name", ""), lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
+        dlg = NameDialog(sec.get("name", ""), lang=self.lang, parent=self, label=self.tr("Section name:"), placeholder=self.tr("E.g.: Introduction"))
         dlg.setWindowTitle(self.tr("Rename section"))
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         name = dlg.get_name()
@@ -822,7 +822,7 @@ class _PlaylistEditView(
         sec = next((s for s in sections if s["id"] == sec_id), None)
         if not sec: return
         current_hue = sec.get("color_hue", APP_BASE_HUE)
-        dlg = _HuePickerDialog(current_hue, parent=self)
+        dlg = HuePickerDialog(current_hue, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         sec["color_hue"] = dlg.selected_hue()
         self._save()
@@ -870,7 +870,7 @@ class _PlaylistEditView(
         if not self._pl: return
         item = next((it for it in self._pl.get("items", []) if it["id"] == item_id), None)
         if not item: return
-        dlg = _NameDialog(item.get("title", ""), lang=self.lang, parent=self)
+        dlg = NameDialog(item.get("title", ""), lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Rename media"))
         if dlg.exec() and dlg.get_name():
             item["title"] = dlg.get_name()

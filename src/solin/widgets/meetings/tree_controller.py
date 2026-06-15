@@ -83,7 +83,7 @@ from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
 from ...core.meetings.colors import generate_section_hue, section_colors
-from ..playlist.dialogs import _HuePickerDialog, _NameDialog
+from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
 
@@ -1302,7 +1302,7 @@ class MeetingTreeController(QObject):
 
     @Slot()
     def newSectionClicked(self):
-        dlg = _NameDialog(
+        dlg = NameDialog(
             parent=self.parent(),
             label=_tr("_PlaylistEditView", "Section name:"),
             placeholder=_tr("_PlaylistEditView", "E.g.: Introduction"),
@@ -1330,7 +1330,7 @@ class MeetingTreeController(QObject):
         parent_node = self._find_node(parent_section_id)
         if not parent_node or parent_node.get("type") != "section":
             return
-        dlg = _NameDialog(
+        dlg = NameDialog(
             parent=self.parent(),
             label=_tr("_PlaylistEditView", "Subsection name:"),
             placeholder=_tr("_PlaylistEditView", "E.g.: Part 1"),
@@ -1454,7 +1454,7 @@ class MeetingTreeController(QObject):
         node = self._find_node(item_id)
         if not node or node.get("type") != "media":
             return
-        dlg = _NameDialog(node.get("title", ""), parent=self.parent())
+        dlg = NameDialog(node.get("title", ""), parent=self.parent())
         dlg.setWindowTitle(_tr("_PlaylistEditView", "Rename media"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -1505,7 +1505,7 @@ class MeetingTreeController(QObject):
             if node.get("type") == "subsection"
             else _tr("_PlaylistEditView", "Section name:")
         )
-        dlg = _NameDialog(node.get("title", ""), parent=self.parent(), label=label)
+        dlg = NameDialog(node.get("title", ""), parent=self.parent(), label=label)
         dlg.setWindowTitle(_tr("_PlaylistEditView", "Rename section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -1542,7 +1542,7 @@ class MeetingTreeController(QObject):
         node = self._find_node(section_id)
         if not node or node.get("type") not in ("section", "subsection"):
             return
-        dlg = _HuePickerDialog(int(node.get("color_hue", 215)), parent=self.parent())
+        dlg = HuePickerDialog(int(node.get("color_hue", 215)), parent=self.parent())
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         node["color_hue"] = dlg.selected_hue()

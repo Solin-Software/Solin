@@ -18,7 +18,7 @@ from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.jwl_files import PlaylistWriteError, write_jwlplaylist_document
 from ...core.playlists.items import create_playlist_item
-from .dialogs import _NameDialog
+from .dialogs import NameDialog
 from .item_visuals import enrich_items_for_export
 
 
@@ -366,7 +366,7 @@ class _PlaylistEditActionsMixin:
         return temp_id
 
     def _save_temp_playlist(self) -> None:
-        dlg = _NameDialog(lang=self.lang, parent=self)
+        dlg = NameDialog(lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Save playlist"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return

@@ -34,7 +34,7 @@ from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.media.cache import MediaCacheManager
 from .components import _CollapsibleSection, _PlaylistCard, _WatchedFolderCard
-from .dialogs import _NameDialog
+from .dialogs import NameDialog
 from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
@@ -307,7 +307,7 @@ class _PlaylistListView(QWidget):
         self._rebuild_watched_section()
 
     def _create_playlist(self) -> None:
-        dlg = _NameDialog(lang=self.lang, parent=self)
+        dlg = NameDialog(lang=self.lang, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -323,7 +323,7 @@ class _PlaylistListView(QWidget):
         pl = self._find(pl_id)
         if not pl:
             return
-        dlg = _NameDialog(pl["name"], lang=self.lang, parent=self)
+        dlg = NameDialog(pl["name"], lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Rename playlist"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -468,7 +468,7 @@ class _PlaylistListView(QWidget):
 
     def _rename_watched_folder(self, folder_path: str) -> None:
         current_name = Path(folder_path).name
-        dlg = _NameDialog(current_name, lang=self.lang, parent=self)
+        dlg = NameDialog(current_name, lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Rename folder"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return

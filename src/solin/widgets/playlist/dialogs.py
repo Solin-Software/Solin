@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from ...core.meetings.colors import section_colors
 
 
-class _NameDialog(QDialog):
+class NameDialog(QDialog):
     def __init__(
         self,
         initial: str = "",
@@ -154,7 +154,7 @@ class _HueSliderBar(QWidget):
         return self._hue
 
 
-class _HuePickerDialog(QDialog):
+class HuePickerDialog(QDialog):
     """Minimal hue picker with a Photoshop-style gradient slider."""
 
     def __init__(self, initial_hue: int = 0, parent=None):
