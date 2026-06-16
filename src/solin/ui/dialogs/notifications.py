@@ -38,8 +38,8 @@ from PySide6.QtGui import QDesktopServices, QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
 if TYPE_CHECKING:
-    from solin.core.remote.notifications import Notification
     from solin.core.i18n.manager import LanguageManager
+    from solin.core.remote.notification_policy import Notification
 
 # ── Paleta interna (espelha theme.py sem import circular) ──────────────────────
 _C = {

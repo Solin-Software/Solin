@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pyqttoast import ToastPosition, ToastPreset
 
-from solin.core.ui.notifications import NotificationCenter, SynchronizedToast
+from solin.ui.notifications import NotificationCenter, SynchronizedToast
 
 
 class _FakeToast:
@@ -151,7 +151,7 @@ def test_synchronized_toast_bar_stays_inside_rounded_corners():
 
 
 def test_notification_icons_are_vector_assets():
-    from solin.core.ui.notifications import NOTIFICATION_ICONS, NotificationKind
+    from solin.ui.notifications import NOTIFICATION_ICONS, NotificationKind
 
     assert set(NOTIFICATION_ICONS) == set(NotificationKind)
     assert all(svg.startswith("<svg") for svg in NOTIFICATION_ICONS.values())

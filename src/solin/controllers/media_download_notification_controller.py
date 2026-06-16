@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlparse
 from PySide6.QtCore import QCoreApplication, QObject, Slot
 
 from ..core.media.cache import MediaCacheManager
-from ..core.ui.notifications import NotificationCenter
+from ..ui.notifications import NotificationCenter
 
 
 class MediaDownloadNotificationController(QObject):

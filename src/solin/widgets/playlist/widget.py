@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
-    from ...core.ui.notifications import NotificationCenter
+    from ...ui.notifications import NotificationCenter
     from ...core.playlists.storage import PlaylistRepository
     from ...core.playlists.cleanup import PlaylistCleanupQueue
     from ...core.rendering.document_conversion import DocumentConversionService

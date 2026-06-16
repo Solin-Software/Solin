@@ -99,7 +99,7 @@ from .core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsS
 from .core.media.profile_store import ProfileMediaStore
 from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
-from .core.ui.notifications import NotificationCenter
+from .ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
 from .core.integrations.automation.settings import (

@@ -51,61 +51,16 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 if TYPE_CHECKING:
     from solin.core.i18n.manager import LanguageManager
-    
+
 from solin.core.foundation.constants import NOTIFICATION_API_URL
 from solin.core.network.http import HttpError, get_json
+from solin.core.remote.notification_policy import Notification, resolve_remote_notifications
 from solin.core.remote.notification_settings import NotificationSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
 
-# ── Configuração ───────────────────────────────────────────────────────────────
 FETCH_TIMEOUT_S: int = 8        # timeout total da requisição HTTP
-FALLBACK_LANG: str = "E"        # api_code de fallback (English)
-
-# Schema mínimo obrigatório em cada notificação
-_REQUIRED_FIELDS = {"id", "type", "content"}
-_VALID_TYPES = {"info", "warning", "error"}
-
-
-# ── Modelo de dados ────────────────────────────────────────────────────────────
-
-class Notification:
-    """Notificação já resolvida e pronta para exibir."""
-    __slots__ = ("id", "notif_type", "title", "detail", "action_url", "action_label")
-
-    def __init__(
-        self,
-        notif_id: str,
-        notif_type: str,
-        title: str,
-        detail: str,
-        action_url: str = "",
-        action_label: str = "",
-    ):
-        self.id = notif_id
-        self.notif_type = notif_type   # "info" | "warning" | "error"
-        self.title = title
-        self.detail = detail
-        self.action_url = action_url   # vazio = sem botão de ação
-        self.action_label = action_label
-
-
-# ── Armazenamento de IDs vistos ────────────────────────────────────────────────
-
-def _load_seen_ids(profile_settings: ProfileSettings) -> set[str]:
-    """Carrega a lista de IDs já exibidos do store tipado."""
-    return NotificationSettingsStore.for_profile_settings(profile_settings).seen_ids()
-
-
-def mark_seen(notif_id: str, profile_settings: ProfileSettings) -> None:
-    """Marca uma notificação como exibida."""
-    NotificationSettingsStore.for_profile_settings(profile_settings).mark_seen(notif_id)
-
-
-def reset_seen_ids(profile_settings: ProfileSettings) -> None:
-    """Utilitário de diagnóstico: limpa o histórico de IDs vistos."""
-    NotificationSettingsStore.for_profile_settings(profile_settings).reset_seen_ids()
 
 
 # ── Worker assíncrono ──────────────────────────────────────────────────────────
@@ -160,79 +115,20 @@ class NotificationWorker(QObject):
         notifications = self._process(payload)
         self.notifications_ready.emit(notifications)
 
-    def _process(self, payload: dict) -> list[Notification]:
+    def _process(self, payload: object) -> list[Notification]:
         """
         Valida o payload, filtra vistas e resolve conteúdo localizado.
         Retorna lista de Notification prontas para exibir.
         """
-        if not isinstance(payload, dict):
-            return []
-
-        raw_list = payload.get("notifications")
-        if not isinstance(raw_list, list):
-            return []
-
-        seen = _load_seen_ids(self._profile_settings)
-        result: list[Notification] = []
-
-        for item in raw_list:
-            if not isinstance(item, dict):
-                continue
-
-            # Validação de schema mínimo
-            if not _REQUIRED_FIELDS.issubset(item.keys()):
-                log.debug("[Notifications] item missing required fields: %s", item)
-                continue
-
-            notif_id = str(item["id"]).strip()
-            if not notif_id:
-                continue
-
-            # Já exibida? Pula.
-            if notif_id in seen:
-                continue
-
-            notif_type = str(item.get("type", "info")).lower()
-            if notif_type not in _VALID_TYPES:
-                notif_type = "info"
-
-            content = item.get("content", {})
-            if not isinstance(content, dict):
-                continue
-
-            # Resolve localização: tenta api_code ativo → fallback "E"
-            localized = content.get(self._api_code) or content.get(FALLBACK_LANG)
-            if not isinstance(localized, dict):
-                log.debug("[Notifications] no content for code '%s' or fallback: %s",
-                          self._api_code, notif_id)
-                continue
-
-            title = str(localized.get("title", "")).strip()
-            detail = str(localized.get("detail", "")).strip()
-            if not title:
-                continue
-
-            # Ação opcional
-            action_url = ""
-            action_label = ""
-            action = item.get("action")
-            if isinstance(action, dict):
-                action_url = str(action.get("url", "")).strip()
-                action_label = str(action.get("label", "")).strip()
-
-            # Marca como vista AGORA — antes de emitir — para evitar re-exibição em crash
-            mark_seen(notif_id, self._profile_settings)
-
-            result.append(Notification(
-                notif_id=notif_id,
-                notif_type=notif_type,
-                title=title,
-                detail=detail,
-                action_url=action_url,
-                action_label=action_label,
-            ))
-
-        return result
+        store = NotificationSettingsStore.for_profile_settings(self._profile_settings)
+        result = resolve_remote_notifications(
+            payload,
+            api_code=self._api_code,
+            seen_ids=store.seen_ids(),
+        )
+        for notification_id in result.mark_seen_ids:
+            store.mark_seen(notification_id)
+        return list(result.notifications)
 
 
 # ── Controlador público ────────────────────────────────────────────────────────

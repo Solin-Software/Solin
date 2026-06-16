@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from ..core.jw.publication_reader import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
     from ..core.rendering.document_conversion import DocumentConversionService
-    from ..core.ui.notifications import NotificationCenter
+    from ..ui.notifications import NotificationCenter
 
 _PDF_EXTS_SET = _PDF_EXTS
 _JWL_EXTS_SET = _JWL_EXTS

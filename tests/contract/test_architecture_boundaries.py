@@ -758,25 +758,23 @@ def test_zoom_state_value_objects_have_no_framework_dependencies():
     assert violations == []
 
 
-def test_remote_update_policy_has_no_framework_or_network_dependencies():
-    path = (
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "remote"
-        / "update_policy.py"
+def test_remote_policies_have_no_framework_or_network_dependencies():
+    paths = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "notification_policy.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "update_policy.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "urls.py",
     )
     violations: list[str] = []
 
-    for node in _imports(path):
-        roots = (
-            [alias.name.split(".", 1)[0] for alias in node.names]
-            if isinstance(node, ast.Import)
-            else [(node.module or "").split(".", 1)[0]]
-        )
-        if any(root in {"PySide6", "solin"} for root in roots):
-            violations.append(_display(path, node))
+    for path in paths:
+        for node in _imports(path):
+            roots = (
+                [alias.name.split(".", 1)[0] for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [(node.module or "").split(".", 1)[0]]
+            )
+            if any(root in {"PySide6", "solin"} for root in roots):
+                violations.append(_display(path, node))
 
     assert violations == []
 

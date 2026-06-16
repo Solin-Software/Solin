@@ -5,10 +5,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from urllib.parse import urlsplit
+
+from .urls import is_safe_remote_url
 
 _VERSION_PATTERN = re.compile(r"^\d+(?:\.\d+){1,3}$")
-_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -49,11 +49,7 @@ class UpdateInfo:
 
 
 def is_safe_update_url(url: str) -> bool:
-    parsed = urlsplit(url)
-    hostname = (parsed.hostname or "").lower()
-    if not hostname:
-        return False
-    return parsed.scheme == "https" or (parsed.scheme == "http" and hostname in _LOCAL_HOSTS)
+    return is_safe_remote_url(url)
 
 
 def evaluate_update(
