@@ -77,6 +77,60 @@ def select_pub_media_file(
     return None
 
 
+def resolve_publication_video_link(
+    key_symbol: str,
+    track: int | None,
+    issue_tag: int | None,
+    meps_doc_id: int | None,
+    language: str,
+    *,
+    is_sign_language: bool = False,
+) -> PubMediaFile | None:
+    """Resolve a JW publication video/audio CDN link from known media identifiers."""
+    try:
+        track_number = int(track or 0)
+        issue_number = int(issue_tag or 0)
+        document_id = int(meps_doc_id or 0)
+    except (TypeError, ValueError):
+        return None
+
+    publication_symbol = key_symbol or ""
+    if is_sign_language and publication_symbol.lower() == "sjjm":
+        publication_symbol = "sjj"
+
+    if publication_symbol:
+        params: dict[str, Any] = {
+            "pub": publication_symbol,
+            "track": track_number,
+            "langwritten": language,
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+        }
+        if issue_number != 0:
+            params["issue"] = issue_number
+    elif document_id:
+        params = {
+            "docid": document_id,
+            "langwritten": language,
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+        }
+    else:
+        return None
+
+    data = fetch_pub_media_json(params)
+    if not data:
+        return None
+    return select_pub_media_file(
+        data,
+        language,
+        VIDEO_FORMATS,
+        prefer_highest_label=True,
+    )
+
+
 def _dedupe_nonempty(values: tuple[str, ...]) -> tuple[str, ...]:
     seen: set[str] = set()
     out: list[str] = []

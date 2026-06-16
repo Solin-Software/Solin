@@ -50,6 +50,8 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
+from solin.core.jw.publication_links import resolve_publication_video_link
+
 log = logging.getLogger(__name__)
 
 # CategoryTypes excluded from all JW pub media queries
@@ -226,13 +228,18 @@ def read_jwpub_for_playlist(
     # ── Resolve video URLs ──────────────────────────────────────────────────
     video_items: list[dict] = []
     if resolve_urls and video_rows:
-        from solin.core.meetings.publications import _resolve_video
         for vr in video_rows:
             try:
-                api   = _resolve_video(vr["sym"], vr["track"], vr["issue"],
-                                       vr["meps"], lang)
-                url   = api.get("url", "")
-                title = api.get("title", "") or vr["label"] or vr["sym"] or stem
+                media_file = resolve_publication_video_link(
+                    vr["sym"],
+                    vr["track"],
+                    vr["issue"],
+                    vr["meps"],
+                    lang,
+                )
+                url = media_file.url if media_file is not None else ""
+                resolved_title = media_file.title if media_file is not None else ""
+                title = resolved_title or vr["label"] or vr["sym"] or stem
             except Exception:  # noqa: BLE001 - per-item external resolver isolation
                 log.debug(
                     "jwpub_reader: resolve failed sym=%s",

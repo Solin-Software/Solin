@@ -44,8 +44,8 @@ from PySide6.QtCore import (
 from solin.core.network.http import HttpError, stream_get
 from solin.core.jw.publication_links import (
     DEFAULT_USER_AGENT,
-    VIDEO_FORMATS,
     fetch_pub_media_json,
+    resolve_publication_video_link,
     select_pub_media_file,
 )
 from solin.core.media.cache import MediaCacheManager
@@ -287,35 +287,15 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
     is_sign_language: quando True e key_symbol for 'sjjm', substitui por 'sjj'
     (língua gestual não usa a versão com música).
     """
-    # Centraliza a lógica sjj/sjjm: mesmo critério de jw.media_api.song_publication_symbol()
-    if is_sign_language and (key_symbol or "").lower() == "sjjm":
-        key_symbol = "sjj"
-
     result = {"url": "", "title": "", "thumbnail": ""}
     try:
-        if key_symbol:
-            params: dict = {
-                "pub": key_symbol, "track": track,
-                "langwritten": lang, "fileformat": "mp4,m4v",
-                "output": "json", "alllangs": "0",
-            }
-            if issue_tag and int(issue_tag) != 0:
-                params["issue"] = issue_tag
-        elif meps_doc_id:
-            params = {
-                "docid": meps_doc_id, "langwritten": lang,
-                "fileformat": "mp4,m4v", "output": "json", "alllangs": "0",
-            }
-        else:
-            return result
-        data = fetch_pub_media_json(params)
-        if not data:
-            return result
-        media_file = select_pub_media_file(
-            data,
+        media_file = resolve_publication_video_link(
+            key_symbol,
+            track,
+            issue_tag,
+            meps_doc_id,
             lang,
-            VIDEO_FORMATS,
-            prefer_highest_label=True,
+            is_sign_language=is_sign_language,
         )
         if media_file is not None:
             result["url"] = media_file.url

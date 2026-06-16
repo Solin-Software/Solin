@@ -1,6 +1,8 @@
+from solin.core.jw import publication_links
 from solin.core.jw.publication_links import (
     VIDEO_FORMATS,
     build_pub_media_url,
+    resolve_publication_video_link,
     select_pub_media_file,
 )
 
@@ -99,3 +101,93 @@ def test_build_pub_media_url_encodes_query_params() -> None:
         },
         "https://example.test/api",
     ) == "https://example.test/api?pub=mwb&langwritten=pt+BR"
+
+
+def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch) -> None:
+    calls = []
+
+    def fetch(params):
+        calls.append(params)
+        return {
+            "files": {
+                "T": {
+                    "MP4": [
+                        {
+                            "title": "Resolved",
+                            "file": {"url": "https://example.test/video.mp4"},
+                        }
+                    ]
+                }
+            }
+        }
+
+    monkeypatch.setattr(publication_links, "fetch_pub_media_json", fetch)
+
+    media_file = resolve_publication_video_link("mwb", 3, 202605, 0, "T")
+
+    assert media_file is not None
+    assert media_file.url == "https://example.test/video.mp4"
+    assert media_file.title == "Resolved"
+    assert calls == [
+        {
+            "pub": "mwb",
+            "track": 3,
+            "langwritten": "T",
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+            "issue": 202605,
+        }
+    ]
+
+
+def test_resolve_publication_video_link_normalizes_sign_language_song(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda params: calls.append(params) or {},
+    )
+
+    media_file = resolve_publication_video_link(
+        "sjjm",
+        7,
+        0,
+        0,
+        "T",
+        is_sign_language=True,
+    )
+
+    assert media_file is None
+    assert calls == [
+        {
+            "pub": "sjj",
+            "track": 7,
+            "langwritten": "T",
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+        }
+    ]
+
+
+def test_resolve_publication_video_link_falls_back_to_document_id(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda params: calls.append(params) or {},
+    )
+
+    media_file = resolve_publication_video_link("", 0, 0, 12345, "T")
+
+    assert media_file is None
+    assert calls == [
+        {
+            "docid": 12345,
+            "langwritten": "T",
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+        }
+    ]
