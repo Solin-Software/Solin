@@ -31,6 +31,7 @@ thin local launcher during development.
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m pyright --pythonpath .\.venv\Scripts\python.exe
+.\.venv\Scripts\python.exe scripts\check_locales.py
 ```
 
 `pyproject.toml` centralizes pytest, Ruff, and Pyright configuration. Ruff
@@ -41,3 +42,11 @@ exception-policy test independently enforces that contract.
 Pyright currently covers core foundation, timer, JW, meetings, and playlist
 domains; controllers/widgets are the next incremental typing frontier because
 they rely heavily on dynamic Qt attributes and mixins.
+
+## Delivery Layout
+
+Versioned delivery automation lives outside generated output directories:
+`scripts/` contains repository operations such as QML cache compilation,
+translation validation, local Windows builds, and release diffs; `packaging/`
+contains installer recipes. `build/` and `dist/` are ignored output-only
+directories.

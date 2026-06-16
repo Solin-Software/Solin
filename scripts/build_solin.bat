@@ -4,10 +4,10 @@ setlocal enabledelayedexpansion
 :: ============================================================
 ::  build_solin.bat — Compila o projeto Solin com Nuitka
 ::  Modo: standalone (pasta distribuivel, sem onefile)
-::  Script em build\scripts. Resolve a raiz do projeto automaticamente.
+::  Script em scripts\. Resolve a raiz do projeto automaticamente.
 :: ============================================================
 
-for %%I in ("%~dp0..\..") do set "PROJECT_ROOT=%%~fI\"
+for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI\"
 set MAIN_SCRIPT=%PROJECT_ROOT%main.py
 set OUTPUT_DIR=%PROJECT_ROOT%build
 set APP_NAME=Solin
@@ -45,7 +45,7 @@ echo.
 
 rmdir /s /q "%QML_MODULE_ROOT%" 2>nul
 
-"%PYTHON%" "%PROJECT_ROOT%tools\compile_qml_cache.py" ^
+"%PYTHON%" "%PROJECT_ROOT%scripts\compile_qml_cache.py" ^
     --source-dir "%QML_SOURCE_DIR%" ^
     --output-dir "%QML_CACHE_DIR%" ^
     --qt-qml-output-dir "%QT_QML_CACHE_DIR%" ^

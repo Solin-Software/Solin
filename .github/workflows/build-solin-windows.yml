@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
             ${{ runner.os }}-pip-
@@ -63,9 +63,17 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pip install --no-deps -e .
           pip install --upgrade nuitka ordered-set zstandard
+
+      - name: Quality gate
+        shell: pwsh
+        run: |
+          python -m ruff check .
+          $pythonPath = (Get-Command python).Source
+          python -m pyright --pythonpath $pythonPath
+          python -m pytest
 
       - name: Install Inno Setup
         shell: pwsh
@@ -101,7 +109,7 @@ jobs:
             "native_webview_widget\_backend.py",
             "native_webview_widget\widget.py",
             "native_webview_widget\native_webview_widget.dll",
-            "build\installer\setup.iss"
+            "packaging\windows\installer\setup.iss"
           )
 
           foreach ($path in $required) {
@@ -114,7 +122,7 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item -LiteralPath "$env:BUILD_DIR\qmlcache\solin\qml" -Recurse -Force -ErrorAction SilentlyContinue
-          python tools\compile_qml_cache.py `
+          python scripts\compile_qml_cache.py `
             --source-dir "src\solin\qml" `
             --output-dir "$env:BUILD_DIR\qmlcache\solin\qml\Solin" `
             --qt-qml-output-dir "$env:BUILD_DIR\qmlcache\PySide6\qml" `
@@ -262,7 +270,7 @@ jobs:
             throw "ISCC.exe was not found at $iscc"
           }
 
-          Push-Location "build\installer"
+          Push-Location "packaging\windows\installer"
           try {
             & $iscc "/DMyAppVersion=$env:APP_VERSION" setup.iss
           }
@@ -270,8 +278,8 @@ jobs:
             Pop-Location
           }
 
-      # Patch installers are intentionally not built here. build/installer/patch.iss expects
-      # build/scripts/diff.py needs an explicit OLD dist directory plus
+      # Patch installers are intentionally not built here. packaging/windows/installer/patch.iss expects
+      # scripts/diff_release.py needs an explicit OLD dist directory plus
       # the newly built dist. A GitHub runner does not naturally have the previous
       # release's dist, so producing a patch here would be misleading.
 

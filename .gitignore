@@ -1,4 +1,8 @@
-.vercel
+.vercel/
+.claude/
+.venv/
+.vscode/
+
 __pycache__/
 *.pyc
 */__pycache__/
@@ -6,50 +10,30 @@ __pycache__/
 .pytest_cache/
 .pytest-tmp/
 .ruff_cache/
-.vscode/
+
+build/
+dist/
+*.zip
+
 cache/
 data/
 icon.ico
 !assets/icon.ico
+
 search.py
-build/
-venv_solin/
-build_solin.bat
-build/
-*.zip
-*.iss
+debug*.py
+backup/
 teste/
 testes/
-backup/
-debug*.py
+utilities_ignore/
 
-# Arquivos e pastas do Python / Flask
 venv/
+venv_solin/
 instance/
 .flaskenv
 .env
-utilities_ignore/
 
-# Arquivos de dependências do Node.js
 node_modules/
-
-# Arquivos de log e debug do npm
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Build recipes used by manual GitHub Actions workflows.
-!build_solin.bat
-!build/
-build/*
-!build/setup.iss
-!build/patch.iss
-!build/diff.py
-!build/scripts/
-!build/scripts/build_solin.bat
-!build/scripts/diff.bat
-!build/scripts/diff.py
-!build/installer/
-!build/installer/setup.iss
-!build/installer/patch.iss
-!tools/debug_flash.py

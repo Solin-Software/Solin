@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,6 +104,18 @@ def test_application_source_layout_is_discoverable():
         "No application source root found. Expected src/solin/ "
         "relative to the repository root."
     )
+
+
+def test_generated_output_directories_are_not_versioned():
+    result = subprocess.run(
+        ["git", "ls-files", "build", "dist"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == ""
 
 
 def test_package_initializers_do_not_reexport_concrete_symbols():

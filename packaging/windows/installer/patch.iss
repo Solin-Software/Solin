@@ -38,7 +38,7 @@
 #define MyAppMutex      "Solin_SingleInstance_Mutex"
 #define MyRegSubkey     "Software\Solin\Solin"
 #define MyPatchFromVer  "1.0.0.0"   ; minimum installed version this patch accepts
-#define MyDistDir       "..\diff" ; Nuitka/PyInstaller output directory
+#define MyDistDir       "..\..\..\build\diff" ; release diff directory
 
 #ifndef MyPatchVersion
   #error MyPatchVersion must be supplied by the build pipeline.
@@ -82,9 +82,9 @@ RestartApplications=no
 #define MyPatchFileVersion \
     Copy(MyPatchVersion, 1, RPos(".", MyPatchVersion) - 1)
     
-OutputDir=..\installer_output
+OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Patch_{#MyPatchFileVersion}
-SetupIconFile=..\..\assets\icon.ico
+SetupIconFile=..\..\..\assets\icon.ico
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -155,8 +155,8 @@ Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; V
 ; Comment the line above and uncomment/adjust lines below.
 ; Source: "{#MyDistDir}\Solin.exe";                  DestDir: "{app}"; Flags: ignoreversion
 ; Source: "{#MyDistDir}\some_updated.dll";            DestDir: "{app}"; Flags: ignoreversion
-; Source: "..\..\translations\*";                     DestDir: "{app}\translations"; Flags: ignoreversion
-; Source: "..\..\translations\locales\*.json";        DestDir: "{app}\translations\locales"; Flags: ignoreversion
+; Source: "..\..\..\translations\*";                  DestDir: "{app}\translations"; Flags: ignoreversion
+; Source: "..\..\..\translations\locales\*.json";     DestDir: "{app}\translations\locales"; Flags: ignoreversion
 
 
 ; =============================================================================

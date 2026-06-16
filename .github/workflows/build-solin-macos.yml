@@ -44,7 +44,7 @@ jobs:
           path: |
             ~/Library/Caches/pip
             .pip-wheels
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
             ${{ runner.os }}-pip-
@@ -107,7 +107,7 @@ jobs:
           python -m pip install --upgrade --retries 10 --timeout 120 pip
           mkdir -p .pip-wheels
           python -m pip download \
-            --requirement requirements.txt \
+            --requirement requirements-dev.txt \
             --dest .pip-wheels \
             --only-binary=:all: \
             --retries 10 \
@@ -116,15 +116,22 @@ jobs:
           python -m pip install \
             --no-index \
             --find-links .pip-wheels \
-            --requirement requirements.txt
+            --requirement requirements-dev.txt
           python -m pip install --no-deps -e .
           python -m pip install --upgrade --retries 10 --timeout 120 --prefer-binary nuitka ordered-set zstandard
+
+      - name: Quality gate
+        shell: bash
+        run: |
+          python -m ruff check .
+          python -m pyright --pythonpath "$(command -v python)"
+          python -m pytest
 
       - name: Generate compiled QML cache
         shell: bash
         run: |
           rm -rf "${BUILD_DIR}/qmlcache/solin/qml"
-          python tools/compile_qml_cache.py \
+          python scripts/compile_qml_cache.py \
             --source-dir src/solin/qml \
             --output-dir "${BUILD_DIR}/qmlcache/solin/qml/Solin" \
             --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \

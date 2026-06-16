@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tools import compile_qml_cache
+from scripts import compile_qml_cache
 
 
 def test_qml_source_preserves_original_translation_context(tmp_path):

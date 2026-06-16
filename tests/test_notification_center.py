@@ -129,7 +129,7 @@ def test_nuitka_builds_include_pyqttoast_runtime_data():
     for path in (
         Path(".github/workflows/build-solin-windows.yml"),
         Path(".github/workflows/build-solin-macos.yml"),
-        Path("build/scripts/build_solin.bat"),
+        Path("scripts/build_solin.bat"),
     ):
         assert "--include-package-data=pyqttoast" in path.read_text(encoding="utf-8")
 

@@ -17,7 +17,7 @@
 ;  BUILD INSTRUCTIONS:
 ;    1. Compile with Nuitka:
 ;         nuitka --standalone --enable-plugin=pyside6 --windows-icon-from-ico=assets\icon.ico
-;                --output-dir=dist --output-filename=Solin main.py
+;                --output-dir=build --output-filename=Solin main.py
 ;       (output directory must be named "main.dist" — or adjust MyDistDir below)
 ;    2. The executable must be "Solin.exe" inside MyDistDir.
 ;    3. Compile with ISCC.exe /DMyAppVersion=<version> setup.iss.
@@ -29,7 +29,7 @@
 #define MyAppExeName     "Solin.exe"
 #define MyAppMutex       "Solin_SingleInstance_Mutex"
 #define MyRegSubkey      "Software\Solin\Solin"
-#define MyDistDir        "..\main.dist"
+#define MyDistDir        "..\..\..\build\main.dist"
 
 #ifndef MyAppVersion
   #error MyAppVersion must be supplied by the build pipeline.
@@ -75,9 +75,9 @@ RestartApplications=no
 #define MySetupFileVersion \
     Copy(MyAppVersion, 1, RPos(".", MyAppVersion) - 1)
     
-OutputDir=..\installer_output
+OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}
-SetupIconFile=..\..\assets\icon.ico
+SetupIconFile=..\..\..\assets\icon.ico
 WizardStyle=modern
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
@@ -123,7 +123,7 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
-Source: "..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 ; NOTE: Translations/lang folders are handled automatically via recursesubdirs
 ;       above, as long as they reside inside main.dist/.
