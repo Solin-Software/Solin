@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
+from solin.core.ingest.local_files import local_file_availability_signature
+from solin.core.ingest.meeting_folder_sources import (
+    meeting_folder_source_needs_processing,
+    scan_meeting_folder_sources,
+)
 from solin.core.media.download_storage import safe_remove
 
 
@@ -46,6 +53,22 @@ class WatchedFolderFileStore:
             return False
         path.unlink()
         return True
+
+    def scan_meeting_sources(self, folder_path: str | Path) -> list[dict[str, Any]]:
+        return scan_meeting_folder_sources(folder_path)
+
+    def meeting_source_needs_processing(
+        self,
+        source: dict[str, Any],
+        record: dict[str, Any] | None,
+    ) -> bool:
+        return meeting_folder_source_needs_processing(source, record)
+
+    def file_availability_signature(
+        self,
+        urls: Iterable[str],
+    ) -> tuple[tuple[str, bool], ...]:
+        return local_file_availability_signature(urls)
 
     @staticmethod
     def is_inside(path: str | Path, folder: str | Path) -> bool:

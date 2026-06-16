@@ -11,6 +11,7 @@ from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.ingest.manifest import CACHE_DIR_NAME, MANIFEST_FILE
+from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncIdentity,
@@ -629,6 +630,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             )
             controller._start_media_requests = lambda *_args: None
             controller._linked_folder_availability_signature = lambda: ()
+            controller._watched_folder_file_store = WatchedFolderFileStore()
             controller._meeting_folder_source_supported = lambda _source: True
             controller._meeting_folder_target_list_id = lambda _pub: "root"
             controller._meeting_folder_record_for_source = lambda _source: None

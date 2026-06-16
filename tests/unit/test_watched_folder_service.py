@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 
 from solin.core.ingest import watched_folder as watched_folder_module
-from solin.core.ingest.watched_folder import (
-    WatchedFolderSyncThread,
-    local_file_availability_signature,
+from solin.core.ingest.local_files import local_file_availability_signature
+from solin.core.ingest.meeting_folder_sources import (
     meeting_folder_source_needs_processing,
     scan_meeting_folder_sources,
 )
+from solin.core.ingest.watched_folder import WatchedFolderSyncThread
 
 
 class LocalFileAvailabilitySignatureTests(unittest.TestCase):

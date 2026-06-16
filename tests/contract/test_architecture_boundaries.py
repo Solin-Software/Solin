@@ -307,6 +307,44 @@ def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
     )
 
 
+def test_meeting_widgets_use_watched_folder_file_store_boundary():
+    meeting_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings"
+    forbidden_module = (
+        "solin",
+        "core",
+        "ingest",
+        "watched_folder",
+    )
+    raw_helpers = {
+        "local_file_availability_signature",
+        "meeting_folder_source_needs_processing",
+        "scan_meeting_folder_sources",
+    }
+    violations: list[str] = []
+
+    for path in sorted(meeting_widget_root.rglob("*.py")):
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            base = _resolve_from(
+                CODEBASES[0],
+                CODEBASES[0].module_for(path),
+                path.name == "__init__.py",
+                node,
+            )
+            if base != forbidden_module:
+                continue
+            imported = {alias.name for alias in node.names}
+            blocked = sorted(raw_helpers.intersection(imported))
+            if blocked:
+                violations.append(f"{_display(path, node)} [{', '.join(blocked)}]")
+
+    assert violations == [], (
+        "Meeting widgets/controllers must use WatchedFolderFileStore instead of "
+        "raw watched-folder filesystem helpers:\n" + "\n".join(violations)
+    )
+
+
 def test_ui_workflows_do_not_construct_jwpub_import_threads_directly():
     workflow_roots = (
         PROJECT_ROOT / "src" / "solin" / "controllers",
@@ -580,6 +618,31 @@ def test_wifi_upload_policy_has_no_framework_dependencies():
         )
         if "PySide6" in roots:
             violations.append(_display(path, node))
+
+    assert violations == []
+
+
+def test_watched_folder_source_policies_have_no_framework_dependencies():
+    paths = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "local_files.py",
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "ingest"
+        / "meeting_folder_sources.py",
+    )
+    violations: list[str] = []
+
+    for path in paths:
+        for node in _imports(path):
+            roots = (
+                [alias.name.split(".", 1)[0] for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [(node.module or "").split(".", 1)[0]]
+            )
+            if "PySide6" in roots:
+                violations.append(_display(path, node))
 
     assert violations == []
 

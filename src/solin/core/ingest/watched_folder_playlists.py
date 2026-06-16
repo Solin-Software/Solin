@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from solin.core.ingest.local_files import local_file_availability_signature
 from solin.core.ingest.watched_folder import (
     WatchedFolderSyncThread,
     get_pending_files,
     load_manifest_playlist,
-    local_file_availability_signature,
     remove_item_from_manifest,
     save_manifest_playlist,
     scan_root,

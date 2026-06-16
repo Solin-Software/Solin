@@ -1144,6 +1144,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             controller._meeting_folder_pending_sources = set()
             controller._meeting_folder_imports = {}
             controller.chromeChanged = self._Signal()
+            controller._watched_folder_file_store = WatchedFolderFileStore()
             captured = {}
 
             controller.set_sync_root = lambda _path: None

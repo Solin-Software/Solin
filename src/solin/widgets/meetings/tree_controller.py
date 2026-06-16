@@ -424,11 +424,6 @@ class MeetingTreeController(QObject):
         if not watched_folder_path or not self._tree_key:
             return
 
-        from ...core.ingest.watched_folder import (
-            meeting_folder_source_needs_processing,
-            scan_meeting_folder_sources,
-        )
-
         # Determine which monday this tree belongs to
         # tree_key format: "<pub_type>:<monday>:<lang>:<issue>"
         parts = self._tree_key.split(":")
@@ -440,7 +435,9 @@ class MeetingTreeController(QObject):
         # Map tag → pub_type
         tag_to_pub = {"MW": "mwb", "WE": "wt"}
 
-        folders = scan_meeting_folder_sources(watched_folder_path)
+        folders = self._watched_folder_file_store.scan_meeting_sources(
+            watched_folder_path
+        )
         touched = False
         for folder in folders:
             # Only inject folders matching this tree's monday AND pub_type
@@ -458,7 +455,10 @@ class MeetingTreeController(QObject):
                 if not source_key or source_key in self._meeting_folder_pending_sources:
                     continue
                 record = self._meeting_folder_record_for_source(source)
-                if not meeting_folder_source_needs_processing(source, record):
+                if not self._watched_folder_file_store.meeting_source_needs_processing(
+                    source,
+                    record,
+                ):
                     continue
 
                 if not record:
@@ -482,14 +482,12 @@ class MeetingTreeController(QObject):
 
     def _linked_folder_availability_signature(self) -> tuple[tuple[str, bool], ...]:
         """Snapshot local availability for linked-folder media nodes."""
-        from ...core.ingest.watched_folder import local_file_availability_signature
-
         urls: list[str] = []
         for node in iter_nodes(self._nodes):
             if node.get("type") != "media" or not node.get("linked_folder_source"):
                 continue
             urls.append(self._url_for_node(node))
-        return local_file_availability_signature(urls)
+        return self._watched_folder_file_store.file_availability_signature(urls)
 
     def _emit_linked_folder_availability_if_changed(self) -> None:
         availability = self._linked_folder_availability_signature()

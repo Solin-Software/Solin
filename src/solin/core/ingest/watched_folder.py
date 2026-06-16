@@ -40,7 +40,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 
@@ -74,10 +74,6 @@ WATCHED_DOC_TYPES: frozenset[str] = frozenset(
     for ext in WATCHED_DOC_EXTS
 )
 PROCESSABLE_EXTS: frozenset[str] = PDF_EXTS | PPTX_EXTS | DOCX_EXTS | JWPUB_EXTS | PLAYLIST_EXTS
-MEETING_FOLDER_SOURCE_EXTS: frozenset[str] = (
-    VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS | PDF_EXTS | PPTX_EXTS | DOCX_EXTS
-    | JWPUB_EXTS | PLAYLIST_EXTS
-)
 
 _DPI = 150
 _PAGE_FMT = "{stem}-page_{n:03d}.jpg"
@@ -93,65 +89,6 @@ def _path_id(path: str | Path) -> str:
 
 def _media_type(path: str | Path) -> str:
     return media_type_from_path(path, default="image")
-
-
-def _meeting_folder_source_key(path: Path) -> str:
-    """Stable per-machine key for a source file in a meeting-targeted folder."""
-    return os.path.normcase(os.path.normpath(os.path.abspath(str(path))))
-
-
-def _meeting_folder_file_signature(path: Path) -> dict:
-    """Fast change signature used to decide whether an autoimport can be reused."""
-    st = path.stat()
-    return {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
-
-
-def _meeting_folder_source_kind(path: Path) -> str:
-    ext = path.suffix.lower()
-    if ext in SCAN_EXTS:
-        return "media"
-    if ext in PDF_EXTS:
-        return "pdf"
-    if ext in JWPUB_EXTS:
-        return "jwpub"
-    if ext in PLAYLIST_EXTS:
-        return "jwlplaylist"
-    if ext in (PPTX_EXTS | DOCX_EXTS):
-        return "lo"
-    return ""
-
-
-def meeting_folder_source_needs_processing(source: dict, record: dict | None) -> bool:
-    """
-    Return True when a meeting-folder source should be imported.
-
-    Matching ``processed`` or ``failed`` records suppress retries until the file
-    changes.  This is what keeps a removed autoimported item from reappearing
-    while the original file remains untouched in the meeting folder.
-    """
-    if not isinstance(record, dict):
-        return True
-    status = str(record.get("status") or "")
-    if status not in {"processed", "failed"}:
-        return True
-    return record.get("signature") != source.get("signature")
-
-
-def local_file_availability_signature(urls: Iterable[str]) -> tuple[tuple[str, bool], ...]:
-    """Return a stable snapshot of local-file availability for transient UI state.
-
-    Linked-folder playlists intentionally keep missing local files in their saved
-    data so cloud-sync placeholders can be shown.  This signature lets UI
-    controllers detect when only the on-disk availability changed, without
-    persisting that machine-local state into shared manifests.
-    """
-    states: dict[str, bool] = {}
-    for url in urls:
-        if not url or url.startswith(("http://", "https://")):
-            continue
-        norm = os.path.normcase(os.path.normpath(os.path.abspath(url)))
-        states[norm] = os.path.exists(url)
-    return tuple(sorted(states.items()))
 
 
 def _commit_processed_entry(
@@ -261,63 +198,6 @@ def scan_meeting_folders(folder_path: str) -> list[dict]:
         })
     return result
 
-
-def scan_meeting_folder_sources(folder_path: str) -> list[dict]:
-    """
-    Return direct source files from meeting-targeted subfolders.
-
-    Unlike :func:`scan_meeting_folders`, this scanner never reads or writes the
-    linked-folder manifest and never inspects ``.solin_cache``.  The controller
-    keeps the normal meeting-folder linked semantics while using profile caches
-    for processed outputs.
-    """
-    from solin.core.meetings.folder_matcher import match_meeting_folder
-
-    root = Path(folder_path)
-    if not root.is_dir():
-        return []
-
-    result: list[dict] = []
-    for sub in sorted(root.iterdir(), key=lambda p: p.name.lower()):
-        if not sub.is_dir() or sub.name.startswith("."):
-            continue
-        match = match_meeting_folder(sub.name)
-        if not match:
-            continue
-
-        sources: list[dict] = []
-        for file_path in sorted(sub.iterdir(), key=lambda p: p.name.lower()):
-            if not file_path.is_file():
-                continue
-            if file_path.name.startswith(".") or file_path.name.startswith("_solin"):
-                continue
-            ext = file_path.suffix.lower()
-            if ext not in MEETING_FOLDER_SOURCE_EXTS:
-                continue
-            kind = _meeting_folder_source_kind(file_path)
-            if not kind:
-                continue
-            source = {
-                "source_key": _meeting_folder_source_key(file_path),
-                "path": str(file_path),
-                "name": file_path.name,
-                "title": file_path.stem,
-                "ext": ext,
-                "kind": kind,
-                "signature": _meeting_folder_file_signature(file_path),
-            }
-            if kind == "media":
-                source["media_type"] = _media_type(file_path)
-            sources.append(source)
-
-        result.append({
-            "path": str(sub),
-            "name": sub.name,
-            "monday": match.monday.isoformat(),
-            "meeting_tag": match.meeting_tag,
-            "sources": sources,
-        })
-    return result
 
 def scan_subfolder(subfolder_path: str) -> list[dict]:
     """
