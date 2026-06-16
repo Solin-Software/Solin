@@ -9,13 +9,13 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from native_webview_widget import NativeWebView, NativeWebViewError
 
 from .aspect_frame import AspectRatioViewFrame
-from .native_adapters import (
+from solin.ui.browser.native_adapters import (
     BrowserBridge,
     HistoryAdapter,
     NativePageAdapter,
     UrlValue,
 )
-from .url_utils import normalize_browser_input
+from solin.core.network.browser_urls import normalize_browser_input
 
 log = logging.getLogger(__name__)
 

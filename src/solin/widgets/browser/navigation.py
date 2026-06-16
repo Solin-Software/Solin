@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 
 from .tab import BrowserTab
-from .url_utils import normalize_browser_input
+from solin.core.network.browser_urls import normalize_browser_input
 
 
 __all__ = ("BrowserNavigationMixin",)

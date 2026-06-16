@@ -12,10 +12,10 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
+from ...ui.browser.scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
 from .crop_overlay import CropOverlay
 from .downloads import BrowserDownloadsMixin
 from .navigation import BrowserNavigationMixin
-from .scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
 from .tab import BrowserTab
 from .ui import BrowserUiMixin
 

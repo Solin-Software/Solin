@@ -1,13 +1,13 @@
 import solin.widgets.browser.widget as browser_widget
 from solin.widgets.browser.aspect_frame import AspectRatioViewFrame
 from solin.widgets.browser.crop_overlay import CropOverlay
-from solin.widgets.browser.native_adapters import (
+from solin.ui.browser.native_adapters import (
     HistoryAdapter,
     NativePageAdapter,
     UrlValue,
 )
-from solin.widgets.browser.scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
-from solin.widgets.browser.url_utils import normalize_browser_input
+from solin.ui.browser.scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
+from solin.core.network.browser_urls import normalize_browser_input
 
 
 def test_normalize_browser_input_keeps_known_urls():

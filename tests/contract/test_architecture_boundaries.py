@@ -953,6 +953,11 @@ def test_update_dialog_has_no_network_persistence_or_process_adapters():
 
 def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     browser_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser"
+    legacy_url_policy = browser_root / "url_utils.py"
+    legacy_presentation_adapters = (
+        browser_root / "native_adapters.py",
+        browser_root / "scripts.py",
+    )
     forbidden_modules = {
         "os",
         "tempfile",
@@ -971,6 +976,24 @@ def test_browser_download_widget_has_no_transfer_or_storage_adapters():
             )
             if any(module in forbidden_modules for module in modules):
                 violations.append(_display(path, node))
+
+    assert not legacy_url_policy.exists()
+    assert not any(path.exists() for path in legacy_presentation_adapters)
+    assert violations == []
+
+
+def test_browser_url_policy_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "network" / "browser_urls.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if any(root in {"PySide6", "solin"} for root in roots):
+            violations.append(_display(path, node))
 
     assert violations == []
 
