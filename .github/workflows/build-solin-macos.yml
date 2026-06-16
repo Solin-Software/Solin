@@ -86,6 +86,7 @@ jobs:
           test -d translations/locales
           test -d translations
           test -f native_webview_widget/__init__.py
+          test -f native_webview_widget/abi.py
           test -f native_webview_widget/_backend.py
           test -f native_webview_widget/widget.py
 

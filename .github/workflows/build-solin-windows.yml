@@ -106,6 +106,7 @@ jobs:
             "translations\locales",
             "translations",
             "native_webview_widget\__init__.py",
+            "native_webview_widget\abi.py",
             "native_webview_widget\_backend.py",
             "native_webview_widget\widget.py",
             "native_webview_widget\native_webview_widget.dll",

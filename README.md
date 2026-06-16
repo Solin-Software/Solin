@@ -32,6 +32,7 @@ thin local launcher during development.
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m pyright --pythonpath .\.venv\Scripts\python.exe
 .\.venv\Scripts\python.exe scripts\check_locales.py
+.\.venv\Scripts\python.exe scripts\validate_native_webview.py
 ```
 
 `pyproject.toml` centralizes pytest, Ruff, and Pyright configuration. Ruff

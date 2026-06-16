@@ -7,6 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .abi import (
+    EVENT_DOWNLOAD_REQUESTED,
+    EVENT_NAVIGATION_FAILED,
+    EVENT_NAVIGATION_FINISHED,
+    EVENT_NAVIGATION_STARTED,
+    EVENT_NEW_WINDOW_REQUESTED,
+    EVENT_READY,
+    EVENT_SCRIPT_MESSAGE,
+    EVENT_TITLE_CHANGED,
+    native_library_candidates,
+)
+
 
 class NativeWebViewError(RuntimeError):
     """Raised when the native webview backend cannot be loaded or used."""
@@ -84,14 +96,14 @@ class _NativeCookieUtf8(ctypes.Structure):
 
 
 class NativeBackend:
-    EVENT_READY = 1
-    EVENT_NAVIGATION_STARTED = 2
-    EVENT_NAVIGATION_FINISHED = 3
-    EVENT_NAVIGATION_FAILED = 4
-    EVENT_TITLE_CHANGED = 5
-    EVENT_DOWNLOAD_REQUESTED = 6
-    EVENT_NEW_WINDOW_REQUESTED = 7
-    EVENT_SCRIPT_MESSAGE = 8
+    EVENT_READY = EVENT_READY
+    EVENT_NAVIGATION_STARTED = EVENT_NAVIGATION_STARTED
+    EVENT_NAVIGATION_FINISHED = EVENT_NAVIGATION_FINISHED
+    EVENT_NAVIGATION_FAILED = EVENT_NAVIGATION_FAILED
+    EVENT_TITLE_CHANGED = EVENT_TITLE_CHANGED
+    EVENT_DOWNLOAD_REQUESTED = EVENT_DOWNLOAD_REQUESTED
+    EVENT_NEW_WINDOW_REQUESTED = EVENT_NEW_WINDOW_REQUESTED
+    EVENT_SCRIPT_MESSAGE = EVENT_SCRIPT_MESSAGE
 
     def __init__(self) -> None:
         self._system = platform.system()
@@ -336,14 +348,8 @@ class NativeBackend:
             raise NativeWebViewError(f"NATIVE_WEBVIEW_WIDGET_LIB points to a missing file: {path}")
 
         package_dir = Path(__file__).resolve().parent
-        if self._system == "Windows":
-            candidates = [package_dir / "native_webview_widget.dll"]
-        elif self._system == "Darwin":
-            candidates = [
-                package_dir / "libnative_webview_widget.dylib",
-                package_dir / "native_webview_widget.dylib",
-            ]
-        else:
+        candidates = native_library_candidates(self._system, package_dir)
+        if not candidates:
             raise NativeWebViewError("native-webview-widget currently supports Windows and macOS only.")
 
         for candidate in candidates:
