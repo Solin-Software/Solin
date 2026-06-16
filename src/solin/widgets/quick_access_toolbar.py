@@ -14,7 +14,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion, QSurfaceFormat
+from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QToolTip, QWidget
 
@@ -26,7 +26,7 @@ from solin.core.integrations.camera import CameraOption
 from solin.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.core.ui.macos_layer import apply_corner_radius
 from solin.ui.background_song_status import translate_background_song_status
-from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.camera_popup import CameraPopup
@@ -110,10 +110,6 @@ class QuickAccessToolbar(QQuickWidget):
         # Instead, position changes use move() only, and the visible pill
         # width is driven entirely by QML layout.
         #
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self.setFormat(fmt)
-
         if parent is not None:
             self.setParent(parent)
 
@@ -122,15 +118,12 @@ class QuickAccessToolbar(QQuickWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setStyleSheet("background: transparent;")
-        self.setClearColor(QColor(0, 0, 0, 0))
-        self.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
         if _MAC:
             # Solid mode: the widget is resized to its content (no transparent
             # padding). Start at a sane size; _reposition() sets the exact one.
             self.resize(_QAT_MAX_W, _QAT_H)
         else:
             self.setFixedSize(_QAT_MAX_W, _QAT_H)  # fixed size — never changes
-        self.setMouseTracking(True)
         self.installEventFilter(self)
 
         # ── Bridge (Python ↔ QML) ─────────────────────────────────────────
@@ -152,10 +145,14 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_solid_mode(True)
 
         # ── QML engine: image provider + context ──────────────────────────
-        self.engine().addImageProvider("icons", SvgIconProvider())
-        self.engine().rootContext().setContextProperty("bridge", self._bridge)
-
-        load_qml_type(self, "QuickAccessToolbar")
+        configure_qml_host(
+            self,
+            type_name="QuickAccessToolbar",
+            clear_color=QColor(0, 0, 0, 0),
+            image_providers={"icons": SvgIconProvider()},
+            context_properties={"bridge": self._bridge},
+            mouse_tracking=True,
+        )
 
         # ── Monitor-button proxy (anchor for popup positioning) ───────────
         self._monitor_btn = QWidget(self)

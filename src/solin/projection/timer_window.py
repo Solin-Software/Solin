@@ -15,12 +15,11 @@ from __future__ import annotations
 from PySide6.QtCore import (
     QEasingCurve, QPropertyAnimation, QTimer, Slot, Qt
 )
-from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..core.ui.fonts import timer_digit_font_family
-from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.timer_output import ClockRenderBridge
 from .window import exclude_from_aero_peek
 
@@ -59,17 +58,15 @@ class TimerOutputWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self._qml = QQuickWidget()
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self._qml.setFormat(fmt)
-        self._qml.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-        self._qml.setClearColor(QColor("#000000"))
-        self._qml.rootContext().setContextProperty(
-            "timerDigitFontFamily",
-            timer_digit_font_family(),
+        configure_qml_host(
+            self._qml,
+            type_name="ClockFace",
+            clear_color="#000000",
+            context_properties={
+                "timerDigitFontFamily": timer_digit_font_family(),
+                "clock": bridge,
+            },
         )
-        self._qml.rootContext().setContextProperty("clock", bridge)
-        load_qml_type(self._qml, "ClockFace")
         layout.addWidget(self._qml)
         self.setLayout(layout)
 

@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QUrl, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QMessageBox, QVBoxLayout, QWidget
 
@@ -18,7 +17,7 @@ from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.media.cache import MediaCacheManager
 from ..core.i18n.manager import LanguageManager
 from ..core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
-from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.media_library import (
     MediaLibraryBridge,
     MediaLibraryIconProvider,
@@ -93,21 +92,19 @@ class MediaLibraryWidget(QWidget):
         root.setSpacing(0)
 
         self.qml_widget = QQuickWidget()
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self.qml_widget.setFormat(fmt)
         self.qml_widget.setParent(self)
-        self.qml_widget.setClearColor(QColor("#0d1117"))
-        self.qml_widget.setMouseTracking(True)
         self.qml_widget.installEventFilter(self)
-        self.qml_widget.engine().addImageProvider("mediaicons", MediaLibraryIconProvider())
-
-        ctx = self.qml_widget.rootContext()
-        ctx.setContextProperty("libraryModel", self.model)
-        ctx.setContextProperty("controller", self.bridge)
-
-        load_qml_type(self.qml_widget, "MediaLibraryView")
-        self.qml_widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
+        configure_qml_host(
+            self.qml_widget,
+            type_name="MediaLibraryView",
+            clear_color="#0d1117",
+            image_providers={"mediaicons": MediaLibraryIconProvider()},
+            context_properties={
+                "libraryModel": self.model,
+                "controller": self.bridge,
+            },
+            mouse_tracking=True,
+        )
         root.addWidget(self.qml_widget, stretch=1)
 
     def _connect_signals(self) -> None:

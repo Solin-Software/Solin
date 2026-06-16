@@ -16,10 +16,10 @@ from PySide6.QtCore import (
     QObject, Signal, QTimer,
     QEvent, Slot,
 )
-from PySide6.QtGui import QPixmap, QColor
+from PySide6.QtGui import QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtGui import QSurfaceFormat
 
+from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.model import PlaylistEditModel
 from solin.ui.qml.playlist.visuals import (
@@ -28,8 +28,6 @@ from solin.ui.qml.playlist.visuals import (
 )
 from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
-
-from solin.ui.qml.loader import load_qml_type
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths
@@ -244,37 +242,30 @@ class PlaylistEditView(
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Create QQuickWidget
         self.qml_widget = QQuickWidget(self)
-        fmt = QSurfaceFormat()
-        fmt.setAlphaBufferSize(8)
-        self.qml_widget.setFormat(fmt)
-        self.qml_widget.setClearColor(QColor("#0a0e14"))
-        self.qml_widget.setMouseTracking(True)
         self.qml_widget.installEventFilter(self)
-
-        # Set image providers
-        self.qml_widget.engine().addImageProvider(
-            "playlistthumbs",
-            PlaylistThumbnailProvider(
-                self._id_to_thumb,
-                disk_loader_cb=lambda item_id: load_thumbnail(
-                    self._playlist_thumbnail_store,
-                    item_id,
+        configure_qml_host(
+            self.qml_widget,
+            type_name="PlaylistEditView",
+            clear_color="#0a0e14",
+            image_providers={
+                "playlistthumbs": PlaylistThumbnailProvider(
+                    self._id_to_thumb,
+                    disk_loader_cb=lambda item_id: load_thumbnail(
+                        self._playlist_thumbnail_store,
+                        item_id,
+                    ),
                 ),
-            )
+                "playlisticons": PlaylistIconProvider(),
+            },
+            context_properties={
+                "playlistModel": self.model,
+                "controller": self.bridge,
+                "catalogBridge": self.catalog_bridge,
+                "songsBridge": self.songs_bridge,
+            },
+            mouse_tracking=True,
         )
-        self.qml_widget.engine().addImageProvider("playlisticons", PlaylistIconProvider())
-
-        # Set context properties
-        ctx = self.qml_widget.rootContext()
-        ctx.setContextProperty("playlistModel", self.model)
-        ctx.setContextProperty("controller", self.bridge)
-        ctx.setContextProperty("catalogBridge", self.catalog_bridge)
-        ctx.setContextProperty("songsBridge", self.songs_bridge)
-
-        load_qml_type(self.qml_widget, "PlaylistEditView")
-        self.qml_widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
 
         root.addWidget(self.qml_widget, stretch=1)
 

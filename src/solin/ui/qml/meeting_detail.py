@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 
-from solin.ui.qml.loader import load_qml_type
+from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.visuals import (
     PlaylistIconProvider,
     PlaylistThumbnailProvider,
@@ -32,36 +31,29 @@ class MeetingDetailQmlHost(QQuickWidget):
     ) -> None:
         super().__init__(parent)
 
-        surface_format = QSurfaceFormat()
-        surface_format.setAlphaBufferSize(8)
-        self.setFormat(surface_format)
-        self.setClearColor(QColor("#0d1117"))
-        self.setMouseTracking(True)
-        self.setAcceptDrops(False)
-
-        self.engine().addImageProvider(
-            "playlistthumbs",
-            PlaylistThumbnailProvider(
-                controller.thumb_cache,
-                controller.disk_thumbnail,
-            ),
+        configure_qml_host(
+            self,
+            type_name="MeetingDetailView",
+            clear_color="#0d1117",
+            image_providers={
+                "playlistthumbs": PlaylistThumbnailProvider(
+                    controller.thumb_cache,
+                    controller.disk_thumbnail,
+                ),
+                "playlisticons": PlaylistIconProvider(),
+            },
+            context_properties={
+                "controller": controller,
+                "catalogBridge": catalog_bridge,
+                "songsBridge": songs_bridge,
+                "pillColor": pill_color,
+                "meetingPill": meeting_pill,
+                "meetingDate": meeting_date,
+                "noItemsText": no_items_text,
+            },
+            mouse_tracking=True,
+            accept_drops=False,
         )
-        self.engine().addImageProvider("playlisticons", PlaylistIconProvider())
-
-        context = self.rootContext()
-        context.setContextProperty("controller", controller)
-        context.setContextProperty("catalogBridge", catalog_bridge)
-        context.setContextProperty("songsBridge", songs_bridge)
-        context.setContextProperty("pillColor", pill_color)
-        self.update_shell_texts(
-            meeting_pill=meeting_pill,
-            meeting_date=meeting_date,
-            no_items_text=no_items_text,
-            retranslate=False,
-        )
-
-        load_qml_type(self, "MeetingDetailView")
-        self.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
 
     def update_shell_texts(
         self,
