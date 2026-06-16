@@ -297,11 +297,11 @@ class ZoomService(QObject):
         generation: int,
         session: ZoomSession,
     ) -> None:
-        from . import controls as _zc
+        from . import controls
         _init_com()
         try:
-            windows, pids = _zc._find_zoom_windows_fast(session)
-            main, _ = _zc._find_main_window(session, windows)
+            windows, pids = controls._find_zoom_windows_fast(session)
+            main, _ = controls._find_main_window(session, windows)
             connected = main is not None
         except Exception:  # noqa: BLE001 - Zoom UIA connection boundary
             connected = False
@@ -367,20 +367,20 @@ class ZoomService(QObject):
           3. warm_toolbar_cache() com include_participants=True cacheia toolbar +
              mute_all_btn + more_btn em um único scan.
         """
-        from . import controls as _zc
+        from . import controls
         _init_com()
         try:
             # Abre painel se necessário (detecção robusta impede toggle acidental)
-            _zc._open_participants_panel(session)
+            controls._open_participants_panel(session)
             time.sleep(0.1)
 
             # get_participant_names() detecta painel já aberto → não fecha
-            names = _zc.get_participant_names(session)
-            count = _zc.count_people(names, exclude_host=True) if names else 0
+            names = controls.get_participant_names(session)
+            count = controls.count_people(names, exclude_host=True) if names else 0
 
             # Cache proativo: toolbar + botões do painel de participantes
             try:
-                _zc.warm_toolbar_cache(
+                controls.warm_toolbar_cache(
                     session,
                     {"btn_paticipants", "btn_muteAudio", "btn_audioMenu"},
                     reveal=True,
@@ -412,13 +412,13 @@ class ZoomService(QObject):
         Uses the fast Win32 FindWindowW check (~0ms) instead of full UIA scan.
         Cache-first strategy: if poller kept the cache warm, invoke is ~0.5ms.
         """
-        from . import controls as _zc
+        from . import controls
         import time
         t_start = time.perf_counter()
         _init_com()
         try:
             t0 = time.perf_counter()
-            is_sharing_fast = _zc._find_float_toolbar_hwnd()
+            is_sharing_fast = controls._find_float_toolbar_hwnd()
             log.info(f"[ZStop] FindWindowW() check took: {(time.perf_counter()-t0)*1000:.1f}ms")
             
             if not is_sharing_fast:
@@ -430,13 +430,13 @@ class ZoomService(QObject):
             
             log.info("[ZStop] Calling stop_screen_share()...")
             t0 = time.perf_counter()
-            _zc.stop_screen_share(session)
+            controls.stop_screen_share(session)
             log.info(f"[ZStop] stop_screen_share() returned in {(time.perf_counter()-t0)*1000:.1f}ms")
             log.info(f"[ZStop] Total worker time: {(time.perf_counter()-t_start)*1000:.1f}ms")
             
         except RuntimeError as exc:
             log.warning("Zoom stop share failed: %s", exc)
-            if not _zc._find_float_toolbar_hwnd():
+            if not controls._find_float_toolbar_hwnd():
                 return
             self._sig_share_error.emit(generation, str(exc))
             self._sig_sharing.emit(generation, False)
@@ -459,12 +459,12 @@ class ZoomService(QObject):
         session: ZoomSession,
     ) -> None:
         """Check if sharing is still active. Uses fast Win32 check + cache refresh."""
-        from . import controls as _zc
+        from . import controls
         import ctypes
         _init_com()
         try:
             # _is_sharing() now uses FindWindowW (~0ms) + validates/refreshes cache
-            still_sharing = _zc._is_sharing(session)
+            still_sharing = controls._is_sharing(session)
             if not still_sharing:
                 # Pode ser que a pessoa apenas começou a compartilhar e está com a 
                 # caixa de seleção do que compartilhar (ZPShareEntranceClass) aberta.
@@ -505,15 +505,15 @@ class ZoomService(QObject):
         session: ZoomSession,
     ) -> None:
         """Leave computer audio + unmute all."""
-        from . import controls as _zc
+        from . import controls
         _init_com()
         try:
-            _zc.leave_computer_audio(session)
+            controls.leave_computer_audio(session)
             time.sleep(0.3)
         except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom leave_computer_audio failed: %s", e)
 
         try:
-            _zc.unmute_all(session)
+            controls.unmute_all(session)
         except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
             log.warning("Zoom unmute_all failed: %s", e)

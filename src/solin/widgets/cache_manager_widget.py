@@ -645,7 +645,6 @@ class CacheManagerWidget(QWidget):
             if card.path == path:
                 if thumb:
                     card.set_thumbnail(thumb)
-                # --- ADICIONE ESTAS DUAS LINHAS ---
                 if title:
                     card.set_title(title)
                 break

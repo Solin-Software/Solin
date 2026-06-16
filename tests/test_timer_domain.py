@@ -208,10 +208,10 @@ def test_timer_part_i18n_sources_cover_canonical_titles():
 
 
 def test_timer_parts_model_formats_started_time_with_locale_pattern():
-    import time as _time
+    import time
     from solin.ui.qml.timer_bridge import _parts_model_for_schedule
 
-    epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
+    epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     sch.parts[0].first_started_epoch = epoch
 
@@ -221,10 +221,10 @@ def test_timer_parts_model_formats_started_time_with_locale_pattern():
 
 
 def test_timer_pdf_rows_include_finished_time_from_started_plus_duration():
-    import time as _time
+    import time
     from solin.core.rendering.timer_report_pdf import build_timer_pdf_rows
 
-    epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
+    epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.WEEKEND)
     part = sch.parts[0]
     part.first_started_epoch = epoch
@@ -282,10 +282,10 @@ def test_timer_pdf_summary_counts_completed_parts_by_time_accuracy():
 
 
 def test_format_time_with_seconds_supports_locale_patterns():
-    import time as _time
+    import time
     from solin.core.i18n.date import format_datetime, format_time_with_seconds
 
-    epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
+    epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
 
     assert format_time_with_seconds(epoch, "HH:mm:ss") == "05:04:03"
     assert format_time_with_seconds(epoch, "h:mm:ss") == "5:04:03"
@@ -296,10 +296,10 @@ def test_format_time_with_seconds_supports_locale_patterns():
 
 
 def test_time_formatting_falls_back_for_invalid_user_patterns(monkeypatch):
-    import time as _time
+    import time
     from solin.core.i18n import date as date_i18n
 
-    epoch = _time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
+    epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
 
     def reject_pattern(_epoch, _pattern):
         raise ValueError("invalid pattern")
@@ -827,7 +827,7 @@ def test_snapshot_roundtrip_preserves_canonical_display_fields():
 # ── Store persistence ─────────────────────────────────────────────────────────
 
 def test_render_idle_digital_matches_wall_clock():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
@@ -837,8 +837,8 @@ def test_render_idle_digital_matches_wall_clock():
     model = build_render_model(snap, cfg)
     assert model["mode"] == "digital"
     assert model["display_mode"] == "clock"
-    assert model["primary_text"] == _time.strftime("%H:%M", _time.localtime(epoch))
-    assert model["seconds_text"] == _time.strftime("%S", _time.localtime(epoch))
+    assert model["primary_text"] == time.strftime("%H:%M", time.localtime(epoch))
+    assert model["seconds_text"] == time.strftime("%S", time.localtime(epoch))
     assert model["clock"]["primary_text"] == model["primary_text"]
     assert not model["active"]
 
@@ -858,19 +858,19 @@ def test_render_idle_analog_sets_hand_angles():
 
 
 def test_render_idle_analog_digital_sets_hands_and_clock_text():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(active=False, wall_clock_epoch=epoch, direction=Direction.DOWN)
     cfg = ClockConfig(mode=ClockMode.ANALOG_DIGITAL, hour_format_24h=True, show_seconds=True)
 
     model = build_render_model(snap, cfg)
 
     assert model["mode"] == "analog_digital"
-    assert model["primary_text"] == _time.strftime("%H:%M", _time.localtime(epoch))
-    assert model["seconds_text"] == _time.strftime("%S", _time.localtime(epoch))
+    assert model["primary_text"] == time.strftime("%H:%M", time.localtime(epoch))
+    assert model["seconds_text"] == time.strftime("%S", time.localtime(epoch))
     assert model["secondary_text"] == ""
     assert model["hour_angle"] > 0.0
     assert model["minute_angle"] > 0.0
@@ -878,11 +878,11 @@ def test_render_idle_analog_digital_sets_hands_and_clock_text():
 
 
 def test_render_idle_analog_second_hand_ticks_once_per_second():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    base = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    base = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     cfg = ClockConfig(mode=ClockMode.ANALOG)
     first = build_render_model(
         TimerSnapshot(active=False, wall_clock_epoch=base + 0.10, direction=Direction.DOWN),
@@ -927,11 +927,11 @@ def test_render_active_countdown_and_overrun():
 
 
 def test_render_active_can_show_clock_only_with_configured_clock_face():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
         active_part_title="Part 1", planned_seconds=300,
@@ -955,11 +955,11 @@ def test_render_active_can_show_clock_only_with_configured_clock_face():
 
 
 def test_render_active_can_show_configured_clock_with_timer():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
         active_part_title="Part 1", planned_seconds=300,
@@ -980,11 +980,11 @@ def test_render_active_can_show_configured_clock_with_timer():
 
 
 def test_render_active_analog_clock_sector_marks_remaining_time():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
         active_part_title="Part 1", planned_seconds=300,
@@ -1006,11 +1006,11 @@ def test_render_active_analog_clock_sector_marks_remaining_time():
 
 
 def test_render_active_analog_clock_sector_marks_overrun_trail():
-    import time as _time
+    import time
     from solin.core.timer.render import build_render_model
     from solin.core.timer.models import TimerSnapshot
 
-    epoch = _time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
+    epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
         active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
         active_part_title="Part 1", planned_seconds=300,

@@ -481,7 +481,7 @@ class OBSWebSocketService(QObject):
 
     def _request_scenes(self, ws) -> list[str]:
         """Envia GetSceneList e retorna nomes em ordem de criação."""
-        import websocket as _ws_mod
+        import websocket
         req_id = str(uuid.uuid4())[:8]
         ws.send(json.dumps({
             "op": _OP_REQUEST,
@@ -491,7 +491,7 @@ class OBSWebSocketService(QObject):
         while time.time() < deadline:
             try:
                 raw = ws.recv()
-            except _ws_mod.WebSocketTimeoutException:
+            except websocket.WebSocketTimeoutException:
                 continue
             if not raw:
                 continue
@@ -503,7 +503,7 @@ class OBSWebSocketService(QObject):
 
     def _request_current_scene(self, ws) -> str:
         """Envia GetCurrentProgramScene e retorna o nome da cena ativa."""
-        import websocket as _ws_mod
+        import websocket
         req_id = str(uuid.uuid4())[:8]
         ws.send(json.dumps({
             "op": _OP_REQUEST,
@@ -513,7 +513,7 @@ class OBSWebSocketService(QObject):
         while time.time() < deadline:
             try:
                 raw = ws.recv()
-            except _ws_mod.WebSocketTimeoutException:
+            except websocket.WebSocketTimeoutException:
                 continue
             if not raw:
                 continue
@@ -524,7 +524,7 @@ class OBSWebSocketService(QObject):
 
     def _request_record_status(self, ws) -> bool:
         """Envia GetRecordStatus e retorna se está gravando."""
-        import websocket as _ws_mod
+        import websocket
         req_id = str(uuid.uuid4())[:8]
         ws.send(json.dumps({
             "op": _OP_REQUEST,
@@ -534,7 +534,7 @@ class OBSWebSocketService(QObject):
         while time.time() < deadline:
             try:
                 raw = ws.recv()
-            except _ws_mod.WebSocketTimeoutException:
+            except websocket.WebSocketTimeoutException:
                 continue
             if not raw:
                 continue

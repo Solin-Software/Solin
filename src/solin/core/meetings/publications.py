@@ -52,11 +52,7 @@ from solin.core.media.cache import MediaCacheManager
 from solin.core.media.download_storage import is_url_cached
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.storage.json_repository import JsonFileRepository
-from .models import (
-    MeetingMedia as _MeetingMedia,
-    MeetingPublicationRef as _MeetingPublicationRef,
-    WeekData as _WeekData,
-)
+from . import models as meeting_models
 
 log = logging.getLogger(__name__)
 
@@ -432,9 +428,9 @@ def _row_value(row, key: str) -> str:
 
 
 def _clean_ref_text(value: str) -> str:
-    import re as _re
-    text = _re.sub(r"<[^>]+>", "", value or "")
-    return _re.sub(r"\s+", " ", text).strip()
+    import re
+    text = re.sub(r"<[^>]+>", "", value or "")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _publication_title_from_row(row, fallback: str) -> str:
@@ -673,7 +669,7 @@ def _get_mwb_publication_refs(
     mid_ord: Optional[int] = None,
     final_song_ord: Optional[int] = None,
     cbs_start: Optional[int] = None,
-) -> list[_MeetingPublicationRef]:
+) -> list[meeting_models.MeetingPublicationRef]:
     if rows is None:
         rows = _mwb_publication_ref_rows(conn, doc_id, include_web=True)
     if not rows:
@@ -690,7 +686,7 @@ def _get_mwb_publication_refs(
             or _mwb_cbs_start_from_rows(rows, final_song_ord)
         )
 
-    refs_by_key: dict[tuple[str, str, str, int, bool], _MeetingPublicationRef] = {}
+    refs_by_key: dict[tuple[str, str, str, int, bool], meeting_models.MeetingPublicationRef] = {}
     order: list[tuple[str, str, str, int, bool]] = []
     for row in rows:
         pub = str(row["undated"] or "").strip()
@@ -709,7 +705,7 @@ def _get_mwb_publication_refs(
             if len(caption) > len(ref.caption):
                 ref.caption = caption
             continue
-        refs_by_key[key] = _MeetingPublicationRef(
+        refs_by_key[key] = meeting_models.MeetingPublicationRef(
             section=section,
             begin_ordinal=par,
             pub=pub,
@@ -777,11 +773,11 @@ def _media_file_path(raw_path: str, pub_dir: Path) -> str:
 
 
 def _make_media_item(r, pub_dir: Path, section: str,
-                     is_song: bool, cbs_title: str = "") -> _MeetingMedia:
+                     is_song: bool, cbs_title: str = "") -> meeting_models.MeetingMedia:
     mime   = (r["MimeType"] or "").lower()
     fp     = r["FilePath"] or ""
     file_path = _media_file_path(fp, pub_dir)
-    return _MeetingMedia(
+    return meeting_models.MeetingMedia(
         multimedia_id     = r["MultimediaId"],
         mime_type         = mime,
         file_path         = file_path,
@@ -858,7 +854,7 @@ def _parse_mwb_media(
     pub_dir: Path,
     mid_ord: Optional[int] = None,
     cbs_start: Optional[int] = None,
-) -> list[_MeetingMedia]:
+) -> list[meeting_models.MeetingMedia]:
     if mid_ord is None:
         mid_ord = _mwb_mid_ordinal(conn, doc_id)
     if cbs_start is None:
@@ -872,7 +868,7 @@ def _parse_mwb_media(
         result.append(_make_media_item(r, pub_dir, section, is_song))
     return result
 
-def _parse_wt_media(conn, doc_id: int, pub_dir: Path) -> list[_MeetingMedia]:
+def _parse_wt_media(conn, doc_id: int, pub_dir: Path) -> list[meeting_models.MeetingMedia]:
     return [
         _make_media_item(r, pub_dir, "wt", (r["KeySymbol"] or "").lower() in SONG_SYMS)
         for r in _dedup_multimedia_rows(_query_multimedia(conn, doc_id))
@@ -884,7 +880,7 @@ def _parse_publication_ref_items(
     meps_doc_id: int,
     section: str,
     marker_title: str,
-) -> list[_MeetingMedia]:
+) -> list[meeting_models.MeetingMedia]:
     result = []
     try:
         conn = _conn(db_path)
@@ -906,7 +902,7 @@ def _parse_publication_ref_items(
     return result
 
 
-def _sync_cbs_from_publication_refs(wd: _WeekData) -> None:
+def _sync_cbs_from_publication_refs(wd: meeting_models.WeekData) -> None:
     refs = [
         ref for ref in getattr(wd, "mwb_publication_refs", []) or []
         if getattr(ref, "is_cbs", False)
@@ -916,7 +912,7 @@ def _sync_cbs_from_publication_refs(wd: _WeekData) -> None:
         return
 
     refs = sorted(refs, key=lambda ref: int(ref.begin_ordinal or 0))
-    items: list[_MeetingMedia] = []
+    items: list[meeting_models.MeetingMedia] = []
     meps_doc_ids: list[int] = []
     doc_titles: dict[int, str] = {}
     for ref in refs:
@@ -1096,7 +1092,7 @@ class _JwpubWorker(QObject):
         if not self._cache.is_cached("mwb", lang, issue):
             return False
         self._parse_mwb(
-            _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+            meeting_models.WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
             monday, issue, lang,
         )
         return True
@@ -1119,7 +1115,7 @@ class _JwpubWorker(QObject):
             if self._cache.is_cached("mwb", lang, issue):
                 log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
                 self._parse_mwb(
-                    _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+                    meeting_models.WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
                     monday, issue, lang,
                 )
                 return
@@ -1132,7 +1128,7 @@ class _JwpubWorker(QObject):
             # Cópia local confirmada atual. Se já a servimos, "nada acontece".
             if not served:
                 self._parse_mwb(
-                    _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+                    meeting_models.WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
                     monday, issue, lang,
                 )
             return
@@ -1142,11 +1138,11 @@ class _JwpubWorker(QObject):
             return  # falhou; se já servimos cache, ele permanece na tela
         self._checksum_store.save("mwb", lang, issue, checksum)
         self._parse_mwb(
-            _WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
+            meeting_models.WeekData(monday=monday, mwb_status="loading", mwb_issue=issue),
             monday, issue, lang,
         )
 
-    def _parse_mwb(self, wd: _WeekData, monday: date, issue: str, lang: str):
+    def _parse_mwb(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
         key     = monday.isoformat()
         pub_dir = self._ensure_extract("mwb", lang, issue)
         db_path = self._cache.db_path("mwb", lang, issue) if pub_dir else None
@@ -1233,7 +1229,7 @@ class _JwpubWorker(QObject):
         for issue in _wt_candidates(monday):
             if not self._cache.is_cached("w", lang, issue):
                 continue
-            wd = _WeekData(monday=monday, wt_status="loading")
+            wd = meeting_models.WeekData(monday=monday, wt_status="loading")
             if self._try_wt_cached(wd, monday, issue, lang):
                 return issue
         return None
@@ -1252,14 +1248,14 @@ class _JwpubWorker(QObject):
                 if self._download("w", lang, served_issue, url, key, "wt", emit_error=False):
                     self._checksum_store.save("w", lang, served_issue, checksum)
                     self._try_wt_cached(
-                        _WeekData(monday=monday, wt_status="loading"),
+                        meeting_models.WeekData(monday=monday, wt_status="loading"),
                         monday, served_issue, lang,
                     )
             return
         # Caminho frio: sem cache utilizável → sonda candidatos e baixa pela rede.
         self._download_wt_chain(monday, lang, _wt_candidates(monday)[:], force=force)
 
-    def _try_wt_cached(self, wd: _WeekData, monday: date,
+    def _try_wt_cached(self, wd: meeting_models.WeekData, monday: date,
                         issue: str, lang: str) -> bool:
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
@@ -1309,7 +1305,7 @@ class _JwpubWorker(QObject):
                         "wt %s: API unreachable, falling back to cached copy",
                         issue,
                     )
-                    wd = _WeekData(monday=monday, wt_status="loading")
+                    wd = meeting_models.WeekData(monday=monday, wt_status="loading")
                     if self._try_wt_cached(wd, monday, issue, lang):
                         return
                 continue
@@ -1319,15 +1315,15 @@ class _JwpubWorker(QObject):
                     continue
                 self._checksum_store.save("w", lang, issue, checksum)
 
-            wd = _WeekData(monday=monday, wt_status="loading")
+            wd = meeting_models.WeekData(monday=monday, wt_status="loading")
             if self._try_wt_cached(wd, monday, issue, lang):
                 return
 
-        wd = _WeekData(monday=monday, wt_status="not_found" if had_api else "error")
+        wd = meeting_models.WeekData(monday=monday, wt_status="not_found" if had_api else "error")
         msg = "NOT_FOUND" if had_api else "No WT issue found for this week"
         self.error.emit(key, "wt", msg)
 
-    def _parse_wt(self, wd: _WeekData, monday: date, issue: str, lang: str):
+    def _parse_wt(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
         key     = monday.isoformat()
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
@@ -1359,7 +1355,7 @@ class _JwpubWorker(QObject):
         wd.wt_status      = "ready"
         self.wt_done.emit(key, wd)
 
-    def _sync_loaded_publication_refs(self, wd: _WeekData, lang: str) -> None:
+    def _sync_loaded_publication_refs(self, wd: meeting_models.WeekData, lang: str) -> None:
         _sync_cbs_from_publication_refs(wd)
         cbs_ref = next(
             (
@@ -1378,14 +1374,14 @@ class _JwpubWorker(QObject):
     def _load_mwb_publication_refs(
         self,
         monday: date,
-        wd: _WeekData,
-        refs: list[_MeetingPublicationRef],
+        wd: meeting_models.WeekData,
+        refs: list[meeting_models.MeetingPublicationRef],
     ):
         key = monday.isoformat()
         lang = self._lang
 
-        def build(cache_only: bool) -> tuple[list[_MeetingPublicationRef], bool]:
-            out: list[_MeetingPublicationRef] = []
+        def build(cache_only: bool) -> tuple[list[meeting_models.MeetingPublicationRef], bool]:
+            out: list[meeting_models.MeetingPublicationRef] = []
             downloaded = False
             for ref in refs:
                 items, did_dl = self._load_publication_ref_items(
@@ -1417,9 +1413,9 @@ class _JwpubWorker(QObject):
         self,
         key: str,
         lang: str,
-        ref: _MeetingPublicationRef,
+        ref: meeting_models.MeetingPublicationRef,
         cache_only: bool = False,
-    ) -> tuple[list[_MeetingMedia], bool]:
+    ) -> tuple[list[meeting_models.MeetingMedia], bool]:
         """
         Resolve os itens de mídia de uma referência de publicação.
 
@@ -1467,8 +1463,8 @@ class _JwpubWorker(QObject):
         return self._parse_ref_items(pub, lang, issue, ref), downloaded
 
     def _parse_ref_items(
-        self, pub: str, lang: str, issue: str, ref: _MeetingPublicationRef
-    ) -> list[_MeetingMedia]:
+        self, pub: str, lang: str, issue: str, ref: meeting_models.MeetingPublicationRef
+    ) -> list[meeting_models.MeetingMedia]:
         pub_dir = self._ensure_extract(pub, lang, issue)
         db_path = self._cache.db_path(pub, lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
@@ -1500,10 +1496,10 @@ class _JwpubWorker(QObject):
     # ── Auto-prefetch ─────────────────────────────────────────────────────────
 
     @Slot(object)
-    def prefetch_week_media(self, wd: _WeekData):
+    def prefetch_week_media(self, wd: meeting_models.WeekData):
         """Resolve URLs e emite prefetch_requested para cada item não cacheado."""
         all_items = list(wd.mwb_all_media) + list(wd.wt_all_media)
-        ref_items: list[_MeetingMedia] = []
+        ref_items: list[meeting_models.MeetingMedia] = []
         for ref in getattr(wd, "mwb_publication_refs", []):
             ref_items.extend(getattr(ref, "items", []) or [])
         all_items.extend(ref_items or list(wd.cbs_items))
@@ -1610,7 +1606,7 @@ class JwpubService(QObject):
         super().__init__(parent)
         self._media_settings = media_settings
         self._cache_manager = cache_manager
-        self._active: dict[str, _WeekData] = {}
+        self._active: dict[str, meeting_models.WeekData] = {}
         self._lang   = "T"
         self._is_sign_language = False
 
@@ -1699,14 +1695,14 @@ class JwpubService(QObject):
             existing = self._active[key]
             if existing.mwb_status not in ("error",) and existing.wt_status not in ("error",):
                 return
-        wd = _WeekData(monday=monday)
+        wd = meeting_models.WeekData(monday=monday)
         self._active[key] = wd
         self._sig_load_week.emit(monday, force)
 
-    def get_week_data(self, monday: date) -> Optional[_WeekData]:
+    def get_week_data(self, monday: date) -> Optional[meeting_models.WeekData]:
         return self._active.get(monday.isoformat())
 
-    def resolve_video_async(self, request_id: str, item: "_MeetingMedia"):
+    def resolve_video_async(self, request_id: str, item: "meeting_models.MeetingMedia"):
         """
         Resolve URL de vídeo de forma assíncrona.
         Resultado chega via signal video_resolved(request_id, url, title, thumb).
@@ -1718,7 +1714,7 @@ class JwpubService(QObject):
             item.meps_doc_id, self._lang,
         )
 
-    def resolve_video(self, item: "_MeetingMedia") -> dict:
+    def resolve_video(self, item: "meeting_models.MeetingMedia") -> dict:
         """
         Resolve URL de vídeo de forma SÍNCRONA (bloqueia a main thread ~200ms).
         Use apenas para ações pontuais do usuário (ex: clique em reproduzir),
@@ -1770,7 +1766,7 @@ class JwpubService(QObject):
     # ── Worker callbacks (chegam na main thread via QueuedConnection) ─────────
 
     @Slot(str, object)
-    def _on_mwb_done(self, key: str, wd: _WeekData):
+    def _on_mwb_done(self, key: str, wd: meeting_models.WeekData):
         existing = self._active.get(key)
         if existing:
             existing.mwb_pub_dir     = wd.mwb_pub_dir
@@ -1791,7 +1787,7 @@ class JwpubService(QObject):
             self._check_complete(key)
 
     @Slot(str, object)
-    def _on_wt_done(self, key: str, wd: _WeekData):
+    def _on_wt_done(self, key: str, wd: meeting_models.WeekData):
         existing = self._active.get(key)
         if existing:
             existing.wt_pub_dir     = wd.wt_pub_dir
@@ -1808,7 +1804,7 @@ class JwpubService(QObject):
             self._check_complete(key)
 
     @Slot(str, object)
-    def _on_cbs_done(self, key: str, wd: _WeekData):
+    def _on_cbs_done(self, key: str, wd: meeting_models.WeekData):
         existing = self._active.get(key)
         if existing:
             existing.cbs_pub_dir = wd.cbs_pub_dir

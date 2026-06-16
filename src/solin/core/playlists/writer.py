@@ -26,7 +26,7 @@ import hashlib
 import logging
 import os
 import sqlite3
-import struct   as _struct
+import struct
 import uuid
 import zipfile
 from pathlib import Path
@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # ── Resolução de metadados JW.org ────────────────────────────────────────────
 from solin.core.jw.identifiers import is_jw_url
-from solin.core.jw.metadata import resolve_jworg_meta as _resolve_jworg_meta
+from solin.core.jw.metadata import resolve_jworg_meta
 from solin.core.media.download_storage import completed_cached_path
 
 from .media_reference import parse_jw_media_reference
@@ -57,11 +57,11 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
         pos = start
         while pos + 8 <= end:
             try:
-                bsz  = _struct.unpack_from(">I", data, pos)[0]
+                bsz  = struct.unpack_from(">I", data, pos)[0]
                 btyp = data[pos + 4: pos + 8]
                 if bsz == 1:                          # extended size (64-bit)
                     if pos + 16 > end: return
-                    bsz   = _struct.unpack_from(">Q", data, pos + 8)[0]
+                    bsz   = struct.unpack_from(">Q", data, pos + 8)[0]
                     inner = pos + 16
                 elif bsz == 0:                        # last box até fim
                     bsz   = end - pos
@@ -72,7 +72,7 @@ def _mp4_read_title(data: bytes) -> Optional[str]:
                 box_end = pos + bsz
                 yield btyp, inner, box_end
                 pos = box_end
-            except (_struct.error, IndexError):
+            except (struct.error, IndexError):
                 return
 
     def _find(start: int, end: int, target: bytes):
@@ -134,7 +134,7 @@ def _mp3_read_title(data: bytes) -> Optional[str]:
         frame_id  = data[pos: pos + 4]
         if frame_id == b"\x00\x00\x00\x00":
             break
-        frame_sz  = _struct.unpack_from(">I", data, pos + 4)[0]
+        frame_sz  = struct.unpack_from(">I", data, pos + 4)[0]
         pos      += 10
         if frame_sz <= 0:
             break
@@ -173,7 +173,7 @@ def _read_label_from_local(data: bytes, ext: str) -> Optional[str]:
             return _mp4_read_title(data)
         if ext == ".mp3":
             return _mp3_read_title(data)
-    except (_struct.error, IndexError, TypeError, UnicodeError, ValueError) as exc:
+    except (struct.error, IndexError, TypeError, UnicodeError, ValueError) as exc:
         log.debug("[writer] Failed to read title metadata (%s): %s", ext, exc)
     return None
 
@@ -221,12 +221,12 @@ def _mp4_duration_ms(data: bytes) -> int:
         pos = start
         while pos + 8 <= end:
             try:
-                bsize = _struct.unpack_from(">I", data, pos)[0]
+                bsize = struct.unpack_from(">I", data, pos)[0]
                 btype = data[pos + 4: pos + 8]
                 if bsize == 1:
                     if pos + 16 > end:
                         break
-                    bsize = _struct.unpack_from(">Q", data, pos + 8)[0]
+                    bsize = struct.unpack_from(">Q", data, pos + 8)[0]
                     inner = pos + 16
                 elif bsize == 0:
                     bsize = end - pos  # last box
@@ -245,17 +245,17 @@ def _mp4_duration_ms(data: bytes) -> int:
                     if ver == 1:
                         if inner + 32 > end:
                             break
-                        ts = _struct.unpack_from(">I", data, inner + 20)[0]
-                        dur = _struct.unpack_from(">Q", data, inner + 24)[0]
+                        ts = struct.unpack_from(">I", data, inner + 20)[0]
+                        dur = struct.unpack_from(">Q", data, inner + 24)[0]
                     else:
                         if inner + 20 > end:
                             break
-                        ts = _struct.unpack_from(">I", data, inner + 12)[0]
-                        dur = _struct.unpack_from(">I", data, inner + 16)[0]
+                        ts = struct.unpack_from(">I", data, inner + 12)[0]
+                        dur = struct.unpack_from(">I", data, inner + 16)[0]
                     if ts > 0:
                         return int(dur * 1000 / ts)
                 pos = box_end
-            except (_struct.error, IndexError):
+            except (struct.error, IndexError):
                 break
         return 0
 
@@ -369,7 +369,7 @@ def _webm_duration_ms(data: bytes) -> int:
                 if DURATION_ID in inner and len(inner[DURATION_ID]) in (4, 8):
                     dur_bytes = inner[DURATION_ID]
                     fmt = ">f" if len(dur_bytes) == 4 else ">d"
-                    dur_ticks = _struct.unpack(fmt, dur_bytes)[0]
+                    dur_ticks = struct.unpack(fmt, dur_bytes)[0]
                     # dur_ticks está em unidades de timescale_ns nanosegundos
                     return int(dur_ticks * timescale_ns / 1_000_000)
             break
@@ -390,7 +390,7 @@ def _read_duration_ms_from_bytes(data: bytes, ext: str) -> int:
             return _mp4_duration_ms(data)
         if ext in (".webm", ".mkv"):
             return _webm_duration_ms(data)
-    except (_struct.error, IndexError, TypeError, ValueError):
+    except (struct.error, IndexError, TypeError, ValueError):
         log.debug("Failed to read media duration from embedded bytes", exc_info=True)
     return 0
 
@@ -521,7 +521,7 @@ def _write_jwlplaylist(
                 mmt = 0 if item_type == "audio" else 2
 
             # Consulta API JW.org para título canônico e duração
-            jw_meta = _resolve_jworg_meta(
+            jw_meta = resolve_jworg_meta(
                 key_symbol            = key_symbol,
                 doc_id                = doc_id,
                 track                 = track,
@@ -758,7 +758,7 @@ def write_jwlplaylist(
             media_cache_dir,
             fallback_lang_code=fallback_lang_code,
         )
-    except (OSError, sqlite3.Error, zipfile.LargeZipFile, _struct.error) as exc:
+    except (OSError, sqlite3.Error, zipfile.LargeZipFile, struct.error) as exc:
         raise PlaylistWriteError(f"Could not write playlist to {output_path}") from exc
 
 
@@ -801,10 +801,10 @@ def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
       - name inclui a extensão ".jwlplaylist"
       - hash = SHA-256 do userData.db serializado
     """
-    import datetime as _dt
-    import json     as _json
+    import datetime
+    import json
 
-    now_utc   = _dt.datetime.now(_dt.timezone.utc)
+    now_utc   = datetime.datetime.now(datetime.timezone.utc)
     now_local = now_utc.astimezone()   # converte para o fuso local da máquina
 
     # JW Library usa formato com microssegundos e offset local, ex:
@@ -844,7 +844,7 @@ def _build_manifest(playlist_name: str, db_bytes: bytes) -> str:
             "schemaVersion":    14,
         },
     }
-    return _json.dumps(manifest, ensure_ascii=False, indent=4)
+    return json.dumps(manifest, ensure_ascii=False, indent=4)
 
 
 def _create_schema(con: sqlite3.Connection) -> None:

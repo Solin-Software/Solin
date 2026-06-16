@@ -50,16 +50,7 @@ from solin.core.jw.publication_links import (
 from .publications import (
     JwpubCache, JwpubChecksumStore,
 )
-from .models import MeetingMedia as _MeetingMedia
-from .models import MemorialData as _MemorialData
-
-# ── HTTP com curl_cffi (browser-friendly) ──────────────────────────────────────
-
-try:
-    from curl_cffi import requests as _cffi  # type: ignore[reportMissingImports]
-    _HAS_CFFI = True
-except ImportError:
-    _HAS_CFFI = False
+from . import models as meeting_models
 
 
 class MemorialDownloadError(RuntimeError):
@@ -95,6 +86,23 @@ def _chrome_headers() -> dict:
     }
 
 
+def _http_get_with_browser_impersonation(url: str, timeout: int) -> bytes | None:
+    try:
+        from curl_cffi import requests  # type: ignore[reportMissingImports]
+    except ImportError:
+        return None
+
+    response = requests.get(
+        url,
+        headers=_chrome_headers(),
+        timeout=timeout,
+        impersonate="chrome124",
+        allow_redirects=True,
+    )
+    response.raise_for_status()
+    return response.content
+
+
 def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
     """
     GET com TLS browser impersonation via curl_cffi.
@@ -104,20 +112,14 @@ def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
     last: Optional[Exception] = None
     for attempt in range(1, retries + 1):
         try:
-            if _HAS_CFFI:
-                r = _cffi.get(
-                    url, headers=_chrome_headers(),
-                    timeout=timeout, impersonate="chrome124",
-                    allow_redirects=True,
-                )
-                r.raise_for_status()
-                return r.content
-            else:
-                return get_bytes(
-                    url,
-                    timeout=timeout,
-                    headers={"User-Agent": DEFAULT_USER_AGENT},
-                )
+            content = _http_get_with_browser_impersonation(url, timeout)
+            if content is not None:
+                return content
+            return get_bytes(
+                url,
+                timeout=timeout,
+                headers={"User-Agent": DEFAULT_USER_AGENT},
+            )
         except Exception as exc:  # noqa: BLE001 - curl_cffi/HTTP transport boundary
             last = exc
             if attempt < retries:
@@ -374,11 +376,11 @@ def _query_memorial_sqlite(pub_dir: Path) -> dict:
     return result
 
 
-def _make_memorial_media(v: dict, pub_dir: Path) -> _MeetingMedia:
+def _make_memorial_media(v: dict, pub_dir: Path) -> meeting_models.MeetingMedia:
     mime  = (v.get("MimeType") or "").lower()
     fp    = v.get("FilePath") or ""
     abs_fp = str(pub_dir / fp) if fp and mime.startswith("image") else fp
-    return _MeetingMedia(
+    return meeting_models.MeetingMedia(
         multimedia_id = v.get("MultimediaId") or 0,
         mime_type     = mime,
         file_path     = abs_fp,
@@ -400,7 +402,7 @@ class _MemorialWorker(QObject):
     Toda I/O bloqueante (HTTP, zip, SQLite, resolução de vídeo) acontece aqui.
     Comunica com MemorialService via sinais (QueuedConnection automática).
     """
-    memorial_done  = Signal(object)   # MemorialData
+    memorial_done  = Signal(object)   # meeting_models.MemorialData
     progress       = Signal(int)      # 0-100
     error          = Signal(str)      # mensagem
 
@@ -426,7 +428,7 @@ class _MemorialWorker(QObject):
         pub   = _mi_pub(year)
         issue = "0"   # mi<YY> não tem issue numérico — usa "0" como chave de cache
 
-        md = _MemorialData(year=year)
+        md = meeting_models.MemorialData(year=year)
 
         # ── Calcular data ──────────────────────────────────────────────────────
         memorial_date = memorial_date_for_year(year)
@@ -590,7 +592,7 @@ class MemorialService(QObject):
         monday = svc.memorial_week()         # para saber em qual semana mostrar
     """
 
-    memorial_ready   = Signal(object)     # MemorialData (status="ready")
+    memorial_ready   = Signal(object)     # meeting_models.MemorialData (status="ready")
     memorial_status  = Signal(str)        # status string (p/ UI genérica)
     memorial_progress = Signal(int)       # 0-100
 
@@ -606,7 +608,7 @@ class MemorialService(QObject):
         super().__init__(parent)
         self._lang   = "T"
         self._year   = date.today().year
-        self._data:  Optional[_MemorialData] = None
+        self._data:  Optional[meeting_models.MemorialData] = None
 
         self._thread = QThread(self)
         self._worker = _MemorialWorker(jwpub_cache_dir, checksum_store)
@@ -674,7 +676,7 @@ class MemorialService(QObject):
             return
         self._sig_load.emit(self._year)
 
-    def get_data(self) -> Optional[_MemorialData]:
+    def get_data(self) -> Optional[meeting_models.MemorialData]:
         return self._data
 
     def memorial_date(self) -> Optional[date]:
@@ -697,7 +699,7 @@ class MemorialService(QObject):
     # ── Slots ─────────────────────────────────────────────────────────────────
 
     @Slot(object)
-    def _on_done(self, data: _MemorialData):
+    def _on_done(self, data: meeting_models.MemorialData):
         self._data = data
         self.memorial_status.emit(data.status)
         if data.status == "ready":

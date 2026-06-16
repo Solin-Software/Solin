@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from solin.core.playlists import jwl_files
+from solin.core.playlists import writer
 
 
 def test_read_jwlplaylist_document_wraps_reader_result(monkeypatch):
@@ -25,8 +26,8 @@ def test_read_jwlplaylist_document_wraps_reader_result(monkeypatch):
 def test_write_jwlplaylist_document_wraps_writer(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        jwl_files,
-        "_write_jwlplaylist",
+        writer,
+        "write_jwlplaylist",
         lambda *args, **kwargs: calls.append((args, kwargs)),
     )
 

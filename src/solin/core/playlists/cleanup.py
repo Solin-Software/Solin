@@ -153,11 +153,11 @@ def flush_pdf_pages(
     meeting_tree_store: MeetingTreeStore,
     pdf_pages_dir: str | os.PathLike[str],
 ) -> None:
-    from solin.core.rendering.pdf import flush_pdf_pages_dir as _flush_pdf
+    from solin.core.rendering.pdf import flush_pdf_pages_dir
 
     referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
-    _flush_pdf(referenced, pdf_pages_dir)
+    flush_pdf_pages_dir(referenced, pdf_pages_dir)
 
 
 def flush_pptx_pages(
@@ -166,13 +166,13 @@ def flush_pptx_pages(
     pptx_pages_dir: str | os.PathLike[str],
     docx_pages_dir: str | os.PathLike[str],
 ) -> None:
-    from solin.core.rendering.libreoffice import flush_docx_pages_dir as _flush_docx
-    from solin.core.rendering.libreoffice import flush_pptx_pages_dir as _flush_pptx
+    from solin.core.rendering.libreoffice import flush_docx_pages_dir
+    from solin.core.rendering.libreoffice import flush_pptx_pages_dir
 
     referenced = _referenced_playlist_urls(storage_paths)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
-    _flush_pptx(referenced, pptx_pages_dir)
-    _flush_docx(referenced, docx_pages_dir)
+    flush_pptx_pages_dir(referenced, pptx_pages_dir)
+    flush_docx_pages_dir(referenced, docx_pages_dir)
 
 
 def flush_embedded_dir(

@@ -8,7 +8,6 @@ from typing import Any
 
 from solin.core.playlists.reader import read_jwlplaylist
 from solin.core.playlists.writer import PlaylistWriteError
-from solin.core.playlists.writer import write_jwlplaylist as _write_jwlplaylist
 
 __all__ = [
     "JwlPlaylistDocument",
@@ -44,7 +43,9 @@ def write_jwlplaylist_document(
     *,
     fallback_lang_code: str = "E",
 ) -> None:
-    _write_jwlplaylist(
+    from solin.core.playlists.writer import write_jwlplaylist
+
+    write_jwlplaylist(
         name,
         items,
         output_path,

@@ -215,9 +215,9 @@ class JWLPlaylistReader:
           - Não mantém arquivos temporários abertos durante a extração
             (evita WinError 32 no Windows).
         """
-        import tempfile as _tmp
+        import tempfile
 
-        fd, tmp_path = _tmp.mkstemp(suffix=".db", prefix="solin_jwl_")
+        fd, tmp_path = tempfile.mkstemp(suffix=".db", prefix="solin_jwl_")
         src: sqlite3.Connection | None = None
         mem: sqlite3.Connection | None = None
         try:
