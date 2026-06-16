@@ -25,6 +25,7 @@ from solin.core.integrations.automation.settings import (
 from solin.core.integrations.camera import CameraOption
 from solin.core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.core.ui.macos_layer import apply_corner_radius
+from solin.ui.background_song_status import translate_background_song_status
 from solin.ui.qml.loader import load_qml_type
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
@@ -384,7 +385,8 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_background_song_icon_color(
                 "58a6ff" if service.is_playing else "8b949e"
             )
-            tooltip = service.current_title or service.status_text or self.tr("Background Song")
+            status_text = translate_background_song_status(service.status_text)
+            tooltip = service.current_title or status_text or self.tr("Background Song")
             self._bridge.set_background_song_tooltip(tooltip)
         self._reposition()
 

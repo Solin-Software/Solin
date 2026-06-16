@@ -209,6 +209,48 @@ def test_clean_architecture_layer_dependencies():
     )
 
 
+def test_core_translation_rendering_stays_in_i18n_or_rendering_adapters():
+    core_root = PROJECT_ROOT / "src" / "solin" / "core"
+    allowed_prefixes = {
+        (PROJECT_ROOT / "src" / "solin" / "core" / "i18n").resolve(),
+    }
+    allowed_files = {
+        (core_root / "rendering" / "timer_report_pdf.py").resolve(),
+    }
+    violations: list[str] = []
+
+    for path in sorted(core_root.rglob("*.py")):
+        resolved = path.resolve()
+        if resolved in allowed_files or any(
+            resolved.is_relative_to(prefix) for prefix in allowed_prefixes
+        ):
+            continue
+
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            if not isinstance(function, ast.Attribute):
+                continue
+            is_qt_translate = (
+                function.attr == "translate"
+                and isinstance(function.value, ast.Name)
+                and function.value.id in {"QCoreApplication", "QApplication"}
+            )
+            is_self_tr = (
+                function.attr == "tr"
+                and isinstance(function.value, ast.Name)
+                and function.value.id == "self"
+            )
+            if is_qt_translate or is_self_tr:
+                violations.append(_display(path, node))
+
+    assert not violations, (
+        "Core services must emit source data/statuses and let presentation/i18n "
+        "adapters render translations:\n" + "\n".join(violations)
+    )
+
+
 def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     forbidden_module = (

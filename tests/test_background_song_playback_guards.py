@@ -5,7 +5,12 @@ from types import SimpleNamespace
 
 import solin.core.jw.background_song_service as service_module
 from solin.core.jw.background_song_service import BackgroundSongService
+from solin.core.jw.background_song_status import (
+    STATUS_STOPPED_BEFORE_MEETING,
+    STATUS_STOPPING,
+)
 from solin.core.meetings.schedule import MIDWEEK, MeetingOccurrence, MeetingSlot
+from solin.ui.background_song_status import translate_background_song_status
 
 
 class _TimerStub:
@@ -42,7 +47,6 @@ def _guard_service(occurrence: MeetingOccurrence):
         _auto_stop_timer=timer,
         _current_pre_meeting_occurrence=lambda: occurrence,
         _set_status=statuses.append,
-        tr=lambda text: text,
     )
     return service, timer, statuses
 
@@ -105,7 +109,7 @@ def test_delayed_automatic_track_is_rejected_after_meeting_start():
 
     assert allowed is False
     assert service._desired_playing is False
-    assert statuses == ["Stopped before the meeting."]
+    assert statuses == [STATUS_STOPPED_BEFORE_MEETING]
 
 
 def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
@@ -118,7 +122,6 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
         _fade_to=lambda target, seconds, *, stop_after: faded.append((target, seconds, stop_after)),
         _set_status=statuses.append,
         stop=lambda *, immediate=False: None,
-        tr=lambda text: text,
     )
 
     BackgroundSongService._start_scheduled_fade(service)
@@ -129,7 +132,7 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
     assert faded[0][0] == 0.0
     assert 1.0 <= faded[0][1] <= 2.0
     assert faded[0][2] is True
-    assert statuses == ["Stopping background song..."]
+    assert statuses == [STATUS_STOPPING]
 
 
 def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
@@ -158,7 +161,6 @@ def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
         _start_scheduled_fade=lambda: None,
         stop=lambda *, immediate=False: None,
         _set_status=lambda _text: None,
-        tr=lambda text: text,
     )
 
     BackgroundSongService.evaluate_auto_playback(service)
@@ -178,7 +180,6 @@ def test_sign_language_context_stops_existing_audio_immediately(monkeypatch):
         _active_key="audio:en",
         stop=lambda *, immediate=False: stopped.append(immediate),
         _set_status=lambda _text: None,
-        tr=lambda text: text,
     )
     monkeypatch.setattr(
         service_module,
@@ -206,7 +207,6 @@ def _ready_service(*, current_title: str, is_playing: bool):
         _set_songs=lambda _items: None,
         _play_next=lambda: plays.append(True),
         _set_status=statuses.append,
-        tr=lambda text: text,
     )
     return service, plays, statuses
 
@@ -236,3 +236,8 @@ def test_songs_ready_starts_playback_when_idle_and_waiting():
     )
 
     assert plays == [True]
+
+
+def test_background_song_status_translation_renders_at_ui_boundary():
+    assert translate_background_song_status(STATUS_STOPPING) == STATUS_STOPPING
+    assert translate_background_song_status("network error") == "network error"

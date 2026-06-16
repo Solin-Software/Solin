@@ -8,9 +8,12 @@ from solin.core.integrations.automation.shortcuts import (
     AutoKeyAction,
     AutoKeySettingsStore,
     EVENT_MEDIA_ENDED,
+    EVENT_MEDIA_PAUSED,
+    EVENT_MEDIA_RESUMED,
     EVENT_MEDIA_STARTED,
 )
 from solin.core.profiles.settings import ProfileSettings
+from solin.ui.auto_key_labels import auto_key_event_label
 
 
 def _store() -> tuple[AutoKeySettingsStore, SettingsStore]:
@@ -90,3 +93,11 @@ def test_auto_key_settings_ignores_invalid_serialized_actions():
         assert actions[0].sequence == "Ctrl+1"
     finally:
         settings.clear()
+
+
+def test_auto_key_event_labels_render_at_ui_boundary():
+    assert auto_key_event_label(EVENT_MEDIA_STARTED) == "Media starts"
+    assert auto_key_event_label(EVENT_MEDIA_ENDED) == "Media ends"
+    assert auto_key_event_label(EVENT_MEDIA_PAUSED) == "Video pauses"
+    assert auto_key_event_label(EVENT_MEDIA_RESUMED) == "Video resumes"
+    assert auto_key_event_label("custom") == "custom"

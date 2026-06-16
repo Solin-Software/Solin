@@ -9,8 +9,8 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 from ...core.integrations.automation.shortcuts import (
     AUTO_KEY_EVENTS,
     AutoKeyAction,
-    event_label,
 )
+from ...ui.auto_key_labels import auto_key_event_label
 from ..common.no_scroll_combo_box import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
@@ -175,7 +175,7 @@ class AutoKeyEditorDialog(QDialog):
             self._event_combo.setMinimumHeight(40)
             self._event_combo.setStyleSheet(self._auto_key_combo_style())
             for event in AUTO_KEY_EVENTS:
-                self._event_combo.addItem(event_label(event), event)
+                self._event_combo.addItem(auto_key_event_label(event), event)
             lay.addWidget(self._event_combo)
         else:
             self._event_combo = None

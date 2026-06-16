@@ -14,10 +14,8 @@ import sys
 import uuid
 
 from PySide6.QtCore import (
-    QCoreApplication,
     QObject,
     QTimer,
-    QT_TRANSLATE_NOOP,
 )
 
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
@@ -38,19 +36,6 @@ AUTO_KEY_EVENTS = (
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
 )
-
-EVENT_LABELS = {
-    EVENT_MEDIA_STARTED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Media starts"),
-    EVENT_MEDIA_ENDED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Media ends"),
-    EVENT_MEDIA_PAUSED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Video pauses"),
-    EVENT_MEDIA_RESUMED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Video resumes"),
-}
-
-
-def event_label(event: str) -> str:
-    source = EVENT_LABELS.get(event, event)
-    return QCoreApplication.translate("AutoKeyEvents", source)
-
 
 _MODIFIER_ALIASES = {
     "ctrl": "ctrl",

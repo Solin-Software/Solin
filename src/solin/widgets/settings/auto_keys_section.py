@@ -5,7 +5,6 @@ from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
 
 from ...core.integrations.automation.shortcuts import (
     AutoKeyAction,
-    event_label,
 )
 from ...styles.icons import (
     ICON_EDIT,
@@ -28,6 +27,7 @@ from .shared import (
     SETTINGS_TEXT,
     SettingsToggleSwitch,
 )
+from ...ui.auto_key_labels import auto_key_event_label
 from .auto_key_dialog import AutoKeyEditorDialog
 
 
@@ -149,7 +149,7 @@ class AutoKeysSectionMixin:
         self._auto_keys_anim = anim
 
     def _event_label(self, event: str) -> str:
-        return event_label(event)
+        return auto_key_event_label(event)
 
     def _auto_key_actions(self) -> list[AutoKeyAction]:
         return self._auto_key_settings.actions()
