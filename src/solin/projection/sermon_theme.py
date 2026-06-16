@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QWidget
 # Pixel-perfect recreation of the reference design.
 # Stored as a plain str (not bytes) to allow any character; encoded on use.
 
-_THEME_BG_SVG = """\
+SERMON_THEME_BACKGROUND_SVG = """\
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 576" width="100%" height="100%">
   <defs>
     <linearGradient id="mainBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -62,7 +62,7 @@ class SermonThemeProjectionWidget(QWidget):
         self._theme_text = ""
         self._subtitle = "DISCURSO PUBLICO"
         # Encode to UTF-8 bytes here — the SVG itself is pure ASCII so this is safe
-        self._renderer = QSvgRenderer(QByteArray(_THEME_BG_SVG.encode("utf-8")))
+        self._renderer = QSvgRenderer(QByteArray(SERMON_THEME_BACKGROUND_SVG.encode("utf-8")))
 
         # ── Zoom/pan transform ─────────────────────────────────────────────
         self._zoom:   float = 1.0
@@ -243,4 +243,4 @@ class SermonThemeProjectionWidget(QWidget):
 
         p.end()
 
-__all__ = ["SermonThemeProjectionWidget", "_THEME_BG_SVG"]
+__all__ = ["SermonThemeProjectionWidget", "SERMON_THEME_BACKGROUND_SVG"]

@@ -28,7 +28,7 @@ Qualidade de vídeo
 ──────────────────
 A resolução preferida e a direção de fallback são controladas pelas constantes
 VIDEO_PREFERRED_QUALITY e VIDEO_QUALITY_FALLBACK_DIR em constants.py.
-A função _pick_quality() é o único ponto de decisão de qualidade.
+A função pick_quality() é o único ponto de decisão de qualidade.
 
 Fallback de idioma
 ──────────────────
@@ -119,7 +119,7 @@ def _build_clips_url(api_code: str, is_sign: bool) -> str:
         return _JW_MEDIATOR_CLIPS.format(code=api_code)
 
 
-def _pick_quality(
+def pick_quality(
     items: list[dict],
     preferred: str = VIDEO_PREFERRED_QUALITY,
     fallback_dir: str = VIDEO_QUALITY_FALLBACK_DIR,
@@ -241,11 +241,11 @@ def _save_cache(
         )
 
 
-def _parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
+def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
     """
     Parse da resposta GETPUBMEDIALINKS (sjjm ou sjj) em lista de cânticos.
 
-    Usa _pick_quality() para selecionar a melhor resolução de vídeo conforme
+    Usa pick_quality() para selecionar a melhor resolução de vídeo conforme
     VIDEO_PREFERRED_QUALITY e VIDEO_QUALITY_FALLBACK_DIR em constants.py.
     Para áudio (MP3): sem filtragem de label; deduplica por número.
     Filtra versões com áudio descrição comparando parsed_num vs campo track.
@@ -260,7 +260,7 @@ def _parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
     # Para vídeo: escolhe a melhor qualidade disponível de forma centralizada
     chosen_label: str | None = None
     if not is_audio:
-        chosen_label = _pick_quality(items)
+        chosen_label = pick_quality(items)
 
     songs: list[dict] = []
     seen_numbers: set[int] = set()
@@ -355,7 +355,7 @@ def fetch_songs(
             )
         raise
 
-    songs, pub_name = _parse_songs(data, api_code, fmt)
+    songs, pub_name = parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
         return fetch_songs(
@@ -462,7 +462,7 @@ def fetch_songs_audio(
             )
         raise
 
-    songs, pub_name = _parse_songs(data, api_code, fmt)
+    songs, pub_name = parse_songs(data, api_code, fmt)
 
     if not songs and fallback_code and fallback_code != api_code:
         return fetch_songs_audio(
@@ -565,11 +565,11 @@ def _parse_clips_mediator(data: dict) -> list:
     return clips
 
 
-def _parse_clips_osg(data: dict, api_code: str) -> list:
+def parse_clips_osg(data: dict, api_code: str) -> list:
     """
     Parser para o endpoint GETPUBMEDIALINKS (pub=osg, fileformat=MP4).
 
-    Usado para línguas gestuais. Seleciona a melhor resolução via _pick_quality()
+    Usado para línguas gestuais. Seleciona a melhor resolução via pick_quality()
     e **inverte** a lista — o osg retorna do mais antigo para o mais novo, então
     revertemos para que os lançamentos mais recentes apareçam primeiro.
 
@@ -585,7 +585,7 @@ def _parse_clips_osg(data: dict, api_code: str) -> list:
     except (KeyError, TypeError):
         return clips
 
-    chosen_label = _pick_quality(items)
+    chosen_label = pick_quality(items)
 
     for item in items:
         if not isinstance(item, dict):
@@ -620,7 +620,7 @@ def fetch_clips(
     • Idiomas normais  → endpoint mediador (/mediator/…/AudioOriginalSongs)
                          Exclui áudio-descrição via subtitled=False.
     • Línguas gestuais → endpoint osg (GETPUBMEDIALINKS, pub=osg, fileformat=MP4)
-                         Melhor resolução via _pick_quality(); resultado invertido
+                         Melhor resolução via pick_quality(); resultado invertido
                          (mais novo primeiro, pois osg retorna do mais antigo ao mais novo).
 
     Fallback para idioma da interface sempre com is_sign_language=False.
@@ -647,7 +647,7 @@ def fetch_clips(
         raise
 
     if is_sign_language:
-        clips = _parse_clips_osg(data, api_code)
+        clips = parse_clips_osg(data, api_code)
     else:
         clips = _parse_clips_mediator(data)
 
@@ -683,3 +683,15 @@ def get_cache_date(
         return float(ts) if ts else None
     except (TypeError, ValueError):
         return None
+
+
+__all__ = [
+    "fetch_clips",
+    "fetch_songs",
+    "fetch_songs_audio",
+    "get_cache_date",
+    "parse_clips_osg",
+    "parse_songs",
+    "pick_quality",
+    "song_publication_symbol",
+]

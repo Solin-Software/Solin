@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pyqttoast import ToastPosition, ToastPreset
 
-from solin.core.ui.notifications import NotificationCenter, _SynchronizedToast
+from solin.core.ui.notifications import NotificationCenter, SynchronizedToast
 
 
 class _FakeToast:
@@ -135,14 +135,14 @@ def test_nuitka_builds_include_pyqttoast_runtime_data():
 
 
 def test_synchronized_toast_bar_uses_elapsed_time_instead_of_callback_count():
-    assert _SynchronizedToast._remaining_bar_width(360, 4000, 0) == 360
-    assert _SynchronizedToast._remaining_bar_width(360, 4000, 1000) == 270
-    assert _SynchronizedToast._remaining_bar_width(360, 4000, 3999) == 1
-    assert _SynchronizedToast._remaining_bar_width(360, 4000, 4000) == 0
+    assert SynchronizedToast._remaining_bar_width(360, 4000, 0) == 360
+    assert SynchronizedToast._remaining_bar_width(360, 4000, 1000) == 270
+    assert SynchronizedToast._remaining_bar_width(360, 4000, 3999) == 1
+    assert SynchronizedToast._remaining_bar_width(360, 4000, 4000) == 0
 
 
 def test_synchronized_toast_bar_stays_inside_rounded_corners():
-    geometry = _SynchronizedToast._duration_bar_geometry(360, 80)
+    geometry = SynchronizedToast._duration_bar_geometry(360, 80)
 
     assert geometry.x() == 10
     assert geometry.y() == 70

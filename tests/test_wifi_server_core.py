@@ -5,7 +5,7 @@ import threading
 from http.server import HTTPServer
 from pathlib import Path
 
-from solin.core.ingest.wifi_server import _make_handler, _parse_multipart, _safe_filename
+from solin.core.ingest.wifi_server import make_handler, parse_multipart, safe_filename
 
 
 def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:
@@ -19,10 +19,10 @@ def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:
     return body, boundary
 
 
-def test_parse_multipart_sanitizes_uploaded_filename():
+def testparse_multipart_sanitizes_uploaded_filename():
     body, boundary = _multipart(r"..\..\evil?.mp4", b"payload")
 
-    parts = _parse_multipart(body, boundary.encode("ascii"))
+    parts = parse_multipart(body, boundary.encode("ascii"))
 
     assert parts == [
         {
@@ -33,15 +33,15 @@ def test_parse_multipart_sanitizes_uploaded_filename():
     ]
 
 
-def test_safe_filename_rejects_path_traversal_shape():
-    assert _safe_filename("../../secret.mp4") == "secret.mp4"
-    assert _safe_filename(r"..\..\evil?.mp4") == "evil_.mp4"
-    assert _safe_filename("...") == "upload"
+def testsafe_filename_rejects_path_traversal_shape():
+    assert safe_filename("../../secret.mp4") == "secret.mp4"
+    assert safe_filename(r"..\..\evil?.mp4") == "evil_.mp4"
+    assert safe_filename("...") == "upload"
 
 
 def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path):
     received: list[tuple[str, str]] = []
-    handler = _make_handler(
+    handler = make_handler(
         token="token",
         html="ok",
         on_file=lambda path, name: received.append((path, name)),
@@ -76,7 +76,7 @@ def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path):
 def test_wifi_upload_saves_allowed_media_in_injected_directory(tmp_path):
     embedded_dir = tmp_path / "profile" / "embedded"
     received: list[tuple[str, str]] = []
-    handler = _make_handler(
+    handler = make_handler(
         token="token",
         html="ok",
         on_file=lambda path, name: received.append((path, name)),

@@ -120,7 +120,7 @@ VIDEO_PREFERRED_QUALITY: str = "720p"
 VIDEO_QUALITY_FALLBACK_DIR: str = "below"
 
 # Ordem canônica de qualidades conhecidas, da mais alta para a mais baixa.
-# Usada por _pick_quality() em jw/media_api.py e _extract_best_entry() em jw/metadata.py.
+# Usada por pick_quality() em jw/media_api.py e _extract_best_entry() em jw/metadata.py.
 VIDEO_QUALITY_ORDER: tuple[str, ...] = (
     "1080p", "720p", "480p", "360p", "240p", "180p",
 )

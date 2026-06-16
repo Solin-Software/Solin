@@ -83,7 +83,7 @@ _ICONS = {
 }
 
 
-class _SynchronizedToast(Toast):
+class SynchronizedToast(Toast):
     """Keep the duration bar aligned with the actual close timer.
 
     pyqt-toast-notification 1.3.3 advances its bar by counting 1 ms timer
@@ -214,7 +214,7 @@ class NotificationCenter:
         self,
         anchor: QWidget,
         *,
-        toast_type: type[Toast] = _SynchronizedToast,
+        toast_type: type[Toast] = SynchronizedToast,
         clock: Callable[[], float] = monotonic,
         dedupe_window_seconds: float = 3.0,
     ) -> None:
@@ -312,7 +312,7 @@ class NotificationCenter:
         toast.setText(message if title else "")
         toast.setDuration(duration_ms if duration_ms is not None else style.duration_ms)
         self._apply_theme(toast, style.accent)
-        if isinstance(toast, _SynchronizedToast):
+        if isinstance(toast, SynchronizedToast):
             toast.set_notification_icon(kind, style.accent)
         toast.show()
         return True
@@ -369,3 +369,10 @@ class NotificationCenter:
         toast.setTextSectionMargins(QMargins(0, 0, 10, 0))
         toast.setCloseButtonMargins(QMargins(0, -4, 0, -4))
         toast.setTextSectionSpacing(5)
+
+
+__all__ = [
+    "NotificationCenter",
+    "NotificationKind",
+    "SynchronizedToast",
+]

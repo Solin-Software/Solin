@@ -94,13 +94,13 @@ def resolve_jworg_meta(
         _RESOLVE_CACHE[cache_key] = None
         return None
 
-    result = _extract_best_meta(data, language_code, file_format, track)
+    result = extract_best_meta(data, language_code, file_format, track)
     log.debug("[jw_api] Resolved metadata: %s", result)
     _RESOLVE_CACHE[cache_key] = result
     return result
 
 
-def _extract_best_meta(
+def extract_best_meta(
     api_response: dict[str, Any],
     lang_code: str,
     fileformat: str,
@@ -195,3 +195,10 @@ def _extract_best_meta(
             }
 
     return None
+
+
+__all__ = [
+    "ResolvedMediaMetadata",
+    "extract_best_meta",
+    "resolve_jworg_meta",
+]

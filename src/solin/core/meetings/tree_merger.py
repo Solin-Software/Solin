@@ -40,7 +40,7 @@ def _media_identity_value(ref: dict, field: str) -> str:
     return str(ref.get(field, ""))
 
 
-def _media_identity_signature(node: Node) -> tuple:
+def media_identity_signature(node: Node) -> tuple:
     ref = node.get("media_ref") or {}
     return tuple(_media_identity_value(ref, field) for field in _MEDIA_IDENTITY_FIELDS)
 
@@ -143,7 +143,7 @@ class MeetingTreeMerger:
     def _copy_durable_media_state(self, saved: Node, node: Node) -> None:
         if node.get("type") != "media" or saved.get("type") != "media":
             return
-        if _media_identity_signature(saved) != _media_identity_signature(node):
+        if media_identity_signature(saved) != media_identity_signature(node):
             return
         for field in _DURABLE_MEDIA_FIELDS:
             value = saved.get(field)
@@ -201,4 +201,4 @@ class MeetingTreeMerger:
         return -1
 
 
-__all__ = ["MeetingTreeMerger", "_media_identity_signature"]
+__all__ = ["MeetingTreeMerger", "media_identity_signature"]

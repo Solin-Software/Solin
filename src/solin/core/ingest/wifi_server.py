@@ -76,7 +76,7 @@ def _find_free_port(start: int, end: int) -> Optional[int]:
 
 # ── Sanitização de nome de arquivo ────────────────────────────────────────────
 
-def _safe_filename(raw: str) -> str:
+def safe_filename(raw: str) -> str:
     name = re.split(r"[\\/]+", raw)[-1]         # strip caminhos POSIX/Windows
     name = re.sub(r"[^\w\s.\-]", "_", name)    # caracteres seguros
     name = name.strip(". ") or "upload"
@@ -85,7 +85,7 @@ def _safe_filename(raw: str) -> str:
 
 # ── Parser multipart (sem dependências externas) ──────────────────────────────
 
-def _parse_multipart(body: bytes, boundary: bytes) -> list[dict]:
+def parse_multipart(body: bytes, boundary: bytes) -> list[dict]:
     """
     Retorna lista de dicts: {"filename": str, "data": bytes, "content_type": str}
     Ignora partes sem filename (campos de formulário comuns).
@@ -116,7 +116,7 @@ def _parse_multipart(body: bytes, boundary: bytes) -> list[dict]:
             continue
         raw_name = cd_match.group(1).strip().strip("\"'")
         raw_name = unquote(raw_name)
-        filename = _safe_filename(raw_name)
+        filename = safe_filename(raw_name)
         if not filename:
             continue
 
@@ -336,7 +336,7 @@ def build_upload_html(labels: dict[str, str]) -> str:
 
 # ── Handler HTTP ──────────────────────────────────────────────────────────────
 
-def _make_handler(token: str, html: str,
+def make_handler(token: str, html: str,
                   on_file: Callable[[str, str], None],
                   on_activity: Callable[[], None],
                   embedded_dir: str | Path) -> type:
@@ -401,7 +401,7 @@ def _make_handler(token: str, html: str,
             # Lê corpo completo em buffer (evita ataques de slow-loris com timeout do SO)
             body = self.rfile.read(length)
 
-            parts = _parse_multipart(body, boundary)
+            parts = parse_multipart(body, boundary)
             saved = 0
             for part in parts:
                 filename = part["filename"]
@@ -538,7 +538,7 @@ class WifiReceiveServer(QObject):
         generation = self._generation
         html = build_upload_html(html_labels)
 
-        handler_cls = _make_handler(
+        handler_cls = make_handler(
             token       = self._token,
             html        = html,
             on_file=lambda path, name: self._on_file_received(
@@ -685,3 +685,13 @@ class WifiReceiveServer(QObject):
         pending, self._pending_start = self._pending_start, None
         if pending is not None:
             self.start(pending)
+
+
+__all__ = [
+    "WifiReceiveServer",
+    "build_upload_html",
+    "get_local_ip",
+    "make_handler",
+    "parse_multipart",
+    "safe_filename",
+]

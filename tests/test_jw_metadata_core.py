@@ -3,10 +3,10 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlsplit
 
 from solin.core.jw import metadata
-from solin.core.jw.metadata import _extract_best_meta
+from solin.core.jw.metadata import extract_best_meta
 
 
-def test_extract_best_meta_prefers_matching_unsubtitled_track():
+def testextract_best_meta_prefers_matching_unsubtitled_track():
     data = {
         "files": {
             "T": {
@@ -29,7 +29,7 @@ def test_extract_best_meta_prefers_matching_unsubtitled_track():
         }
     }
 
-    assert _extract_best_meta(data, "T", "MP4", target_track=2) == {
+    assert extract_best_meta(data, "T", "MP4", target_track=2) == {
         "title": None,
         "duration_ticks": 125_000_000,
     }

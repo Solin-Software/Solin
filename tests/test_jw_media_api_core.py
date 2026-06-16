@@ -5,23 +5,23 @@ from pathlib import Path
 import pytest
 
 from solin.core.jw import media_api
-from solin.core.jw.media_api import _parse_clips_osg, _parse_songs, _pick_quality
+from solin.core.jw.media_api import parse_clips_osg, parse_songs, pick_quality
 from solin.core.network.http import HttpTransportError
 
 
-def test_pick_quality_prefers_lower_resolution_before_higher_fallback():
+def testpick_quality_prefers_lower_resolution_before_higher_fallback():
     items = [{"label": "1080p"}, {"label": "480p"}, {"label": "360p"}]
 
-    assert _pick_quality(items, preferred="720p", fallback_dir="below") == "480p"
+    assert pick_quality(items, preferred="720p", fallback_dir="below") == "480p"
 
 
-def test_pick_quality_can_prefer_higher_resolution_when_configured():
+def testpick_quality_can_prefer_higher_resolution_when_configured():
     items = [{"label": "1080p"}, {"label": "480p"}]
 
-    assert _pick_quality(items, preferred="720p", fallback_dir="above") == "1080p"
+    assert pick_quality(items, preferred="720p", fallback_dir="above") == "1080p"
 
 
-def test_parse_songs_filters_video_quality_subtitles_and_track_mismatch():
+def testparse_songs_filters_video_quality_subtitles_and_track_mismatch():
     data = {
         "pubName": "Songs",
         "files": {
@@ -60,7 +60,7 @@ def test_parse_songs_filters_video_quality_subtitles_and_track_mismatch():
         },
     }
 
-    songs, pub_name = _parse_songs(data, "T", "MP4")
+    songs, pub_name = parse_songs(data, "T", "MP4")
 
     assert pub_name == "Songs"
     assert songs == [
@@ -73,7 +73,7 @@ def test_parse_songs_filters_video_quality_subtitles_and_track_mismatch():
     ]
 
 
-def test_parse_clips_osg_selects_best_quality_and_newest_first():
+def testparse_clips_osg_selects_best_quality_and_newest_first():
     data = {
         "files": {
             "T": {
@@ -100,7 +100,7 @@ def test_parse_clips_osg_selects_best_quality_and_newest_first():
         }
     }
 
-    clips = _parse_clips_osg(data, "T")
+    clips = parse_clips_osg(data, "T")
 
     assert [clip["title"] for clip in clips] == ["Newer", "Older"]
     assert clips[0]["url"] == "https://example.test/newer.mp4"
