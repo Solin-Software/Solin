@@ -87,16 +87,16 @@ class ProjectionAudioMixin:
         )
 
         from PySide6.QtCore import QByteArray, Qt
-        from PySide6.QtGui import QPainter as _QPainter, QPixmap as _QPixmap
+        from PySide6.QtGui import QPainter, QPixmap
         from PySide6.QtSvg import QSvgRenderer
 
         size = min(min(w, h), 500)
         svg_data = QByteArray(svg.encode("utf-8"))
         renderer = QSvgRenderer(svg_data)
         if renderer.isValid():
-            pix = _QPixmap(size, size)
+            pix = QPixmap(size, size)
             pix.fill(Qt.GlobalColor.transparent)
-            painter = _QPainter(pix)
+            painter = QPainter(pix)
             renderer.render(painter)
             painter.end()
             self.preview_content.setPixmap(pix)

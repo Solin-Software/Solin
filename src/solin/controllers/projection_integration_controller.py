@@ -10,7 +10,7 @@ from typing import Any
 
 from PySide6.QtCore import QTimer
 
-from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA_SCENE
+from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 
 
 AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS = 1900
@@ -102,7 +102,7 @@ class ProjectionIntegrationController:
         going_to_media = active and visual and has_output
 
         if going_to_media:
-            if _MEMORIZE_PRE_MEDIA_SCENE:
+            if MEMORIZE_PRE_MEDIA_SCENE:
                 current = context.obs_service.current_scene or ""
                 if media_scene and current and current != media_scene:
                     self._obs_scene_session.remember(current)
@@ -111,7 +111,7 @@ class ProjectionIntegrationController:
             current = context.obs_service.current_scene or ""
             if media_scene and current and current != media_scene:
                 return
-            if _MEMORIZE_PRE_MEDIA_SCENE:
+            if MEMORIZE_PRE_MEDIA_SCENE:
                 scene = self._obs_scene_session.pre_media_scene or default_scene
             else:
                 scene = default_scene

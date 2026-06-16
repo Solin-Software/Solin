@@ -23,9 +23,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 
-from ..core.ui.helpers import avatar_colors as _avatar_colors
-from ..core.ui.helpers import fade_in as _fade_in
-from ..core.ui.helpers import initials as _initials
+from ..core.ui.helpers import avatar_colors, fade_in, initials
 from ..core.profiles.models import ProfileInfo
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
 
@@ -56,7 +54,7 @@ class _SwitchProfileCard(QWidget):
         self.setFixedSize(self._W, self._H)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
-        self._c1, self._c2 = _avatar_colors(profile.id)
+        self._c1, self._c2 = avatar_colors(profile.id)
 
     def enterEvent(self, event):
         self._hovered = True
@@ -118,7 +116,7 @@ class _SwitchProfileCard(QWidget):
         p.drawText(
             QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2),
             Qt.AlignmentFlag.AlignCenter,
-            _initials(self.profile.name),
+            initials(self.profile.name),
         )
 
         if self._is_active:
@@ -290,7 +288,7 @@ class ProfileSwitchOverlay(QWidget):
         parent_window.installEventFilter(self)
 
         self._build_ui()
-        _fade_in(self, duration=180)
+        fade_in(self, duration=180)
 
     def eventFilter(self, obj, event):
         if obj is self.parent() and event.type() == QEvent.Type.Resize:

@@ -976,7 +976,7 @@ class WifiReceiveWidget(QWidget):
 
     def _expand_jwlplaylist(self, path: str, orig_name: str) -> None:
         """Lê o .jwlplaylist e adiciona cada item como card individual."""
-        import zipfile as _zipmod
+        import zipfile
         from ..core.playlists.jwl_files import read_jwlplaylist_document
 
         fallback_lang = jw_media_language_context(self._lang).fallback_code
@@ -986,7 +986,7 @@ class WifiReceiveWidget(QWidget):
                 path,
                 fallback_lang_code=fallback_lang,
             )
-        except (_zipmod.BadZipFile, OSError, ValueError) as exc:
+        except (zipfile.BadZipFile, OSError, ValueError) as exc:
             self._notifications.error(
                 f"Erro ao ler playlist: {Path(orig_name).name}\n{exc}"
             )

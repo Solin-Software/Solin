@@ -12,7 +12,7 @@ _WT_CLEAR_TEXT = "Wt-ClearText-Bold"
 import sys
 import ctypes
 
-def _exclude_from_aero_peek(hwnd: int) -> None:
+def exclude_from_aero_peek(hwnd: int) -> None:
     """
     Tells the Windows Desktop Window Manager to exclude this window from
     Aero Peek / taskbar thumbnail hover previews.
@@ -1003,7 +1003,7 @@ class ProjectionWindow(BaseProjectionView):
         # Windows to hide all non-targeted windows (including this one on the
         # secondary monitor), making the projection screen go blank until the
         # user clicks or moves the mouse away from the thumbnail preview.
-        _exclude_from_aero_peek(int(self.winId()))
+        exclude_from_aero_peek(int(self.winId()))
 
     @Slot()
     def _on_screen_geometry_changed(self):
@@ -1058,7 +1058,7 @@ class ProjectionWindow(BaseProjectionView):
             for i in range(self._stack.count()):
                 self._stack.widget(i).update()
             # Re-apply Aero Peek exclusion — the HWND may have been recreated
-            _exclude_from_aero_peek(int(self.winId()))
+            exclude_from_aero_peek(int(self.winId()))
 
         QTimer.singleShot(60, _restore)
 

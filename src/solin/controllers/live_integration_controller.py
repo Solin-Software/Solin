@@ -10,7 +10,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtGui import QImage
 
 from ..core.integrations.camera import CameraOption
-from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE as _MEMORIZE_PRE_MEDIA_SCENE
+from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 
 log = logging.getLogger(__name__)
 
@@ -340,7 +340,7 @@ class LiveIntegrationController:
             return
 
         if context.projection_bar.is_obs_scene_media():
-            if _MEMORIZE_PRE_MEDIA_SCENE:
+            if MEMORIZE_PRE_MEDIA_SCENE:
                 target = (
                     context.obs_scene_session.pre_media_scene
                     or context.obs_settings.default_scene()
@@ -351,7 +351,7 @@ class LiveIntegrationController:
                 context.obs_service.request_scene_change(target)
                 context.projection_bar.set_obs_scene_is_media(False)
         else:
-            if _MEMORIZE_PRE_MEDIA_SCENE:
+            if MEMORIZE_PRE_MEDIA_SCENE:
                 current = context.obs_service.current_scene or ""
                 if current and current != media_scene:
                     context.obs_scene_session.remember(current)

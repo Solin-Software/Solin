@@ -385,9 +385,9 @@ class RemoteNotificationQueue(QObject):
         lang: "LanguageManager",
         parent: QWidget | None = None,
     ):
-        from PySide6.QtCore import QObject as _QO
+        from PySide6.QtCore import QObject
 
-        _QO.__init__(self, parent)
+        QObject.__init__(self, parent)
         self._lang = lang
         self._parent = parent
         self._queue: list["Notification"] = []

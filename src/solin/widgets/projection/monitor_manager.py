@@ -322,8 +322,8 @@ class MonitorManagerPopup(QWidget):
         """Update idle section to reflect current path (empty = no media)."""
         self._idle_media_path = path
         if path:
-            import os as _os
-            name = _os.path.basename(path)
+            import os
+            name = os.path.basename(path)
             # Truncate long names
             max_len = 24
             display = ("…" + name[-(max_len - 1):]) if len(name) > max_len else name

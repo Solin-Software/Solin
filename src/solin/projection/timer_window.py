@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from ..core.ui.fonts import timer_digit_font_family
 from solin.ui.qml.loader import load_qml_type
 from solin.ui.qml.timer_output import ClockRenderBridge
-from .window import _exclude_from_aero_peek
+from .window import exclude_from_aero_peek
 
 
 # ── Output window ─────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ class TimerOutputWindow(QWidget):
         QTimer.singleShot(60, self._open_anim.start)
 
         screen.geometryChanged.connect(self._on_screen_geometry_changed)
-        _exclude_from_aero_peek(int(self.winId()))
+        exclude_from_aero_peek(int(self.winId()))
 
     @Slot()
     def _on_screen_geometry_changed(self):
