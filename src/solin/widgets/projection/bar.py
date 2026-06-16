@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import random as _random
+import random
 from collections.abc import Callable
 
 from PySide6.QtCore import (
@@ -1361,7 +1361,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 else:
                     self.stop_requested.emit()
                     return
-            next_idx = _random.choice(remaining)
+            next_idx = random.choice(remaining)
             self._playlist_index = next_idx
             self._played_indices.add(next_idx)
             self._update_nav_buttons()

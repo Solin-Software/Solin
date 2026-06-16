@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-import urllib.parse as _url_parse
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -81,7 +81,7 @@ class _FetchWorker(QThread):
             "snip":     "yes",
             "wtlocale": api_code,
         }
-        url = f"{_WOL_API_URL}?{_url_parse.urlencode(params)}"
+        url = f"{_WOL_API_URL}?{urllib.parse.urlencode(params)}"
         log.debug("[yeartext] GET %s", url)
 
         try:

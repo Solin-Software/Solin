@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json as _json
+import json
 import logging
 from pathlib import Path
 
@@ -94,8 +94,8 @@ class ProjectableWebView(NativeWebView):
 
     def _on_script_message(self, message: str) -> None:
         try:
-            payload = _json.loads(message)
-        except _json.JSONDecodeError:
+            payload = json.loads(message)
+        except json.JSONDecodeError:
             return
         if not isinstance(payload, dict):
             return
@@ -133,11 +133,11 @@ class ProjectableWebView(NativeWebView):
         lbl_save_vid = self.tr("Save video")
         lbl_add_play = self.tr("Add to playlist")
         js = (
-            f"window._jwProjectLabel      = {_json.dumps(lbl_proj_img)};"
-            f"window._jwProjectVideoLabel = {_json.dumps(lbl_proj_vid)};"
-            f"window._jwSaveImageLabel    = {_json.dumps(lbl_save_img)};"
-            f"window._jwSaveVideoLabel    = {_json.dumps(lbl_save_vid)};"
-            f"window._jwAddPlaylistLabel  = {_json.dumps(lbl_add_play)};"
+            f"window._jwProjectLabel      = {json.dumps(lbl_proj_img)};"
+            f"window._jwProjectVideoLabel = {json.dumps(lbl_proj_vid)};"
+            f"window._jwSaveImageLabel    = {json.dumps(lbl_save_img)};"
+            f"window._jwSaveVideoLabel    = {json.dumps(lbl_save_vid)};"
+            f"window._jwAddPlaylistLabel  = {json.dumps(lbl_add_play)};"
         )
         self.run_javascript(js)
 

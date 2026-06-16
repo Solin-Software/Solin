@@ -9,7 +9,7 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QFont, QFontDatabase
 from PySide6.QtSvg import QSvgRenderer
 
-import sys as _sys
+import sys
 
 # ── Configuracao de bandeiras ─────────────────────────────────────────────────
 #
@@ -25,7 +25,7 @@ import sys as _sys
 # Deteccao automatica por plataforma. Para forcar um valor, substitua por:
 #   USE_EMOJI_FLAGS: bool = True   ou   USE_EMOJI_FLAGS: bool = False
 #
-USE_EMOJI_FLAGS: bool = _sys.platform != "win32"
+USE_EMOJI_FLAGS: bool = sys.platform != "win32"
 
 # Família de fonte emoji preferida (primeira disponível no sistema é usada).
 # Você pode ajustar esta lista se quiser priorizar outra fonte.
@@ -977,7 +977,7 @@ def __getattr__(name: str):
             _SVG_CACHE[name] = svg
         return svg
     if name == "FLAG_ICONS":
-        module = _sys.modules[__name__]
+        module = sys.modules[__name__]
         return {code: getattr(module, icon_name) for code, icon_name in _FLAG_ICON_NAMES.items()}
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -1111,7 +1111,7 @@ def _get_flag_svg(lang_code: str) -> str | None:
     icon_name = _FLAG_ICON_NAMES.get(lang_code)
     if not icon_name:
         return None
-    return getattr(_sys.modules[__name__], icon_name)
+    return getattr(sys.modules[__name__], icon_name)
 
 def get_flag_icon(lang_code: str, emoji: str, size: int = 24) -> QIcon:
     """

@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 #     2. Procurar também em data-* e JSON embutido na página.
 #     3. Ao clicar, enviar o URL direto ao bridge Python → QMediaPlayer.
 #
-import json as _json
+import json
 from ...styles.icons import JS_SVG_IMAGE, JS_SVG_VIDEO
 
 
@@ -64,8 +64,8 @@ def _build_overlay_js(body: str) -> str:
         r"// ── Ícones SVG.*?\.join\(''\);",
         (
             f"// ── Ícones SVG (fonte: solin/styles/icons.py) ──────────────────────────\n"
-            f"    var SVG_IMAGE = {_json.dumps(JS_SVG_IMAGE)};\n"
-            f"    var SVG_VIDEO = {_json.dumps(JS_SVG_VIDEO)};"
+            f"    var SVG_IMAGE = {json.dumps(JS_SVG_IMAGE)};\n"
+            f"    var SVG_VIDEO = {json.dumps(JS_SVG_VIDEO)};"
         ),
         body,
         flags=re.DOTALL,
