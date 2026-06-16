@@ -20,7 +20,7 @@ from ...styles.icons import (
     ICON_SAVE_PLAYLIST,
     make_icon,
 )
-from ._shared import (
+from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_BG,
     SETTINGS_BORDER,

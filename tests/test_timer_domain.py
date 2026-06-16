@@ -127,7 +127,7 @@ def test_weekend_default_parts():
 def test_timer_section_palette_uses_meeting_section_hues():
     from solin.core.meetings.section_meta import SECTION_META
     from solin.core.meetings.colors import section_colors
-    from solin.ui.qml.timer_bridge import _section_palette
+    from solin.ui.qml.timer_bridge import section_palette
 
     section_codes = {
         Section.OPENING_COMMENTS: "opening_comments",
@@ -141,7 +141,7 @@ def test_timer_section_palette_uses_meeting_section_hues():
 
     for section, code in section_codes.items():
         colors = section_colors(SECTION_META[code][1])
-        palette = _section_palette(section)
+        palette = section_palette(section)
         assert palette["accent"] == colors["accent"]
         assert palette["text"] == colors["text"]
         assert palette["badge"] == colors["badge"]
@@ -150,10 +150,10 @@ def test_timer_section_palette_uses_meeting_section_hues():
 
 def test_timer_parts_model_uses_global_display_numbers():
     _app()
-    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    rows = _parts_model_for_schedule(sch)
+    rows = parts_model_for_schedule(sch)
 
     assert [row["displayNumber"] for row in rows] == list(range(1, len(rows) + 1))
     assert rows[0]["section"] == Section.OPENING_COMMENTS.value
@@ -184,13 +184,13 @@ def test_timer_parts_model_uses_global_display_numbers():
 
 def test_timer_parts_model_formats_default_timer_part_titles():
     _app()
-    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     set_section_part_count(sch, Section.TREASURES, 4)
     sch.parts_in(Section.MINISTRY)[0].title = "Custom Ministry Title"
 
-    rows = _parts_model_for_schedule(sch)
+    rows = parts_model_for_schedule(sch)
 
     assert rows[0]["title"] == QCoreApplication.translate("_TimerPart", OPENING_COMMENTS_TITLE)
     assert rows[1]["title"] == QCoreApplication.translate("_TimerPart", TREASURES_TALK_TITLE)
@@ -209,13 +209,13 @@ def test_timer_part_i18n_sources_cover_canonical_titles():
 
 def test_timer_parts_model_formats_started_time_with_locale_pattern():
     import time
-    from solin.ui.qml.timer_bridge import _parts_model_for_schedule
+    from solin.ui.qml.timer_bridge import parts_model_for_schedule
 
     epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     sch.parts[0].first_started_epoch = epoch
 
-    rows = _parts_model_for_schedule(sch, "HH.mm.ss")
+    rows = parts_model_for_schedule(sch, "HH.mm.ss")
 
     assert rows[0]["startedLabel"] == "05.04.03"
 

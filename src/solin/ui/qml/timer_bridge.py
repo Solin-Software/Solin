@@ -78,7 +78,7 @@ _STANDALONE_SECTIONS = {
 _CONFIGURABLE_COUNT = {Section.MINISTRY, Section.LIVING}
 
 
-def _section_palette(section: Section) -> dict[str, str]:
+def section_palette(section: Section) -> dict[str, str]:
     code = _SECTION_CODES.get(section, "")
     hue = SECTION_META.get(code, ("", 215))[1]
     colors = section_colors(hue)
@@ -114,7 +114,7 @@ def _started_label(epoch: float | None, time_format: str = "HH:mm:ss") -> str:
     return format_time_with_seconds(epoch, time_format)
 
 
-def _parts_model_for_schedule(schedule, time_format: str = "HH:mm:ss") -> list[dict]:
+def parts_model_for_schedule(schedule, time_format: str = "HH:mm:ss") -> list[dict]:
     rows = []
     seen_sections: set[str] = set()
     section_positions: dict[Section, int] = {}
@@ -124,7 +124,7 @@ def _parts_model_for_schedule(schedule, time_format: str = "HH:mm:ss") -> list[d
         section_positions[section] = section_position
         first = section.value not in seen_sections
         seen_sections.add(section.value)
-        palette = _section_palette(section)
+        palette = section_palette(section)
         indexed_number: int | None = None
         if is_indexed_part_title_source(p.title):
             indexed_number = section_position
@@ -234,7 +234,7 @@ class TimerBridge(QObject):
             "time_with_seconds_format",
             "HH:mm:ss",
         )
-        return _parts_model_for_schedule(self._schedule, time_format)
+        return parts_model_for_schedule(self._schedule, time_format)
 
     parts = Property(_QVARIANT, _parts_model, notify=scheduleChanged)
 

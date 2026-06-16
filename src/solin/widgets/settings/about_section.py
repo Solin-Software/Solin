@@ -5,7 +5,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from ...core.foundation.constants import APP_VERSION
-from ._shared import SETTINGS_ACCENT, SETTINGS_BORDER, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
+from .shared import SETTINGS_ACCENT, SETTINGS_BORDER, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
 
 
 class AboutSectionMixin:

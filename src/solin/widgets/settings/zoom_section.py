@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...styles.icons import ICON_ZOOM, make_icon
-from ._shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT, SettingsToggleSwitch
+from .shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT, SettingsToggleSwitch
 
 
 class ZoomSectionMixin:

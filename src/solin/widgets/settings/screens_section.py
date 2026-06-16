@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...core.ui.screens import ScreenManager
 from ...styles.icons import ICON_MONITOR, ICON_TV, make_icon
-from ._shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
+from .shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
 
 
 class ScreensSectionMixin:

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...styles.icons import ICON_FOLDER_LINK, make_icon
-from ._shared import (
+from .shared import (
     SETTINGS_BORDER,
     SETTINGS_BORDER_STRONG,
     SETTINGS_DANGER,

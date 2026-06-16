@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QDialog, QLabel
 
 from ...core.jw.language_context import jw_media_language_context
 from ...styles.icons import ICON_BOOK, ICON_NAV_BROWSER
-from ._shared import create_interface_language_picker, create_jw_language_picker
+from .shared import create_interface_language_picker, create_jw_language_picker
 
 
 class LanguageSectionMixin:

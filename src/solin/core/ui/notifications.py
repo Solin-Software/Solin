@@ -54,7 +54,7 @@ _STYLES = {
     ),
 }
 
-_ICONS = {
+NOTIFICATION_ICONS = {
     NotificationKind.SUCCESS: (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
         ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
@@ -178,7 +178,7 @@ class SynchronizedToast(Toast):
     def set_notification_icon(self, kind: NotificationKind, color: str) -> None:
         size = QSize(20, 20)
         self.setIconColor(None)
-        self.setIcon(make_icon(_ICONS[kind], size.width(), color).pixmap(size))
+        self.setIcon(make_icon(NOTIFICATION_ICONS[kind], size.width(), color).pixmap(size))
         self.setIconSize(size)
         self._Toast__icon_widget.setStyleSheet(
             "background: transparent; border: none; padding: 0;"

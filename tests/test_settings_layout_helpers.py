@@ -14,7 +14,7 @@ from solin.widgets.settings_widget import SettingsWidget
 
 
 def test_settings_shared_visual_contracts_are_public():
-    from solin.widgets.settings import _shared as settings_shared
+    from solin.widgets.settings import shared as settings_shared
     from solin.widgets.settings.auto_key_dialog import AutoKeyEditorDialog
 
     assert settings_shared.SETTINGS_BG == "#0d1117"

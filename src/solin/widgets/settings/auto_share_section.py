@@ -7,7 +7,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from ...styles.icons import ICON_CROSSHAIR, ICON_EDIT, ICON_SHARE_SCREEN, make_icon
-from ._shared import (
+from .shared import (
     SETTINGS_BG,
     SETTINGS_BORDER,
     SETTINGS_BORDER_STRONG,

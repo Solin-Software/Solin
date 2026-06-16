@@ -151,7 +151,7 @@ def test_synchronized_toast_bar_stays_inside_rounded_corners():
 
 
 def test_notification_icons_are_vector_assets():
-    from solin.core.ui.notifications import _ICONS, NotificationKind
+    from solin.core.ui.notifications import NOTIFICATION_ICONS, NotificationKind
 
-    assert set(_ICONS) == set(NotificationKind)
-    assert all(svg.startswith("<svg") for svg in _ICONS.values())
+    assert set(NOTIFICATION_ICONS) == set(NotificationKind)
+    assert all(svg.startswith("<svg") for svg in NOTIFICATION_ICONS.values())

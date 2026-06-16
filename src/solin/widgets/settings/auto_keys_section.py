@@ -14,7 +14,7 @@ from ...styles.icons import (
     ICON_TRASH,
     make_icon,
 )
-from ._shared import (
+from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_BG,
     SETTINGS_BORDER,
