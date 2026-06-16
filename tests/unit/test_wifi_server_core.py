@@ -5,7 +5,12 @@ import threading
 from http.server import HTTPServer
 from pathlib import Path
 
-from solin.core.ingest.wifi_server import make_handler, parse_multipart, safe_filename
+from solin.core.ingest.wifi_server import make_handler
+from solin.core.ingest.wifi_uploads import (
+    is_allowed_upload_filename,
+    parse_multipart,
+    safe_filename,
+)
 
 
 def _multipart(filename: str, payload: bytes = b"data") -> tuple[bytes, str]:
@@ -37,6 +42,13 @@ def testsafe_filename_rejects_path_traversal_shape():
     assert safe_filename("../../secret.mp4") == "secret.mp4"
     assert safe_filename(r"..\..\evil?.mp4") == "evil_.mp4"
     assert safe_filename("...") == "upload"
+
+
+def test_upload_filename_policy_allows_only_supported_media_and_playlist_files():
+    assert is_allowed_upload_filename("clip.mp4") is True
+    assert is_allowed_upload_filename("playlist.jwlplaylist") is True
+    assert is_allowed_upload_filename("publication.jwpub") is True
+    assert is_allowed_upload_filename("tool.exe") is False
 
 
 def test_wifi_upload_rejects_disallowed_extension_server_side(tmp_path):

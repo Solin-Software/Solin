@@ -28,16 +28,14 @@ import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import unquote
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
-from solin.core.foundation.constants import (
-    JWPUB_EXTS,
-    PDF_EXTS,
-    PLAYLIST_EXTS,
+from solin.core.ingest.wifi_uploads import (
+    MAX_UPLOAD_BODY_BYTES,
+    is_allowed_upload_filename,
+    parse_multipart,
 )
-from solin.core.media.formats import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +44,6 @@ log = logging.getLogger(__name__)
 _INACTIVITY_SECS: int = 15 * 60          # 15 minutos
 _POLL_INTERVAL_MS: int = 30_000          # checa inatividade a cada 30 s
 _PORT_RANGE: tuple[int, int] = (8765, 8865)
-_ALLOWED_EXTS: frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS | PDF_EXTS | PLAYLIST_EXTS | JWPUB_EXTS
-_MAX_BODY_BYTES: int = 2 * 1024 ** 3    # 2 GB
 
 # ── Helpers de rede ───────────────────────────────────────────────────────────
 
@@ -72,60 +68,6 @@ def _find_free_port(start: int, end: int) -> Optional[int]:
         except OSError:
             continue
     return None
-
-
-# ── Sanitização de nome de arquivo ────────────────────────────────────────────
-
-def safe_filename(raw: str) -> str:
-    name = re.split(r"[\\/]+", raw)[-1]         # strip caminhos POSIX/Windows
-    name = re.sub(r"[^\w\s.\-]", "_", name)    # caracteres seguros
-    name = name.strip(". ") or "upload"
-    return name[:180]
-
-
-# ── Parser multipart (sem dependências externas) ──────────────────────────────
-
-def parse_multipart(body: bytes, boundary: bytes) -> list[dict]:
-    """
-    Retorna lista de dicts: {"filename": str, "data": bytes, "content_type": str}
-    Ignora partes sem filename (campos de formulário comuns).
-    """
-    delim = b"--" + boundary
-    parts: list[dict] = []
-
-    segments = body.split(delim)
-    for seg in segments[1:]:                    # primeiro é vazio ou preamble
-        if seg.startswith(b"--"):               # epilogue
-            break
-        # Separa cabeçalhos do corpo (CRLF CRLF)
-        try:
-            header_end = seg.index(b"\r\n\r\n")
-        except ValueError:
-            continue
-        header_raw = seg[:header_end].decode("utf-8", errors="replace")
-        body_part  = seg[header_end + 4:]
-        if body_part.endswith(b"\r\n"):
-            body_part = body_part[:-2]
-
-        # Extrai filename do Content-Disposition
-        cd_match = re.search(
-            r'Content-Disposition:[^\r\n]*filename\*?=["\']?(?:utf-8\'\')?([^"\'\r\n;]+)',
-            header_raw, re.IGNORECASE,
-        )
-        if not cd_match:
-            continue
-        raw_name = cd_match.group(1).strip().strip("\"'")
-        raw_name = unquote(raw_name)
-        filename = safe_filename(raw_name)
-        if not filename:
-            continue
-
-        # Content-Type da parte
-        ct_match = re.search(r"Content-Type:\s*(\S+)", header_raw, re.IGNORECASE)
-        ct = ct_match.group(1) if ct_match else "application/octet-stream"
-
-        parts.append({"filename": filename, "data": body_part, "content_type": ct})
-    return parts
 
 
 # ── HTML da página de upload ──────────────────────────────────────────────────
@@ -386,7 +328,7 @@ def make_handler(token: str, html: str,
                 self._send(400, "text/plain", b"Bad request")
                 return
 
-            if length > _MAX_BODY_BYTES:
+            if length > MAX_UPLOAD_BODY_BYTES:
                 self._send(413, "text/plain", b"File too large")
                 return
 
@@ -406,7 +348,7 @@ def make_handler(token: str, html: str,
             for part in parts:
                 filename = part["filename"]
                 ext      = Path(filename).suffix.lower()
-                if ext not in _ALLOWED_EXTS:
+                if not is_allowed_upload_filename(filename):
                     continue
                 data = part["data"]
                 if not data:
@@ -692,6 +634,4 @@ __all__ = [
     "build_upload_html",
     "get_local_ip",
     "make_handler",
-    "parse_multipart",
-    "safe_filename",
 ]

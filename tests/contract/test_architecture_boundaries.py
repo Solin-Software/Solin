@@ -552,6 +552,38 @@ def test_wifi_widget_does_not_own_qr_generation_workers():
     )
 
 
+def test_qr_code_generation_policy_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "qr_codes.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if any(root in {"PySide6", "solin"} for root in roots):
+            violations.append(_display(path, node))
+
+    assert violations == []
+
+
+def test_wifi_upload_policy_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "wifi_uploads.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if "PySide6" in roots:
+            violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_shell_composition_controllers_do_not_store_main_window():
     controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
     controller_files = (

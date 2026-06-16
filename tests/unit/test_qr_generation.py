@@ -1,6 +1,7 @@
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.ingest import qr_generation
+from solin.core.ingest.qr_codes import generate_qr_png
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
 
@@ -75,6 +76,12 @@ def _session(monkeypatch):
     _FakeQrThread.instances.clear()
     monkeypatch.setattr(qr_generation, "QrGenerationThread", _FakeQrThread)
     return qr_generation.QrGenerationSession()
+
+
+def test_generate_qr_png_returns_png_bytes():
+    data = generate_qr_png("http://solin.test")
+
+    assert data.startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_qr_generation_thread_emits_png_bytes(monkeypatch):
