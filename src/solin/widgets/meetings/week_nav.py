@@ -31,6 +31,11 @@ from .visuals import (
     MEETING_TEXT,
 )
 
+__all__ = (
+    "WeekNavBar",
+    "WeekPicker",
+)
+
 
 def _ghost_btn(
     svg: str,
@@ -54,7 +59,7 @@ def _ghost_btn(
     return btn
 
 
-class _WeekPicker(QWidget):
+class WeekPicker(QWidget):
     week_selected = Signal(object)  # date
 
     def __init__(self, selected: date, cache: dict | None = None, parent=None):

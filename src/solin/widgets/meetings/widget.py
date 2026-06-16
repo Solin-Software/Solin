@@ -36,13 +36,13 @@ from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from ...core.foundation.constants import (
-    DOCX_EXTS as _DOCX_EXTS,
-    JWPUB_EXTS as _JWPUB_EXTS,
-    PDF_EXTS as _PDF_EXTS,
-    PLAYLIST_EXTS as _PLAYLIST_EXTS,
-    PPTX_EXTS as _PPTX_EXTS,
+    DOCX_EXTS,
+    JWPUB_EXTS,
+    PDF_EXTS,
+    PLAYLIST_EXTS,
+    PPTX_EXTS,
 )
-from ...core.media.formats import MEDIA_EXTS as _MEDIA_EXTS
+from ...core.media.formats import MEDIA_EXTS
 from ...core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
@@ -57,14 +57,14 @@ from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
 from solin.ui.qml.meeting_detail import MeetingDetailQmlHost
 from .tree_controller import MeetingTreeController
-from .overview import _Overview
+from .overview import Overview
 from .visuals import (
     MEETING_ACCENT,
     MEETING_BG,
     MEETING_GOLD,
     MEETING_PURPLE,
 )
-from .week_nav import WeekNavBar, _WeekPicker
+from .week_nav import WeekNavBar, WeekPicker
 from ...ui.media_info import MediaInfoQueue
 
 if TYPE_CHECKING:
@@ -83,9 +83,9 @@ if TYPE_CHECKING:
 def _meeting_drop_exts(
     document_conversion_service: DocumentConversionService,
 ) -> frozenset[str]:
-    exts = _MEDIA_EXTS | _PDF_EXTS | _JWPUB_EXTS | _PLAYLIST_EXTS
+    exts = MEDIA_EXTS | PDF_EXTS | JWPUB_EXTS | PLAYLIST_EXTS
     if document_conversion_service.office_conversion_available():
-        exts = exts | _PPTX_EXTS | _DOCX_EXTS
+        exts = exts | PPTX_EXTS | DOCX_EXTS
     return frozenset(exts)
 
 
@@ -740,7 +740,7 @@ class MeetingsWidget(QWidget):
 
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background:{MEETING_BG};")
-        self._overview = _Overview()
+        self._overview = Overview()
         self._overview.open_mwb.connect(lambda: self._open_detail("mwb"))
         self._overview.open_wt.connect(lambda: self._open_detail("wt"))
         self._overview.open_memorial.connect(self._open_memorial_detail)
@@ -792,7 +792,7 @@ class MeetingsWidget(QWidget):
             self._discard_detail(detail_key)
 
     def _show_picker(self):
-        popup = _WeekPicker(self._monday, cache=self._cache)
+        popup = WeekPicker(self._monday, cache=self._cache)
         popup.week_selected.connect(self._on_week_picked)
         popup.show_near(self._navbar)
 

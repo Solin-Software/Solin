@@ -32,6 +32,8 @@ from .visuals import (
 if TYPE_CHECKING:
     from ...core.meetings.models import MemorialData, WeekData
 
+__all__ = ("Overview",)
+
 
 class _PubCard(QFrame):
     open_requested = Signal()
@@ -448,7 +450,7 @@ class _MemorialCard(QFrame):
         self.setVisible(False)
 
 
-class _Overview(QWidget):
+class Overview(QWidget):
     open_mwb = Signal()
     open_wt = Signal()
     open_memorial = Signal()
