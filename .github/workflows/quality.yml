@@ -9,12 +9,12 @@ on:
     branches:
       - main
     paths-ignore:
-      - "translations/locales/*.json"
-      - "translations/locales/**/*.json"
-      - "translations/*.ts"
-      - "translations/**/*.ts"
-      - "translations/*.qm"
-      - "translations/**/*.qm"
+      - "resources/translations/locales/*.json"
+      - "resources/translations/locales/**/*.json"
+      - "resources/translations/*.ts"
+      - "resources/translations/**/*.ts"
+      - "resources/translations/*.qm"
+      - "resources/translations/**/*.qm"
 
 permissions:
   contents: read
@@ -66,7 +66,7 @@ jobs:
           run_quality=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              translations/locales/*.json|translations/*.ts|translations/*.qm)
+              resources/translations/locales/*.json|resources/translations/*.ts|resources/translations/*.qm)
                 ;;
               *)
                 run_quality=true

@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOCALES_DIR = PROJECT_ROOT / "translations" / "locales"
+DEFAULT_LOCALES_DIR = PROJECT_ROOT / "resources" / "translations" / "locales"
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "src" / "solin"
 STRING_FALLBACK_RE = re.compile(r"""["']([^"']+)["']""")
 

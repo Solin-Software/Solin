@@ -16,7 +16,7 @@
 ;
 ;  BUILD INSTRUCTIONS:
 ;    1. Compile with Nuitka:
-;         nuitka --standalone --enable-plugin=pyside6 --windows-icon-from-ico=assets\icon.ico
+;         nuitka --standalone --enable-plugin=pyside6 --windows-icon-from-ico=resources\assets\icon.ico
 ;                --output-dir=build --output-filename=Solin main.py
 ;       (output directory must be named "main.dist" — or adjust MyDistDir below)
 ;    2. The executable must be "Solin.exe" inside MyDistDir.
@@ -77,15 +77,15 @@ RestartApplications=no
     
 OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}
-SetupIconFile=..\..\..\assets\icon.ico
+SetupIconFile=..\..\..\resources\assets\icon.ico
 WizardStyle=modern
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 ; Uncomment if you have wizard artwork BMPs:
-; WizardSmallImageFile=assets\wizard_small.bmp
-; WizardImageFile=assets\wizard_side.bmp
+; WizardSmallImageFile=resources\assets\wizard_small.bmp
+; WizardImageFile=resources\assets\wizard_side.bmp
 
 ; ── Compression ───────────────────────────────────────────────────────────────
 Compression=lzma2/ultra64
@@ -123,7 +123,7 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
-Source: "..\..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "..\..\..\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
 
 ; NOTE: Translations/lang folders are handled automatically via recursesubdirs
 ;       above, as long as they reside inside main.dist/.
@@ -138,9 +138,9 @@ Source: "..\..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversio
 
 ; =============================================================================
 [Icons]
-Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
+Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\resources\assets\icon.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\resources\assets\icon.ico"; Tasks: desktopicon
 Name: "{autostartup}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
 
 ; =============================================================================
@@ -154,17 +154,17 @@ Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallScope
 ; ── 1. Define o que é uma Imagem, Vídeo e Áudio para o Solin ──
 ; Imagem
 Root: HKA; Subkey: "Software\Classes\Solin.Image"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Imagem do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Image\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Image\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Image\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; Vídeo
 Root: HKA; Subkey: "Software\Classes\Solin.Video"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Vídeo do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Video\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Video\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Video\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; Áudio
 Root: HKA; Subkey: "Software\Classes\Solin.Audio"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Áudio do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Audio\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; ── 2. Adiciona o Solin na lista de "Abrir com..." educadamente ──
@@ -185,7 +185,7 @@ Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; V
 ; Remove the ";" to activate.
 ; Root: HKA; Subkey: "Software\Classes\.jwlplaylist";                            ValueType: string; ValueName: ""; ValueData: "Solin.jwlplaylist"; Flags: uninsdeletevalue
 ; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist";                       ValueType: string; ValueName: ""; ValueData: "JW Library Playlist"; Flags: uninsdeletekey
-; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist\DefaultIcon";           ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist\DefaultIcon";           ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 ; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist\shell\open\command";    ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; =============================================================================

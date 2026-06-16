@@ -84,7 +84,7 @@ RestartApplications=no
     
 OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Patch_{#MyPatchFileVersion}
-SetupIconFile=..\..\..\assets\icon.ico
+SetupIconFile=..\..\..\resources\assets\icon.ico
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -125,17 +125,17 @@ Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 ; ── 1. Define o que é uma Imagem, Vídeo e Áudio para o Solin ──
 ; Imagem
 Root: HKA; Subkey: "Software\Classes\Solin.Image"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Imagem do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Image\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Image\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Image\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; Vídeo
 Root: HKA; Subkey: "Software\Classes\Solin.Video"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Vídeo do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Video\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Video\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Video\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; Áudio
 Root: HKA; Subkey: "Software\Classes\Solin.Audio"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Áudio do Solin"; Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Solin.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Solin.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Audio\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; ── 2. Adiciona o Solin na lista de "Abrir com..." educadamente ──
@@ -155,8 +155,8 @@ Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; V
 ; Comment the line above and uncomment/adjust lines below.
 ; Source: "{#MyDistDir}\Solin.exe";                  DestDir: "{app}"; Flags: ignoreversion
 ; Source: "{#MyDistDir}\some_updated.dll";            DestDir: "{app}"; Flags: ignoreversion
-; Source: "..\..\..\translations\*";                  DestDir: "{app}\translations"; Flags: ignoreversion
-; Source: "..\..\..\translations\locales\*.json";     DestDir: "{app}\translations\locales"; Flags: ignoreversion
+; Source: "..\..\..\resources\translations\*";                  DestDir: "{app}\resources\translations"; Flags: ignoreversion
+; Source: "..\..\..\resources\translations\locales\*.json";     DestDir: "{app}\resources\translations\locales"; Flags: ignoreversion
 
 
 ; =============================================================================

@@ -24,12 +24,12 @@ do Qt. O método t(key) foi removido. O fluxo de atualização de traduções é
 
 Arquivos necessários em produção
 ─────────────────────────────────
-  translations/solin_<code>.qm   ← binários compilados pelo lrelease
-  translations/locales/<code>.json ← metadados (code, name, api_code…)
+  resources/translations/solin_<code>.qm   ← binários compilados pelo lrelease
+  resources/translations/locales/<code>.json ← metadados (code, name, api_code…)
 
 Arquivos de desenvolvimento (NÃO embarcados em produção)
 ─────────────────────────────────────────────────────────
-  translations/solin_<code>.ts   ← fonte para lupdate / Qt Linguist / lrelease
+  resources/translations/solin_<code>.ts   ← fonte para lupdate / Qt Linguist / lrelease
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ from PySide6.QtCore import (
     QObject,
     Signal,
 )
+from solin.core.foundation.resources import application_translation_root
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
@@ -60,12 +61,7 @@ def _get_jw_language_service_class():
 
 # ── resolução de caminhos ─────────────────────────────────────────────────────
 def _translation_root() -> Path:
-    package_root = Path(__file__).resolve().parents[2]
-    for root in (package_root.parent, package_root.parents[1], Path.cwd()):
-        candidate = root / "translations"
-        if (candidate / "locales").is_dir():
-            return candidate
-    return package_root.parents[1] / "translations"
+    return application_translation_root()
 
 
 _TRANS_DIR    = os.fspath(_translation_root())

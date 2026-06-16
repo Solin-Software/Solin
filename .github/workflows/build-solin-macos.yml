@@ -81,10 +81,10 @@ jobs:
         shell: bash
         run: |
           test -f main.py
-          test -f assets/icon.icns
+          test -f resources/assets/icon.icns
           test -d src/solin/qml
-          test -d translations/locales
-          test -d translations
+          test -d resources/translations/locales
+          test -d resources/translations
           test -f native_webview_widget/__init__.py
           test -f native_webview_widget/abi.py
           test -f native_webview_widget/_backend.py
@@ -161,7 +161,7 @@ jobs:
             --output-dir="${BUILD_DIR}" \
             --macos-app-name="${APP_NAME}" \
             --macos-app-version="${APP_VERSION}" \
-            --macos-app-icon="assets/icon.icns" \
+            --macos-app-icon="resources/assets/icon.icns" \
             --assume-yes-for-downloads \
             --follow-imports \
             --follow-import-to=solin \
@@ -179,12 +179,12 @@ jobs:
             --include-module=websocket._app \
             --include-package=ephem \
             --include-package-data=pyqttoast \
-            --include-data-dir=assets=assets \
-            --include-data-dir=translations/locales=translations/locales \
+            --include-data-dir=resources/assets=resources/assets \
+            --include-data-dir=resources/translations/locales=resources/translations/locales \
             --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
-            --include-data-files="translations/*.qm=translations/" \
+            --include-data-files="resources/translations/*.qm=resources/translations/" \
             --include-data-files="${NATIVE_WEBVIEW_DYLIB}=native_webview_widget/$(basename "${NATIVE_WEBVIEW_DYLIB}")" \
             --enable-plugin=pyside6 \
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position \
@@ -421,7 +421,7 @@ jobs:
           mkdir -p "${DIST_DIR}"
           create-dmg \
             --volname "${APP_NAME} ${APP_VERSION}" \
-            --volicon "assets/icon.icns" \
+            --volicon "resources/assets/icon.icns" \
             --window-pos 200 120 \
             --window-size 660 420 \
             --icon-size 128 \

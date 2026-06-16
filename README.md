@@ -49,5 +49,5 @@ they rely heavily on dynamic Qt attributes and mixins.
 Versioned delivery automation lives outside generated output directories:
 `scripts/` contains repository operations such as QML cache compilation,
 translation validation, local Windows builds, and release diffs; `packaging/`
-contains installer recipes. `build/` and `dist/` are ignored output-only
-directories.
+contains installer recipes; `resources/` contains runtime assets and
+translations. `build/` and `dist/` are ignored output-only directories.
