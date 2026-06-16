@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from solin.core.media.playback_session import MediaPlaybackSession
+from tests._paths import REPO_ROOT
 
 
 def test_begin_playback_resets_media_state_and_keeps_deferred_switch_flag() -> None:
@@ -74,7 +73,7 @@ def test_stop_invalidates_frames_and_clears_paths_after_cleanup_window() -> None
 
 def test_media_playback_session_has_no_qt_or_downloader_dependency() -> None:
     source = (
-        Path(__file__).resolve().parents[1]
+        REPO_ROOT
         / "src"
         / "solin"
         / "core"

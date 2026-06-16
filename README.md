@@ -44,6 +44,10 @@ Pyright currently covers core foundation, timer, JW, meetings, and playlist
 domains; controllers/widgets are the next incremental typing frontier because
 they rely heavily on dynamic Qt attributes and mixins.
 
+Tests are organized by suite under `tests/unit`, `tests/integration`,
+`tests/contract`, and `tests/e2e`. Run a focused suite with `pytest -m unit`,
+`pytest -m integration`, or `pytest -m contract`.
+
 ## Delivery Layout
 
 Versioned delivery automation lives outside generated output directories:

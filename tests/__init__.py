@@ -1,0 +1,1 @@
+"""Solin test suites."""

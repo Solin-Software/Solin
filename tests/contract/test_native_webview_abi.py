@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import ast
 import platform
-from pathlib import Path
 
 from native_webview_widget.abi import EVENTS, REQUIRED_EXPORTS
 from scripts import validate_native_webview
+from tests._paths import REPO_ROOT
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_DIR = PROJECT_ROOT / "native_webview_widget"
+PACKAGE_DIR = REPO_ROOT / "native_webview_widget"
 
 
 def _backend_configured_symbols() -> set[str]:

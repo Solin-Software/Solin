@@ -27,6 +27,7 @@ from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
 from solin.core.meetings.tree_merger import MeetingTreeMerger
+from tests._paths import FIXTURES_DIR
 from solin.widgets.meetings.tree_controller import MeetingTreeController
 
 
@@ -890,7 +891,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
             self.assertFalse(stale.exists())
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
-        fixture = Path("tests/fixtures/synthetic_meeting_workbook.jwpub")
+        fixture = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"
         if not fixture.exists():
             self.skipTest("synthetic jwpub fixture not present")
         with tempfile.TemporaryDirectory() as tmp:

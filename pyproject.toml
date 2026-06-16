@@ -43,6 +43,12 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra --basetemp=.pytest-tmp -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
+markers = [
+    "unit: fast tests for pure domain and application services",
+    "integration: tests that compose Qt, controllers, filesystem, network, or worker adapters",
+    "contract: architecture, persisted-data, packaging, and repository-layout contracts",
+    "e2e: packaged application smoke and upgrade-install workflows",
+]
 
 [tool.ruff]
 target-version = "py313"

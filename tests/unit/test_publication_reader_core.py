@@ -6,8 +6,9 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from solin.core.jw import publication_reader
+from tests._paths import FIXTURES_DIR
 
-_FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_meeting_workbook.jwpub"
+_FIXTURE = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"
 
 
 def _track_extraction_dirs(monkeypatch: pytest.MonkeyPatch) -> list[Path]:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 from solin.core.timer.application import TimerSession
 from solin.core.timer.models import (
@@ -14,6 +13,7 @@ from solin.core.timer.models import (
     Section,
 )
 from solin.core.timer.schedule_factory import build_default_schedule
+from tests._paths import REPO_ROOT
 
 
 _WEEK = date(2026, 6, 1)
@@ -135,16 +135,14 @@ def test_timer_session_updates_clock_and_visibility_through_repository() -> None
 
 
 def test_timer_source_boundaries_keep_application_pure_and_widget_injected() -> None:
-    root = Path(__file__).resolve().parents[1]
-
     application_source = (
-        root / "src" / "solin" / "core" / "timer" / "application.py"
+        REPO_ROOT / "src" / "solin" / "core" / "timer" / "application.py"
     ).read_text(encoding="utf-8")
     widget_source = (
-        root / "src" / "solin" / "widgets" / "timer_widget.py"
+        REPO_ROOT / "src" / "solin" / "widgets" / "timer_widget.py"
     ).read_text(encoding="utf-8")
     bridge_source = (
-        root / "src" / "solin" / "ui" / "qml" / "timer_bridge.py"
+        REPO_ROOT / "src" / "solin" / "ui" / "qml" / "timer_bridge.py"
     ).read_text(encoding="utf-8")
 
     assert "PySide6" not in application_source

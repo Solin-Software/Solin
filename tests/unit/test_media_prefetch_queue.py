@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from solin.core.media.application import MediaPrefetchQueue, PrefetchPlan
+from tests._paths import REPO_ROOT
 
 
 class _Lookup:
@@ -116,7 +115,7 @@ def test_cached_remote_emits_cache_change_without_queueing_or_starting() -> None
 
 def test_media_prefetch_queue_application_service_has_no_qt_or_downloader_dependency() -> None:
     source = (
-        Path(__file__).resolve().parents[1]
+        REPO_ROOT
         / "src"
         / "solin"
         / "core"

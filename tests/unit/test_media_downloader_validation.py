@@ -16,6 +16,7 @@ from solin.core.media.download_storage import (
     make_persistent_temp_path,
     safe_remove,
 )
+from tests._paths import REPO_ROOT
 
 
 def _download_from_server(
@@ -161,7 +162,7 @@ def test_download_progress_gate_throttles_by_percent_byte_and_time():
 
 def test_media_download_storage_has_no_qt_or_downloader_dependency():
     source = (
-        Path(__file__).resolve().parents[1]
+        REPO_ROOT
         / "src"
         / "solin"
         / "core"

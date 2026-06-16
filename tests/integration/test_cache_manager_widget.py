@@ -3,11 +3,11 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
+
+from tests._paths import REPO_ROOT
 
 
 def test_media_card_keeps_resolved_title_outside_frozen_cache_item():
-    repo_root = Path(__file__).resolve().parents[1]
     script = """
 from PySide6.QtWidgets import QApplication, QPushButton
 
@@ -52,11 +52,11 @@ app.processEvents()
 """
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
-    env["PYTHONPATH"] = str(repo_root / "src")
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
 
     result = subprocess.run(
         [sys.executable, "-c", script],
-        cwd=repo_root,
+        cwd=REPO_ROOT,
         env=env,
         capture_output=True,
         text=True,

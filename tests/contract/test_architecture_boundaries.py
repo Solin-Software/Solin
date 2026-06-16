@@ -5,8 +5,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from tests._paths import REPO_ROOT
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = REPO_ROOT
 
 
 @dataclass(frozen=True)

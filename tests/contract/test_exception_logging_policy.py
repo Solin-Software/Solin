@@ -3,7 +3,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from tests._paths import REPO_ROOT
+
+_REPO_ROOT = REPO_ROOT
 _BROAD_EXCEPTION_NOQA = "noqa: BLE001"
 
 
@@ -11,6 +13,7 @@ def _python_sources() -> list[Path]:
     return [
         _REPO_ROOT / "main.py",
         *sorted((_REPO_ROOT / "src" / "solin").rglob("*.py")),
+        *sorted((_REPO_ROOT / "scripts").rglob("*.py")),
         *sorted((_REPO_ROOT / "tools").rglob("*.py")),
     ]
 
