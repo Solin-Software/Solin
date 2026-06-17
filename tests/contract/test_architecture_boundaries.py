@@ -1075,6 +1075,27 @@ def test_meeting_publication_worker_is_split_from_service_facade():
     assert "class JwpubWorker" in worker_source
 
 
+def test_memorial_worker_is_split_from_service_facade():
+    facade = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial.py"
+    worker = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "meetings"
+        / "memorial_worker.py"
+    )
+
+    facade_source = facade.read_text(encoding="utf-8")
+    worker_source = worker.read_text(encoding="utf-8")
+
+    assert "class MemorialWorker" not in facade_source
+    assert "resolve_memorial_jwpub" not in facade_source
+    assert "download_memorial_bytes" not in facade_source
+    assert "extract_memorial_jwpub" not in facade_source
+    assert "class MemorialWorker" in worker_source
+
+
 def test_zoom_state_value_objects_have_no_framework_dependencies():
     path = (
         PROJECT_ROOT

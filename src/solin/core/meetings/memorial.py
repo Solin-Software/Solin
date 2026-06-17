@@ -4,16 +4,13 @@ memorial.py ─ Solin
 Serviço de mídia da Celebração do Memorial JW.
 
 Responsabilidades:
-  1. Calcular a data exata do Memorial do ano atual (algoritmo JW moderno)
-  2. Determinar a semana em que o Memorial cai
-  3. Baixar e extrair o JWPUB mi<YY> com curl_cffi (browser-friendly)
-  4. Consultar SQLite: capa (CategoryType=26) + vídeos intro (CategoryType=-1)
-  5. Resolver URLs dos vídeos via API GETPUBMEDIALINKS
-  6. Armazenar em cache (estrutura idêntica ao JwpubCache)
-  7. Emitir sinais para a UI (main thread via QueuedConnection)
+  1. Expor a API pública de mídia do Memorial para a UI
+  2. Determinar a data e a semana do Memorial para consultas síncronas leves
+  3. Orquestrar a thread dedicada que executa I/O bloqueante
+  4. Emitir sinais para a UI (main thread via QueuedConnection)
 
 Threading:
-  _MemorialWorker  — QObject num QThread dedicado (toda I/O bloqueante aqui)
+  MemorialWorker   — QObject num QThread dedicado (toda I/O bloqueante aqui)
   MemorialService  — QObject na main thread (API pública para a UI)
 
 Política de fetch:
@@ -30,179 +27,12 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
-log = logging.getLogger(__name__)
-
-from solin.core.jw.memorial_publication import (
-    MemorialDownloadError,
-    download_memorial_bytes,
-    resolve_memorial_jwpub,
-)
-
-from .jwpub_cache import JwpubCache, JwpubChecksumStore
-from .memorial_calendar import memorial_date_for_year, monday_of
-from .memorial_content import (
-    extract_memorial_jwpub,
-    memorial_publication_symbol,
-    read_memorial_publication_content,
-)
 from . import models as meeting_models
+from .jwpub_cache import JwpubChecksumStore
+from .memorial_calendar import memorial_date_for_year, monday_of
+from .memorial_worker import MemorialWorker
 
-
-# ── Worker ────────────────────────────────────────────────────────────────────
-
-class _MemorialWorker(QObject):
-    """
-    Roda num QThread dedicado.
-    Toda I/O bloqueante (HTTP, zip, SQLite, resolução de vídeo) acontece aqui.
-    Comunica com MemorialService via sinais (QueuedConnection automática).
-    """
-    memorial_done  = Signal(object)   # meeting_models.MemorialData
-    progress       = Signal(int)      # 0-100
-    error          = Signal(str)      # mensagem
-
-    def __init__(
-        self,
-        jwpub_cache_dir: str | Path,
-        checksum_store: JwpubChecksumStore,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self._cache           = JwpubCache(jwpub_cache_dir)
-        self._checksum_store  = checksum_store
-        self._lang            = "T"
-
-    @Slot(str)
-    def set_lang(self, lang: str):
-        self._lang = lang
-
-    @Slot(int)
-    def load_memorial(self, year: int):
-        """Busca e resolve as mídias do Memorial para o ano dado."""
-        lang  = self._lang
-        pub   = memorial_publication_symbol(year)
-        issue = "0"   # mi<YY> não tem issue numérico — usa "0" como chave de cache
-
-        md = meeting_models.MemorialData(year=year)
-
-        # ── Calcular data ──────────────────────────────────────────────────────
-        memorial_date = memorial_date_for_year(year)
-        if not memorial_date:
-            md.status = "error"
-            self.error.emit(f"Could not calculate the Memorial date for {year}")
-            self.memorial_done.emit(md)
-            return
-
-        md.memorial_date = memorial_date
-        md.memorial_week = monday_of(memorial_date)
-
-        # ── Verificar janela de fetch ──────────────────────────────────────────
-        today      = date.today()
-        days_until = (memorial_date - today).days
-        is_past    = days_until < -1   # more than 1 day after the memorial
-
-        if days_until > 7:
-            md.status = "not_yet"
-            self.memorial_done.emit(md)
-            return
-
-        # NOTE: we intentionally do NOT bail out early for is_past here.
-        # If we have a cached copy it should still be shown; and if not,
-        # we need to reach the API to decide whether to show "not_found"
-        # or "deleted" (media removed by JW).
-
-        self.progress.emit(5)
-
-        # ── Obter URL + checksum do Memorial (sempre chama API para detectar updates) ──
-        jwpub_info = resolve_memorial_jwpub(pub, lang)
-        dl_url = jwpub_info.download_url
-        checksum = jwpub_info.checksum
-        not_found = jwpub_info.not_found
-        md.thumb_url = jwpub_info.thumbnail_url
-
-        is_cached = self._cache.is_cached(pub, lang, issue)
-
-        needs_download = (
-            not is_cached
-            or self._checksum_store.has_changed(pub, lang, issue, checksum)
-        )
-
-        if needs_download:
-            if not dl_url:
-                if is_cached:
-                    # API unreachable but we have a local copy → use stale cache.
-                    log.warning(
-                        "memorial %s/%s: API unreachable, falling back to stale cache",
-                        pub, lang,
-                    )
-                    self.progress.emit(60)
-                else:
-                    # No URL AND no local copy — determine the right user message.
-                    if is_past and not_found:
-                        # API confirmed pub absent + date already passed
-                        # → JW has removed the media from their servers.
-                        md.status = "deleted"
-                    elif not_found:
-                        # API confirmed pub absent but date is still upcoming/current
-                        # → publication not yet available; user can retry later.
-                        md.status = "not_found"
-                    else:
-                        # Pure network error — we can't tell whether the pub exists.
-                        if is_past:
-                            md.status = "deleted"  # assume deleted if past and we can't confirm
-                        else:
-                            md.status = "error"
-                            self.error.emit(f"URL not found for {pub} lang={lang}")
-                    self.memorial_done.emit(md)
-                    return
-            else:
-                dest = self._cache.jwpub_path(pub, lang, issue)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    raw = download_memorial_bytes(dl_url, timeout=120)
-                    self.progress.emit(60)
-                    dest.write_bytes(raw)
-                    # New .jwpub on disk — wipe the stale extract dir so that
-                    # extract_memorial_jwpub() below unpacks the fresh content.
-                    self._cache.invalidate_extract(pub, lang, issue)
-                    self._checksum_store.save(pub, lang, issue, checksum)
-                except (MemorialDownloadError, OSError) as exc:
-                    if is_cached:
-                        # Download failed but stale cache exists → use it.
-                        log.warning(
-                            "memorial %s/%s: download failed, using stale cache: %s",
-                            pub, lang, exc,
-                        )
-                        self.progress.emit(60)
-                    else:
-                        md.status = "error"
-                        self.error.emit(f"Download failed: {exc}")
-                        self.memorial_done.emit(md)
-                        return
-        else:
-            self.progress.emit(60)
-
-        self.progress.emit(70)
-
-        # ── Extração ───────────────────────────────────────────────────────────
-        pub_dir = extract_memorial_jwpub(pub, lang, issue, self._cache)
-        if not pub_dir:
-            md.status = "error"
-            self.error.emit("JWPUB extraction failed")
-            self.memorial_done.emit(md)
-            return
-
-        md.pub_dir = pub_dir
-        self.progress.emit(80)
-
-        # ── Consulta SQLite e construção dos itens ─────────────────────────────
-        content = read_memorial_publication_content(pub_dir)
-        md.cover_bytes = content.cover_bytes
-        self.progress.emit(85)
-
-        md.videos = content.media_items
-        md.status = "ready" if (content.media_items or md.cover_bytes) else "empty"
-        self.progress.emit(100)
-        self.memorial_done.emit(md)
+log = logging.getLogger(__name__)
 
 
 # ── MemorialService — vive na main thread ────────────────────────────────────
@@ -239,7 +69,7 @@ class MemorialService(QObject):
         self._data:  Optional[meeting_models.MemorialData] = None
 
         self._thread = QThread(self)
-        self._worker = _MemorialWorker(jwpub_cache_dir, checksum_store)
+        self._worker = MemorialWorker(jwpub_cache_dir, checksum_store)
         self._worker.moveToThread(self._thread)
         self._thread.finished.connect(self._worker.deleteLater)
 
