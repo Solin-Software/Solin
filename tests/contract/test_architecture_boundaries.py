@@ -1424,6 +1424,15 @@ def test_jw_language_service_receives_media_language_settings_store():
     assert "_media_language_settings" in source
 
 
+def test_remote_notification_service_receives_notification_settings_store():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "notifications.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "ProfileSettings" not in source
+    assert ".for_profile_settings" not in source
+    assert "_notification_settings" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

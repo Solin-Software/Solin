@@ -56,7 +56,6 @@ from solin.core.foundation.constants import NOTIFICATION_API_URL
 from solin.core.network.http import HttpError, get_json
 from solin.core.remote.notification_policy import Notification, resolve_remote_notifications
 from solin.core.remote.notification_settings import NotificationSettingsStore
-from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
 
@@ -76,13 +75,13 @@ class NotificationWorker(QObject):
     def __init__(
         self,
         api_code: str,
-        profile_settings: ProfileSettings,
+        settings: NotificationSettingsStore,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         # api_code do idioma ativo (ex: "T" para Português, "E" para English)
         self._api_code = api_code
-        self._profile_settings = profile_settings
+        self._settings = settings
 
     def run(self) -> None:
         """Chamado pela thread. Faz fetch, processa, emite resultado."""
@@ -120,14 +119,13 @@ class NotificationWorker(QObject):
         Valida o payload, filtra vistas e resolve conteúdo localizado.
         Retorna lista de Notification prontas para exibir.
         """
-        store = NotificationSettingsStore.for_profile_settings(self._profile_settings)
         result = resolve_remote_notifications(
             payload,
             api_code=self._api_code,
-            seen_ids=store.seen_ids(),
+            seen_ids=self._settings.seen_ids(),
         )
         for notification_id in result.mark_seen_ids:
-            store.mark_seen(notification_id)
+            self._settings.mark_seen(notification_id)
         return list(result.notifications)
 
 
@@ -140,7 +138,7 @@ class NotificationService(QObject):
     Uso típico:
         self._notif_service = NotificationService(
             lang_manager,
-            profile_settings,
+            notification_settings_store,
             self,
         )
         self._notif_service.notifications_ready.connect(self._on_notifications)
@@ -151,12 +149,12 @@ class NotificationService(QObject):
     def __init__(
         self,
         lang_manager: "LanguageManager",
-        profile_settings: ProfileSettings,
+        notification_settings: NotificationSettingsStore,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self._lang = lang_manager
-        self._profile_settings = profile_settings
+        self._notification_settings = notification_settings
         self._thread: QThread | None = None
         self._worker: NotificationWorker | None = None
         self._running = False
@@ -172,7 +170,7 @@ class NotificationService(QObject):
         api_code = self._lang.api_code  # ex: "T", "E", "S"
 
         self._thread = QThread(self)
-        self._worker = NotificationWorker(api_code, self._profile_settings)
+        self._worker = NotificationWorker(api_code, self._notification_settings)
         self._worker.moveToThread(self._thread)
 
         # Conecta sinais

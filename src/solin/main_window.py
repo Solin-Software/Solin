@@ -128,6 +128,7 @@ from .core.meetings.memorial import MemorialService
 from .core.meetings.jwpub_cache import JwpubChecksumStore
 from .core.meetings.publications import JwpubService
 from .core.profiles.models import ProfileInfo
+from .core.remote.notification_settings import NotificationSettingsStore
 from .core.remote.notifications import NotificationService
 from .core.remote.patch_installer import (
     PatchDownloadWorker,
@@ -785,7 +786,9 @@ class MainWindow(QMainWindow):
                     self,
                     notification_service=NotificationService(
                         self.lang,
-                        self.profile_settings,
+                        NotificationSettingsStore.for_profile_settings(
+                            self.profile_settings
+                        ),
                         self,
                     ),
                     notification_queue=RemoteNotificationQueue(self.lang, self),
