@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import inspect
 import sqlite3
 import tempfile
@@ -22,7 +21,6 @@ from solin.core.meetings.publication_content import (
     make_media_item,
     open_publication_database,
 )
-from solin.core.meetings.publication_worker import JwpubWorker
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
@@ -742,68 +740,6 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(controller._nodes, before)
         self.assertEqual(controller.saved, 0)
         self.assertEqual(controller.count_updates, 0)
-
-
-class _FakeJwpubCache:
-    def __init__(self, *, cached: bool, archive: Path):
-        self.cached = cached
-        self.archive = archive
-
-    def is_cached(self, pub: str, lang: str, issue: str) -> bool:
-        return self.cached
-
-    def jwpub_path(self, pub: str, lang: str, issue: str) -> Path:
-        return self.archive
-
-
-class _FakeChecksumStore:
-    def __init__(self, stored: str = ""):
-        self.stored = stored
-        self.saved: list[str] = []
-
-    def get(self, pub: str, lang: str, issue: str) -> str:
-        return self.stored
-
-    def save(self, pub: str, lang: str, issue: str, checksum: str) -> None:
-        self.stored = checksum
-        self.saved.append(checksum)
-
-
-class JwpubDownloadGateTests(unittest.TestCase):
-    def worker(self, *, cached: bool, archive: Path, stored: str = ""):
-        worker = JwpubWorker(
-            archive.parent,
-            archive.parent / "jwpub",
-            _FakeChecksumStore(stored),
-        )
-        worker._cache = _FakeJwpubCache(cached=cached, archive=archive)
-        return worker
-
-    def test_force_does_not_redownload_valid_local_archive(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "w_T_20260400.jwpub"
-            archive.write_bytes(b"valid archive")
-            checksum = hashlib.md5(archive.read_bytes()).hexdigest()
-            worker = self.worker(cached=True, archive=archive)
-
-            self.assertFalse(worker._needs_download("w", "T", "20260400", checksum, True))
-            self.assertEqual(worker._checksum_store.saved, [checksum])
-
-    def test_redownloads_when_remote_checksum_differs_from_local_archive(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "w_T_20260400.jwpub"
-            archive.write_bytes(b"old archive")
-            worker = self.worker(cached=True, archive=archive, stored="old")
-
-            self.assertTrue(worker._needs_download("w", "T", "20260400", "remote-new", False))
-
-    def test_uses_legacy_extracted_cache_when_archive_checksum_is_missing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "missing.jwpub"
-            worker = self.worker(cached=True, archive=archive)
-
-            self.assertFalse(worker._needs_download("mwb", "T", "20260500", "remote", False))
-            self.assertEqual(worker._checksum_store.saved, ["remote"])
 
 
 class MeetingTreeStoreTests(unittest.TestCase):

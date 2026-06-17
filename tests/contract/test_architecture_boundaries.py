@@ -1075,6 +1075,47 @@ def test_meeting_publication_worker_is_split_from_service_facade():
     assert "class JwpubWorker" in worker_source
 
 
+def test_meeting_publication_worker_uses_jw_archive_client_boundary():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "meetings"
+        / "publication_worker.py"
+    )
+    source = path.read_text(encoding="utf-8")
+
+    assert "stream_get" not in source
+    assert "HttpError" not in source
+    assert "JwpubMediaRequest" not in source
+    assert "PublicationMediaResolver" not in source
+    assert "_get_jwpub_info" not in source
+    assert "download_jwpub_archive" in source
+    assert "resolve_jwpub_archive" in source
+
+
+def test_publication_archive_client_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "jw" / "publication_archive.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if "PySide6" in roots:
+            violations.append(_display(path, node))
+
+    source = path.read_text(encoding="utf-8")
+    for fragment in ("QObject", "QThread", "Signal"):
+        if fragment in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)} contains {fragment}")
+
+    assert violations == []
+
+
 def test_memorial_worker_is_split_from_service_facade():
     facade = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial.py"
     worker = (

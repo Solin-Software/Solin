@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import sqlite3
@@ -12,17 +11,16 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from solin.core.jw.publication_links import (
-    DEFAULT_USER_AGENT,
-    JwpubMediaRequest,
-    PublicationMediaRequest,
-    PublicationMediaResolver,
+from solin.core.jw.publication_archive import (
+    JwpubArchiveDownloadError,
+    download_jwpub_archive,
+    resolve_jwpub_archive,
+    resolve_meeting_video,
 )
 from solin.core.media.download_storage import is_url_cached
-from solin.core.network.http import HttpError, stream_get
 
 from . import models as meeting_models
-from .jwpub_cache import JwpubCache, JwpubChecksumStore
+from .jwpub_cache import JwpubCache, JwpubChecksumStore, needs_jwpub_download
 from .meeting_weeks import mwb_issue_for_week, watchtower_issue_candidates
 from .publication_content import (
     parse_publication_ref_items,
@@ -33,57 +31,6 @@ from .publication_content import (
 )
 
 log = logging.getLogger(__name__)
-
-_UA = DEFAULT_USER_AGENT
-_PUBLICATION_MEDIA_RESOLVER = PublicationMediaResolver()
-
-def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str, bool]:
-    """
-    Query the JW pub-media API and return (download_url, checksum, not_found).
-
-    not_found=True  → The API responded successfully but has no files for this
-                       pub/lang/issue.  The publication genuinely does not exist
-                       (equivalent to an HTTP 404).
-    not_found=False → Either a URL was found, or the request failed due to a
-                       network / parse error (we cannot confirm existence).
-
-    Both url and checksum come from the same API call; checksum is '' when the
-    server does not supply one.  Returns (None, '', False) on any network error.
-    """
-    media_info = _PUBLICATION_MEDIA_RESOLVER.resolve_jwpub(
-        JwpubMediaRequest(pub=pub, language=lang, issue=issue)
-    )
-    return media_info.download_url, media_info.checksum, media_info.not_found
-
-
-def resolve_meeting_video(key_symbol: str, track: int, issue_tag: int,
-                   meps_doc_id: int, lang: str,
-                   is_sign_language: bool = False) -> dict:
-    """
-    Resolve video URL — deve ser chamado APENAS de worker threads.
-
-    is_sign_language: quando True e key_symbol for 'sjjm', substitui por 'sjj'
-    (língua gestual não usa a versão com música).
-    """
-    result = {"url": "", "title": "", "thumbnail": ""}
-    try:
-        media_file = _PUBLICATION_MEDIA_RESOLVER.resolve_video(
-            PublicationMediaRequest(
-                key_symbol=key_symbol,
-                track=track,
-                issue_tag=issue_tag,
-                meps_doc_id=meps_doc_id,
-                language=lang,
-                is_sign_language=is_sign_language,
-            )
-        )
-        if media_file is not None:
-            result["url"] = media_file.url
-            result["title"] = media_file.title
-            result["thumbnail"] = media_file.thumbnail_url
-    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
-        log.debug("Could not parse resolved video metadata", exc_info=True)
-    return result
 
 
 # ── Worker — toda lógica bloqueante aqui, nunca na main thread ────────────────
@@ -134,53 +81,6 @@ class JwpubWorker(QObject):
         """Informa se o idioma de mídia é gestual (afeta resolução de cânticos)."""
         self._is_sign_language = is_sign
 
-    # ── Checksum-aware download gate ──────────────────────────────────────────
-
-    def _needs_download(self, pub: str, lang: str, issue: str,
-                        checksum: str, force: bool) -> bool:
-        """
-        Returns True when the file must be (re-)downloaded:
-          • no local extract/archive exists yet
-          • checksum changed compared with the real local archive
-        Returns False when the cached copy is confirmed up-to-date.
-        """
-        has_extract = self._cache.is_cached(pub, lang, issue)
-        archive = self._cache.jwpub_path(pub, lang, issue)
-        has_archive = archive.is_file()
-
-        if not has_extract and not has_archive:
-            return True
-        if not checksum:
-            return False
-
-        stored = self._checksum_store.get(pub, lang, issue)
-        if stored == checksum:
-            return False
-
-        local_checksum = self._local_jwpub_checksum(archive) if has_archive else ""
-        if local_checksum and local_checksum == checksum:
-            self._checksum_store.save(pub, lang, issue, checksum)
-            return False
-
-        if not stored and has_extract and not has_archive:
-            # Legacy cache: extracted DB exists but the original archive/checksum
-            # does not. Trust the local usable cache and seed the remote checksum
-            # so future launches do not redownload forever.
-            self._checksum_store.save(pub, lang, issue, checksum)
-            return False
-
-        return True
-
-    def _local_jwpub_checksum(self, path: Path) -> str:
-        try:
-            digest = hashlib.md5()  # nosec B324 - JW API exposes MD5 checksums
-            with path.open("rb") as fh:
-                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            return digest.hexdigest()
-        except OSError:
-            return ""
-
     # ── Load week ─────────────────────────────────────────────────────────────
 
     @Slot(object, bool)
@@ -206,8 +106,8 @@ class JwpubWorker(QObject):
         if not force:
             mwb_served = self._serve_mwb_cached(monday)
             wt_served  = self._serve_wt_cached(monday)
-        self._revalidate_mwb(monday, force, mwb_served)
-        self._revalidate_wt(monday, force, wt_served)
+        self._revalidate_mwb(monday, mwb_served)
+        self._revalidate_wt(monday, wt_served)
 
     # ── MWB ───────────────────────────────────────────────────────────────────
 
@@ -223,7 +123,7 @@ class JwpubWorker(QObject):
         )
         return True
 
-    def _revalidate_mwb(self, monday: date, force: bool, served: bool):
+    def _revalidate_mwb(self, monday: date, served: bool):
         """
         Fase 2 (SWR): consulta a API e só re-emite se o conteúdo do servidor
         mudou. ``served`` indica se a fase 1 já mostrou uma cópia do cache.
@@ -232,7 +132,10 @@ class JwpubWorker(QObject):
         issue = mwb_issue_for_week(monday)
         lang  = self._lang
 
-        url, checksum, not_found = _get_jwpub_info("mwb", lang, issue)
+        archive_info = resolve_jwpub_archive("mwb", lang, issue)
+        url = archive_info.download_url
+        checksum = archive_info.checksum
+        not_found = archive_info.not_found
 
         if not url:
             # API inalcançável, ou a publicação não existe para esta semana/idioma.
@@ -250,7 +153,9 @@ class JwpubWorker(QObject):
             )
             return
 
-        if not self._needs_download("mwb", lang, issue, checksum, force):
+        if not needs_jwpub_download(
+            self._cache, self._checksum_store, "mwb", lang, issue, checksum
+        ):
             # Cópia local confirmada atual. Se já a servimos, "nada acontece".
             if not served:
                 self._parse_mwb(
@@ -323,7 +228,7 @@ class JwpubWorker(QObject):
                 return issue
         return None
 
-    def _revalidate_wt(self, monday: date, force: bool, served_issue: Optional[str]):
+    def _revalidate_wt(self, monday: date, served_issue: Optional[str]):
         """
         Fase 2 (SWR). Se já servimos uma edição do cache, revalida APENAS ela
         (a única que importa) e só re-emite se mudou. Caso contrário, cai no
@@ -332,8 +237,12 @@ class JwpubWorker(QObject):
         lang = self._lang
         if served_issue is not None:
             key = monday.isoformat()
-            url, checksum, _ = _get_jwpub_info("w", lang, served_issue)
-            if url and self._needs_download("w", lang, served_issue, checksum, force):
+            archive_info = resolve_jwpub_archive("w", lang, served_issue)
+            url = archive_info.download_url
+            checksum = archive_info.checksum
+            if url and needs_jwpub_download(
+                self._cache, self._checksum_store, "w", lang, served_issue, checksum
+            ):
                 if self._download("w", lang, served_issue, url, key, "wt", emit_error=False):
                     self._checksum_store.save("w", lang, served_issue, checksum)
                     self._try_wt_cached(
@@ -346,7 +255,6 @@ class JwpubWorker(QObject):
             monday,
             lang,
             watchtower_issue_candidates(monday)[:],
-            force=force,
         )
 
     def _try_wt_cached(self, wd: meeting_models.WeekData, monday: date,
@@ -369,8 +277,6 @@ class JwpubWorker(QObject):
         lang: str,
         candidates: list[str],
         _had_api_response: bool = False,
-        *,
-        force: bool = False,
     ):
         """
         Try each WT issue candidate in order.  Each candidate is independently
@@ -387,7 +293,10 @@ class JwpubWorker(QObject):
 
         for issue in candidates:
             is_cached = self._cache.is_cached("w", lang, issue)
-            url, checksum, not_found = _get_jwpub_info("w", lang, issue)
+            archive_info = resolve_jwpub_archive("w", lang, issue)
+            url = archive_info.download_url
+            checksum = archive_info.checksum
+            not_found = archive_info.not_found
             had_api = had_api or not_found or bool(url)
 
             if not url:
@@ -401,7 +310,9 @@ class JwpubWorker(QObject):
                         return
                 continue
 
-            if self._needs_download("w", lang, issue, checksum, force):
+            if needs_jwpub_download(
+                self._cache, self._checksum_store, "w", lang, issue, checksum
+            ):
                 if not self._download("w", lang, issue, url, key, "wt"):
                     continue
                 self._checksum_store.save("w", lang, issue, checksum)
@@ -522,9 +433,13 @@ class JwpubWorker(QObject):
                     return self._parse_ref_items(pub, lang, cand, ref), False
             return [], False
 
-        url, checksum, _ = _get_jwpub_info(pub, lang, issue)
+        archive_info = resolve_jwpub_archive(pub, lang, issue)
+        url = archive_info.download_url
+        checksum = archive_info.checksum
         if not url and issue != "0":
-            fallback_url, fallback_checksum, _ = _get_jwpub_info(pub, lang, "0")
+            fallback_info = resolve_jwpub_archive(pub, lang, "0")
+            fallback_url = fallback_info.download_url
+            fallback_checksum = fallback_info.checksum
             if fallback_url or self._cache.is_cached(pub, lang, "0"):
                 url = fallback_url
                 checksum = fallback_checksum
@@ -536,7 +451,9 @@ class JwpubWorker(QObject):
             return [], False
 
         downloaded = False
-        if url and self._needs_download(pub, lang, issue, checksum, False):
+        if url and needs_jwpub_download(
+            self._cache, self._checksum_store, pub, lang, issue, checksum
+        ):
             if not self._download(pub, lang, issue, url, key, "mwb", emit_error=False):
                 return [], False
             self._checksum_store.save(pub, lang, issue, checksum)
@@ -616,26 +533,17 @@ class JwpubWorker(QObject):
         """
         dest = self._cache.jwpub_path(pub, lang, issue)
         try:
-            with stream_get(url, timeout=60, headers={"User-Agent": _UA}) as resp:
-                total  = int(resp.headers.get("Content-Length") or 0)
-                done   = 0
-                chunks = []
-                last_pct = -1
-                for chunk in resp.iter_bytes(256 * 1024):
-                    chunks.append(chunk)
-                    done += len(chunk)
-                    pct = int(done / total * 100) if total else 0
-                    if pct != last_pct:
-                        last_pct = pct
-                        self.progress.emit(key, pub_ui, pct)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(b"".join(chunks))
+            download_jwpub_archive(
+                url,
+                dest,
+                progress=lambda pct: self.progress.emit(key, pub_ui, pct),
+            )
             # New .jwpub on disk — wipe the stale extract dir so the next
             # _ensure_extract() call unpacks the fresh content instead of
             # returning the old x_<issue> directory.
             self._cache.invalidate_extract(pub, lang, issue)
             return True
-        except (HttpError, OSError, ValueError) as exc:
+        except JwpubArchiveDownloadError as exc:
             if emit_error:
                 self.error.emit(key, pub_ui, str(exc))
             else:
@@ -649,6 +557,4 @@ class JwpubWorker(QObject):
             return ep
         return self._cache.extract(pub, lang, issue)
 
-
-
-__all__ = ["JwpubWorker", "resolve_meeting_video"]
+__all__ = ["JwpubWorker"]

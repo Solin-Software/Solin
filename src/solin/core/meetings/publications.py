@@ -35,15 +35,13 @@ from PySide6.QtCore import (
 
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.settings import MediaSettingsStore
+from solin.core.jw.publication_archive import resolve_meeting_video
 from . import models as meeting_models
 from .jwpub_cache import JwpubChecksumStore
 from .meeting_weeks import (
     current_monday,
 )
-from .publication_worker import (
-    JwpubWorker,
-    resolve_meeting_video,
-)
+from .publication_worker import JwpubWorker
 
 log = logging.getLogger(__name__)
 

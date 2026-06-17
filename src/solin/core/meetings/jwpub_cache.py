@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -178,4 +179,59 @@ class JwpubChecksumStore:
         return changed
 
 
-__all__ = ["JwpubCache", "JwpubChecksumStore"]
+def local_jwpub_checksum(path: Path) -> str:
+    try:
+        digest = hashlib.md5()  # nosec B324 - JW API exposes MD5 checksums
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return ""
+
+
+def needs_jwpub_download(
+    cache: JwpubCache,
+    checksum_store: JwpubChecksumStore,
+    pub: str,
+    lang: str,
+    issue: str,
+    checksum: str,
+) -> bool:
+    """
+    Return whether a JWPUB archive needs to be downloaded.
+
+    Existing extracted data is trusted when the original archive/checksum is
+    missing; this preserves old usable caches without redownloading forever.
+    """
+    has_extract = cache.is_cached(pub, lang, issue)
+    archive = cache.jwpub_path(pub, lang, issue)
+    has_archive = archive.is_file()
+
+    if not has_extract and not has_archive:
+        return True
+    if not checksum:
+        return False
+
+    stored = checksum_store.get(pub, lang, issue)
+    if stored == checksum:
+        return False
+
+    local_checksum = local_jwpub_checksum(archive) if has_archive else ""
+    if local_checksum and local_checksum == checksum:
+        checksum_store.save(pub, lang, issue, checksum)
+        return False
+
+    if not stored and has_extract and not has_archive:
+        checksum_store.save(pub, lang, issue, checksum)
+        return False
+
+    return True
+
+
+__all__ = [
+    "JwpubCache",
+    "JwpubChecksumStore",
+    "local_jwpub_checksum",
+    "needs_jwpub_download",
+]
