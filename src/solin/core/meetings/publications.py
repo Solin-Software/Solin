@@ -53,6 +53,13 @@ from .meeting_weeks import (
     mwb_issue_for_week,
     watchtower_issue_candidates,
 )
+from .publication_content import (
+    parse_publication_ref_items,
+    read_mwb_week_content,
+    read_watchtower_study_content,
+    sync_cbs_from_publication_refs,
+    watchtower_issue_contains_week,
+)
 
 log = logging.getLogger(__name__)
 
@@ -60,14 +67,6 @@ log = logging.getLogger(__name__)
 
 _UA       = DEFAULT_USER_AGENT
 _PUBLICATION_MEDIA_RESOLVER = PublicationMediaResolver()
-
-SONG_SYMS  = {"sjj", "sjjm"}
-_EXCL_CAT  = {9, 10, 15, 25}
-_WT_CLASS  = 40
-_MWB_AYFM  = 18
-_SKIP_MEETING_REF_PUBS = {"th", "lmd"}
-_MWB_STUDY_REF_TYPES = {"Book", "Brochure", "Watchtower", "Article"}
-
 
 def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str, bool]:
     """
@@ -116,621 +115,6 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         log.debug("Could not parse resolved video metadata", exc_info=True)
     return result
-
-
-# ── SQLite helpers (worker-thread only) ──────────────────────────────────────
-
-def _conn(db_path: Path) -> sqlite3.Connection:
-    c = sqlite3.connect(str(db_path))
-    c.row_factory = sqlite3.Row
-    return c
-
-def _find_mwb_doc_id(conn, monday: date) -> Optional[int]:
-    target = int(monday.strftime("%Y%m%d"))
-    try:
-        r = conn.execute(
-            "SELECT DocumentId FROM DatedText WHERE FirstDateOffset=? LIMIT 1",
-            (target,)
-        ).fetchone()
-        return r[0] if r else None
-    except sqlite3.Error:
-        return None
-
-def _find_wt_doc_id(conn, monday: date) -> Optional[int]:
-    target = int(monday.strftime("%Y%m%d"))
-    try:
-        rows   = conn.execute(
-            "SELECT FirstDateOffset FROM DatedText ORDER BY FirstDateOffset"
-        ).fetchall()
-        week_nr = next((i for i, r in enumerate(rows) if r[0] == target), -1)
-        if week_nr == -1:
-            return None
-        row = conn.execute(
-            "SELECT DocumentId FROM Document WHERE Class=? "
-            "ORDER BY DocumentId LIMIT 1 OFFSET ?",
-            (_WT_CLASS, week_nr)
-        ).fetchone()
-        return row[0] if row else None
-    except sqlite3.Error:
-        return None
-
-def _is_week_in_dated_text(conn, monday: date) -> bool:
-    target = int(monday.strftime("%Y%m%d"))
-    try:
-        r = conn.execute(
-            "SELECT COUNT(*) FROM DatedText WHERE FirstDateOffset=?", (target,)
-        ).fetchone()
-        return bool(r and r[0] > 0)
-    except sqlite3.Error:
-        return False
-
-def _doc_title(conn, doc_id: int) -> str:
-    try:
-        r = conn.execute(
-            "SELECT Title FROM Document WHERE DocumentId=?", (doc_id,)
-        ).fetchone()
-        return (r[0] or "").strip() if r else ""
-    except sqlite3.Error:
-        return ""
-
-def _cover_bytes(pub_dir: Path) -> Optional[bytes]:
-    dbs = list(pub_dir.glob("*.db"))
-    if not dbs:
-        return None
-    try:
-        c = _conn(dbs[0])
-        for cat in (9, 15):
-            r = c.execute(
-                "SELECT FilePath FROM Multimedia WHERE CategoryType=? LIMIT 1", (cat,)
-            ).fetchone()
-            if r and r[0]:
-                img = pub_dir / r[0]
-                if img.exists():
-                    c.close()
-                    return img.read_bytes()
-        c.close()
-    except (OSError, sqlite3.Error):
-        log.debug("Failed to read cover bytes from publication database", exc_info=True)
-    return None
-
-def _row_value(row, key: str) -> str:
-    try:
-        return row[key] or ""
-    except (IndexError, KeyError, TypeError):
-        return ""
-
-
-def _clean_ref_text(value: str) -> str:
-    import re
-    text = re.sub(r"<[^>]+>", "", value or "")
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _publication_title_from_row(row, fallback: str) -> str:
-    for key in (
-        "display_title",
-        "reference_title",
-        "short_title",
-        "title",
-        "undated_reference_title",
-    ):
-        title = _clean_ref_text(_row_value(row, key))
-        if title:
-            return title
-    return fallback
-
-
-def _mwb_song_ordinals(conn, doc_id: int) -> list[int]:
-    try:
-        return [
-            int(r["par"] or 0) for r in conn.execute(
-                "SELECT dm.BeginParagraphOrdinal AS par FROM Multimedia m "
-                "JOIN DocumentMultimedia dm ON dm.MultimediaId=m.MultimediaId "
-                "WHERE dm.DocumentId=? AND m.KeySymbol IN ('sjj','sjjm') "
-                "AND dm.BeginParagraphOrdinal IS NOT NULL ORDER BY par",
-                (doc_id,)
-            ).fetchall()
-        ]
-    except sqlite3.Error:
-        log.debug("Failed to read MWB song ordinals", exc_info=True)
-        return []
-
-
-def _mwb_mid_ordinal_from_songs(song_ords: list[int]) -> int:
-    return song_ords[1] if len(song_ords) >= 2 else 9999
-
-
-def _mwb_final_song_ordinal_from_songs(song_ords: list[int]) -> int:
-    return song_ords[-1] if len(song_ords) >= 3 else 9999
-
-
-def _mwb_mid_ordinal(conn, doc_id: int) -> int:
-    return _mwb_mid_ordinal_from_songs(_mwb_song_ordinals(conn, doc_id))
-
-
-def _mwb_final_song_ordinal(conn, doc_id: int) -> int:
-    return _mwb_final_song_ordinal_from_songs(_mwb_song_ordinals(conn, doc_id))
-
-
-def _is_cbs_row(row, cbs_ref: Optional[dict], final_song_ord: int = 9999) -> bool:
-    if not cbs_ref:
-        return False
-    pub = str(row["undated"] or "").strip()
-    meps_id = int(row["meps_id"] or 0)
-    par = int(row["par"] or 0)
-    cbs_docs = {int(value) for value in cbs_ref.get("meps_doc_ids", [])}
-    if pub != str(cbs_ref.get("pub") or "") or meps_id not in cbs_docs:
-        return False
-    if par < int(cbs_ref.get("cbs_start") or 9999):
-        return False
-    return final_song_ord >= 9999 or par < final_song_ord
-
-
-def _mwb_publication_ref_rows(conn, doc_id: int, include_web: bool = False) -> list:
-    pub_types = "'Book','Brochure','Watchtower','Article'"
-    if include_web:
-        pub_types = f"{pub_types},'Web'"
-    try:
-        return conn.execute(f"""
-            SELECT de.BeginParagraphOrdinal AS par,
-                   e.Caption,
-                   e.RefMepsDocumentId       AS meps_id,
-                   rp.UndatedSymbol          AS undated,
-                   rp.IssueTagNumber         AS issue_tag,
-                   rp.PublicationType        AS pub_type,
-                   rp.DisplayTitle           AS display_title,
-                   rp.ReferenceTitle         AS reference_title,
-                   rp.ShortTitle             AS short_title,
-                   rp.Title                  AS title,
-                   rp.UndatedReferenceTitle  AS undated_reference_title
-            FROM   DocumentExtract de
-            JOIN   Extract e         ON e.ExtractId         = de.ExtractId
-            JOIN   RefPublication rp ON rp.RefPublicationId = e.RefPublicationId
-            WHERE  de.DocumentId = ?
-              AND  rp.UndatedSymbol NOT IN ('sjj','sjjm')
-              AND  rp.PublicationType IN ({pub_types})
-            ORDER  BY de.BeginParagraphOrdinal ASC
-        """, (doc_id,)).fetchall()
-    except sqlite3.Error:
-        try:
-            return conn.execute(f"""
-                SELECT de.BeginParagraphOrdinal AS par,
-                       e.Caption,
-                       e.RefMepsDocumentId       AS meps_id,
-                       rp.UndatedSymbol          AS undated,
-                       rp.IssueTagNumber         AS issue_tag,
-                       rp.PublicationType        AS pub_type,
-                       NULL                      AS display_title,
-                       NULL                      AS reference_title,
-                       NULL                      AS short_title,
-                       NULL                      AS title,
-                       NULL                      AS undated_reference_title
-                FROM   DocumentExtract de
-                JOIN   Extract e         ON e.ExtractId         = de.ExtractId
-                JOIN   RefPublication rp ON rp.RefPublicationId = e.RefPublicationId
-                WHERE  de.DocumentId = ?
-                  AND  rp.UndatedSymbol NOT IN ('sjj','sjjm')
-                  AND  rp.PublicationType IN ({pub_types})
-                ORDER  BY de.BeginParagraphOrdinal ASC
-            """, (doc_id,)).fetchall()
-        except sqlite3.Error:
-            log.debug("Failed to read MWB publication references", exc_info=True)
-            return []
-
-
-def _mwb_study_ref_rows(rows: list) -> list:
-    return [
-        row for row in rows
-        if str(row["pub_type"] or "") in _MWB_STUDY_REF_TYPES
-    ]
-
-
-def _infer_cbs_rows(rows: list, final_song_ord: int) -> list:
-    candidates = [
-        r for r in rows
-        if (r["undated"] or "").strip()
-        and (final_song_ord >= 9999 or int(r["par"] or 0) < final_song_ord)
-    ]
-    if not candidates:
-        return []
-
-    ordered = sorted(candidates, key=lambda r: int(r["par"] or 0), reverse=True)
-    top_sym = str(ordered[0]["undated"] or "").strip()
-    cbs_rows = []
-    last_cbs_par = int(ordered[0]["par"] or 0)
-    for row in ordered:
-        pub = str(row["undated"] or "").strip()
-        par = int(row["par"] or 0)
-        if pub == top_sym:
-            cbs_rows.append(row)
-            last_cbs_par = par
-            continue
-        if cbs_rows and par < last_cbs_par:
-            break
-    return sorted(cbs_rows, key=lambda r: int(r["par"] or 0))
-
-
-def _mwb_cbs_start_from_rows(rows: list, final_song_ord: int) -> int:
-    rows = _infer_cbs_rows(
-        _mwb_study_ref_rows(rows),
-        final_song_ord,
-    )
-    if rows:
-        return min(int(row["par"] or 9999) for row in rows)
-    return 9999
-
-
-def _mwb_cbs_start(conn, doc_id: int) -> int:
-    song_ords = _mwb_song_ordinals(conn, doc_id)
-    return _mwb_cbs_start_from_rows(
-        _mwb_publication_ref_rows(conn, doc_id),
-        _mwb_final_song_ordinal_from_songs(song_ords),
-    )
-
-
-def _mwb_section_for_par(par: int, mid_ord: int, cbs_start: int) -> str:
-    if cbs_start < 9999 and par >= cbs_start:
-        return "lac"
-    if par >= mid_ord:
-        return "lac"
-    if par >= _MWB_AYFM:
-        return "ayfm"
-    return "tgw"
-
-
-def _get_cbs_ref(
-    conn,
-    doc_id: int,
-    rows: Optional[list] = None,
-    final_song_ord: Optional[int] = None,
-) -> Optional[dict]:
-    if rows is None:
-        rows = _mwb_publication_ref_rows(conn, doc_id)
-    if final_song_ord is None:
-        final_song_ord = _mwb_final_song_ordinal(conn, doc_id)
-    cbs_rows = _infer_cbs_rows(_mwb_study_ref_rows(rows), final_song_ord)
-    if not cbs_rows:
-        return None
-
-    top_row   = max(cbs_rows, key=lambda r: r["par"])
-    top_sym   = top_row["undated"] or ""
-    top_issue = str(top_row["issue_tag"] or "0")
-    if not top_sym:
-        return None
-    pub_title = ""
-    for key in (
-        "display_title",
-        "reference_title",
-        "short_title",
-        "title",
-        "undated_reference_title",
-    ):
-        pub_title = _clean_ref_text(_row_value(top_row, key))
-        if pub_title:
-            break
-    meps_ids:   list[int]      = []
-    doc_titles: dict[int, str] = {}
-    cbs_start = min(int(row["par"] or 0) for row in cbs_rows)
-    for r in cbs_rows:
-        if (r["undated"] or "") != top_sym:
-            continue
-        mid = r["meps_id"]
-        if not mid:
-            continue
-        if mid not in meps_ids:
-            meps_ids.append(mid)
-        if mid not in doc_titles and r["Caption"]:
-            doc_titles[mid] = _clean_ref_text(r["Caption"])
-    if not meps_ids:
-        return None
-    return {
-        "pub":          top_sym,
-        "issue":        top_issue,
-        "publication_title": pub_title or top_sym,
-        "meps_doc_ids": meps_ids,
-        "doc_titles":   doc_titles,
-        "title":        doc_titles.get(meps_ids[0], ""),
-        "cbs_start":    cbs_start,
-    }
-
-
-def _get_mwb_publication_refs(
-    conn,
-    doc_id: int,
-    cbs_ref: Optional[dict] = None,
-    rows: Optional[list] = None,
-    mid_ord: Optional[int] = None,
-    final_song_ord: Optional[int] = None,
-    cbs_start: Optional[int] = None,
-) -> list[meeting_models.MeetingPublicationRef]:
-    if rows is None:
-        rows = _mwb_publication_ref_rows(conn, doc_id, include_web=True)
-    if not rows:
-        return []
-
-    if final_song_ord is None:
-        final_song_ord = _mwb_final_song_ordinal(conn, doc_id)
-    cbs_ref = cbs_ref or _get_cbs_ref(conn, doc_id, rows, final_song_ord)
-    if mid_ord is None:
-        mid_ord = _mwb_mid_ordinal(conn, doc_id)
-    if cbs_start is None:
-        cbs_start = int(
-            (cbs_ref or {}).get("cbs_start")
-            or _mwb_cbs_start_from_rows(rows, final_song_ord)
-        )
-
-    refs_by_key: dict[tuple[str, str, str, int, bool], meeting_models.MeetingPublicationRef] = {}
-    order: list[tuple[str, str, str, int, bool]] = []
-    for row in rows:
-        pub = str(row["undated"] or "").strip()
-        meps_id = int(row["meps_id"] or 0)
-        if not pub or pub.lower() in _SKIP_MEETING_REF_PUBS or not meps_id:
-            continue
-        par = int(row["par"] or 0)
-        issue = str(row["issue_tag"] or "0")
-        section = _mwb_section_for_par(par, mid_ord, cbs_start)
-        is_cbs = _is_cbs_row(row, cbs_ref, final_song_ord)
-        key = (section, pub, issue, meps_id, is_cbs)
-        caption = _clean_ref_text(row["Caption"] or "")
-        if key in refs_by_key:
-            ref = refs_by_key[key]
-            ref.begin_ordinal = min(ref.begin_ordinal, par)
-            if len(caption) > len(ref.caption):
-                ref.caption = caption
-            continue
-        refs_by_key[key] = meeting_models.MeetingPublicationRef(
-            section=section,
-            begin_ordinal=par,
-            pub=pub,
-            issue=issue,
-            publication_title=_publication_title_from_row(row, pub),
-            caption=caption,
-            meps_doc_id=meps_id,
-            is_cbs=is_cbs,
-        )
-        order.append(key)
-    return sorted((refs_by_key[key] for key in order), key=lambda ref: ref.begin_ordinal)
-
-
-def _excl_str() -> str:
-    return ",".join(str(c) for c in _EXCL_CAT)
-
-def _query_multimedia(conn, doc_id: int) -> list:
-    """
-    Return one row per MultimediaId for this document.
-
-    Sign-language publications (e.g. LGP) often associate the *same*
-    MultimediaId with several paragraphs in DocumentMultimedia — one video
-    covers a range of paragraphs.  Without GROUP BY the plain JOIN would
-    return duplicate rows for each paragraph association, causing every video
-    to appear N times in the media list.
-
-    We group by MultimediaId and take the *minimum* BeginParagraphOrdinal so
-    that section-assignment logic (_parse_mwb_media) still places the item at
-    its natural position in the meeting outline.
-    """
-    excl = _excl_str()
-    for clause in ["AND m.SuppressZoom IS NOT 1", ""]:
-        try:
-            return conn.execute(f"""
-                SELECT m.MultimediaId, m.FilePath, m.MimeType, m.CategoryType,
-                       m.Label, m.Caption, m.KeySymbol, m.Track,
-                       m.IssueTagNumber, m.MepsDocumentId,
-                       MIN(dm.BeginParagraphOrdinal) AS par
-                FROM   Multimedia m
-                JOIN   DocumentMultimedia dm ON dm.MultimediaId=m.MultimediaId
-                WHERE  dm.DocumentId=?
-                  AND  m.CategoryType NOT IN ({excl})
-                  AND  dm.BeginParagraphOrdinal IS NOT NULL
-                  {clause}
-                GROUP BY m.MultimediaId
-                ORDER  BY par
-            """, (doc_id,)).fetchall()
-        except sqlite3.OperationalError:
-            continue
-    return []
-
-def _media_file_path(raw_path: str, pub_dir: Path) -> str:
-    raw_path = str(raw_path or "").strip()
-    if not raw_path:
-        return ""
-    if raw_path.startswith(("http://", "https://")):
-        return raw_path
-
-    candidate = Path(raw_path)
-    if not candidate.is_absolute():
-        candidate = pub_dir / raw_path
-    if candidate.exists():
-        return str(candidate)
-    return ""
-
-
-def _make_media_item(r, pub_dir: Path, section: str,
-                     is_song: bool, cbs_title: str = "") -> meeting_models.MeetingMedia:
-    mime   = (r["MimeType"] or "").lower()
-    fp     = r["FilePath"] or ""
-    file_path = _media_file_path(fp, pub_dir)
-    return meeting_models.MeetingMedia(
-        multimedia_id     = r["MultimediaId"],
-        mime_type         = mime,
-        file_path         = file_path,
-        label             = r["Label"] or "",
-        caption           = r["Caption"] or "",
-        begin_ordinal     = r["par"] or 0,
-        key_symbol        = r["KeySymbol"] or "",
-        track             = r["Track"] or 0,
-        issue_tag         = r["IssueTagNumber"] or 0,
-        meps_doc_id       = r["MepsDocumentId"] or 0,
-        section           = section,
-        is_song           = is_song,
-        cbs_article_title = cbs_title,
-    )
-
-def _dedup_multimedia_rows(rows: list) -> list:
-    """
-    Remove rows that would resolve to the same video/audio.
-
-    In sign-language publications a single meeting section can contain several
-    Multimedia rows with *different* MultimediaIds but the *same* resolution
-    key (KeySymbol+Track, or MepsDocumentId).  All of them hit the same CDN
-    URL, so the user would see the exact same video card repeated.
-
-    Strategy (mirrors jw.jwpub_import):
-      1. Deduplicate image rows by FilePath — same file shown once.
-      2. Deduplicate video/audio rows by (KeySymbol, Track, IssueTagNumber)
-         when KeySymbol is present, or by MepsDocumentId otherwise.
-      3. Rows that have neither key are kept as-is (edge case).
-
-    Ordering from the caller (_query_multimedia already groups by MIN par) is
-    preserved — the first occurrence wins.
-    """
-    seen_mid:     set[int]   = set()
-    seen_vid_key: set[tuple] = set()
-    seen_img:     set[str]   = set()
-    result = []
-    for r in rows:
-        mid  = r["MultimediaId"]
-        if mid in seen_mid:
-            continue
-        seen_mid.add(mid)
-
-        mime = (r["MimeType"] or "").lower()
-        if mime.startswith("image"):
-            fp = r["FilePath"] or ""
-            if fp and fp in seen_img:
-                continue
-            if fp:
-                seen_img.add(fp)
-        else:
-            sym   = (r["KeySymbol"] or "").strip()
-            track = r["Track"]
-            issue = r["IssueTagNumber"]
-            meps  = r["MepsDocumentId"]
-            if sym:
-                vk = (sym.lower(), track, issue)
-            elif meps:
-                vk = ("__meps__", meps, None)
-            else:
-                vk = None
-            if vk is not None:
-                if vk in seen_vid_key:
-                    continue
-                seen_vid_key.add(vk)
-
-        result.append(r)
-    return result
-
-
-def _parse_mwb_media(
-    conn,
-    doc_id: int,
-    pub_dir: Path,
-    mid_ord: Optional[int] = None,
-    cbs_start: Optional[int] = None,
-) -> list[meeting_models.MeetingMedia]:
-    if mid_ord is None:
-        mid_ord = _mwb_mid_ordinal(conn, doc_id)
-    if cbs_start is None:
-        cbs_start = _mwb_cbs_start(conn, doc_id)
-    result = []
-    for r in _dedup_multimedia_rows(_query_multimedia(conn, doc_id)):
-        par     = r["par"] or 0
-        sym     = (r["KeySymbol"] or "").lower()
-        is_song = sym in SONG_SYMS
-        section = _mwb_section_for_par(par, mid_ord, cbs_start)
-        result.append(_make_media_item(r, pub_dir, section, is_song))
-    return result
-
-def _parse_wt_media(conn, doc_id: int, pub_dir: Path) -> list[meeting_models.MeetingMedia]:
-    return [
-        _make_media_item(r, pub_dir, "wt", (r["KeySymbol"] or "").lower() in SONG_SYMS)
-        for r in _dedup_multimedia_rows(_query_multimedia(conn, doc_id))
-    ]
-
-def _parse_publication_ref_items(
-    pub_dir: Path,
-    db_path: Path,
-    meps_doc_id: int,
-    section: str,
-    marker_title: str,
-) -> list[meeting_models.MeetingMedia]:
-    result = []
-    try:
-        conn = _conn(db_path)
-        row = conn.execute(
-            "SELECT DocumentId FROM Document WHERE MepsDocumentId=? LIMIT 1",
-            (meps_doc_id,)
-        ).fetchone()
-        if not row:
-            conn.close()
-            return []
-        for r in _dedup_multimedia_rows(_query_multimedia(conn, row[0])):
-            sym = (r["KeySymbol"] or "").lower()
-            result.append(_make_media_item(
-                r, pub_dir, section, sym in SONG_SYMS, marker_title
-            ))
-        conn.close()
-    except (IndexError, KeyError, OSError, sqlite3.Error, TypeError, ValueError):
-        log.exception("Could not parse publication reference media")
-    return result
-
-
-def _sync_cbs_from_publication_refs(wd: meeting_models.WeekData) -> None:
-    refs = [
-        ref for ref in getattr(wd, "mwb_publication_refs", []) or []
-        if getattr(ref, "is_cbs", False)
-    ]
-    if not refs:
-        wd.cbs_items = []
-        return
-
-    refs = sorted(refs, key=lambda ref: int(ref.begin_ordinal or 0))
-    items: list[meeting_models.MeetingMedia] = []
-    meps_doc_ids: list[int] = []
-    doc_titles: dict[int, str] = {}
-    for ref in refs:
-        meps_doc_id = int(ref.meps_doc_id or 0)
-        if meps_doc_id and meps_doc_id not in meps_doc_ids:
-            meps_doc_ids.append(meps_doc_id)
-        if meps_doc_id and ref.caption:
-            doc_titles[meps_doc_id] = ref.caption
-        items.extend(ref.items or [])
-
-    first = refs[0]
-    if wd.cbs_ref:
-        existing_ids = [
-            int(value) for value in wd.cbs_ref.get("meps_doc_ids", [])
-            if int(value or 0)
-        ]
-        existing_titles = {
-            int(key): value
-            for key, value in (wd.cbs_ref.get("doc_titles") or {}).items()
-            if int(key or 0)
-        }
-        for meps_doc_id in meps_doc_ids:
-            if meps_doc_id not in existing_ids:
-                existing_ids.append(meps_doc_id)
-            if meps_doc_id in doc_titles and meps_doc_id not in existing_titles:
-                existing_titles[meps_doc_id] = doc_titles[meps_doc_id]
-        wd.cbs_ref = dict(wd.cbs_ref)
-        wd.cbs_ref["issue"] = first.issue or wd.cbs_ref.get("issue", "0")
-        wd.cbs_ref["meps_doc_ids"] = existing_ids
-        wd.cbs_ref["doc_titles"] = existing_titles
-        wd.cbs_ref["title"] = (
-            wd.cbs_ref.get("title")
-            or (existing_titles.get(existing_ids[0], "") if existing_ids else "")
-        )
-    else:
-        wd.cbs_ref = {
-            "pub": first.pub,
-            "issue": first.issue or "0",
-            "publication_title": first.publication_title or first.pub,
-            "meps_doc_ids": meps_doc_ids,
-            "doc_titles": doc_titles,
-            "title": doc_titles.get(meps_doc_ids[0], "") if meps_doc_ids else "",
-            "cbs_start": first.begin_ordinal,
-        }
-    wd.cbs_items = items
 
 
 # ── Worker — toda lógica bloqueante aqui, nunca na main thread ────────────────
@@ -924,68 +308,31 @@ class _JwpubWorker(QObject):
             self.error.emit(key, "mwb", "Extraction failed")
             return
         try:
-            conn = _conn(db_path)
-            if not _is_week_in_dated_text(conn, monday):
-                conn.close()
-                wd.mwb_status = "empty"
-                self.mwb_done.emit(key, wd)
-                return
-            doc_id = _find_mwb_doc_id(conn, monday)
-            if doc_id is None:
-                conn.close()
-                wd.mwb_status = "empty"
-                self.mwb_done.emit(key, wd)
-                return
-            date_label = _doc_title(conn, doc_id)
-            song_ords = _mwb_song_ordinals(conn, doc_id)
-            mid_ord = _mwb_mid_ordinal_from_songs(song_ords)
-            final_song_ord = _mwb_final_song_ordinal_from_songs(song_ords)
-            publication_rows = _mwb_publication_ref_rows(
-                conn,
-                doc_id,
-                include_web=True,
-            )
-            cbs_ref = _get_cbs_ref(
-                conn,
-                doc_id,
-                publication_rows,
-                final_song_ord,
-            )
-            cbs_start = int(
-                (cbs_ref or {}).get("cbs_start")
-                or _mwb_cbs_start_from_rows(publication_rows, final_song_ord)
-            )
-            items = _parse_mwb_media(conn, doc_id, pub_dir, mid_ord, cbs_start)
-            publication_refs = _get_mwb_publication_refs(
-                conn,
-                doc_id,
-                cbs_ref,
-                publication_rows,
-                mid_ord,
-                final_song_ord,
-                cbs_start,
-            )
-            conn.close()
+            content = read_mwb_week_content(pub_dir, db_path, monday)
         except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
             log.exception("Could not parse MWB publication %s/%s", lang, issue)
             wd.mwb_status = "error"
             self.error.emit(key, "mwb", str(exc))
             return
+        if content is None:
+            wd.mwb_status = "empty"
+            self.mwb_done.emit(key, wd)
+            return
 
         wd.mwb_pub_dir     = pub_dir
-        wd.mwb_date_label  = date_label
-        wd.mwb_week_title  = date_label
-        wd.mwb_all_media   = items
-        wd.mwb_publication_refs = publication_refs
-        wd.mwb_cover_bytes = _cover_bytes(pub_dir)
+        wd.mwb_date_label  = content.date_label
+        wd.mwb_week_title  = content.date_label
+        wd.mwb_all_media   = content.media_items
+        wd.mwb_publication_refs = content.publication_refs
+        wd.mwb_cover_bytes = content.cover_bytes
         wd.mwb_status      = "ready"
-        wd.cbs_ref         = cbs_ref
-        _sync_cbs_from_publication_refs(wd)
-        if publication_refs:
+        wd.cbs_ref         = content.cbs_ref
+        sync_cbs_from_publication_refs(wd)
+        if content.publication_refs:
             wd.cbs_status = "loading"
         self.mwb_done.emit(key, wd)
-        if publication_refs:
-            self._load_mwb_publication_refs(monday, wd, publication_refs)
+        if content.publication_refs:
+            self._load_mwb_publication_refs(monday, wd, content.publication_refs)
 
     # ── WT ────────────────────────────────────────────────────────────────────
 
@@ -1040,10 +387,7 @@ class _JwpubWorker(QObject):
         if not pub_dir or not db_path:
             return False
         try:
-            conn   = _conn(db_path)
-            doc_id = _find_wt_doc_id(conn, monday)
-            conn.close()
-            if doc_id is None:
+            if not watchtower_issue_contains_week(db_path, monday):
                 return False
         except (OSError, sqlite3.Error):
             return False
@@ -1110,31 +454,26 @@ class _JwpubWorker(QObject):
             self.error.emit(key, "wt", "Extraction failed")
             return
         try:
-            conn   = _conn(db_path)
-            doc_id = _find_wt_doc_id(conn, monday)
-            if doc_id is None:
-                conn.close()
-                wd.wt_status = "empty"
-                self.wt_done.emit(key, wd)
-                return
-            title = _doc_title(conn, doc_id)
-            items = _parse_wt_media(conn, doc_id, pub_dir)
-            conn.close()
+            content = read_watchtower_study_content(pub_dir, db_path, monday)
         except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
             log.exception("Could not parse WT publication %s/%s", lang, issue)
             wd.wt_status = "error"
             self.error.emit(key, "wt", str(exc))
             return
+        if content is None:
+            wd.wt_status = "empty"
+            self.wt_done.emit(key, wd)
+            return
         wd.wt_pub_dir     = pub_dir
         wd.wt_issue       = issue
-        wd.wt_study_title = title
-        wd.wt_all_media   = items
-        wd.wt_cover_bytes = _cover_bytes(pub_dir)
+        wd.wt_study_title = content.title
+        wd.wt_all_media   = content.media_items
+        wd.wt_cover_bytes = content.cover_bytes
         wd.wt_status      = "ready"
         self.wt_done.emit(key, wd)
 
     def _sync_loaded_publication_refs(self, wd: meeting_models.WeekData, lang: str) -> None:
-        _sync_cbs_from_publication_refs(wd)
+        sync_cbs_from_publication_refs(wd)
         cbs_ref = next(
             (
                 ref for ref in (wd.mwb_publication_refs or [])
@@ -1247,7 +586,7 @@ class _JwpubWorker(QObject):
         db_path = self._cache.db_path(pub, lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
             return []
-        return _parse_publication_ref_items(
+        return parse_publication_ref_items(
             pub_dir,
             db_path,
             ref.meps_doc_id,

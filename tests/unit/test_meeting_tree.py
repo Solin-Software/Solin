@@ -15,13 +15,15 @@ import solin.core.meetings.memorial as memorial_module
 import solin.core.meetings.publications as publications_module
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
+from solin.core.meetings.publication_content import (
+    find_mwb_document_id,
+    get_cbs_reference,
+    get_mwb_publication_refs,
+    make_media_item,
+    open_publication_database,
+)
 from solin.core.meetings.publications import (
-    _conn,
-    _find_mwb_doc_id,
-    _get_cbs_ref,
-    _get_mwb_publication_refs,
     _JwpubWorker,
-    _make_media_item,
 )
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
@@ -42,13 +44,13 @@ class PublicationSqlErrorBoundaryTests(unittest.TestCase):
     def test_expected_sqlite_error_uses_absence_fallback(self):
         conn = self._Connection(sqlite3.OperationalError("missing table"))
 
-        self.assertIsNone(_find_mwb_doc_id(conn, date(2026, 5, 25)))
+        self.assertIsNone(find_mwb_document_id(conn, date(2026, 5, 25)))
 
     def test_unexpected_query_error_is_not_silenced(self):
         conn = self._Connection(RuntimeError("programming error"))
 
         with self.assertRaisesRegex(RuntimeError, "programming error"):
-            _find_mwb_doc_id(conn, date(2026, 5, 25))
+            find_mwb_document_id(conn, date(2026, 5, 25))
 
 
 def media(**kwargs) -> MeetingMedia:
@@ -95,7 +97,7 @@ class MeetingMediaPathTests(unittest.TestCase):
             image_path = pub_dir / "image.jpg"
             image_path.write_bytes(b"jpg")
 
-            item = _make_media_item(
+            item = make_media_item(
                 multimedia_row(MimeType="image/jpeg", FilePath="image.jpg"),
                 pub_dir,
                 "wt",
@@ -106,7 +108,7 @@ class MeetingMediaPathTests(unittest.TestCase):
 
     def test_jwpub_video_file_path_is_empty_when_file_is_not_extracted(self):
         with tempfile.TemporaryDirectory() as tmp:
-            item = _make_media_item(
+            item = make_media_item(
                 multimedia_row(
                     FilePath="w_LGP_202604_02_r720P.mp4",
                     KeySymbol="w",
@@ -129,7 +131,7 @@ class MeetingMediaPathTests(unittest.TestCase):
             video_path = pub_dir / "local.mp4"
             video_path.write_bytes(b"mp4")
 
-            item = _make_media_item(
+            item = make_media_item(
                 multimedia_row(FilePath="local.mp4"),
                 pub_dir,
                 "wt",
@@ -354,12 +356,12 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         )
 
         try:
-            cbs_ref = _get_cbs_ref(conn, 1)
-            refs = _get_mwb_publication_refs(conn, 1, cbs_ref)
+            cbs_ref = get_cbs_reference(conn, 1)
+            assert cbs_ref is not None
+            refs = get_mwb_publication_refs(conn, 1, cbs_ref)
         finally:
             conn.close()
 
-        self.assertIsNotNone(cbs_ref)
         self.assertEqual(cbs_ref["pub"], "studyguide")
         self.assertEqual(cbs_ref["cbs_start"], 50)
         self.assertEqual(cbs_ref["meps_doc_ids"], [101, 102])
@@ -904,12 +906,13 @@ class MeetingTreeStoreTests(unittest.TestCase):
             with zipfile.ZipFile(outer / "contents") as zf:
                 zf.extractall(inner)
             db_path = next(inner.rglob("*.db"))
-            conn = _conn(db_path)
-            doc_id = _find_mwb_doc_id(conn, date(2026, 5, 25))
-            cbs_ref = _get_cbs_ref(conn, doc_id)
-            refs = _get_mwb_publication_refs(conn, doc_id, cbs_ref)
+            conn = open_publication_database(db_path)
+            doc_id = find_mwb_document_id(conn, date(2026, 5, 25))
+            assert doc_id is not None
+            cbs_ref = get_cbs_reference(conn, doc_id)
+            assert cbs_ref is not None
+            refs = get_mwb_publication_refs(conn, doc_id, cbs_ref)
             conn.close()
-        self.assertIsNotNone(cbs_ref)
         self.assertEqual(cbs_ref["pub"], "studyguide")
         self.assertEqual(cbs_ref.get("publication_title", ""), "Synthetic Study Guide")
         self.assertTrue(any(ref.pub == "reference" for ref in refs))
