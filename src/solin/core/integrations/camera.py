@@ -43,8 +43,6 @@ from __future__ import annotations
 
 import logging
 import platform
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -58,6 +56,8 @@ from PySide6.QtMultimedia import (
     QVideoSink,
 )
 
+from solin.core.integrations import camera_options
+
 
 _log = logging.getLogger(__name__)
 
@@ -67,53 +67,6 @@ _log = logging.getLogger(__name__)
 IS_WINDOWS = platform.system().lower() == "windows"
 IS_MACOS   = platform.system().lower() == "darwin"
 IS_LINUX   = not IS_WINDOWS and not IS_MACOS
-
-
-# ── Data types ────────────────────────────────────────────────────────────────
-
-class CameraBackend(str, Enum):
-    QT = "qt"          # All cameras via Qt QCamera + QVideoSink
-
-
-# Maps old backend names (persisted before this version) to current names.
-_BACKEND_ALIASES: dict[str, str] = {
-    "cv2":       "qt",   # CameraBackend.CV2 → QT
-    "cv2_dshow": "qt",   # CameraBackend.CV2_DSHOW → QT
-    "dshow":     "qt",   # CameraBackend.DSHOW → QT
-}
-
-
-@dataclass(frozen=True)
-class CameraOption:
-    """
-    Describes a single enumerated camera.
-
-    Fields
-    ──────
-    name        — user-visible device description (e.g. "Integrated Webcam")
-    label       — display name (usually same as name)
-    backend     — capture backend (always QT)
-    cv_index    — zero-based enumeration index in QMediaDevices.videoInputs()
-    device_path — platform device identifier decoded from QCameraDevice.id()
-                  Windows: MSMF symbolic link  (e.g. \\\\?\\usb#vid_046d…)
-                  macOS  : AVFoundation UID
-                  Linux  : /dev/videoN
-    """
-
-    name:        str
-    label:       str
-    backend:     CameraBackend
-    cv_index:    int = 0
-    device_path: str = field(default="", compare=False, hash=False)
-
-    @property
-    def key(self) -> str:
-        return f"{self.backend.value}:{self.cv_index}"
-
-    @property
-    def is_virtual(self) -> bool:
-        t = self.name.casefold()
-        return "virtual" in t or "obs" in t
 
 
 # ── Service ───────────────────────────────────────────────────────────────────
@@ -141,8 +94,8 @@ class CameraService(QObject):
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
-        self._active: Optional[CameraOption]       = None
-        self._known:  Optional[list[CameraOption]]  = None
+        self._active: Optional[camera_options.CameraOption] = None
+        self._known: Optional[list[camera_options.CameraOption]] = None
 
         # Qt multimedia objects live on the main thread — no worker thread.
         # This avoids the deadlock where a worker thread's camera.stop()
@@ -160,28 +113,32 @@ class CameraService(QObject):
         return self._active is not None
 
     @property
-    def active_camera(self) -> Optional[CameraOption]:
+    def active_camera(self) -> Optional[camera_options.CameraOption]:
         return self._active
 
     # ── Discovery ─────────────────────────────────────────────────────────────
 
-    def known_cameras(self) -> list[CameraOption]:
+    def known_cameras(self) -> list[camera_options.CameraOption]:
         return list(self._known) if self._known is not None else []
 
-    def refresh_cameras(self) -> list[CameraOption]:
+    def refresh_cameras(self) -> list[camera_options.CameraOption]:
         self._known = discover_cameras()
         self.cameras_ready.emit(self.known_cameras())
         return self.known_cameras()
 
-    def find_saved(self, backend: str, name: str) -> Optional[CameraOption]:
+    def find_saved(
+        self,
+        backend: str,
+        name: str,
+    ) -> Optional[camera_options.CameraOption]:
         """
         Locate a previously saved camera by backend + name.
 
-        Applies _BACKEND_ALIASES so that preferences saved with old backend
+        Applies legacy backend aliases so that preferences saved with old backend
         names ("cv2", "cv2_dshow", "dshow") still resolve correctly.
         Falls back to name-only match if the backend differs.
         """
-        backend = _BACKEND_ALIASES.get((backend or "").strip(), (backend or "").strip())
+        backend = camera_options.normalize_camera_backend(backend)
         name    = (name or "").strip()
 
         if self._known is None:
@@ -200,7 +157,7 @@ class CameraService(QObject):
 
     # ── Capture control ───────────────────────────────────────────────────────
 
-    def start(self, option: CameraOption) -> None:
+    def start(self, option: camera_options.CameraOption) -> None:
         """Start capturing from the given camera.  Stops any active capture first."""
         _log.info(
             "CameraService.start: name=%r backend=%s index=%d device_path=%r",
@@ -242,7 +199,11 @@ class CameraService(QObject):
 
     # ── Qt camera (main-thread) ───────────────────────────────────────────
 
-    def _start_qt(self, option: CameraOption, qt_device: QCameraDevice) -> None:
+    def _start_qt(
+        self,
+        option: camera_options.CameraOption,
+        qt_device: QCameraDevice,
+    ) -> None:
         """Start a physical camera via Qt's media stack on the main thread."""
         try:
             camera = QCamera(qt_device, self)
@@ -325,7 +286,9 @@ def _extract_device_path(qt_device: QCameraDevice) -> str:
         return ""
 
 
-def _find_qt_device(option: CameraOption) -> Optional[QCameraDevice]:
+def _find_qt_device(
+    option: camera_options.CameraOption,
+) -> Optional[QCameraDevice]:
     """
     Find the live QCameraDevice corresponding to a CameraOption.
 
@@ -357,7 +320,7 @@ def _find_qt_device(option: CameraOption) -> Optional[QCameraDevice]:
     return None
 
 
-def discover_cameras() -> list[CameraOption]:
+def discover_cameras() -> list[camera_options.CameraOption]:
     """
     Build the list of available cameras via QMediaDevices.
 
@@ -365,10 +328,10 @@ def discover_cameras() -> list[CameraOption]:
     reported by the OS media stack (MSMF on Windows, AVFoundation on macOS,
     V4L2 on Linux).
     """
-    found:     list[CameraOption] = []
+    found: list[camera_options.CameraOption] = []
     seen_keys: set[str]           = set()
 
-    def _add(opt: CameraOption) -> None:
+    def _add(opt: camera_options.CameraOption) -> None:
         if not opt.name.strip():
             _log.debug("discover: skipping blank-name device")
             return
@@ -390,10 +353,10 @@ def discover_cameras() -> list[CameraOption]:
         qt_devices = []
 
     for i, device in enumerate(qt_devices):
-        _add(CameraOption(
+        _add(camera_options.CameraOption(
             name=device.description(),
             label=device.description(),
-            backend=CameraBackend.QT,
+            backend=camera_options.CameraBackend.QT,
             cv_index=i,
             device_path=_extract_device_path(device),
         ))

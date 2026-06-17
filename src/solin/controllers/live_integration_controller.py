@@ -9,7 +9,7 @@ from typing import Any
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QImage
 
-from ..core.integrations.camera import CameraOption
+from ..core.integrations.camera_options import CameraOption
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 
 log = logging.getLogger(__name__)

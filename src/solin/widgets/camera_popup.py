@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.core.integrations.camera import CameraOption, CameraService
+from solin.core.integrations.camera import CameraService
+from solin.core.integrations.camera_options import CameraOption
 from solin.core.integrations.automation.settings import CameraSettingsStore
 from solin.styles.icons import ICON_CAMERA, ICON_CAST, make_icon
 
