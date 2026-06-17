@@ -22,9 +22,7 @@ from solin.core.meetings.publication_content import (
     make_media_item,
     open_publication_database,
 )
-from solin.core.meetings.publications import (
-    _JwpubWorker,
-)
+from solin.core.meetings.publication_worker import JwpubWorker
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
@@ -773,7 +771,7 @@ class _FakeChecksumStore:
 
 class JwpubDownloadGateTests(unittest.TestCase):
     def worker(self, *, cached: bool, archive: Path, stored: str = ""):
-        worker = _JwpubWorker(
+        worker = JwpubWorker(
             archive.parent,
             archive.parent / "jwpub",
             _FakeChecksumStore(stored),

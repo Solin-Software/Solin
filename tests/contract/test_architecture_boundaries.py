@@ -1055,6 +1055,26 @@ def test_memorial_publication_client_has_no_framework_dependencies():
     assert violations == []
 
 
+def test_meeting_publication_worker_is_split_from_service_facade():
+    facade = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publications.py"
+    worker = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "meetings"
+        / "publication_worker.py"
+    )
+
+    facade_source = facade.read_text(encoding="utf-8")
+    worker_source = worker.read_text(encoding="utf-8")
+
+    assert "class JwpubWorker" not in facade_source
+    assert "_get_jwpub_info" not in facade_source
+    assert "stream_get" not in facade_source
+    assert "class JwpubWorker" in worker_source
+
+
 def test_zoom_state_value_objects_have_no_framework_dependencies():
     path = (
         PROJECT_ROOT
