@@ -23,7 +23,6 @@ Política de fetch:
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date
 from pathlib import Path
@@ -33,14 +32,10 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 log = logging.getLogger(__name__)
 
-from solin.core.network.http import get_bytes
-from solin.core.jw.publication_links import (
-    DEFAULT_TIMEOUT,
-    DEFAULT_USER_AGENT,
-    PUB_MEDIA_URL,
-    build_pub_media_url,
-    fetch_pub_media_json,
-    select_pub_media_file,
+from solin.core.jw.memorial_publication import (
+    MemorialDownloadError,
+    download_memorial_bytes,
+    resolve_memorial_jwpub,
 )
 
 from .jwpub_cache import JwpubCache, JwpubChecksumStore
@@ -51,165 +46,6 @@ from .memorial_content import (
     read_memorial_publication_content,
 )
 from . import models as meeting_models
-
-
-class MemorialDownloadError(RuntimeError):
-    """Transport-independent failure while downloading Memorial resources."""
-
-
-def _chrome_headers() -> dict:
-    return {
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,image/avif,image/webp,image/apng,*/*;"
-            "q=0.8,application/signed-exchange;v=b3;q=0.7"
-        ),
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language":  "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cache-Control":    "no-cache",
-        "Pragma":           "no-cache",
-        "Sec-Ch-Ua": (
-            '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"'
-        ),
-        "Sec-Ch-Ua-Mobile":    "?0",
-        "Sec-Ch-Ua-Platform":  '"Windows"',
-        "Sec-Fetch-Dest":      "document",
-        "Sec-Fetch-Mode":      "navigate",
-        "Sec-Fetch-Site":      "none",
-        "Sec-Fetch-User":      "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-    }
-
-
-def _http_get_with_browser_impersonation(url: str, timeout: int) -> bytes | None:
-    try:
-        from curl_cffi import requests  # type: ignore[reportMissingImports]
-    except ImportError:
-        return None
-
-    response = requests.get(
-        url,
-        headers=_chrome_headers(),
-        timeout=timeout,
-        impersonate="chrome124",
-        allow_redirects=True,
-    )
-    response.raise_for_status()
-    return response.content
-
-
-def _http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
-    """
-    GET com TLS browser impersonation via curl_cffi.
-    Fallback para o adaptador HTTP central quando curl_cffi não estiver disponível.
-    """
-    import time
-    last: Optional[Exception] = None
-    for attempt in range(1, retries + 1):
-        try:
-            content = _http_get_with_browser_impersonation(url, timeout)
-            if content is not None:
-                return content
-            return get_bytes(
-                url,
-                timeout=timeout,
-                headers={"User-Agent": DEFAULT_USER_AGENT},
-            )
-        except Exception as exc:  # noqa: BLE001 - curl_cffi/HTTP transport boundary
-            last = exc
-            if attempt < retries:
-                time.sleep(2.0 ** attempt)
-    if last is None:
-        raise MemorialDownloadError(f"No download attempt was made for {url}")
-    raise MemorialDownloadError(f"Could not download {url}: {last}") from last
-
-
-def _http_get_json(url: str) -> Optional[dict]:
-    try:
-        data = _http_get(url, timeout=DEFAULT_TIMEOUT)
-        return json.loads(data.decode())
-    except (
-        MemorialDownloadError,
-        UnicodeError,
-        json.JSONDecodeError,
-    ) as exc:
-        log.warning("GET JSON %s → %s", url, exc)
-        return None
-
-
-# ── JWPUB helpers (worker-thread only) ────────────────────────────────────────
-
-def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, bool]:
-    """
-    Busca URL de download + thumbnail quadrado + checksum para o pub mi<YY>.
-    Retorna (download_url, thumb_url, checksum, not_found).
-
-    not_found=True  → API respondeu com JSON mas sem arquivos para este pub/lang
-                       (publicação genuinamente ausente — equivalente a HTTP 404).
-    not_found=False → URL encontrada, ou falha de rede (não conseguimos confirmar).
-
-    Estratégia (production-grade):
-      1. API direta via urllib simples — o endpoint é público e não requer
-         browser fingerprinting; igual ao que publications.py usa em _get_json.
-      2. Fallback com curl_cffi (browser impersonation) caso a chamada simples
-         falhe por qualquer razão (bloqueio de rede, TLS restritivo, etc.).
-    """
-    params = {
-        "pub":         pub,
-        "issue":       "0",   # mi<YY> não tem número de edição; "0" é o valor correto
-        "langwritten": lang,
-        "fileformat":  "JWPUB",
-        "output":      "json",
-        "alllangs":    "0",
-        "txtCMSLang":  "E",
-    }
-
-    _any_api_response = False   # tracks whether any attempt got a valid JSON reply
-
-    # ── Passo 1: API direta (urllib — sem UA spoofing) ────────────────────────
-    data = fetch_pub_media_json(params)
-    if data:
-        _any_api_response = True
-        media_file = select_pub_media_file(
-            data,
-            lang,
-            ("JWPUB",),
-            fallback_languages=("E",),
-        )
-        if media_file is not None:
-            log.debug("_get_mi_jwpub_url: URL obtained from direct API for %s/%s", pub, lang)
-            return media_file.url, media_file.thumbnail_url, media_file.checksum, False
-
-    # ── Passo 2: Fallback — browser impersonation via curl_cffi ──────────────
-    log.warning(
-        "_get_mi_jwpub_url: direct API failed for %s/%s - trying browser impersonation",
-        pub, lang,
-    )
-    url = build_pub_media_url(params, PUB_MEDIA_URL)
-    data = _http_get_json(url)
-    if data:
-        _any_api_response = True
-        media_file = select_pub_media_file(
-            data,
-            lang,
-            ("JWPUB",),
-            fallback_languages=("E",),
-        )
-        if media_file is not None:
-            log.debug("_get_mi_jwpub_url: URL obtained via fallback (curl_cffi) for %s/%s", pub, lang)
-            return media_file.url, media_file.thumbnail_url, media_file.checksum, False
-
-    # Both strategies failed to return a URL.
-    # If at least one strategy got a valid JSON response the API is reachable,
-    # meaning the publication simply doesn't exist → not_found=True.
-    not_found = _any_api_response
-    log.error("_get_mi_jwpub_url: no strategy returned a URL for %s/%s", pub, lang)
-    return None, "", "", not_found
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -277,8 +113,11 @@ class _MemorialWorker(QObject):
         self.progress.emit(5)
 
         # ── Obter URL + checksum do Memorial (sempre chama API para detectar updates) ──
-        dl_url, thumb_url, checksum, not_found = _get_mi_jwpub_url(pub, lang)
-        md.thumb_url = thumb_url
+        jwpub_info = resolve_memorial_jwpub(pub, lang)
+        dl_url = jwpub_info.download_url
+        checksum = jwpub_info.checksum
+        not_found = jwpub_info.not_found
+        md.thumb_url = jwpub_info.thumbnail_url
 
         is_cached = self._cache.is_cached(pub, lang, issue)
 
@@ -319,7 +158,7 @@ class _MemorialWorker(QObject):
                 dest = self._cache.jwpub_path(pub, lang, issue)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 try:
-                    raw = _http_get(dl_url, timeout=120)
+                    raw = download_memorial_bytes(dl_url, timeout=120)
                     self.progress.emit(60)
                     dest.write_bytes(raw)
                     # New .jwpub on disk — wipe the stale extract dir so that
