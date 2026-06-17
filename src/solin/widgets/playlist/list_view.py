@@ -28,8 +28,8 @@ from ...core.playlists.jwl_files import (
     read_jwlplaylist_document,
     write_jwlplaylist_document,
 )
+from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.playlists.storage import PlaylistStoragePaths
-from ...core.playlists.items import create_playlist_item
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...core.media.cache import MediaCacheManager
@@ -432,29 +432,21 @@ class PlaylistListView(QWidget):
                     fallback_lang_code=fallback_lang,
                 )
                 pl_name = document.name or Path(path).stem
-                items = []
-                for raw in document.items:
-                    url = raw.get("url") or raw.get("jworg_url") or ""
-                    item = create_playlist_item(
-                        title=raw.get("title", ""),
-                        url=url,
-                        type=raw.get("type", "video"),
-                        key_symbol=raw.get("key_symbol"),
-                        track=raw.get("track"),
-                        issue_tag=raw.get("issue_tag"),
-                        doc_id=raw.get("doc_id"),
-                        meps_language=raw.get("language", 0),
-                    )
-                    if raw.get("data") and not url:
-                        item["url"] = self._profile_media_store.save_embedded(
-                            raw["data"],
-                            raw.get("filename", "media"),
-                            identifier=item["id"],
+                result = playlist_items_from_jwl_document_items(
+                    document.items,
+                    source_name=Path(path).name,
+                    save_embedded=(
+                        lambda data, filename, identifier, default_suffix:
+                        self._profile_media_store.save_embedded(
+                            data,
+                            filename,
+                            identifier=identifier,
+                            default_suffix=default_suffix,
                         )
-                        item["type"] = raw.get("type", "video")
-                    items.append(item)
+                    ),
+                )
                 self._playlists.append(
-                    {"id": str(uuid.uuid4()), "name": pl_name, "items": items}
+                    {"id": str(uuid.uuid4()), "name": pl_name, "items": result.items}
                 )
                 imported += 1
             except (OSError, ValueError) as e:

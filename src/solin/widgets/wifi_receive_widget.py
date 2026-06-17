@@ -42,8 +42,8 @@ from ..core.jw.language_context import jw_media_language_context
 from ..core.media.formats import (
     MediaKind,
     media_kind_from_path,
-    mime_to_ext,
 )
+from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..styles.icons import make_icon
 from ..ui.media_info import MediaInfoService
 
@@ -992,74 +992,52 @@ class WifiReceiveWidget(QWidget):
             )
             return
 
-        def _best_ext(item: dict, default_mime: str) -> str:
-            filename = item.get("filename", "")
-            if filename:
-                orig_ext = Path(filename).suffix.lower()
-                if orig_ext:
-                    return orig_ext
-            return mime_to_ext(item.get("mime_type", default_mime))
-
-        def _write_tmp(data: bytes, suffix: str) -> str:
+        def _save_embedded(
+            data: bytes,
+            filename: str,
+            identifier: str,
+            default_suffix: str,
+        ) -> str:
             """Write embedded media to data/embedded/ for persistence."""
-            path = self._profile_media_store.save_embedded(
+            saved_path = self._profile_media_store.save_embedded(
                 data,
-                f"media{suffix}",
+                filename,
+                identifier=identifier,
+                default_suffix=default_suffix,
             )
-            # Track for cleanup if user discards without adding to playlist
-            self._wifi_tmp_files.add(path)
-            return path
+            self._wifi_tmp_files.add(saved_path)
+            return saved_path
 
-        added = 0
-        skipped = []
-        for item in document.items:
-            itype  = item.get("type", "video")
-            source = item.get("source", "")
-            title  = item.get("title", "Item")
+        result = playlist_items_from_jwl_document_items(
+            document.items,
+            source_name=orig_name,
+            save_embedded=_save_embedded,
+        )
 
-            if source == "embedded":
-                data = item.get("data")
-                if not data:
-                    skipped.append(title)
-                    continue
-                default_mime = "image/jpeg" if itype == "image" else "video/mp4"
-                ext = _best_ext(item, default_mime)
-                tmp_path = _write_tmp(data, ext)
-                self._received_files.append({
-                    "path":      tmp_path,
-                    "title":     title,
-                    "orig_name": title + ext,
-                    "type":      itype,
-                })
-                self._add_card(tmp_path, title, orig_name=title + ext)
-                added += 1
-
-            elif source == "jworg":
-                url = item.get("jworg_url") or item.get("url") or ""
-                if not url:
-                    skipped.append(title)
-                    continue
-                # Store all JW metadata so it survives the trip to the playlist
-                self._received_files.append({
-                    "path":       url,
-                    "title":      title,
-                    "orig_name":  title,
-                    "type":       itype,
-                    "key_symbol": item.get("key_symbol"),
-                    "track":      item.get("track"),
-                    "issue_tag":  item.get("issue_tag"),
-                    "doc_id":     item.get("doc_id"),
-                    "meps_language": item.get("meps_language", 0),
-                })
-                self._add_card(url, title, orig_name=title)
-                added += 1
+        for item in result.items:
+            item_path = str(item.get("url") or "")
+            title = str(item.get("title") or Path(item_path).stem or "Item")
+            orig_item_name = str(item.get("original_filename") or title)
+            entry = {
+                "path": item_path,
+                "title": title,
+                "orig_name": orig_item_name,
+                "type": item.get("type", "video"),
+                "key_symbol": item.get("key_symbol"),
+                "track": item.get("track"),
+                "issue_tag": item.get("issue_tag"),
+                "doc_id": item.get("doc_id"),
+                "meps_language": item.get("meps_language", 0),
+            }
+            self._received_files.append(entry)
+            self._add_card(item_path, title, orig_name=orig_item_name)
 
         pl_name = document.name or Path(orig_name).stem
-        if added:
-            self._notifications.success(f"{pl_name}  ({added} itens)")
-        if skipped:
+        if result.items:
+            self._notifications.success(f"{pl_name}  ({len(result.items)} itens)")
+        if result.skipped_titles:
             self._notifications.warning(
-                f"{len(skipped)} item(ns) não resolvido(s)"
+                f"{len(result.skipped_titles)} item(ns) não resolvido(s)"
             )
 
     @Slot(str)

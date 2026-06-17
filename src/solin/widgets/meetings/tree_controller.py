@@ -82,6 +82,7 @@ from ...core.meetings.tree_merger import MeetingTreeMerger
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
+from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
@@ -813,9 +814,14 @@ class MeetingTreeController(QObject):
                 path,
                 fallback_lang_code=self._fallback_language_code,
             )
+            result = playlist_items_from_jwl_document_items(
+                document.items,
+                source_name=Path(path).name,
+                save_embedded=self._save_jwl_embedded,
+            )
             nodes = [
                 self._node_from_playlist_item(raw, Path(path).stem)
-                for raw in document.items
+                for raw in result.items
             ]
         except (OSError, ValueError) as exc:
             self._record_meeting_folder_failure(source, Path(path).name, str(exc))
@@ -1080,9 +1086,14 @@ class MeetingTreeController(QObject):
                     path,
                     fallback_lang_code=self._fallback_language_code,
                 )
+                result = playlist_items_from_jwl_document_items(
+                    document.items,
+                    source_name=Path(path).name,
+                    save_embedded=self._save_jwl_embedded,
+                )
                 nodes = [
                     self._node_from_playlist_item(raw, Path(path).stem)
-                    for raw in document.items
+                    for raw in result.items
                 ]
             except (OSError, ValueError) as exc:
                 self._warn_import_failed(Path(path).name, str(exc))
@@ -1104,6 +1115,20 @@ class MeetingTreeController(QObject):
         nodes = [self._node_from_playlist_item(raw, file_stem) for raw in items]
         if nodes:
             self._insert_nodes(list_id or "root", insert_index, nodes)
+
+    def _save_jwl_embedded(
+        self,
+        data: bytes,
+        filename: str,
+        identifier: str,
+        default_suffix: str,
+    ) -> str:
+        return self._profile_media_store.save_embedded(
+            data,
+            filename,
+            identifier=identifier,
+            default_suffix=default_suffix,
+        )
 
     def _node_from_playlist_item(self, raw: dict[str, Any], fallback_title: str) -> Node:
         node_id = new_node_id()

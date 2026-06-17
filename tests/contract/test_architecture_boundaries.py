@@ -1258,6 +1258,27 @@ def test_controllers_do_not_call_raw_jwlplaylist_reader_or_writer():
     assert violations == []
 
 
+def test_jwl_document_consumers_use_shared_import_policy():
+    consumer_paths = (
+        PROJECT_ROOT / "src" / "solin" / "controllers" / "open_media_controller.py",
+        PROJECT_ROOT / "src" / "solin" / "controllers" / "playlist_import_controller.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "wifi_receive_widget.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "tree_controller.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist" / "import_export.py",
+        PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist" / "list_view.py",
+    )
+    violations: list[str] = []
+
+    for path in consumer_paths:
+        source = path.read_text(encoding="utf-8")
+        if "read_jwlplaylist_document" not in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)}: no document helper")
+        if "playlist_items_from_jwl_document_items" not in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)}: no import policy")
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {
