@@ -75,9 +75,23 @@ class _WindowStub:
         self.proj_bar = _ProjectionBarStub()
         self._auto_key_projection = _AutoKeyProjectionStub()
         self._visible = visible
+        self.started_shares = []
+        self.stopped_shares = []
+        self.share_started = threading.Event()
+        self.share_stopped = threading.Event()
 
     def _all_windows(self):
         return [_ProjectionWindowStub(self._visible)]
+
+    def start_auto_share(self, hotkey, click_x, click_y):
+        self.started_shares.append((hotkey, click_x, click_y))
+        self.share_started.set()
+        return True
+
+    def stop_auto_share(self, hotkey):
+        self.stopped_shares.append(hotkey)
+        self.share_stopped.set()
+        return True
 
 
 def _controller(window):
@@ -92,6 +106,8 @@ def _controller(window):
             auto_share_settings=window._auto_share_settings,
             projection_bar=window.proj_bar,
             auto_share_finished=lambda *_args: None,
+            start_auto_share=window.start_auto_share,
+            stop_auto_share=window.stop_auto_share,
         )
     )
 
@@ -170,6 +186,25 @@ def test_auto_share_configured_rejects_missing_hotkey():
 
     assert controller.auto_share_hotkey() == ""
     assert controller.auto_share_configured() is False
+
+
+def test_auto_share_uses_injected_share_actions():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+        click_position=(10, 20),
+    )
+    controller = _controller(window)
+
+    controller.sync_zoom_share(active=True, visual=True)
+    assert window.share_started.wait(1)
+    assert window.started_shares == [("Alt+S", 10, 20)]
+
+    controller.sync_zoom_share(active=False, visual=True)
+    assert window.share_stopped.wait(1)
+    assert window.stopped_shares == ["Alt+S"]
+    controller.cleanup()
 
 
 def test_auto_share_ignores_stale_worker_result():

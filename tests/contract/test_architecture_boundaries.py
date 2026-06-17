@@ -1355,6 +1355,17 @@ def test_update_dialog_has_no_network_persistence_or_process_adapters():
     assert violations == []
 
 
+def test_projection_integration_controller_receives_auto_share_actions():
+    path = PROJECT_ROOT / "src" / "solin" / "controllers" / "projection_integration_controller.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "core.integrations.automation.screen_share" not in source
+    assert "execute_start_share" not in source
+    assert "execute_stop_share" not in source
+    assert "start_auto_share" in source
+    assert "stop_auto_share" in source
+
+
 def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     browser_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser"
     legacy_url_policy = browser_root / "url_utils.py"

@@ -87,6 +87,10 @@ from .core.timer.application import TimerSession
 from .core.ui.monitor_allocation import MonitorAllocationStore
 from .core.ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
+from .core.integrations.automation.screen_share import (
+    execute_start_share,
+    execute_stop_share,
+)
 from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
 from .core.jw.songs import JWSongsStore
@@ -604,6 +608,8 @@ class MainWindow(QMainWindow):
                 auto_share_settings=self._auto_share_settings,
                 projection_bar=self.proj_bar,
                 auto_share_finished=self._auto_share_finished.emit,
+                start_auto_share=execute_start_share,
+                stop_auto_share=execute_stop_share,
             )
         )
         self._media_projection = MediaProjectionController(
