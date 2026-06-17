@@ -1162,6 +1162,27 @@ def test_zoom_state_value_objects_have_no_framework_dependencies():
     assert violations == []
 
 
+def test_zoom_service_uses_native_adapter_for_win32_calls():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "integrations"
+        / "automation"
+        / "zoom"
+        / "service.py"
+    )
+    source = path.read_text(encoding="utf-8")
+
+    assert "import ctypes" not in source
+    assert "ctypes." not in source
+    assert "CoInitializeEx" not in source
+    assert "FindWindowW(" not in source
+    assert "initialize_com_for_current_thread" in source
+    assert "share_selection_dialog_open" in source
+
+
 def test_obs_protocol_has_no_framework_network_or_thread_dependencies():
     path = (
         PROJECT_ROOT

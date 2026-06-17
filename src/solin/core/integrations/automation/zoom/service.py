@@ -22,6 +22,10 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from solin.core.integrations.automation.settings import ZoomParticipantSettings
+from solin.core.integrations.automation.zoom.native import (
+    initialize_com_for_current_thread,
+    share_selection_dialog_open,
+)
 
 if TYPE_CHECKING:
     from .controls import ZoomSession
@@ -36,20 +40,6 @@ _HAS_ZOOM = False
 if sys.platform == "win32":
     # Verifica se a biblioteca existe sem importá-la na thread principal
     _HAS_ZOOM = importlib.util.find_spec("pywinauto") is not None
-
-def _init_com():
-    """Initialize COM for the current thread (MTA). Silences pywinauto warnings."""
-    if sys.platform != "win32":
-        return
-    try:
-        import ctypes
-        # COINIT_MULTITHREADED = 0x0
-        hr = ctypes.windll.ole32.CoInitializeEx(None, 0)
-        # S_OK=0, S_FALSE=1 (already initialized) are both fine
-        if hr not in (0, 1):
-            log.debug("CoInitializeEx returned 0x%08X", hr)
-    except Exception:  # noqa: BLE001 - COM initialization boundary
-        log.debug("Failed to initialize COM for Zoom worker", exc_info=True)
 
 
 # ── ZoomService ───────────────────────────────────────────────────────────────
@@ -298,7 +288,7 @@ class ZoomService(QObject):
         session: ZoomSession,
     ) -> None:
         from . import controls
-        _init_com()
+        initialize_com_for_current_thread()
         try:
             windows, pids = controls._find_zoom_windows_fast(session)
             main, _ = controls._find_main_window(session, windows)
@@ -368,7 +358,7 @@ class ZoomService(QObject):
              mute_all_btn + more_btn em um único scan.
         """
         from . import controls
-        _init_com()
+        initialize_com_for_current_thread()
         try:
             # Abre painel se necessário (detecção robusta impede toggle acidental)
             controls._open_participants_panel(session)
@@ -415,11 +405,14 @@ class ZoomService(QObject):
         from . import controls
         import time
         t_start = time.perf_counter()
-        _init_com()
+        initialize_com_for_current_thread()
         try:
             t0 = time.perf_counter()
             is_sharing_fast = controls._find_float_toolbar_hwnd()
-            log.info(f"[ZStop] FindWindowW() check took: {(time.perf_counter()-t0)*1000:.1f}ms")
+            log.info(
+                "[ZStop] Floating-toolbar check took: %.1fms",
+                (time.perf_counter() - t0) * 1000,
+            )
             
             if not is_sharing_fast:
                 self._sig_sharing.emit(generation, False)
@@ -458,19 +451,17 @@ class ZoomService(QObject):
         generation: int,
         session: ZoomSession,
     ) -> None:
-        """Check if sharing is still active. Uses fast Win32 check + cache refresh."""
+        """Check if sharing is still active. Uses a fast native probe + cache refresh."""
         from . import controls
-        import ctypes
-        _init_com()
+        initialize_com_for_current_thread()
         try:
-            # _is_sharing() now uses FindWindowW (~0ms) + validates/refreshes cache
+            # _is_sharing() uses a fast floating-toolbar probe and validates cache.
             still_sharing = controls._is_sharing(session)
             if not still_sharing:
                 # Pode ser que a pessoa apenas começou a compartilhar e está com a 
                 # caixa de seleção do que compartilhar (ZPShareEntranceClass) aberta.
                 # Não queremos desarmar o poller se ele só estiver escolhendo a tela.
-                is_dialog_open = ctypes.windll.user32.FindWindowW("ZPShareEntranceClass", None)
-                if not is_dialog_open:
+                if not share_selection_dialog_open():
                     self._sig_sharing.emit(generation, False)
         except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary
             log.debug("Failed to poll Zoom sharing state", exc_info=True)
@@ -506,7 +497,7 @@ class ZoomService(QObject):
     ) -> None:
         """Leave computer audio + unmute all."""
         from . import controls
-        _init_com()
+        initialize_com_for_current_thread()
         try:
             controls.leave_computer_audio(session)
             time.sleep(0.3)
