@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
 
 from solin.core.i18n.date import format_time_with_seconds, week_label
-from solin.core.meetings.publications import current_monday
+from solin.core.meetings.meeting_weeks import current_monday
 from solin.core.meetings.section_meta import SECTION_META
 from solin.core.timer.application import TimerSession
 from solin.core.timer.models import (

@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget,
 )
 
-from ...core.meetings.publications import current_monday
+from ...core.meetings.meeting_weeks import current_monday
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception

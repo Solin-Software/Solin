@@ -53,6 +53,11 @@ from solin.core.media.download_storage import is_url_cached
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.storage.json_repository import JsonFileRepository
 from . import models as meeting_models
+from .meeting_weeks import (
+    current_monday,
+    mwb_issue_for_week,
+    watchtower_issue_candidates,
+)
 
 log = logging.getLogger(__name__)
 
@@ -300,25 +305,6 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         log.debug("Could not parse resolved video metadata", exc_info=True)
     return result
-
-
-# ── Date arithmetic ───────────────────────────────────────────────────────────
-
-def _monday_of_week(d: date) -> date:
-    return d - timedelta(days=d.weekday())
-
-def _mwb_issue(monday: date) -> str:
-    m = monday.month
-    if m % 2 == 0:
-        m -= 1
-    return f"{monday.year}{m:02d}00"
-
-def _wt_candidates(monday: date) -> list[str]:
-    return [
-        f"{(monday - timedelta(weeks=w)).year}"
-        f"{(monday - timedelta(weeks=w)).month:02d}00"
-        for w in [6, 8, 10, 12]
-    ]
 
 
 # ── SQLite helpers (worker-thread only) ──────────────────────────────────────
@@ -1063,7 +1049,7 @@ class _JwpubWorker(QObject):
 
     def _serve_mwb_cached(self, monday: date) -> bool:
         """Fase 1 (SWR): renderiza o MWB do cache local sem rede. True se servido."""
-        issue = _mwb_issue(monday)
+        issue = mwb_issue_for_week(monday)
         lang  = self._lang
         if not self._cache.is_cached("mwb", lang, issue):
             return False
@@ -1079,7 +1065,7 @@ class _JwpubWorker(QObject):
         mudou. ``served`` indica se a fase 1 já mostrou uma cópia do cache.
         """
         key   = monday.isoformat()
-        issue = _mwb_issue(monday)
+        issue = mwb_issue_for_week(monday)
         lang  = self._lang
 
         url, checksum, not_found = _get_jwpub_info("mwb", lang, issue)
@@ -1202,7 +1188,7 @@ class _JwpubWorker(QObject):
         semana. Retorna a edição servida, ou None se nenhuma cópia local serve.
         """
         lang = self._lang
-        for issue in _wt_candidates(monday):
+        for issue in watchtower_issue_candidates(monday):
             if not self._cache.is_cached("w", lang, issue):
                 continue
             wd = meeting_models.WeekData(monday=monday, wt_status="loading")
@@ -1229,7 +1215,12 @@ class _JwpubWorker(QObject):
                     )
             return
         # Caminho frio: sem cache utilizável → sonda candidatos e baixa pela rede.
-        self._download_wt_chain(monday, lang, _wt_candidates(monday)[:], force=force)
+        self._download_wt_chain(
+            monday,
+            lang,
+            watchtower_issue_candidates(monday)[:],
+            force=force,
+        )
 
     def _try_wt_cached(self, wd: meeting_models.WeekData, monday: date,
                         issue: str, lang: str) -> bool:
@@ -1709,7 +1700,7 @@ class JwpubService(QObject):
     def auto_download_if_enabled(self):
         if not self._media_settings.meetings_auto_download():
             return
-        mon      = _monday_of_week(date.today())
+        mon      = current_monday()
         next_mon = mon + timedelta(weeks=1)
 
         # Conecta antes de disparar load_week — garante que não perdemos o sinal
@@ -1734,7 +1725,7 @@ class JwpubService(QObject):
     def _on_auto_dl_ready(self, key: str, wd: object):
         if not self._media_settings.meetings_auto_download():
             return
-        mon = _monday_of_week(date.today())
+        mon = current_monday()
         target_keys = {mon.isoformat(), (mon + timedelta(weeks=1)).isoformat()}
         if key in target_keys:
             self._sig_prefetch_wd.emit(wd)
@@ -1826,5 +1817,3 @@ class JwpubService(QObject):
 
 # ── Public helpers ────────────────────────────────────────────────────────────
 
-def current_monday() -> date:
-    return _monday_of_week(date.today())

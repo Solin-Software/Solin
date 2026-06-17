@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n.date import week_label, week_label_short
-from ...core.meetings.publications import current_monday
+from ...core.meetings.meeting_weeks import current_monday
 from ...styles.icons import (
     ICON_CHEVRON_LEFT,
     ICON_CHEVRON_RIGHT,

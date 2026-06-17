@@ -188,7 +188,7 @@ def _create_profile_screen(container, lang_manager):
 
 
 def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
-    from solin.core.meetings.publications import current_monday
+    from solin.core.meetings.meeting_weeks import current_monday
     from solin.core.timer.application import TimerSession
     from solin.core.timer.infrastructure import QSettingsTimerRepository
 
