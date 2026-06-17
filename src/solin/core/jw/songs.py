@@ -7,43 +7,17 @@ song load state and concurrent requests for the same language/mode are coalesced
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
-from .media_api import fetch_songs, fetch_songs_audio
+from solin.core.jw.song_media import (
+    JWSongsRequest,
+    JWSongsSnapshot,
+    fetch_song_media,
+)
 
 log = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class JWSongsRequest:
-    """Identity for a song media request."""
-
-    api_code: str
-    fallback_code: str
-    is_sign_language: bool
-    audio_mode: bool = False
-
-    @property
-    def key(self) -> str:
-        sign = "sl" if self.is_sign_language else "regular"
-        mode = "audio" if self.audio_mode else "video"
-        return f"{self.api_code or 'E'}|{self.fallback_code or ''}|{sign}|{mode}"
-
-
-@dataclass
-class JWSongsSnapshot:
-    """Read-only-ish snapshot of the current store state for one request."""
-
-    items: list[dict[str, Any]]
-    pub_name: str = ""
-    fetched_at: float = 0.0
-    from_cache: bool = False
-    is_loading: bool = False
-    error: str = ""
 
 
 class _FetchSignals(QObject):
@@ -68,28 +42,17 @@ class _FetchWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            if self.request.audio_mode:
-                items, pub_name, fetched_at, from_cache = fetch_songs_audio(
-                    self.request.api_code,
-                    self.force,
-                    fallback_code=self.request.fallback_code,
-                    is_sign_language=self.request.is_sign_language,
-                    cache_dir=self.cache_dir,
-                )
-            else:
-                items, pub_name, fetched_at, from_cache = fetch_songs(
-                    self.request.api_code,
-                    self.force,
-                    fallback_code=self.request.fallback_code,
-                    is_sign_language=self.request.is_sign_language,
-                    cache_dir=self.cache_dir,
-                )
+            result = fetch_song_media(
+                self.request,
+                cache_dir=self.cache_dir,
+                force=self.force,
+            )
             self.signals.succeeded.emit(
                 self.request.key,
-                list(items or []),
-                pub_name,
-                float(fetched_at or 0.0),
-                bool(from_cache),
+                result.items,
+                result.pub_name,
+                result.fetched_at,
+                result.from_cache,
             )
         except Exception as exc:  # noqa: BLE001 - QRunnable reports domain failures via signal
             log.exception("JW songs fetch worker failed")
