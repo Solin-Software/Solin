@@ -5,10 +5,11 @@ import hashlib
 import logging
 import os
 import shutil
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
@@ -23,14 +24,13 @@ from solin.core.ingest.manifest import (
 )
 
 from .folder_matcher import match_meeting_folder
-from .schedule import UNCONFIGURED_WEEKDAY
-from .schedule_settings import MeetingScheduleSettingsStore
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
 
 MEETING_TREE_KEY = "meeting_tree"
 MEETING_TREE_SCHEMA_VERSION = 1
+MeetingWeekdayResolver = Callable[[str], int]
 
 
 class MeetingSyncError(RuntimeError):
@@ -76,12 +76,12 @@ def meeting_tag_for_pub_type(pub_type: str) -> str:
 class MeetingLinkedFolderSync:
     """Domain service for meeting state stored in a watched meeting folder."""
 
-    def __init__(self, schedule_settings: MeetingScheduleSettingsStore) -> None:
-        self._schedule_settings = schedule_settings
+    def __init__(self, weekday_for_pub_type: MeetingWeekdayResolver) -> None:
+        self._weekday_for_pub_type = weekday_for_pub_type
 
     def folder_date_for(self, monday: date, pub_type: str) -> date:
-        weekday = self._configured_weekday(pub_type)
-        if weekday == UNCONFIGURED_WEEKDAY:
+        weekday = self._weekday_for_pub_type(pub_type)
+        if not 0 <= weekday <= 6:
             return monday
         return monday + timedelta(days=weekday)
 
@@ -295,13 +295,6 @@ class MeetingLinkedFolderSync:
             else:
                 node.pop("linked_folder_source", None)
         return detached
-
-    def _configured_weekday(self, pub_type: str) -> int:
-        schedule = self._schedule_settings.load()
-        slot = schedule.midweek if pub_type == "mwb" else schedule.weekend
-        if 0 <= slot.weekday <= 6:
-            return slot.weekday
-        return UNCONFIGURED_WEEKDAY
 
     def _block_matches(
         self,

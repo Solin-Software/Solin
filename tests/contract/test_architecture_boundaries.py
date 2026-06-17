@@ -726,6 +726,22 @@ def test_meeting_domain_has_no_framework_or_application_dependencies():
     assert violations == []
 
 
+def test_meeting_linked_folder_sync_receives_schedule_resolver():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "meetings"
+        / "linked_folder_sync.py"
+    )
+    source = path.read_text(encoding="utf-8")
+
+    assert "MeetingScheduleSettingsStore" not in source
+    assert "schedule_settings" not in source
+    assert "weekday_for_pub_type" in source
+
+
 def test_timer_domain_has_no_framework_or_application_dependencies():
     timer_root = PROJECT_ROOT / "src" / "solin" / "core" / "timer"
     domain_files = (

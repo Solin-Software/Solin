@@ -55,6 +55,7 @@ from ...core.meetings.linked_folder_sync import (
     MeetingSyncError,
     MeetingSyncIdentity,
 )
+from ...core.meetings.schedule import UNCONFIGURED_WEEKDAY
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.catalog_placement import (
     MeetingCatalogPlaylistRef,
@@ -117,6 +118,24 @@ def _usable_ref_file_path(ref: dict[str, Any]) -> str:
     return path
 
 
+def _meeting_weekday_resolver(
+    schedule_settings: MeetingScheduleSettingsStore,
+) -> Callable[[str], int]:
+    def weekday_for_pub_type(pub_type: str) -> int:
+        schedule = schedule_settings.load()
+        if pub_type == "mwb":
+            weekday = schedule.midweek.weekday
+        elif pub_type == "wt":
+            weekday = schedule.weekend.weekday
+        else:
+            return UNCONFIGURED_WEEKDAY
+        if 0 <= weekday <= 6:
+            return weekday
+        return UNCONFIGURED_WEEKDAY
+
+    return weekday_for_pub_type
+
+
 class MeetingTreeController(QObject):
     backRequested = Signal()
     projectRequested = Signal(object)
@@ -172,7 +191,9 @@ class MeetingTreeController(QObject):
             section_title=_translate_section_title,
             media_fallback_title=lambda: _tr("_MediaRow", "Media"),
         )
-        self._sync_service = MeetingLinkedFolderSync(schedule_settings)
+        self._sync_service = MeetingLinkedFolderSync(
+            _meeting_weekday_resolver(schedule_settings)
+        )
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""

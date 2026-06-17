@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 import uuid
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from solin.core.meetings.linked_folder_sync import (
     MeetingSyncError,
     MeetingSyncRecord,
 )
+from solin.core.meetings.schedule import UNCONFIGURED_WEEKDAY
 from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 from solin.widgets.meetings.tree_controller import MeetingTreeController
@@ -40,6 +42,30 @@ def _schedule_settings(
     return MeetingScheduleSettingsStore(settings)
 
 
+def _weekday_resolver(values: dict[str, object] | None = None) -> Callable[[str], int]:
+    schedule_settings = _schedule_settings(values)
+
+    def weekday_for_pub_type(pub_type: str) -> int:
+        schedule = schedule_settings.load()
+        if pub_type == "mwb":
+            weekday = schedule.midweek.weekday
+        elif pub_type == "wt":
+            weekday = schedule.weekend.weekday
+        else:
+            return UNCONFIGURED_WEEKDAY
+        if 0 <= weekday <= 6:
+            return weekday
+        return UNCONFIGURED_WEEKDAY
+
+    return weekday_for_pub_type
+
+
+def _linked_folder_sync(
+    values: dict[str, object] | None = None,
+) -> MeetingLinkedFolderSync:
+    return MeetingLinkedFolderSync(_weekday_resolver(values))
+
+
 class _Signal:
     def __init__(self):
         self.calls = []
@@ -59,23 +85,23 @@ def _identity(pub_type: str = "mwb") -> MeetingSyncIdentity:
 
 class MeetingLinkedFolderSyncTests(unittest.TestCase):
     def test_folder_name_uses_configured_meeting_day(self):
-        service = MeetingLinkedFolderSync(_schedule_settings({
+        service = _linked_folder_sync({
             SettingsKey.MEETING_MIDWEEK_DAY: 2,
             SettingsKey.MEETING_WEEKEND_DAY: 5,
-        }))
+        })
 
         self.assertEqual(service.folder_name_for(_identity("mwb")), "2026-05-27 MW")
         self.assertEqual(service.folder_name_for(_identity("wt")), "2026-05-30 WE")
 
     def test_folder_name_falls_back_to_monday_when_day_is_unconfigured(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
 
         self.assertEqual(service.folder_name_for(_identity("mwb")), "2026-05-25 MW")
 
     def test_locate_reuses_existing_folder_before_creating(self):
-        service = MeetingLinkedFolderSync(_schedule_settings({
+        service = _linked_folder_sync({
             SettingsKey.MEETING_MIDWEEK_DAY: 2,
-        }))
+        })
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             older = root / "2026-05-26 MW"
@@ -92,9 +118,9 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             )
 
     def test_save_and_load_manifest_round_trips_relative_paths(self):
-        service = MeetingLinkedFolderSync(_schedule_settings({
+        service = _linked_folder_sync({
             SettingsKey.MEETING_MIDWEEK_DAY: 2,
-        }))
+        })
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             folder = root / "2026-05-27 MW"
@@ -138,7 +164,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(loaded.deleted_source_keys, {"official"})
 
     def test_manifest_import_records_are_portable_by_source_path(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             folder = root / "2026-05-25 MW"
@@ -181,7 +207,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             )
 
     def test_stale_save_returns_merged_record_for_next_save(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             folder = root / "2026-05-25 MW"
@@ -239,7 +265,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             )
 
     def test_materialize_copies_manual_physical_file_to_root_without_deleting_origin(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source.mp4"
@@ -266,7 +292,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(linked[str(copied)], "media")
 
     def test_materialize_copies_meeting_generated_physical_file_to_cache(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "official-image.jpg"
@@ -295,7 +321,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(linked[str(cached)], "official")
 
     def test_delete_sync_metadata_keeps_root_files(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "2026-05-25 MW"
             folder.mkdir()
@@ -313,7 +339,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertFalse(cache.exists())
 
     def test_detach_cache_references_keeps_local_tree_independent_from_deleted_cache(self):
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             folder = root / "2026-05-25 MW"
@@ -369,7 +395,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller = FakeController()
             controller._sync_enabled = True
             controller._sync_folder = str(folder)
-            controller._sync_service = MeetingLinkedFolderSync(_schedule_settings())
+            controller._sync_service = _linked_folder_sync()
             controller._linked_folder_files = {}
             controller._generated_asset_roots = lambda: ()
 
@@ -569,7 +595,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         class FakeController:
             pass
 
-        service = MeetingLinkedFolderSync(_schedule_settings())
+        service = _linked_folder_sync()
         identity = _identity("mwb")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
