@@ -25,23 +25,31 @@ IMPORTANTE — escopo GLOBAL (não por perfil):
 
 Uso:
     from solin.core.foundation.identity import get_install_id
-    install_id = get_install_id()  # str, 32 hex chars sem separadores
+    install_id = get_install_id(settings)  # str, 32 hex chars sem separadores
 """
 from __future__ import annotations
 
 import uuid
 import logging
+from typing import Protocol
 
-from .settings_store import InstallationSettingsStore
 
 log = logging.getLogger(__name__)
 
-def get_install_id() -> str:
+
+class InstallationIdentitySettings(Protocol):
+    def install_id(self) -> str:
+        ...
+
+    def set_install_id(self, install_id: str) -> None:
+        ...
+
+
+def get_install_id(settings: InstallationIdentitySettings) -> str:
     """
     Retorna o install_id persistido. Gera um novo se ainda não existir.
     Usa sempre o namespace global de instalação, não o namespace do perfil.
     """
-    settings = InstallationSettingsStore.create()
     existing = settings.install_id()
 
     if existing and len(existing) >= 32:

@@ -32,6 +32,7 @@ Segurança:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QThread, Signal
 
@@ -42,6 +43,7 @@ from solin.core.remote.update_policy import UpdateInfo, evaluate_update
 log = logging.getLogger(__name__)
 
 FETCH_TIMEOUT_S: int = 10
+InstallIdProvider = Callable[[], str]
 
 
 # ── Worker ─────────────────────────────────────────────────────────────────────
@@ -55,13 +57,19 @@ class UpdateWorker(QObject):
     no_update        = Signal()
     fetch_failed     = Signal(str)     # mensagem de erro (log silencioso)
 
+    def __init__(
+        self,
+        install_id_provider: InstallIdProvider,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._install_id_provider = install_id_provider
+
     def run(self) -> None:
         try:
-            from solin.core.foundation.identity import get_install_id
-
             params = {
                 "v":        APP_VERSION,
-                "id":       get_install_id(),
+                "id":       self._install_id_provider(),
                 "platform": APP_PLATFORM,
             }
             payload = get_json(
@@ -93,14 +101,19 @@ class UpdateService(QObject):
     Fachada pública. Gerencia ciclo de vida da thread.
 
     Uso típico (em MainWindow.__init__):
-        self._update_svc = UpdateService(self)
+        self._update_svc = UpdateService(install_id_provider, self)
         self._update_svc.update_available.connect(self._on_update_available)
         QTimer.singleShot(UPDATE_CHECK_DELAY_MS, self._update_svc.check)
     """
     update_available = Signal(object)  # UpdateInfo
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        install_id_provider: InstallIdProvider,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._install_id_provider = install_id_provider
         self._thread: QThread | None = None
         self._worker: UpdateWorker | None = None
         self._running = False
@@ -114,7 +127,7 @@ class UpdateService(QObject):
         self._running = True
 
         self._thread = QThread(self)
-        self._worker = UpdateWorker()
+        self._worker = UpdateWorker(self._install_id_provider)
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)

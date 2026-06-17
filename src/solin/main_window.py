@@ -118,6 +118,7 @@ from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
 from .core.integrations.automation.shortcuts import AutoKeyDispatcher
+from .core.foundation.identity import get_install_id
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.settings_store import InstallationSettingsStore
 from .core.foundation.qt_threads import OwnedQThreadRegistry
@@ -219,6 +220,7 @@ class MainWindow(QMainWindow):
         self.jw_songs_store = jw_songs_store
         self.jwpub_checksum_store = jwpub_checksum_store
         self._installation_settings = installation_settings
+        self._install_id_provider = lambda: get_install_id(self._installation_settings)
         self.playlist_storage_paths = playlist_storage_paths
         self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
@@ -792,10 +794,11 @@ class MainWindow(QMainWindow):
                         NotificationSettingsStore.for_profile_settings(
                             self.profile_settings
                         ),
+                        self._install_id_provider,
                         self,
                     ),
                     notification_queue=RemoteNotificationQueue(self.lang, self),
-                    update_service=UpdateService(self),
+                    update_service=UpdateService(self._install_id_provider, self),
                     update_dialog_factory=lambda info: UpdateDialog(
                         info,
                         self,

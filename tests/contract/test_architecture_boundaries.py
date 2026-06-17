@@ -1433,6 +1433,28 @@ def test_remote_notification_service_receives_notification_settings_store():
     assert "_notification_settings" in source
 
 
+def test_install_identity_receives_installation_settings_store():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "foundation" / "identity.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "InstallationSettingsStore" not in source
+    assert "InstallationSettingsStore.create" not in source
+    assert "class InstallationIdentitySettings(Protocol)" in source
+    assert "get_install_id(settings" in source
+
+
+def test_remote_workers_receive_install_id_provider():
+    for path in (
+        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "notifications.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "updates.py",
+    ):
+        source = path.read_text(encoding="utf-8")
+
+        assert "get_install_id" not in source
+        assert "install_id_provider" in source
+        assert "_install_id_provider" in source
+
+
 def test_patch_installer_receives_installation_settings_store():
     path = PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "patch_installer.py"
     source = path.read_text(encoding="utf-8")

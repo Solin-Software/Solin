@@ -45,6 +45,7 @@ Formato esperado da API:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QThread, Signal
@@ -52,7 +53,11 @@ from PySide6.QtCore import QObject, QThread, Signal
 if TYPE_CHECKING:
     from solin.core.i18n.manager import LanguageManager
 
-from solin.core.foundation.constants import NOTIFICATION_API_URL
+from solin.core.foundation.constants import (
+    APP_PLATFORM,
+    APP_VERSION,
+    NOTIFICATION_API_URL,
+)
 from solin.core.network.http import HttpError, get_json
 from solin.core.remote.notification_policy import Notification, resolve_remote_notifications
 from solin.core.remote.notification_settings import NotificationSettingsStore
@@ -60,6 +65,7 @@ from solin.core.remote.notification_settings import NotificationSettingsStore
 log = logging.getLogger(__name__)
 
 FETCH_TIMEOUT_S: int = 8        # timeout total da requisição HTTP
+InstallIdProvider = Callable[[], str]
 
 
 # ── Worker assíncrono ──────────────────────────────────────────────────────────
@@ -76,24 +82,23 @@ class NotificationWorker(QObject):
         self,
         api_code: str,
         settings: NotificationSettingsStore,
+        install_id_provider: InstallIdProvider,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         # api_code do idioma ativo (ex: "T" para Português, "E" para English)
         self._api_code = api_code
         self._settings = settings
+        self._install_id_provider = install_id_provider
 
     def run(self) -> None:
         """Chamado pela thread. Faz fetch, processa, emite resultado."""
         try:
-            from solin.core.foundation.identity import get_install_id
-            from solin.core.foundation.constants import APP_PLATFORM, APP_VERSION
-
             # Enviamos id + v para o servidor poder upsert AppInstance
             # (contribui para métricas de instâncias ativas sem precisar de
             #  uma chamada extra dedicada). Ambos são opcionais pelo servidor.
             params = {
-                "id":       get_install_id(),
+                "id":       self._install_id_provider(),
                 "v":        APP_VERSION,
                 "platform": APP_PLATFORM,
             }
@@ -139,6 +144,7 @@ class NotificationService(QObject):
         self._notif_service = NotificationService(
             lang_manager,
             notification_settings_store,
+            install_id_provider,
             self,
         )
         self._notif_service.notifications_ready.connect(self._on_notifications)
@@ -150,11 +156,13 @@ class NotificationService(QObject):
         self,
         lang_manager: "LanguageManager",
         notification_settings: NotificationSettingsStore,
+        install_id_provider: InstallIdProvider,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self._lang = lang_manager
         self._notification_settings = notification_settings
+        self._install_id_provider = install_id_provider
         self._thread: QThread | None = None
         self._worker: NotificationWorker | None = None
         self._running = False
@@ -170,7 +178,11 @@ class NotificationService(QObject):
         api_code = self._lang.api_code  # ex: "T", "E", "S"
 
         self._thread = QThread(self)
-        self._worker = NotificationWorker(api_code, self._notification_settings)
+        self._worker = NotificationWorker(
+            api_code,
+            self._notification_settings,
+            self._install_id_provider,
+        )
         self._worker.moveToThread(self._thread)
 
         # Conecta sinais

@@ -84,10 +84,11 @@ def test_installation_settings_store_preserves_global_app_namespace(monkeypatch)
 def test_get_install_id_uses_installation_settings_store(monkeypatch) -> None:
     _install_fake_settings(monkeypatch)
     generated = "b" * 32
+    store = settings_store.InstallationSettingsStore.create()
     monkeypatch.setattr(identity.uuid, "uuid4", lambda: SimpleNamespace(hex=generated))
 
-    assert identity.get_install_id() == generated
-    assert identity.get_install_id() == generated
+    assert identity.get_install_id(store) == generated
+    assert identity.get_install_id(store) == generated
     assert _FakeSettings.buckets[(QSETTINGS_ORG_NAME, QSETTINGS_APP_APP)] == {
         SettingsKey.INSTALL_ID: generated,
     }
