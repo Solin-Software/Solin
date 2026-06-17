@@ -25,7 +25,7 @@ from ..core.playlists.items import (
 )
 
 if TYPE_CHECKING:
-    from ..core.jw.publication_reader import JwpubImportThreadFactory
+    from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ..core.rendering.document_conversion import DocumentConversionService
 
 

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths
     from solin.core.ingest.qr_generation import QrGenerationSessionFactory
-    from solin.core.jw.publication_reader import JwpubImportThreadFactory
+    from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
     from solin.core.media.cache_scan import CacheScanSessionFactory

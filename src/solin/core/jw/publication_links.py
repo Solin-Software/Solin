@@ -24,6 +24,68 @@ class PubMediaFile:
     label: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class PublicationMediaRequest:
+    key_symbol: str
+    track: int | None
+    issue_tag: int | None
+    meps_doc_id: int | None
+    language: str
+    is_sign_language: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class JwpubMediaRequest:
+    pub: str
+    language: str
+    issue: str
+    fallback_languages: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class JwpubMediaInfo:
+    download_url: str | None
+    checksum: str = ""
+    not_found: bool = False
+
+
+class PublicationMediaResolver:
+    """Resolve JW publication media metadata through GETPUBMEDIALINKS."""
+
+    def resolve_video(self, request: PublicationMediaRequest) -> PubMediaFile | None:
+        return resolve_publication_video_link(
+            request.key_symbol,
+            request.track,
+            request.issue_tag,
+            request.meps_doc_id,
+            request.language,
+            is_sign_language=request.is_sign_language,
+        )
+
+    def resolve_jwpub(self, request: JwpubMediaRequest) -> JwpubMediaInfo:
+        data = fetch_pub_media_json({
+            "pub": request.pub,
+            "issue": request.issue,
+            "langwritten": request.language,
+            "fileformat": "JWPUB",
+            "output": "json",
+            "alllangs": "0",
+            "txtCMSLang": "E",
+        })
+        if not data:
+            return JwpubMediaInfo(None, "", False)
+
+        media_file = select_pub_media_file(
+            data,
+            request.language,
+            ("JWPUB",),
+            fallback_languages=request.fallback_languages,
+        )
+        if media_file is None:
+            return JwpubMediaInfo(None, "", True)
+        return JwpubMediaInfo(media_file.url, media_file.checksum, False)
+
+
 def build_pub_media_url(params: dict[str, Any], base_url: str = PUB_MEDIA_URL) -> str:
     return f"{base_url}?{urllib.parse.urlencode(params)}" if params else base_url
 

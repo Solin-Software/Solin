@@ -5,7 +5,8 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from solin.core.jw import publication_reader
+from solin.core.jw import jwpub_import, jwpub_import_thread
+from solin.core.jw.publication_links import PubMediaFile
 from tests._paths import FIXTURES_DIR
 
 _FIXTURE = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"
@@ -21,7 +22,7 @@ def _track_extraction_dirs(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
         return directory
 
     monkeypatch.setattr(
-        publication_reader.tempfile,
+        jwpub_import.tempfile,
         "TemporaryDirectory",
         create_tracked_directory,
     )
@@ -35,10 +36,12 @@ def test_jwpub_reader_persists_images_and_removes_extraction_dir(
     extraction_dirs = _track_extraction_dirs(monkeypatch)
     destination = tmp_path / "images"
 
-    items, _stem = publication_reader.read_jwpub_for_playlist(
-        str(_FIXTURE),
-        dest_images_dir=str(destination),
-        resolve_urls=False,
+    items, _stem = jwpub_import.JwpubPlaylistImportService().read(
+        jwpub_import.JwpubImportRequest(
+            jwpub_path=str(_FIXTURE),
+            dest_images_dir=str(destination),
+            resolve_urls=False,
+        )
     )
 
     image_paths = [Path(item["url"]) for item in items if item["type"] == "image"]
@@ -57,17 +60,47 @@ def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
     def fail_copy(*_args, **_kwargs):
         raise PermissionError("destination is not writable")
 
-    monkeypatch.setattr(publication_reader.shutil, "copy2", fail_copy)
+    monkeypatch.setattr(jwpub_import.shutil, "copy2", fail_copy)
 
     with pytest.raises(PermissionError):
-        publication_reader.read_jwpub_for_playlist(
-            str(_FIXTURE),
-            dest_images_dir=str(tmp_path / "images"),
-            resolve_urls=False,
+        jwpub_import.JwpubPlaylistImportService().read(
+            jwpub_import.JwpubImportRequest(
+                jwpub_path=str(_FIXTURE),
+                dest_images_dir=str(tmp_path / "images"),
+                resolve_urls=False,
+            )
         )
 
     assert extraction_dirs
     assert all(not path.exists() for path in extraction_dirs)
+
+
+def test_jwpub_import_service_uses_injected_media_resolver(tmp_path: Path):
+    calls = []
+
+    def resolve_media(key_symbol, track, issue_tag, meps_doc_id, language):
+        calls.append((key_symbol, track, issue_tag, meps_doc_id, language))
+        return PubMediaFile(
+            url=f"https://cdn.example/{key_symbol or meps_doc_id}.mp4",
+            title="Resolved media",
+        )
+
+    service = jwpub_import.JwpubPlaylistImportService(resolve_media=resolve_media)
+
+    items, _stem = service.read(
+        jwpub_import.JwpubImportRequest(
+            jwpub_path=str(_FIXTURE),
+            language="T",
+            dest_images_dir=str(tmp_path / "images"),
+            resolve_urls=True,
+        )
+    )
+
+    video_items = [item for item in items if item["type"] in {"video", "audio"}]
+    assert calls
+    assert video_items
+    assert all(item["url"].startswith("https://cdn.example/") for item in video_items)
+    assert all(item["title"] == "Resolved media" for item in video_items)
 
 
 def test_jwpub_import_thread_factory_uses_default_and_override_destinations(
@@ -81,15 +114,19 @@ def test_jwpub_import_thread_factory_uses_default_and_override_destinations(
     threads = [object(), object()]
 
     monkeypatch.setattr(
-        publication_reader.JwpubImportThread,
+        jwpub_import_thread.JwpubImportThread,
         "create",
-        lambda path, *, lang, dest_images_dir, parent: calls.append(
-            (path, lang, dest_images_dir, parent)
+        lambda path, *, lang, dest_images_dir, service, parent: calls.append(
+            (path, lang, dest_images_dir, service, parent)
         )
         or threads.pop(0),
     )
 
-    factory = publication_reader.JwpubImportThreadFactory(default_destination)
+    service = jwpub_import.JwpubPlaylistImportService()
+    factory = jwpub_import_thread.JwpubImportThreadFactory(
+        default_destination,
+        service=service,
+    )
 
     first = factory.create("first.jwpub", lang="T", parent=parent)
     second = factory.create(
@@ -101,6 +138,6 @@ def test_jwpub_import_thread_factory_uses_default_and_override_destinations(
 
     assert first is not second
     assert calls == [
-        ("first.jwpub", "T", str(default_destination), parent),
-        ("second.jwpub", "E", str(override_destination), parent),
+        ("first.jwpub", "T", str(default_destination), service, parent),
+        ("second.jwpub", "E", str(override_destination), service, parent),
     ]

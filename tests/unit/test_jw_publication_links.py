@@ -1,5 +1,8 @@
 from solin.core.jw import publication_links
 from solin.core.jw.publication_links import (
+    JwpubMediaRequest,
+    PublicationMediaRequest,
+    PublicationMediaResolver,
     VIDEO_FORMATS,
     build_pub_media_url,
     resolve_publication_video_link,
@@ -189,5 +192,84 @@ def test_resolve_publication_video_link_falls_back_to_document_id(monkeypatch) -
             "fileformat": "mp4,m4v",
             "output": "json",
             "alllangs": "0",
+        }
+    ]
+
+
+def test_publication_media_resolver_resolves_video_request(monkeypatch) -> None:
+    calls = []
+
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda params: calls.append(params)
+        or {
+            "files": {
+                "T": {
+                    "MP4": [
+                        {
+                            "title": "Resolved",
+                            "file": {"url": "https://example.test/video.mp4"},
+                        }
+                    ]
+                }
+            }
+        },
+    )
+
+    media_file = PublicationMediaResolver().resolve_video(
+        PublicationMediaRequest(
+            key_symbol="mwb",
+            track=3,
+            issue_tag=202605,
+            meps_doc_id=0,
+            language="T",
+        )
+    )
+
+    assert media_file is not None
+    assert media_file.url == "https://example.test/video.mp4"
+    assert calls[0]["pub"] == "mwb"
+
+
+def test_publication_media_resolver_returns_jwpub_info(monkeypatch) -> None:
+    calls = []
+
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda params: calls.append(params)
+        or {
+            "files": {
+                "T": {
+                    "JWPUB": [
+                        {
+                            "file": {
+                                "url": "https://example.test/mwb.jwpub",
+                                "checksum": "checksum",
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+    )
+
+    media_info = PublicationMediaResolver().resolve_jwpub(
+        JwpubMediaRequest(pub="mwb", language="T", issue="202605")
+    )
+
+    assert media_info.download_url == "https://example.test/mwb.jwpub"
+    assert media_info.checksum == "checksum"
+    assert media_info.not_found is False
+    assert calls == [
+        {
+            "pub": "mwb",
+            "issue": "202605",
+            "langwritten": "T",
+            "fileformat": "JWPUB",
+            "output": "json",
+            "alllangs": "0",
+            "txtCMSLang": "E",
         }
     ]

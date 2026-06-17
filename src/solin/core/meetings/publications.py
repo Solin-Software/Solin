@@ -44,9 +44,9 @@ from PySide6.QtCore import (
 from solin.core.network.http import HttpError, stream_get
 from solin.core.jw.publication_links import (
     DEFAULT_USER_AGENT,
-    fetch_pub_media_json,
-    resolve_publication_video_link,
-    select_pub_media_file,
+    JwpubMediaRequest,
+    PublicationMediaRequest,
+    PublicationMediaResolver,
 )
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.download_storage import is_url_cached
@@ -59,6 +59,7 @@ log = logging.getLogger(__name__)
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _UA       = DEFAULT_USER_AGENT
+_PUBLICATION_MEDIA_RESOLVER = PublicationMediaResolver()
 
 SONG_SYMS  = {"sjj", "sjjm"}
 _EXCL_CAT  = {9, 10, 15, 25}
@@ -265,17 +266,10 @@ def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str
     Both url and checksum come from the same API call; checksum is '' when the
     server does not supply one.  Returns (None, '', False) on any network error.
     """
-    data = fetch_pub_media_json({
-        "pub": pub, "issue": issue, "langwritten": lang,
-        "fileformat": "JWPUB", "output": "json",
-        "alllangs": "0", "txtCMSLang": "E",
-    })
-    if not data:
-        return None, "", False   # network / parse error — cannot determine existence
-    media_file = select_pub_media_file(data, lang, ("JWPUB",))
-    if media_file is None:
-        return None, "", True    # API replied but has no files → pub absent (404-equivalent)
-    return media_file.url, media_file.checksum, False
+    media_info = _PUBLICATION_MEDIA_RESOLVER.resolve_jwpub(
+        JwpubMediaRequest(pub=pub, language=lang, issue=issue)
+    )
+    return media_info.download_url, media_info.checksum, media_info.not_found
 
 
 def _resolve_video(key_symbol: str, track: int, issue_tag: int,
@@ -289,13 +283,15 @@ def _resolve_video(key_symbol: str, track: int, issue_tag: int,
     """
     result = {"url": "", "title": "", "thumbnail": ""}
     try:
-        media_file = resolve_publication_video_link(
-            key_symbol,
-            track,
-            issue_tag,
-            meps_doc_id,
-            lang,
-            is_sign_language=is_sign_language,
+        media_file = _PUBLICATION_MEDIA_RESOLVER.resolve_video(
+            PublicationMediaRequest(
+                key_symbol=key_symbol,
+                track=track,
+                issue_tag=issue_tag,
+                meps_doc_id=meps_doc_id,
+                language=lang,
+                is_sign_language=is_sign_language,
+            )
         )
         if media_file is not None:
             result["url"] = media_file.url
@@ -782,7 +778,7 @@ def _dedup_multimedia_rows(rows: list) -> list:
     key (KeySymbol+Track, or MepsDocumentId).  All of them hit the same CDN
     URL, so the user would see the exact same video card repeated.
 
-    Strategy (mirrors jw.publication_reader):
+    Strategy (mirrors jw.jwpub_import):
       1. Deduplicate image rows by FilePath — same file shown once.
       2. Deduplicate video/audio rows by (KeySymbol, Track, IssueTagNumber)
          when KeySymbol is present, or by MepsDocumentId otherwise.

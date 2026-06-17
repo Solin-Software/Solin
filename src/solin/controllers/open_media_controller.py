@@ -34,7 +34,7 @@ from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..core.playlists.items import create_playlist_item, playlist_items_from_jwpub
 
 if TYPE_CHECKING:
-    from ..core.jw.publication_reader import JwpubImportThreadFactory
+    from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ..core.rendering.document_conversion import DocumentConversionService
 
 

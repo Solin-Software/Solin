@@ -68,7 +68,7 @@ if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog_service import JWMediaCatalogService
-    from ...core.jw.publication_reader import JwpubImportThreadFactory
+    from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore

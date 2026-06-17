@@ -50,7 +50,7 @@ from ..ui.media_info import MediaInfoService
 if TYPE_CHECKING:
     from ..core.ingest.qr_generation import QrGenerationSessionFactory
     from ..core.ingest.wifi_server import WifiReceiveServer
-    from ..core.jw.publication_reader import JwpubImportThreadFactory
+    from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
     from ..core.rendering.document_conversion import DocumentConversionService
     from ..ui.notifications import NotificationCenter

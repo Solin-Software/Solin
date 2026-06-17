@@ -955,7 +955,10 @@ class WatchedFolderSyncThread(QThread):
 
     def _process_jwpub(self, jwpub_path: Path, cache: Path) -> tuple[list[str], list[dict]]:
         self._check_interrupted()
-        from solin.core.jw.publication_reader import read_jwpub_for_playlist
+        from solin.core.jw.jwpub_import import (
+            JwpubImportRequest,
+            JwpubPlaylistImportService,
+        )
 
         with tempfile.TemporaryDirectory(
             prefix=".jwpub-render-",
@@ -963,11 +966,13 @@ class WatchedFolderSyncThread(QThread):
             ignore_cleanup_errors=True,
         ) as tmp:
             staging_dir = Path(tmp)
-            items, stem = read_jwpub_for_playlist(
-                str(jwpub_path),
-                lang=self._media_lang,
-                dest_images_dir=str(staging_dir),
-                resolve_urls=True,
+            items, stem = JwpubPlaylistImportService().read(
+                JwpubImportRequest(
+                    jwpub_path=str(jwpub_path),
+                    language=self._media_lang,
+                    dest_images_dir=str(staging_dir),
+                    resolve_urls=True,
+                )
             )
             outputs = []
             virtuals = []

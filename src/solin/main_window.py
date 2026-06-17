@@ -144,7 +144,7 @@ if TYPE_CHECKING:
     from .core.ingest.qr_generation import QrGenerationSessionFactory
     from .core.jw.clip_fetch import ClipFetchThreadFactory
     from .core.jw.catalog_service import JWMediaCatalogService
-    from .core.jw.publication_reader import JwpubImportThreadFactory
+    from .core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from .core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.media.cache_scan import CacheScanSessionFactory

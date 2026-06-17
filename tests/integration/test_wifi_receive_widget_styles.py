@@ -22,7 +22,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
-from solin.core.jw.publication_reader import JwpubImportThreadFactory
+from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
 from solin.core.rendering.document_conversion import DocumentConversionService
 from solin.core.ingest.qr_generation import QrGenerationSessionFactory
 from solin.core.ingest.wifi_server import WifiReceiveServer

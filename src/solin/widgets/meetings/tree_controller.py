@@ -89,7 +89,7 @@ from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
 
 if TYPE_CHECKING:
-    from ...core.jw.publication_reader import JwpubImportThreadFactory
+    from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1

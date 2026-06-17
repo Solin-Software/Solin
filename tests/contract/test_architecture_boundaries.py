@@ -887,6 +887,51 @@ def test_jw_catalog_policy_has_no_qt_adapter_dependencies():
     assert violations == []
 
 
+def test_jwpub_import_service_has_no_qt_adapter_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "jw" / "jwpub_import.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if "PySide6" in roots:
+            violations.append(_display(path, node))
+
+    source = path.read_text(encoding="utf-8")
+    for fragment in ("JwpubImportThread", "QThread", "Signal"):
+        if fragment in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)} contains {fragment}")
+
+    assert violations == []
+
+
+def test_publication_workflows_use_media_resolver_service():
+    paths = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "jw" / "jwpub_import.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "publications.py",
+    )
+    forbidden_imports = {
+        "fetch_pub_media_json",
+        "resolve_publication_video_link",
+        "select_pub_media_file",
+    }
+    violations: list[str] = []
+
+    for path in paths:
+        for node in _imports(path):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            imported = {alias.name for alias in node.names}
+            blocked = sorted(imported & forbidden_imports)
+            if blocked:
+                violations.append(f"{_display(path, node)} [{', '.join(blocked)}]")
+
+    assert violations == []
+
+
 def test_zoom_state_value_objects_have_no_framework_dependencies():
     path = (
         PROJECT_ROOT
