@@ -3,62 +3,20 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from solin.core.network.http import HttpDecodeError, HttpError, get_json
+from solin.core.jw.yeartext_content import (
+    YeartextFetchError,
+    fetch_yeartext,
+    parse_yeartext_html,
+)
 from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 log = logging.getLogger(__name__)
-
-_WOL_API_URL    = "https://wol.jw.org/wol/finder"
-_API_TIMEOUT    = 12
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/122.0.0.0 Safari/537.36"
-)
-
-
-def _strip_tags(html: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html or "")).strip()
-
-
-def parse_yeartext_html(html: str) -> Tuple[str, str]:
-    """
-    Parseia o HTML multi-paragrafo retornado pela API wol.jw.org.
-
-    Estrutura da resposta:
-      - p1..pN-1 : partes da citacao (texto da Escritura)
-      - pN       : referencia biblica -- mantida EXATAMENTE como recebida
-                   (ex: "-- Mateus 5:3." em pt, "(Matteo 5:3)" em it, etc.)
-      - pN+1     : paragrafo vazio com class="sb" -- ignorado
-
-    A referencia e preservada sem modificacoes para que cada idioma
-    exiba o separador que a API ja envia (dash, parenteses, etc.).
-
-    Retorna (quote, reference). Nunca lanca excecao.
-    """
-    paras = re.findall(r"<p[^>]*>(.*?)</p>", html, re.DOTALL | re.IGNORECASE)
-    texts = [_strip_tags(p) for p in paras]
-    texts = [t for t in texts if t]   # remove paragrafos vazios
-
-    if not texts:
-        return _strip_tags(html), ""
-    if len(texts) == 1:
-        return texts[0], ""
-
-    # Ultimo paragrafo nao-vazio = referencia (exatamente como recebida)
-    ref   = texts[-1]
-    # Une as partes da citacao com \n, preservando as quebras de linha
-    # que a propria API define via paragrafos <p> separados
-    quote = "\n".join(texts[:-1])
-    return quote, ref
 
 
 class _FetchWorker(QThread):
@@ -75,56 +33,18 @@ class _FetchWorker(QThread):
         api_code = self._api_code
         year     = self._year
 
-        params = {
-            "docid":    f"110{year}800",
-            "format":   "json",
-            "snip":     "yes",
-            "wtlocale": api_code,
-        }
-        url = f"{_WOL_API_URL}?{urllib.parse.urlencode(params)}"
-        log.debug("[yeartext] GET %s", url)
-
         try:
-            data = get_json(
-                url,
-                timeout=_API_TIMEOUT,
-                headers={
-                    "User-Agent":       _USER_AGENT,
-                    "Accept":           "application/json, text/javascript, */*; q=0.01",
-                    "Accept-Language":  "pt-BR,pt;q=0.9,en;q=0.8",
-                    "Referer":          "https://wol.jw.org/",
-                    "X-Requested-With": "XMLHttpRequest",
-                },
-            )
-        except HttpDecodeError as exc:
-            self.failed.emit(api_code, year, f"JSON invalido: {exc}")
-            return
-        except HttpError as exc:
-            log.warning("[yeartext] Request failed (%s/%d): %s", api_code, year, exc)
+            result = fetch_yeartext(api_code, year)
+        except YeartextFetchError as exc:
             self.failed.emit(api_code, year, str(exc))
             return
 
-        log.debug("[yeartext] JSON response (%s/%d): %s", api_code, year, data)
-
-        if not data.get("exists", False):
-            self.failed.emit(api_code, year,
-                             f"Texto {year} nao encontrado para '{api_code}'")
-            return
-
-        content = data.get("content", "")
-        if not content:
-            self.failed.emit(api_code, year, "Conteudo vazio na resposta da API")
-            return
-
-        quote, reference = parse_yeartext_html(content)
-        if not quote:
-            self.failed.emit(api_code, year,
-                             "Nao foi possivel extrair o texto da resposta")
-            return
-
-        log.info("[yeartext] OK (%s/%d): %s... / ref: %s",
-                 api_code, year, quote[:60], reference)
-        self.succeeded.emit(api_code, year, quote, reference)
+        self.succeeded.emit(
+            result.api_code,
+            result.year,
+            result.quote,
+            result.reference,
+        )
 
 
 class YeartextService(QObject):
@@ -178,7 +98,7 @@ class YeartextService(QObject):
         }
         self._save_cache()
 
-    def get_cached(self, api_code: str, year: int) -> Optional[Tuple[str, str]]:
+    def get_cached(self, api_code: str, year: int) -> Optional[tuple[str, str]]:
         """
         Retorna (quote, reference) se o cache for valido para api_code + ano.
         Retorna None se ausente, desatualizado ou vazio.
@@ -219,7 +139,7 @@ class YeartextService(QObject):
         worker.start()
 
     def ensure_current(self, api_code: str,
-                       year: int) -> Optional[Tuple[str, str]]:
+                       year: int) -> Optional[tuple[str, str]]:
         cached = self.get_cached(api_code, year)
         if cached:
             return cached
