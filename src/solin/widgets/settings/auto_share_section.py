@@ -28,13 +28,10 @@ class AutoShareSectionMixin:
     def _autoshare_hotkey(self) -> str:
         return self._auto_share_settings.ensure_hotkey()
 
-    def _macos_accessibility_trusted(self) -> bool:
+    def _autoshare_accessibility_trusted(self) -> bool:
         if sys.platform != "darwin":
             return True
-        from ...core.integrations.automation.screen_share import (
-            macos_accessibility_trusted,
-        )
-        return bool(macos_accessibility_trusted())
+        return bool(self._auto_share_accessibility_trusted())
 
     def _build_auto_share_card(self):
         card, lay = self._card()
@@ -314,7 +311,7 @@ class AutoShareSectionMixin:
     def _refresh_autoshare_accessibility_status(self):
         if sys.platform != "darwin" or not hasattr(self, "_autoshare_access_dot"):
             return
-        trusted = self._macos_accessibility_trusted()
+        trusted = self._autoshare_accessibility_trusted()
         color = SETTINGS_SUCCESS if trusted else SETTINGS_DANGER
         self._autoshare_access_dot.setStyleSheet(
             f"background-color: {color}; border: none; border-radius: 4px;"

@@ -94,6 +94,7 @@ class MainWindowUiContext:
     watched_folder_settings: Any
     yeartext_settings: Any
     yeartext_service_factory: Callable[[QObject], Any]
+    auto_share_accessibility_trusted: Callable[[], bool]
     background_song_settings: Any
     projection_playback_settings: Any
     background_song_service: Any
@@ -387,6 +388,7 @@ class MainWindowUiController:
             watched_folder_settings=context.watched_folder_settings,
             yeartext_settings=context.yeartext_settings,
             yeartext_service_factory=context.yeartext_service_factory,
+            auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,
             background_song_settings=context.background_song_settings,
             parent=context.parent,
         )

@@ -90,6 +90,7 @@ from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
     execute_start_share,
     execute_stop_share,
+    macos_accessibility_trusted,
 )
 from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.background_song_settings import BackgroundSongSettingsStore
@@ -404,6 +405,9 @@ class MainWindow(QMainWindow):
                 yeartext_service_factory=lambda parent: YeartextService(
                     cache_file=self.runtime_paths.cache_dir / "yeartext_cache.json",
                     parent=parent,
+                ),
+                auto_share_accessibility_trusted=lambda: bool(
+                    macos_accessibility_trusted()
                 ),
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,

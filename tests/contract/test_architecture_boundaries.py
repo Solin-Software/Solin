@@ -1408,6 +1408,22 @@ def test_projection_integration_controller_receives_auto_share_actions():
     assert "raise_projection_window" in source
 
 
+def test_auto_share_settings_section_receives_native_accessibility_probe():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "widgets"
+        / "settings"
+        / "auto_share_section.py"
+    )
+    source = path.read_text(encoding="utf-8")
+
+    assert "core.integrations.automation.screen_share" not in source
+    assert "macos_accessibility_trusted" not in source
+    assert "_auto_share_accessibility_trusted" in source
+
+
 def test_auto_key_action_model_has_no_framework_settings_or_process_dependencies():
     path = (
         PROJECT_ROOT

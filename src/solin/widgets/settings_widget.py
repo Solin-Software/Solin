@@ -90,6 +90,7 @@ class SettingsWidget(
                  yeartext_settings: YeartextSettingsStore,
                  background_song_settings: BackgroundSongSettingsStore,
                  yeartext_service_factory: Callable[[QObject], YeartextService],
+                 auto_share_accessibility_trusted: Callable[[], bool],
                  parent=None):
         super().__init__(parent)
         self.lang       = lang_manager
@@ -107,6 +108,7 @@ class SettingsWidget(
         self._watched_folder_settings = watched_folder_settings
         self._yeartext_settings = yeartext_settings
         self._background_song_settings = background_song_settings
+        self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._init_yearly_text_section()
         self._build_ui()
         screen_manager.screens_changed.connect(self._refresh_screens)
