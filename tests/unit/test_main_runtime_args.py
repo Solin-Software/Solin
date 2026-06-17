@@ -85,6 +85,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
+    installation_settings = object()
     timer_session = object()
     active_profile = object()
 
@@ -108,6 +109,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
+            received_installation_settings,
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
@@ -150,6 +152,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
+            self.installation_settings = received_installation_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
@@ -208,6 +211,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
+        installation_settings=installation_settings,
         timer_session=timer_session,
         active_profile=active_profile,
     )
@@ -237,6 +241,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     )
     assert window.jw_songs_store is jw_songs_store
     assert window.jwpub_checksum_store is jwpub_checksum_store
+    assert window.installation_settings is installation_settings
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.playlist_repository.path) == "playlists.json"
@@ -320,6 +325,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     jw_catalog_cache_paths = object()
     jw_songs_store = object()
     jwpub_checksum_store = object()
+    installation_settings = object()
     timer_session = object()
     active_profile = object()
 
@@ -343,6 +349,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
+            received_installation_settings,
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
@@ -385,6 +392,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
+            self.installation_settings = received_installation_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
@@ -440,6 +448,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         jw_catalog_cache_paths=jw_catalog_cache_paths,
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
+        installation_settings=installation_settings,
         timer_session=timer_session,
         active_profile=active_profile,
     )

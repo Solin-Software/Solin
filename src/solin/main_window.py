@@ -119,6 +119,7 @@ from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
 from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from .core.foundation.settings_store import InstallationSettingsStore
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
@@ -186,6 +187,7 @@ class MainWindow(QMainWindow):
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
+        installation_settings: InstallationSettingsStore,
         playlist_storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
@@ -216,6 +218,7 @@ class MainWindow(QMainWindow):
         self.font_manager = font_manager
         self.jw_songs_store = jw_songs_store
         self.jwpub_checksum_store = jwpub_checksum_store
+        self._installation_settings = installation_settings
         self.playlist_storage_paths = playlist_storage_paths
         self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
@@ -797,7 +800,10 @@ class MainWindow(QMainWindow):
                         info,
                         self,
                         patch_downloader_factory=PatchDownloadWorker,
-                        save_cleanup_path=save_pending_patch_cleanup,
+                        save_cleanup_path=lambda path: save_pending_patch_cleanup(
+                            self._installation_settings,
+                            path,
+                        ),
                         launch_patch=launch_patch_installer,
                     ),
                 ),

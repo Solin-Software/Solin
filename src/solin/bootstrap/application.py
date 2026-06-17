@@ -44,6 +44,7 @@ def _launch_main_window(
     jw_catalog_cache_paths,
     jw_songs_store,
     jwpub_checksum_store,
+    installation_settings,
     timer_session,
     active_profile,
 ):
@@ -125,6 +126,7 @@ def _launch_main_window(
         jw_catalog_thumbnail_session_factory,
         jw_songs_store,
         jwpub_checksum_store,
+        installation_settings,
         playlist_storage_paths,
         playlist_repository,
         meeting_tree_store,
@@ -210,6 +212,7 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
         container.jw_catalog_cache_paths,
         container.jw_songs_store,
         container.jwpub_checksum_store,
+        container.installation_settings,
         TimerSession(
             QSettingsTimerRepository.for_profile_settings(profile_context.settings),
             current_week_monday=current_monday(),
@@ -298,7 +301,7 @@ def main():
 
     # ── Primeira instância — limpezas ─────────────────────────────────────────
     from solin.core.remote.patch_installer import cleanup_pending_patch
-    cleanup_pending_patch()
+    cleanup_pending_patch(container.installation_settings)
 
     from solin.core.media.download_storage import cleanup_orphan_temps, cleanup_incomplete_cache
     cleanup_orphan_temps()

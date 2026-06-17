@@ -9,7 +9,10 @@ from typing import Any, TYPE_CHECKING
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.lifecycle import ApplicationLifecycle
 from solin.core.foundation.runtime_paths import RuntimePaths
-from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.foundation.settings_store import (
+    GlobalSettingsStore,
+    InstallationSettingsStore,
+)
 
 if TYPE_CHECKING:
     from solin.bootstrap.media import MediaComposition
@@ -32,6 +35,7 @@ class ApplicationContainer:
     config: AppConfig
     runtime_paths: RuntimePaths
     global_settings: GlobalSettingsStore
+    installation_settings: InstallationSettingsStore
     media: MediaComposition
     font_manager: FontManager
     jw_catalog_cache_paths: JWMediaCatalogCachePaths
@@ -67,6 +71,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     log.info("Starting %s %s", config.display_name, config.version)
 
     global_settings = GlobalSettingsStore.create()
+    installation_settings = InstallationSettingsStore.create()
     profile_service = create_local_profile_service(
         os.fspath(runtime_paths.data_dir),
         cache_dir=os.fspath(runtime_paths.cache_dir),
@@ -106,6 +111,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         config=config,
         runtime_paths=runtime_paths,
         global_settings=global_settings,
+        installation_settings=installation_settings,
         media=media,
         font_manager=font_manager,
         jw_catalog_cache_paths=jw_catalog_cache_paths,

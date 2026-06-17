@@ -24,29 +24,19 @@ class _SettingsStub:
 def test_cleanup_pending_patch_clears_setting_and_removes_file(monkeypatch):
     settings = _SettingsStub("patch.exe")
     removed: list[str] = []
-    monkeypatch.setattr(
-        patch_installer.InstallationSettingsStore,
-        "create",
-        lambda: settings,
-    )
     monkeypatch.setattr(patch_installer.os.path, "isfile", lambda path: True)
     monkeypatch.setattr(patch_installer.os, "remove", removed.append)
 
-    patch_installer.cleanup_pending_patch()
+    patch_installer.cleanup_pending_patch(settings)
 
     assert settings.cleared == 1
     assert removed == ["patch.exe"]
 
 
-def test_save_pending_patch_cleanup_uses_installation_settings(monkeypatch):
+def test_save_pending_patch_cleanup_uses_installation_settings():
     settings = _SettingsStub()
-    monkeypatch.setattr(
-        patch_installer.InstallationSettingsStore,
-        "create",
-        lambda: settings,
-    )
 
-    patch_installer.save_pending_patch_cleanup("patch.exe")
+    patch_installer.save_pending_patch_cleanup(settings, "patch.exe")
 
     assert settings.saved == ["patch.exe"]
 

@@ -5,18 +5,27 @@ import os
 import subprocess
 import sys
 import tempfile
+from typing import Protocol
 
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
-from solin.core.foundation.settings_store import InstallationSettingsStore
-
 log = logging.getLogger(__name__)
 
 
-def cleanup_pending_patch() -> None:
+class PatchCleanupSettings(Protocol):
+    def pending_patch_cleanup_path(self) -> str:
+        ...
+
+    def clear_pending_patch_cleanup_path(self) -> None:
+        ...
+
+    def set_pending_patch_cleanup_path(self, path: str) -> None:
+        ...
+
+
+def cleanup_pending_patch(settings: PatchCleanupSettings) -> None:
     """Remove the patch executable recorded by the previous app session."""
-    settings = InstallationSettingsStore.create()
     path = settings.pending_patch_cleanup_path()
     if not path:
         return
@@ -30,8 +39,11 @@ def cleanup_pending_patch() -> None:
         log.debug("[Update] failed to remove patch temp: %s", exc)
 
 
-def save_pending_patch_cleanup(path: str) -> None:
-    InstallationSettingsStore.create().set_pending_patch_cleanup_path(path)
+def save_pending_patch_cleanup(
+    settings: PatchCleanupSettings,
+    path: str,
+) -> None:
+    settings.set_pending_patch_cleanup_path(path)
 
 
 def launch_patch_installer(path: str) -> None:

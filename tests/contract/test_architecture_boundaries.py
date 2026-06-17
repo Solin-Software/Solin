@@ -1433,6 +1433,18 @@ def test_remote_notification_service_receives_notification_settings_store():
     assert "_notification_settings" in source
 
 
+def test_patch_installer_receives_installation_settings_store():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "patch_installer.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "InstallationSettingsStore" not in source
+    assert "InstallationSettingsStore.create" not in source
+    assert "class PatchCleanupSettings(Protocol)" in source
+    assert "cleanup_pending_patch(settings" in source
+    assert "save_pending_patch_cleanup(" in source
+    assert "settings: PatchCleanupSettings" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []
