@@ -1,7 +1,7 @@
 """
 catalog.py - Solin
 ====================================
-Reusable JW.org media catalog service.
+Reusable JW.org media catalog fetch and cache policies.
 
 This module is intentionally independent from playlists and QML.  It provides
 one normalized contract for future UI surfaces that need to browse JW videos,
@@ -9,8 +9,7 @@ show thumbnails, and later decide what to do with the selected item.
 
 Public layers:
   - JWMediaQuery / JWMediaItem dataclasses for synchronous, testable code.
-  - fetch_jw_videos() for direct callers.
-  - JWMediaCatalogService for Qt async callers.
+  - fetch_jw_videos() for direct callers and framework adapters.
 
 Thumbnail policy:
   API thumbnails are cached under cache/thumbs/jw_catalog/ using a SHA-256 of
@@ -25,14 +24,11 @@ import json
 import logging
 import os
 import re
-import threading
 import time
 import urllib.parse
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
-
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from typing import Any, Callable, Iterable
 
 from solin.core.foundation.constants import (
     CACHE_TTL_DAYS,
@@ -49,7 +45,6 @@ _FETCH_TIMEOUT_S = 15
 _THUMB_TIMEOUT_S = 15
 _MAX_THUMB_BYTES = 5 * 1024 * 1024
 _CATALOG_REFRESH_INTERVAL_S = 12 * 60 * 60
-_CATALOG_PROGRESS_EMIT_INTERVAL_S = 0.25
 # Set to False to use the previous full-refresh behavior for stale catalogs.
 USE_LATEST_DELTA_CATALOG_REFRESH = True
 _LATEST_CATEGORY_KEY = "LatestVideos"
@@ -88,8 +83,8 @@ class JWMediaCatalogCachePaths:
         return self.thumb_cache_dir / "jw_catalog"
 
 
-class _FetchCancelled(Exception):
-    """Internal sentinel used to stop cooperative background fetches."""
+class JWMediaCatalogFetchCancelled(Exception):
+    """Sentinel used to stop cooperative catalog fetches."""
 
 
 _EXPECTED_FETCH_ERRORS = (
@@ -98,23 +93,6 @@ _EXPECTED_FETCH_ERRORS = (
     UnicodeError,
     ValueError,
 )
-
-
-class _CancelToken:
-    """Small thread-safe cancellation token shared with QRunnable workers."""
-
-    def __init__(self) -> None:
-        self._event = threading.Event()
-
-    def cancel(self) -> None:
-        self._event.set()
-
-    def is_cancelled(self) -> bool:
-        return self._event.is_set()
-
-    def raise_if_cancelled(self) -> None:
-        if self.is_cancelled():
-            raise _FetchCancelled()
 
 
 @dataclass(frozen=True)
@@ -246,7 +224,7 @@ def fetch_jw_video_catalog(
 
     def raise_if_cancelled() -> None:
         if should_cancel and should_cancel():
-            raise _FetchCancelled()
+            raise JWMediaCatalogFetchCancelled()
 
     raise_if_cancelled()
 
@@ -361,7 +339,7 @@ def fetch_jw_video_catalog(
             )
             if progress_callback:
                 progress_callback(sorted_items, idx, total)
-        except _FetchCancelled:
+        except JWMediaCatalogFetchCancelled:
             raise
         except _EXPECTED_FETCH_ERRORS as exc:
             log.debug("[JWMediaCatalog] Skipping category %s: %s", category, exc)
@@ -393,7 +371,7 @@ def _try_refresh_catalog_from_latest(
 ) -> tuple[list[JWMediaItem], float] | None:
     def raise_if_cancelled() -> None:
         if should_cancel and should_cancel():
-            raise _FetchCancelled()
+            raise JWMediaCatalogFetchCancelled()
 
     raise_if_cancelled()
     try:
@@ -409,7 +387,7 @@ def _try_refresh_catalog_from_latest(
             latest_raw,
             JWMediaQuery(language=language, category=_LATEST_CATEGORY_KEY),
         )
-    except _FetchCancelled:
+    except JWMediaCatalogFetchCancelled:
         raise
     except _EXPECTED_FETCH_ERRORS as exc:
         log.debug("[JWMediaCatalog] Latest delta refresh unavailable: %s", exc)
@@ -530,275 +508,6 @@ def cached_thumbnail_path(
     return ""
 
 
-class _FetchSignals(QObject):
-    succeeded = Signal(str, list, float, bool)  # request_id, list[dict], fetched_at, from_cache
-    progress = Signal(str, list, int, int)      # request_id, partial items, completed, total
-    failed = Signal(str, str)                   # request_id, error
-
-
-class _FetchWorker(QRunnable):
-    def __init__(
-        self,
-        request_id: str,
-        query: JWMediaQuery,
-        *,
-        cache_paths: JWMediaCatalogCachePaths,
-        force: bool,
-        cache_thumbnails: bool,
-        cancel_token: _CancelToken,
-    ) -> None:
-        super().__init__()
-        self.request_id = request_id
-        self.query = query
-        self.cache_paths = cache_paths
-        self.force = force
-        self.cache_thumbnails = cache_thumbnails
-        self.cancel_token = cancel_token
-        self.signals = _FetchSignals()
-        self.setAutoDelete(True)
-
-    def run(self) -> None:
-        try:
-            self.cancel_token.raise_if_cancelled()
-            items, fetched_at, from_cache = fetch_jw_videos(
-                self.query,
-                cache_paths=self.cache_paths,
-                force=self.force,
-                cache_thumbnails=self.cache_thumbnails,
-            )
-            self.cancel_token.raise_if_cancelled()
-            self.signals.succeeded.emit(
-                self.request_id,
-                [item.to_dict() for item in items],
-                fetched_at,
-                from_cache,
-            )
-        except _FetchCancelled:
-            return
-        except Exception as exc:  # noqa: BLE001 - QRunnable reports failures via signal
-            log.exception("[JWMediaCatalog] Fetch worker failed")
-            if not self.cancel_token.is_cancelled():
-                self.signals.failed.emit(self.request_id, str(exc))
-
-
-class _CatalogWorker(QRunnable):
-    def __init__(
-        self,
-        request_id: str,
-        language: str,
-        *,
-        cache_paths: JWMediaCatalogCachePaths,
-        force: bool,
-        cache_thumbnails: bool,
-        cancel_token: _CancelToken,
-    ) -> None:
-        super().__init__()
-        self.request_id = request_id
-        self.language = language
-        self.cache_paths = cache_paths
-        self.force = force
-        self.cache_thumbnails = cache_thumbnails
-        self.cancel_token = cancel_token
-        self.signals = _FetchSignals()
-        self.setAutoDelete(True)
-
-    def run(self) -> None:
-        try:
-            last_progress_emit = 0.0
-
-            def _progress(items: list[JWMediaItem], completed: int, total: int) -> None:
-                nonlocal last_progress_emit
-                if self.cancel_token.is_cancelled():
-                    raise _FetchCancelled()
-                now = time.monotonic()
-                should_emit = (
-                    last_progress_emit <= 0
-                    or now - last_progress_emit >= _CATALOG_PROGRESS_EMIT_INTERVAL_S
-                    or bool(total and completed >= total)
-                )
-                if not should_emit:
-                    return
-                last_progress_emit = now
-                emit_items = [
-                    _item_for_emit(
-                        item,
-                        self.cache_thumbnails,
-                        self.cache_paths,
-                    ).to_dict()
-                    for item in items
-                ]
-                if self.cancel_token.is_cancelled():
-                    raise _FetchCancelled()
-                self.signals.progress.emit(self.request_id, emit_items, completed, total)
-
-            self.cancel_token.raise_if_cancelled()
-            items, fetched_at, from_cache = fetch_jw_video_catalog(
-                self.language,
-                cache_paths=self.cache_paths,
-                force=self.force,
-                progress_callback=_progress,
-                should_cancel=self.cancel_token.is_cancelled,
-            )
-            self.cancel_token.raise_if_cancelled()
-            emit_items = [
-                _item_for_emit(
-                    item,
-                    self.cache_thumbnails,
-                    self.cache_paths,
-                ).to_dict()
-                for item in items
-            ]
-            self.signals.succeeded.emit(self.request_id, emit_items, fetched_at, from_cache)
-        except _FetchCancelled:
-            return
-        except Exception as exc:  # noqa: BLE001 - QRunnable reports failures via signal
-            log.exception("[JWMediaCatalog] Catalog worker failed")
-            if not self.cancel_token.is_cancelled():
-                self.signals.failed.emit(self.request_id, str(exc))
-
-
-class JWMediaCatalogService(QObject):
-    """Qt async facade for JW media browsing surfaces."""
-
-    fetch_started = Signal(str)                 # request_id
-    videos_ready = Signal(str, list, float, bool)  # request_id, items, fetched_at, from_cache
-    videos_progress = Signal(str, list, int, int)  # request_id, items, completed, total
-    fetch_failed = Signal(str, str)             # request_id, error
-
-    def __init__(
-        self,
-        cache_paths: JWMediaCatalogCachePaths,
-        parent: Optional[QObject] = None,
-    ) -> None:
-        super().__init__(parent)
-        self._cache_paths = cache_paths
-        self._active: set[str] = set()
-        self._cancel_tokens: dict[str, _CancelToken] = {}
-        self._workers: dict[str, QRunnable] = {}
-        self._thread_pool = QThreadPool(self)
-        self._thread_pool.setMaxThreadCount(2)
-
-    def fetch_videos(
-        self,
-        query: JWMediaQuery | dict[str, Any],
-        *,
-        request_id: str = "",
-        force: bool = False,
-        cache_thumbnails: bool = True,
-    ) -> str:
-        """Start an async fetch and return the request id."""
-
-        q = _coerce_query(query).normalized()
-        rid = request_id or _request_id(q)
-        if rid in self._active:
-            return rid
-        token = _CancelToken()
-
-        worker = _FetchWorker(
-            rid,
-            q,
-            cache_paths=self._cache_paths,
-            force=force,
-            cache_thumbnails=cache_thumbnails,
-            cancel_token=token,
-        )
-        worker.signals.succeeded.connect(self._on_success)
-        worker.signals.failed.connect(self._on_failed)
-
-        self._active.add(rid)
-        self._cancel_tokens[rid] = token
-        self._workers[rid] = worker
-        self.fetch_started.emit(rid)
-        self._thread_pool.start(worker)
-        return rid
-
-    def fetch_all_videos(
-        self,
-        language: str,
-        *,
-        request_id: str = "",
-        force: bool = False,
-        cache_thumbnails: bool = False,
-    ) -> str:
-        """Start an async full-catalog fetch and return the request id."""
-
-        lang = (language or "E").upper()
-        rid = request_id or _stable_item_id("catalog", lang, str(time.time_ns()))
-        if rid in self._active:
-            return rid
-        token = _CancelToken()
-
-        worker = _CatalogWorker(
-            rid,
-            lang,
-            cache_paths=self._cache_paths,
-            force=force,
-            cache_thumbnails=cache_thumbnails,
-            cancel_token=token,
-        )
-        worker.signals.progress.connect(self._on_progress)
-        worker.signals.succeeded.connect(self._on_success)
-        worker.signals.failed.connect(self._on_failed)
-
-        self._active.add(rid)
-        self._cancel_tokens[rid] = token
-        self._workers[rid] = worker
-        self.fetch_started.emit(rid)
-        self._thread_pool.start(worker)
-        return rid
-
-    def cancel(self, request_id: str) -> None:
-        """Cancel one active request and suppress any late worker signals."""
-        if not request_id:
-            return
-        token = self._cancel_tokens.pop(request_id, None)
-        if token is not None:
-            token.cancel()
-        self._workers.pop(request_id, None)
-        self._active.discard(request_id)
-
-    def cancel_all(self, *, wait_ms: int = 0) -> None:
-        """Cancel all active catalog/media fetches owned by this service."""
-        for request_id in list(self._active):
-            self.cancel(request_id)
-        self._thread_pool.clear()
-        if wait_ms < 0:
-            self._thread_pool.waitForDone()
-        elif wait_ms > 0:
-            self._thread_pool.waitForDone(wait_ms)
-
-    def stop(self, wait_ms: int = 0) -> None:
-        """Compatibility alias for host widgets that expose cleanup hooks."""
-        self.cancel_all(wait_ms=wait_ms)
-
-    def _on_success(self, request_id: str, items: list, fetched_at: float, from_cache: bool) -> None:
-        if request_id not in self._active:
-            return
-        self._active.discard(request_id)
-        self._cancel_tokens.pop(request_id, None)
-        self._workers.pop(request_id, None)
-        self.videos_ready.emit(request_id, items, fetched_at, from_cache)
-
-    def _on_progress(self, request_id: str, items: list, completed: int, total: int) -> None:
-        if request_id not in self._active:
-            return
-        self.videos_progress.emit(request_id, items, completed, total)
-
-    def _on_failed(self, request_id: str, error: str) -> None:
-        if request_id not in self._active:
-            return
-        self._active.discard(request_id)
-        self._cancel_tokens.pop(request_id, None)
-        self._workers.pop(request_id, None)
-        self.fetch_failed.emit(request_id, error)
-
-
-def _coerce_query(query: JWMediaQuery | dict[str, Any]) -> JWMediaQuery:
-    if isinstance(query, JWMediaQuery):
-        return query
-    return JWMediaQuery(**dict(query))
-
-
 def _fetch_pub_media_links(
     query: JWMediaQuery,
     *,
@@ -912,7 +621,7 @@ def _discover_video_categories(
 
     def raise_if_cancelled() -> None:
         if should_cancel and should_cancel():
-            raise _FetchCancelled()
+            raise JWMediaCatalogFetchCancelled()
 
     def add_category(key: str) -> None:
         if key and key not in categories:
@@ -943,11 +652,11 @@ def _discover_video_categories(
                 raise_if_cancelled()
                 for second in _subcategory_keys(child):
                     add_category(second)
-            except _FetchCancelled:
+            except JWMediaCatalogFetchCancelled:
                 raise
             except _EXPECTED_FETCH_ERRORS as exc:
                 log.debug("[JWMediaCatalog] Could not inspect category %s: %s", first, exc)
-    except _FetchCancelled:
+    except JWMediaCatalogFetchCancelled:
         raise
     except _EXPECTED_FETCH_ERRORS as exc:
         log.debug("[JWMediaCatalog] Could not inspect VideoOnDemand: %s", exc)
@@ -1327,7 +1036,7 @@ def _stable_item_id(*parts: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def _item_for_emit(
+def catalog_item_for_delivery(
     item: JWMediaItem,
     cache_thumbnails: bool,
     cache_paths: JWMediaCatalogCachePaths,
@@ -1442,7 +1151,7 @@ def _fetch_json_cached(
 ) -> tuple[dict[str, Any], float, bool]:
     def raise_if_cancelled() -> None:
         if should_cancel and should_cancel():
-            raise _FetchCancelled()
+            raise JWMediaCatalogFetchCancelled()
 
     raise_if_cancelled()
     cache_path = _json_cache_path(namespace, url, cache_paths)
@@ -1531,17 +1240,14 @@ def _guess_image_ext(url: str, content_type: str) -> str:
     return ".jpg"
 
 
-def _request_id(query: JWMediaQuery) -> str:
-    raw = json.dumps(asdict(query), sort_keys=True, default=str)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
 __all__ = [
-    "JWMediaCatalogService",
+    "JWMediaCatalogCachePaths",
+    "JWMediaCatalogFetchCancelled",
     "JWMediaItem",
     "JWMediaQuery",
     "USE_LATEST_DELTA_CATALOG_REFRESH",
     "cached_thumbnail_path",
+    "catalog_item_for_delivery",
     "ensure_thumbnail_cached",
     "fetch_jw_video_catalog",
     "fetch_jw_videos",

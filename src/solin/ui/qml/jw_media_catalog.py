@@ -37,7 +37,7 @@ from PySide6.QtCore import (
 from solin.core.meetings.colors import accent_from_hue
 
 if TYPE_CHECKING:
-    from solin.core.jw.catalog import JWMediaCatalogService
+    from solin.core.jw.catalog_service import JWMediaCatalogService
     from solin.core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
 
 log = logging.getLogger(__name__)

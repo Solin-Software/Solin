@@ -143,7 +143,7 @@ if TYPE_CHECKING:
     from .core.ingest.wifi_server import WifiReceiveServer
     from .core.ingest.qr_generation import QrGenerationSessionFactory
     from .core.jw.clip_fetch import ClipFetchThreadFactory
-    from .core.jw.catalog import JWMediaCatalogService
+    from .core.jw.catalog_service import JWMediaCatalogService
     from .core.jw.publication_reader import JwpubImportThreadFactory
     from .core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from .core.media.browser_downloads import BrowserDownloadService

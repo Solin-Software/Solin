@@ -58,7 +58,7 @@ def _launch_main_window(
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
     from solin.core.jw.clip_fetch import ClipFetchThreadFactory
-    from solin.core.jw.catalog import JWMediaCatalogService
+    from solin.core.jw.catalog_service import JWMediaCatalogService
     from solin.core.jw.publication_reader import JwpubImportThreadFactory
     from solin.core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from solin.core.rendering.document_conversion import DocumentConversionService

@@ -6,7 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication
 
-from solin.core.jw.catalog import JWMediaCatalogCachePaths, JWMediaCatalogService
+from solin.core.jw.catalog import JWMediaCatalogCachePaths
+from solin.core.jw.catalog_service import JWMediaCatalogService
 from solin.ui.qml.jw_media_catalog import (
     JWMediaCatalogBridge,
     JWMediaCatalogModel,
