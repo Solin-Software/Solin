@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -33,6 +32,7 @@ class ProjectionIntegrationContext:
     auto_share_finished: Callable[[int, bool, bool], None]
     start_auto_share: Callable[[str, int, int], bool]
     stop_auto_share: Callable[[str], bool]
+    raise_projection_window: Callable[[Any], None]
 
 
 class ProjectionIntegrationController:
@@ -231,39 +231,6 @@ class ProjectionIntegrationController:
             try:
                 if not win.isVisible():
                     continue
-                self.raise_projection_window(win)
+                self._context.raise_projection_window(win)
             except RuntimeError:
                 continue
-
-    @staticmethod
-    def raise_projection_window(win) -> None:
-        if win.isMinimized():
-            win.showFullScreen()
-
-        win.raise_()
-        win.activateWindow()
-
-        if sys.platform != "win32":
-            return
-
-        try:
-            import ctypes
-
-            hwnd = int(win.winId())
-            HWND_TOPMOST = -1
-            SWP_NOSIZE = 0x0001
-            SWP_NOMOVE = 0x0002
-            SWP_SHOWWINDOW = 0x0040
-            user32 = ctypes.windll.user32
-            user32.SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
-            )
-            user32.SetForegroundWindow(hwnd)
-        except Exception:  # noqa: BLE001 - Win32 foreground API boundary
-            log.debug("Failed to refocus projection window after auto-share", exc_info=True)

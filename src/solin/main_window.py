@@ -138,6 +138,7 @@ from .widgets.projection.monitor_manager import MonitorManagerPopup
 from .ui.dialogs.notifications import RemoteNotificationQueue
 from .ui.dialogs.update import UpdateDialog
 from .ui.qml.timer_bridge import TimerBridge
+from .ui.window_focus import raise_projection_window
 
 if TYPE_CHECKING:
     from .core.ingest.watched_folder import WatchedFolderWatcher
@@ -608,6 +609,7 @@ class MainWindow(QMainWindow):
                 auto_share_finished=self._auto_share_finished.emit,
                 start_auto_share=execute_start_share,
                 stop_auto_share=execute_stop_share,
+                raise_projection_window=raise_projection_window,
             )
         )
         self._media_projection = MediaProjectionController(

@@ -1401,6 +1401,11 @@ def test_projection_integration_controller_receives_auto_share_actions():
     assert "execute_stop_share" not in source
     assert "start_auto_share" in source
     assert "stop_auto_share" in source
+    assert "ctypes" not in source
+    assert "SetForegroundWindow" not in source
+    assert "sys.platform" not in source
+    assert ".winId(" not in source
+    assert "raise_projection_window" in source
 
 
 def test_auto_key_action_model_has_no_framework_settings_or_process_dependencies():

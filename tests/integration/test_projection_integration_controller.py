@@ -77,6 +77,7 @@ class _WindowStub:
         self._visible = visible
         self.started_shares = []
         self.stopped_shares = []
+        self.raised_projection_windows = []
         self.share_started = threading.Event()
         self.share_stopped = threading.Event()
 
@@ -93,6 +94,9 @@ class _WindowStub:
         self.share_stopped.set()
         return True
 
+    def raise_projection_window(self, window):
+        self.raised_projection_windows.append(window)
+
 
 def _controller(window):
     return ProjectionIntegrationController(
@@ -108,6 +112,7 @@ def _controller(window):
             auto_share_finished=lambda *_args: None,
             start_auto_share=window.start_auto_share,
             stop_auto_share=window.stop_auto_share,
+            raise_projection_window=window.raise_projection_window,
         )
     )
 
@@ -118,6 +123,11 @@ class _ProjectionWindowStub:
 
     def isVisible(self):
         return self._visible
+
+
+class _ProjectionWindowRuntimeErrorStub:
+    def isVisible(self):
+        raise RuntimeError("deleted")
 
 
 def test_current_projection_activity_distinguishes_idle_video_audio_and_visual():
@@ -247,6 +257,22 @@ def test_cleanup_joins_owned_auto_share_workers():
 
     assert controller._auto_share_stop.is_set()
     assert controller._auto_share_threads == set()
+
+
+def test_raise_visible_projection_windows_uses_injected_focus_action():
+    window = _WindowStub()
+    visible = _ProjectionWindowStub(True)
+    hidden = _ProjectionWindowStub(False)
+    window.projection_session.projection_windows[:] = [
+        visible,
+        hidden,
+        _ProjectionWindowRuntimeErrorStub(),
+    ]
+    controller = _controller(window)
+
+    controller.raise_visible_projection_windows()
+
+    assert window.raised_projection_windows == [visible]
 
 
 def test_projection_integration_controller_uses_explicit_dependencies():
