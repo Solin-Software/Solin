@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
-from ...core.integrations.automation.shortcuts import (
+from ...core.integrations.automation.auto_key_actions import (
     AutoKeyAction,
 )
 from ...styles.icons import (

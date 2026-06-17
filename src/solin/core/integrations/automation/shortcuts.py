@@ -5,13 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import ctypes
 from ctypes import wintypes
-import json
 import logging
 import os
 import shutil
 import subprocess
 import sys
-import uuid
 
 from PySide6.QtCore import (
     QObject,
@@ -23,19 +21,14 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
-log = logging.getLogger(__name__)
-
-EVENT_MEDIA_STARTED = "media_started"
-EVENT_MEDIA_ENDED = "media_ended"
-EVENT_MEDIA_PAUSED = "media_paused"
-EVENT_MEDIA_RESUMED = "media_resumed"
-
-AUTO_KEY_EVENTS = (
-    EVENT_MEDIA_STARTED,
-    EVENT_MEDIA_ENDED,
-    EVENT_MEDIA_PAUSED,
-    EVENT_MEDIA_RESUMED,
+from .auto_key_actions import (
+    AUTO_KEY_EVENTS,
+    AutoKeyAction,
+    parse_actions,
+    serialize_actions,
 )
+
+log = logging.getLogger(__name__)
 
 _MODIFIER_ALIASES = {
     "ctrl": "ctrl",
@@ -49,56 +42,6 @@ _MODIFIER_ALIASES = {
     "win": "meta",
     "windows": "meta",
 }
-
-
-@dataclass(frozen=True)
-class AutoKeyAction:
-    id: str
-    event: str
-    sequence: str
-    enabled: bool = True
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "AutoKeyAction | None":
-        if not isinstance(data, dict):
-            return None
-        event = str(data.get("event") or "")
-        sequence = str(data.get("sequence") or "").split(",", 1)[0].strip()
-        if event not in AUTO_KEY_EVENTS or not sequence:
-            return None
-        return cls(
-            id=str(data.get("id") or uuid.uuid4().hex),
-            event=event,
-            sequence=sequence,
-            enabled=bool(data.get("enabled", True)),
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "event": self.event,
-            "sequence": self.sequence,
-            "enabled": self.enabled,
-        }
-
-
-def parse_actions(raw: object) -> list[AutoKeyAction]:
-    try:
-        parsed = json.loads(str(raw or "[]"))
-    except (TypeError, json.JSONDecodeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    actions: list[AutoKeyAction] = []
-    for item in parsed:
-        action = AutoKeyAction.from_dict(item)
-        if action is not None:
-            actions.append(action)
-    return actions
-
-
-def serialize_actions(actions: list[AutoKeyAction]) -> str:
-    return json.dumps([action.to_dict() for action in actions])
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication
 
-from solin.core.integrations.automation.shortcuts import (
+from solin.core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
@@ -24,4 +24,3 @@ def auto_key_event_label(event: str) -> str:
     if event == EVENT_MEDIA_RESUMED:
         return QCoreApplication.translate(_TR_CONTEXT, "Video resumes")
     return event
-

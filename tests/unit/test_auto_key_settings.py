@@ -4,14 +4,14 @@ import uuid
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
-from solin.core.integrations.automation.shortcuts import (
+from solin.core.integrations.automation.auto_key_actions import (
     AutoKeyAction,
-    AutoKeySettingsStore,
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
     EVENT_MEDIA_STARTED,
 )
+from solin.core.integrations.automation.shortcuts import AutoKeySettingsStore
 from solin.core.profiles.settings import ProfileSettings
 from solin.ui.auto_key_labels import auto_key_event_label
 

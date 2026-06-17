@@ -1366,6 +1366,44 @@ def test_projection_integration_controller_receives_auto_share_actions():
     assert "stop_auto_share" in source
 
 
+def test_auto_key_action_model_has_no_framework_settings_or_process_dependencies():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "integrations"
+        / "automation"
+        / "auto_key_actions.py"
+    )
+    forbidden_roots = {
+        "PySide6",
+        "ctypes",
+        "os",
+        "shutil",
+        "subprocess",
+        "solin",
+    }
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        for root in roots:
+            if root in forbidden_roots:
+                violations.append(_display(path, node))
+
+    source = path.read_text(encoding="utf-8")
+    for fragment in ("QObject", "QThread", "QTimer", "SettingsStore"):
+        if fragment in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)} contains {fragment}")
+
+    assert violations == []
+
+
 def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     browser_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser"
     legacy_url_policy = browser_root / "url_utils.py"

@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
-from ...core.integrations.automation.shortcuts import (
+from ...core.integrations.automation.auto_key_actions import (
     AUTO_KEY_EVENTS,
     AutoKeyAction,
 )
