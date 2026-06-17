@@ -1404,6 +1404,26 @@ def test_auto_key_action_model_has_no_framework_settings_or_process_dependencies
     assert violations == []
 
 
+def test_auto_key_dispatcher_has_no_settings_store_dependency():
+    path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "integrations"
+        / "automation"
+        / "shortcuts.py"
+    )
+    source = path.read_text(encoding="utf-8")
+
+    assert "SettingsStore" not in source
+    assert "SettingsKey" not in source
+    assert "QSETTINGS_PREFS_APP" not in source
+    assert "ProfileSettings" not in source
+    assert "AutoKeySettingsStore" not in source
+    assert "AutoKeySettingsSource" in source
+
+
 def test_browser_download_widget_has_no_transfer_or_storage_adapters():
     browser_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "browser"
     legacy_url_policy = browser_root / "url_utils.py"

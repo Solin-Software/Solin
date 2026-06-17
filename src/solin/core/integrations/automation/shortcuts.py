@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import ctypes
 from ctypes import wintypes
 import logging
@@ -10,22 +9,16 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Protocol
 
 from PySide6.QtCore import (
     QObject,
     QTimer,
 )
 
-from solin.core.foundation.constants import QSETTINGS_PREFS_APP
-from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.foundation.settings_store import SettingsStore
-from solin.core.profiles.settings import ProfileSettings
-
 from .auto_key_actions import (
     AUTO_KEY_EVENTS,
     AutoKeyAction,
-    parse_actions,
-    serialize_actions,
 )
 
 log = logging.getLogger(__name__)
@@ -44,46 +37,16 @@ _MODIFIER_ALIASES = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class AutoKeySettingsStore:
-    settings: SettingsStore
+class AutoKeySettingsSource(Protocol):
+    def is_enabled(self) -> bool: ...
 
-    @classmethod
-    def for_profile_settings(
-        cls,
-        profile_settings: ProfileSettings,
-    ) -> "AutoKeySettingsStore":
-        return cls(
-            SettingsStore.for_namespace(
-                profile_settings.organization,
-                QSETTINGS_PREFS_APP,
-            )
-        )
-
-    def is_enabled(self) -> bool:
-        return bool(self.settings.value(SettingsKey.AUTO_KEYS_ENABLED, False, bool))
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.settings.set_value(SettingsKey.AUTO_KEYS_ENABLED, bool(enabled))
-
-    def actions(self) -> list[AutoKeyAction]:
-        return parse_actions(self.settings.string(SettingsKey.AUTO_KEYS_ACTIONS, "[]"))
-
-    def save_actions(self, actions: list[AutoKeyAction]) -> None:
-        self.settings.set_value(SettingsKey.AUTO_KEYS_ACTIONS, serialize_actions(actions))
-
-    def action_count_for_event(self, event: str) -> int:
-        return sum(
-            1
-            for action in self.actions()
-            if action.enabled and action.event == event
-        )
+    def actions(self) -> list[AutoKeyAction]: ...
 
 
 class AutoKeyDispatcher(QObject):
     """Loads configured actions and sends their key sequences in order."""
 
-    def __init__(self, settings: AutoKeySettingsStore, parent=None):
+    def __init__(self, settings: AutoKeySettingsSource, parent=None):
         super().__init__(parent)
         self._settings = settings
 

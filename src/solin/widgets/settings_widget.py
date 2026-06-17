@@ -15,12 +15,12 @@ from ..core.i18n.manager import LanguageManager
 from ..core.ui.screens import ScreenManager
 from ..core.integrations.automation.obs import OBSWebSocketService
 from ..core.integrations.automation.settings import (
+    AutoKeySettingsStore,
     AutoShareSettingsStore,
     CameraSettingsStore,
     OBSSettingsStore,
     ZoomSettingsStore,
 )
-from ..core.integrations.automation.shortcuts import AutoKeySettingsStore
 from ..core.integrations.ndi import NDIReceiverService
 from ..core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from ..core.jw.background_song_settings import BackgroundSongSettingsStore

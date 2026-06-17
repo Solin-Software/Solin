@@ -11,7 +11,7 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_RESUMED,
     EVENT_MEDIA_STARTED,
 )
-from solin.core.integrations.automation.shortcuts import AutoKeySettingsStore
+from solin.core.integrations.automation.settings import AutoKeySettingsStore
 from solin.core.profiles.settings import ProfileSettings
 from solin.ui.auto_key_labels import auto_key_event_label
 

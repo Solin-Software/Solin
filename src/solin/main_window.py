@@ -107,6 +107,7 @@ from .ui.notifications import NotificationCenter
 from .core.ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
 from .core.integrations.automation.settings import (
+    AutoKeySettingsStore,
     AutoShareSettingsStore,
     CameraSettingsStore,
     OBSSettingsStore,
@@ -115,10 +116,7 @@ from .core.integrations.automation.settings import (
 from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
-from .core.integrations.automation.shortcuts import (
-    AutoKeyDispatcher,
-    AutoKeySettingsStore,
-)
+from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.profiles.settings import ProfileSettings

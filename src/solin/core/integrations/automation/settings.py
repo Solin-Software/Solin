@@ -8,8 +8,12 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
+from .auto_key_actions import AutoKeyAction, parse_actions, serialize_actions
+
 
 def _as_int(value: object, default: int) -> int:
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
+        return default
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -117,6 +121,28 @@ class ZoomSettingsStore(_ProfilePrefsSettings):
 
     def set_show_participants(self, show: bool) -> None:
         self.settings.set_value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, bool(show))
+
+
+@dataclass(frozen=True, slots=True)
+class AutoKeySettingsStore(_ProfilePrefsSettings):
+    def is_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.AUTO_KEYS_ENABLED, False, bool))
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.AUTO_KEYS_ENABLED, bool(enabled))
+
+    def actions(self) -> list[AutoKeyAction]:
+        return parse_actions(self.settings.string(SettingsKey.AUTO_KEYS_ACTIONS, "[]"))
+
+    def save_actions(self, actions: list[AutoKeyAction]) -> None:
+        self.settings.set_value(SettingsKey.AUTO_KEYS_ACTIONS, serialize_actions(actions))
+
+    def action_count_for_event(self, event: str) -> int:
+        return sum(
+            1
+            for action in self.actions()
+            if action.enabled and action.event == event
+        )
 
 
 @dataclass(frozen=True, slots=True)
