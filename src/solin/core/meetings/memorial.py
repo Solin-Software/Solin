@@ -28,7 +28,7 @@ import json
 import logging
 import sqlite3
 import zipfile
-from datetime import date, datetime, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
@@ -50,6 +50,7 @@ from solin.core.jw.publication_links import (
 from .publications import (
     JwpubCache, JwpubChecksumStore,
 )
+from .memorial_calendar import memorial_date_for_year, monday_of
 from . import models as meeting_models
 
 
@@ -140,69 +141,6 @@ def _http_get_json(url: str) -> Optional[dict]:
     ) as exc:
         log.warning("GET JSON %s → %s", url, exc)
         return None
-
-
-# ── Memorial date calculator (algoritmo JW moderno, validado 2008-2028) ───────
-
-def memorial_date_for_year(year: int) -> Optional[date]:
-    """
-    Calcula a data exata do Memorial JW para o ano dado.
-    Algoritmo reconstruído por engenharia reversa — 21/21 anos modernos ✅
-    Baseado em memorial_dates_calc.py.
-    """
-    try:
-        import ephem
-    except ImportError:
-        log.error("ephem is not installed - cannot calculate the Memorial date")
-        return None
-
-    LAG_MIN  = 49.0   # crescent lag mínimo (min)
-    LAG_MAX  = 150.0  # crescent lag máximo (min)
-    AGE_MIN  = 22.0   # idade mínima da lua (h)
-
-    jerusalem = ephem.Observer()
-    jerusalem.lat       = "31.7683"
-    jerusalem.lon       = "35.2137"
-    jerusalem.elevation = 754
-
-    try:
-        equinox    = ephem.next_vernal_equinox(f"{year}/01/01")
-        luna_prev  = ephem.previous_new_moon(equinox)
-        luna_next  = ephem.next_new_moon(equinox)
-
-        dist_prev  = abs(equinox.datetime() - luna_prev.datetime())
-        dist_next  = abs(equinox.datetime() - luna_next.datetime())
-        new_moon   = luna_prev.datetime() if dist_prev < dist_next else luna_next.datetime()
-
-        test_day = new_moon
-        for _ in range(35):
-            jerusalem.date = test_day
-            sunset = jerusalem.next_setting(ephem.Sun())
-
-            jerusalem.date = sunset
-            moonset = jerusalem.next_setting(ephem.Moon())
-
-            lag = (moonset.datetime() - sunset.datetime()).total_seconds() / 60.0
-            age = (sunset.datetime() - new_moon).total_seconds() / 3600.0
-
-            if LAG_MIN <= lag <= LAG_MAX and age >= AGE_MIN:
-                nisan1   = sunset.datetime()
-                memorial = nisan1 + timedelta(days=13)
-                if memorial < datetime(year, 3, 22):
-                    test_day = sunset.datetime() + timedelta(hours=20)
-                    continue
-                return memorial.date()
-
-            test_day = sunset.datetime() + timedelta(hours=20)
-
-    except Exception:  # noqa: BLE001 - ephem exposes implementation-specific exceptions
-        log.exception("Failed to calculate Memorial date %d", year)
-
-    return None
-
-
-def _monday_of(d: date) -> date:
-    return d - timedelta(days=d.weekday())
 
 
 # ── JWPUB helpers (worker-thread only) ────────────────────────────────────────
@@ -439,7 +377,7 @@ class _MemorialWorker(QObject):
             return
 
         md.memorial_date = memorial_date
-        md.memorial_week = _monday_of(memorial_date)
+        md.memorial_week = monday_of(memorial_date)
 
         # ── Verificar janela de fetch ──────────────────────────────────────────
         today      = date.today()
@@ -689,7 +627,7 @@ class MemorialService(QObject):
     def memorial_week(self) -> Optional[date]:
         """Segunda-feira da semana do Memorial."""
         d = self.memorial_date()
-        return _monday_of(d) if d else None
+        return monday_of(d) if d else None
 
     def is_memorial_week(self, monday: date) -> bool:
         """Verdadeiro se a semana dada é a semana do Memorial."""

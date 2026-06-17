@@ -932,6 +932,22 @@ def test_publication_workflows_use_media_resolver_service():
     assert violations == []
 
 
+def test_memorial_calendar_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial_calendar.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if "PySide6" in roots:
+            violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_zoom_state_value_objects_have_no_framework_dependencies():
     path = (
         PROJECT_ROOT

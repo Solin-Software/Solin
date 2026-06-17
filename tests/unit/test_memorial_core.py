@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from datetime import date
 
-from solin.core.meetings.memorial import (
-    _monday_of,
+from solin.core.meetings.memorial_calendar import (
     memorial_date_for_year,
+    monday_of,
 )
 
 
 def test_monday_of_returns_week_start():
-    assert _monday_of(date(2026, 4, 2)) == date(2026, 3, 30)
+    assert monday_of(date(2026, 4, 2)) == date(2026, 3, 30)
 
 
 def test_memorial_date_calculator_matches_verified_modern_dates():
