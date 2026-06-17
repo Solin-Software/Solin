@@ -33,6 +33,8 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, QTimer
 from PySide6.QtGui import QImage
 
+from solin.core.integrations.ndi_runtime_paths import candidate_ndi_library_paths
+
 log = logging.getLogger(__name__)
 
 _NDI_FRAME_NONE = 0
@@ -109,38 +111,7 @@ class _NDILib:
 
     @staticmethod
     def _candidate_paths() -> list[str]:
-        names = ["Processing.NDI.Lib.x64.dll", "Processing.NDI.Lib.x86.dll"]
-        candidates: list[str] = list(names)
-
-        env_dirs = [
-            os.environ.get("NDI_RUNTIME_DIR_V6"),
-            os.environ.get("NDI_RUNTIME_DIR_V5"),
-            os.environ.get("NDI_RUNTIME_DIR"),
-        ]
-        for base in [p for p in env_dirs if p]:
-            for name in names:
-                candidates.append(str(Path(base) / name))
-                candidates.append(str(Path(base) / "Bin" / "x64" / name))
-
-        program_files = [
-            os.environ.get("ProgramFiles", r"C:\Program Files"),
-            os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-        ]
-        relative_dirs = [
-            Path("obs-studio") / "obs-plugins" / "64bit",
-            Path("obs-studio") / "bin" / "64bit",
-            Path("NDI") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
-            Path("NDI") / "NDI 6 Runtime" / "v6",
-            Path("NDI") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
-            Path("NDI") / "NDI 5 Runtime" / "v5",
-            Path("NewTek") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
-            Path("NewTek") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
-        ]
-        for root in [p for p in program_files if p]:
-            for rel in relative_dirs:
-                for name in names:
-                    candidates.append(str(Path(root) / rel / name))
-        return candidates
+        return candidate_ndi_library_paths(os.environ)
 
     @classmethod
     def _load_library(cls):

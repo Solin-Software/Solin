@@ -1199,6 +1199,32 @@ def test_obs_protocol_has_no_framework_network_or_thread_dependencies():
     assert violations == []
 
 
+def test_ndi_runtime_path_policy_has_no_framework_or_native_loader_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "integrations" / "ndi_runtime_paths.py"
+    forbidden_roots = {
+        "PySide6",
+        "ctypes",
+        "os",
+        "solin",
+        "sys",
+        "threading",
+        "time",
+    }
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        for root in roots:
+            if root in forbidden_roots:
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_remote_policies_have_no_framework_or_network_dependencies():
     paths = (
         PROJECT_ROOT / "src" / "solin" / "core" / "remote" / "notification_policy.py",
