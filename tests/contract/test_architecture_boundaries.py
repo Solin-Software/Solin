@@ -1404,6 +1404,16 @@ def test_media_cache_and_playback_do_not_import_concrete_downloader():
     assert violations == []
 
 
+def test_background_song_service_receives_schedule_source_protocol():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "jw" / "background_song_service.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "MeetingScheduleSettingsStore" not in source
+    assert "schedule_settings" not in source
+    assert "MeetingScheduleSource" in source
+    assert "_schedule_source" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

@@ -37,7 +37,7 @@ def _guard_service(occurrence: MeetingOccurrence):
     service = SimpleNamespace(
         _fade_seconds=5,
         _stop_before_seconds=10,
-        _schedule_settings=SimpleNamespace(
+        _schedule_source=SimpleNamespace(
             load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: occurrence)
         ),
         _active_occurrence=None,
@@ -83,7 +83,7 @@ def test_manual_track_is_allowed_after_meeting_start():
     service, timer, statuses = _guard_service(occurrence)
     service._active_occurrence = occurrence
     service._scheduled_fade_deadline = None
-    service._schedule_settings = SimpleNamespace(
+    service._schedule_source = SimpleNamespace(
         load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: None)
     )
 
@@ -101,7 +101,7 @@ def test_delayed_automatic_track_is_rejected_after_meeting_start():
     service._manual_session = False
     service._active_occurrence = occurrence
     service._scheduled_fade_deadline = None
-    service._schedule_settings = SimpleNamespace(
+    service._schedule_source = SimpleNamespace(
         load=lambda: SimpleNamespace(pre_meeting_occurrence=lambda _now: None)
     )
 
@@ -145,7 +145,7 @@ def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
     )
     service = SimpleNamespace(
         _enabled=True,
-        _schedule_settings=SimpleNamespace(load=lambda: schedule),
+        _schedule_source=SimpleNamespace(load=lambda: schedule),
         _active_occurrence=None,
         _scheduled_fade_deadline=None,
         _suppressed_slot_id="",
