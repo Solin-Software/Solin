@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
@@ -13,11 +14,13 @@ from solin.core.foundation.settings_store import GlobalSettingsStore
 if TYPE_CHECKING:
     from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
+    from solin.core.jw.language_settings import JWLanguageSettingsStore
     from solin.core.jw.songs import JWSongsStore
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.onboarding.application import OnboardingService
     from solin.core.profiles.application import ProfileService
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
+    from solin.core.profiles.settings import ProfileSettings
     from solin.core.rendering.fonts import FontManager
 
 log = logging.getLogger(__name__)
@@ -32,6 +35,9 @@ class ApplicationContainer:
     media: MediaComposition
     font_manager: FontManager
     jw_catalog_cache_paths: JWMediaCatalogCachePaths
+    jw_language_settings_store_factory: Callable[
+        [ProfileSettings], JWLanguageSettingsStore
+    ]
     jw_songs_store: JWSongsStore
     jwpub_checksum_store: JwpubChecksumStore
     profile_service: ProfileService
@@ -45,6 +51,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.foundation.logging_config import configure_logging
     from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
+    from solin.core.jw.language_settings import JWLanguageSettingsStore
     from solin.core.jw.songs import JWSongsStore
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.profiles.infrastructure import create_local_profile_service
@@ -102,6 +109,9 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         media=media,
         font_manager=font_manager,
         jw_catalog_cache_paths=jw_catalog_cache_paths,
+        jw_language_settings_store_factory=(
+            JWLanguageSettingsStore.for_profile_settings
+        ),
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
         profile_service=profile_service,

@@ -271,7 +271,10 @@ def main():
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager(
         global_settings=container.global_settings,
-        jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json"
+        jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json",
+        jw_language_settings_store_factory=(
+            container.jw_language_settings_store_factory
+        ),
     )
     container.lifecycle.register_cleanup(lang_manager.shutdown)
 

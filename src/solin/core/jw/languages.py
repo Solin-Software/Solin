@@ -38,7 +38,6 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.storage.json_files import read_json_file, write_json_atomic
-from solin.core.profiles.settings import ProfileSettings
 from solin.core.network.http import get_json
 
 log = logging.getLogger(__name__)
@@ -121,7 +120,7 @@ class JWLanguageService(QObject):
         self._languages: list[dict]  = []
         self._is_loading: bool       = False
         self._by_code: dict[str, dict] = {}
-        self._profile_settings: ProfileSettings | None = None
+        self._media_language_settings: JWLanguageSettingsStore | None = None
         self._thread_pool = QThreadPool(self)
         self._worker: _FetchWorker | None = None
 
@@ -158,22 +157,20 @@ class JWLanguageService(QObject):
 
     # ── Idioma de mídia selecionado ─────────────────────────────────────────────
 
-    def activate_profile(self, profile_settings: ProfileSettings) -> None:
-        self._profile_settings = profile_settings
+    def activate_settings(self, settings: JWLanguageSettingsStore) -> None:
+        self._media_language_settings = settings
 
-    def _require_profile_settings(self) -> ProfileSettings:
-        if self._profile_settings is None:
+    def _require_media_language_settings(self) -> JWLanguageSettingsStore:
+        if self._media_language_settings is None:
             raise RuntimeError("JW media language requested before profile activation.")
-        return self._profile_settings
+        return self._media_language_settings
 
     @property
     def media_api_code(self) -> str:
-        return JWLanguageSettingsStore.for_profile_settings(
-            self._require_profile_settings(),
-        ).media_language_code()
+        return self._require_media_language_settings().media_language_code()
 
     def set_media_api_code(self, code: str) -> None:
-        store = JWLanguageSettingsStore.for_profile_settings(self._require_profile_settings())
+        store = self._require_media_language_settings()
         old = store.media_language_code()
         store.set_media_language_code(code)
         log.debug("[JWLanguageService] Media language: %s", code)

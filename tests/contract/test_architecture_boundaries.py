@@ -1414,6 +1414,16 @@ def test_background_song_service_receives_schedule_source_protocol():
     assert "_schedule_source" in source
 
 
+def test_jw_language_service_receives_media_language_settings_store():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "jw" / "languages.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "ProfileSettings" not in source
+    assert ".for_profile_settings" not in source
+    assert "activate_settings" in source
+    assert "_media_language_settings" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

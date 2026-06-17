@@ -20,6 +20,7 @@ app = QApplication([])
 from solin.core.i18n.manager import LanguageManager
 from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -51,6 +52,9 @@ widget = WifiReceiveWidget(
     LanguageManager(
         global_settings=GlobalSettingsStore.create(),
         jw_languages_cache_file=Path("jw_languages.json"),
+        jw_language_settings_store_factory=(
+            JWLanguageSettingsStore.for_profile_settings
+        ),
     ),
     notifications=_Notifications(),
     document_conversion_service=DocumentConversionService(

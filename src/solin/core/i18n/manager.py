@@ -38,6 +38,7 @@ import glob
 import json
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
 
@@ -50,6 +51,7 @@ from PySide6.QtCore import (
 )
 from solin.core.foundation.resources import application_translation_root
 from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 log = logging.getLogger(__name__)
@@ -92,6 +94,9 @@ class LanguageManager(QObject):
         *,
         global_settings: GlobalSettingsStore,
         jw_languages_cache_file: str | Path,
+        jw_language_settings_store_factory: Callable[
+            [ProfileSettings], JWLanguageSettingsStore
+        ],
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
@@ -99,6 +104,7 @@ class LanguageManager(QObject):
         self.current_code: str = "pt_BR"
         self._global_settings = global_settings
         self._profile_settings: ProfileSettings | None = None
+        self._jw_language_settings_store_factory = jw_language_settings_store_factory
 
         # Serviço de idiomas JW.org (lista completa para mídia)
         JWLanguageService  = _get_jw_language_service_class()
@@ -140,7 +146,9 @@ class LanguageManager(QObject):
 
     def activate_profile(self, profile_settings: ProfileSettings) -> None:
         self._profile_settings = profile_settings
-        self._jw_lang_svc.activate_profile(profile_settings)
+        self._jw_lang_svc.activate_settings(
+            self._jw_language_settings_store_factory(profile_settings)
+        )
         saved = profile_settings.app_settings().app_language()
         if saved and saved in self._meta:
             self._global_settings.set_bootstrap_language(saved)
