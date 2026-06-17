@@ -69,6 +69,15 @@ from ...core.meetings.media_nodes import (
     media_ref_title,
     playlist_item_media_url,
 )
+from ...core.meetings.meeting_folder_imports import (
+    find_meeting_folder_import_record,
+    is_meeting_folder_source_supported,
+    make_meeting_folder_import_record,
+    meeting_folder_matches_tree,
+    same_local_source,
+    target_section_code_for_pub_type,
+    upsert_meeting_folder_import_record,
+)
 from ...core.meetings.tree_builder import MeetingTreeBuilder
 from ...core.meetings.tree_editing import (
     can_drop_tree_node,
@@ -454,29 +463,36 @@ class MeetingTreeController(QObject):
         tree_monday = parts[1]  # ISO date string
         tree_pub_type = parts[0]  # "mwb" or "wt"
 
-        # Map tag → pub_type
-        tag_to_pub = {"MW": "mwb", "WE": "wt"}
-
         folders = self._watched_folder_file_store.scan_meeting_sources(
             watched_folder_path
         )
         touched = False
         for folder in folders:
-            # Only inject folders matching this tree's monday AND pub_type
-            if folder["monday"] != tree_monday:
-                continue
-            expected_pub = tag_to_pub.get(folder["meeting_tag"], "")
-            if expected_pub != tree_pub_type:
+            if not meeting_folder_matches_tree(
+                folder,
+                tree_monday=tree_monday,
+                tree_pub_type=tree_pub_type,
+            ):
                 continue
 
-            target_list_id = self._meeting_folder_target_list_id(tree_pub_type)
             for source in folder.get("sources", []):
-                if not self._meeting_folder_source_supported(source):
+                office_conversion_available = (
+                    self._document_conversion_service.office_conversion_available()
+                    if str(source.get("kind") or "") == "lo"
+                    else False
+                )
+                if not is_meeting_folder_source_supported(
+                    source,
+                    office_conversion_available=office_conversion_available,
+                ):
                     continue
                 source_key = str(source.get("source_key") or "")
                 if not source_key or source_key in self._meeting_folder_pending_sources:
                     continue
-                record = self._meeting_folder_record_for_source(source)
+                record = find_meeting_folder_import_record(
+                    source,
+                    self._meeting_folder_imports,
+                )
                 if not self._watched_folder_file_store.meeting_source_needs_processing(
                     source,
                     record,
@@ -495,6 +511,7 @@ class MeetingTreeController(QObject):
                 source_with_folder = dict(source)
                 source_with_folder["folder_path"] = str(folder.get("path") or "")
                 self._remove_previous_meeting_folder_nodes(record)
+                target_list_id = self._meeting_folder_target_list_id(tree_pub_type)
                 self._import_meeting_folder_source(source_with_folder, target_list_id, 0)
                 touched = True
 
@@ -527,55 +544,11 @@ class MeetingTreeController(QObject):
         self.stateChanged.emit()
 
     def _meeting_folder_target_list_id(self, tree_pub_type: str) -> str:
-        target_section_code = "lac" if tree_pub_type == "mwb" else "public_talk"
+        target_section_code = target_section_code_for_pub_type(tree_pub_type)
         target_section = self._find_section_by_code(target_section_code)
         if target_section:
             return f"section:{target_section.get('id', '')}"
         return "root"
-
-    def _meeting_folder_source_supported(self, source: dict[str, Any]) -> bool:
-        kind = str(source.get("kind") or "")
-        if kind in {"media", "pdf", "jwpub", "jwlplaylist"}:
-            return True
-        if kind == "lo":
-            return self._document_conversion_service.office_conversion_available()
-        return False
-
-    def _meeting_folder_record_for_source(
-        self,
-        source: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        source_key = str(source.get("source_key") or "")
-        record = self._meeting_folder_imports.get(source_key)
-        if isinstance(record, dict):
-            return record
-
-        source_path = str(source.get("path") or "")
-        if not source_path:
-            return None
-        for existing in self._meeting_folder_imports.values():
-            if not isinstance(existing, dict):
-                continue
-            if self._same_local_source(str(existing.get("path") or ""), source_path):
-                return existing
-        return None
-
-    def _same_local_source(self, a: str, b: str) -> bool:
-        if not a or not b:
-            return False
-        if a.startswith(("http://", "https://")) or b.startswith(("http://", "https://")):
-            return a == b
-        return (
-            os.path.normcase(os.path.normpath(os.path.abspath(a)))
-            == os.path.normcase(os.path.normpath(os.path.abspath(b)))
-        )
-
-    def _path_is_inside(self, path: str, folder: str) -> bool:
-        try:
-            Path(path).resolve().relative_to(Path(folder).resolve())
-            return True
-        except (OSError, ValueError):
-            return False
 
     def _adopt_existing_meeting_folder_source(
         self, source: dict[str, Any], folder_path: str
@@ -589,7 +562,7 @@ class MeetingTreeController(QObject):
         for node in iter_nodes(self._nodes):
             if node.get("type") != "media":
                 continue
-            if not self._same_local_source(self._url_for_node(node), source_path):
+            if not same_local_source(self._url_for_node(node), source_path):
                 continue
             node_id = str(node.get("id") or "")
             if node_id:
@@ -626,38 +599,20 @@ class MeetingTreeController(QObject):
         error: str = "",
     ) -> None:
         source_key = str(source.get("source_key") or "")
-        if not source_key:
+        record = make_meeting_folder_import_record(
+            source,
+            node_ids,
+            status=status,
+            error=error,
+        )
+        if not record:
             return
-        record: dict[str, Any] = {
-            "source_key": source_key,
-            "path": str(source.get("path") or ""),
-            "name": str(source.get("name") or ""),
-            "kind": str(source.get("kind") or ""),
-            "signature": dict(source.get("signature") or {}),
-            "status": status,
-            "node_ids": list(node_ids or []),
-        }
-        if error:
-            record["error"] = str(error)[:500]
-        self._forget_meeting_folder_records_for_path(source_key, record["path"])
-        self._meeting_folder_imports[source_key] = record
+        self._meeting_folder_imports = upsert_meeting_folder_import_record(
+            self._meeting_folder_imports,
+            record,
+        )
         self._meeting_folder_pending_sources.discard(source_key)
         self._save()
-
-    def _forget_meeting_folder_records_for_path(
-        self,
-        source_key: str,
-        source_path: str,
-    ) -> None:
-        if not source_path:
-            return
-        for key, record in list(self._meeting_folder_imports.items()):
-            if key == source_key:
-                continue
-            if not isinstance(record, dict):
-                continue
-            if self._same_local_source(str(record.get("path") or ""), source_path):
-                self._meeting_folder_imports.pop(key, None)
 
     def _record_meeting_folder_failure(
         self, source: dict[str, Any], name: str, error: str
@@ -1478,7 +1433,7 @@ class MeetingTreeController(QObject):
             same_source_file = bool(
                 file_path
                 and record_path
-                and self._same_local_source(record_path, file_path)
+                and same_local_source(record_path, file_path)
             )
             source_is_gone = bool(
                 record_path

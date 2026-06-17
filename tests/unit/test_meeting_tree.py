@@ -13,6 +13,9 @@ import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
 import solin.core.meetings.publications as publications_module
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+from solin.core.meetings.meeting_folder_imports import (
+    find_meeting_folder_import_record,
+)
 from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
 from solin.core.meetings.publication_content import (
     find_mwb_document_id,
@@ -976,16 +979,6 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         controller._url_for_node = (
             lambda node: MeetingTreeController._url_for_node(controller, node)
         )
-        controller._path_is_inside = (
-            lambda path, folder: MeetingTreeController._path_is_inside(
-                controller,
-                path,
-                folder,
-            )
-        )
-        controller._same_local_source = (
-            lambda a, b: MeetingTreeController._same_local_source(controller, a, b)
-        )
         controller._remember_deleted_sources = (
             lambda node, *, include_media: MeetingTreeController._remember_deleted_sources(
                 controller,
@@ -1085,17 +1078,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             captured = {}
 
             controller.set_sync_root = lambda _path: None
-            controller._meeting_folder_source_supported = lambda _source: True
             controller._meeting_folder_target_list_id = lambda _pub: "section:lac"
-            controller._meeting_folder_record_for_source = (
-                lambda source_data: MeetingTreeController._meeting_folder_record_for_source(
-                    controller,
-                    source_data,
-                )
-            )
-            controller._same_local_source = lambda a, b: (
-                MeetingTreeController._same_local_source(controller, a, b)
-            )
             controller._adopt_existing_meeting_folder_source = (
                 lambda _source_data, _folder_path: []
             )
@@ -1117,29 +1100,22 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertEqual(controller.chromeChanged.calls, [()])
 
     def test_meeting_folder_record_lookup_matches_same_path_across_source_keys(self):
-        class FakeController:
-            pass
-
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "2026-05-27 MW" / "manual.mp4")
-            controller = FakeController()
-            controller._meeting_folder_imports = {
+            records = {
                 "old-machine-key": {
                     "path": path,
                     "status": "processed",
                     "signature": {"size": 5, "mtime_ns": 123},
                 }
             }
-            controller._same_local_source = lambda a, b: (
-                MeetingTreeController._same_local_source(controller, a, b)
-            )
 
-            record = MeetingTreeController._meeting_folder_record_for_source(
-                controller,
+            record = find_meeting_folder_import_record(
                 {"source_key": "new-machine-key", "path": path},
+                records,
             )
 
-            self.assertIs(record, controller._meeting_folder_imports["old-machine-key"])
+            self.assertIs(record, records["old-machine-key"])
 
     def test_remove_linked_root_media_deletes_import_record(self):
         class FakeController:

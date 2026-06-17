@@ -657,9 +657,6 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._start_media_requests = lambda *_args: None
             controller._linked_folder_availability_signature = lambda: ()
             controller._watched_folder_file_store = WatchedFolderFileStore()
-            controller._meeting_folder_source_supported = lambda _source: True
-            controller._meeting_folder_target_list_id = lambda _pub: "root"
-            controller._meeting_folder_record_for_source = lambda _source: None
             controller._adopt_existing_meeting_folder_source = (
                 lambda _source, _folder: []
             )

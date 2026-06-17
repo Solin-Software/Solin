@@ -742,6 +742,36 @@ def test_meeting_linked_folder_sync_receives_schedule_resolver():
     assert "weekday_for_pub_type" in source
 
 
+def test_meeting_folder_import_policy_lives_outside_controller():
+    controller = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "widgets"
+        / "meetings"
+        / "tree_controller.py"
+    )
+    policy = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "meetings"
+        / "meeting_folder_imports.py"
+    )
+    controller_source = controller.read_text(encoding="utf-8")
+    policy_source = policy.read_text(encoding="utf-8")
+
+    for fragment in (
+        "def _meeting_folder_source_supported",
+        "def _meeting_folder_record_for_source",
+        "def _same_local_source",
+        "def _forget_meeting_folder_records_for_path",
+    ):
+        assert fragment not in controller_source
+    assert "PySide6" not in policy_source
+
+
 def test_timer_domain_has_no_framework_or_application_dependencies():
     timer_root = PROJECT_ROOT / "src" / "solin" / "core" / "timer"
     domain_files = (
