@@ -122,7 +122,8 @@ from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.memorial import MemorialService
-from .core.meetings.publications import JwpubChecksumStore, JwpubService
+from .core.meetings.jwpub_cache import JwpubChecksumStore
+from .core.meetings.publications import JwpubService
 from .core.profiles.models import ProfileInfo
 from .core.remote.notifications import NotificationService
 from .core.remote.patch_installer import (

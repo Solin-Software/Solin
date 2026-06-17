@@ -46,10 +46,7 @@ from solin.core.jw.publication_links import (
     select_pub_media_file,
 )
 
-# ── Reutiliza constantes e helpers de publications.py ─────────────────────────
-from .publications import (
-    JwpubCache, JwpubChecksumStore,
-)
+from .jwpub_cache import JwpubCache, JwpubChecksumStore
 from .memorial_calendar import memorial_date_for_year, monday_of
 from . import models as meeting_models
 

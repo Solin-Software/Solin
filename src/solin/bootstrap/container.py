@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
     from solin.core.jw.songs import JWSongsStore
-    from solin.core.meetings.publications import JwpubChecksumStore
+    from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.onboarding.application import OnboardingService
     from solin.core.profiles.application import ProfileService
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
@@ -46,7 +46,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
     from solin.core.jw.songs import JWSongsStore
-    from solin.core.meetings.publications import JwpubChecksumStore
+    from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
     from solin.core.onboarding.infrastructure import QSettingsOnboardingSettings

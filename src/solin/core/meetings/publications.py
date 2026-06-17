@@ -24,15 +24,10 @@ Isso elimina:
 
 from __future__ import annotations
 
-import io
 import hashlib
-import json
 import logging
 import os
-import shutil
 import sqlite3
-import threading
-import zipfile
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -51,8 +46,8 @@ from solin.core.jw.publication_links import (
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.download_storage import is_url_cached
 from solin.core.media.settings import MediaSettingsStore
-from solin.core.storage.json_repository import JsonFileRepository
 from . import models as meeting_models
+from .jwpub_cache import JwpubCache, JwpubChecksumStore
 from .meeting_weeks import (
     current_monday,
     mwb_issue_for_week,
@@ -73,190 +68,6 @@ _MWB_AYFM  = 18
 _SKIP_MEETING_REF_PUBS = {"th", "lmd"}
 _MWB_STUDY_REF_TYPES = {"Book", "Brochure", "Watchtower", "Article"}
 
-
-# ── Filesystem cache ──────────────────────────────────────────────────────────
-
-class JwpubCache:
-    def __init__(self, root: str | os.PathLike[str]) -> None:
-        self._root = Path(root)
-        self._root.mkdir(parents=True, exist_ok=True)
-
-    def jwpub_path(self, pub: str, lang: str, issue: str) -> Path:
-        d = self._root / f"{pub}_{lang}"
-        d.mkdir(exist_ok=True)
-        return d / f"{pub}_{lang}_{issue}.jwpub"
-
-    def extract_dir(self, pub: str, lang: str, issue: str) -> Path:
-        return self._root / f"{pub}_{lang}" / f"x_{issue}"
-
-    def is_cached(self, pub: str, lang: str, issue: str) -> bool:
-        ep = self.extract_dir(pub, lang, issue)
-        return ep.exists() and any(ep.glob("*.db"))
-
-    def db_path(self, pub: str, lang: str, issue: str) -> Optional[Path]:
-        ep  = self.extract_dir(pub, lang, issue)
-        dbs = list(ep.glob("*.db"))
-        return dbs[0] if dbs else None
-
-    def invalidate_extract(self, pub: str, lang: str, issue: str) -> None:
-        """
-        Remove the extract directory for the given publication so that the
-        next call to extract() or _ensure_extract() is forced to unpack the
-        freshly-downloaded .jwpub instead of reusing stale files.
-
-        Called immediately after a successful .jwpub write so that a checksum
-        update always propagates to the extracted content.  Errors are logged
-        but never raised — a missing or already-absent directory is a no-op.
-        """
-        ep = self.extract_dir(pub, lang, issue)
-        if not ep.exists():
-            return
-        try:
-            shutil.rmtree(ep)
-            log.debug("JwpubCache: invalidated extract dir %s", ep)
-        except OSError as exc:
-            log.error("JwpubCache: could not remove extract dir %s: %s", ep, exc)
-
-    def extract(self, pub: str, lang: str, issue: str) -> Optional[Path]:
-        jwpub = self.jwpub_path(pub, lang, issue)
-        if not jwpub.exists():
-            return None
-        ep = self.extract_dir(pub, lang, issue)
-        ep.mkdir(exist_ok=True)
-        try:
-            with zipfile.ZipFile(jwpub, "r") as outer:
-                if "contents" not in outer.namelist():
-                    return None
-                inner_bytes = outer.read("contents")
-            with zipfile.ZipFile(io.BytesIO(inner_bytes), "r") as inner:
-                inner.extractall(ep)
-            return ep
-        except (
-            EOFError,
-            NotImplementedError,
-            OSError,
-            RuntimeError,
-            zipfile.BadZipFile,
-            zipfile.LargeZipFile,
-        ) as exc:
-            log.error("Extract failed %s: %s", jwpub, exc)
-            return None
-
-
-# ── Checksum persistence ──────────────────────────────────────────────────────
-
-class JwpubChecksumStore:
-    """
-    Persists the MD5 checksums returned by the JW API alongside each .jwpub
-    so that we can detect server-side content changes without re-downloading.
-
-    Storage : the explicitly configured JSON file (atomic write via tmp+replace)
-    Key     : "<pub>_<lang>_<issue>"  e.g. "mwb_T_202503", "w_T_202501"
-    Value   : MD5 hex string from the API  e.g. "dcf8a1d77e8c804aece4efd0d47baa80"
-
-    Thread safety
-    -------------
-    The application container shares one instance across every worker thread.
-    All public methods are guarded by a lock, so concurrent saves from the
-    meetings and Memorial workers are serialised and never overwrite each other.
-
-    _flush() uses a read-merge-write strategy: it re-reads the file from disk
-    inside the lock before writing, so that any entry persisted by a previous
-    save() call is preserved even in the unlikely event that two separate
-    instances exist within the same process (e.g. during hot-reload in dev).
-    """
-
-    def __init__(self, path: str | os.PathLike[str]) -> None:
-        self._json = JsonFileRepository(path)
-        self._json.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock  = threading.Lock()
-        self._data: dict[str, str] = self._load()
-
-    # ── Persistence ───────────────────────────────────────────────────────────
-
-    def _load(self) -> dict:
-        try:
-            if self._json.exists():
-                data = self._json.read()
-                if isinstance(data, dict):
-                    return data
-                log.warning("ChecksumStore: unexpected format in %s — resetting", self._json.path)
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            log.warning("ChecksumStore: could not load %s: %s", self._json.path, exc)
-        return {}
-
-    def _flush(self) -> None:
-        """
-        Atomic read-merge-write so no concurrent save is lost.
-
-        Strategy (all inside self._lock, already held by the caller):
-          1. Re-read the on-disk file.
-          2. Merge: disk entries first, then in-memory entries on top
-             (in-memory wins on conflict — the current write is authoritative).
-          3. Write the merged dict through the shared atomic JSON helper.
-        """
-        try:
-            # 1. Read whatever is currently on disk (may have been written by
-            #    another save() call that ran between our last _flush and now).
-            on_disk: dict[str, str] = {}
-            try:
-                if self._json.exists():
-                    raw = self._json.read()
-                    if isinstance(raw, dict):
-                        on_disk = raw
-            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-                log.warning("ChecksumStore: re-read before flush failed: %s", exc)
-
-            # 2. Merge: disk is the base; our in-memory view overwrites on conflict.
-            merged = {**on_disk, **self._data}
-            # Sync in-memory view so subsequent has_changed() calls are consistent.
-            self._data = merged
-
-            # 3. Atomic write.
-            self._json.write(merged, sort_keys=True)
-        except OSError as exc:
-            log.error("ChecksumStore: could not save %s: %s", self._json.path, exc)
-
-    # ── Public API ────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _key(pub: str, lang: str, issue: str) -> str:
-        return f"{pub}_{lang}_{issue}"
-
-    def get(self, pub: str, lang: str, issue: str) -> str:
-        """Return the stored checksum, or '' if none recorded yet."""
-        with self._lock:
-            return self._data.get(self._key(pub, lang, issue), "")
-
-    def save(self, pub: str, lang: str, issue: str, checksum: str) -> None:
-        """Persist a checksum.  No-op when checksum is empty."""
-        if not checksum:
-            return
-        with self._lock:
-            self._data[self._key(pub, lang, issue)] = checksum
-            self._flush()
-
-    def has_changed(self, pub: str, lang: str, issue: str,
-                    remote_checksum: str) -> bool:
-        """
-        Returns True when the remote checksum differs from the stored one,
-        meaning the server-side file has been updated and we must re-download.
-
-        Conservative: when remote_checksum is empty (API did not provide one)
-        we assume nothing has changed and return False to avoid spurious
-        re-downloads.
-        """
-        if not remote_checksum:
-            return False
-        with self._lock:
-            stored = self._data.get(self._key(pub, lang, issue), "")
-        changed = stored != remote_checksum
-        if changed:
-            log.info(
-                "ChecksumStore: %s/%s/%s checksum changed (%s → %s)",
-                pub, lang, issue, stored or "<none>", remote_checksum,
-            )
-        return changed
 
 def _get_jwpub_info(pub: str, lang: str, issue: str) -> tuple[Optional[str], str, bool]:
     """
