@@ -1013,6 +1013,27 @@ def test_meeting_publication_content_has_no_framework_dependencies():
     assert violations == []
 
 
+def test_memorial_content_has_no_framework_dependencies():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "meetings" / "memorial_content.py"
+    violations: list[str] = []
+
+    for node in _imports(path):
+        roots = (
+            [alias.name.split(".", 1)[0] for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [(node.module or "").split(".", 1)[0]]
+        )
+        if "PySide6" in roots:
+            violations.append(_display(path, node))
+
+    source = path.read_text(encoding="utf-8")
+    for fragment in ("QObject", "QThread", "Signal"):
+        if fragment in source:
+            violations.append(f"{path.relative_to(PROJECT_ROOT)} contains {fragment}")
+
+    assert violations == []
+
+
 def test_zoom_state_value_objects_have_no_framework_dependencies():
     path = (
         PROJECT_ROOT

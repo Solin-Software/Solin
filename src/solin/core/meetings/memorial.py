@@ -23,11 +23,8 @@ Política de fetch:
 
 from __future__ import annotations
 
-import io
 import json
 import logging
-import sqlite3
-import zipfile
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -48,6 +45,11 @@ from solin.core.jw.publication_links import (
 
 from .jwpub_cache import JwpubCache, JwpubChecksumStore
 from .memorial_calendar import memorial_date_for_year, monday_of
+from .memorial_content import (
+    extract_memorial_jwpub,
+    memorial_publication_symbol,
+    read_memorial_publication_content,
+)
 from . import models as meeting_models
 
 
@@ -142,11 +144,6 @@ def _http_get_json(url: str) -> Optional[dict]:
 
 # ── JWPUB helpers (worker-thread only) ────────────────────────────────────────
 
-def _mi_pub(year: int) -> str:
-    """mi26, mi27, ..."""
-    return f"mi{str(year)[2:]}"
-
-
 def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, bool]:
     """
     Busca URL de download + thumbnail quadrado + checksum para o pub mi<YY>.
@@ -215,120 +212,6 @@ def _get_mi_jwpub_url(pub: str, lang: str) -> tuple[Optional[str], str, str, boo
     return None, "", "", not_found
 
 
-def _extract_jwpub_to_dir(pub: str, lang: str, issue: str,
-                           cache: JwpubCache) -> Optional[Path]:
-    """Extrai o JWPUB (estrutura ZIP duplo) para o diretório de cache."""
-    jwpub_path = cache.jwpub_path(pub, lang, issue)
-    if not jwpub_path.exists():
-        return None
-    ep = cache.extract_dir(pub, lang, issue)
-    if ep.exists() and any(ep.glob("*.db")):
-        return ep   # já extraído
-    ep.mkdir(parents=True, exist_ok=True)
-    try:
-        raw = jwpub_path.read_bytes()
-        with zipfile.ZipFile(io.BytesIO(raw)) as outer:
-            outer.extractall(ep)
-        contents = ep / "contents"
-        if contents.is_file():
-            with zipfile.ZipFile(contents) as inner:
-                inner.extractall(ep)
-        if any(ep.glob("*.db")):
-            return ep
-    except (
-        EOFError,
-        NotImplementedError,
-        OSError,
-        RuntimeError,
-        zipfile.BadZipFile,
-        zipfile.LargeZipFile,
-    ) as exc:
-        log.error("extract_jwpub %s: %s", jwpub_path, exc)
-    return None
-
-
-def _query_memorial_sqlite(pub_dir: Path) -> dict:
-    """
-    Consulta SQLite do mi<YY>:
-      CategoryType = 26  → capa (bg) + thumb sqr
-      CategoryType = -1  → vídeos de introdução (BeginParagraphOrdinal IS NULL)
-    """
-    dbs = list(pub_dir.glob("*.db"))
-    if not dbs:
-        return {"cover": None, "videos": [], "thumb_path": None}
-
-    db_path = dbs[0]
-    result = {"cover": None, "videos": [], "thumb_path": None}
-    conn: sqlite3.Connection | None = None
-
-    try:
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-
-        # Verifica se DocumentMultimedia existe
-        has_dm = bool(conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master "
-            "WHERE type='table' AND name='DocumentMultimedia'"
-        ).fetchone()[0])
-
-        join   = ("INNER JOIN DocumentMultimedia dm "
-                  "ON m.MultimediaId = dm.MultimediaId") if has_dm else ""
-        dm_col = ", dm.BeginParagraphOrdinal AS par" if has_dm else ""
-
-        # Capa (CategoryType=26) — imagem ctv 1920×1080
-        row = conn.execute(f"""
-            SELECT m.*{dm_col}
-            FROM Multimedia m {join}
-            WHERE m.CategoryType = 26
-            LIMIT 1
-        """).fetchone()
-        if row:
-            result["cover"] = dict(row)
-
-        # Thumb quadrado: procura arquivo *_univ_sqr* no diretório
-        for f in pub_dir.iterdir():
-            if f.is_file() and "univ_sqr" in f.name:
-                result["thumb_path"] = f
-                break
-
-        # Vídeos de introdução (CategoryType=-1, BeginParagraphOrdinal IS NULL)
-        null_cond = " AND dm.BeginParagraphOrdinal IS NULL" if has_dm else ""
-        rows = conn.execute(f"""
-            SELECT m.*{dm_col}
-            FROM Multimedia m {join}
-            WHERE m.CategoryType = -1{null_cond}
-        """).fetchall()
-        result["videos"] = [dict(r) for r in rows]
-    except (OSError, sqlite3.Error) as exc:
-        log.error("query_memorial_sqlite %s: %s", db_path, exc)
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except sqlite3.Error:
-                log.debug("Could not close memorial database %s", db_path, exc_info=True)
-
-    return result
-
-
-def _make_memorial_media(v: dict, pub_dir: Path) -> meeting_models.MeetingMedia:
-    mime  = (v.get("MimeType") or "").lower()
-    fp    = v.get("FilePath") or ""
-    abs_fp = str(pub_dir / fp) if fp and mime.startswith("image") else fp
-    return meeting_models.MeetingMedia(
-        multimedia_id = v.get("MultimediaId") or 0,
-        mime_type     = mime,
-        file_path     = abs_fp,
-        label         = v.get("Label") or "",
-        caption       = v.get("Caption") or "",
-        key_symbol    = v.get("KeySymbol") or "",
-        track         = v.get("Track") or 0,
-        issue_tag     = v.get("IssueTagNumber") or 0,
-        meps_doc_id   = v.get("MepsDocumentId") or 0,
-        section       = "memorial",
-    )
-
-
 # ── Worker ────────────────────────────────────────────────────────────────────
 
 class _MemorialWorker(QObject):
@@ -360,7 +243,7 @@ class _MemorialWorker(QObject):
     def load_memorial(self, year: int):
         """Busca e resolve as mídias do Memorial para o ano dado."""
         lang  = self._lang
-        pub   = _mi_pub(year)
+        pub   = memorial_publication_symbol(year)
         issue = "0"   # mi<YY> não tem issue numérico — usa "0" como chave de cache
 
         md = meeting_models.MemorialData(year=year)
@@ -440,7 +323,7 @@ class _MemorialWorker(QObject):
                     self.progress.emit(60)
                     dest.write_bytes(raw)
                     # New .jwpub on disk — wipe the stale extract dir so that
-                    # _extract_jwpub_to_dir() below unpacks the fresh content.
+                    # extract_memorial_jwpub() below unpacks the fresh content.
                     self._cache.invalidate_extract(pub, lang, issue)
                     self._checksum_store.save(pub, lang, issue, checksum)
                 except (MemorialDownloadError, OSError) as exc:
@@ -462,7 +345,7 @@ class _MemorialWorker(QObject):
         self.progress.emit(70)
 
         # ── Extração ───────────────────────────────────────────────────────────
-        pub_dir = _extract_jwpub_to_dir(pub, lang, issue, self._cache)
+        pub_dir = extract_memorial_jwpub(pub, lang, issue, self._cache)
         if not pub_dir:
             md.status = "error"
             self.error.emit("JWPUB extraction failed")
@@ -472,42 +355,13 @@ class _MemorialWorker(QObject):
         md.pub_dir = pub_dir
         self.progress.emit(80)
 
-        # ── Consulta SQLite ────────────────────────────────────────────────────
-        sqlite_data = _query_memorial_sqlite(pub_dir)
-
-        # Capa: usa arquivo *univ_sqr* local se disponível, senão CategoryType=26
-        if sqlite_data["thumb_path"] and sqlite_data["thumb_path"].exists():
-            try:
-                md.cover_bytes = sqlite_data["thumb_path"].read_bytes()
-            except OSError:
-                log.debug("Failed to read memorial thumbnail bytes", exc_info=True)
-
-        if not md.cover_bytes and sqlite_data["cover"]:
-            fp = sqlite_data["cover"].get("FilePath", "")
-            if fp:
-                cover_path = pub_dir / fp
-                if cover_path.exists():
-                    try:
-                        md.cover_bytes = cover_path.read_bytes()
-                    except OSError:
-                        log.debug("Failed to read memorial cover bytes", exc_info=True)
-
+        # ── Consulta SQLite e construção dos itens ─────────────────────────────
+        content = read_memorial_publication_content(pub_dir)
+        md.cover_bytes = content.cover_bytes
         self.progress.emit(85)
 
-        # ── Construir itens de mídia (sem pré-resolução de URL) ───────────────
-        # A resolução de URL é feita lazily por _MediaRow + JwpubService
-        # quando o usuário abre o detalhe, seguindo o mesmo padrão das reuniões.
-        media_items = []
-        
-        # 1. Adiciona a imagem principal (ctv) na lista de mídias projetáveis
-        if sqlite_data.get("cover"):
-            media_items.append(_make_memorial_media(sqlite_data["cover"], pub_dir))
-            
-        # 2. Adiciona os vídeos de introdução
-        media_items.extend([_make_memorial_media(v, pub_dir) for v in sqlite_data["videos"]])
-
-        md.videos = media_items
-        md.status = "ready" if (media_items or md.cover_bytes) else "empty"
+        md.videos = content.media_items
+        md.status = "ready" if (content.media_items or md.cover_bytes) else "empty"
         self.progress.emit(100)
         self.memorial_done.emit(md)
 
