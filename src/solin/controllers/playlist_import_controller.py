@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import zipfile
+from zipfile import BadZipFile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +16,9 @@ from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
-from ..core.media.formats import media_type_from_path, mime_to_ext
+from ..core.media.formats import media_type_from_path
+from ..core.playlists.jwl_files import read_jwlplaylist_document
+from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..core.playlists.items import (
     create_playlist_item,
     playlist_items_from_jwpub,
@@ -151,15 +153,13 @@ class PlaylistImportController:
             self.add_jwpub_file_to_playlist_target(path, target)
 
     def items_from_jwlplaylist_for_playlist(self, jwl_path: str) -> list:
-        from ..core.playlists.reader import read_jwlplaylist
-
         context = self._context
         try:
-            data = read_jwlplaylist(
+            document = read_jwlplaylist_document(
                 jwl_path,
                 fallback_lang_code=self._media_language_context().fallback_code,
             )
-        except zipfile.BadZipFile:
+        except BadZipFile:
             QMessageBox.warning(
                 context.dialog_parent,
                 context.translate("Unsupported file"),
@@ -178,47 +178,27 @@ class PlaylistImportController:
             )
             return []
 
-        new_items = []
-        skipped = []
-        for raw in data.get("items", []):
-            url = raw.get("url") or raw.get("jworg_url") or ""
-            item = create_playlist_item(
-                title=raw.get("title", "") or os.path.basename(jwl_path),
-                url=url,
-                type=raw.get("type", "video"),
-                key_symbol=raw.get("key_symbol"),
-                track=raw.get("track"),
-                issue_tag=raw.get("issue_tag"),
-                doc_id=raw.get("doc_id"),
-                meps_language=raw.get("language", 0),
-            )
+        result = playlist_items_from_jwl_document_items(
+            document.items,
+            source_name=os.path.basename(jwl_path),
+            save_embedded=lambda data, filename, identifier, default_suffix: (
+                context.profile_media_store.save_embedded(
+                    data,
+                    filename,
+                    identifier=identifier,
+                    default_suffix=default_suffix,
+                )
+            ),
+        )
 
-            if raw.get("data") and not url:
-                try:
-                    item["url"] = context.profile_media_store.save_embedded(
-                        raw["data"],
-                        raw.get("filename", "media"),
-                        identifier=item["id"],
-                        default_suffix=mime_to_ext(raw.get("mime_type", "")),
-                    )
-                except (OSError, ValueError):
-                    skipped.append(item.get("title", "Item"))
-                    continue
-                item["type"] = raw.get("type", "video")
-            elif not url:
-                skipped.append(item.get("title", "Item"))
-                continue
-
-            new_items.append(item)
-
-        if skipped:
-            names = "\n".join(f"  • {name}" for name in skipped)
+        if result.skipped_titles:
+            names = "\n".join(f"  • {name}" for name in result.skipped_titles)
             QMessageBox.warning(
                 context.dialog_parent,
                 "JW Library Playlist",
                 f"Itens não resolvidos (sem conexão com a internet?):\n\n{names}",
             )
-        return new_items
+        return result.items
 
     def add_items_to_playlist_target(self, target, items: list, source_name: str) -> None:
         context = self._context

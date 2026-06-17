@@ -1240,6 +1240,24 @@ def test_widgets_do_not_call_raw_jwlplaylist_reader_or_writer():
     assert violations == []
 
 
+def test_controllers_do_not_call_raw_jwlplaylist_reader_or_writer():
+    controller_root = PROJECT_ROOT / "src" / "solin" / "controllers"
+    violations: list[str] = []
+
+    for path in sorted(controller_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        forbidden = (
+            "core.playlists.reader",
+            "core.playlists.writer",
+            "read_jwlplaylist(",
+            "write_jwlplaylist(",
+        )
+        if any(fragment in source for fragment in forbidden):
+            violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

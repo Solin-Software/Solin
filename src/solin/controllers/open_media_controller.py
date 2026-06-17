@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-import zipfile
+from zipfile import BadZipFile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,8 +28,9 @@ from ..core.media.formats import (
     AUDIO_EXTS,
     IMAGE_EXTS,
     VIDEO_EXTS,
-    mime_to_ext,
 )
+from ..core.playlists.jwl_files import read_jwlplaylist_document
+from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..core.playlists.items import create_playlist_item, playlist_items_from_jwpub
 
 if TYPE_CHECKING:
@@ -254,15 +255,13 @@ class OpenMediaController:
         self._handlers.open_pdf_temp_playlist(items, stem)
 
     def expand_jwlplaylist(self, path: str) -> list:
-        from ..core.playlists.reader import read_jwlplaylist
-
         context = self._context
         try:
-            parsed = read_jwlplaylist(
+            document = read_jwlplaylist_document(
                 path,
                 fallback_lang_code=self._media_language_context().fallback_code,
             )
-        except zipfile.BadZipFile:
+        except BadZipFile:
             QMessageBox.warning(
                 context.dialog_parent,
                 context.translate("Unsupported file"),
@@ -282,57 +281,21 @@ class OpenMediaController:
             )
             return []
 
-        result = []
-        skipped = []
-        for item in parsed.get("items", []):
-            media_type = item.get("type", "video")
-            source = item.get("source", "")
-            title = item.get("title", "Item")
-            if source == "embedded" and media_type == "image":
-                data = item.get("data")
-                if data:
-                    result.append({
-                        "url": self._write_tmp(
-                            data,
-                            self._best_ext(item, "image/jpeg"),
-                        ),
-                        "title": title,
-                        "type": "image",
-                        "_tmp": True,
-                    })
-            elif source == "embedded" and media_type in ("video", "audio"):
-                data = item.get("data")
-                if not data:
-                    skipped.append(title)
-                    continue
-                result.append({
-                    "url": self._write_tmp(
-                        data,
-                        self._best_ext(item, "video/mp4"),
-                    ),
-                    "title": title,
-                    "type": media_type,
-                    "_tmp": True,
-                })
-            elif source == "jworg":
-                url = item.get("jworg_url") or item.get("url")
-                if not url:
-                    skipped.append(title)
-                    continue
-                result.append({"url": url, "title": title, "type": media_type})
-            else:
-                url = item.get("url")
-                if url:
-                    result.append({"url": url, "title": title, "type": media_type})
+        result = playlist_items_from_jwl_document_items(
+            document.items,
+            source_name=os.path.basename(path),
+            save_embedded=self._save_temp_embedded,
+            mark_embedded_tmp=True,
+        )
 
-        if skipped:
-            names = "\n".join(f"  • {title}" for title in skipped)
+        if result.skipped_titles:
+            names = "\n".join(f"  • {title}" for title in result.skipped_titles)
             QMessageBox.warning(
                 context.dialog_parent,
                 "JW Library Playlist",
                 f"Itens não resolvidos (sem conexão com a internet?):\n\n{names}",
             )
-        return result
+        return [self._temp_playlist_entry(item) for item in result.items]
 
     def _show_conversion_error(self, error: object) -> None:
         context = self._context
@@ -357,13 +320,25 @@ class OpenMediaController:
         ]
 
     @staticmethod
-    def _best_ext(item: dict, default_mime: str) -> str:
-        filename = item.get("filename", "")
-        if filename:
-            ext = os.path.splitext(filename)[1].lower()
-            if ext:
-                return ext
-        return mime_to_ext(item.get("mime_type", default_mime))
+    def _temp_playlist_entry(item: dict) -> dict:
+        entry = {
+            "url": item.get("url", ""),
+            "title": item.get("title", ""),
+            "type": item.get("type", "video"),
+        }
+        if item.get("_tmp"):
+            entry["_tmp"] = True
+        return entry
+
+    def _save_temp_embedded(
+        self,
+        data: bytes,
+        filename: str,
+        _identifier: str,
+        default_suffix: str,
+    ) -> str:
+        suffix = os.path.splitext(filename)[1].lower() or default_suffix
+        return self._write_tmp(data, suffix)
 
     def _write_tmp(self, data: bytes, suffix: str) -> str:
         tmp = tempfile.NamedTemporaryFile(

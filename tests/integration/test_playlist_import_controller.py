@@ -271,7 +271,7 @@ def test_items_from_jwlplaylist_persists_embedded_media_via_profile_store(
     profile_media_store = _ProfileMediaStoreStub()
     controller = _controller(window, profile_media_store=profile_media_store)
     monkeypatch.setattr(
-        "solin.core.playlists.reader.read_jwlplaylist",
+        "solin.core.playlists.jwl_files.read_jwlplaylist",
         lambda *_args, **_kwargs: {
             "items": [
                 {

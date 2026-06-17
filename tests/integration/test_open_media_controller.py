@@ -423,7 +423,7 @@ def test_expand_jwlplaylist_returns_jworg_and_local_items(monkeypatch):
             ]
         }
 
-    monkeypatch.setattr("solin.core.playlists.reader.read_jwlplaylist", _fake_read)
+    monkeypatch.setattr("solin.core.playlists.jwl_files.read_jwlplaylist", _fake_read)
 
     assert controller.expand_jwlplaylist("playlist.jwlplaylist") == [
         {
@@ -440,7 +440,7 @@ def test_expand_jwlplaylist_writes_embedded_media(monkeypatch):
     controller = _controller(window)
 
     monkeypatch.setattr(
-        "solin.core.playlists.reader.read_jwlplaylist",
+        "solin.core.playlists.jwl_files.read_jwlplaylist",
         lambda _path, fallback_lang_code: {
             "items": [
                 {
@@ -473,12 +473,36 @@ def test_expand_jwlplaylist_writes_embedded_media(monkeypatch):
                 pass
 
 
-def test_best_ext_prefers_filename_then_mime_type():
-    controller = _controller(_WindowStub())
+def test_expand_jwlplaylist_uses_mime_type_for_embedded_suffix(monkeypatch):
+    window = _WindowStub()
+    controller = _controller(window)
+    monkeypatch.setattr(
+        "solin.core.playlists.jwl_files.read_jwlplaylist",
+        lambda _path, fallback_lang_code: {
+            "items": [
+                {
+                    "source": "embedded",
+                    "type": "audio",
+                    "title": "Audio",
+                    "filename": "audio",
+                    "mime_type": "audio/ogg",
+                    "data": b"audio-bytes",
+                }
+            ]
+        },
+    )
 
-    assert controller._best_ext({"filename": "video.mov"}, "video/mp4") == ".mov"
-    assert controller._best_ext({"mime_type": "audio/ogg"}, "video/mp4") == ".ogg"
-    assert controller._best_ext({}, "video/mp4") == ".mp4"
+    try:
+        result = controller.expand_jwlplaylist("playlist.jwlplaylist")
+
+        assert len(result) == 1
+        assert result[0]["url"].endswith(".ogg")
+    finally:
+        for tmp_file in list(window._jwl_tmp_files):
+            try:
+                os.unlink(tmp_file)
+            except OSError:
+                pass
 
 
 def test_open_media_controller_uses_explicit_dependencies():
