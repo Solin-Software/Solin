@@ -14,17 +14,32 @@ Eventos OBS suportados
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import logging
 import threading
 import time
-import uuid
+from collections.abc import Mapping
 from enum import Enum, auto
 
 from PySide6.QtCore import QObject, Signal, QTimer
 
+from solin.core.integrations.automation.obs_protocol import (
+    EVT_RECORD_STATE_CHANGED,
+    EVT_SCENE_CHANGED,
+    EVT_SCENE_LIST_CHANGED,
+    ObsOp,
+    event_data,
+    event_type,
+    identify_payload,
+    is_recording_output_active,
+    is_response_for,
+    parse_current_scene,
+    parse_record_active,
+    parse_scene_names,
+    request_id_from_payload,
+    request_payload,
+    set_current_program_scene_payload,
+)
 from solin.core.integrations.automation.settings import OBSConnectionSettings
 
 log = logging.getLogger(__name__)
@@ -35,30 +50,6 @@ class OBSConnectionState(Enum):
     CONNECTING   = auto()
     CONNECTED    = auto()
     ERROR        = auto()
-
-
-# ── OBS WebSocket v5 opcodes ──────────────────────────────────────────────────
-
-_OP_HELLO      = 0
-_OP_IDENTIFY   = 1
-_OP_IDENTIFIED = 2
-_OP_REQUEST    = 6
-_OP_RESPONSE   = 7
-_OP_EVENT      = 5
-
-# Event types we care about
-_EVT_SCENE_LIST_CHANGED    = "SceneListChanged"
-_EVT_SCENE_CHANGED         = "CurrentProgramSceneChanged"
-_EVT_RECORD_STATE_CHANGED  = "RecordStateChanged"
-
-
-def _make_auth(password: str, salt: str, challenge: str) -> str:
-    secret = base64.b64encode(
-        hashlib.sha256((password + salt).encode()).digest()
-    ).decode()
-    return base64.b64encode(
-        hashlib.sha256((secret + challenge).encode()).digest()
-    ).decode()
 
 
 # ── OBSWebSocketService ───────────────────────────────────────────────────────
@@ -218,13 +209,7 @@ class OBSWebSocketService(QObject):
         if not ws:
             return
         try:
-            d = {
-                "requestType": request_type,
-                "requestId": str(uuid.uuid4())[:8],
-            }
-            if request_data:
-                d["requestData"] = request_data
-            ws.send(json.dumps({"op": _OP_REQUEST, "d": d}))
+            ws.send(json.dumps(request_payload(request_type, request_data)))
         except Exception as exc:  # noqa: BLE001 - websocket-client request boundary
             log.warning("OBS %s failed: %s", request_type, exc)
 
@@ -289,14 +274,7 @@ class OBSWebSocketService(QObject):
         if not ws:
             return
         try:
-            ws.send(json.dumps({
-                "op": _OP_REQUEST,
-                "d": {
-                    "requestType": "SetCurrentProgramScene",
-                    "requestId":   str(uuid.uuid4())[:8],
-                    "requestData": {"sceneName": scene_name},
-                }
-            }))
+            ws.send(json.dumps(set_current_program_scene_payload(scene_name)))
         except Exception as exc:  # noqa: BLE001 - websocket-client request boundary
             log.warning("OBS SetCurrentProgramScene failed: %s", exc)
 
@@ -405,11 +383,11 @@ class OBSWebSocketService(QObject):
         Processa mensagens recebidas do OBS durante o event loop.
         Trata: SceneListChanged, CurrentProgramSceneChanged.
         """
-        if msg.get("op") != _OP_EVENT:
+        if msg.get("op") != ObsOp.EVENT:
             return
-        event_type = msg.get("d", {}).get("eventType", "")
+        obs_event_type = event_type(msg)
 
-        if event_type == _EVT_SCENE_LIST_CHANGED:
+        if obs_event_type == EVT_SCENE_LIST_CHANGED:
             # Re-fetch the updated scene list and notify main thread.
             # We are already on the event-loop thread, so it is safe to call
             # _request_scenes directly — no concurrent recv() race.
@@ -422,46 +400,43 @@ class OBSWebSocketService(QObject):
                 except Exception as exc:  # noqa: BLE001 - OBS websocket protocol boundary
                     log.warning("OBS SceneListChanged re-fetch failed: %s", exc)
 
-        elif event_type == _EVT_SCENE_CHANGED:
-            scene_name = msg.get("d", {}).get("eventData", {}).get("sceneName", "")
+        elif obs_event_type == EVT_SCENE_CHANGED:
+            scene_name = str(event_data(msg).get("sceneName") or "")
             if scene_name:
                 self._sig_scene_changed.emit(generation, scene_name)
 
-        elif event_type == _EVT_RECORD_STATE_CHANGED:
-            state = msg.get("d", {}).get("eventData", {}).get("outputState", "")
-            # OBS states: OBS_WEBSOCKET_OUTPUT_STARTED, OBS_WEBSOCKET_OUTPUT_STOPPED, etc.
-            is_rec = state in ("OBS_WEBSOCKET_OUTPUT_STARTED", "OBS_WEBSOCKET_OUTPUT_RESUMED")
-            self._sig_record_state.emit(generation, is_rec)
+        elif obs_event_type == EVT_RECORD_STATE_CHANGED:
+            state = str(event_data(msg).get("outputState") or "")
+            self._sig_record_state.emit(generation, is_recording_output_active(state))
 
     def _do_handshake(self, ws, password: str, generation: int) -> list[str]:
         """Executa Hello→Identify→Identified. Retorna lista de cenas."""
         raw = ws.recv()
         msg = json.loads(raw)
-        if msg.get("op") != _OP_HELLO:
+        if msg.get("op") != ObsOp.HELLO:
             raise ValueError(f"Expected Hello (op=0), got op={msg.get('op')}")
 
-        hello_d  = msg["d"]
-        identify = {"op": _OP_IDENTIFY, "d": {"rpcVersion": hello_d.get("rpcVersion", 1)}}
+        hello_d = msg.get("d")
+        if not isinstance(hello_d, Mapping):
+            raise ValueError("Invalid OBS Hello payload.")
 
         auth_info = hello_d.get("authentication")
-        if auth_info:
-            if not password:
-                raise ValueError(
-                    "OBS requires a password but none was provided."
-                )
-            identify["d"]["authentication"] = _make_auth(
-                password, auth_info["salt"], auth_info["challenge"]
-            )
+        if auth_info is not None and not isinstance(auth_info, Mapping):
+            raise ValueError("Invalid OBS authentication payload.")
+
+        identify = identify_payload(
+            rpc_version=hello_d.get("rpcVersion", 1),
+            auth_info=auth_info,
+            password=password,
+        )
 
         ws.send(json.dumps(identify))
 
         raw2 = ws.recv()
-        if raw2 == '' or raw2 == None:
-            raise ValueError(
-                "Incorrect password."
-            )
+        if not raw2:
+            raise ValueError("Incorrect password.")
         msg2 = json.loads(raw2)
-        if msg2.get("op") != _OP_IDENTIFIED:
+        if msg2.get("op") != ObsOp.IDENTIFIED:
             raise ValueError(
                 f"Authentication failed (op={msg2.get('op')}). Check your password."
             )
@@ -482,11 +457,10 @@ class OBSWebSocketService(QObject):
     def _request_scenes(self, ws) -> list[str]:
         """Envia GetSceneList e retorna nomes em ordem de criação."""
         import websocket
-        req_id = str(uuid.uuid4())[:8]
-        ws.send(json.dumps({
-            "op": _OP_REQUEST,
-            "d":  {"requestType": "GetSceneList", "requestId": req_id},
-        }))
+
+        payload = request_payload("GetSceneList")
+        req_id = request_id_from_payload(payload)
+        ws.send(json.dumps(payload))
         deadline = time.time() + 5
         while time.time() < deadline:
             try:
@@ -496,19 +470,17 @@ class OBSWebSocketService(QObject):
             if not raw:
                 continue
             m = json.loads(raw)
-            if m.get("op") == _OP_RESPONSE and m["d"].get("requestId") == req_id:
-                raw_scenes = m["d"].get("responseData", {}).get("scenes", [])
-                return [s["sceneName"] for s in reversed(raw_scenes)]
+            if is_response_for(m, req_id):
+                return parse_scene_names(m)
         return []
 
     def _request_current_scene(self, ws) -> str:
         """Envia GetCurrentProgramScene e retorna o nome da cena ativa."""
         import websocket
-        req_id = str(uuid.uuid4())[:8]
-        ws.send(json.dumps({
-            "op": _OP_REQUEST,
-            "d":  {"requestType": "GetCurrentProgramScene", "requestId": req_id},
-        }))
+
+        payload = request_payload("GetCurrentProgramScene")
+        req_id = request_id_from_payload(payload)
+        ws.send(json.dumps(payload))
         deadline = time.time() + 5
         while time.time() < deadline:
             try:
@@ -518,18 +490,17 @@ class OBSWebSocketService(QObject):
             if not raw:
                 continue
             m = json.loads(raw)
-            if m.get("op") == _OP_RESPONSE and m["d"].get("requestId") == req_id:
-                return m["d"].get("responseData", {}).get("currentProgramSceneName", "")
+            if is_response_for(m, req_id):
+                return parse_current_scene(m)
         return ""
 
     def _request_record_status(self, ws) -> bool:
         """Envia GetRecordStatus e retorna se está gravando."""
         import websocket
-        req_id = str(uuid.uuid4())[:8]
-        ws.send(json.dumps({
-            "op": _OP_REQUEST,
-            "d":  {"requestType": "GetRecordStatus", "requestId": req_id},
-        }))
+
+        payload = request_payload("GetRecordStatus")
+        req_id = request_id_from_payload(payload)
+        ws.send(json.dumps(payload))
         deadline = time.time() + 5
         while time.time() < deadline:
             try:
@@ -539,8 +510,8 @@ class OBSWebSocketService(QObject):
             if not raw:
                 continue
             m = json.loads(raw)
-            if m.get("op") == _OP_RESPONSE and m["d"].get("requestId") == req_id:
-                return bool(m["d"].get("responseData", {}).get("outputActive", False))
+            if is_response_for(m, req_id):
+                return parse_record_active(m)
         return False
 
     # ── Main-thread slots (via QueuedConnection) ──────────────────────────
