@@ -1279,6 +1279,18 @@ def test_jwl_document_consumers_use_shared_import_policy():
     assert violations == []
 
 
+def test_widgets_use_jwl_export_service_for_writes():
+    widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
+    violations: list[str] = []
+
+    for path in sorted(widget_root.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "write_jwlplaylist_document" in source:
+            violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_main_window_does_not_expose_media_factories_as_service_locator_state():
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     forbidden_attributes = {

@@ -23,10 +23,13 @@ from PySide6.QtWidgets import (
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.jw.language_context import jw_media_language_context
+from ...core.playlists.jwl_export import (
+    JwlPlaylistExportRequest,
+    export_jwlplaylist_document,
+)
 from ...core.playlists.jwl_files import (
     PlaylistWriteError,
     read_jwlplaylist_document,
-    write_jwlplaylist_document,
 )
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.playlists.storage import PlaylistStoragePaths
@@ -398,12 +401,14 @@ class PlaylistListView(QWidget):
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist_document(
-                pl["name"],
-                items,
-                path,
-                self._media_cache_manager.media_cache_dir,
-                fallback_lang_code=fallback_lang,
+            export_jwlplaylist_document(
+                JwlPlaylistExportRequest(
+                    name=pl["name"],
+                    items=items,
+                    output_path=path,
+                    media_cache_dir=self._media_cache_manager.media_cache_dir,
+                    fallback_lang_code=fallback_lang,
+                )
             )
             QMessageBox.information(
                 self,
@@ -526,12 +531,14 @@ class PlaylistListView(QWidget):
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist_document(
-                name,
-                enriched,
-                path,
-                self._media_cache_manager.media_cache_dir,
-                fallback_lang_code=fallback_lang,
+            export_jwlplaylist_document(
+                JwlPlaylistExportRequest(
+                    name=name,
+                    items=enriched,
+                    output_path=path,
+                    media_cache_dir=self._media_cache_manager.media_cache_dir,
+                    fallback_lang_code=fallback_lang,
+                )
             )
             QMessageBox.information(
                 self,

@@ -17,7 +17,11 @@ from ...core.foundation.constants import (
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.jwl_files import PlaylistWriteError, write_jwlplaylist_document
+from ...core.playlists.jwl_export import (
+    JwlPlaylistExportRequest,
+    export_jwlplaylist_document,
+)
+from ...core.playlists.jwl_files import PlaylistWriteError
 from ...core.playlists.items import create_playlist_item
 from .dialogs import NameDialog
 from .item_visuals import enrich_items_for_export
@@ -320,12 +324,14 @@ class PlaylistEditActionsMixin:
                 self._playlist_thumbnail_store,
             )
             fallback_lang = jw_media_language_context(self.lang).fallback_code
-            write_jwlplaylist_document(
-                self._pl["name"],
-                items,
-                path,
-                self._media_cache_manager.media_cache_dir,
-                fallback_lang_code=fallback_lang,
+            export_jwlplaylist_document(
+                JwlPlaylistExportRequest(
+                    name=self._pl["name"],
+                    items=items,
+                    output_path=path,
+                    media_cache_dir=self._media_cache_manager.media_cache_dir,
+                    fallback_lang_code=fallback_lang,
+                )
             )
             QMessageBox.information(
                 self,
