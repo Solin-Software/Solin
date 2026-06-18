@@ -219,7 +219,11 @@ def _launch_main_window(
     from solin.core.ingest.qr_generation import QrGenerationSessionFactory
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.playlists.cleanup import PlaylistCleanupQueue
-    from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
+    from solin.core.playlists.storage import (
+        PendingDeletionRepository,
+        PlaylistRepository,
+        PlaylistStoragePaths,
+    )
     from solin.ui.titlebar import apply_titlebar_color
 
     playlist_storage_paths = PlaylistStoragePaths(
@@ -227,6 +231,16 @@ def _launch_main_window(
         pending_deletions_file=runtime_paths.pending_del_file,
     )
     playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
+    pending_deletion_repository = PendingDeletionRepository.from_paths(
+        playlist_storage_paths
+    )
+
+    def queue_pending_deletion(path: str) -> None:
+        pending = pending_deletion_repository.load()
+        if path not in pending:
+            pending.append(path)
+            pending_deletion_repository.save(pending)
+
     meeting_tree_store = MeetingTreeStore(profile_paths.meeting_trees_file)
     profile_media_store = ProfileMediaStore(
         profile_paths.embedded_dir,
@@ -290,6 +304,7 @@ def _launch_main_window(
         jwpub_checksum_store,
         playlist_storage_paths,
         playlist_repository,
+        queue_pending_deletion,
         meeting_tree_store,
         profile_media_store,
         jwpub_import_thread_factory,

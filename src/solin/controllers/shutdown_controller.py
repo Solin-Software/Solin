@@ -38,7 +38,7 @@ class ShutdownDependencies:
     widget_providers: tuple[Callable[[], Any | None], ...]
     conversion_threads: OwnedQThreadRegistry
     jwl_temp_files: set[str]
-    playlist_storage_paths: Any
+    queue_pending_deletion: Callable[[str], None]
     save_window_state: Callable[[], None]
     cleanup_lazy_pages: Callable[[], None] | None
 
@@ -137,12 +137,4 @@ class ShutdownController:
             self._queue_pending_deletion(tmp_path)
 
     def _queue_pending_deletion(self, tmp_path: str) -> None:
-        from ..core.playlists.storage import PendingDeletionRepository
-
-        pending_repo = PendingDeletionRepository.from_paths(
-            self._dependencies.playlist_storage_paths
-        )
-        pending = pending_repo.load()
-        if tmp_path not in pending:
-            pending.append(tmp_path)
-            pending_repo.save(pending)
+        self._dependencies.queue_pending_deletion(tmp_path)

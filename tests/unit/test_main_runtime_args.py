@@ -113,6 +113,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jwpub_checksum_store,
             playlist_storage_paths,
             playlist_repository,
+            queue_pending_deletion,
             meeting_tree_store,
             profile_media_store,
             jwpub_import_thread_factory,
@@ -156,6 +157,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
+            self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
@@ -256,6 +258,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.playlist_repository.path) == "playlists.json"
+    assert callable(window.queue_pending_deletion)
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
     assert str(window.profile_media_store.embedded_dir) == "embedded"
     assert str(window.profile_media_store.images_dir) == "images"
@@ -376,6 +379,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jwpub_checksum_store,
             playlist_storage_paths,
             playlist_repository,
+            queue_pending_deletion,
             meeting_tree_store,
             profile_media_store,
             jwpub_import_thread_factory,
@@ -419,6 +423,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.jwpub_checksum_store = received_jwpub_checksum_store
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
+            self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory

@@ -1649,6 +1649,15 @@ def test_main_window_receives_long_lived_service_factories_from_bootstrap():
     assert "MainWindowServiceFactories" in source
 
 
+def test_shutdown_controller_receives_pending_deletion_queue():
+    path = PROJECT_ROOT / "src" / "solin" / "controllers" / "shutdown_controller.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "PendingDeletionRepository" not in source
+    assert "playlist_storage_paths" not in source
+    assert "queue_pending_deletion" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

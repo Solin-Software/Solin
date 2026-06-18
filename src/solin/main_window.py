@@ -155,6 +155,7 @@ class MainWindow(QMainWindow):
         jwpub_checksum_store: JwpubChecksumStore,
         playlist_storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
+        queue_pending_deletion: Callable[[str], None],
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
@@ -757,7 +758,7 @@ class MainWindow(QMainWindow):
                 ),
                 conversion_threads=self._conversion_threads,
                 jwl_temp_files=self._jwl_tmp_files,
-                playlist_storage_paths=self.playlist_storage_paths,
+                queue_pending_deletion=queue_pending_deletion,
                 save_window_state=self._window_state.save_size,
                 cleanup_lazy_pages=self._lazy_pages.cleanup_browser,
             )

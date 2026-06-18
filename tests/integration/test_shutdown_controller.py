@@ -100,7 +100,7 @@ def _dependencies(events=None):
         widget_providers=(lambda: widget,),
         conversion_threads=registry,
         jwl_temp_files=set(),
-        playlist_storage_paths=object(),
+        queue_pending_deletion=lambda path: events.append(("pending", path)),
         save_window_state=lambda: events.append("window-state"),
         cleanup_lazy_pages=lambda: events.append("lazy-pages"),
     )
@@ -206,6 +206,15 @@ def test_remove_or_queue_tmp_file_queues_when_remove_fails(monkeypatch):
     controller._remove_or_queue_tmp_file("temp.jwlplaylist")
 
     assert queued == ["temp.jwlplaylist"]
+
+
+def test_queue_pending_deletion_delegates_to_dependency():
+    events = []
+    controller = ShutdownController(_dependencies(events))
+
+    controller._queue_pending_deletion("temp.jwlplaylist")
+
+    assert events == [("pending", "temp.jwlplaylist")]
 
 
 def test_shutdown_controller_uses_explicit_dependencies():
