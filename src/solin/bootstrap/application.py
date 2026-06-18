@@ -70,7 +70,7 @@ def _launch_main_window(
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.playlists.cleanup import PlaylistCleanupQueue
     from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
-    from solin.core.ui.titlebar import apply_titlebar_color
+    from solin.ui.titlebar import apply_titlebar_color
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,

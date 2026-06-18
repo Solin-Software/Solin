@@ -831,6 +831,21 @@ def test_profile_infrastructure_receives_global_settings_from_composition():
     assert "QSettingsProfilePreferences(global_settings)" in source
 
 
+def test_native_titlebar_adapter_lives_in_presentation_ui():
+    core_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "titlebar.py"
+    ui_path = PROJECT_ROOT / "src" / "solin" / "ui" / "titlebar.py"
+    consumers = (
+        PROJECT_ROOT / "src" / "solin" / "bootstrap" / "application.py",
+        PROJECT_ROOT / "src" / "solin" / "controllers" / "window_state_controller.py",
+    )
+
+    assert not core_path.exists()
+    assert ui_path.is_file()
+    for path in consumers:
+        source = path.read_text(encoding="utf-8")
+        assert "core.ui.titlebar" not in source
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",

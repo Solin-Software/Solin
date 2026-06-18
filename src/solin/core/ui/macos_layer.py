@@ -21,7 +21,7 @@ Segurança
 - Toda a ponte ObjC é embrulhada em ``try/except`` e nunca propaga exceção.
   Pior caso = no-op → o widget continua um retângulo de cantos retos (a base
   garantida do modo sólido), nunca um crash nativo. Isso respeita o alerta
-  documentado em ``titlebar.py`` para builds Nuitka standalone.
+  documentado em ``solin.ui.titlebar`` para builds Nuitka standalone.
 - Em qualquer outra plataforma é um no-op silencioso (nem importa pyobjc).
 
 Uso

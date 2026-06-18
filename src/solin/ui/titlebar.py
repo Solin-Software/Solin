@@ -21,7 +21,7 @@ Linux / outros
 
 Uso
 ───
-    from solin.core.ui.titlebar import apply_titlebar_color
+    from solin.ui.titlebar import apply_titlebar_color
     apply_titlebar_color(window, "#1A231F")   # após window.show()
 """
 

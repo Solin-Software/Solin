@@ -184,7 +184,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         SimpleNamespace(MainWindow=_MainWindow),
     )
     monkeypatch.setattr(
-        "solin.core.ui.titlebar.apply_titlebar_color",
+        "solin.ui.titlebar.apply_titlebar_color",
         lambda window, color: events.append(("titlebar", window, color)),
     )
     monkeypatch.setattr(
@@ -421,7 +421,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         SimpleNamespace(MainWindow=_MainWindow),
     )
     monkeypatch.setattr(
-        "solin.core.ui.titlebar.apply_titlebar_color",
+        "solin.ui.titlebar.apply_titlebar_color",
         lambda window, color: events.append(("titlebar", color)),
     )
     monkeypatch.setattr(
