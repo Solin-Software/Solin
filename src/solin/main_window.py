@@ -18,6 +18,7 @@ from .controllers.main_window_bootstrap_controller import (
     MainWindowBootstrapController,
     MainWindowStartupDependencies,
 )
+from .controllers.main_window_profile_settings import MainWindowProfileSettings
 from .controllers.main_window_ui_controller import (
     MainWindowUiContext,
     MainWindowUiController,
@@ -84,8 +85,6 @@ from .controllers.wifi_playlist_controller import (
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
-from .core.projection.monitor_allocation import MonitorAllocationStore
-from .ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
     execute_start_share,
@@ -93,27 +92,16 @@ from .core.integrations.automation.screen_share import (
     macos_accessibility_trusted,
 )
 from .core.jw.background_song_service import BackgroundSongService
-from .core.jw.background_song_settings import BackgroundSongSettingsStore
 from .core.jw.songs import JWSongsStore
 from .core.jw.yeartext import YeartextService
-from .core.jw.yeartext_settings import YeartextSettingsStore
-from .core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
-from .core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
 from .core.media.profile_store import ProfileMediaStore
 from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
 from .core.integrations.automation.obs import OBSWebSocketService
-from .core.integrations.automation.settings import (
-    AutoKeySettingsStore,
-    AutoShareSettingsStore,
-    CameraSettingsStore,
-    OBSSettingsStore,
-    ZoomSettingsStore,
-)
 from .core.integrations.ndi import NDIReceiverService
 from .core.integrations.camera import CameraService
 from .core.integrations.automation.zoom.service import ZoomService
@@ -122,15 +110,12 @@ from .core.foundation.identity import get_install_id
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.settings_store import InstallationSettingsStore
 from .core.foundation.qt_threads import OwnedQThreadRegistry
-from .core.profiles.settings import ProfileSettings
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
-from .core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.memorial import MemorialService
 from .core.meetings.jwpub_cache import JwpubChecksumStore
 from .core.meetings.publications import JwpubService
 from .core.profiles.models import ProfileInfo
-from .core.remote.notification_settings import NotificationSettingsStore
 from .core.remote.notifications import NotificationService
 from .core.remote.patch_installer import (
     PatchDownloadWorker,
@@ -174,7 +159,7 @@ class MainWindow(QMainWindow):
         lang_manager: LanguageManager,
         runtime_paths: RuntimePaths,
         profile_paths: ProfilePaths,
-        profile_settings: ProfileSettings,
+        profile_settings_bundle: MainWindowProfileSettings,
         media_cache_manager: MediaCacheManager,
         media_controller: MediaController,
         background_media_controller: MediaController,
@@ -182,7 +167,6 @@ class MainWindow(QMainWindow):
         media_info_service_factory: Callable[[QObject], MediaInfoService],
         browser_download_service_factory: Callable[[], BrowserDownloadService],
         browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService],
-        media_settings: MediaSettingsStore,
         font_manager: FontManager,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
@@ -212,7 +196,7 @@ class MainWindow(QMainWindow):
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
-        self.profile_settings = profile_settings
+        self._profile_settings = profile_settings_bundle
         self.media_cache_manager = media_cache_manager
         self.media_ctrl = media_controller
         self._background_media_controller = background_media_controller
@@ -226,35 +210,19 @@ class MainWindow(QMainWindow):
         self.meeting_tree_store = meeting_tree_store
         self.timer_session = timer_session
         self.active_profile = active_profile
-        self._obs_settings = OBSSettingsStore.for_profile_settings(profile_settings)
-        self._zoom_settings = ZoomSettingsStore.for_profile_settings(profile_settings)
-        self._auto_share_settings = AutoShareSettingsStore.for_profile_settings(
-            profile_settings,
-        )
-        self._auto_key_settings = AutoKeySettingsStore.for_profile_settings(
-            profile_settings,
-        )
-        self._camera_settings = CameraSettingsStore.for_profile_settings(profile_settings)
-        self._media_settings = media_settings
-        self._projection_playback_settings = (
-            ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings)
-        )
-        self._meeting_schedule_settings = (
-            MeetingScheduleSettingsStore.for_profile_settings(profile_settings)
-        )
-        self._watched_folder_settings = WatchedFolderSettingsStore.for_profile_settings(
-            profile_settings,
-        )
-        self._yeartext_settings = YeartextSettingsStore.for_profile_settings(
-            profile_settings,
-        )
-        self._background_song_settings = (
-            BackgroundSongSettingsStore.for_profile_settings(profile_settings)
-        )
+        self._obs_settings = profile_settings_bundle.obs
+        self._zoom_settings = profile_settings_bundle.zoom
+        self._auto_share_settings = profile_settings_bundle.auto_share
+        self._auto_key_settings = profile_settings_bundle.auto_key
+        self._camera_settings = profile_settings_bundle.camera
+        self._media_settings = profile_settings_bundle.media
+        self._projection_playback_settings = profile_settings_bundle.projection_playback
+        self._meeting_schedule_settings = profile_settings_bundle.meeting_schedule
+        self._watched_folder_settings = profile_settings_bundle.watched_folder
+        self._yeartext_settings = profile_settings_bundle.yeartext
+        self._background_song_settings = profile_settings_bundle.background_song
         self.screen_mgr = ScreenManager(self)
-        self._monitor_allocation = MonitorAllocationStore.for_profile_settings(
-            profile_settings,
-        )
+        self._monitor_allocation = profile_settings_bundle.monitor_allocation
         self.projection_session = ProjectionSession(
             allocation=self._monitor_allocation,
             media_hidden_screen_names=self._monitor_allocation.media_off_names(
@@ -368,7 +336,7 @@ class MainWindow(QMainWindow):
                 win_id=self.winId,
                 titlebar_window=self,
             ),
-            WindowGeometrySettingsStore.for_profile_settings(profile_settings),
+            profile_settings_bundle.window_geometry,
         )
         self._window_state.restore_size()
         self._window_state.apply_icon()
@@ -791,9 +759,7 @@ class MainWindow(QMainWindow):
                     self,
                     notification_service=NotificationService(
                         self.lang,
-                        NotificationSettingsStore.for_profile_settings(
-                            self.profile_settings
-                        ),
+                        self._profile_settings.notification,
                         self._install_id_provider,
                         self,
                     ),

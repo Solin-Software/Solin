@@ -1611,6 +1611,16 @@ def test_patch_installer_receives_installation_settings_store():
     assert "settings: PatchCleanupSettings" in source
 
 
+def test_main_window_receives_profile_settings_from_bootstrap_composition():
+    path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert ".for_profile_settings" not in source
+    assert "NotificationSettingsStore" not in source
+    assert "WindowGeometrySettingsStore" not in source
+    assert "MainWindowProfileSettings" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

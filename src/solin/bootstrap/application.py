@@ -32,6 +32,58 @@ from solin.bootstrap.single_instance import (
 )
 from solin.core.profiles.application import ProfileRegistryLoadError
 
+
+def _build_main_window_profile_settings(profile_settings):
+    from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
+    from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
+    from solin.core.integrations.automation.settings import (
+        AutoKeySettingsStore,
+        AutoShareSettingsStore,
+        CameraSettingsStore,
+        OBSSettingsStore,
+        ZoomSettingsStore,
+    )
+    from solin.core.jw.background_song_settings import BackgroundSongSettingsStore
+    from solin.core.jw.yeartext_settings import YeartextSettingsStore
+    from solin.core.media.settings import (
+        MediaSettingsStore,
+        ProjectionPlaybackSettingsStore,
+    )
+    from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
+    from solin.core.projection.monitor_allocation import MonitorAllocationStore
+    from solin.core.remote.notification_settings import NotificationSettingsStore
+    from solin.ui.window_settings import WindowGeometrySettingsStore
+
+    return MainWindowProfileSettings(
+        media=MediaSettingsStore.for_profile_settings(profile_settings),
+        obs=OBSSettingsStore.for_profile_settings(profile_settings),
+        zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
+        auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
+        auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
+        camera=CameraSettingsStore.for_profile_settings(profile_settings),
+        projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(
+            profile_settings
+        ),
+        meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(
+            profile_settings
+        ),
+        watched_folder=WatchedFolderSettingsStore.for_profile_settings(
+            profile_settings
+        ),
+        yeartext=YeartextSettingsStore.for_profile_settings(profile_settings),
+        background_song=BackgroundSongSettingsStore.for_profile_settings(
+            profile_settings
+        ),
+        monitor_allocation=MonitorAllocationStore.for_profile_settings(
+            profile_settings
+        ),
+        window_geometry=WindowGeometrySettingsStore.for_profile_settings(
+            profile_settings
+        ),
+        notification=NotificationSettingsStore.for_profile_settings(profile_settings),
+    )
+
+
 def _launch_main_window(
     app,
     lang_manager,
@@ -54,7 +106,6 @@ def _launch_main_window(
     """
     from solin.main_window import MainWindow
     from solin.core.meetings.tree_store import MeetingTreeStore
-    from solin.core.media.settings import MediaSettingsStore
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
@@ -105,14 +156,18 @@ def _launch_main_window(
     )
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
-    media_settings = MediaSettingsStore.for_profile_settings(profile_settings)
-    media_controller = media.create_playback(media_settings)
-    background_media_controller = media.create_playback(media_settings)
+    main_window_profile_settings = _build_main_window_profile_settings(
+        profile_settings
+    )
+    media_controller = media.create_playback(main_window_profile_settings.media)
+    background_media_controller = media.create_playback(
+        main_window_profile_settings.media
+    )
     window = MainWindow(
         lang_manager,
         runtime_paths,
         profile_paths,
-        profile_settings,
+        main_window_profile_settings,
         media.cache_manager,
         media_controller,
         background_media_controller,
@@ -120,7 +175,6 @@ def _launch_main_window(
         media.create_info_service,
         media.create_browser_download_service,
         media.create_browser_image_fetch_service,
-        media_settings,
         font_manager,
         jw_catalog_service_factory,
         jw_catalog_thumbnail_session_factory,

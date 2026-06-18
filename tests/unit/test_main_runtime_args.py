@@ -59,6 +59,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
+    profile_settings_bundle = SimpleNamespace(media=media_settings)
 
     class _MediaController:
         def __init__(self):
@@ -95,7 +96,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             lang_manager,
             received_runtime_paths,
             received_profile_paths,
-            received_profile_settings,
+            received_profile_settings_bundle,
             received_media_cache_manager,
             received_media_controller,
             received_background_media_controller,
@@ -103,7 +104,6 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_media_info_service_factory,
             received_browser_download_service_factory,
             received_browser_image_fetch_service_factory,
-            received_media_settings,
             received_font_manager,
             received_jw_catalog_service_factory,
             received_jw_catalog_thumbnail_session_factory,
@@ -132,7 +132,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
-            self.profile_settings = received_profile_settings
+            self.profile_settings_bundle = received_profile_settings_bundle
             self.media_cache_manager = received_media_cache_manager
             self.media_controller = received_media_controller
             self.background_media_controller = received_background_media_controller
@@ -144,7 +144,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.browser_image_fetch_service_factory = (
                 received_browser_image_fetch_service_factory
             )
-            self.media_settings = received_media_settings
+            self.media_settings = received_profile_settings_bundle.media
             self.font_manager = received_font_manager
             self.jw_catalog_service_factory = received_jw_catalog_service_factory
             self.jw_catalog_thumbnail_session_factory = (
@@ -195,8 +195,12 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         ),
     )
     monkeypatch.setattr(
-        "solin.core.media.settings.MediaSettingsStore.for_profile_settings",
-        lambda _settings: media_settings,
+        main,
+        "_build_main_window_profile_settings",
+        lambda received_settings: (
+            events.append(("profile_settings_bundle", received_settings))
+            or profile_settings_bundle
+        ),
     )
 
     window = main._launch_main_window(
@@ -219,7 +223,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.lang_manager == "lang"
     assert window.runtime_paths is runtime_paths
     assert window.profile_paths is profile_paths
-    assert window.profile_settings is profile_settings
+    assert window.profile_settings_bundle is profile_settings_bundle
     assert window.media_cache_manager is media_cache_manager
     assert window.media_settings is media_settings
     assert window.media_info_queue_factory is media.create_info_queue
@@ -284,6 +288,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
     assert events == [
+        ("profile_settings_bundle", profile_settings),
         "show",
         ("titlebar", window, "#1A231F"),
         ("timer", 200),
@@ -308,6 +313,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
+    profile_settings_bundle = SimpleNamespace(media=media_settings)
 
     class _MediaController:
         def setParent(self, _parent):
@@ -335,7 +341,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             lang_manager,
             received_runtime_paths,
             received_profile_paths,
-            received_profile_settings,
+            received_profile_settings_bundle,
             received_media_cache_manager,
             received_media_controller,
             received_background_media_controller,
@@ -343,7 +349,6 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_media_info_service_factory,
             received_browser_download_service_factory,
             received_browser_image_fetch_service_factory,
-            received_media_settings,
             received_font_manager,
             received_jw_catalog_service_factory,
             received_jw_catalog_thumbnail_session_factory,
@@ -372,7 +377,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
-            self.profile_settings = received_profile_settings
+            self.profile_settings_bundle = received_profile_settings_bundle
             self.media_cache_manager = received_media_cache_manager
             self.media_controller = received_media_controller
             self.background_media_controller = received_background_media_controller
@@ -384,7 +389,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.browser_image_fetch_service_factory = (
                 received_browser_image_fetch_service_factory
             )
-            self.media_settings = received_media_settings
+            self.media_settings = received_profile_settings_bundle.media
             self.font_manager = received_font_manager
             self.jw_catalog_service_factory = received_jw_catalog_service_factory
             self.jw_catalog_thumbnail_session_factory = (
@@ -432,8 +437,12 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         ),
     )
     monkeypatch.setattr(
-        "solin.core.media.settings.MediaSettingsStore.for_profile_settings",
-        lambda _settings: media_settings,
+        main,
+        "_build_main_window_profile_settings",
+        lambda received_settings: (
+            events.append(("profile_settings_bundle", received_settings))
+            or profile_settings_bundle
+        ),
     )
 
     main._launch_main_window(
@@ -453,7 +462,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         active_profile=active_profile,
     )
 
-    assert events == ["show", ("titlebar", "#1A231F")]
+    assert events == [
+        ("profile_settings_bundle", profile_settings),
+        "show",
+        ("titlebar", "#1A231F"),
+    ]
 
 
 def test_run_zoom_poll_standalone_keeps_window_alive_until_event_loop(monkeypatch):
