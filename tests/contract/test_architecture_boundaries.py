@@ -856,21 +856,26 @@ def test_native_visual_adapters_live_in_presentation_ui():
         assert "core.ui.macos_layer" not in source
 
 
-def test_widget_presentation_helpers_live_in_ui_package():
-    core_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "helpers.py"
-    ui_path = PROJECT_ROOT / "src" / "solin" / "ui" / "helpers.py"
+def test_presentation_helpers_live_in_ui_package():
+    core_helpers_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "helpers.py"
+    core_fonts_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "fonts.py"
+    ui_helpers_path = PROJECT_ROOT / "src" / "solin" / "ui" / "helpers.py"
+    ui_fonts_path = PROJECT_ROOT / "src" / "solin" / "ui" / "fonts.py"
     consumers = (
+        PROJECT_ROOT / "src" / "solin" / "projection",
         PROJECT_ROOT / "src" / "solin" / "widgets",
         PROJECT_ROOT / "src" / "solin" / "ui",
     )
     violations: list[str] = []
 
-    assert not core_path.exists()
-    assert ui_path.is_file()
+    assert not core_helpers_path.exists()
+    assert not core_fonts_path.exists()
+    assert ui_helpers_path.is_file()
+    assert ui_fonts_path.is_file()
     for root in consumers:
         for path in sorted(root.rglob("*.py")):
             source = path.read_text(encoding="utf-8")
-            if "core.ui.helpers" in source:
+            if "core.ui.helpers" in source or "core.ui.fonts" in source:
                 violations.append(str(path.relative_to(PROJECT_ROOT)))
 
     assert violations == []

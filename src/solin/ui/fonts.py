@@ -1,4 +1,4 @@
-"""Shared UI font selection helpers."""
+"""Shared presentation font selection helpers."""
 
 from __future__ import annotations
 

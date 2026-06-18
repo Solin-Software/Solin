@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.i18n.manager import LanguageManager
-from ..core.ui.fonts import timer_digit_font_family
+from ..ui.fonts import timer_digit_font_family
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.timer_bridge import TimerBridge
 from solin.ui.qml.timer_icons import TimerIconProvider

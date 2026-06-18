@@ -18,7 +18,7 @@ from PySide6.QtCore import (
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from ..core.ui.fonts import timer_digit_font_family
+from ..ui.fonts import timer_digit_font_family
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.timer_output import ClockRenderBridge
 from .window import exclude_from_aero_peek
