@@ -131,7 +131,10 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
             profile_models.ProfileInfo("removed", "Removed"),
         ]
     )
-    manager = profile_infrastructure.create_local_profile_service(tmp_path)
+    manager = profile_infrastructure.create_local_profile_service(
+        tmp_path,
+        global_settings=settings_store.GlobalSettingsStore.create(),
+    )
     manager.set_active("kept")
 
     assert manager.delete_profile("removed") is True

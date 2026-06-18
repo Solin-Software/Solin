@@ -27,6 +27,7 @@ from solin.core.foundation.constants import (
 from solin.core.foundation import runtime_paths as runtime_paths_module
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
+from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
 from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import infrastructure as profile_infrastructure
@@ -94,6 +95,13 @@ EXPECTED_SETTINGS_KEYS = {
 }
 
 
+def _isolated_global_settings() -> GlobalSettingsStore:
+    organization = f"SolinTest_{uuid.uuid4().hex}"
+    return GlobalSettingsStore(
+        SettingsStore.for_namespace(organization, QSETTINGS_GLOBAL_APP)
+    )
+
+
 def test_qsettings_identity_and_namespaces_are_stable() -> None:
     expected_qt_identity = "SolinDev" if IS_DEV else "Solin"
 
@@ -150,6 +158,7 @@ def test_profile_registry_and_directory_layout_are_stable(
     manager = profile_infrastructure.create_local_profile_service(
         tmp_path,
         cache_dir,
+        global_settings=_isolated_global_settings(),
     )
     manager.set_active("main_hall")
     runtime = profile_infrastructure.ProfileRuntimeContextFactory(
@@ -196,8 +205,14 @@ def test_profile_registry_and_directory_layout_are_stable(
 
 
 def test_profile_services_are_isolated_instances(tmp_path: Path) -> None:
-    first = profile_infrastructure.create_local_profile_service(tmp_path / "first")
-    second = profile_infrastructure.create_local_profile_service(tmp_path / "second")
+    first = profile_infrastructure.create_local_profile_service(
+        tmp_path / "first",
+        global_settings=_isolated_global_settings(),
+    )
+    second = profile_infrastructure.create_local_profile_service(
+        tmp_path / "second",
+        global_settings=_isolated_global_settings(),
+    )
 
     created = first.create_profile("Main Hall")
 
@@ -214,7 +229,10 @@ def test_corrupt_profile_registry_is_not_treated_as_first_run(
     registry_path.write_text("{broken", encoding="utf-8")
 
     with pytest.raises(ProfileRegistryLoadError):
-        profile_infrastructure.create_local_profile_service(tmp_path)
+        profile_infrastructure.create_local_profile_service(
+            tmp_path,
+            global_settings=_isolated_global_settings(),
+        )
 
     assert registry_path.read_text(encoding="utf-8") == "{broken"
 

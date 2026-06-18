@@ -822,6 +822,15 @@ def test_profile_domain_has_no_framework_or_application_dependencies():
     assert violations == []
 
 
+def test_profile_infrastructure_receives_global_settings_from_composition():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "profiles" / "infrastructure.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "GlobalSettingsStore.create" not in source
+    assert "global_settings: GlobalSettingsStore" in source
+    assert "QSettingsProfilePreferences(global_settings)" in source
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",

@@ -201,8 +201,8 @@ class LocalProfileDataDeletion:
 class QSettingsProfilePreferences:
     """Profile selection, namespaces, cleanup, and legacy settings migration."""
 
-    def __init__(self, global_settings: GlobalSettingsStore | None = None) -> None:
-        self._global_settings = global_settings or GlobalSettingsStore.create()
+    def __init__(self, global_settings: GlobalSettingsStore) -> None:
+        self._global_settings = global_settings
 
     def has_legacy_settings(self) -> bool:
         legacy = SettingsStore.for_namespace(
@@ -333,7 +333,7 @@ def create_local_profile_service(
     data_dir: str | Path,
     cache_dir: str | Path | None = None,
     *,
-    global_settings: GlobalSettingsStore | None = None,
+    global_settings: GlobalSettingsStore,
 ) -> ProfileService:
     data_root = Path(data_dir)
     return ProfileService(
