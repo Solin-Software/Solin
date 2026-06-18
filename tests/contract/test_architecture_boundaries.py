@@ -881,6 +881,28 @@ def test_presentation_helpers_live_in_ui_package():
     assert violations == []
 
 
+def test_screen_manager_lives_in_presentation_ui():
+    core_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "screens.py"
+    ui_path = PROJECT_ROOT / "src" / "solin" / "ui" / "screens.py"
+    consumers = (
+        PROJECT_ROOT / "src" / "solin" / "controllers",
+        PROJECT_ROOT / "src" / "solin" / "widgets",
+        PROJECT_ROOT / "src" / "solin" / "main_window.py",
+    )
+    violations: list[str] = []
+
+    assert not core_path.exists()
+    assert ui_path.is_file()
+    for target in consumers:
+        paths = [target] if target.is_file() else sorted(target.rglob("*.py"))
+        for path in paths:
+            source = path.read_text(encoding="utf-8")
+            if "core.ui.screens" in source:
+                violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",

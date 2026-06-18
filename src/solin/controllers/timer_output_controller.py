@@ -18,7 +18,7 @@ from PySide6.QtCore import QTimer
 from ..core.timer.application import TimerSession
 from ..core.timer.models import ClockConfig
 from ..core.ui.monitor_allocation import OWNER_TIMER
-from ..core.ui.screens import ScreenManager
+from ..ui.screens import ScreenManager
 from ..projection.timer_window import TimerOutputWindow
 from ..ui.qml.timer_output import ClockRenderBridge
 

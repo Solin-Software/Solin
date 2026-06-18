@@ -12,7 +12,7 @@ from PySide6.QtCore import (
 )
 
 from ..core.i18n.manager import LanguageManager
-from ..core.ui.screens import ScreenManager
+from ..ui.screens import ScreenManager
 from ..core.integrations.automation.obs import OBSWebSocketService
 from ..core.integrations.automation.settings import (
     AutoKeySettingsStore,

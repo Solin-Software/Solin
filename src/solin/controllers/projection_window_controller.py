@@ -7,7 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QDateTime, QTimer
 
-from ..core.ui.screens import ScreenManager
+from ..ui.screens import ScreenManager
 from ..core.projection.application import ProjectionSession
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow

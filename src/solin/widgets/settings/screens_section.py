@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from ...core.ui.screens import ScreenManager
+from ...ui.screens import ScreenManager
 from ...styles.icons import ICON_MONITOR, ICON_TV, make_icon
 from .shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
 

@@ -1,3 +1,5 @@
+"""Screen enumeration adapter for presentation controllers and widgets."""
+
 from PySide6.QtGui import QGuiApplication, QScreen
 from PySide6.QtCore import QObject, Signal
 
