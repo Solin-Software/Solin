@@ -337,13 +337,15 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
 
             self.assertTrue(root_file.exists())
             self.assertFalse((folder / MANIFEST_FILE).exists())
-            self.assertTrue(cache.exists())
+            self.assertFalse(cache.exists())
 
-    def test_delete_sync_metadata_preserves_watched_folder_manifest_and_cache(self):
+    def test_delete_sync_metadata_removes_meeting_manifest_and_cache_with_processed_state(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "2026-05-25 MW"
             folder.mkdir()
+            root_file = folder / "report.pdf"
+            root_file.write_bytes(b"pdf")
             manifest = {
                 "version": 1,
                 "processed": {
@@ -370,12 +372,12 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
 
             service.delete_sync_metadata(folder)
 
-            saved = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
-            self.assertNotIn(MEETING_TREE_KEY, saved)
-            self.assertEqual(saved["processed"], manifest["processed"])
-            self.assertTrue(cached_output.exists())
+            self.assertTrue(root_file.exists())
+            self.assertFalse((folder / MANIFEST_FILE).exists())
+            self.assertFalse(cached_output.exists())
+            self.assertFalse(cache.exists())
 
-    def test_detach_cache_references_keeps_local_tree_independent_from_sync_cache(self):
+    def test_detach_cache_references_keeps_local_tree_independent_from_deleted_cache(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -413,7 +415,7 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertTrue(official_path.is_relative_to(durable))
             self.assertEqual(manual_path, manual_root)
             self.assertTrue(manual_root.exists())
-            self.assertTrue(cache.exists())
+            self.assertFalse(cache.exists())
             self.assertNotIn("linked_folder_source", detached[0])
             self.assertEqual(detached[1]["linked_folder_source"], str(folder))
 

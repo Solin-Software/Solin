@@ -204,22 +204,18 @@ class MeetingLinkedFolderSync:
 
     def delete_sync_metadata(self, folder: Path) -> None:
         with MANIFEST_LOCK:
-            try:
-                manifest = load_manifest(folder, strict=True)
-            except ManifestError as exc:
-                raise MeetingSyncError(f"Could not read {MANIFEST_FILE}.") from exc
-
-            manifest.pop(MEETING_TREE_KEY, None)
-            if self._manifest_has_persistent_state(manifest):
-                if not save_manifest(folder, manifest):
-                    raise MeetingSyncError(f"Could not write {MANIFEST_FILE}.")
-                return
-
             manifest_path = folder / MANIFEST_FILE
             try:
                 manifest_path.unlink(missing_ok=True)
             except OSError as exc:
                 raise MeetingSyncError(f"Could not remove {MANIFEST_FILE}.") from exc
+
+            cache_path = folder / CACHE_DIR_NAME
+            if cache_path.exists():
+                try:
+                    shutil.rmtree(cache_path)
+                except OSError:
+                    log.warning("Could not remove meeting sync cache %s", cache_path, exc_info=True)
 
     def materialize_tree_files(
         self,
@@ -484,16 +480,6 @@ class MeetingLinkedFolderSync:
             return max(0, int(block.get("revision") or 0))
         except (TypeError, ValueError):
             return 0
-
-    @staticmethod
-    def _manifest_has_persistent_state(manifest: dict[str, Any]) -> bool:
-        for key, value in manifest.items():
-            if key == "version":
-                continue
-            if key == "processed" and value == {}:
-                continue
-            return True
-        return False
 
     def _merge_conflicting_nodes(
         self,
