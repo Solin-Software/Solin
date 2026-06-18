@@ -5,7 +5,7 @@ from solin.controllers.window_state_controller import (
     WindowStateController,
 )
 from solin.core.profiles.settings import ProfileSettings
-from solin.core.ui.window_settings import WindowGeometrySettingsStore
+from solin.ui.window_settings import WindowGeometrySettingsStore
 
 
 class _GeometrySettingsStub:

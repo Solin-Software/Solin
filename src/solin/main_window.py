@@ -85,7 +85,7 @@ from .controllers.window_state_controller import WindowStateContext, WindowState
 from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
 from .core.projection.monitor_allocation import MonitorAllocationStore
-from .core.ui.window_settings import WindowGeometrySettingsStore
+from .ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
     execute_start_share,

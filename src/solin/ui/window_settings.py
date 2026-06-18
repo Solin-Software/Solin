@@ -10,7 +10,7 @@ from solin.core.profiles.settings import ProfileSettings
 
 @dataclass(frozen=True, slots=True)
 class WindowGeometrySettingsStore:
-    """Typed profile-scoped settings for the main window geometry."""
+    """Typed profile-scoped presentation settings for main window geometry."""
 
     settings: SettingsStore
 

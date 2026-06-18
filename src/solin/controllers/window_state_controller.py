@@ -10,7 +10,7 @@ from PySide6.QtGui import QGuiApplication, QIcon
 
 from ..core.foundation.resources import application_asset_path
 from ..ui.titlebar import apply_titlebar_color
-from ..core.ui.window_settings import WindowGeometrySettingsStore
+from ..ui.window_settings import WindowGeometrySettingsStore
 
 log = logging.getLogger(__name__)
 

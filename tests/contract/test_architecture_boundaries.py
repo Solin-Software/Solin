@@ -925,6 +925,23 @@ def test_monitor_allocation_lives_with_projection_core():
     assert violations == []
 
 
+def test_core_ui_package_has_no_python_modules():
+    core_ui_root = PROJECT_ROOT / "src" / "solin" / "core" / "ui"
+    violations = [
+        str(path.relative_to(PROJECT_ROOT))
+        for path in sorted(core_ui_root.rglob("*.py"))
+    ]
+    import_violations: list[str] = []
+
+    for path in sorted((PROJECT_ROOT / "src" / "solin").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "core.ui." in source or "core.ui import" in source:
+            import_violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+    assert import_violations == []
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",
