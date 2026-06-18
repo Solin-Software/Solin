@@ -569,8 +569,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
     def _interface_api_code(self, code: str) -> str:
         if self._lang:
-            meta = getattr(self._lang, "languages", {}).get(code, {}).get("meta", {})
-            return meta.get("api_code", "")
+            return self._lang.api_code_for_language(code)
         return "T" if code == "pt_BR" else "E"
 
     def _media_language_items(self) -> list[tuple[str, str, str]]:

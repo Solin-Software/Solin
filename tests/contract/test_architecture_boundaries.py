@@ -947,6 +947,18 @@ def test_window_geometry_settings_live_in_core_windowing():
     assert violations == []
 
 
+def test_language_manager_exposes_explicit_language_metadata_api():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "i18n" / "manager.py"
+    profile_screen = PROJECT_ROOT / "src" / "solin" / "ui" / "profile_screen.py"
+    source = path.read_text(encoding="utf-8")
+    profile_source = profile_screen.read_text(encoding="utf-8")
+
+    assert "def languages(" not in source
+    assert 'getattr(self._lang, "languages"' not in profile_source
+    assert "api_code_for_language" in source
+    assert "api_code_for_language" in profile_source
+
+
 def test_presentation_has_no_trivial_refresh_language_aliases():
     violations: list[str] = []
 

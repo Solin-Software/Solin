@@ -291,13 +291,9 @@ class LanguageManager(QObject):
         return [(code, m.get("name", code))
                 for code, m in self._meta.items()]
 
+    def api_code_for_language(self, code: str) -> str:
+        return self._meta.get(code, {}).get("api_code", "")
+
     def shutdown(self) -> None:
         """Stop background work owned by language services."""
         self._jw_lang_svc.shutdown()
-
-    # ── compatibilidade: dict 'languages' (leitura) ───────────────────────────
-
-    @property
-    def languages(self) -> dict[str, dict]:
-        """Compatibilidade com código que acessa lang.languages[code]['meta']."""
-        return {code: {"meta": m} for code, m in self._meta.items()}
