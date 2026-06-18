@@ -1,5 +1,9 @@
 from dataclasses import FrozenInstanceError
+import os
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
@@ -40,6 +44,44 @@ def test_zoom_state_types_are_importable_without_pywinauto():
     assert state.video is VideoState.UNKNOWN
     assert state.sharing is ShareState.UNKNOWN
     assert state.participant_names == ()
+
+
+def test_zoom_controls_import_without_pywinauto():
+    code = textwrap.dedent(
+        """
+        import importlib.abc
+        import sys
+
+        class BlockPywinauto(importlib.abc.MetaPathFinder):
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname == "pywinauto" or fullname.startswith("pywinauto."):
+                    raise ImportError("blocked pywinauto")
+                return None
+
+        sys.meta_path.insert(0, BlockPywinauto())
+
+        from solin.core.integrations.automation.zoom.controls import ZoomSession
+
+        session = ZoomSession()
+        try:
+            session.desktop()
+        except RuntimeError as exc:
+            assert "pywinauto" in str(exc)
+        else:
+            raise AssertionError("ZoomSession.desktop() should require pywinauto")
+        """
+    )
+    env = {**os.environ, "PYTHONPATH": str(Path("src").resolve())}
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_zoom_state_value_objects_are_immutable_and_validated():
@@ -123,6 +165,7 @@ def test_zoom_controls_uses_package_local_zoom_modules():
         encoding="utf-8"
     )
 
+    assert "sys.exit" not in source
     assert "from .i18n_labels import" in source
     assert "from .toolbar_cache import" in source
     assert "from .text_match import" in source

@@ -18,7 +18,6 @@ import ctypes
 import json
 import logging
 import re
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -58,10 +57,22 @@ def _debug_ignored(message: str) -> None:
 try:
     from pywinauto import Desktop
     from pywinauto.keyboard import send_keys
-except ImportError as e:
-    log.error("pywinauto is not installed. Run: pip install pywinauto")
-    log.debug("pywinauto import details: %r", e)
-    sys.exit(1)
+    _PYWINAUTO_IMPORT_ERROR: ImportError | None = None
+except ImportError as exc:
+    Desktop = None  # type: ignore[assignment]
+    _PYWINAUTO_IMPORT_ERROR = exc
+
+    def send_keys(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("Zoom automation requires pywinauto on Windows.") from (
+            _PYWINAUTO_IMPORT_ERROR
+        )
+
+
+def _require_pywinauto() -> None:
+    if _PYWINAUTO_IMPORT_ERROR is not None:
+        raise RuntimeError("Zoom automation requires pywinauto on Windows.") from (
+            _PYWINAUTO_IMPORT_ERROR
+        )
 
 # ─────────────────────────────────────────────────────────────────
 #  Timeouts
@@ -865,9 +876,13 @@ class ZoomSession:
 
     def desktop(self) -> Desktop:
         self.ensure_active()
+        _require_pywinauto()
+        desktop_factory = Desktop
+        if desktop_factory is None:
+            raise RuntimeError("Zoom automation requires pywinauto on Windows.")
         desktop = getattr(self._desktop_local, "desktop", None)
         if desktop is None:
-            desktop = Desktop(backend="uia")
+            desktop = desktop_factory(backend="uia")
             self._desktop_local.desktop = desktop
         return desktop
 

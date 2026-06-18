@@ -7,7 +7,7 @@ browser surface:
 - macOS: WKWebView through `libnative_webview_widget.dylib`
 
 The Python package and native binaries are versioned together in this
-repository. The ABI source of truth is `native_webview_widget/abi.py`.
+repository. The ABI source of truth is `src/native_webview_widget/abi.py`.
 
 ## ABI Contract
 
@@ -25,13 +25,13 @@ is intentionally bumped and every native implementation is rebuilt.
 
 The package must contain:
 
-- `native_webview_widget/__init__.py`
-- `native_webview_widget/abi.py`
-- `native_webview_widget/_backend.py`
-- `native_webview_widget/widget.py`
-- `native_webview_widget/native_webview_widget.dll`
-- `native_webview_widget/libnative_webview_widget.dylib` or
-  `native_webview_widget/native_webview_widget.dylib`
+- `src/native_webview_widget/__init__.py`
+- `src/native_webview_widget/abi.py`
+- `src/native_webview_widget/_backend.py`
+- `src/native_webview_widget/widget.py`
+- `src/native_webview_widget/native_webview_widget.dll`
+- `src/native_webview_widget/libnative_webview_widget.dylib` or
+  `src/native_webview_widget/native_webview_widget.dylib`
 
 ## Validation
 

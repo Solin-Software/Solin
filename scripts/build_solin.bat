@@ -101,7 +101,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
     --include-data-files="%PROJECT_ROOT%resources\translations\*.qm=resources/translations/" ^
-    --include-data-files="%PROJECT_ROOT%native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" ^
+    --include-data-files="%PROJECT_ROOT%src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^
     "%MAIN_SCRIPT%"

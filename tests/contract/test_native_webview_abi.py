@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import ast
 import platform
+import tomllib
 
 from native_webview_widget.abi import EVENTS, REQUIRED_EXPORTS
 from scripts import validate_native_webview
 from tests._paths import REPO_ROOT
 
-PACKAGE_DIR = REPO_ROOT / "native_webview_widget"
+PACKAGE_DIR = REPO_ROOT / "src" / "native_webview_widget"
 
 
 def _backend_configured_symbols() -> set[str]:
@@ -33,6 +34,18 @@ def _backend_configured_symbols() -> set[str]:
 
 def test_native_webview_abi_manifest_matches_backend_usage():
     assert set(REQUIRED_EXPORTS) == _backend_configured_symbols()
+
+
+def test_native_webview_package_uses_src_layout_and_includes_native_binaries():
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert PACKAGE_DIR.is_dir()
+    assert not (REPO_ROOT / "native_webview_widget" / "__init__.py").exists()
+    assert pyproject["tool"]["setuptools"]["packages"]["find"]["where"] == ["src"]
+    assert pyproject["tool"]["setuptools"]["package-data"]["native_webview_widget"] == [
+        "*.dll",
+        "*.dylib",
+    ]
 
 
 def test_native_webview_event_ids_are_stable():

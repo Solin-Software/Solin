@@ -5,7 +5,7 @@ import os
 import platform
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .abi import (
     EVENT_DOWNLOAD_REQUESTED,
@@ -119,9 +119,9 @@ class NativeBackend:
             ctypes.c_size_t,
             ctypes.c_void_p,
         )
-        self._callbacks: dict[int, ctypes._CFuncPtr] = {}
-        self._policy_callbacks: dict[int, ctypes._CFuncPtr] = {}
-        self._capture_callbacks: dict[int, ctypes._CFuncPtr] = {}
+        self._callbacks: dict[int, Any] = {}
+        self._policy_callbacks: dict[int, Any] = {}
+        self._capture_callbacks: dict[int, Any] = {}
         self._configure_signatures()
 
     def create(self, parent_handle: int, options: NativeOptions, callback: EventCallback) -> int:
@@ -168,7 +168,7 @@ class NativeBackend:
             _user_data: int,
             request_id: int,
             success: int,
-            data_ptr: ctypes.POINTER(ctypes.c_uint8),
+            data_ptr: Any,
             size: int,
             error_ptr: int,
         ) -> None:
@@ -413,7 +413,7 @@ class NativeBackend:
                 ctypes.c_wchar_p(cookie.path or "/"),
             ]
             keepalive.extend(values)
-            args = [ctypes.cast(value, ctypes.c_void_p).value for value in values]
+            args: list[Any] = [ctypes.cast(value, ctypes.c_void_p).value for value in values]
             args.extend([float(cookie.expires or 0), int(cookie.secure), int(cookie.http_only), same_site])
             native = _NativeCookieW(*args)
         else:
@@ -424,7 +424,7 @@ class NativeBackend:
                 ctypes.c_char_p((cookie.path or "/").encode("utf-8")),
             ]
             keepalive.extend(values)
-            args = [ctypes.cast(value, ctypes.c_void_p).value for value in values]
+            args: list[Any] = [ctypes.cast(value, ctypes.c_void_p).value for value in values]
             args.extend([float(cookie.expires or 0), int(cookie.secure), int(cookie.http_only), same_site])
             native = _NativeCookieUtf8(*args)
 

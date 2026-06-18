@@ -95,17 +95,17 @@ jobs:
           test -d src/solin/qml
           test -d resources/translations/locales
           test -d resources/translations
-          test -f native_webview_widget/__init__.py
-          test -f native_webview_widget/abi.py
-          test -f native_webview_widget/_backend.py
-          test -f native_webview_widget/widget.py
+          test -f src/native_webview_widget/__init__.py
+          test -f src/native_webview_widget/abi.py
+          test -f src/native_webview_widget/_backend.py
+          test -f src/native_webview_widget/widget.py
 
-          if [ -f native_webview_widget/libnative_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
-          elif [ -f native_webview_widget/native_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
+          if [ -f src/native_webview_widget/libnative_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
+          elif [ -f src/native_webview_widget/native_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
           else
-            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into native_webview_widget/ before running this workflow."
+            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into src/native_webview_widget/ before running this workflow."
             exit 1
           fi
 

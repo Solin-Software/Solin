@@ -115,11 +115,11 @@ jobs:
             "src\solin\qml",
             "resources\translations\locales",
             "resources\translations",
-            "native_webview_widget\__init__.py",
-            "native_webview_widget\abi.py",
-            "native_webview_widget\_backend.py",
-            "native_webview_widget\widget.py",
-            "native_webview_widget\native_webview_widget.dll",
+            "src\native_webview_widget\__init__.py",
+            "src\native_webview_widget\abi.py",
+            "src\native_webview_widget\_backend.py",
+            "src\native_webview_widget\widget.py",
+            "src\native_webview_widget\native_webview_widget.dll",
             "packaging\windows\installer\setup.iss"
           )
 
@@ -182,7 +182,7 @@ jobs:
             --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
             --include-data-files="resources\translations\*.qm=resources/translations/" `
-            --include-data-files="native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" `
+            --include-data-files="src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" `
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position `
             main.py
