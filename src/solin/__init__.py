@@ -1,0 +1,1 @@
+"""Solin application package."""

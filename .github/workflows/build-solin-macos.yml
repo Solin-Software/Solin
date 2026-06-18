@@ -8,6 +8,16 @@ on:
         required: true
         type: number
         default: 5
+      run_release_smoke_tests:
+        description: Run packaged startup and app replacement smoke tests
+        required: true
+        type: boolean
+        default: true
+      previous_macos_dmg_url:
+        description: Previous production DMG used for app replacement smoke
+        required: true
+        type: string
+        default: "https://github.com/Solin-Software/solin-releases/releases/download/26.17.0/Solin-26.17.0-macOS.dmg"
 
 permissions:
   contents: read
@@ -44,7 +54,7 @@ jobs:
           path: |
             ~/Library/Caches/pip
             .pip-wheels
-          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
             ${{ runner.os }}-pip-
@@ -63,18 +73,14 @@ jobs:
         shell: bash
         run: |
           python - <<'PY' | tee -a "$GITHUB_ENV" >> "$GITHUB_OUTPUT"
-          import re
           from pathlib import Path
 
-          constants_path = Path("app/core/foundation/constants.py")
-          text = constants_path.read_text(encoding="utf-8")
-          match = re.search(r'APP_VERSION:\s*str\s*=\s*"([^"]+)"', text)
-          if not match:
-              raise SystemExit(f"APP_VERSION was not found in {constants_path}")
-          internal_version = match.group(1)
+          namespace = {}
+          exec(Path("src/solin/version.py").read_text(encoding="utf-8"), namespace)
+          internal_version = namespace["__version__"]
           parts = internal_version.split(".")
           if len(parts) != 4 or not all(part.isdigit() for part in parts):
-              raise SystemExit(f"APP_VERSION must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
+              raise SystemExit(f"Version must use MAJOR.MINOR.PATCH.BUILD format. Got: {internal_version}")
           macos_version = ".".join(parts[:3])
           print(f"APP_VERSION={macos_version}")
           print(f"app_version={macos_version}")
@@ -85,20 +91,21 @@ jobs:
         shell: bash
         run: |
           test -f main.py
-          test -f assets/icon.icns
-          test -d app/qml
-          test -d translations/locales
-          test -d translations
-          test -f native_webview_widget/__init__.py
-          test -f native_webview_widget/_backend.py
-          test -f native_webview_widget/widget.py
+          test -f src/solin/resources/assets/icon.icns
+          test -d src/solin/qml
+          test -d src/solin/resources/translations/locales
+          test -d src/solin/resources/translations
+          test -f src/native_webview_widget/__init__.py
+          test -f src/native_webview_widget/abi.py
+          test -f src/native_webview_widget/_backend.py
+          test -f src/native_webview_widget/widget.py
 
-          if [ -f native_webview_widget/libnative_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
-          elif [ -f native_webview_widget/native_webview_widget.dylib ]; then
-            echo "NATIVE_WEBVIEW_DYLIB=native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
+          if [ -f src/native_webview_widget/libnative_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/libnative_webview_widget.dylib" >> "$GITHUB_ENV"
+          elif [ -f src/native_webview_widget/native_webview_widget.dylib ]; then
+            echo "NATIVE_WEBVIEW_DYLIB=src/native_webview_widget/native_webview_widget.dylib" >> "$GITHUB_ENV"
           else
-            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into native_webview_widget/ before running this workflow."
+            echo "::error::Missing macOS native webview dylib. Build or vendor libnative_webview_widget.dylib into src/native_webview_widget/ before running this workflow."
             exit 1
           fi
 
@@ -111,7 +118,7 @@ jobs:
           python -m pip install --upgrade --retries 10 --timeout 120 pip
           mkdir -p .pip-wheels
           python -m pip download \
-            --requirement requirements.txt \
+            --requirement requirements-dev.txt \
             --dest .pip-wheels \
             --only-binary=:all: \
             --retries 10 \
@@ -120,16 +127,24 @@ jobs:
           python -m pip install \
             --no-index \
             --find-links .pip-wheels \
-            --requirement requirements.txt
+            --requirement requirements-dev.txt
+          python -m pip install --no-deps -e .
           python -m pip install --upgrade --retries 10 --timeout 120 --prefer-binary nuitka ordered-set zstandard
+
+      - name: Quality gate
+        shell: bash
+        run: |
+          python -m ruff check .
+          python -m pyright --pythonpath "$(command -v python)"
+          python -m pytest
 
       - name: Generate compiled QML cache
         shell: bash
         run: |
-          rm -rf "${BUILD_DIR}/qmlcache/app/qml"
-          python tools/compile_qml_cache.py \
-            --source-dir app/qml \
-            --output-dir "${BUILD_DIR}/qmlcache/app/qml/Solin" \
+          rm -rf "${BUILD_DIR}/qmlcache/solin/qml"
+          python scripts/compile_qml_cache.py \
+            --source-dir src/solin/qml \
+            --output-dir "${BUILD_DIR}/qmlcache/solin/qml/Solin" \
             --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \
             --qt-framework-output-dir "${BUILD_DIR}/qmlcache/qt-libs"
 
@@ -153,34 +168,34 @@ jobs:
           python -m nuitka \
             --standalone \
             --macos-create-app-bundle \
+            --macos-app-console-mode=disable \
             --output-dir="${BUILD_DIR}" \
             --macos-app-name="${APP_NAME}" \
             --macos-app-version="${APP_VERSION}" \
-            --macos-app-icon="assets/icon.icns" \
+            --macos-app-icon="src/solin/resources/assets/icon.icns" \
             --assume-yes-for-downloads \
             --follow-imports \
-            --follow-import-to=app \
-            --follow-import-to=app.core \
-            --follow-import-to=app.styles \
-            --follow-import-to=app.widgets \
+            --follow-import-to=solin \
+            --follow-import-to=solin.core \
+            --follow-import-to=solin.styles \
+            --follow-import-to=solin.widgets \
             --nofollow-import-to=PySide6.QtTranslations \
-            --nofollow-import-to=app.core.zoom_controls \
-            --include-package=app \
-            --include-package=app.core \
-            --include-package=app.styles \
-            --include-package=app.widgets \
+            --include-package=solin \
+            --include-package=solin.core \
+            --include-package=solin.styles \
+            --include-package=solin.widgets \
             --include-package=native_webview_widget \
             --include-module=websocket \
             --include-module=websocket._core \
             --include-module=websocket._app \
             --include-package=ephem \
             --include-package-data=pyqttoast \
-            --include-data-dir=assets=assets \
-            --include-data-dir=translations/locales=translations/locales \
-            --include-data-dir="${BUILD_DIR}/qmlcache/app/qml/Solin=app/qml/Solin" \
+            --include-data-dir=src/solin/resources/assets=solin/resources/assets \
+            --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
+            --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
-            --include-data-files="translations/*.qm=translations/" \
+            --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
             --include-data-files="${NATIVE_WEBVIEW_DYLIB}=native_webview_widget/$(basename "${NATIVE_WEBVIEW_DYLIB}")" \
             --enable-plugin=pyside6 \
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position \
@@ -263,19 +278,19 @@ jobs:
         shell: bash
         run: |
           BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
-          find "$BUNDLE" -path "*/app/qml/*.qmlc" -not -path "*/app/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/app/qml/*.qml" -not -path "*/app/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/app/qml/qmldir" -delete
-          if ! find "$BUNDLE" -path "*/app/qml/Solin/*.qmlc" -print -quit | grep -q .; then
+          find "$BUNDLE" -path "*/solin/qml/*.qmlc" -not -path "*/solin/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/solin/qml/*.qml" -not -path "*/solin/qml/Solin/*" -delete
+          find "$BUNDLE" -path "*/solin/qml/qmldir" -delete
+          if ! find "$BUNDLE" -path "*/solin/qml/Solin/*.qmlc" -print -quit | grep -q .; then
             echo "::error::Compiled QML cache files were not packaged in the app bundle."
             exit 1
           fi
-          find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -delete
-          if ! find "$BUNDLE" -path "*/app/qml/Solin/qmldir" -print -quit | grep -q .; then
+          find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -delete
+          if ! find "$BUNDLE" -path "*/solin/qml/Solin/qmldir" -print -quit | grep -q .; then
             echo "::error::Compiled QML qmldir metadata was not packaged in the app bundle."
             exit 1
           fi
-          if find "$BUNDLE" -path "*/app/qml/Solin/*.qml" -print -quit | grep -q .; then
+          if find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -print -quit | grep -q .; then
             echo "::error::Raw QML source files remained in the app bundle."
             exit 1
           fi
@@ -417,7 +432,7 @@ jobs:
           mkdir -p "${DIST_DIR}"
           create-dmg \
             --volname "${APP_NAME} ${APP_VERSION}" \
-            --volicon "assets/icon.icns" \
+            --volicon "src/solin/resources/assets/icon.icns" \
             --window-pos 200 120 \
             --window-size 660 420 \
             --icon-size 128 \
@@ -431,6 +446,114 @@ jobs:
 
           shasum -a 256 "${DIST_DIR}"/*.dmg > "${DIST_DIR}/SHA256SUMS-macos.txt"
           ls -lh "${DIST_DIR}/"
+
+      - name: Locate newly built macOS DMG
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmgs=()
+          while IFS= read -r dmg; do
+            dmgs+=("$dmg")
+          done < <(find "$DIST_DIR" -maxdepth 1 -name "*.dmg" -type f | sort)
+          if [ "${#dmgs[@]}" -ne 1 ]; then
+            printf '%s\n' "${dmgs[@]}" | sed 's/^/found DMG: /'
+            echo "::error::Expected exactly one newly built DMG, found ${#dmgs[@]}."
+            exit 1
+          fi
+          echo "SOLIN_NEW_MACOS_DMG=${PWD}/${dmgs[0]}" >> "$GITHUB_ENV"
+          ls -lh "${dmgs[0]}"
+
+      - name: Download previous macOS DMG
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="${{ inputs.previous_macos_dmg_url }}"
+          if [ -z "${url//[[:space:]]/}" ]; then
+            echo "::error::previous_macos_dmg_url must not be empty when release smoke tests are enabled."
+            exit 1
+          fi
+
+          out_dir="${BUILD_DIR}/previous-dmg"
+          mkdir -p "$out_dir"
+          old_dmg="${PWD}/${out_dir}/${APP_NAME}_previous.dmg"
+          curl --fail --location --retry 3 --retry-delay 5 --output "$old_dmg" "$url"
+          if [ ! -s "$old_dmg" ]; then
+            echo "::error::Downloaded previous DMG is empty: $old_dmg"
+            exit 1
+          fi
+          echo "SOLIN_OLD_MACOS_DMG=$old_dmg" >> "$GITHUB_ENV"
+          ls -lh "$old_dmg"
+
+      - name: Extract macOS release apps
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount_roots=()
+          mount_points=()
+
+          cleanup() {
+            for mount_point in "${mount_points[@]}"; do
+              hdiutil detach "$mount_point" -quiet || true
+            done
+            for mount_root in "${mount_roots[@]}"; do
+              rm -rf "$mount_root"
+            done
+          }
+          trap cleanup EXIT
+
+          extract_app() {
+            local dmg="$1"
+            local output_dir="$2"
+            local env_name="$3"
+            local mount_root
+            local mount_point
+            local app_source
+
+            mount_root="$(mktemp -d "${RUNNER_TEMP}/solin-dmg.XXXXXX")"
+            mount_point="${mount_root}/mount"
+            mkdir -p "$mount_point"
+            mount_roots+=("$mount_root")
+            mount_points+=("$mount_point")
+
+            hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_point" -quiet
+            app_source="$(find "$mount_point" -maxdepth 2 -name "${APP_NAME}.app" -type d -print -quit)"
+            if [ -z "$app_source" ]; then
+              echo "::error::${APP_NAME}.app was not found in $dmg"
+              exit 1
+            fi
+
+            rm -rf "$output_dir"
+            mkdir -p "$output_dir"
+            ditto "$app_source" "${output_dir}/${APP_NAME}.app"
+            if [ ! -x "${output_dir}/${APP_NAME}.app/Contents/MacOS/main" ]; then
+              echo "::error::App executable was not found after extraction from $dmg."
+              exit 1
+            fi
+            echo "${env_name}=${PWD}/${output_dir}/${APP_NAME}.app" >> "$GITHUB_ENV"
+          }
+
+          extract_app "$SOLIN_OLD_MACOS_DMG" "${BUILD_DIR}/previous-app" "SOLIN_OLD_MACOS_APP"
+          extract_app "$SOLIN_NEW_MACOS_DMG" "${BUILD_DIR}/new-dmg-app" "SOLIN_NEW_MACOS_APP"
+
+      - name: Run macOS app replacement smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        env:
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+        run: |
+          python -m pytest tests/e2e/test_macos_app_upgrade_smoke.py -q
+
+      - name: Run packaged startup smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        env:
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+        run: |
+          export SOLIN_PACKAGED_EXE="${SOLIN_NEW_MACOS_APP}/Contents/MacOS/main"
+          python -m pytest tests/e2e/test_packaged_app_smoke.py -q
 
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4

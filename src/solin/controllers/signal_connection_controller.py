@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowSignalSources:
+    """Qt objects that publish signals consumed by the main-window shell."""
+
+    songs_widget: Any
+    meetings_widget: Any
+    clips_widget: Any
+    timer_widget: Any
+    sermon_theme_widget: Any
+    playlist_widget: Any
+    projection_bar: Any
+    media_controller: Any
+    screen_manager: Any
+    language_manager: Any
+    settings_widget: Any
+    obs_service: Any
+    ndi_service: Any
+    camera_service: Any
+    auto_share_finished: Any
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowSignalHandlers:
+    """Explicit destinations for signals published by the main-window shell."""
+
+    media_projection: Any
+    timer_theme: Any
+    playlist_imports: Any
+    auto_key_projection: Any
+    projection_stop: Any
+    projection_targets: Any
+    language_controller: Any
+    live_integrations: Any
+    background_song_service: Any
+    projection_integrations: Any
+    timer_output: Any | None = None
+    timer_bridge: Any | None = None
+
+
+class SignalConnectionController:
+    """Wires shell signals without using MainWindow as a service locator."""
+
+    def __init__(
+        self,
+        sources: MainWindowSignalSources,
+        handlers: MainWindowSignalHandlers,
+    ) -> None:
+        self._sources = sources
+        self._handlers = handlers
+
+    def _refresh_timer_monitors(self) -> None:
+        bridge = self._handlers.timer_bridge
+        if bridge is not None:
+            bridge.refreshMonitors()
+
+    def connect_signals(self) -> None:
+        sources = self._sources
+        handlers = self._handlers
+        media_projection = handlers.media_projection
+        timer_theme = handlers.timer_theme
+        projection_bar = sources.projection_bar
+        media_controller = sources.media_controller
+        live_integrations = handlers.live_integrations
+
+        sources.songs_widget.project_video_signal.connect(
+            media_projection.on_sjjm_project
+        )
+        sources.meetings_widget.project_media.connect(
+            media_projection.on_meeting_media_project
+        )
+        sources.clips_widget.project_video_signal.connect(
+            media_projection.on_song_project
+        )
+        sources.timer_widget.project_timer_signal.connect(timer_theme.start_timer)
+        sources.sermon_theme_widget.project_theme_signal.connect(
+            timer_theme.project_sermon_theme
+        )
+
+        sources.playlist_widget.project_video_signal.connect(
+            media_projection.on_playlist_project
+        )
+        sources.playlist_widget.project_image_signal.connect(
+            media_projection.project_image_bytes
+        )
+
+        projection_bar.add_to_playlist_requested.connect(
+            handlers.playlist_imports.add_current_to_playlist
+        )
+        projection_bar.send_to_temp_playlist_requested.connect(
+            handlers.playlist_imports.send_to_temp_playlist
+        )
+
+        media_controller.frame_ready.connect(media_projection.distribute_frame)
+        media_controller.state_changed.connect(
+            handlers.auto_key_projection.on_media_state
+        )
+        media_controller.cover_art_changed.connect(projection_bar.set_cover_art)
+        media_controller.title_from_metadata.connect(
+            media_projection.on_title_from_metadata
+        )
+
+        projection_bar.stop_requested.connect(handlers.projection_stop.stop_any)
+        projection_bar.seek_requested.connect(media_controller.seek)
+        projection_bar.toggle_requested.connect(media_controller.toggle_play_pause)
+        projection_bar.volume_changed.connect(media_controller.set_volume)
+        projection_bar.timer_updated.connect(timer_theme.on_timer_update_proj)
+        projection_bar.timer_blink.connect(timer_theme.on_timer_blink_proj)
+        projection_bar.play_next_requested.connect(media_projection.project_next_auto)
+        projection_bar.playlist_navigate.connect(media_projection.on_playlist_navigate)
+        projection_bar.image_apply_transform.connect(
+            media_projection.on_image_apply_transform
+        )
+        projection_bar.image_reset_transform.connect(
+            media_projection.on_image_reset_transform
+        )
+        projection_bar.image_reset_transform_instant.connect(
+            media_projection.on_image_reset_transform_instant
+        )
+
+        sources.screen_manager.screens_changed.connect(
+            handlers.projection_targets.on_screens_changed
+        )
+        if handlers.timer_output is not None:
+            sources.screen_manager.screens_changed.connect(
+                handlers.timer_output.on_screens_changed
+            )
+            sources.screen_manager.screens_changed.connect(
+                self._refresh_timer_monitors
+            )
+
+        sources.language_manager.language_changed.connect(
+            handlers.language_controller.change_language
+        )
+        settings = sources.settings_widget
+        settings.yearly_text_changed.connect(
+            handlers.projection_targets.apply_yearly_text
+        )
+        settings.watched_folder_changed.connect(
+            sources.playlist_widget.set_watched_folder
+        )
+        settings.watched_folder_changed.connect(
+            sources.meetings_widget.set_watched_folder
+        )
+        settings.zoom_enabled_toggled.connect(
+            live_integrations.on_zoom_settings_enabled_toggled
+        )
+        settings.zoom_participants_toggled.connect(
+            live_integrations.on_zoom_settings_parts_toggled
+        )
+        settings.obs_stream_config_changed.connect(
+            live_integrations.refresh_obs_stream_availability
+        )
+        settings.camera_enabled_toggled.connect(
+            live_integrations.on_camera_settings_enabled_toggled
+        )
+        settings.background_song_toggled.connect(
+            handlers.background_song_service.set_enabled
+        )
+        settings.meeting_schedule_changed.connect(
+            handlers.background_song_service.reload_settings
+        )
+
+        sources.obs_service.state_changed.connect(
+            live_integrations.on_obs_state_changed
+        )
+        sources.obs_service.current_scene_changed.connect(
+            live_integrations.on_obs_scene_changed
+        )
+        sources.obs_service.scenes_updated.connect(
+            lambda _: live_integrations.refresh_obs_btn_availability()
+        )
+        sources.obs_service.scenes_updated.connect(
+            live_integrations.on_obs_scenes_updated
+        )
+
+        sources.ndi_service.frame_ready.connect(live_integrations.on_obs_ndi_frame)
+        sources.ndi_service.error.connect(live_integrations.on_obs_ndi_error)
+        sources.ndi_service.stopped.connect(live_integrations.on_obs_ndi_stopped)
+
+        sources.camera_service.frame_ready.connect(live_integrations.on_camera_frame)
+        sources.camera_service.error.connect(live_integrations.on_camera_error)
+        sources.camera_service.stopped.connect(live_integrations.on_camera_stopped)
+
+        projection_bar.obs_scene_toggle_requested.connect(
+            live_integrations.on_obs_scene_toggle
+        )
+        projection_bar.set_as_idle_requested.connect(
+            handlers.projection_targets.on_idle_media_changed
+        )
+        sources.auto_share_finished.connect(
+            handlers.projection_integrations.on_auto_share_finished
+        )

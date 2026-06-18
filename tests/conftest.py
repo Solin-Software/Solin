@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        try:
+            relative = Path(str(item.path)).resolve().relative_to(Path(__file__).resolve().parent)
+        except ValueError:
+            continue
+
+        suite = relative.parts[0] if relative.parts else ""
+        if suite in {"unit", "integration", "contract", "e2e"}:
+            item.add_marker(getattr(pytest.mark, suite))
