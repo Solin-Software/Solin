@@ -26,7 +26,7 @@ Segurança
 
 Uso
 ───
-    from solin.core.ui.macos_layer import apply_corner_radius
+    from solin.ui.macos_layer import apply_corner_radius
     apply_corner_radius(self, 20)   # após o widget ter handle nativo (winId)
 """
 
