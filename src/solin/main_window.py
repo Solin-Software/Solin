@@ -19,6 +19,7 @@ from .controllers.main_window_bootstrap_controller import (
     MainWindowStartupDependencies,
 )
 from .controllers.main_window_profile_settings import MainWindowProfileSettings
+from .controllers.main_window_service_factories import MainWindowServiceFactories
 from .controllers.main_window_ui_controller import (
     MainWindowUiContext,
     MainWindowUiController,
@@ -91,7 +92,6 @@ from .core.integrations.automation.screen_share import (
     execute_stop_share,
     macos_accessibility_trusted,
 )
-from .core.jw.background_song_service import BackgroundSongService
 from .core.jw.songs import JWSongsStore
 from .core.jw.yeartext import YeartextService
 from .core.media.playback import MediaController
@@ -101,11 +101,6 @@ from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
-from .core.integrations.automation.obs import OBSWebSocketService
-from .core.integrations.ndi import NDIReceiverService
-from .core.integrations.camera import CameraService
-from .core.integrations.automation.zoom.service import ZoomService
-from .core.integrations.automation.shortcuts import AutoKeyDispatcher
 from .core.foundation.identity import get_install_id
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.settings_store import InstallationSettingsStore
@@ -160,6 +155,7 @@ class MainWindow(QMainWindow):
         runtime_paths: RuntimePaths,
         profile_paths: ProfilePaths,
         profile_settings_bundle: MainWindowProfileSettings,
+        service_factories: MainWindowServiceFactories,
         media_cache_manager: MediaCacheManager,
         media_controller: MediaController,
         background_media_controller: MediaController,
@@ -236,7 +232,10 @@ class MainWindow(QMainWindow):
         self._jwl_tmp_files: set[str] = set()
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
-        self._auto_keys = AutoKeyDispatcher(self._auto_key_settings, self)
+        self._auto_keys = service_factories.auto_key_dispatcher(
+            self._auto_key_settings,
+            self,
+        )
         self._profile_switch = ProfileSwitchController(
             self.switch_profile_requested.emit
         )
@@ -296,18 +295,18 @@ class MainWindow(QMainWindow):
         )
 
         # OBS WebSocket integration
-        self._obs_service = OBSWebSocketService(self._obs_settings, self)
+        self._obs_service = service_factories.obs_websocket(self._obs_settings, self)
 
         # OBS/DistroAV NDI program stream receiver
-        self._ndi_service = NDIReceiverService(self)
+        self._ndi_service = service_factories.ndi_receiver(self)
 
         # Live camera receiver
-        self._camera_service = CameraService(self)
+        self._camera_service = service_factories.camera(self)
 
         # Zoom Meetings integration
-        self._zoom_service = ZoomService(self._zoom_settings, self)
+        self._zoom_service = service_factories.zoom(self._zoom_settings, self)
 
-        self._background_song_service = BackgroundSongService(
+        self._background_song_service = service_factories.background_song(
             self.lang,
             self._background_song_settings,
             self._meeting_schedule_settings,

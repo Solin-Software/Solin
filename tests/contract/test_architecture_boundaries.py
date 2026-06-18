@@ -1621,6 +1621,22 @@ def test_main_window_receives_profile_settings_from_bootstrap_composition():
     assert "MainWindowProfileSettings" in source
 
 
+def test_main_window_receives_long_lived_service_factories_from_bootstrap():
+    path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
+    source = path.read_text(encoding="utf-8")
+
+    for concrete_service in (
+        "AutoKeyDispatcher",
+        "OBSWebSocketService",
+        "NDIReceiverService",
+        "CameraService",
+        "ZoomService",
+        "BackgroundSongService",
+    ):
+        assert concrete_service not in source
+    assert "MainWindowServiceFactories" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []

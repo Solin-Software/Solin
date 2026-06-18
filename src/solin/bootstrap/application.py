@@ -84,6 +84,27 @@ def _build_main_window_profile_settings(profile_settings):
     )
 
 
+def _build_main_window_service_factories():
+    from solin.controllers.main_window_service_factories import (
+        MainWindowServiceFactories,
+    )
+    from solin.core.integrations.automation.obs import OBSWebSocketService
+    from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
+    from solin.core.integrations.automation.zoom.service import ZoomService
+    from solin.core.integrations.camera import CameraService
+    from solin.core.integrations.ndi import NDIReceiverService
+    from solin.core.jw.background_song_service import BackgroundSongService
+
+    return MainWindowServiceFactories(
+        auto_key_dispatcher=AutoKeyDispatcher,
+        obs_websocket=OBSWebSocketService,
+        ndi_receiver=NDIReceiverService,
+        camera=CameraService,
+        zoom=ZoomService,
+        background_song=BackgroundSongService,
+    )
+
+
 def _launch_main_window(
     app,
     lang_manager,
@@ -159,6 +180,7 @@ def _launch_main_window(
     main_window_profile_settings = _build_main_window_profile_settings(
         profile_settings
     )
+    main_window_service_factories = _build_main_window_service_factories()
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(
         main_window_profile_settings.media
@@ -168,6 +190,7 @@ def _launch_main_window(
         runtime_paths,
         profile_paths,
         main_window_profile_settings,
+        main_window_service_factories,
         media.cache_manager,
         media_controller,
         background_media_controller,

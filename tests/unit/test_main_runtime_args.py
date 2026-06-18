@@ -60,6 +60,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(media=media_settings)
+    service_factories = object()
 
     class _MediaController:
         def __init__(self):
@@ -97,6 +98,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_runtime_paths,
             received_profile_paths,
             received_profile_settings_bundle,
+            received_service_factories,
             received_media_cache_manager,
             received_media_controller,
             received_background_media_controller,
@@ -133,6 +135,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.profile_settings_bundle = received_profile_settings_bundle
+            self.service_factories = received_service_factories
             self.media_cache_manager = received_media_cache_manager
             self.media_controller = received_media_controller
             self.background_media_controller = received_background_media_controller
@@ -202,6 +205,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             or profile_settings_bundle
         ),
     )
+    monkeypatch.setattr(
+        main,
+        "_build_main_window_service_factories",
+        lambda: events.append("service_factories") or service_factories,
+    )
 
     window = main._launch_main_window(
         app=object(),
@@ -224,6 +232,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.runtime_paths is runtime_paths
     assert window.profile_paths is profile_paths
     assert window.profile_settings_bundle is profile_settings_bundle
+    assert window.service_factories is service_factories
     assert window.media_cache_manager is media_cache_manager
     assert window.media_settings is media_settings
     assert window.media_info_queue_factory is media.create_info_queue
@@ -289,6 +298,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.active_profile is active_profile
     assert events == [
         ("profile_settings_bundle", profile_settings),
+        "service_factories",
         "show",
         ("titlebar", window, "#1A231F"),
         ("timer", 200),
@@ -314,6 +324,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(media=media_settings)
+    service_factories = object()
 
     class _MediaController:
         def setParent(self, _parent):
@@ -342,6 +353,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_runtime_paths,
             received_profile_paths,
             received_profile_settings_bundle,
+            received_service_factories,
             received_media_cache_manager,
             received_media_controller,
             received_background_media_controller,
@@ -378,6 +390,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.runtime_paths = received_runtime_paths
             self.profile_paths = received_profile_paths
             self.profile_settings_bundle = received_profile_settings_bundle
+            self.service_factories = received_service_factories
             self.media_cache_manager = received_media_cache_manager
             self.media_controller = received_media_controller
             self.background_media_controller = received_background_media_controller
@@ -444,6 +457,11 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             or profile_settings_bundle
         ),
     )
+    monkeypatch.setattr(
+        main,
+        "_build_main_window_service_factories",
+        lambda: events.append("service_factories") or service_factories,
+    )
 
     main._launch_main_window(
         app=object(),
@@ -464,6 +482,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
 
     assert events == [
         ("profile_settings_bundle", profile_settings),
+        "service_factories",
         "show",
         ("titlebar", "#1A231F"),
     ]
