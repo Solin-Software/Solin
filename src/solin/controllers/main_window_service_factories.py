@@ -20,3 +20,4 @@ class MainWindowServiceFactories:
     jwpub: Callable[[QObject], Any]
     memorial: Callable[[QObject], Any]
     remote_services: Callable[[QWidget], Any]
+    auto_share_workers: Callable[[], Any]

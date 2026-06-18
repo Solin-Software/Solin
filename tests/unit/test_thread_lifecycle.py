@@ -6,6 +6,7 @@ import time
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.ingest.wifi_server import WifiReceiveServer
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.integrations.automation.obs import OBSWebSocketService
 from solin.core.integrations.automation.zoom import controls as zoom_controls
 from solin.core.integrations.automation.zoom import service as zoom_module
@@ -113,6 +114,26 @@ def test_media_cache_notification_from_python_thread_runs_on_qt_thread(tmp_path)
 
     assert _wait_until(lambda: len(callback_threads) == 1)
     assert callback_threads == [app.thread()]
+
+
+def test_threaded_worker_pool_drains_workers_on_shutdown():
+    pool = ThreadedWorkerPool()
+    started = threading.Event()
+    release = threading.Event()
+
+    def _worker() -> None:
+        started.set()
+        release.wait(1)
+
+    pool.submit("test-worker", _worker)
+    assert started.wait(1)
+    assert pool.active_count == 1
+
+    release.set()
+    assert pool.shutdown(timeout=1) == ()
+
+    assert pool.is_stopped
+    assert pool.active_count == 0
 
 
 def test_font_manager_shutdown_cancels_and_joins_workers(tmp_path):

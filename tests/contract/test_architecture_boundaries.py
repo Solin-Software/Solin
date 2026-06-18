@@ -1838,11 +1838,14 @@ def test_projection_integration_controller_receives_auto_share_actions():
     path = PROJECT_ROOT / "src" / "solin" / "controllers" / "projection_integration_controller.py"
     source = path.read_text(encoding="utf-8")
 
+    assert "import threading" not in source
+    assert "threading.Thread" not in source
     assert "core.integrations.automation.screen_share" not in source
     assert "execute_start_share" not in source
     assert "execute_stop_share" not in source
     assert "start_auto_share" in source
     assert "stop_auto_share" in source
+    assert "auto_share_workers" in source
     assert "ctypes" not in source
     assert "SetForegroundWindow" not in source
     assert "sys.platform" not in source

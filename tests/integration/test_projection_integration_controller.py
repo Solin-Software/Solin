@@ -4,6 +4,7 @@ from solin.controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
 )
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.projection.application import ObsSceneSession, ProjectionSession
 
 
@@ -80,6 +81,7 @@ class _WindowStub:
         self.raised_projection_windows = []
         self.share_started = threading.Event()
         self.share_stopped = threading.Event()
+        self.auto_share_workers = ThreadedWorkerPool()
 
     def _all_windows(self):
         return [_ProjectionWindowStub(self._visible)]
@@ -113,6 +115,7 @@ def _controller(window):
             start_auto_share=window.start_auto_share,
             stop_auto_share=window.stop_auto_share,
             raise_projection_window=window.raise_projection_window,
+            auto_share_workers=window.auto_share_workers,
         )
     )
 
@@ -255,8 +258,8 @@ def test_cleanup_joins_owned_auto_share_workers():
 
     controller.cleanup()
 
-    assert controller._auto_share_stop.is_set()
-    assert controller._auto_share_threads == set()
+    assert window.auto_share_workers.is_stopped
+    assert window.auto_share_workers.active_count == 0
 
 
 def test_raise_visible_projection_windows_uses_injected_focus_action():

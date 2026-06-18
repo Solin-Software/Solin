@@ -105,6 +105,7 @@ def _build_main_window_service_factories(
         RemoteUpdateService,
     )
     from solin.core.foundation.identity import get_install_id
+    from solin.core.foundation.thread_workers import ThreadedWorkerPool
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
     from solin.core.integrations.automation.zoom.service import ZoomService
@@ -180,6 +181,7 @@ def _build_main_window_service_factories(
                 launch_patch=launch_patch_installer,
             ),
         ),
+        auto_share_workers=ThreadedWorkerPool,
     )
 
 

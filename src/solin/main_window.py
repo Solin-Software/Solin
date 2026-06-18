@@ -557,6 +557,7 @@ class MainWindow(QMainWindow):
                 start_auto_share=execute_start_share,
                 stop_auto_share=execute_stop_share,
                 raise_projection_window=raise_projection_window,
+                auto_share_workers=service_factories.auto_share_workers(),
             )
         )
         self._media_projection = MediaProjectionController(
