@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu, QDialog, QMessageBox,
 )
 
-from ..core.ui.helpers import fade_in
+from .helpers import fade_in
 from ..core.onboarding.application import (
     OBSOnboardingConfiguration,
     OnboardingService,

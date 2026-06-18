@@ -24,8 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.profiles.models import ProfileInfo
-from ..core.ui.helpers import avatar_colors
-from ..core.ui.helpers import initials
+from .helpers import avatar_colors
+from .helpers import initials
 from ..styles.icons import make_icon
 from ..styles.theme import SCROLLBAR_STYLESHEET
 

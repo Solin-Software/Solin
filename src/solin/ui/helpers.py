@@ -1,4 +1,4 @@
-"""Shared UI helpers used across Solin widgets."""
+"""Shared presentation helpers used across Solin widgets."""
 
 from __future__ import annotations
 

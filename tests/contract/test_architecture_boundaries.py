@@ -856,6 +856,26 @@ def test_native_visual_adapters_live_in_presentation_ui():
         assert "core.ui.macos_layer" not in source
 
 
+def test_widget_presentation_helpers_live_in_ui_package():
+    core_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "helpers.py"
+    ui_path = PROJECT_ROOT / "src" / "solin" / "ui" / "helpers.py"
+    consumers = (
+        PROJECT_ROOT / "src" / "solin" / "widgets",
+        PROJECT_ROOT / "src" / "solin" / "ui",
+    )
+    violations: list[str] = []
+
+    assert not core_path.exists()
+    assert ui_path.is_file()
+    for root in consumers:
+        for path in sorted(root.rglob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            if "core.ui.helpers" in source:
+                violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",

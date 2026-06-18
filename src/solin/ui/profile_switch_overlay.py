@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 
-from ..core.ui.helpers import avatar_colors, fade_in, initials
+from .helpers import avatar_colors, fade_in, initials
 from ..core.profiles.models import ProfileInfo
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
 

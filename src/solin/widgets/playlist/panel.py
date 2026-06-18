@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.core.ui.helpers import make_rounded_thumb
+from solin.ui.helpers import make_rounded_thumb
 from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_IMAGE, ICON_MUSIC, ICON_VIDEO, make_icon
 

@@ -13,7 +13,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
-from solin.core.ui.helpers import avatar_colors, initials
+from solin.ui.helpers import avatar_colors, initials
 
 
 class ProfileAvatarButton(QWidget):

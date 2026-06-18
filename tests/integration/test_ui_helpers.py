@@ -1,4 +1,4 @@
-from solin.core.ui import helpers
+from solin.ui import helpers
 
 
 class _CursorTarget:

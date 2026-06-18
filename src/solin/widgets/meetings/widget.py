@@ -48,7 +48,7 @@ from ...core.jw.language_context import (
     jw_media_language_context,
 )
 from ...core.jw.songs import JWSongsStore
-from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import MeetingTreeStore
 from ...core.media.cache import MediaCacheManager

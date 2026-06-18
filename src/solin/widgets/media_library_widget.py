@@ -16,7 +16,7 @@ from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.media.cache import MediaCacheManager
 from ..core.i18n.manager import LanguageManager
-from ..core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ..ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.media_library import (
     MediaLibraryBridge,

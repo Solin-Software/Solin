@@ -38,7 +38,7 @@ from ...core.jw.language_context import (
 )
 from ...core.jw.identifiers import is_jw_url
 from ...core.jw.songs import JWSongsStore
-from ...core.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
