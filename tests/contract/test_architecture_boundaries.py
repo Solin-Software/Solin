@@ -852,7 +852,13 @@ def test_profile_infrastructure_receives_global_settings_from_composition():
 
     assert "GlobalSettingsStore.create" not in source
     assert "global_settings: GlobalSettingsStore" in source
-    assert "QSettingsProfilePreferences(global_settings)" in source
+    assert "profile_app_settings_for: Callable[[str], ProfileAppSettingsStore]" in source
+    assert "QSettingsProfilePreferences(" in source
+    assert (
+        "ProfileSettings.for_profile_id(\n"
+        "            profile_id\n"
+        "        ).app_settings()"
+    ) not in source
 
 
 def test_native_visual_adapters_live_in_presentation_ui():

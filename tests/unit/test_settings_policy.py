@@ -15,9 +15,11 @@ from solin.core.foundation.constants import (
     QSETTINGS_TIMER_APP,
 )
 from solin.core.foundation import settings_store
+from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.profiles import infrastructure as profile_infrastructure
 from solin.core.profiles import models as profile_models
+from solin.core.profiles.settings import ProfileSettings
 
 
 EXPECTED_SETTINGS_KEYS = {
@@ -134,6 +136,7 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
     manager = profile_infrastructure.create_local_profile_service(
         tmp_path,
         global_settings=settings_store.GlobalSettingsStore.create(),
+        profile_app_settings_for=_profile_app_settings_for,
     )
     manager.set_active("kept")
 
@@ -144,6 +147,10 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
         (profile_org, application)
         for application in QSETTINGS_PROFILE_SCOPED_APPS
     ]
+
+
+def _profile_app_settings_for(profile_id: str) -> ProfileAppSettingsStore:
+    return ProfileSettings.for_profile_id(profile_id).app_settings()
 
 
 def _call_name(node: ast.expr) -> str:

@@ -130,9 +130,17 @@ def test_application_container_initializes_runtime_services(
             self.aboutToQuit = _Signal()
 
     class _ProfileService:
-        def __init__(self, data_dir, cache_dir=None, *, global_settings):
+        def __init__(
+            self,
+            data_dir,
+            cache_dir=None,
+            *,
+            global_settings,
+            profile_app_settings_for,
+        ):
             self.constructor_args = (data_dir, cache_dir)
             self.global_settings = global_settings
+            self.profile_app_settings_for = profile_app_settings_for
 
     constructed = []
 
@@ -152,12 +160,13 @@ def test_application_container_initializes_runtime_services(
     monkeypatch.setattr(
         profile_infrastructure,
         "create_local_profile_service",
-        lambda data_dir, cache_dir=None, *, global_settings: (
+        lambda data_dir, cache_dir=None, *, global_settings, profile_app_settings_for: (
             constructed.append(
                 _ProfileService(
                     data_dir,
                     cache_dir,
                     global_settings=global_settings,
+                    profile_app_settings_for=profile_app_settings_for,
                 )
             )
             or constructed[-1]
@@ -182,6 +191,7 @@ def test_application_container_initializes_runtime_services(
     assert container.config is config
     assert container.app is app
     assert container.profile_service is constructed[0]
+    assert callable(constructed[0].profile_app_settings_for)
     assert container.profile_runtime is not None
     assert container.onboarding_service is not None
     assert container.global_settings is not None

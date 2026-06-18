@@ -6,7 +6,7 @@ import json
 import logging
 import shutil
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,7 +19,11 @@ from solin.core.foundation.constants import (
 )
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
+from solin.core.foundation.settings_store import (
+    GlobalSettingsStore,
+    ProfileAppSettingsStore,
+    SettingsStore,
+)
 from solin.core.profiles.application import ProfileRegistryLoadError, ProfileService
 from solin.core.profiles.models import ProfileInfo
 from solin.core.profiles.settings import ProfileSettings
@@ -201,8 +205,13 @@ class LocalProfileDataDeletion:
 class QSettingsProfilePreferences:
     """Profile selection, namespaces, cleanup, and legacy settings migration."""
 
-    def __init__(self, global_settings: GlobalSettingsStore) -> None:
+    def __init__(
+        self,
+        global_settings: GlobalSettingsStore,
+        profile_app_settings_for: Callable[[str], ProfileAppSettingsStore],
+    ) -> None:
         self._global_settings = global_settings
+        self._profile_app_settings_for = profile_app_settings_for
 
     def has_legacy_settings(self) -> bool:
         legacy = SettingsStore.for_namespace(
@@ -299,9 +308,7 @@ class QSettingsProfilePreferences:
                 )
 
     def prepare_profile_creation(self, profile_id: str) -> None:
-        language = ProfileSettings.for_profile_id(
-            profile_id
-        ).app_settings().app_language()
+        language = self._profile_app_settings_for(profile_id).app_language()
         if language:
             self._global_settings.set_bootstrap_language(language)
 
@@ -334,10 +341,14 @@ def create_local_profile_service(
     cache_dir: str | Path | None = None,
     *,
     global_settings: GlobalSettingsStore,
+    profile_app_settings_for: Callable[[str], ProfileAppSettingsStore],
 ) -> ProfileService:
     data_root = Path(data_dir)
     return ProfileService(
         registry=JsonProfileRegistry(data_root / _PROFILES_FILENAME),
         storage=LocalProfileStorage(data_root, cache_dir),
-        preferences=QSettingsProfilePreferences(global_settings),
+        preferences=QSettingsProfilePreferences(
+            global_settings,
+            profile_app_settings_for,
+        ),
     )

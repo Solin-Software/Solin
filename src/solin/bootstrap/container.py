@@ -76,14 +76,17 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
 
     global_settings = GlobalSettingsStore.create()
     installation_settings = InstallationSettingsStore.create()
+    profile_runtime = ProfileRuntimeContextFactory(
+        runtime_paths.data_dir,
+        runtime_paths.cache_dir,
+    )
     profile_service = create_local_profile_service(
         os.fspath(runtime_paths.data_dir),
         cache_dir=os.fspath(runtime_paths.cache_dir),
         global_settings=global_settings,
-    )
-    profile_runtime = ProfileRuntimeContextFactory(
-        runtime_paths.data_dir,
-        runtime_paths.cache_dir,
+        profile_app_settings_for=lambda profile_id: (
+            profile_runtime.create(profile_id).settings.app_settings()
+        ),
     )
 
     def onboarding_settings_for_profile(profile_id: str) -> OnboardingSettingsStores:

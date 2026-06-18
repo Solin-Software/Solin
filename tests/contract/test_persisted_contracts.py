@@ -27,7 +27,11 @@ from solin.core.foundation.constants import (
 from solin.core.foundation import runtime_paths as runtime_paths_module
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_keys import SettingsKey
-from solin.core.foundation.settings_store import GlobalSettingsStore, SettingsStore
+from solin.core.foundation.settings_store import (
+    GlobalSettingsStore,
+    ProfileAppSettingsStore,
+    SettingsStore,
+)
 from solin.core.playlists import storage as playlist_storage
 from solin.core.playlists.schema import SCHEMA_VERSION, create_jwlplaylist_schema
 from solin.core.profiles import infrastructure as profile_infrastructure
@@ -102,6 +106,10 @@ def _isolated_global_settings() -> GlobalSettingsStore:
     )
 
 
+def _profile_app_settings_for(profile_id: str) -> ProfileAppSettingsStore:
+    return ProfileSettings.for_profile_id(profile_id).app_settings()
+
+
 def test_qsettings_identity_and_namespaces_are_stable() -> None:
     expected_qt_identity = "SolinDev" if IS_DEV else "Solin"
 
@@ -159,6 +167,7 @@ def test_profile_registry_and_directory_layout_are_stable(
         tmp_path,
         cache_dir,
         global_settings=_isolated_global_settings(),
+        profile_app_settings_for=_profile_app_settings_for,
     )
     manager.set_active("main_hall")
     runtime = profile_infrastructure.ProfileRuntimeContextFactory(
@@ -208,10 +217,12 @@ def test_profile_services_are_isolated_instances(tmp_path: Path) -> None:
     first = profile_infrastructure.create_local_profile_service(
         tmp_path / "first",
         global_settings=_isolated_global_settings(),
+        profile_app_settings_for=_profile_app_settings_for,
     )
     second = profile_infrastructure.create_local_profile_service(
         tmp_path / "second",
         global_settings=_isolated_global_settings(),
+        profile_app_settings_for=_profile_app_settings_for,
     )
 
     created = first.create_profile("Main Hall")
@@ -232,6 +243,7 @@ def test_corrupt_profile_registry_is_not_treated_as_first_run(
         profile_infrastructure.create_local_profile_service(
             tmp_path,
             global_settings=_isolated_global_settings(),
+            profile_app_settings_for=_profile_app_settings_for,
         )
 
     assert registry_path.read_text(encoding="utf-8") == "{broken"
