@@ -149,7 +149,7 @@ jobs:
             --output-dir="$env:BUILD_DIR" `
             --output-filename="$env:APP_NAME" `
             --windows-icon-from-ico="resources\assets\icon.ico" `
-            --windows-console-mode=disable `
+            --windows-console-mode=attach `
             --assume-yes-for-downloads `
             --windows-file-version="$env:APP_VERSION" `
             --windows-product-version="$env:APP_VERSION" `

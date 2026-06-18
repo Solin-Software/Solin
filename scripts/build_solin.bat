@@ -65,7 +65,7 @@ if %ERRORLEVEL% NEQ 0 (
     --output-dir="%OUTPUT_DIR%" ^
     --output-filename="%APP_NAME%" ^
     --windows-icon-from-ico="%ICON%" ^
-    --windows-console-mode=disable ^
+    --windows-console-mode=attach ^
     --assume-yes-for-downloads ^
     --windows-file-version=%VERSION% ^
     --windows-product-version=%VERSION% ^

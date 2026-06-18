@@ -168,6 +168,7 @@ jobs:
           python -m nuitka \
             --standalone \
             --macos-create-app-bundle \
+            --macos-app-console-mode=disable \
             --output-dir="${BUILD_DIR}" \
             --macos-app-name="${APP_NAME}" \
             --macos-app-version="${APP_VERSION}" \
