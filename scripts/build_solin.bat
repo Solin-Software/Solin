@@ -26,7 +26,8 @@ rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
 :: "%PYTHON%" -m nuitka --clean-cache=all
 
 :: ── Metadados do executavel ───────────────────────────────
-for /f "usebackq delims=" %%V in (`"%PYTHON%" -c "import pathlib; ns={}; exec(pathlib.Path(r'%PROJECT_ROOT%src\solin\version.py').read_text(encoding='utf-8'), ns); print(ns['__version__'])"`) do set "VERSION=%%V"
+set "VERSION_FILE=%PROJECT_ROOT%src\solin\version.py"
+for /f "delims=" %%V in ('call "%PYTHON%" -c "import pathlib; ns={}; exec(pathlib.Path(r'%VERSION_FILE%').read_text(encoding='utf-8'), ns); print(ns['__version__'])"') do set "VERSION=%%V"
 if not defined VERSION (
     echo  [ERRO] Nao foi possivel ler a versao em src\solin\version.py.
     pause
