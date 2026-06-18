@@ -37,6 +37,6 @@ def configure_qml_host(
     for name, value in (context_properties or {}).items():
         context.setContextProperty(name, value)
 
-    load_qml_type(widget, type_name)
     if resize_to_root:
         widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
+    load_qml_type(widget, type_name)

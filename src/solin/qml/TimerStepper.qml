@@ -42,11 +42,9 @@ Row {
             font.weight: Font.Medium
             Behavior on color { ColorAnimation { duration: 120 } }
         }
-        MouseArea {
+        TimerPointerArea {
             id: sbMa
             anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
             onClicked: sb.pressed_()
         }
         ToolTip.visible: sb.tip !== "" && sbMa.containsMouse
@@ -75,11 +73,9 @@ Row {
             font.pixelSize: 16
             font.weight: Font.Bold
 
-            MouseArea {
+            TimerPointerArea {
                 anchors.fill: parent
                 enabled: ctl.editable
-                hoverEnabled: true
-                cursorShape: ctl.editable ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onDoubleClicked: {
                     editField.text = ctl.text
                     ctl.editing = true

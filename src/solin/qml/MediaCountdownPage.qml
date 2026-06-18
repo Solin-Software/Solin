@@ -171,11 +171,9 @@ Item {
                                 font.pixelSize: 10
                             }
                         }
-                        MouseArea {
+                        TimerPointerArea {
                             id: chipMa
                             anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
                             onClicked: timer.startCountdownMinutes(modelData)
                         }
                     }

@@ -112,12 +112,10 @@ Rectangle {
                     clip: true
                     Behavior on color { ColorAnimation { duration: 140 } }
                 }
-                MouseArea {
+                TimerPointerArea {
                     id: mouse
                     anchors.fill: parent
                     enabled: seg.enabled
-                    hoverEnabled: true
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: seg.picked(index)
                 }
 

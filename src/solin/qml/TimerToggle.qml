@@ -33,10 +33,9 @@ Item {
         }
     }
 
-    MouseArea {
+    TimerPointerArea {
         anchors.fill: parent
         enabled: ctl.enabled
-        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: ctl.toggled(!ctl.checked)
     }
 }
