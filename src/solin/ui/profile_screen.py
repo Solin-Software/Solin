@@ -34,7 +34,7 @@ from ..core.onboarding.application import (
 from ..core.profiles.application import ProfileService
 from ..core.profiles.settings import ProfileSettings
 from ..controllers.onboarding_obs_probe import OnboardingOBSProbe
-from ..widgets.common.no_scroll_combo_box import NoScrollComboBox
+from .controls import NoScrollComboBox
 from ..styles.icons import (
     make_icon,
     ICON_EDIT, ICON_TRASH,
@@ -610,7 +610,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
     def _open_ob_interface_picker(self) -> None:
         if not self._lang:
             return
-        from ..widgets.settings_widget import create_interface_language_picker
+        from .language_pickers import create_interface_language_picker
 
         current = getattr(self, "_ob_iface_selected_code", "pt_BR")
         dlg = create_interface_language_picker(self._lang, parent=self, current_code=current)
@@ -628,7 +628,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         svc = self._lang.jw_lang_service if self._lang else None
         if not svc:
             return
-        from ..widgets.settings_widget import create_jw_language_picker
+        from .language_pickers import create_jw_language_picker
 
         current = getattr(self, "_ob_media_selected_code", "T")
         dlg = create_jw_language_picker(svc, current, parent=self)

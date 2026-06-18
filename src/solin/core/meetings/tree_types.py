@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from typing import Any, cast
@@ -62,3 +63,18 @@ def iter_nodes(nodes: list[Node]):
     for node in nodes:
         yield node
         yield from iter_nodes(node.get("children", []))
+
+
+def iter_nodes_strict(nodes: Any, *, context: str = "nodes") -> Iterator[Node]:
+    """Yield nodes while rejecting malformed tree shapes for destructive callers."""
+    if not isinstance(nodes, list):
+        raise ValueError(f"{context} must be a list")
+    for index, node in enumerate(nodes):
+        node_context = f"{context}[{index}]"
+        if not isinstance(node, dict):
+            raise ValueError(f"{node_context} must be an object")
+        yield node
+        children = node.get("children", [])
+        if not isinstance(children, list):
+            raise ValueError(f"{node_context}.children must be a list")
+        yield from iter_nodes_strict(children, context=f"{node_context}.children")

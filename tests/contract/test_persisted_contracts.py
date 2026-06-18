@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from tests._paths import REPO_ROOT as PROJECT_ROOT
 from solin.core.foundation.constants import (
     DISPLAY_APP_NAME,
     IS_DEV,
@@ -141,6 +142,26 @@ def test_qsettings_identity_and_namespaces_are_stable() -> None:
     )
 
 
+def test_windows_installer_qsettings_cleanup_tracks_current_namespaces() -> None:
+    setup_iss = (
+        PROJECT_ROOT / "packaging" / "windows" / "installer" / "setup.iss"
+    ).read_text(encoding="utf-8")
+    current_apps = {
+        QSETTINGS_PREFS_APP,
+        QSETTINGS_APP_APP,
+        QSETTINGS_GLOBAL_APP,
+        QSETTINGS_MAIN_WINDOW_GEOMETRY_APP,
+        QSETTINGS_TIMER_APP,
+        QSETTINGS_MONITORS_APP,
+        QSETTINGS_NOTIFICATIONS_APP,
+    }
+
+    for app_name in current_apps:
+        assert f"Software\\Solin\\{app_name}" in setup_iss
+    assert "RegGetSubkeyNames(HKCU, 'Software', Names)" in setup_iss
+    assert "Copy(KeyName, 1, 6) = 'Solin_'" in setup_iss
+
+
 def test_settings_key_names_and_values_are_stable() -> None:
     actual = {
         name: value
@@ -192,8 +213,28 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert runtime.paths.meeting_trees_file == (
         tmp_path / "profiles" / "main_hall" / "meeting_trees.json"
     )
+    assert runtime.paths.pending_deletions_file == (
+        tmp_path / "profiles" / "main_hall" / "pending_cleanup.json"
+    )
+    assert "pending_del_file" not in runtime_paths_module.RuntimePaths.__dataclass_fields__
     assert runtime.paths.images_dir == tmp_path / "profiles" / "main_hall" / "images"
     assert runtime.paths.embedded_dir == tmp_path / "profiles" / "main_hall" / "embedded"
+    assert runtime.paths.profile_cache_dir == cache_dir / "profiles" / "main_hall"
+    assert runtime.paths.thumb_cache_dir == (
+        cache_dir / "profiles" / "main_hall" / "thumbs"
+    )
+    assert runtime.paths.meeting_thumb_cache_dir == (
+        cache_dir / "profiles" / "main_hall" / "meeting_thumbs"
+    )
+    assert runtime.paths.pdf_pages_dir == (
+        cache_dir / "profiles" / "main_hall" / "pdf_pages"
+    )
+    assert runtime.paths.pptx_pages_dir == (
+        cache_dir / "profiles" / "main_hall" / "pptx_pages"
+    )
+    assert runtime.paths.docx_pages_dir == (
+        cache_dir / "profiles" / "main_hall" / "docx_pages"
+    )
     assert runtime.paths.native_webview_data_dir == (
         tmp_path / "NativeWebView" / "sessions" / "solin_session_main_hall"
     )

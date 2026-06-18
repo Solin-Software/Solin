@@ -289,10 +289,6 @@ class JWMediaCatalogService(QObject):
         elif wait_ms > 0:
             self._thread_pool.waitForDone(wait_ms)
 
-    def stop(self, wait_ms: int = 0) -> None:
-        """Compatibility alias for host widgets that expose cleanup hooks."""
-        self.cancel_all(wait_ms=wait_ms)
-
     def _on_success(self, request_id: str, items: list, fetched_at: float, from_cache: bool) -> None:
         if request_id not in self._active:
             return

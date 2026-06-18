@@ -119,6 +119,7 @@ if TYPE_CHECKING:
     from .core.jw.catalog_service import JWMediaCatalogService
     from .core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from .core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
+    from .core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from .core.media.browser_downloads import BrowserDownloadService
     from .core.media.cache_scan import CacheScanSessionFactory
     from .core.network.browser_images import BrowserImageFetchService
@@ -157,6 +158,7 @@ class MainWindow(QMainWindow):
         playlist_repository: PlaylistRepository,
         queue_pending_deletion: Callable[[str], None],
         meeting_tree_store: MeetingTreeStore,
+        meeting_linked_folder_sync: MeetingLinkedFolderSync,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
         document_conversion_service: DocumentConversionService,
@@ -187,6 +189,7 @@ class MainWindow(QMainWindow):
         self.playlist_storage_paths = playlist_storage_paths
         self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
+        self.meeting_linked_folder_sync = meeting_linked_folder_sync
         self.timer_session = timer_session
         self.active_profile = active_profile
         self._obs_settings = profile_settings_bundle.obs
@@ -369,6 +372,7 @@ class MainWindow(QMainWindow):
                 playlist_storage_paths=self.playlist_storage_paths,
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
+                meeting_linked_folder_sync=self.meeting_linked_folder_sync,
                 profile_media_store=profile_media_store,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
                 document_conversion_service=document_conversion_service,

@@ -1,5 +1,3 @@
-"""Combo box that ignores mouse-wheel changes while focused elsewhere."""
-
 from __future__ import annotations
 
 from PySide6.QtWidgets import QComboBox

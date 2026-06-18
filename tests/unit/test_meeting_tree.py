@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import inspect
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -828,6 +829,35 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
             self.assertTrue(keep.exists())
             self.assertFalse(stale.exists())
+
+    def test_flush_meeting_thumbs_fails_closed_when_store_is_corrupt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            thumb_dir = Path(tmp) / "meeting_thumbs"
+            thumb_dir.mkdir()
+            stale = thumb_dir / "stale.jpg"
+            stale.write_bytes(b"stale")
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            store.path.write_text("{broken", encoding="utf-8")
+
+            flush_meeting_thumbs_dir(store=store, thumb_dir=thumb_dir)
+
+            self.assertTrue(stale.exists())
+
+    def test_flush_meeting_thumbs_fails_closed_when_tree_shape_is_invalid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            thumb_dir = Path(tmp) / "meeting_thumbs"
+            thumb_dir.mkdir()
+            stale = thumb_dir / "stale.jpg"
+            stale.write_bytes(b"stale")
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            store.path.write_text(
+                json.dumps({"trees": {"week": {"nodes": "not-a-list"}}}),
+                encoding="utf-8",
+            )
+
+            flush_meeting_thumbs_dir(store=store, thumb_dir=thumb_dir)
+
+            self.assertTrue(stale.exists())
 
     def test_synthetic_jwpub_fixture_identifies_study_references(self):
         fixture = FIXTURES_DIR / "synthetic_meeting_workbook.jwpub"

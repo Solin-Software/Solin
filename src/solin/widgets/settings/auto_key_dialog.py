@@ -11,7 +11,7 @@ from ...core.integrations.automation.auto_key_actions import (
     AutoKeyAction,
 )
 from ...ui.auto_key_labels import auto_key_event_label
-from ..common.no_scroll_combo_box import NoScrollComboBox
+from ...ui.controls import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_BG,

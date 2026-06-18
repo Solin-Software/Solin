@@ -50,13 +50,10 @@ from ...core.i18n.strings import (
 from ...core.ingest.manifest import ManifestError, cache_dir
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.meetings.linked_folder_sync import (
-    MeetingLinkedFolderSync,
     MeetingSyncRecord,
     MeetingSyncError,
     MeetingSyncIdentity,
 )
-from ...core.meetings.schedule import UNCONFIGURED_WEEKDAY
-from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.catalog_placement import (
     MeetingCatalogPlaylistRef,
     build_meeting_catalog_playlist_ref,
@@ -100,6 +97,7 @@ from ...ui.thumbnail_images import save_thumbnail
 
 if TYPE_CHECKING:
     from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
+    from ...core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
@@ -125,24 +123,6 @@ def _usable_ref_file_path(ref: dict[str, Any]) -> str:
     if _has_jw_media_identity(ref):
         return ""
     return path
-
-
-def _meeting_weekday_resolver(
-    schedule_settings: MeetingScheduleSettingsStore,
-) -> Callable[[str], int]:
-    def weekday_for_pub_type(pub_type: str) -> int:
-        schedule = schedule_settings.load()
-        if pub_type == "mwb":
-            weekday = schedule.midweek.weekday
-        elif pub_type == "wt":
-            weekday = schedule.weekend.weekday
-        else:
-            return UNCONFIGURED_WEEKDAY
-        if 0 <= weekday <= 6:
-            return weekday
-        return UNCONFIGURED_WEEKDAY
-
-    return weekday_for_pub_type
 
 
 class MeetingTreeController(QObject):
@@ -177,7 +157,7 @@ class MeetingTreeController(QObject):
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
-        schedule_settings: MeetingScheduleSettingsStore,
+        linked_folder_sync: MeetingLinkedFolderSync,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         fallback_language_code: str = "",
         parent=None,
@@ -200,9 +180,7 @@ class MeetingTreeController(QObject):
             section_title=_translate_section_title,
             media_fallback_title=lambda: _tr("_MediaRow", "Media"),
         )
-        self._sync_service = MeetingLinkedFolderSync(
-            _meeting_weekday_resolver(schedule_settings)
-        )
+        self._sync_service = linked_folder_sync
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""

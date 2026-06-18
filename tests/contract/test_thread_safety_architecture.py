@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
+
+from tests._paths import REPO_ROOT
 
 
 _GUI_TYPES = {
@@ -86,10 +87,12 @@ def _worker_functions(tree: ast.AST) -> set[ast.FunctionDef]:
 
 
 def test_worker_entrypoints_do_not_touch_gui_resources():
+    worker_count = 0
     violations: list[str] = []
-    for path in Path("app").rglob("*.py"):
+    for path in (REPO_ROOT / "src" / "solin").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for function in _worker_functions(tree):
+            worker_count += 1
             for node in ast.walk(function):
                 if isinstance(node, ast.Name) and node.id in _GUI_TYPES:
                     violations.append(f"{path}:{node.lineno}: {node.id}")
@@ -100,4 +103,5 @@ def test_worker_entrypoints_do_not_touch_gui_resources():
                 ):
                     violations.append(f"{path}:{node.lineno}: {node.func.attr}()")
 
+    assert worker_count >= 20
     assert violations == [], "GUI access from worker entrypoints:\n" + "\n".join(violations)

@@ -190,8 +190,6 @@ class PlaylistEditImportMixin:
         for path in paths:
             self._import_single_lo(path, insert_at=insert_at, section_id=section_id)
 
-    _import_pptx_files = _import_lo_files
-
     def _import_single_lo(
         self,
         lo_path: str,

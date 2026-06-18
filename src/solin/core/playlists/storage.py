@@ -72,12 +72,31 @@ class PendingDeletionRepository:
 
     def load(self) -> list[str]:
         try:
-            if self._json.exists():
-                data = self._json.read()
-                return data.get("pending", []) if isinstance(data, dict) else []
-        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
+            return self.load_strict()
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+            AttributeError,
+        ):
             log_ignored_exception(__name__, "Could not load pending deletions file")
         return []
+
+    def load_strict(self) -> list[str]:
+        """Load pending deletions while preserving invalid schema for cleanup callers."""
+        if not self._json.exists():
+            return []
+        data = self._json.read()
+        if not isinstance(data, dict):
+            raise ValueError("Pending deletion storage root must be an object")
+        pending = data.get("pending", [])
+        if not isinstance(pending, list):
+            raise ValueError("Pending deletion storage 'pending' must be a list")
+        if not all(isinstance(path, str) for path in pending):
+            raise ValueError("Pending deletion entries must be strings")
+        return pending
 
     def save(self, media_paths: list[str]) -> None:
         try:

@@ -75,6 +75,7 @@ if TYPE_CHECKING:
     from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
+    from ...core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from ...core.meetings.memorial import MemorialService
     from ...core.meetings.publications import JwpubService
     from ...core.rendering.document_conversion import DocumentConversionService
@@ -125,6 +126,7 @@ class StudyDetailView(QWidget):
                  jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
                  jw_songs_store: JWSongsStore,
+                 meeting_linked_folder_sync: MeetingLinkedFolderSync,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  watched_folder: str = "", parent=None):
@@ -147,6 +149,7 @@ class StudyDetailView(QWidget):
             jw_catalog_thumbnail_session_factory
         )
         self._jw_songs_store = jw_songs_store
+        self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
         self._watched_folder = watched_folder
@@ -178,7 +181,7 @@ class StudyDetailView(QWidget):
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
-            schedule_settings=self._meeting_schedule_settings,
+            linked_folder_sync=self._meeting_linked_folder_sync,
             media_info_queue_factory=self._media_info_queue_factory,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
@@ -393,6 +396,7 @@ class _MemorialDetailView(QWidget):
                  jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
                  jw_songs_store: JWSongsStore,
+                 meeting_linked_folder_sync: MeetingLinkedFolderSync,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  parent=None):
@@ -414,6 +418,7 @@ class _MemorialDetailView(QWidget):
             jw_catalog_thumbnail_session_factory
         )
         self._jw_songs_store = jw_songs_store
+        self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
         self._qml_pointer_depth = 0
@@ -443,7 +448,7 @@ class _MemorialDetailView(QWidget):
             profile_paths=self._profile_paths,
             runtime_paths=self._runtime_paths,
             cache_manager=self._cache_manager,
-            schedule_settings=self._meeting_schedule_settings,
+            linked_folder_sync=self._meeting_linked_folder_sync,
             media_info_queue_factory=self._media_info_queue_factory,
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
@@ -638,6 +643,7 @@ class MeetingsWidget(QWidget):
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         media_settings: MediaSettingsStore,
+        meeting_linked_folder_sync: MeetingLinkedFolderSync,
         meeting_schedule_settings: MeetingScheduleSettingsStore,
         jwpub_service_factory: Callable[[QObject], JwpubService],
         memorial_service_factory: Callable[[QObject], MemorialService],
@@ -667,6 +673,7 @@ class MeetingsWidget(QWidget):
         )
         self._jw_songs_store = jw_songs_store
         self._media_settings = media_settings
+        self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
 
@@ -907,6 +914,9 @@ class MeetingsWidget(QWidget):
                                     self._jw_catalog_thumbnail_session_factory
                                 ),
                                 jw_songs_store=self._jw_songs_store,
+                                meeting_linked_folder_sync=(
+                                    self._meeting_linked_folder_sync
+                                ),
                                 meeting_schedule_settings=self._meeting_schedule_settings,
                                 media_info_queue_factory=self._media_info_queue_factory,
                                 watched_folder=self._watched_folder)
@@ -953,6 +963,7 @@ class MeetingsWidget(QWidget):
                     self._jw_catalog_thumbnail_session_factory
                 ),
                 jw_songs_store=self._jw_songs_store,
+                meeting_linked_folder_sync=self._meeting_linked_folder_sync,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 media_info_queue_factory=self._media_info_queue_factory,
             )

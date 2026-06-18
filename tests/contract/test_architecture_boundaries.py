@@ -1036,6 +1036,19 @@ def test_core_ui_package_has_no_python_modules():
     assert import_violations == []
 
 
+def test_presentation_ui_does_not_depend_on_widgets():
+    ui_root = PROJECT_ROOT / "src" / "solin" / "ui"
+    violations: list[str] = []
+
+    for path in sorted(ui_root.rglob("*.py")):
+        for node in _imports(path):
+            for target, _ in _dependency_targets(CODEBASES[0], path, node):
+                if len(target) > 1 and target[:2] == ("solin", "widgets"):
+                    violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",
@@ -1795,7 +1808,7 @@ def test_settings_widgets_do_not_construct_yeartext_service():
 
 def test_meeting_widgets_do_not_construct_meeting_services():
     meetings_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings"
-    forbidden = {"JwpubService", "MemorialService"}
+    forbidden = {"JwpubService", "MeetingLinkedFolderSync", "MemorialService"}
     violations: list[str] = []
 
     for path in sorted(meetings_widget_root.rglob("*.py")):

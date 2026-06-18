@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.lifecycle import ApplicationLifecycle
-from solin.core.foundation.runtime_paths import RuntimePaths
+from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 
 
 def test_app_config_is_immutable_and_applies_qt_identity() -> None:
@@ -75,6 +75,36 @@ def test_runtime_paths_snapshot_is_immutable_and_creates_runtime_dirs(
     )
     with pytest.raises(FrozenInstanceError):
         runtime_paths.data_dir = tmp_path / "other"  # type: ignore[misc]
+
+
+def test_profile_paths_snapshot_is_immutable_and_creates_profile_cache_dirs(
+    tmp_path,
+) -> None:
+    profile_paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="main",
+    )
+    profile_paths.ensure_dirs()
+
+    assert profile_paths.profile_dir == tmp_path / "data" / "profiles" / "main"
+    assert profile_paths.profile_cache_dir == tmp_path / "cache" / "profiles" / "main"
+    assert all(
+        directory.is_dir()
+        for directory in (
+            profile_paths.profile_dir,
+            profile_paths.images_dir,
+            profile_paths.embedded_dir,
+            profile_paths.profile_cache_dir,
+            profile_paths.thumb_cache_dir,
+            profile_paths.meeting_thumb_cache_dir,
+            profile_paths.pdf_pages_dir,
+            profile_paths.pptx_pages_dir,
+            profile_paths.docx_pages_dir,
+        )
+    )
+    with pytest.raises(FrozenInstanceError):
+        profile_paths.profile_dir = tmp_path / "other"  # type: ignore[misc]
 
 
 def test_application_lifecycle_runs_cleanup_callbacks_once_in_reverse_order() -> None:

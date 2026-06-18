@@ -3,9 +3,16 @@
 ;  setup.iss  |  Inno Setup 6.3+
 ;
 ;  REGISTRY STRUCTURE (detected from source):
-;    QSettings("Solin","ProjectionPrefs")  → HKCU\Software\Solin\ProjectionPrefs
-;    QSettings("Solin","Notifications")    → HKCU\Software\Solin\Notifications
-;    QSettings("Solin","App")              → HKCU\Software\Solin\App
+;    Global QSettings:
+;      HKCU\Software\Solin\ProjectionPrefs
+;      HKCU\Software\Solin\App
+;      HKCU\Software\Solin\GlobalApp
+;      HKCU\Software\Solin\MainWindowGeometry
+;      HKCU\Software\Solin\Timer
+;      HKCU\Software\Solin\Monitors
+;      HKCU\Software\Solin\Notifications
+;    Profile-scoped QSettings:
+;      HKCU\Software\Solin_<profile_id>\...
 ;
 ;  INSTALLER KEYS (read by patch.iss):
 ;    HKA = HKLM if admin / HKCU if per-user
@@ -586,6 +593,36 @@ begin
   end;
 end;
 
+procedure DeleteProfileQSettingsKeys();
+var
+  Names: TArrayOfString;
+  I: Integer;
+  KeyName: String;
+begin
+  if RegGetSubkeyNames(HKCU, 'Software', Names) then
+  begin
+    for I := 0 to GetArrayLength(Names) - 1 do
+    begin
+      KeyName := Names[I];
+      if Copy(KeyName, 1, 6) = 'Solin_' then
+        RegDeleteKeyIncludingSubkeys(HKCU, 'Software\' + KeyName);
+    end;
+  end;
+end;
+
+procedure DeleteQSettingsKeys();
+begin
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\ProjectionPrefs');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\App');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\GlobalApp');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\MainWindowGeometry');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Timer');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Monitors');
+  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Notifications');
+  DeleteProfileQSettingsKeys();
+  RegDeleteKeyIfEmpty(HKCU, 'Software\Solin');
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   AppDir: String;
@@ -623,10 +660,7 @@ begin
     usUninstall:
     begin
       // Remove QSettings keys (always HKCU — written by the Qt app)
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\ProjectionPrefs');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\Notifications');
-      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Solin\App');
-      RegDeleteKeyIfEmpty(HKCU, 'Software\Solin');
+      DeleteQSettingsKeys();
 
       // Remove installer keys (check both hives — written by HKA at install time)
       RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Solin\Solin');

@@ -84,6 +84,24 @@ def _build_main_window_profile_settings(profile_settings):
     )
 
 
+def _meeting_weekday_resolver(schedule_settings):
+    from solin.core.meetings.schedule import UNCONFIGURED_WEEKDAY
+
+    def weekday_for_pub_type(pub_type: str) -> int:
+        schedule = schedule_settings.load()
+        if pub_type == "mwb":
+            weekday = schedule.midweek.weekday
+        elif pub_type == "wt":
+            weekday = schedule.weekend.weekday
+        else:
+            return UNCONFIGURED_WEEKDAY
+        if 0 <= weekday <= 6:
+            return weekday
+        return UNCONFIGURED_WEEKDAY
+
+    return weekday_for_pub_type
+
+
 def _build_main_window_service_factories(
     lang_manager,
     runtime_paths,
@@ -207,6 +225,7 @@ def _launch_main_window(
     """
     from solin.main_window import MainWindow
     from solin.core.meetings.tree_store import MeetingTreeStore
+    from solin.core.meetings.linked_folder_sync import MeetingLinkedFolderSync
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.media.thumbnail_store import ThumbnailStore
     from solin.core.media.cache_scan import CacheScanSessionFactory
@@ -230,7 +249,7 @@ def _launch_main_window(
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,
-        pending_deletions_file=runtime_paths.pending_del_file,
+        pending_deletions_file=profile_paths.pending_deletions_file,
     )
     playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
     pending_deletion_repository = PendingDeletionRepository.from_paths(
@@ -238,7 +257,13 @@ def _launch_main_window(
     )
 
     def queue_pending_deletion(path: str) -> None:
-        pending = pending_deletion_repository.load()
+        try:
+            pending = pending_deletion_repository.load_strict()
+        except (OSError, UnicodeError, TypeError, ValueError):
+            from solin.core.foundation.exception_logging import log_ignored_exception
+
+            log_ignored_exception(__name__, "Could not load pending deletions queue")
+            return
         if path not in pending:
             pending.append(path)
             pending_deletion_repository.save(pending)
@@ -252,9 +277,9 @@ def _launch_main_window(
         profile_paths.images_dir,
     )
     document_conversion_service = DocumentConversionService(
-        pdf_pages_dir=runtime_paths.pdf_pages_dir,
-        pptx_pages_dir=runtime_paths.pptx_pages_dir,
-        docx_pages_dir=runtime_paths.docx_pages_dir,
+        pdf_pages_dir=profile_paths.pdf_pages_dir,
+        pptx_pages_dir=profile_paths.pptx_pages_dir,
+        docx_pages_dir=profile_paths.docx_pages_dir,
     )
     def jw_catalog_service_factory(parent):
         return JWMediaCatalogService(jw_catalog_cache_paths, parent)
@@ -265,14 +290,17 @@ def _launch_main_window(
     clip_fetch_thread_factory = ClipFetchThreadFactory()
     cache_scan_session_factory = CacheScanSessionFactory()
     qr_generation_session_factory = QrGenerationSessionFactory()
-    playlist_thumbnail_store = ThumbnailStore(runtime_paths.thumb_cache_dir)
+    playlist_thumbnail_store = ThumbnailStore(profile_paths.thumb_cache_dir)
     meeting_thumbnail_store = ThumbnailStore(
-        runtime_paths.meeting_thumb_cache_dir,
+        profile_paths.meeting_thumb_cache_dir,
     )
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(
         profile_settings
+    )
+    meeting_linked_folder_sync = MeetingLinkedFolderSync(
+        _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )
     main_window_service_factories = _build_main_window_service_factories(
         lang_manager,
@@ -308,6 +336,7 @@ def _launch_main_window(
         playlist_repository,
         queue_pending_deletion,
         meeting_tree_store,
+        meeting_linked_folder_sync,
         profile_media_store,
         jwpub_import_thread_factory,
         document_conversion_service,

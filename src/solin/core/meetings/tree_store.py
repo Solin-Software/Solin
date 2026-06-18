@@ -13,7 +13,7 @@ from typing import Any
 from solin.core.storage.json_repository import JsonFileRepository
 
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
-from .tree_types import Node, clone_nodes, iter_nodes
+from .tree_types import Node, clone_nodes, iter_nodes_strict
 
 log = logging.getLogger(__name__)
 
@@ -39,14 +39,7 @@ class MeetingTreeStore:
         if not self._json.exists():
             return self._empty()
         try:
-            data = self._json.read()
-            if not isinstance(data, dict):
-                return self._empty()
-            data.setdefault("version", 1)
-            data.setdefault("trees", {})
-            if not isinstance(data["trees"], dict):
-                data["trees"] = {}
-            return data
+            return self.load_all_strict()
         except (
             OSError,
             UnicodeError,
@@ -56,6 +49,19 @@ class MeetingTreeStore:
         ) as exc:
             log.warning("Could not load meeting tree store %s: %s", path, exc)
             return self._empty()
+
+    def load_all_strict(self) -> dict[str, Any]:
+        """Load meeting trees while preserving read/parse failures for destructive callers."""
+        if not self._json.exists():
+            return self._empty()
+        data = self._json.read()
+        if not isinstance(data, dict):
+            raise ValueError("Meeting tree storage root must be an object")
+        data.setdefault("version", 1)
+        data.setdefault("trees", {})
+        if not isinstance(data["trees"], dict):
+            raise ValueError("Meeting tree storage 'trees' must be an object")
+        return data
 
     def load(self, tree_key: str) -> tuple[list[Node] | None, str]:
         record = self.load_all().get("trees", {}).get(tree_key)
@@ -160,25 +166,35 @@ def flush_meeting_thumbs_dir(
         return
 
     referenced: set[str] = set()
-    data = store.load_all()
-    for record in data.get("trees", {}).values():
-        if not isinstance(record, dict):
-            continue
-        nodes = record.get("nodes", [])
-        if not isinstance(nodes, list):
-            continue
-        for node in iter_nodes(nodes):
-            if node.get("type") != "media":
-                continue
-            item_id = str(node.get("id", "") or "")
-            if item_id:
-                referenced.add(meeting_thumb_cache_key(item_id))
-            cache_key = str(node.get("thumbnail_cache_key") or "")
-            if cache_key:
-                referenced.add(_stored_file_name(cache_key))
-            local_path = str(node.get("thumbnail_local_path") or "")
-            if local_path:
-                referenced.add(_stored_file_name(local_path))
+    try:
+        data = store.load_all_strict()
+        for tree_key, record in data.get("trees", {}).items():
+            if not isinstance(record, dict):
+                raise ValueError(f"Meeting tree '{tree_key}' must be an object")
+            if "nodes" not in record:
+                raise ValueError(f"Meeting tree '{tree_key}' must contain nodes")
+            for node in iter_nodes_strict(
+                record["nodes"],
+                context=f"trees[{tree_key!r}].nodes",
+            ):
+                if node.get("type") != "media":
+                    continue
+                item_id = str(node.get("id", "") or "")
+                if item_id:
+                    referenced.add(meeting_thumb_cache_key(item_id))
+                cache_key = str(node.get("thumbnail_cache_key") or "")
+                if cache_key:
+                    referenced.add(_stored_file_name(cache_key))
+                local_path = str(node.get("thumbnail_local_path") or "")
+                if local_path:
+                    referenced.add(_stored_file_name(local_path))
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        log.warning(
+            "Could not validate meeting thumbnail references from %s: %s",
+            store.path,
+            exc,
+        )
+        return
 
     for path in target_dir.iterdir():
         if path.name in referenced:

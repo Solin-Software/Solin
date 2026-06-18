@@ -102,6 +102,7 @@ class MainWindowUiContext:
     playlist_storage_paths: Any
     playlist_repository: Any
     meeting_tree_store: Any
+    meeting_linked_folder_sync: Any
     profile_media_store: Any
     jwpub_import_thread_factory: Any
     document_conversion_service: Any
@@ -453,6 +454,7 @@ class MainWindowUiController:
             ),
             jw_songs_store=context.jw_songs_store,
             media_settings=context.media_settings,
+            meeting_linked_folder_sync=context.meeting_linked_folder_sync,
             meeting_schedule_settings=context.meeting_schedule_settings,
             jwpub_service_factory=context.jwpub_service_factory,
             memorial_service_factory=context.memorial_service_factory,
@@ -677,21 +679,20 @@ class MainWindowUiController:
     def _flush_orphaned_media_files(self) -> None:
         context = self._context
         storage_paths = context.playlist_storage_paths
-        runtime_paths = context.runtime_paths
         meeting_tree_store = context.meeting_tree_store
         profile_paths = context.profile_paths
         flush_pending_deletions(storage_paths, meeting_tree_store)
         flush_images_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_thumbs_dir(storage_paths, runtime_paths.thumb_cache_dir)
+        flush_thumbs_dir(storage_paths, profile_paths.thumb_cache_dir)
         flush_meeting_thumbs_dir(
             store=meeting_tree_store,
-            thumb_dir=runtime_paths.meeting_thumb_cache_dir,
+            thumb_dir=profile_paths.meeting_thumb_cache_dir,
         )
         flush_embedded_dir(storage_paths, meeting_tree_store, profile_paths)
-        flush_pdf_pages(storage_paths, meeting_tree_store, runtime_paths.pdf_pages_dir)
+        flush_pdf_pages(storage_paths, meeting_tree_store, profile_paths.pdf_pages_dir)
         flush_pptx_pages(
             storage_paths,
             meeting_tree_store,
-            runtime_paths.pptx_pages_dir,
-            runtime_paths.docx_pages_dir,
+            profile_paths.pptx_pages_dir,
+            profile_paths.docx_pages_dir,
         )

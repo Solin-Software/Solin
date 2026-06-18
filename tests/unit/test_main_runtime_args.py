@@ -44,12 +44,18 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
 def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkeypatch):
     events = []
     file_args = ["clip.mp4", "song.mp3"]
-    runtime_paths = SimpleNamespace(pending_del_file="pending.json")
+    runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
+        pending_deletions_file="profile_pending.json",
         embedded_dir="embedded",
         images_dir="images",
+        thumb_cache_dir="profile_thumbs",
+        meeting_thumb_cache_dir="profile_meeting_thumbs",
+        pdf_pages_dir="profile_pdf_pages",
+        pptx_pages_dir="profile_pptx_pages",
+        docx_pages_dir="profile_docx_pages",
     )
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
@@ -59,7 +65,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
-    profile_settings_bundle = SimpleNamespace(media=media_settings)
+    profile_settings_bundle = SimpleNamespace(
+        media=media_settings,
+        meeting_schedule=object(),
+    )
     service_factories = object()
 
     class _MediaController:
@@ -115,6 +124,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             playlist_repository,
             queue_pending_deletion,
             meeting_tree_store,
+            meeting_linked_folder_sync,
             profile_media_store,
             jwpub_import_thread_factory,
             document_conversion_service,
@@ -159,6 +169,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.playlist_repository = playlist_repository
             self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
+            self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
             self.document_conversion_service = document_conversion_service
@@ -256,10 +267,14 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.jw_songs_store is jw_songs_store
     assert window.jwpub_checksum_store is jwpub_checksum_store
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
-    assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
+    assert window.playlist_storage_paths.pending_deletions_file == "profile_pending.json"
     assert str(window.playlist_repository.path) == "playlists.json"
     assert callable(window.queue_pending_deletion)
     assert str(window.meeting_tree_store.path) == profile_paths.meeting_trees_file
+    assert (
+        window.meeting_linked_folder_sync.__class__.__name__
+        == "MeetingLinkedFolderSync"
+    )
     assert str(window.profile_media_store.embedded_dir) == "embedded"
     assert str(window.profile_media_store.images_dir) == "images"
     assert (
@@ -270,6 +285,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         window.document_conversion_service.__class__.__name__
         == "DocumentConversionService"
     )
+    assert str(window.document_conversion_service.pdf_pages_dir) == "profile_pdf_pages"
+    assert str(window.document_conversion_service.pptx_pages_dir) == "profile_pptx_pages"
+    assert str(window.document_conversion_service.docx_pages_dir) == "profile_docx_pages"
     assert (
         window.clip_fetch_thread_factory.__class__.__name__
         == "ClipFetchThreadFactory"
@@ -282,8 +300,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         window.qr_generation_session_factory.__class__.__name__
         == "QrGenerationSessionFactory"
     )
-    assert str(window.playlist_thumbnail_store.root) == "thumbs"
-    assert str(window.meeting_thumbnail_store.root) == "meeting_thumbs"
+    assert str(window.playlist_thumbnail_store.root) == "profile_thumbs"
+    assert str(window.meeting_thumbnail_store.root) == "profile_meeting_thumbs"
     assert (
         window.watched_folder_file_store.__class__.__name__
         == "WatchedFolderFileStore"
@@ -319,12 +337,18 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
 
 def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):
     events = []
-    runtime_paths = SimpleNamespace(pending_del_file="pending.json")
+    runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
         playlists_file="playlists.json",
         meeting_trees_file="meeting_trees.json",
+        pending_deletions_file="profile_pending.json",
         embedded_dir="embedded",
         images_dir="images",
+        thumb_cache_dir="profile_thumbs",
+        meeting_thumb_cache_dir="profile_meeting_thumbs",
+        pdf_pages_dir="profile_pdf_pages",
+        pptx_pages_dir="profile_pptx_pages",
+        docx_pages_dir="profile_docx_pages",
     )
     runtime_paths.thumb_cache_dir = "thumbs"
     runtime_paths.meeting_thumb_cache_dir = "meeting_thumbs"
@@ -334,7 +358,10 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     profile_settings = object()
     media_cache_manager = object()
     media_settings = object()
-    profile_settings_bundle = SimpleNamespace(media=media_settings)
+    profile_settings_bundle = SimpleNamespace(
+        media=media_settings,
+        meeting_schedule=object(),
+    )
     service_factories = object()
 
     class _MediaController:
@@ -381,6 +408,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             playlist_repository,
             queue_pending_deletion,
             meeting_tree_store,
+            meeting_linked_folder_sync,
             profile_media_store,
             jwpub_import_thread_factory,
             document_conversion_service,
@@ -425,6 +453,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.playlist_repository = playlist_repository
             self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
+            self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
             self.document_conversion_service = document_conversion_service

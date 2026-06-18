@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButto
 from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from ...core.integrations.automation.obs import OBSConnectionState
 from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
-from ..common.no_scroll_combo_box import NoScrollComboBox
+from ...ui.controls import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_BG,

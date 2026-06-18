@@ -17,6 +17,10 @@ if TYPE_CHECKING:
     from solin.core.meetings.tree_store import MeetingTreeStore
 
 
+_REFERENCE_STATE_ERRORS = (OSError, UnicodeError, TypeError, ValueError)
+_MISSING = object()
+
+
 def _playlist_repository(paths: PlaylistStoragePaths) -> PlaylistRepository:
     return PlaylistRepository.from_paths(paths)
 
@@ -41,7 +45,14 @@ def try_remove_file(
                 time.sleep(delay * (attempt + 1))
 
     pending_repo = _pending_deletion_repository(storage_paths)
-    pending = pending_repo.load()
+    try:
+        pending = pending_repo.load_strict()
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(
+            __name__,
+            "Could not load pending deletions queue",
+        )
+        return False
     if path not in pending:
         pending.append(path)
         pending_repo.save(pending)
@@ -53,35 +64,39 @@ def flush_pending_deletions(
     meeting_tree_store: MeetingTreeStore,
 ) -> None:
     pending_repo = _pending_deletion_repository(storage_paths)
-    pending = pending_repo.load()
+    try:
+        pending = pending_repo.load_strict()
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(
+            __name__,
+            "Could not validate pending deletions queue",
+        )
+        return
     if not pending:
         return
 
     try:
         playlists = _playlist_repository(storage_paths).load_strict()
-    except (OSError, UnicodeError, ValueError):
+        playlist_items = _playlist_items_for_cleanup(playlists)
+        meeting_references = _meeting_tree_referenced_urls(meeting_tree_store)
+    except _REFERENCE_STATE_ERRORS:
         log_ignored_exception(
             __name__,
-            "Could not validate playlist references for pending deletions",
+            "Could not validate media references for pending deletions",
         )
         return
     referenced_urls = {
         os.path.normcase(os.path.normpath(item["url"]))
-        for playlist in playlists
-        for item in playlist.get("items", [])
+        for item in playlist_items
         if isinstance(item.get("url"), str)
         and os.path.isabs(item["url"])
     }
     referenced_ids = {
         item["id"]
-        for playlist in playlists
-        for item in playlist.get("items", [])
+        for item in playlist_items
         if isinstance(item.get("id"), str) and item["id"]
     }
-    referenced_urls.update(
-        os.path.normcase(path)
-        for path in _meeting_tree_referenced_urls(meeting_tree_store)
-    )
+    referenced_urls.update(os.path.normcase(path) for path in meeting_references)
     still_pending = []
     for path in pending:
         normalized = os.path.normcase(os.path.normpath(path))
@@ -107,8 +122,15 @@ def flush_images_dir(
     if not os.path.isdir(images_dir):
         return
 
-    referenced = _referenced_playlist_urls(storage_paths, normalize=True)
-    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
+    try:
+        referenced = _referenced_media_urls(
+            storage_paths,
+            meeting_tree_store,
+            normalize=True,
+        )
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(__name__, "Could not validate image references")
+        return
 
     for fname in os.listdir(images_dir):
         fpath = os.path.join(images_dir, fname)
@@ -129,12 +151,18 @@ def flush_thumbs_dir(
     if not os.path.isdir(thumb_dir):
         return
 
+    try:
+        playlists = _playlist_repository(storage_paths).load_strict()
+        playlist_items = _playlist_items_for_cleanup(playlists)
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(__name__, "Could not validate thumbnail references")
+        return
+
     referenced_ids: set[str] = set()
-    for playlist in _playlist_repository(storage_paths).load():
-        for item in playlist.get("items", []):
-            item_id = item.get("id", "")
-            if item_id:
-                referenced_ids.add(item_id)
+    for item in playlist_items:
+        item_id = item.get("id", "")
+        if item_id:
+            referenced_ids.add(item_id)
 
     for fname in os.listdir(thumb_dir):
         fpath = os.path.join(thumb_dir, fname)
@@ -153,10 +181,14 @@ def flush_pdf_pages(
     meeting_tree_store: MeetingTreeStore,
     pdf_pages_dir: str | os.PathLike[str],
 ) -> None:
+    try:
+        referenced = _referenced_media_urls(storage_paths, meeting_tree_store)
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(__name__, "Could not validate PDF page references")
+        return
+
     from solin.core.rendering.pdf import flush_pdf_pages_dir
 
-    referenced = _referenced_playlist_urls(storage_paths)
-    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
     flush_pdf_pages_dir(referenced, pdf_pages_dir)
 
 
@@ -166,11 +198,15 @@ def flush_pptx_pages(
     pptx_pages_dir: str | os.PathLike[str],
     docx_pages_dir: str | os.PathLike[str],
 ) -> None:
+    try:
+        referenced = _referenced_media_urls(storage_paths, meeting_tree_store)
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(__name__, "Could not validate Office page references")
+        return
+
     from solin.core.rendering.libreoffice import flush_docx_pages_dir
     from solin.core.rendering.libreoffice import flush_pptx_pages_dir
 
-    referenced = _referenced_playlist_urls(storage_paths)
-    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
     flush_pptx_pages_dir(referenced, pptx_pages_dir)
     flush_docx_pages_dir(referenced, docx_pages_dir)
 
@@ -184,8 +220,15 @@ def flush_embedded_dir(
     if not os.path.isdir(embedded_dir):
         return
 
-    referenced = _referenced_playlist_urls(storage_paths, normalize=True)
-    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
+    try:
+        referenced = _referenced_media_urls(
+            storage_paths,
+            meeting_tree_store,
+            normalize=True,
+        )
+    except _REFERENCE_STATE_ERRORS:
+        log_ignored_exception(__name__, "Could not validate embedded media references")
+        return
 
     for fname in os.listdir(embedded_dir):
         fpath = os.path.join(embedded_dir, fname)
@@ -226,18 +269,18 @@ class PlaylistCleanupQueue:
 
         try:
             playlists = _playlist_repository(self._storage_paths).load_strict()
-        except (OSError, UnicodeError, ValueError):
+            playlist_items = _playlist_items_for_cleanup(playlists)
+        except _REFERENCE_STATE_ERRORS:
             log_ignored_exception(
                 __name__,
                 "Could not validate playlist references for cleanup",
             )
             return
-        referenced_ids: set[str] = set()
-        for playlist in playlists:
-            for item in playlist.get("items", []):
-                item_id = item.get("id", "")
-                if isinstance(item_id, str) and item_id:
-                    referenced_ids.add(item_id)
+        referenced_ids = {
+            str(item_id)
+            for item in playlist_items
+            if isinstance((item_id := item.get("id", "")), str) and item_id
+        }
 
         pending_ids = self._pending_ids
         self._pending_ids = set()
@@ -253,6 +296,16 @@ class PlaylistCleanupQueue:
                 )
 
 
+def _referenced_media_urls(
+    storage_paths: PlaylistStoragePaths,
+    meeting_tree_store: MeetingTreeStore,
+    *,
+    normalize: bool = False,
+) -> set[str]:
+    referenced = _referenced_playlist_urls(storage_paths, normalize=normalize)
+    referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
+    return referenced
+
 
 def _referenced_playlist_urls(
     storage_paths: PlaylistStoragePaths,
@@ -260,35 +313,61 @@ def _referenced_playlist_urls(
     normalize: bool = False,
 ) -> set[str]:
     referenced: set[str] = set()
-    for playlist in _playlist_repository(storage_paths).load():
-        for item in playlist.get("items", []):
-            url = item.get("url", "")
-            if url:
-                referenced.add(os.path.normpath(url) if normalize else url)
+    playlists = _playlist_repository(storage_paths).load_strict()
+    for item in _playlist_items_for_cleanup(playlists):
+        url = item.get("url", "")
+        if isinstance(url, str) and url:
+            referenced.add(os.path.normpath(url) if normalize else url)
     return referenced
+
+
+def _playlist_items_for_cleanup(playlists: list[dict]) -> list[dict]:
+    items: list[dict] = []
+    for playlist_index, playlist in enumerate(playlists):
+        if not isinstance(playlist, dict):
+            raise ValueError(f"Playlist #{playlist_index} must be an object")
+        playlist_items = playlist.get("items", _MISSING)
+        if not isinstance(playlist_items, list):
+            raise ValueError(f"Playlist #{playlist_index} must contain an items list")
+        for item_index, item in enumerate(playlist_items):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Playlist #{playlist_index} item #{item_index} must be an object"
+                )
+            item_id = item.get("id", _MISSING)
+            if not isinstance(item_id, str):
+                raise ValueError(
+                    f"Playlist #{playlist_index} item #{item_index} must contain a string id"
+                )
+            url = item.get("url", _MISSING)
+            if not isinstance(url, str):
+                raise ValueError(
+                    f"Playlist #{playlist_index} item #{item_index} must contain a string url"
+                )
+            items.append(item)
+    return items
 
 
 def _meeting_tree_referenced_urls(
     meeting_tree_store: MeetingTreeStore,
 ) -> set[str]:
     referenced: set[str] = set()
-    try:
-        from solin.core.meetings.tree_types import iter_nodes
+    from solin.core.meetings.tree_types import iter_nodes_strict
 
-        data = meeting_tree_store.load_all()
-        for record in data.get("trees", {}).values():
-            if not isinstance(record, dict):
+    data = meeting_tree_store.load_all_strict()
+    for tree_key, record in data.get("trees", {}).items():
+        if not isinstance(record, dict):
+            raise ValueError(f"Meeting tree '{tree_key}' must be an object")
+        if "nodes" not in record:
+            raise ValueError(f"Meeting tree '{tree_key}' must contain nodes")
+        for node in iter_nodes_strict(
+            record["nodes"],
+            context=f"trees[{tree_key!r}].nodes",
+        ):
+            if node.get("type") != "media":
                 continue
-            nodes = record.get("nodes", [])
-            if not isinstance(nodes, list):
-                continue
-            for node in iter_nodes(nodes):
-                if node.get("type") != "media":
-                    continue
-                ref = node.get("media_ref") or {}
-                url = str(ref.get("file_path") or "")
-                if url:
-                    referenced.add(os.path.normpath(url))
-    except Exception:  # noqa: BLE001 - meeting model adapter boundary
-        log_ignored_exception(__name__, "Could not collect meeting thumbnail references")
+            ref = node.get("media_ref") or {}
+            url = str(ref.get("file_path") or "")
+            if url:
+                referenced.add(os.path.normpath(url))
     return referenced

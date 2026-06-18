@@ -34,9 +34,9 @@ from ..core.i18n.manager import LanguageManager
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.foundation.constants import (
-    JWPUB_EXTS as _JWPUB_EXTS,
-    PDF_EXTS as _PDF_EXTS,
-    PLAYLIST_EXTS as _JWL_EXTS,
+    JWPUB_EXTS,
+    PDF_EXTS,
+    PLAYLIST_EXTS,
 )
 from ..core.jw.language_context import jw_media_language_context
 from ..core.media.formats import (
@@ -54,10 +54,6 @@ if TYPE_CHECKING:
     from ..core.media.profile_store import ProfileMediaStore
     from ..core.rendering.document_conversion import DocumentConversionService
     from ..ui.notifications import NotificationCenter
-
-_PDF_EXTS_SET = _PDF_EXTS
-_JWL_EXTS_SET = _JWL_EXTS
-_JWPUB_EXTS_SET = _JWPUB_EXTS
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 
@@ -181,8 +177,8 @@ def _file_media_type(path: str) -> str:
     media_kind = media_kind_from_path(path)
     if media_kind is not MediaKind.UNKNOWN:
         return media_kind.value
-    if ext in _PDF_EXTS:   return "pdf"
-    if ext in _JWL_EXTS:   return "playlist"
+    if ext in PDF_EXTS:   return "pdf"
+    if ext in PLAYLIST_EXTS:   return "playlist"
     return "image"
 
 
@@ -860,15 +856,15 @@ class WifiReceiveWidget(QWidget):
     def _on_file_received(self, path: str, orig_name: str) -> None:
         ext = Path(path).suffix.lower()
 
-        if ext in _PDF_EXTS_SET:
+        if ext in PDF_EXTS:
             self._expand_pdf(path, orig_name)
             return
 
-        if ext in _JWL_EXTS_SET:
+        if ext in PLAYLIST_EXTS:
             self._expand_jwlplaylist(path, orig_name)
             return
 
-        if ext in _JWPUB_EXTS_SET:
+        if ext in JWPUB_EXTS:
             self._expand_jwpub(path, orig_name)
             return
 
