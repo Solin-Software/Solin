@@ -5,7 +5,13 @@ import logging
 import time
 from dataclasses import dataclass
 
-from solin.core.network.http import get_bytes
+from solin.core.network.http import (
+    BrowserImpersonatingHttpTransport,
+    HttpBrowserImpersonationUnavailableError,
+    HttpError,
+    HttpTransport,
+    get_bytes,
+)
 
 from .publication_links import (
     DEFAULT_TIMEOUT,
@@ -97,19 +103,28 @@ def resolve_memorial_jwpub(pub: str, lang: str) -> MemorialJwpubInfo:
     return MemorialJwpubInfo(None, "", "", any_api_response)
 
 
-def download_memorial_bytes(url: str, timeout: int = 30, retries: int = 3) -> bytes:
-    last: Exception | None = None
+def download_memorial_bytes(
+    url: str,
+    timeout: int = 30,
+    retries: int = 3,
+    *,
+    browser_transport: HttpTransport | None = None,
+    fallback_transport: HttpTransport | None = None,
+) -> bytes:
+    last: HttpError | None = None
+    impersonating_transport = browser_transport or BrowserImpersonatingHttpTransport()
     for attempt in range(1, retries + 1):
         try:
-            content = _http_get_with_browser_impersonation(url, timeout)
-            if content is not None:
-                return content
-            return get_bytes(
-                url,
-                timeout=timeout,
-                headers={"User-Agent": DEFAULT_USER_AGENT},
-            )
-        except Exception as exc:  # noqa: BLE001 - curl_cffi/HTTP transport boundary
+            try:
+                return get_bytes(url, timeout=timeout, transport=impersonating_transport)
+            except HttpBrowserImpersonationUnavailableError:
+                return get_bytes(
+                    url,
+                    timeout=timeout,
+                    headers={"User-Agent": DEFAULT_USER_AGENT},
+                    transport=fallback_transport,
+                )
+        except HttpError as exc:
             last = exc
             if attempt < retries:
                 time.sleep(2.0 ** attempt)
@@ -126,52 +141,6 @@ def http_get_json(url: str) -> dict | None:
         log.warning("GET JSON %s -> %s", url, exc)
         return None
     return decoded if isinstance(decoded, dict) else None
-
-
-def _http_get_with_browser_impersonation(url: str, timeout: int) -> bytes | None:
-    try:
-        from curl_cffi import requests  # type: ignore[reportMissingImports]
-    except ImportError:
-        return None
-
-    response = requests.get(
-        url,
-        headers=_chrome_headers(),
-        timeout=timeout,
-        impersonate="chrome124",
-        allow_redirects=True,
-    )
-    response.raise_for_status()
-    return response.content
-
-
-def _chrome_headers() -> dict[str, str]:
-    return {
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,image/avif,image/webp,image/apng,*/*;"
-            "q=0.8,application/signed-exchange;v=b3;q=0.7"
-        ),
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Sec-Ch-Ua": (
-            '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"'
-        ),
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-    }
 
 
 __all__ = [

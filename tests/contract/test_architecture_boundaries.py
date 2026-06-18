@@ -384,6 +384,30 @@ def test_widgets_do_not_import_clip_http_fetcher():
     )
 
 
+def test_concrete_http_clients_stay_in_network_adapter():
+    source_root = PROJECT_ROOT / "src" / "solin"
+    allowed = {
+        (source_root / "core" / "network" / "http.py").resolve(),
+    }
+    fragments = ("requests.get(", "urlopen(", "curl_cffi")
+    violations: list[str] = []
+
+    for path in sorted(source_root.rglob("*.py")):
+        if path.resolve() in allowed:
+            continue
+        source = path.read_text(encoding="utf-8")
+        for fragment in fragments:
+            if fragment in source:
+                violations.append(
+                    f"{path.relative_to(PROJECT_ROOT)} contains {fragment}"
+                )
+
+    assert violations == [], (
+        "Concrete HTTP clients must stay behind solin.core.network.http adapters:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_widgets_do_not_import_cache_scanner():
     widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
     violations: list[str] = []

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from solin.core.jw import memorial_publication
 from solin.core.jw.memorial_publication import resolve_memorial_jwpub
+from solin.core.network import http
 
 
 def _jwpub_payload(url: str, *, checksum: str = "abc", thumb: str = "thumb.jpg"):
@@ -73,3 +74,73 @@ def test_resolve_memorial_jwpub_marks_not_found_after_empty_api_response(monkeyp
 
     assert info.download_url is None
     assert info.not_found is True
+
+
+def test_download_memorial_bytes_prefers_browser_impersonating_transport():
+    calls: list[tuple[str, str, dict[str, str]]] = []
+
+    class _BrowserTransport:
+        def get(self, request: http.HttpRequest) -> http.HttpResponse:
+            calls.append(("browser", request.url, dict(request.headers)))
+            return http.HttpResponse(
+                url=request.url,
+                status_code=200,
+                headers=http.HttpHeaders({}),
+                content=b"jwpub",
+            )
+
+        def stream(self, request: http.HttpRequest) -> http.HttpByteStream:
+            raise AssertionError("unexpected stream")
+
+    class _FallbackTransport:
+        def get(self, request: http.HttpRequest) -> http.HttpResponse:
+            raise AssertionError("unexpected fallback")
+
+        def stream(self, request: http.HttpRequest) -> http.HttpByteStream:
+            raise AssertionError("unexpected stream")
+
+    data = memorial_publication.download_memorial_bytes(
+        "https://example.test/archive.jwpub",
+        browser_transport=_BrowserTransport(),
+        fallback_transport=_FallbackTransport(),
+    )
+
+    assert data == b"jwpub"
+    assert calls == [("browser", "https://example.test/archive.jwpub", {})]
+
+
+def test_download_memorial_bytes_uses_fallback_when_impersonation_is_unavailable():
+    calls: list[tuple[str, str, dict[str, str]]] = []
+
+    class _BrowserTransport:
+        def get(self, request: http.HttpRequest) -> http.HttpResponse:
+            calls.append(("browser", request.url, dict(request.headers)))
+            raise http.HttpBrowserImpersonationUnavailableError("missing optional adapter")
+
+        def stream(self, request: http.HttpRequest) -> http.HttpByteStream:
+            raise AssertionError("unexpected stream")
+
+    class _FallbackTransport:
+        def get(self, request: http.HttpRequest) -> http.HttpResponse:
+            calls.append(("fallback", request.url, dict(request.headers)))
+            return http.HttpResponse(
+                url=request.url,
+                status_code=200,
+                headers=http.HttpHeaders({}),
+                content=b"fallback-jwpub",
+            )
+
+        def stream(self, request: http.HttpRequest) -> http.HttpByteStream:
+            raise AssertionError("unexpected stream")
+
+    data = memorial_publication.download_memorial_bytes(
+        "https://example.test/archive.jwpub",
+        browser_transport=_BrowserTransport(),
+        fallback_transport=_FallbackTransport(),
+    )
+
+    assert data == b"fallback-jwpub"
+    assert calls == [
+        ("browser", "https://example.test/archive.jwpub", {}),
+        ("fallback", "https://example.test/archive.jwpub", {"User-Agent": "Mozilla/5.0"}),
+    ]

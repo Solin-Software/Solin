@@ -51,6 +51,10 @@ class HttpResponseTooLargeError(HttpError):
         self.limit = limit
 
 
+class HttpBrowserImpersonationUnavailableError(HttpTransportError):
+    """The optional browser-impersonating transport dependency is not installed."""
+
+
 class HttpHeaders(Mapping[str, str]):
     """Case-insensitive response headers with Mapping semantics."""
 
@@ -172,6 +176,31 @@ class _RequestsByteStream:
         self.close()
 
 
+class _BytesByteStream:
+    def __init__(self, response: HttpResponse) -> None:
+        self.url = response.url
+        self.status_code = response.status_code
+        self.headers = response.headers
+        self._content = response.content
+
+    @property
+    def content_length(self) -> int:
+        return len(self._content)
+
+    def iter_bytes(self, chunk_size: int = DEFAULT_CHUNK_SIZE) -> Iterator[bytes]:
+        for index in range(0, len(self._content), chunk_size):
+            yield self._content[index : index + chunk_size]
+
+    def close(self) -> None:
+        return None
+
+    def __enter__(self) -> "_BytesByteStream":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+
 class RequestsHttpTransport:
     """Configured production HTTP adapter backed by requests and certifi."""
 
@@ -222,6 +251,89 @@ class RequestsHttpTransport:
             raise HttpTransportError(f"GET {request.url} failed: {exc}") from exc
 
         return response
+
+
+class BrowserImpersonatingHttpTransport:
+    """Optional HTTP adapter backed by curl_cffi browser impersonation."""
+
+    def __init__(
+        self,
+        *,
+        impersonate: str = "chrome124",
+        default_headers: Mapping[str, str] | None = None,
+    ) -> None:
+        self._impersonate = impersonate
+        self._default_headers = dict(default_headers or browser_impersonation_headers())
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        try:
+            from curl_cffi import requests as curl_requests  # type: ignore[reportMissingImports]
+        except ImportError as exc:
+            raise HttpBrowserImpersonationUnavailableError(
+                "curl_cffi is required for browser-impersonating HTTP requests"
+            ) from exc
+
+        headers = dict(self._default_headers)
+        headers.update(request.headers)
+        try:
+            response = curl_requests.get(
+                request.url,
+                headers=headers,
+                params=request.params,
+                timeout=request.timeout,
+                impersonate=self._impersonate,
+                allow_redirects=True,
+            )
+        except Exception as exc:  # noqa: BLE001 - optional curl_cffi transport boundary
+            raise HttpTransportError(f"GET {request.url} failed: {exc}") from exc
+
+        try:
+            response.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 - optional curl_cffi response boundary
+            raise HttpStatusError(
+                str(getattr(response, "url", "") or request.url),
+                int(getattr(response, "status_code", 0) or 0),
+                str(exc),
+            ) from exc
+
+        return HttpResponse(
+            url=str(getattr(response, "url", "") or request.url),
+            status_code=int(getattr(response, "status_code", 0) or 0),
+            headers=HttpHeaders(getattr(response, "headers", {})),
+            content=bytes(getattr(response, "content", b"")),
+        )
+
+    def stream(self, request: HttpRequest) -> HttpByteStream:
+        return _BytesByteStream(self.get(request))
+
+
+def browser_impersonation_headers() -> dict[str, str]:
+    return {
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;"
+            "q=0.9,image/avif,image/webp,image/apng,*/*;"
+            "q=0.8,application/signed-exchange;v=b3;q=0.7"
+        ),
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Ch-Ua": (
+            '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"'
+        ),
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
 
 
 _DEFAULT_TRANSPORT: HttpTransport = RequestsHttpTransport()
