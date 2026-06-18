@@ -8,6 +8,16 @@ on:
         required: true
         type: number
         default: 5
+      run_release_smoke_tests:
+        description: Run packaged startup and installer upgrade smoke tests
+        required: true
+        type: boolean
+        default: true
+      previous_windows_installer_url:
+        description: Previous production installer used for upgrade smoke
+        required: true
+        type: string
+        default: "https://github.com/Solin-Software/solin-releases/releases/download/26.17.1/Solin_Setup_26.17.1.exe"
 
 permissions:
   contents: read
@@ -283,6 +293,73 @@ jobs:
       # scripts/diff_release.py needs an explicit OLD dist directory plus
       # the newly built dist. A GitHub runner does not naturally have the previous
       # release's dist, so producing a patch here would be misleading.
+
+      - name: Locate newly built Windows installer
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem "build\installer_output" -Filter "Solin_Setup_*.exe" -File)
+          if ($installers.Count -ne 1) {
+            $found = $installers | ForEach-Object { $_.FullName }
+            throw "Expected exactly one newly built installer, found $($installers.Count): $found"
+          }
+          "SOLIN_NEW_INSTALLER=$($installers[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "SOLIN_NEW_INSTALLER=$($installers[0].FullName)"
+
+      - name: Download previous Windows installer
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "${{ inputs.previous_windows_installer_url }}"
+          if ([string]::IsNullOrWhiteSpace($url)) {
+            throw "previous_windows_installer_url must not be empty when release smoke tests are enabled."
+          }
+
+          $outDir = Join-Path $env:BUILD_DIR "previous-installer"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $oldInstaller = Join-Path $outDir "Solin_Setup_previous.exe"
+          $ProgressPreference = "SilentlyContinue"
+
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+              Write-Host "Downloading previous installer (attempt $attempt): $url"
+              Invoke-WebRequest -Uri $url -OutFile $oldInstaller -MaximumRedirection 5
+              break
+            }
+            catch {
+              if ($attempt -eq 3) {
+                throw
+              }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+          }
+
+          $file = Get-Item $oldInstaller
+          if ($file.Length -le 0) {
+            throw "Downloaded previous installer is empty: $oldInstaller"
+          }
+          "SOLIN_OLD_INSTALLER=$oldInstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Downloaded previous installer: $oldInstaller ($($file.Length) bytes)"
+
+      - name: Run full-installer upgrade smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: pwsh
+        env:
+          SOLIN_E2E_ALLOW_INSTALLER_MUTATION: "1"
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+          SOLIN_E2E_INSTALLER_TIMEOUT: "240"
+        run: |
+          python -m pytest tests\e2e\test_installer_upgrade_smoke.py -q
+
+      - name: Run packaged startup smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: pwsh
+        env:
+          SOLIN_PACKAGED_EXE: 'build\main.dist\Solin.exe'
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+        run: |
+          python -m pytest tests\e2e\test_packaged_app_smoke.py -q
 
       - name: Collect installer artifacts
         shell: pwsh

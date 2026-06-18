@@ -8,6 +8,16 @@ on:
         required: true
         type: number
         default: 5
+      run_release_smoke_tests:
+        description: Run packaged startup and app replacement smoke tests
+        required: true
+        type: boolean
+        default: true
+      previous_macos_dmg_url:
+        description: Previous production DMG used for app replacement smoke
+        required: true
+        type: string
+        default: "https://github.com/Solin-Software/solin-releases/releases/download/26.17.0/Solin-26.17.0-macOS.dmg"
 
 permissions:
   contents: read
@@ -435,6 +445,114 @@ jobs:
 
           shasum -a 256 "${DIST_DIR}"/*.dmg > "${DIST_DIR}/SHA256SUMS-macos.txt"
           ls -lh "${DIST_DIR}/"
+
+      - name: Locate newly built macOS DMG
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmgs=()
+          while IFS= read -r dmg; do
+            dmgs+=("$dmg")
+          done < <(find "$DIST_DIR" -maxdepth 1 -name "*.dmg" -type f | sort)
+          if [ "${#dmgs[@]}" -ne 1 ]; then
+            printf '%s\n' "${dmgs[@]}" | sed 's/^/found DMG: /'
+            echo "::error::Expected exactly one newly built DMG, found ${#dmgs[@]}."
+            exit 1
+          fi
+          echo "SOLIN_NEW_MACOS_DMG=${PWD}/${dmgs[0]}" >> "$GITHUB_ENV"
+          ls -lh "${dmgs[0]}"
+
+      - name: Download previous macOS DMG
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="${{ inputs.previous_macos_dmg_url }}"
+          if [ -z "${url//[[:space:]]/}" ]; then
+            echo "::error::previous_macos_dmg_url must not be empty when release smoke tests are enabled."
+            exit 1
+          fi
+
+          out_dir="${BUILD_DIR}/previous-dmg"
+          mkdir -p "$out_dir"
+          old_dmg="${PWD}/${out_dir}/${APP_NAME}_previous.dmg"
+          curl --fail --location --retry 3 --retry-delay 5 --output "$old_dmg" "$url"
+          if [ ! -s "$old_dmg" ]; then
+            echo "::error::Downloaded previous DMG is empty: $old_dmg"
+            exit 1
+          fi
+          echo "SOLIN_OLD_MACOS_DMG=$old_dmg" >> "$GITHUB_ENV"
+          ls -lh "$old_dmg"
+
+      - name: Extract macOS release apps
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount_roots=()
+          mount_points=()
+
+          cleanup() {
+            for mount_point in "${mount_points[@]}"; do
+              hdiutil detach "$mount_point" -quiet || true
+            done
+            for mount_root in "${mount_roots[@]}"; do
+              rm -rf "$mount_root"
+            done
+          }
+          trap cleanup EXIT
+
+          extract_app() {
+            local dmg="$1"
+            local output_dir="$2"
+            local env_name="$3"
+            local mount_root
+            local mount_point
+            local app_source
+
+            mount_root="$(mktemp -d "${RUNNER_TEMP}/solin-dmg.XXXXXX")"
+            mount_point="${mount_root}/mount"
+            mkdir -p "$mount_point"
+            mount_roots+=("$mount_root")
+            mount_points+=("$mount_point")
+
+            hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_point" -quiet
+            app_source="$(find "$mount_point" -maxdepth 2 -name "${APP_NAME}.app" -type d -print -quit)"
+            if [ -z "$app_source" ]; then
+              echo "::error::${APP_NAME}.app was not found in $dmg"
+              exit 1
+            fi
+
+            rm -rf "$output_dir"
+            mkdir -p "$output_dir"
+            ditto "$app_source" "${output_dir}/${APP_NAME}.app"
+            if [ ! -x "${output_dir}/${APP_NAME}.app/Contents/MacOS/main" ]; then
+              echo "::error::App executable was not found after extraction from $dmg."
+              exit 1
+            fi
+            echo "${env_name}=${PWD}/${output_dir}/${APP_NAME}.app" >> "$GITHUB_ENV"
+          }
+
+          extract_app "$SOLIN_OLD_MACOS_DMG" "${BUILD_DIR}/previous-app" "SOLIN_OLD_MACOS_APP"
+          extract_app "$SOLIN_NEW_MACOS_DMG" "${BUILD_DIR}/new-dmg-app" "SOLIN_NEW_MACOS_APP"
+
+      - name: Run macOS app replacement smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        env:
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+        run: |
+          python -m pytest tests/e2e/test_macos_app_upgrade_smoke.py -q
+
+      - name: Run packaged startup smoke
+        if: ${{ inputs.run_release_smoke_tests }}
+        shell: bash
+        env:
+          SOLIN_E2E_STARTUP_SECONDS: "8"
+        run: |
+          export SOLIN_PACKAGED_EXE="${SOLIN_NEW_MACOS_APP}/Contents/MacOS/main"
+          python -m pytest tests/e2e/test_packaged_app_smoke.py -q
 
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4

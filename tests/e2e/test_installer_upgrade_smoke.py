@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from tests.e2e._packaged_app import (
+    assert_profile_user_state_survived,
     assert_process_survives_startup,
+    cleanup_solin_test_registry,
     isolated_app_env,
     path_from_env,
+    seed_profile_user_state,
+    skip_if_solin_registry_exists,
 )
 
 
@@ -21,10 +23,6 @@ pytestmark = pytest.mark.e2e
 
 _APP_EXE = "Solin.exe"
 _PROFILE_ID = "upgrade_profile"
-_REGISTRY_SUBKEYS = (
-    r"Software\Solin",
-    rf"Software\Solin_{_PROFILE_ID}",
-)
 
 
 def _require_windows_installer_opt_in() -> None:
@@ -34,62 +32,6 @@ def _require_windows_installer_opt_in() -> None:
         pytest.skip(
             "Set SOLIN_E2E_ALLOW_INSTALLER_MUTATION=1 to run installer e2e tests."
         )
-
-
-def _winreg() -> Any:
-    import winreg
-
-    return winreg
-
-
-def _registry_key_exists(root: Any, subkey: str) -> bool:
-    winreg = _winreg()
-    try:
-        with winreg.OpenKey(root, subkey):
-            return True
-    except FileNotFoundError:
-        return False
-    except PermissionError:
-        return True
-
-
-def _skip_if_real_solin_registry_exists() -> None:
-    winreg = _winreg()
-    for root_name, root in (("HKCU", winreg.HKEY_CURRENT_USER), ("HKLM", winreg.HKEY_LOCAL_MACHINE)):
-        if _registry_key_exists(root, r"Software\Solin"):
-            pytest.skip(
-                f"{root_name}\\Software\\Solin already exists; refusing to mutate "
-                "a machine with an existing Solin installation."
-            )
-
-
-def _delete_registry_tree(root: Any, subkey: str) -> None:
-    winreg = _winreg()
-    try:
-        with winreg.OpenKey(root, subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
-            children: list[str] = []
-            index = 0
-            while True:
-                try:
-                    children.append(winreg.EnumKey(key, index))
-                    index += 1
-                except OSError:
-                    break
-    except FileNotFoundError:
-        return
-
-    for child in children:
-        _delete_registry_tree(root, rf"{subkey}\{child}")
-    try:
-        winreg.DeleteKey(root, subkey)
-    except FileNotFoundError:
-        return
-
-
-def _cleanup_test_registry() -> None:
-    winreg = _winreg()
-    for subkey in _REGISTRY_SUBKEYS:
-        _delete_registry_tree(winreg.HKEY_CURRENT_USER, subkey)
 
 
 def _run_installer(installer: Path, install_dir: Path, env: dict[str, str]) -> None:
@@ -138,61 +80,6 @@ def _run_uninstaller(install_dir: Path, env: dict[str, str]) -> None:
     )
 
 
-def _write_json(path: Path, data: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _seed_user_state(temp_root: Path) -> dict[Path, str]:
-    data_dir = temp_root / "AppData" / "Roaming" / "Solin" / "Solin"
-    profile_dir = data_dir / "profiles" / _PROFILE_ID
-    sentinels = {
-        profile_dir / "images" / "upgrade-image.txt": "image survives upgrade",
-        profile_dir / "embedded" / "upgrade-media.bin": "media survives upgrade",
-    }
-
-    _write_json(
-        data_dir / "profiles.json",
-        {
-            "profiles": [
-                {
-                    "id": _PROFILE_ID,
-                    "name": "Upgrade Profile",
-                    "created_at": 1_700_000_000.0,
-                }
-            ]
-        },
-    )
-    _write_json(
-        profile_dir / "playlists.json",
-        {
-            "playlists": [
-                {
-                    "id": "upgrade-playlist",
-                    "name": "Upgrade Playlist",
-                    "items": [],
-                }
-            ]
-        },
-    )
-    _write_json(
-        profile_dir / "meeting_trees.json",
-        {
-            "version": 1,
-            "trees": {
-                "upgrade-week": {
-                    "nodes": [],
-                    "last_canonical_hash": "upgrade-sentinel",
-                }
-            },
-        },
-    )
-    for path, content in sentinels.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    return sentinels
-
-
 def _seed_qsettings() -> None:
     from PySide6.QtCore import QSettings
 
@@ -205,21 +92,7 @@ def _seed_qsettings() -> None:
     profile_settings.sync()
 
 
-def _assert_user_state_survived(sentinels: dict[Path, str]) -> None:
-    for path, expected in sentinels.items():
-        assert path.read_text(encoding="utf-8") == expected
-
-    profile_dir = next(iter(sentinels)).parents[1]
-    playlists = json.loads((profile_dir / "playlists.json").read_text(encoding="utf-8"))
-    meeting_trees = json.loads(
-        (profile_dir / "meeting_trees.json").read_text(encoding="utf-8")
-    )
-    assert playlists["playlists"][0]["id"] == "upgrade-playlist"
-    assert (
-        meeting_trees["trees"]["upgrade-week"]["last_canonical_hash"]
-        == "upgrade-sentinel"
-    )
-
+def _assert_qsettings_survived() -> None:
     from PySide6.QtCore import QSettings
 
     assert QSettings("Solin", "GlobalApp").value("last_active_profile") == _PROFILE_ID
@@ -228,7 +101,7 @@ def _assert_user_state_survived(sentinels: dict[Path, str]) -> None:
 
 def test_full_installer_upgrade_preserves_user_state() -> None:
     _require_windows_installer_opt_in()
-    _skip_if_real_solin_registry_exists()
+    skip_if_solin_registry_exists(_PROFILE_ID)
     old_installer = path_from_env(
         "SOLIN_OLD_INSTALLER",
         purpose="full installer upgrade smoke tests",
@@ -245,13 +118,15 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
 
         try:
             _run_installer(old_installer, install_dir, env)
-            sentinels = _seed_user_state(temp_root)
+            data_dir = temp_root / "AppData" / "Roaming" / "Solin" / "Solin"
+            sentinels = seed_profile_user_state(data_dir, _PROFILE_ID)
             _seed_qsettings()
 
             _run_installer(new_installer, install_dir, env)
-            _assert_user_state_survived(sentinels)
+            assert_profile_user_state_survived(sentinels)
+            _assert_qsettings_survived()
             assert_process_survives_startup(install_dir / _APP_EXE, env=env)
         finally:
             _run_uninstaller(install_dir, env)
-            _cleanup_test_registry()
+            cleanup_solin_test_registry(_PROFILE_ID)
             shutil.rmtree(install_dir, ignore_errors=True)
