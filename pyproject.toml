@@ -36,7 +36,13 @@ version = {attr = "solin.version.__version__"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-solin = ["qml/*.qml"]
+solin = [
+    "qml/*.qml",
+    "resources/assets/*.icns",
+    "resources/assets/*.ico",
+    "resources/translations/*.qm",
+    "resources/translations/locales/*.json",
+]
 native_webview_widget = ["*.dll", "*.dylib"]
 
 [tool.pytest.ini_options]
@@ -57,7 +63,7 @@ line-length = 100
 extend-exclude = [
     "build",
     "dist",
-    "resources/translations",
+    "src/solin/resources/translations",
 ]
 
 [tool.ruff.lint]
@@ -94,7 +100,7 @@ exclude = [
     ".pytest-tmp",
     "build",
     "dist",
-    "resources/translations",
+    "src/solin/resources/translations",
 ]
 reportMissingTypeStubs = false
 reportUnknownMemberType = false

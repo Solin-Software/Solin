@@ -10,6 +10,7 @@ def package_root() -> Path:
 def application_resource_roots() -> tuple[Path, ...]:
     package = package_root()
     return (
+        package,
         package.parent,
         package.parents[1],
         Path.cwd(),

@@ -24,12 +24,12 @@ do Qt. O método t(key) foi removido. O fluxo de atualização de traduções é
 
 Arquivos necessários em produção
 ─────────────────────────────────
-  resources/translations/solin_<code>.qm   ← binários compilados pelo lrelease
-  resources/translations/locales/<code>.json ← metadados (code, name, api_code…)
+  src/solin/resources/translations/solin_<code>.qm   ← binários compilados pelo lrelease
+  src/solin/resources/translations/locales/<code>.json ← metadados (code, name, api_code…)
 
 Arquivos de desenvolvimento (NÃO embarcados em produção)
 ─────────────────────────────────────────────────────────
-  resources/translations/solin_<code>.ts   ← fonte para lupdate / Qt Linguist / lrelease
+  src/solin/resources/translations/solin_<code>.ts   ← fonte para lupdate / Qt Linguist / lrelease
 """
 
 from __future__ import annotations

@@ -11,7 +11,7 @@ for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI\"
 set MAIN_SCRIPT=%PROJECT_ROOT%main.py
 set OUTPUT_DIR=%PROJECT_ROOT%build
 set APP_NAME=Solin
-set ICON=%PROJECT_ROOT%resources\assets\icon.ico
+set ICON=%PROJECT_ROOT%src\solin\resources\assets\icon.ico
 set PYTHON=%PROJECT_ROOT%.venv\Scripts\python.exe
 set QML_SOURCE_DIR=%PROJECT_ROOT%src\solin\qml
 set QML_MODULE_ROOT=%PROJECT_ROOT%build\qmlcache\solin\qml
@@ -94,13 +94,13 @@ if %ERRORLEVEL% NEQ 0 (
     --include-package=pywinauto ^
     --include-package=comtypes ^
     --include-package-data=pyqttoast ^
-    --include-data-dir="%PROJECT_ROOT%resources\assets=resources/assets" ^
-    --include-data-dir="%PROJECT_ROOT%resources\translations\locales=resources/translations/locales" ^
+    --include-data-dir="%PROJECT_ROOT%src\solin\resources\assets=solin/resources/assets" ^
+    --include-data-dir="%PROJECT_ROOT%src\solin\resources\translations\locales=solin/resources/translations/locales" ^
     --include-data-dir="%QML_CACHE_DIR%=solin/qml/Solin" ^
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
     --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
-    --include-data-files="%PROJECT_ROOT%resources\translations\*.qm=resources/translations/" ^
+    --include-data-files="%PROJECT_ROOT%src\solin\resources\translations\*.qm=solin/resources/translations/" ^
     --include-data-files="%PROJECT_ROOT%src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,multimedia,position ^

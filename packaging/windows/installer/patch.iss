@@ -84,7 +84,7 @@ RestartApplications=no
     
 OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Patch_{#MyPatchFileVersion}
-SetupIconFile=..\..\..\resources\assets\icon.ico
+SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -155,8 +155,8 @@ Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; V
 ; Comment the line above and uncomment/adjust lines below.
 ; Source: "{#MyDistDir}\Solin.exe";                  DestDir: "{app}"; Flags: ignoreversion
 ; Source: "{#MyDistDir}\some_updated.dll";            DestDir: "{app}"; Flags: ignoreversion
-; Source: "..\..\..\resources\translations\*";                  DestDir: "{app}\resources\translations"; Flags: ignoreversion
-; Source: "..\..\..\resources\translations\locales\*.json";     DestDir: "{app}\resources\translations\locales"; Flags: ignoreversion
+; Source: "..\..\..\src\solin\resources\translations\*";                  DestDir: "{app}\resources\translations"; Flags: ignoreversion
+; Source: "..\..\..\src\solin\resources\translations\locales\*.json";     DestDir: "{app}\resources\translations\locales"; Flags: ignoreversion
 
 
 ; =============================================================================

@@ -111,10 +111,10 @@ jobs:
         run: |
           $required = @(
             "main.py",
-            "resources\assets\icon.ico",
+            "src\solin\resources\assets\icon.ico",
             "src\solin\qml",
-            "resources\translations\locales",
-            "resources\translations",
+            "src\solin\resources\translations\locales",
+            "src\solin\resources\translations",
             "src\native_webview_widget\__init__.py",
             "src\native_webview_widget\abi.py",
             "src\native_webview_widget\_backend.py",
@@ -148,7 +148,7 @@ jobs:
             --standalone `
             --output-dir="$env:BUILD_DIR" `
             --output-filename="$env:APP_NAME" `
-            --windows-icon-from-ico="resources\assets\icon.ico" `
+            --windows-icon-from-ico="src\solin\resources\assets\icon.ico" `
             --windows-console-mode=attach `
             --assume-yes-for-downloads `
             --windows-file-version="$env:APP_VERSION" `
@@ -175,13 +175,13 @@ jobs:
             --include-package=pywinauto `
             --include-package=comtypes `
             --include-package-data=pyqttoast `
-            --include-data-dir="resources\assets=resources/assets" `
-            --include-data-dir="resources\translations\locales=resources/translations/locales" `
+            --include-data-dir="src\solin\resources\assets=solin/resources/assets" `
+            --include-data-dir="src\solin\resources\translations\locales=solin/resources/translations/locales" `
             --include-data-dir="$env:BUILD_DIR\qmlcache\solin\qml\Solin=solin/qml/Solin" `
             --include-data-dir="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml" `
             --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
-            --include-data-files="resources\translations\*.qm=resources/translations/" `
+            --include-data-files="src\solin\resources\translations\*.qm=solin/resources/translations/" `
             --include-data-files="src\native_webview_widget\native_webview_widget.dll=native_webview_widget/native_webview_widget.dll" `
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,multimedia,position `

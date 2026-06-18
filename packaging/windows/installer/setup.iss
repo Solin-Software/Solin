@@ -23,7 +23,7 @@
 ;
 ;  BUILD INSTRUCTIONS:
 ;    1. Compile with Nuitka:
-;         nuitka --standalone --enable-plugin=pyside6 --windows-icon-from-ico=resources\assets\icon.ico
+;         nuitka --standalone --enable-plugin=pyside6 --windows-icon-from-ico=src\solin\resources\assets\icon.ico
 ;                --output-dir=build --output-filename=Solin main.py
 ;       (output directory must be named "main.dist" — or adjust MyDistDir below)
 ;    2. The executable must be "Solin.exe" inside MyDistDir.
@@ -84,7 +84,7 @@ RestartApplications=no
     
 OutputDir=..\..\..\build\installer_output
 OutputBaseFilename=Solin_Setup_{#MySetupFileVersion}
-SetupIconFile=..\..\..\resources\assets\icon.ico
+SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 WizardStyle=modern
 
 ; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
@@ -130,7 +130,7 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
-Source: "..\..\..\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
+Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
 
 ; NOTE: Translations/lang folders are handled automatically via recursesubdirs
 ;       above, as long as they reside inside main.dist/.
