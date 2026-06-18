@@ -173,6 +173,8 @@ class TimerBridge(QObject):
 
     # Relayed to TimerWidget.project_timer_signal for the media-countdown mode.
     mediaCountdownRequested = Signal(QDateTime)
+    pointerEntered = Signal()
+    pointerExited = Signal()
 
     def __init__(
         self,
@@ -460,3 +462,13 @@ class TimerBridge(QObject):
     def startCountdownMinutes(self, minutes: int) -> None:
         target = QDateTime.currentDateTime().addSecs(int(minutes) * 60)
         self.mediaCountdownRequested.emit(target)
+
+    # ── Exposed: QML cursor bridge ─────────────────────────────────────────
+
+    @Slot()
+    def pointerEnter(self) -> None:  # noqa: N802
+        self.pointerEntered.emit()
+
+    @Slot()
+    def pointerExit(self) -> None:  # noqa: N802
+        self.pointerExited.emit()

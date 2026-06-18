@@ -47,4 +47,4 @@ class ClockRenderBridge(QObject):
     def _get_model(self) -> dict:
         return self._model
 
-    model = Property(object, _get_model, notify=modelChanged)
+    model = Property("QVariant", _get_model, notify=modelChanged)

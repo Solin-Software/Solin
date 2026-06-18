@@ -45,10 +45,9 @@ Item {
         Behavior on scale { NumberAnimation { duration: 90 } }
     }
 
-    MouseArea {
+    TimerPointerArea {
         id: ma
         anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
         function apply(mx) {
             var f = Math.max(0, Math.min(1, (mx - handle.width / 2) / Math.max(1, ctl.width - handle.width)))
             var v = ctl.from + f * (ctl.to - ctl.from)

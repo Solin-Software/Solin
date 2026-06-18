@@ -73,12 +73,10 @@ Rectangle {
         }
     }
 
-    MouseArea {
+    TimerPointerArea {
         id: ma
         anchors.fill: parent
         enabled: ctl.enabled
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
         onClicked: ctl.clicked()
     }
 

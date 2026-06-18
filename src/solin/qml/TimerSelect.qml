@@ -60,12 +60,10 @@ Rectangle {
         Behavior on opacity { NumberAnimation { duration: 140 } }
     }
 
-    MouseArea {
+    TimerPointerArea {
         id: mouse
         anchors.fill: parent
         enabled: select.enabled
-        hoverEnabled: true
-        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: menu.opened ? menu.close() : menu.open()
     }
 
@@ -143,10 +141,9 @@ Rectangle {
                         elide: Text.ElideRight
                     }
 
-                    MouseArea {
+                    TimerPointerArea {
                         id: optionMouse
                         anchors.fill: parent
-                        hoverEnabled: true
                         onClicked: {
                             select.picked(index)
                             menu.close()
