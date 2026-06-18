@@ -111,7 +111,6 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
-            received_installation_settings,
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
@@ -155,7 +154,6 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
-            self.installation_settings = received_installation_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
@@ -255,7 +253,6 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     )
     assert window.jw_songs_store is jw_songs_store
     assert window.jwpub_checksum_store is jwpub_checksum_store
-    assert window.installation_settings is installation_settings
     assert window.playlist_storage_paths.playlists_file == "playlists.json"
     assert window.playlist_storage_paths.pending_deletions_file == "pending.json"
     assert str(window.playlist_repository.path) == "playlists.json"
@@ -302,10 +299,12 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         (
             "service_factories",
             (
+                "lang",
                 runtime_paths,
                 profile_settings_bundle,
                 media_cache_manager,
                 jwpub_checksum_store,
+                installation_settings,
             ),
         ),
         "show",
@@ -375,7 +374,6 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             received_jw_catalog_thumbnail_session_factory,
             received_jw_songs_store,
             received_jwpub_checksum_store,
-            received_installation_settings,
             playlist_storage_paths,
             playlist_repository,
             meeting_tree_store,
@@ -419,7 +417,6 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             )
             self.jw_songs_store = received_jw_songs_store
             self.jwpub_checksum_store = received_jwpub_checksum_store
-            self.installation_settings = received_installation_settings
             self.playlist_storage_paths = playlist_storage_paths
             self.playlist_repository = playlist_repository
             self.meeting_tree_store = meeting_tree_store
@@ -495,10 +492,12 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         (
             "service_factories",
             (
+                "lang",
                 runtime_paths,
                 profile_settings_bundle,
                 media_cache_manager,
                 jwpub_checksum_store,
+                installation_settings,
             ),
         ),
         "show",

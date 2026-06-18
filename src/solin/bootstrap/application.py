@@ -85,14 +85,26 @@ def _build_main_window_profile_settings(profile_settings):
 
 
 def _build_main_window_service_factories(
+    lang_manager,
     runtime_paths,
     profile_settings,
     media_cache_manager,
     jwpub_checksum_store,
+    installation_settings,
 ):
+    from typing import cast
+
+    from PySide6.QtWidgets import QWidget
     from solin.controllers.main_window_service_factories import (
         MainWindowServiceFactories,
     )
+    from solin.controllers.remote_services_controller import (
+        RemoteNotificationQueue as RemoteNotificationQueuePort,
+        RemoteNotificationService,
+        RemoteServicesController,
+        RemoteUpdateService,
+    )
+    from solin.core.foundation.identity import get_install_id
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
     from solin.core.integrations.automation.zoom.service import ZoomService
@@ -102,6 +114,18 @@ def _build_main_window_service_factories(
     from solin.core.jw.yeartext import YeartextService
     from solin.core.meetings.memorial import MemorialService
     from solin.core.meetings.publications import JwpubService
+    from solin.core.remote.notifications import NotificationService
+    from solin.core.remote.patch_installer import (
+        PatchDownloadWorker,
+        launch_patch_installer,
+        save_pending_patch_cleanup,
+    )
+    from solin.core.remote.update_policy import UpdateInfo
+    from solin.core.remote.updates import UpdateService
+    from solin.ui.dialogs.notifications import RemoteNotificationQueue
+    from solin.ui.dialogs.update import UpdateDialog
+
+    install_id_provider = lambda: get_install_id(installation_settings)
 
     return MainWindowServiceFactories(
         auto_key_dispatcher=AutoKeyDispatcher,
@@ -125,6 +149,36 @@ def _build_main_window_service_factories(
             runtime_paths.jwpub_cache_dir,
             jwpub_checksum_store,
             parent,
+        ),
+        remote_services=lambda parent: RemoteServicesController(
+            cast(QWidget, parent),
+            notification_service=cast(
+                RemoteNotificationService,
+                NotificationService(
+                    lang_manager,
+                    profile_settings.notification,
+                    install_id_provider,
+                    parent,
+                ),
+            ),
+            notification_queue=cast(
+                RemoteNotificationQueuePort,
+                RemoteNotificationQueue(lang_manager, parent),
+            ),
+            update_service=cast(
+                RemoteUpdateService,
+                UpdateService(install_id_provider, parent),
+            ),
+            update_dialog_factory=lambda info: UpdateDialog(
+                cast(UpdateInfo, info),
+                parent,
+                patch_downloader_factory=PatchDownloadWorker,
+                save_cleanup_path=lambda path: save_pending_patch_cleanup(
+                    installation_settings,
+                    path,
+                ),
+                launch_patch=launch_patch_installer,
+            ),
         ),
     )
 
@@ -205,10 +259,12 @@ def _launch_main_window(
         profile_settings
     )
     main_window_service_factories = _build_main_window_service_factories(
+        lang_manager,
         runtime_paths,
         main_window_profile_settings,
         media.cache_manager,
         jwpub_checksum_store,
+        installation_settings,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(
@@ -232,7 +288,6 @@ def _launch_main_window(
         jw_catalog_thumbnail_session_factory,
         jw_songs_store,
         jwpub_checksum_store,
-        installation_settings,
         playlist_storage_paths,
         playlist_repository,
         meeting_tree_store,

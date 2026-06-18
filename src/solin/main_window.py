@@ -58,7 +58,6 @@ from .controllers.projection_window_controller import (
     ProjectionWindowContext,
     ProjectionWindowController,
 )
-from .controllers.remote_services_controller import RemoteServicesController
 from .controllers.shutdown_controller import (
     ShutdownController,
     ShutdownDependencies,
@@ -100,24 +99,13 @@ from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
-from .core.foundation.identity import get_install_id
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
-from .core.foundation.settings_store import InstallationSettingsStore
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
 from .core.meetings.jwpub_cache import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
-from .core.remote.notifications import NotificationService
-from .core.remote.patch_installer import (
-    PatchDownloadWorker,
-    launch_patch_installer,
-    save_pending_patch_cleanup,
-)
-from .core.remote.updates import UpdateService
 from .widgets.projection.monitor_manager import MonitorManagerPopup
-from .ui.dialogs.notifications import RemoteNotificationQueue
-from .ui.dialogs.update import UpdateDialog
 from .ui.qml.timer_bridge import TimerBridge
 from .ui.window_focus import raise_projection_window
 
@@ -165,7 +153,6 @@ class MainWindow(QMainWindow):
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         jwpub_checksum_store: JwpubChecksumStore,
-        installation_settings: InstallationSettingsStore,
         playlist_storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         meeting_tree_store: MeetingTreeStore,
@@ -196,8 +183,6 @@ class MainWindow(QMainWindow):
         self.font_manager = font_manager
         self.jw_songs_store = jw_songs_store
         self.jwpub_checksum_store = jwpub_checksum_store
-        self._installation_settings = installation_settings
-        self._install_id_provider = lambda: get_install_id(self._installation_settings)
         self.playlist_storage_paths = playlist_storage_paths
         self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
@@ -738,27 +723,7 @@ class MainWindow(QMainWindow):
                     bring_to_front=self._bring_to_front,
                     open_media_files=self.open_media_files,
                 ),
-                remote_services_factory=lambda: RemoteServicesController(
-                    self,
-                    notification_service=NotificationService(
-                        self.lang,
-                        self._profile_settings.notification,
-                        self._install_id_provider,
-                        self,
-                    ),
-                    notification_queue=RemoteNotificationQueue(self.lang, self),
-                    update_service=UpdateService(self._install_id_provider, self),
-                    update_dialog_factory=lambda info: UpdateDialog(
-                        info,
-                        self,
-                        patch_downloader_factory=PatchDownloadWorker,
-                        save_cleanup_path=lambda path: save_pending_patch_cleanup(
-                            self._installation_settings,
-                            path,
-                        ),
-                        launch_patch=launch_patch_installer,
-                    ),
-                ),
+                remote_services_factory=lambda: service_factories.remote_services(self),
                 apply_stylesheet=self.setStyleSheet,
             )
         )

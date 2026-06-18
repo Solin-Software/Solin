@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QObject
+from PySide6.QtWidgets import QWidget
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,3 +19,4 @@ class MainWindowServiceFactories:
     yeartext: Callable[[QObject], Any]
     jwpub: Callable[[QObject], Any]
     memorial: Callable[[QObject], Any]
+    remote_services: Callable[[QWidget], Any]
