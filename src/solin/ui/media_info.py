@@ -30,7 +30,6 @@ import logging
 import os
 import re
 import struct
-import threading
 import time
 import zlib
 from pathlib import Path
@@ -41,6 +40,7 @@ from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
 from ..core.foundation.exception_logging import log_ignored_exception
+from ..core.foundation.thread_workers import CancellationFlag, WorkerHandle, WorkerPool
 from ..core.media.info_queue import (
     MediaInfoJob,
     MediaInfoScheduler,
@@ -393,12 +393,19 @@ class _ThreadedRemoteInfoExtractor(QObject):
     _worker_ready = Signal(bytes, str)
     _worker_failed = Signal()
 
-    def __init__(self, index: int, url: str, parent=None):
+    def __init__(
+        self,
+        index: int,
+        url: str,
+        worker_pool: WorkerPool,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._index = index
         self._url = url
-        self._cancelled = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._worker_pool = worker_pool
+        self._cancelled = CancellationFlag()
+        self._worker: WorkerHandle | None = None
         cancelled = self._cancelled
         self.destroyed.connect(lambda *_: cancelled.set())
         self._worker_ready.connect(self._deliver_worker_result)
@@ -408,23 +415,13 @@ class _ThreadedRemoteInfoExtractor(QObject):
     def _start(self) -> None:
         if self._cancelled.is_set():
             return
-        thread = threading.Thread(
-            target=self._run,
-            daemon=True,
-            name=type(self).__name__,
-        )
-        self._thread = thread
-        thread.start()
+        self._worker = self._worker_pool.submit(type(self).__name__, self._run)
 
     def cancel(self, *, wait: bool = False, timeout: float = 2.0) -> None:
         self._cancelled.set()
-        thread = self._thread
-        if (
-            wait
-            and thread is not None
-            and thread is not threading.current_thread()
-        ):
-            thread.join(timeout=max(0.0, timeout))
+        worker = self._worker
+        if wait and worker is not None and not worker.is_current():
+            worker.join(timeout=max(0.0, timeout))
         self.deleteLater()
 
     def _run(self) -> None:
@@ -486,9 +483,15 @@ class RemoteAudioInfoExtractor(_ThreadedRemoteInfoExtractor):
     _MAX_BYTES = 3_145_728  # 3 MB (3 * 1024 * 1024)
     _TIMEOUT_S = 10
 
-    def __init__(self, index: int, url: str, parent=None):
+    def __init__(
+        self,
+        index: int,
+        url: str,
+        worker_pool: WorkerPool,
+        parent=None,
+    ) -> None:
         self._ext = Path(url.split("?")[0]).suffix.lower()
-        super().__init__(index, url, parent)
+        super().__init__(index, url, worker_pool, parent)
 
     def _fetch_info(self) -> tuple[bytes | None, str]:
         data = get_bytes(
@@ -843,7 +846,14 @@ class _RemoteVideoMetaThenStream(QObject):
     thumbnail_failed = Signal(int)
     duration_ready   = Signal(int, int)
 
-    def __init__(self, index: int, url: str, media_type: str, parent=None):
+    def __init__(
+        self,
+        index: int,
+        url: str,
+        media_type: str,
+        worker_pool: WorkerPool,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._index      = index
         self._url        = url
@@ -852,7 +862,7 @@ class _RemoteVideoMetaThenStream(QObject):
         self._stream_ex: MediaInfoExtractor | None = None
 
         # Estágio 1: tenta og:image + og:title
-        self._page_ex = RemotePageMetaExtractor(index, url, self)
+        self._page_ex = RemotePageMetaExtractor(index, url, worker_pool, self)
         self._page_ex.info_ready.connect(self._on_page_ready)
         self._page_ex.thumbnail_failed.connect(self._on_page_failed)
 
@@ -905,22 +915,46 @@ class _RemoteVideoMetaThenStream(QObject):
         self.deleteLater()
 
 
-ExtractorFactory = Callable[[int, str, str, QObject], QObject]
+ExtractorFactory = Callable[[int, str, str, WorkerPool, QObject], QObject]
 
 
-def _remote_image_factory(index: int, url: str, _media_type: str, parent: QObject) -> QObject:
-    return RemoteImageInfoExtractor(index, url, parent)
+def _remote_image_factory(
+    index: int,
+    url: str,
+    _media_type: str,
+    worker_pool: WorkerPool,
+    parent: QObject,
+) -> QObject:
+    return RemoteImageInfoExtractor(index, url, worker_pool, parent)
 
 
-def _remote_audio_factory(index: int, url: str, _media_type: str, parent: QObject) -> QObject:
-    return RemoteAudioInfoExtractor(index, url, parent)
+def _remote_audio_factory(
+    index: int,
+    url: str,
+    _media_type: str,
+    worker_pool: WorkerPool,
+    parent: QObject,
+) -> QObject:
+    return RemoteAudioInfoExtractor(index, url, worker_pool, parent)
 
 
-def _remote_video_factory(index: int, url: str, media_type: str, parent: QObject) -> QObject:
-    return _RemoteVideoMetaThenStream(index, url, media_type, parent)
+def _remote_video_factory(
+    index: int,
+    url: str,
+    media_type: str,
+    worker_pool: WorkerPool,
+    parent: QObject,
+) -> QObject:
+    return _RemoteVideoMetaThenStream(index, url, media_type, worker_pool, parent)
 
 
-def _local_media_factory(index: int, url: str, _media_type: str, parent: QObject) -> QObject:
+def _local_media_factory(
+    index: int,
+    url: str,
+    _media_type: str,
+    _worker_pool: WorkerPool,
+    parent: QObject,
+) -> QObject:
     return MediaInfoExtractor(index, url, parent)
 
 
@@ -932,12 +966,18 @@ _EXTRACTOR_FACTORIES: dict[tuple[bool, str | None], ExtractorFactory] = {
 }
 
 
-def _create_extractor(index: int, url: str, media_type: str, parent: QObject) -> QObject:
+def _create_extractor(
+    index: int,
+    url: str,
+    media_type: str,
+    worker_pool: WorkerPool,
+    parent: QObject,
+) -> QObject:
     is_remote = url.startswith(("http://", "https://"))
     factory = _EXTRACTOR_FACTORIES.get((is_remote, media_type))
     if factory is None:
         factory = _EXTRACTOR_FACTORIES[(is_remote, None)]
-    return factory(index, url, media_type, parent)
+    return factory(index, url, media_type, worker_pool, parent)
 
 
 class MediaInfoQueue(QObject):
@@ -966,11 +1006,13 @@ class MediaInfoQueue(QObject):
         self,
         media_cache_dir: str | os.PathLike[str],
         thumb_cache_dir: str | os.PathLike[str],
+        remote_worker_pool: WorkerPool,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._media_cache_dir = os.fspath(media_cache_dir)
         self._thumb_cache_dir = os.fspath(thumb_cache_dir)
+        self._remote_worker_pool = remote_worker_pool
         self._scheduler = MediaInfoScheduler(
             max_concurrent=self._MAX_CONCURRENT,
         )
@@ -1208,6 +1250,7 @@ class MediaInfoQueue(QObject):
                 job.index,
                 job.url,
                 job.media_type,
+                self._remote_worker_pool,
                 self,
             )
         except Exception:  # noqa: BLE001 - Qt factory boundary isolates one failed job

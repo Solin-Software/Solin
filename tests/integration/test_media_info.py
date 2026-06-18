@@ -13,6 +13,20 @@ from solin.ui.media_info import (
 )
 
 
+class _NoRemoteWorkerPool:
+    def submit(self, _name, _target):
+        raise AssertionError("this test should not start remote workers")
+
+
+def _media_info_queue(tmp_path, parent=None):
+    return MediaInfoQueue(
+        tmp_path / "media",
+        tmp_path / "thumbs",
+        _NoRemoteWorkerPool(),
+        parent,
+    )
+
+
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     checksum = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
     return struct.pack(">I", len(data)) + chunk_type + data + struct.pack(">I", checksum)
@@ -105,13 +119,13 @@ def test_media_info_queue_ignores_extractors_from_cleared_generation(
 
     extractors: list[_Extractor] = []
 
-    def _factory(_index, _url, _media_type, _parent):
+    def _factory(_index, _url, _media_type, _worker_pool, _parent):
         extractor = _Extractor()
         extractors.append(extractor)
         return extractor
 
     monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
-    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs")
+    queue = _media_info_queue(tmp_path)
 
     queue.request(0, str(tmp_path / "first.mp4"))
     first = extractors[0]
@@ -136,7 +150,7 @@ def test_media_info_queue_ignores_extractors_from_cleared_generation(
 
 
 def test_media_info_queue_rejects_fast_path_callback_after_invalidation(tmp_path):
-    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs")
+    queue = _media_info_queue(tmp_path)
     version = queue._scheduler.version_for(0)
     old_pixmap = object()
     new_pixmap = object()
@@ -170,7 +184,7 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
 
     created: list[int] = []
 
-    def _factory(index, _url, _media_type, _parent):
+    def _factory(index, _url, _media_type, _worker_pool, _parent):
         if index == 0:
             raise RuntimeError("factory failed")
         created.append(index)
@@ -178,7 +192,7 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
 
     monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
     monkeypatch.setattr(media_info_module, "QPixmap", _NullPixmap)
-    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs")
+    queue = _media_info_queue(tmp_path)
     queue._scheduler.enqueue(0, "failed.mp4", "video")
     queue._scheduler.enqueue(1, "second.mp4", "video")
     queue._scheduler.enqueue(2, "third.mp4", "video")
@@ -197,6 +211,7 @@ def test_media_info_service_owns_queue_created_by_injected_factory(tmp_path):
         queue = MediaInfoQueue(
             tmp_path / "media",
             tmp_path / "thumbs",
+            _NoRemoteWorkerPool(),
             parent,
         )
         queues.append(queue)

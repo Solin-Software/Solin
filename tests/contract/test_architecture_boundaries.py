@@ -2011,6 +2011,21 @@ def test_media_info_services_live_outside_widget_package():
     assert not legacy_path.exists()
 
 
+def test_media_info_remote_workers_are_injected_from_composition():
+    media_info_source = (
+        PROJECT_ROOT / "src" / "solin" / "ui" / "media_info.py"
+    ).read_text(encoding="utf-8")
+    composition_source = (
+        PROJECT_ROOT / "src" / "solin" / "bootstrap" / "media.py"
+    ).read_text(encoding="utf-8")
+
+    assert "import threading" not in media_info_source
+    assert "threading.Thread" not in media_info_source
+    assert "remote_worker_pool" in media_info_source
+    assert "ThreadedWorkerPool" in composition_source
+    assert "_media_info_workers" in composition_source
+
+
 def test_profile_media_bytes_are_persisted_outside_widgets():
     widget_root = PROJECT_ROOT / "src" / "solin" / "widgets"
     paths = (

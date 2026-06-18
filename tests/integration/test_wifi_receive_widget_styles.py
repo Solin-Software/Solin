@@ -20,6 +20,7 @@ app = QApplication([])
 from solin.core.i18n.manager import LanguageManager
 from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from solin.core.foundation.settings_store import GlobalSettingsStore
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
@@ -78,6 +79,7 @@ widget = WifiReceiveWidget(
         lambda owner: MediaInfoQueue(
             runtime_paths.media_cache_dir,
             runtime_paths.thumb_cache_dir,
+            ThreadedWorkerPool(),
             owner,
         ),
         parent,

@@ -125,8 +125,11 @@ def test_threaded_worker_pool_drains_workers_on_shutdown():
         started.set()
         release.wait(1)
 
-    pool.submit("test-worker", _worker)
+    handle = pool.submit("test-worker", _worker)
+    assert handle is not None
     assert started.wait(1)
+    assert handle.name == "test-worker"
+    assert handle.is_alive()
     assert pool.active_count == 1
 
     release.set()
@@ -134,6 +137,8 @@ def test_threaded_worker_pool_drains_workers_on_shutdown():
 
     assert pool.is_stopped
     assert pool.active_count == 0
+    assert not handle.is_alive()
+    assert pool.submit("after-shutdown", _worker) is None
 
 
 def test_font_manager_shutdown_cancels_and_joins_workers(tmp_path):

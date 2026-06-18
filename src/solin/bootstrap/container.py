@@ -123,6 +123,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()
     lifecycle.register_cleanup(media.cache_manager.cancel_all)
+    lifecycle.register_cleanup(media.shutdown)
     lifecycle.register_cleanup(font_manager.shutdown)
     lifecycle.register_cleanup(jw_songs_store.shutdown)
 

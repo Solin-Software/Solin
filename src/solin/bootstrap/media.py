@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject
 
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.core.media.browser_downloads import BrowserDownloadService
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.downloader import SongDownloader
@@ -17,6 +19,8 @@ from solin.core.network.browser_images import BrowserImageFetchService
 
 if TYPE_CHECKING:
     from solin.ui.media_info import MediaInfoQueue, MediaInfoService
+
+log = logging.getLogger(__name__)
 
 
 class MediaComposition:
@@ -30,6 +34,7 @@ class MediaComposition:
     ) -> None:
         self._media_cache_dir = media_cache_dir
         self._thumb_cache_dir = thumb_cache_dir
+        self._media_info_workers = ThreadedWorkerPool()
         self.cache_manager = MediaCacheManager(
             media_cache_dir,
             downloader_factory=self.create_downloader,
@@ -67,6 +72,7 @@ class MediaComposition:
         return MediaInfoQueue(
             self._media_cache_dir,
             self._thumb_cache_dir,
+            self._media_info_workers,
             parent,
         )
 
@@ -77,3 +83,8 @@ class MediaComposition:
             self.create_info_queue,
             parent,
         )
+
+    def shutdown(self) -> None:
+        alive = self._media_info_workers.shutdown()
+        if alive:
+            log.warning("Media info workers still alive after shutdown: %s", alive)
