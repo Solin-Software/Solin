@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from collections.abc import Callable
+from typing import Any
 
-from solin.core.integrations.automation.obs import OBSWebSocketService
+from PySide6.QtCore import QObject, Signal
 
 
 class _TransientOBSSettings:
@@ -32,10 +33,14 @@ class OnboardingOBSProbe(QObject):
     state_changed = Signal(object, str)
     scenes_updated = Signal(list)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        obs_service_factory: Callable[[Any, QObject], Any],
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self._settings = _TransientOBSSettings()
-        self._service = OBSWebSocketService(self._settings, parent=self)
+        self._service = obs_service_factory(self._settings, self)
         self._service.state_changed.connect(self.state_changed.emit)
         self._service.scenes_updated.connect(self.scenes_updated.emit)
 

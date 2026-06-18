@@ -350,9 +350,12 @@ def _run_zoom_poll_standalone(app, filepath: str, lang_manager) -> int:
 
 def _create_profile_screen(container, lang_manager):
     from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
+    from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.ui.profile_screen import ProfileScreen
 
-    obs_probe = OnboardingOBSProbe()
+    obs_probe = OnboardingOBSProbe(
+        lambda settings, parent: OBSWebSocketService(settings, parent=parent)
+    )
     container.lifecycle.register_cleanup(obs_probe.shutdown)
     return ProfileScreen(
         lang_manager,
