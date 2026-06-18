@@ -7,22 +7,8 @@ def package_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def application_resource_roots() -> tuple[Path, ...]:
-    package = package_root()
-    return (
-        package,
-        package.parent,
-        package.parents[1],
-        Path.cwd(),
-    )
-
-
 def application_resource_path(*parts: str) -> Path:
-    for root in application_resource_roots():
-        candidate = root / "resources" / Path(*parts)
-        if candidate.exists():
-            return candidate
-    return package_root().parents[1] / "resources" / Path(*parts)
+    return package_root() / "resources" / Path(*parts)
 
 
 def application_asset_path(filename: str) -> Path:
