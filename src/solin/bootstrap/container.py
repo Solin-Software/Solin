@@ -60,7 +60,11 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
-    from solin.core.onboarding.infrastructure import QSettingsOnboardingSettings
+    from solin.core.integrations.automation.settings import OBSSettingsStore
+    from solin.core.onboarding.infrastructure import (
+        OnboardingSettingsStores,
+        QSettingsOnboardingSettings,
+    )
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
     from solin.core.rendering.fonts import FontManager
 
@@ -81,9 +85,20 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         runtime_paths.data_dir,
         runtime_paths.cache_dir,
     )
+
+    def onboarding_settings_for_profile(profile_id: str) -> OnboardingSettingsStores:
+        settings = profile_runtime.create(profile_id).settings
+        return OnboardingSettingsStores(
+            app_settings=settings.app_settings(),
+            media_language_settings=JWLanguageSettingsStore.for_profile_settings(
+                settings
+            ),
+            obs_settings=OBSSettingsStore.for_profile_settings(settings),
+        )
+
     onboarding_service = OnboardingService(
         profile_service,
-        QSettingsOnboardingSettings(),
+        QSettingsOnboardingSettings(onboarding_settings_for_profile),
     )
     media = MediaComposition(
         app,

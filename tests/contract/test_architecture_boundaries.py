@@ -1666,6 +1666,15 @@ def test_onboarding_obs_probe_receives_obs_service_factory():
     assert "obs_service_factory" in source
 
 
+def test_onboarding_settings_adapter_receives_profile_store_factory():
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "onboarding" / "infrastructure.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "ProfileSettings" not in source
+    assert ".for_profile_settings" not in source
+    assert "stores_for_profile" in source
+
+
 def test_playlist_widgets_do_not_construct_playlist_repository():
     playlist_widget_root = PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist"
     violations: list[str] = []
