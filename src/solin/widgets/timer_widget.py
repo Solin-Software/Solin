@@ -3,11 +3,9 @@ timer_widget.py — Solin
 =======================
 Host for the QML-based Timer tab.
 
-The class name (``TimerWidget``) and the ``project_timer_signal`` contract are
-preserved so the rest of the app (the UI controller and the timer-theme
-controller that projects the media-window countdown) keep working unchanged.
-Internally it now hosts ``TimerView.qml`` and wires it to :class:`TimerBridge`,
-which owns the advanced-timer state.
+The widget hosts ``TimerView.qml`` and wires it to :class:`TimerBridge`, which
+owns the advanced-timer state. ``project_timer_signal`` remains the presentation
+contract for media-window countdown projection.
 """
 
 from __future__ import annotations
@@ -27,8 +25,8 @@ from solin.ui.qml.timer_icons import TimerIconProvider
 class TimerWidget(QWidget):
     """QML host for the advanced timer / media-countdown tab."""
 
-    # Kept for backward compatibility: the media-window countdown mode emits a
-    # target QDateTime that MainWindow projects via the timer-theme controller.
+    # Media-window countdown mode emits a target QDateTime that MainWindow
+    # projects through the timer-theme controller.
     project_timer_signal = Signal(QDateTime)
 
     def __init__(

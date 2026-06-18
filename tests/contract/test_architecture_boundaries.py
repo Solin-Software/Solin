@@ -930,6 +930,23 @@ def test_screen_manager_lives_in_presentation_ui():
     assert violations == []
 
 
+def test_window_geometry_settings_live_in_core_windowing():
+    old_path = PROJECT_ROOT / "src" / "solin" / "ui" / "window_settings.py"
+    new_path = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "windowing" / "settings.py"
+    )
+    violations: list[str] = []
+
+    assert not old_path.exists()
+    assert new_path.is_file()
+    for path in sorted((PROJECT_ROOT / "src" / "solin").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "ui.window_settings" in source:
+            violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_presentation_has_no_trivial_refresh_language_aliases():
     violations: list[str] = []
 

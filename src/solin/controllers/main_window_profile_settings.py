@@ -16,7 +16,7 @@ from ..core.media.settings import MediaSettingsStore, ProjectionPlaybackSettings
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ..core.projection.monitor_allocation import MonitorAllocationStore
 from ..core.remote.notification_settings import NotificationSettingsStore
-from ..ui.window_settings import WindowGeometrySettingsStore
+from ..core.windowing.settings import WindowGeometrySettingsStore
 
 
 @dataclass(frozen=True, slots=True)

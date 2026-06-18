@@ -52,7 +52,7 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
     from solin.core.projection.monitor_allocation import MonitorAllocationStore
     from solin.core.remote.notification_settings import NotificationSettingsStore
-    from solin.ui.window_settings import WindowGeometrySettingsStore
+    from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
         media=MediaSettingsStore.for_profile_settings(profile_settings),

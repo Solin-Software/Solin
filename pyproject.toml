@@ -86,6 +86,7 @@ include = [
     "src/solin/core/projection",
     "src/solin/core/profiles",
     "src/solin/core/timer",
+    "src/solin/core/windowing",
 ]
 exclude = [
     "**/__pycache__",
