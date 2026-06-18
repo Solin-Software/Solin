@@ -173,6 +173,7 @@ def test_profile_registry_and_directory_layout_are_stable(
     runtime = profile_infrastructure.ProfileRuntimeContextFactory(
         tmp_path,
         cache_dir,
+        profile_settings_for=ProfileSettings.for_profile_id,
     ).create("main_hall")
 
     assert profile_models.profile_slug(" Main Hall - East ") == "main_hall_east"
@@ -276,7 +277,10 @@ def test_legacy_file_copy_preserves_sources_until_cleanup(tmp_path: Path) -> Non
 def test_profile_runtime_context_requires_an_explicit_valid_profile_id(
     tmp_path: Path,
 ) -> None:
-    runtime = profile_infrastructure.ProfileRuntimeContextFactory(tmp_path)
+    runtime = profile_infrastructure.ProfileRuntimeContextFactory(
+        tmp_path,
+        profile_settings_for=ProfileSettings.for_profile_id,
+    )
 
     with pytest.raises(ValueError, match="cannot be empty"):
         runtime.create("")

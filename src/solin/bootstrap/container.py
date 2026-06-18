@@ -66,6 +66,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         QSettingsOnboardingSettings,
     )
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
+    from solin.core.profiles.settings import ProfileSettings
     from solin.core.rendering.fonts import FontManager
 
     runtime_paths = RuntimePaths.from_standard_locations()
@@ -79,6 +80,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     profile_runtime = ProfileRuntimeContextFactory(
         runtime_paths.data_dir,
         runtime_paths.cache_dir,
+        profile_settings_for=ProfileSettings.for_profile_id,
     )
     profile_service = create_local_profile_service(
         os.fspath(runtime_paths.data_dir),

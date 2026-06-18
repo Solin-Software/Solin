@@ -326,13 +326,16 @@ class ProfileRuntimeContextFactory:
         self,
         data_dir: str | Path,
         cache_dir: str | Path | None = None,
+        *,
+        profile_settings_for: Callable[[str], ProfileSettings],
     ) -> None:
         self._storage = LocalProfileStorage(data_dir, cache_dir)
+        self._profile_settings_for = profile_settings_for
 
     def create(self, profile_id: str) -> ProfileRuntimeContext:
         return ProfileRuntimeContext(
             paths=self._storage.paths_for(profile_id),
-            settings=ProfileSettings.for_profile_id(profile_id),
+            settings=self._profile_settings_for(profile_id),
         )
 
 
