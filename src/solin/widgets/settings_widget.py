@@ -340,5 +340,3 @@ class SettingsWidget(
         self._link_changelog_btn.setText(self.tr("Changelog"))
         self._refresh_screens()
 
-    def refresh_language(self):
-        self.retranslateUi()

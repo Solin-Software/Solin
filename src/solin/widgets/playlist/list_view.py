@@ -306,9 +306,6 @@ class PlaylistListView(QWidget):
         self._rebuild_app_cards()
         self._rebuild_watched_section()
 
-    def refresh_language(self) -> None:
-        self.retranslateUi()
-
     def refresh(self) -> None:
         self._rebuild_app_cards()
 

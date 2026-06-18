@@ -930,6 +930,44 @@ def test_screen_manager_lives_in_presentation_ui():
     assert violations == []
 
 
+def test_presentation_has_no_trivial_refresh_language_aliases():
+    violations: list[str] = []
+
+    for path in sorted((PROJECT_ROOT / "src" / "solin").rglob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.FunctionDef) or node.name != "refresh_language":
+                continue
+            body = [
+                statement
+                for statement in node.body
+                if not (
+                    isinstance(statement, ast.Expr)
+                    and isinstance(statement.value, ast.Constant)
+                    and isinstance(statement.value.value, str)
+                )
+            ]
+            if len(body) != 1:
+                continue
+            statement = body[0]
+            call: ast.expr | None = None
+            if isinstance(statement, ast.Expr):
+                call = statement.value
+            elif isinstance(statement, ast.Return):
+                call = statement.value
+            if not isinstance(call, ast.Call):
+                continue
+            function = call.func
+            if (
+                isinstance(function, ast.Attribute)
+                and function.attr == "retranslateUi"
+                and isinstance(function.value, ast.Name)
+                and function.value.id == "self"
+            ):
+                violations.append(_display(path, node))
+
+    assert violations == []
+
+
 def test_monitor_allocation_lives_with_projection_core():
     old_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "monitor_allocation.py"
     new_path = (

@@ -1382,6 +1382,3 @@ class BrowserWidget(
             else self.tr("Lock browser to 16:9")
         )
 
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()

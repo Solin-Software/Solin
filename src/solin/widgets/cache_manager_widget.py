@@ -858,10 +858,6 @@ class CacheManagerWidget(QWidget):
         self._update_chip_labels()
         self._refresh_action_bar()
 
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()
-
     # ── Lifecycle ─────────────────────────────────────────────────────────
 
     def showEvent(self, event):

@@ -1294,10 +1294,6 @@ class WifiReceiveWidget(QWidget):
         self._send_all_btn.setText(self.tr("  Send all to playlist"))
         self._placeholder.setText(self.tr("Files sent from your phone will appear here."))
 
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()
-
     def cleanup(self) -> None:
         """Para servidor e threads auxiliares antes da janela ser destruída."""
         try:

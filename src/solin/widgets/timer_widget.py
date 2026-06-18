@@ -80,9 +80,6 @@ class TimerWidget(QWidget):
             log_ignored_exception(__name__, "Could not refresh timer language")
         self.bridge.refresh_language()
 
-    def refresh_language(self) -> None:
-        self.retranslateUi()
-
     # ── Shutdown ──────────────────────────────────────────────────────────────
 
     def cleanup(self) -> None:

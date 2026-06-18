@@ -597,9 +597,6 @@ class MediaLibraryWidget(QWidget):
         self._sync_static_text()
         self._load_items()
 
-    def refresh_language(self) -> None:
-        self.retranslateUi()
-
     def cleanup(self) -> None:
         if self._disposed:
             return

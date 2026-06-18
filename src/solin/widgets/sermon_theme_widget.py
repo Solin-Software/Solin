@@ -429,6 +429,3 @@ class SermonThemeWidget(QWidget):
         self.preview.set_subtitle(self.subtitle_input.text() or new_default)
         self.project_btn.setText(self.tr("Project Theme"))
 
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()

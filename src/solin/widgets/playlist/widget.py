@@ -890,9 +890,6 @@ class PlaylistEditView(
         if self._pl:
             self._rebuild_list()
 
-    def refresh_language(self) -> None:
-        self.retranslateUi()
-
     def begin_qml_pointer_cursor(self) -> None:
         self._qml_pointer_depth += 1
         begin_qml_pointer_cursor(self.qml_widget)
@@ -1215,10 +1212,6 @@ class PlaylistWidget(QWidget):
     def retranslateUi(self) -> None:
         self._list_view.retranslateUi()
         self._edit_view.retranslateUi()
-
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()
 
     def cleanup(self) -> None:
         """Stop background work owned by child views."""

@@ -1112,10 +1112,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if hasattr(self, "_monitor_popup") and self._monitor_popup is not None:
             self._monitor_popup.retranslateUi()
 
-    def refresh_language(self) -> None:
-        """Alias de compatibilidade → retranslateUi()."""
-        self.retranslateUi()
-
     # ── Image zoom/pan → projector ────────────────────────────────────────
 
     # Signals forwarded to MainWindow so it can apply the transform to all
