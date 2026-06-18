@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from ..core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
+from ..core.projection.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
 
 
 class TimerMonitorController:

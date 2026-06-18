@@ -903,6 +903,28 @@ def test_screen_manager_lives_in_presentation_ui():
     assert violations == []
 
 
+def test_monitor_allocation_lives_with_projection_core():
+    old_path = PROJECT_ROOT / "src" / "solin" / "core" / "ui" / "monitor_allocation.py"
+    new_path = (
+        PROJECT_ROOT
+        / "src"
+        / "solin"
+        / "core"
+        / "projection"
+        / "monitor_allocation.py"
+    )
+    violations: list[str] = []
+
+    assert not old_path.exists()
+    assert new_path.is_file()
+    for path in sorted((PROJECT_ROOT / "src" / "solin").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "core.ui.monitor_allocation" in source:
+            violations.append(str(path.relative_to(PROJECT_ROOT)))
+
+    assert violations == []
+
+
 def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",

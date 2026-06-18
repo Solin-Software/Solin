@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any, Protocol
 
-from solin.core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
+from solin.core.projection.monitor_allocation import (
+    OWNER_MEDIA,
+    OWNER_OFF,
+    OWNER_TIMER,
+)
 
 
 ProjectionState = dict[str, Any]

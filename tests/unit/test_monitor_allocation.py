@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from solin.core.ui.monitor_allocation import (
+from solin.core.projection.monitor_allocation import (
     MonitorAllocationStore,
     OWNER_MEDIA,
     OWNER_OFF,

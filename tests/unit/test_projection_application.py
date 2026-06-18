@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from solin.core.projection.application import ProjectionSession
-from solin.core.ui.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
+from solin.core.projection.monitor_allocation import OWNER_MEDIA, OWNER_OFF, OWNER_TIMER
 
 
 class _Screen:

@@ -1,5 +1,5 @@
 r"""
-monitor_allocation.py — Solin
+monitor_allocation.py — Solin projection monitor ownership
 =============================
 A single, profile-persisted arbiter of *which subsystem owns which monitor*.
 

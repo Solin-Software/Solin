@@ -84,7 +84,7 @@ from .controllers.wifi_playlist_controller import (
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
-from .core.ui.monitor_allocation import MonitorAllocationStore
+from .core.projection.monitor_allocation import MonitorAllocationStore
 from .core.ui.window_settings import WindowGeometrySettingsStore
 from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
