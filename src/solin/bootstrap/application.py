@@ -84,7 +84,12 @@ def _build_main_window_profile_settings(profile_settings):
     )
 
 
-def _build_main_window_service_factories():
+def _build_main_window_service_factories(
+    runtime_paths,
+    profile_settings,
+    media_cache_manager,
+    jwpub_checksum_store,
+):
     from solin.controllers.main_window_service_factories import (
         MainWindowServiceFactories,
     )
@@ -94,6 +99,9 @@ def _build_main_window_service_factories():
     from solin.core.integrations.camera import CameraService
     from solin.core.integrations.ndi import NDIReceiverService
     from solin.core.jw.background_song_service import BackgroundSongService
+    from solin.core.jw.yeartext import YeartextService
+    from solin.core.meetings.memorial import MemorialService
+    from solin.core.meetings.publications import JwpubService
 
     return MainWindowServiceFactories(
         auto_key_dispatcher=AutoKeyDispatcher,
@@ -102,6 +110,22 @@ def _build_main_window_service_factories():
         camera=CameraService,
         zoom=ZoomService,
         background_song=BackgroundSongService,
+        yeartext=lambda parent: YeartextService(
+            cache_file=runtime_paths.cache_dir / "yeartext_cache.json",
+            parent=parent,
+        ),
+        jwpub=lambda parent: JwpubService(
+            profile_settings.media,
+            media_cache_manager,
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+        ),
+        memorial=lambda parent: MemorialService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+        ),
     )
 
 
@@ -180,7 +204,12 @@ def _launch_main_window(
     main_window_profile_settings = _build_main_window_profile_settings(
         profile_settings
     )
-    main_window_service_factories = _build_main_window_service_factories()
+    main_window_service_factories = _build_main_window_service_factories(
+        runtime_paths,
+        main_window_profile_settings,
+        media.cache_manager,
+        jwpub_checksum_store,
+    )
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(
         main_window_profile_settings.media

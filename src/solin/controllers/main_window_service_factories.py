@@ -15,3 +15,6 @@ class MainWindowServiceFactories:
     camera: Callable[[QObject], Any]
     zoom: Callable[[Any, QObject], Any]
     background_song: Callable[[Any, Any, Any, Any, Any, QObject], Any]
+    yeartext: Callable[[QObject], Any]
+    jwpub: Callable[[QObject], Any]
+    memorial: Callable[[QObject], Any]

@@ -1632,6 +1632,9 @@ def test_main_window_receives_long_lived_service_factories_from_bootstrap():
         "CameraService",
         "ZoomService",
         "BackgroundSongService",
+        "YeartextService",
+        "JwpubService",
+        "MemorialService",
     ):
         assert concrete_service not in source
     assert "MainWindowServiceFactories" in source

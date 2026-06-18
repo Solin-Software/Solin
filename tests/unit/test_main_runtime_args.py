@@ -208,7 +208,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda: events.append("service_factories") or service_factories,
+        lambda *args: events.append(("service_factories", args))
+        or service_factories,
     )
 
     window = main._launch_main_window(
@@ -298,7 +299,15 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert window.active_profile is active_profile
     assert events == [
         ("profile_settings_bundle", profile_settings),
-        "service_factories",
+        (
+            "service_factories",
+            (
+                runtime_paths,
+                profile_settings_bundle,
+                media_cache_manager,
+                jwpub_checksum_store,
+            ),
+        ),
         "show",
         ("titlebar", window, "#1A231F"),
         ("timer", 200),
@@ -460,7 +469,8 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda: events.append("service_factories") or service_factories,
+        lambda *args: events.append(("service_factories", args))
+        or service_factories,
     )
 
     main._launch_main_window(
@@ -482,7 +492,15 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
 
     assert events == [
         ("profile_settings_bundle", profile_settings),
-        "service_factories",
+        (
+            "service_factories",
+            (
+                runtime_paths,
+                profile_settings_bundle,
+                media_cache_manager,
+                jwpub_checksum_store,
+            ),
+        ),
         "show",
         ("titlebar", "#1A231F"),
     ]

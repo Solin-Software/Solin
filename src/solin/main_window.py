@@ -93,7 +93,6 @@ from .core.integrations.automation.screen_share import (
     macos_accessibility_trusted,
 )
 from .core.jw.songs import JWSongsStore
-from .core.jw.yeartext import YeartextService
 from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.profile_store import ProfileMediaStore
@@ -107,9 +106,7 @@ from .core.foundation.settings_store import InstallationSettingsStore
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
-from .core.meetings.memorial import MemorialService
 from .core.meetings.jwpub_cache import JwpubChecksumStore
-from .core.meetings.publications import JwpubService
 from .core.profiles.models import ProfileInfo
 from .core.remote.notifications import NotificationService
 from .core.remote.patch_installer import (
@@ -375,10 +372,7 @@ class MainWindow(QMainWindow):
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
                 yeartext_settings=self._yeartext_settings,
-                yeartext_service_factory=lambda parent: YeartextService(
-                    cache_file=self.runtime_paths.cache_dir / "yeartext_cache.json",
-                    parent=parent,
-                ),
+                yeartext_service_factory=service_factories.yeartext,
                 auto_share_accessibility_trusted=lambda: bool(
                     macos_accessibility_trusted()
                 ),
@@ -407,18 +401,8 @@ class MainWindow(QMainWindow):
                     jw_catalog_thumbnail_session_factory
                 ),
                 jw_songs_store=self.jw_songs_store,
-                jwpub_service_factory=lambda parent: JwpubService(
-                    self._media_settings,
-                    self.media_cache_manager,
-                    self.runtime_paths.jwpub_cache_dir,
-                    self.jwpub_checksum_store,
-                    parent,
-                ),
-                memorial_service_factory=lambda parent: MemorialService(
-                    self.runtime_paths.jwpub_cache_dir,
-                    self.jwpub_checksum_store,
-                    parent,
-                ),
+                jwpub_service_factory=service_factories.jwpub,
+                memorial_service_factory=service_factories.memorial,
             ),
             MainWindowUiHandlers(
                 project_image=lambda data: self._media_projection.project_image_bytes(
