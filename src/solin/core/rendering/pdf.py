@@ -131,7 +131,7 @@ def render_pdf_pages_sync(
             raise RuntimeError(f"PDF sem páginas: '{pdf_path.name}'.")
 
         paths: list[str] = []
-        fmt = image_format.upper().encode("ascii")
+        fmt = image_format.upper() if image_format else None
         save_quality = -1 if quality is None else int(quality)
         for idx in range(total):
             if progress_cb:
