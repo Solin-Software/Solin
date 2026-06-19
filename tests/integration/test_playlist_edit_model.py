@@ -125,6 +125,41 @@ def test_tree_data_preserves_nested_marker_and_media_order(tmp_path):
     ]
 
 
+def test_tree_data_is_cached_until_model_rebuild(tmp_path):
+    playlist = _nested_playlist()
+    model = _model(tmp_path)
+    model.rebuild(playlist)
+
+    first = model.tree_data()
+    second = model.tree_data()
+    playlist["items"][0]["title"] = "Changed after cache"
+
+    assert second is first
+    assert model.tree_data()[0]["children"][0]["title"] == "Introduction"
+
+    model.rebuild(playlist)
+
+    assert model.tree_data() is not first
+    assert model.tree_data()[0]["children"][0]["title"] == "Changed after cache"
+
+
+def test_section_patch_updates_cached_rows_without_full_rebuild(tmp_path):
+    playlist = _nested_playlist()
+    model = _model(tmp_path)
+    model.rebuild(playlist)
+    first_tree = model.tree_data()
+    playlist["sections"][0]["name"] = "Updated opening"
+    playlist["sections"][0]["color_hue"] = 120
+
+    model.update_section("section-1")
+
+    patch = model.section_patch("section-1")
+    assert patch["title"] == "Updated opening"
+    assert patch["itemCount"] == 2
+    assert model.entry_at(0)["name"] == "Updated opening"
+    assert model.tree_data() is not first_tree
+
+
 def test_move_media_to_subsection_updates_storage_and_marker_positions(tmp_path):
     playlist = _nested_playlist()
     model = _model(tmp_path)

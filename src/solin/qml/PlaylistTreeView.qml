@@ -31,6 +31,13 @@ Item {
     property bool hasItems: false
     property var playlistNodes: []
     readonly property bool hasController: playlistController !== null
+    property int treeHydrationJobs: 0
+    property int treeHydrationCreated: 0
+    property int treeHydrationTotal: 0
+    readonly property bool treeHydrating: treeHydrationJobs > 0
+    readonly property int treeHydrationInitialBatch: 18
+    readonly property int treeHydrationChildInitialBatch: 10
+    readonly property int treeHydrationBatch: 36
 
     property string externalDropListId: "root"
     property int externalDropIndex: -1
@@ -38,6 +45,7 @@ Item {
     property string pendingMarkerEditId: ""
     property int pendingMarkerEditAttempts: 0
     property var pendingMediaPatches: ({})
+    property var pendingCloudPatches: ({})
 
     function picon(name, size, colorHex) {
         return "image://playlisticons/" + name + "/" + size + "/" + colorHex
@@ -45,6 +53,10 @@ Item {
 
     function commonTr(context, source) {
         return qsTranslate(context, source)
+    }
+
+    function currentPlaylistNodes() {
+        return root.hasController ? root.playlistController.playlistData : root.playlistNodes
     }
 
     function pointerEntered() {
@@ -58,12 +70,42 @@ Item {
     }
 
     function getIndexAt(rootY) {
+        if (root.treeHydrating) {
+            clearExternalDropPreview()
+            return -1
+        }
         var local = rootPlaylist.mapFromItem(root, 0, rootY)
         dragManager.updateExternalDrop(local.x, local.y)
         var target = rootPlaylist.dropTargetAt(local.x, local.y)
         externalDropListId = target.listId
         externalDropIndex = target.index
         return target.index
+    }
+
+    function resetTreeHydration() {
+        treeHydrationJobs = 0
+        treeHydrationCreated = 0
+        treeHydrationTotal = 0
+    }
+
+    function beginTreeHydration(total) {
+        if (total <= 0)
+            return
+        treeHydrationJobs += 1
+        treeHydrationTotal += total
+    }
+
+    function advanceTreeHydration(count) {
+        if (count <= 0)
+            return
+        treeHydrationCreated = Math.min(treeHydrationTotal,
+                                        treeHydrationCreated + count)
+    }
+
+    function finishTreeHydration() {
+        treeHydrationJobs = Math.max(0, treeHydrationJobs - 1)
+        if (treeHydrationJobs === 0)
+            treeHydrationCreated = treeHydrationTotal
     }
 
     function clearExternalDropPreview() {
@@ -97,6 +139,28 @@ Item {
             patch.thumbSource
         )
         delete pendingMediaPatches[mediaItem.nodeId]
+    }
+
+    function rememberCloudPatch(itemId, visible, active, progress, tooltip) {
+        pendingCloudPatches[itemId] = {
+            "visible": visible,
+            "active": active,
+            "progress": progress,
+            "tooltip": tooltip
+        }
+    }
+
+    function applyPendingCloudPatch(mediaItem) {
+        var patch = pendingCloudPatches[mediaItem.nodeId]
+        if (!patch)
+            return
+        mediaItem.applyCloudPatch(
+            patch.visible,
+            patch.active,
+            patch.progress,
+            patch.tooltip
+        )
+        delete pendingCloudPatches[mediaItem.nodeId]
     }
 
     Timer {
@@ -186,6 +250,8 @@ Item {
         }
 
         function updateExternalDrop(localX, localY) {
+            if (root.treeHydrating)
+                return
             if (draggedItem)
                 return
             var wasInactive = !externalActive
@@ -278,7 +344,7 @@ Item {
         target: root.hasController ? root.playlistController : null
         function onStateChanged() {
             if (!dragManager.active)
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onMediaChanged(itemId, title, duration, thumbSource) {
@@ -288,17 +354,24 @@ Item {
 
         function onMediaInserted(listId, insertIndex, nodes) {
             if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onNodesInserted(listId, insertIndex, nodes) {
             if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onNodeReplaced(nodeId, nodes) {
             if (!rootPlaylist.replaceNode(nodeId, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+        }
+
+        function onSectionChanged(nodeId, title, color, textColor, badgeBg, itemCount) {
+            if (!rootPlaylist.updateSectionNode(
+                    nodeId, title, color, textColor, badgeBg, itemCount)) {
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+            }
         }
 
         function onSectionCountsChanged(counts) {
@@ -310,7 +383,8 @@ Item {
         }
 
         function onCloudChanged(itemId, visible, active, progress, tooltip) {
-            rootPlaylist.updateCloudNode(itemId, visible, active, progress, tooltip)
+            if (!rootPlaylist.updateCloudNode(itemId, visible, active, progress, tooltip))
+                root.rememberCloudPatch(itemId, visible, active, progress, tooltip)
         }
     }
 
@@ -327,7 +401,7 @@ Item {
                 color: "transparent"
                 border.width: 1
                 border.color: root.border_
-                visible: !root.hasItems
+                visible: !root.hasItems && !root.treeHydrating
                 opacity: 0.75
 
                 ColumnLayout {
@@ -349,6 +423,42 @@ Item {
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 18
+                width: hydrationRow.implicitWidth + 24
+                height: 34
+                radius: 8
+                color: "#161b22"
+                border.width: 1
+                border.color: root.borderStrong
+                opacity: root.treeHydrating && root.hasItems ? 0.96 : 0.0
+                visible: opacity > 0
+                z: 50
+
+                Behavior on opacity { NumberAnimation { duration: 140 } }
+
+                RowLayout {
+                    id: hydrationRow
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    BusyIndicator {
+                        Layout.preferredWidth: 18
+                        Layout.preferredHeight: 18
+                        running: root.treeHydrating
+                    }
+
+                    Text {
+                        text: qsTranslate("_PlaylistEditView", "Preparing media...")
+                        color: root.textMuted
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
                     }
                 }
             }
@@ -454,9 +564,12 @@ Item {
         property int depth: 0
         property var items: []
         property var pendingNodes: []
+        property int pendingIndex: 0
         property real listContentHeight: 0
         property bool layoutQueued: false
         property bool collapsed: false
+        property bool rebuildQueued: false
+        property bool hydrationRegistered: false
 
         implicitHeight: Math.max(listKind === "root" ? 30 : 64, listContentHeight)
         height: collapsed ? 0 : implicitHeight
@@ -464,6 +577,21 @@ Item {
         clip: true
 
         onWidthChanged: requestLayout()
+        onCollapsedChanged: {
+            if (collapsed) {
+                rebuildTimer.stop()
+                finishHydration()
+                requestLayout()
+                return
+            }
+            if (items.length === 0 && pendingNodes.length > 0) {
+                rebuildQueued = false
+                rebuildFromNodes(pendingNodes)
+            } else if (pendingIndex < pendingNodes.length) {
+                startHydration()
+                rebuildTimer.start()
+            }
+        }
 
         Behavior on height {
             NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
@@ -484,26 +612,32 @@ Item {
         function rebuildFromNodes(nodes) {
             if (dragManager.active)
                 return
+            rebuildTimer.stop()
+            finishHydration()
             var oldItems = items.slice()
             for (var i = 0; i < oldItems.length; i++)
                 oldItems[i].destroy()
             items = []
+            pendingNodes = nodes || []
+            pendingIndex = 0
+            listContentHeight = 0
 
-            var source = nodes || []
-            for (var n = 0; n < source.length; n++) {
-                var node = source[n]
-                var comp = componentForNode(node)
-                var obj = comp.createObject(listRoot, {
-                    "node": node,
-                    "nodeId": node.id,
-                    "nodeType": node.type,
-                    "parentList": listRoot,
-                    "depth": listRoot.depth
-                })
-                if (obj)
-                    items.push(obj)
+            if (listKind === "root")
+                root.resetTreeHydration()
+            if (collapsed || pendingNodes.length === 0) {
+                doLayout()
+                return
             }
+
+            startHydration()
+            createNextBatch(listKind === "root"
+                            ? root.treeHydrationInitialBatch
+                            : root.treeHydrationChildInitialBatch)
             doLayout()
+            if (pendingIndex < pendingNodes.length)
+                rebuildTimer.start()
+            else
+                finishHydration()
         }
 
         function componentForNode(node) {
@@ -525,9 +659,81 @@ Item {
             })
         }
 
+        function childListIdForNode(node) {
+            if (!node)
+                return ""
+            if (node.type === "section")
+                return "section:" + node.id
+            if (node.type === "subsection")
+                return "subsection:" + node.id
+            return ""
+        }
+
+        function spliceArray(target, index, deleteCount, values) {
+            var args = [index, deleteCount]
+            for (var i = 0; i < values.length; i++)
+                args.push(values[i])
+            target.splice.apply(target, args)
+        }
+
         function scheduleRebuild(nodes) {
             pendingNodes = nodes || []
+            pendingIndex = 0
+            rebuildQueued = true
+            if (listKind === "root")
+                root.resetTreeHydration()
+            if (collapsed)
+                return
             rebuildTimer.restart()
+        }
+
+        function startHydration() {
+            if (hydrationRegistered || collapsed)
+                return
+            var remaining = pendingNodes.length - pendingIndex
+            if (remaining <= 0)
+                return
+            hydrationRegistered = true
+            root.beginTreeHydration(remaining)
+        }
+
+        function finishHydration() {
+            if (!hydrationRegistered)
+                return
+            hydrationRegistered = false
+            root.finishTreeHydration()
+        }
+
+        function createNextBatch(limit) {
+            if (collapsed)
+                return 0
+            var created = 0
+            while (pendingIndex < pendingNodes.length && created < limit) {
+                var node = pendingNodes[pendingIndex]
+                pendingIndex += 1
+                var obj = createNodeObject(node)
+                if (obj) {
+                    items.push(obj)
+                    updateNodeList(obj)
+                    created += 1
+                }
+            }
+            if (created > 0) {
+                root.advanceTreeHydration(created)
+                requestLayout()
+            }
+            return created
+        }
+
+        function continueHydration() {
+            if (collapsed)
+                return
+            startHydration()
+            createNextBatch(root.treeHydrationBatch)
+            if (pendingIndex < pendingNodes.length)
+                rebuildTimer.start()
+            else
+                finishHydration()
         }
 
         function indexOfNode(node) {
@@ -598,16 +804,7 @@ Item {
 
         function insertNodes(targetListId, insertIndex, nodes) {
             if (listId === targetListId) {
-                var idx = Math.max(0, Math.min(insertIndex, items.length))
-                for (var n = 0; n < nodes.length; n++) {
-                    var obj = createNodeObject(nodes[n])
-                    if (obj) {
-                        items.splice(idx + n, 0, obj)
-                        updateNodeList(obj)
-                    }
-                }
-                requestLayout()
-                return true
+                return insertNodesHere(insertIndex, nodes || [])
             }
 
             for (var i = 0; i < items.length; i++) {
@@ -617,28 +814,110 @@ Item {
                     return true
                 }
             }
+            return insertNodesInPendingTree(pendingNodes, targetListId, insertIndex, nodes || [])
+        }
+
+        function insertNodesHere(insertIndex, nodes) {
+            if (!nodes || nodes.length === 0)
+                return true
+            var idx = Math.max(0, Math.min(insertIndex, pendingNodes.length))
+            var oldPendingIndex = pendingIndex
+            spliceArray(pendingNodes, idx, 0, nodes)
+
+            if (collapsed || rebuildQueued || idx > oldPendingIndex)
+                return true
+
+            var visualIdx = Math.max(0, Math.min(idx, items.length))
+            for (var n = 0; n < nodes.length; n++) {
+                var obj = createNodeObject(nodes[n])
+                if (obj) {
+                    items.splice(visualIdx + n, 0, obj)
+                    updateNodeList(obj)
+                }
+            }
+            pendingIndex += nodes.length
+            requestLayout()
+            return true
+        }
+
+        function insertNodesInPendingTree(sourceNodes, targetListId, insertIndex, nodes) {
+            if (!sourceNodes || !nodes || nodes.length === 0)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (childListIdForNode(node) === targetListId) {
+                    if (!node.children)
+                        node.children = []
+                    var idx = Math.max(0, Math.min(insertIndex, node.children.length))
+                    spliceArray(node.children, idx, 0, nodes)
+                    return true
+                }
+                if (node.children
+                        && insertNodesInPendingTree(node.children, targetListId, insertIndex, nodes)) {
+                    return true
+                }
+            }
             return false
         }
 
         function replaceNode(nodeId, nodes) {
+            var replacement = nodes || []
+            for (var pendingIdx = 0; pendingIdx < pendingNodes.length; pendingIdx++) {
+                if (pendingNodes[pendingIdx].id === nodeId)
+                    return replaceNodeHere(pendingIdx, replacement)
+            }
+
             for (var i = 0; i < items.length; i++) {
                 var child = items[i]
-                if (!child)
-                    continue
-                if (child.nodeId === nodeId) {
-                    items.splice(i, 1)
-                    child.destroy()
-                    for (var n = 0; n < nodes.length; n++) {
-                        var obj = createNodeObject(nodes[n])
-                        if (obj) {
-                            items.splice(i + n, 0, obj)
-                            updateNodeList(obj)
-                        }
-                    }
-                    requestLayout()
+                if (child && child.bodyList && child.bodyList.replaceNode(nodeId, replacement))
+                    return true
+            }
+            return replaceNodeInPendingTree(pendingNodes, nodeId, replacement)
+        }
+
+        function replaceNodeHere(pendingIdx, nodes) {
+            var oldNodeId = pendingNodes[pendingIdx].id
+            var wasHydrated = !rebuildQueued && pendingIdx < pendingIndex
+            spliceArray(pendingNodes, pendingIdx, 1, nodes)
+            if (!wasHydrated)
+                return true
+
+            var visualIdx = -1
+            for (var i = 0; i < items.length; i++) {
+                if (items[i] && items[i].nodeId === oldNodeId) {
+                    visualIdx = i
+                    break
+                }
+            }
+            if (visualIdx < 0)
+                visualIdx = Math.max(0, Math.min(pendingIdx, items.length - 1))
+
+            var existing = items[visualIdx]
+            if (existing)
+                existing.destroy()
+            items.splice(visualIdx, 1)
+            for (var n = 0; n < nodes.length; n++) {
+                var obj = createNodeObject(nodes[n])
+                if (obj) {
+                    items.splice(visualIdx + n, 0, obj)
+                    updateNodeList(obj)
+                }
+            }
+            pendingIndex += nodes.length - 1
+            requestLayout()
+            return true
+        }
+
+        function replaceNodeInPendingTree(sourceNodes, nodeId, nodes) {
+            if (!sourceNodes)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (node.id === nodeId) {
+                    spliceArray(sourceNodes, i, 1, nodes)
                     return true
                 }
-                if (child.bodyList && child.bodyList.replaceNode(nodeId, nodes))
+                if (node.children && replaceNodeInPendingTree(node.children, nodeId, nodes))
                     return true
             }
             return false
@@ -819,7 +1098,37 @@ Item {
             id: rebuildTimer
             interval: 0
             repeat: false
-            onTriggered: listRoot.rebuildFromNodes(listRoot.pendingNodes)
+            onTriggered: {
+                if (listRoot.rebuildQueued) {
+                    listRoot.rebuildQueued = false
+                    listRoot.rebuildFromNodes(listRoot.pendingNodes)
+                    return
+                }
+                listRoot.continueHydration()
+            }
+        }
+
+        function updateSectionNode(nodeId, title, color, textColor, badgeBg, itemCount) {
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (!child)
+                    continue
+                if ((child.nodeType === "section" || child.nodeType === "subsection")
+                        && child.nodeId === nodeId) {
+                    child.applySectionPatch(title, color, textColor, badgeBg, itemCount)
+                    return true
+                }
+                if (child.bodyList && child.bodyList.updateSectionNode(
+                        nodeId, title, color, textColor, badgeBg, itemCount)) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        Component.onDestruction: {
+            rebuildTimer.stop()
+            finishHydration()
         }
     }
 
@@ -855,6 +1164,8 @@ Item {
         function beginVisualDrag() {
             if (dragStarted)
                 return
+            if (root.treeHydrating)
+                return
             dragStarted = true
             suspendBehavior = true
             var globalPos = parent.mapToItem(dragOverlay, x, y)
@@ -879,7 +1190,7 @@ Item {
             hoverEnabled: true
             cursorShape: draggable.dragStarted
                          ? Qt.ClosedHandCursor
-                         : Qt.OpenHandCursor
+                         : (root.treeHydrating ? Qt.ArrowCursor : Qt.OpenHandCursor)
 
             onPressed: function(mouse) {
                 var itemPos = draggable.mapFromItem(dragMouse, mouse.x, mouse.y)
@@ -940,6 +1251,7 @@ Item {
             dragArea.parent = mediaDragZone
             dragArea.anchors.fill = mediaDragZone
             root.applyPendingMediaPatch(mediaRoot)
+            root.applyPendingCloudPatch(mediaRoot)
         }
 
         onClicked: {
@@ -1358,6 +1670,10 @@ Item {
         property alias bodyList: childList
         property bool collapsed: node ? node.collapsed : false
         property bool isSubsection: sectionRoot.nodeType === "subsection"
+        property string displayTitle: node ? node.title : ""
+        property string displayColor: node ? node.color : root.accent
+        property string displayTextColor: node ? node.textColor : root.textPrimary
+        property string displayBadgeBg: node ? node.badgeBg : "#1a1f28"
         property int displayItemCount: node ? node.itemCount : 0
 
         Component.onCompleted: {
@@ -1377,6 +1693,21 @@ Item {
             displayItemCount = count
             if (node)
                 node.itemCount = count
+        }
+
+        function applySectionPatch(title, color, textColor, badgeBg, itemCount) {
+            displayTitle = title
+            displayColor = color
+            displayTextColor = textColor
+            displayBadgeBg = badgeBg
+            displayItemCount = itemCount
+            if (node) {
+                node.title = title
+                node.color = color
+                node.textColor = textColor
+                node.badgeBg = badgeBg
+                node.itemCount = itemCount
+            }
         }
 
         onClicked: sectionRoot.toggleCollapsed()
@@ -1402,7 +1733,7 @@ Item {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 8
                 radius: 2
-                color: node ? node.color : root.accent
+                color: sectionRoot.displayColor
                 visible: !sectionRoot.isSubsection
                 opacity: 0.95
             }
@@ -1457,10 +1788,10 @@ Item {
                         // Section title
                         Text {
                             Layout.fillWidth: true
-                            text: node ? node.title : ""
+                            text: sectionRoot.displayTitle
                             color: sectionRoot.isSubsection
                                    ? root.textMuted
-                                   : (node ? node.textColor : root.textPrimary)
+                                   : sectionRoot.displayTextColor
                             font.pixelSize: sectionRoot.isSubsection ? 11 : 13
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
@@ -1475,7 +1806,7 @@ Item {
                             radius: 9
                             color: sectionRoot.isSubsection
                                    ? "#151a22"
-                                   : (node ? node.badgeBg : "#1a1f28")
+                                   : sectionRoot.displayBadgeBg
 
                             Text {
                                 id: countLabel
@@ -1483,7 +1814,7 @@ Item {
                                 text: sectionRoot.displayItemCount
                                 color: sectionRoot.isSubsection
                                        ? root.textDim
-                                       : (node ? node.textColor : root.textMuted)
+                                       : sectionRoot.displayTextColor
                                 font.pixelSize: 10
                                 font.weight: Font.DemiBold
                             }
@@ -1580,7 +1911,11 @@ Item {
                     listKind: sectionRoot.nodeType
                     depth: sectionRoot.depth + 1
                     collapsed: sectionRoot.collapsed
-                    Component.onCompleted: scheduleRebuild(node ? node.children : [])
+                    Component.onCompleted: {
+                        pendingNodes = node ? node.children : []
+                        if (!collapsed)
+                            scheduleRebuild(pendingNodes)
+                    }
                 }
 
                 // Bottom padding

@@ -161,6 +161,7 @@ class PlaylistEditModel(QAbstractListModel):
         self._pl: Optional[dict] = None
         self._thumb_versions: dict[str, int] = {}
         self._cloud_progress_by_url: dict[str, float] = {}
+        self._tree_data_cache: list[dict] | None = None
 
     # ── QAbstractListModel overrides ───────────────────────────────────────
 
@@ -184,12 +185,85 @@ class PlaylistEditModel(QAbstractListModel):
         """Full rebuild from playlist dict."""
         self.beginResetModel()
         self._pl = pl
+        self.invalidate_tree_data_cache()
         self._entries = self._build_entries(pl)
         self._compute_card_properties()
         self.endResetModel()
 
+    def invalidate_tree_data_cache(self) -> None:
+        self._tree_data_cache = None
+
     def tree_data(self) -> list[dict]:
         """Return a QML-friendly recursive playlist tree."""
+        if self._tree_data_cache is None:
+            self._tree_data_cache = self._build_tree_data()
+        return self._tree_data_cache
+
+    def section_patch(self, section_id: str) -> dict:
+        """Return QML-facing fields for a section without building the full tree."""
+        if not self._pl:
+            return {}
+        sections = self._pl.get("sections", [])
+        section = next(
+            (sec for sec in sections if sec.get("id") == section_id),
+            None,
+        )
+        if not section:
+            return {}
+        child_ids = {
+            sec.get("id")
+            for sec in sections
+            if sec.get("parent_id") == section_id
+        }
+        count = sum(
+            1
+            for item in self._pl.get("items", [])
+            if item.get("section_id") == section_id
+            or (
+                not section.get("parent_id")
+                and item.get("section_id") in child_ids
+            )
+        )
+        is_subsection = bool(section.get("parent_id"))
+        hue = section.get("color_hue", 145 if is_subsection else 215)
+        return {
+            "id": section_id,
+            "type": "subsection" if is_subsection else "section",
+            "title": section.get("name", ""),
+            "color": accent_from_hue(hue),
+            "textColor": section_text_from_hue(hue),
+            "badgeBg": badge_bg_from_hue(hue),
+            "itemCount": count,
+        }
+
+    def update_section(self, section_id: str) -> None:
+        """Update cached model rows after section metadata changes."""
+        self.invalidate_tree_data_cache()
+        patch = self.section_patch(section_id)
+        if not patch:
+            return
+        for row, entry in enumerate(self._entries):
+            if entry["id"] == section_id and entry["type"] in ("section", "subsection"):
+                entry["name"] = patch["title"]
+                entry["accent_color"] = patch["color"]
+                entry["section_text"] = patch["textColor"]
+                entry["badge_bg"] = patch["badgeBg"]
+                entry["item_count"] = patch["itemCount"]
+                idx = self.index(row)
+                self.dataChanged.emit(
+                    idx,
+                    idx,
+                    [
+                        self.NameRole,
+                        self.AccentColorRole,
+                        self.SectionTextRole,
+                        self.BadgeBgRole,
+                        self.ItemCountRole,
+                    ],
+                )
+                break
+
+    def _build_tree_data(self) -> list[dict]:
         if not self._pl:
             return []
 
@@ -1426,6 +1500,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def update_thumb(self, item_id: str) -> None:
         """Bump the thumb_version for an item so QML reloads the image."""
+        self.invalidate_tree_data_cache()
         self._thumb_versions[item_id] = self._thumb_versions.get(item_id, 0) + 1
         for i, entry in enumerate(self._entries):
             if entry["type"] == "item" and entry["id"] == item_id:
@@ -1468,6 +1543,7 @@ class PlaylistEditModel(QAbstractListModel):
 
     def update_title(self, item_id: str, title: str) -> None:
         """Update item title in model."""
+        self.invalidate_tree_data_cache()
         for i, entry in enumerate(self._entries):
             if entry["type"] == "item" and entry["id"] == item_id:
                 entry["title"] = title
