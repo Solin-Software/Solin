@@ -343,6 +343,7 @@ class MainWindow(QMainWindow):
                 parent=self,
                 event_filter=self,
                 set_central_widget=self.setCentralWidget,
+                active_profile_id=active_profile.id,
                 active_profile_name=active_profile.name,
                 translate=self.tr,
                 lang_manager=self.lang,
