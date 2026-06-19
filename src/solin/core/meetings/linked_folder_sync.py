@@ -8,7 +8,7 @@ import shutil
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from solin.core.ingest.manifest import (
@@ -408,11 +408,15 @@ class MeetingLinkedFolderSync:
         linked_folder_files: dict[str, str],
         folder: Path,
     ) -> dict[str, str]:
-        return {
-            to_manifest_url(str(path), folder): str(node_id)
-            for path, node_id in linked_folder_files.items()
-            if path and node_id
-        }
+        result: dict[str, str] = {}
+        for path, node_id in linked_folder_files.items():
+            if not path or not node_id:
+                continue
+            portable_path = to_manifest_url(str(path), folder)
+            if self._is_absolute_local_path(portable_path):
+                continue
+            result[portable_path] = str(node_id)
+        return result
 
     def _resolve_linked_files(self, value: Any, folder: Path) -> dict[str, str]:
         if not isinstance(value, dict):
@@ -569,6 +573,12 @@ class MeetingLinkedFolderSync:
             return False
         path = Path(value)
         return path.is_absolute() and path.is_file()
+
+    @staticmethod
+    def _is_absolute_local_path(value: str) -> bool:
+        if not value or value.startswith(("http://", "https://")):
+            return False
+        return Path(value).is_absolute() or PureWindowsPath(value).is_absolute()
 
     @staticmethod
     def _is_inside(path: Path, parent: Path) -> bool:

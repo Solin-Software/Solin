@@ -321,6 +321,40 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(materialized[0]["media_ref"]["file_path"], str(cached))
             self.assertEqual(linked[str(cached)], "official")
 
+    def test_save_manifest_drops_nonportable_stale_linked_file_entries(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "2026-05-25 MW"
+            cache = folder / CACHE_DIR_NAME
+            profile_cache = root / "profile-cache" / "pdf_pages" / "report"
+            cache.mkdir(parents=True)
+            profile_cache.mkdir(parents=True)
+            cached_page = cache / "page_001.jpg"
+            stale_profile_page = profile_cache / "page_001.jpg"
+            cached_page.write_bytes(b"page")
+            stale_profile_page.write_bytes(b"page")
+
+            service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[],
+                deleted_source_keys=set(),
+                linked_folder_files={
+                    str(cached_page): "page",
+                    str(stale_profile_page): "page",
+                    r"C:\Users\Someone\AppData\Local\Solin\cache\page_001.jpg": "page",
+                },
+                meeting_folder_imports={},
+                expected_revision=0,
+            )
+
+            raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
+            self.assertEqual(
+                raw["meeting_tree"]["linked_folder_files"],
+                {f"{CACHE_DIR_NAME}/page_001.jpg": "page"},
+            )
+
     def test_delete_sync_metadata_keeps_root_files(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
@@ -452,6 +486,44 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertTrue(copied.exists())
             self.assertEqual(prepared[0]["media_ref"]["file_path"], str(copied))
             self.assertEqual(controller._linked_folder_files[str(copied)], "media")
+
+    def test_materialize_current_nodes_replaces_stale_processed_file_links(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            profile_cache = root / "profile-cache" / "pdf_pages" / "report"
+            profile_cache.mkdir(parents=True)
+            source_page = profile_cache / "page_001.jpg"
+            source_page.write_bytes(b"page")
+            folder = root / "2026-05-25 MW"
+            folder.mkdir()
+            controller = FakeController()
+            controller._sync_folder = str(folder)
+            controller._sync_service = _linked_folder_sync()
+            controller._linked_folder_files = {
+                str(source_page): "page",
+                r"C:\Users\Someone\AppData\Local\Solin\cache\page_001.jpg": "page",
+            }
+            controller._generated_asset_roots = lambda: (str(profile_cache.parent),)
+            controller._nodes = [{
+                "id": "page",
+                "type": "media",
+                "linked_folder_source": str(folder),
+                "children": [],
+                "media_ref": {"file_path": str(source_page)},
+            }]
+
+            MeetingTreeController._materialize_current_nodes_for_sync(controller)
+
+            cached_page = folder / CACHE_DIR_NAME / "page_001.jpg"
+            self.assertTrue(cached_page.exists())
+            self.assertEqual(
+                controller._nodes[0]["media_ref"]["file_path"],
+                str(cached_page),
+            )
+            self.assertEqual(controller._linked_folder_files, {str(cached_page): "page"})
 
     def test_save_sync_manifest_adopts_saved_merged_record(self):
         class FakeController:
