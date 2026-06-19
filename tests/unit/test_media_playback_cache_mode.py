@@ -202,6 +202,14 @@ class _ReconnectPlayer:
         self.paused += 1
 
 
+class _NoMediaReconnectPlayer(_ReconnectPlayer):
+    def duration(self) -> int:
+        return 0
+
+    def mediaStatus(self):
+        return QMediaPlayer.MediaStatus.NoMedia
+
+
 def test_network_playback_errors_keep_projection_state_and_continue_retrying(tmp_path):
     controller, downloader, _played = _controller_with_downloader(
         tmp_path,
@@ -222,13 +230,31 @@ def test_network_playback_errors_keep_projection_state_and_continue_retrying(tmp
     controller._on_error(None, "Error number -10054 occurred")
 
     assert reconnect_timer.started == 3
-    assert reconnect_timer.intervals == [800, 1600, 3200]
+    assert reconnect_timer.intervals == [3000, 3000, 3000]
     assert errors == []
     assert interruptions == [
         ("https://cdn.example/song.mp3", "Error number -10054 occurred")
     ]
     assert controller.current_url == "https://cdn.example/song.mp3"
     assert downloader.cancel_count == 0
+
+
+def test_recovery_changed_signal_wraps_remote_reconnect_state(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    controller._reconnect_timer = _ReconnectTimer()
+    recovery_states: list[bool] = []
+    controller.playback_recovery_changed.connect(recovery_states.append)
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(42_000)
+    controller._on_error(None, "Error number -10054 occurred")
+    controller._on_error(None, "Error number -10054 occurred")
+    controller._on_status(QMediaPlayer.MediaStatus.LoadedMedia)
+
+    assert recovery_states == [True, False]
 
 
 def test_reconnect_flushes_source_restores_position_and_resumes(monkeypatch, tmp_path):
@@ -285,6 +311,38 @@ def test_reconnect_resume_respects_pause_requested_while_loading(monkeypatch, tm
     assert controller._session.requested_playing is False
 
 
+def test_reconnect_no_media_status_schedules_next_remote_retry(monkeypatch, tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    monkeypatch.setattr(
+        playback_module.QTimer,
+        "singleShot",
+        lambda _delay, callback: callback(),
+    )
+    reconnect_timer = _ReconnectTimer()
+    controller._reconnect_timer = reconnect_timer
+    player = _NoMediaReconnectPlayer()
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller.player = player
+    controller._last_playback_error = "Could not open media."
+    controller._stream_recovering = True
+
+    controller._restore_reconnect_position(
+        source="https://cdn.example/song.mp3",
+        saved_pos=42_000,
+        reconnect_session=controller._session.session_id,
+    )
+
+    assert reconnect_timer.started == 1
+    assert reconnect_timer.intervals == [3000]
+    assert player.played == 0
+    assert player.paused == 0
+    assert controller.current_url == "https://cdn.example/song.mp3"
+
+
 def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
@@ -301,6 +359,42 @@ def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
 
     assert ended == []
     assert controller.current_url == "https://cdn.example/song.mp3"
+
+
+def test_offline_reconnect_open_failure_keeps_retrying_without_closing(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    reconnect_timer = _ReconnectTimer()
+    controller._reconnect_timer = reconnect_timer
+    errors: list[str] = []
+    interruptions: list[tuple[str, str]] = []
+    controller.error_occurred.connect(errors.append)
+    controller.playback_interrupted.connect(
+        lambda url, message: interruptions.append((url, message))
+    )
+
+    controller.play_url("https://akdd1.jw-cdn.org/media/video.mp4")
+    controller._on_position(42_000)
+    controller._on_error(None, "Error number -10054 occurred")
+    controller._on_position(0)
+    controller._on_error(
+        None,
+        "Could not open media. FFmpeg error description: I/O error",
+    )
+
+    assert reconnect_timer.started == 2
+    assert reconnect_timer.intervals == [3000, 3000]
+    assert errors == []
+    assert interruptions == [
+        (
+            "https://akdd1.jw-cdn.org/media/video.mp4",
+            "Error number -10054 occurred",
+        )
+    ]
+    assert controller.current_url == "https://akdd1.jw-cdn.org/media/video.mp4"
+    assert controller._last_known_position == 42_000
 
 
 def test_unknown_duration_remote_end_is_normal_completion(tmp_path):
@@ -354,7 +448,7 @@ def test_unexpected_remote_end_before_error_starts_recovery(tmp_path):
     assert controller.current_url == "https://cdn.example/song.mp3"
 
 
-def test_network_reconnect_backoff_is_capped(tmp_path):
+def test_network_reconnect_uses_fixed_retry_interval(tmp_path):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
         auto_download=True,
@@ -366,16 +460,7 @@ def test_network_reconnect_backoff_is_capped(tmp_path):
     for _ in range(8):
         controller._on_error(None, "Error number -10054 occurred")
 
-    assert reconnect_timer.intervals == [
-        800,
-        1600,
-        3200,
-        6400,
-        12800,
-        15000,
-        15000,
-        15000,
-    ]
+    assert reconnect_timer.intervals == [3000] * 8
 
 
 def test_qt_network_error_without_message_keeps_reconnecting(tmp_path):

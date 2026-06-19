@@ -637,6 +637,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.media.buffer_progress.connect(self._on_buffer_progress)
         self.media.frame_ready.connect(self._on_video_frame)
         self.media.playback_source_changed.connect(self._on_playback_source_changed)
+        self.media.playback_recovery_changed.connect(
+            self._on_playback_recovery_changed
+        )
 
     @Slot(bool)
     def _on_playback_source_changed(self, is_offline: bool):
@@ -646,6 +649,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         is_offline=False → stream HTTP ou inativo — oculta badge
         """
         self._offline_badge.setVisible(is_offline and self._mode is not None)
+
+    @Slot(bool)
+    def _on_playback_recovery_changed(self, recovering: bool):
+        self.seek_slider.setReconnectActive(
+            bool(recovering) and self._mode == "video"
+        )
 
     # ── API pública ───────────────────────────────────────────────────────
 
