@@ -13,6 +13,7 @@ from solin.core.media.downloader import (
 from solin.core.media.download_storage import (
     DownloadProgressGate,
     cleanup_incomplete_cache,
+    completed_cached_path,
     make_persistent_temp_path,
     safe_remove,
 )
@@ -138,6 +139,14 @@ def test_cleanup_incomplete_cache_removes_only_unfinished_downloads(tmp_path):
     assert marker.exists()
     assert not incomplete.exists()
     assert not staging.exists()
+
+
+def test_completed_cached_path_ignores_local_sources(tmp_path):
+    local_media = tmp_path / "local-video.mp4"
+    local_media.write_bytes(b"local")
+
+    assert completed_cached_path(str(local_media), tmp_path / "cache") is None
+    assert not (tmp_path / "cache").exists()
 
 
 def test_download_progress_gate_throttles_by_percent_byte_and_time():

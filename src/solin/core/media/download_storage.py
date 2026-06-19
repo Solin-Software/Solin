@@ -99,6 +99,8 @@ def completed_cached_path(
     url: str,
     media_cache_dir: str | os.PathLike[str],
 ) -> str | None:
+    if not is_remote_url(url):
+        return None
     path = cached_path_for(url, media_cache_dir)
     if os.path.exists(path) and os.path.exists(path + ".done"):
         return path
