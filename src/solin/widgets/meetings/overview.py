@@ -30,6 +30,7 @@ from .visuals import (
 )
 
 if TYPE_CHECKING:
+    from ...core.meetings.tree_store import MeetingTreeSnapshot
     from ...core.meetings.models import MemorialData, WeekData
 
 __all__ = ("Overview",)
@@ -181,6 +182,35 @@ class _PubCard(QFrame):
         if cover_bytes:
             pix = QPixmap()
             pix.loadFromData(cover_bytes)
+            if not pix.isNull():
+                self._cover.setPixmap(rounded_meeting_pixmap(pix, self._CW, self._CH, 8))
+                return
+        ph = QPixmap(self._CW, self._CH)
+        ph.fill(QColor("#21262d"))
+        self._cover.setPixmap(ph)
+
+    def set_saved(self, snapshot: "MeetingTreeSnapshot"):
+        self._last_pct = -1
+        self._progress_style_set = False
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
+        self._pill.setText(pill_text)
+
+        fallback_title = self.tr("Life & Ministry") if self._is_mwb else self.tr("Watchtower Study")
+        self._title_lbl.setText(snapshot.overview.title or fallback_title)
+        self._sub_lbl.setText("")
+        n_items = snapshot.media_count
+        word = self.tr("item") if n_items == 1 else self.tr("items")
+        self._status_lbl.setText(f"{n_items} media {word}")
+        self._status_lbl.setStyleSheet(
+            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+        )
+        self._arrow.setVisible(True)
+
+        if snapshot.overview.cover_bytes:
+            pix = QPixmap()
+            pix.loadFromData(snapshot.overview.cover_bytes)
             if not pix.isNull():
                 self._cover.setPixmap(rounded_meeting_pixmap(pix, self._CW, self._CH, 8))
                 return
