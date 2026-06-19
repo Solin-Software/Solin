@@ -223,6 +223,36 @@ def test_reconnect_flushes_source_restores_position_and_resumes(monkeypatch, tmp
     assert player.paused == 0
 
 
+def test_reconnect_resume_respects_pause_requested_while_loading(monkeypatch, tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    delayed_callbacks = []
+
+    def fake_single_shot(delay, callback):
+        if delay == 50:
+            callback()
+            return
+        delayed_callbacks.append(callback)
+
+    monkeypatch.setattr(playback_module.QTimer, "singleShot", fake_single_shot)
+    player = _ReconnectPlayer()
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(42_000)
+    controller.player = player
+    controller._do_reconnect()
+    controller.pause()
+    for callback in delayed_callbacks:
+        callback()
+
+    assert player.positions == [42_000]
+    assert player.played == 0
+    assert player.paused == 2
+    assert controller._session.requested_playing is False
+
+
 def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
@@ -241,6 +271,30 @@ def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
     assert controller.current_url == "https://cdn.example/song.mp3"
 
 
+def test_unknown_duration_remote_end_is_normal_completion(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    reconnect_timer = _ReconnectTimer()
+    controller._reconnect_timer = reconnect_timer
+    ended = []
+    interruptions: list[tuple[str, str]] = []
+    controller.media_ended.connect(lambda: ended.append("ended"))
+    controller.playback_interrupted.connect(
+        lambda url, message: interruptions.append((url, message))
+    )
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(42_000)
+    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
+
+    assert ended == ["ended"]
+    assert reconnect_timer.started == 0
+    assert interruptions == []
+    assert controller._session.requested_playing is False
+
+
 def test_unexpected_remote_end_before_error_starts_recovery(tmp_path):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
@@ -256,7 +310,8 @@ def test_unexpected_remote_end_before_error_starts_recovery(tmp_path):
     )
 
     controller.play_url("https://cdn.example/song.mp3")
-    controller._on_position(937937)
+    controller._on_position(42_000)
+    controller.player = _ReconnectPlayer()
     controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
 
     assert ended == []

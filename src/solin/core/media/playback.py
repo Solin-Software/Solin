@@ -267,7 +267,6 @@ class MediaController(QObject):
 
     def _do_reconnect(self):
         saved_pos = max(self.player.position(), self._last_known_position)
-        was_playing = self._session.requested_playing
         source = self._session.reconnect_source()
         if not source:
             self._fail_playback(self._last_playback_error)
@@ -280,7 +279,6 @@ class MediaController(QObject):
         self._restore_reconnect_position(
             source=source,
             saved_pos=saved_pos,
-            was_playing=was_playing,
             reconnect_session=reconnect_session,
         )
 
@@ -461,7 +459,6 @@ class MediaController(QObject):
         *,
         source: str,
         saved_pos: int,
-        was_playing: bool,
         reconnect_session: int,
     ) -> None:
         max_attempts = 60
@@ -493,10 +490,7 @@ class MediaController(QObject):
                     self.player.setPosition(saved_pos)
                 QTimer.singleShot(
                     40,
-                    lambda: self._resume_after_reconnect(
-                        reconnect_session,
-                        was_playing,
-                    ),
+                    lambda: self._resume_after_reconnect(reconnect_session),
                 )
                 return
 
@@ -504,7 +498,7 @@ class MediaController(QObject):
                 QTimer.singleShot(50, _try_restore)
                 return
 
-            if was_playing:
+            if self._session.requested_playing:
                 self.player.play()
             else:
                 self.player.pause()
@@ -514,11 +508,10 @@ class MediaController(QObject):
     def _resume_after_reconnect(
         self,
         reconnect_session: int,
-        was_playing: bool,
     ) -> None:
         if self._session.session_id != reconnect_session:
             return
-        if was_playing:
+        if self._session.requested_playing:
             self.player.play()
         else:
             self.player.pause()
@@ -565,7 +558,7 @@ class MediaController(QObject):
         duration = self.player.duration()
         position = max(self.player.position(), self._last_known_position)
         if duration <= 0:
-            return position > 0
+            return False
         return position + 1500 < duration
 
     def _cleanup_current_temp(self) -> None:
