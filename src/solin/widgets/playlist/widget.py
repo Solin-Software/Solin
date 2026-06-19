@@ -139,10 +139,16 @@ class PlaylistEditView(
         self._thumb_idx_to_id: dict[int, str] = {}       # request token → item ID
         self._thumb_pending_item_ids: set[str] = set()
         self._thumb_request_token: int = 0
+        self._thumb_scan_items: list[dict] = []
+        self._thumb_scan_index: int = 0
         self._qml_pointer_depth = 0
         self._thumb_queue = media_info_queue_factory(self)
         self._thumb_queue.info_ready.connect(self._on_info)
         self._thumb_queue.duration_ready.connect(self._on_duration_from_extractor)
+        self._thumb_scan_timer = QTimer(self)
+        self._thumb_scan_timer.setSingleShot(True)
+        self._thumb_scan_timer.setInterval(0)
+        self._thumb_scan_timer.timeout.connect(self._scan_missing_thumbnails_batch)
         self._pdf_threads:  list[object] = []
         self._lo_threads:   list[object] = []
         self._wf_refresh_pending: bool = False      # deferred refresh flag
@@ -199,6 +205,8 @@ class PlaylistEditView(
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
         self._thumb_queue.shutdown()
+        self._thumb_scan_timer.stop()
+        self._thumb_scan_items.clear()
         self._stop_owned_thread(self._wf_sync_thread, wait_ms=10_000)
         self._wf_sync_thread = None
         for threads in (self._pdf_threads, self._lo_threads):
@@ -367,6 +375,8 @@ class PlaylistEditView(
         self._pl = pl
         self._is_temp = bool(pl.get("_temp"))
         self._thumb_queue.clear()
+        self._thumb_scan_timer.stop()
+        self._thumb_scan_items.clear()
         self._id_to_thumb.clear()
         self._thumb_pending_item_ids.clear()
         self._rebuild_list()
@@ -380,6 +390,8 @@ class PlaylistEditView(
         self._pl = pl
         self._wf_file_availability = self._watched_file_availability(pl)
         self._thumb_queue.clear()
+        self._thumb_scan_timer.stop()
+        self._thumb_scan_items.clear()
         self._id_to_thumb.clear()
         self._thumb_pending_item_ids.clear()
         self._rebuild_list()
@@ -544,25 +556,48 @@ class PlaylistEditView(
     def _request_missing_thumbnails(self) -> None:
         if not self._pl:
             return
-        for item in self._pl.get("items", []):
-            item_id = item["id"]
-            url = item.get("url", "")
-            media_type = item.get("type", "video")
-            needs_title = item.get("auto_title", False) and url.startswith(("http://", "https://"))
+        self._thumb_scan_items = list(self._pl.get("items", []))
+        self._thumb_scan_index = 0
+        if self._thumb_scan_items:
+            self._thumb_scan_timer.start()
 
-            cached = self._id_to_thumb.get(item_id)
-            if cached is not None and not cached.isNull():
-                if needs_title:
-                    self._request_thumbnail(item_id, url, media_type)
-                continue
+    def _scan_missing_thumbnails_batch(self) -> None:
+        if not self._pl:
+            self._thumb_scan_timer.stop()
+            self._thumb_scan_items.clear()
+            return
 
-            has_disk = self._playlist_thumbnail_store.exists(item_id)
-            if has_disk:
-                if needs_title:
-                    self._request_thumbnail(item_id, url, media_type)
-                continue
+        batch_size = 32
+        end = min(self._thumb_scan_index + batch_size, len(self._thumb_scan_items))
+        for item in self._thumb_scan_items[self._thumb_scan_index:end]:
+            self._request_missing_thumbnail_for_item(item)
+        self._thumb_scan_index = end
 
-            self._request_thumbnail(item_id, url, media_type)
+        if self._thumb_scan_index >= len(self._thumb_scan_items):
+            self._thumb_scan_timer.stop()
+            self._thumb_scan_items.clear()
+        else:
+            self._thumb_scan_timer.start()
+
+    def _request_missing_thumbnail_for_item(self, item: dict) -> None:
+        item_id = item["id"]
+        url = item.get("url", "")
+        media_type = item.get("type", "video")
+        needs_title = item.get("auto_title", False) and url.startswith(("http://", "https://"))
+
+        cached = self._id_to_thumb.get(item_id)
+        if cached is not None and not cached.isNull():
+            if needs_title:
+                self._request_thumbnail(item_id, url, media_type)
+            return
+
+        has_disk = self._playlist_thumbnail_store.exists(item_id)
+        if has_disk:
+            if needs_title:
+                self._request_thumbnail(item_id, url, media_type)
+            return
+
+        self._request_thumbnail(item_id, url, media_type)
 
     def _request_thumbnail(self, item_id: str, url: str, media_type: str) -> None:
         if item_id in self._thumb_pending_item_ids:
@@ -730,7 +765,7 @@ class PlaylistEditView(
             return
         marker["text"] = text
         self._save()
-        self.model.rebuild(self._pl)
+        self.model.invalidate_tree_data_cache()
 
     def _delete_marker(self, marker_id: str) -> None:
         if not self._pl:
@@ -743,7 +778,7 @@ class PlaylistEditView(
             if marker.get("id") != marker_id
         ]
         self._save()
-        self.model.rebuild(self._pl)
+        self.model.invalidate_tree_data_cache()
         self._sync_playlist_chrome(emit_data_changed=False)
         self.bridge.emit_node_replaced(marker_id, [])
 
@@ -759,7 +794,8 @@ class PlaylistEditView(
         if not name: return
         sec["name"] = name
         self._save()
-        self._rebuild_list()
+        self.model.update_section(sec_id)
+        self.bridge.emit_section_changed(sec_id)
 
     def _delete_section(self, sec_id: str):
         """Delete a section/subsection but keep its items."""
@@ -822,7 +858,8 @@ class PlaylistEditView(
         if dlg.exec() != QDialog.DialogCode.Accepted: return
         sec["color_hue"] = dlg.selected_hue()
         self._save()
-        self._rebuild_list()
+        self.model.update_section(sec_id)
+        self.bridge.emit_section_changed(sec_id)
 
     def _url_in_playlist(self, url: str) -> bool:
         if not self._pl or not url: return False
@@ -869,10 +906,12 @@ class PlaylistEditView(
         dlg = NameDialog(item.get("title", ""), lang=self.lang, parent=self)
         dlg.setWindowTitle(self.tr("Rename media"))
         if dlg.exec() and dlg.get_name():
-            item["title"] = dlg.get_name()
+            title = dlg.get_name()
+            item["title"] = title
             item["auto_title"] = False
             self._save()
-            self._rebuild_list()
+            self.model.update_title(item_id, title)
+            self.bridge.emit_media_changed(item_id)
 
     # ── i18n ──────────────────────────────────────────────────────────────
 

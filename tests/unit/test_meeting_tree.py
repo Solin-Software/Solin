@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
+from collections import deque
 from datetime import date
 from pathlib import Path
 
@@ -666,6 +667,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
 
         controller = FakeController()
         controller._nodes = nodes
+        controller._tree_data_cache = [{"id": "stale"}]
         controller.saved = 0
         controller.count_updates = 0
         controller.chromeChanged = self._Signal()
@@ -717,6 +719,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(controller.saved, 1)
         self.assertEqual(controller.count_updates, 1)
         self.assertEqual(controller.chromeChanged.calls, [()])
+        self.assertIsNone(controller._tree_data_cache)
 
     def test_invalid_move_into_descendant_preserves_tree(self):
         nodes = [
@@ -747,6 +750,55 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(controller._nodes, before)
         self.assertEqual(controller.saved, 0)
         self.assertEqual(controller.count_updates, 0)
+        self.assertEqual(controller._tree_data_cache, [{"id": "stale"}])
+
+    def test_media_requests_are_queued_for_batched_drain(self):
+        class FakeTimer:
+            def __init__(self):
+                self.started = 0
+                self.stopped = 0
+                self.active = False
+
+            def isActive(self):
+                return self.active
+
+            def start(self):
+                self.started += 1
+                self.active = True
+
+            def stop(self):
+                self.stopped += 1
+                self.active = False
+
+        controller = self.controller([
+            {"id": "media-1", "type": "media", "children": []},
+            {
+                "id": "section",
+                "type": "section",
+                "children": [
+                    {"id": "media-2", "type": "media", "children": []},
+                ],
+            },
+        ])
+        requested = []
+        controller._media_request_queue = deque()
+        controller._media_request_timer = FakeTimer()
+        controller._start_media_request = lambda node: requested.append(node["id"])
+
+        MeetingTreeController._start_media_requests(controller)
+
+        self.assertEqual(requested, [])
+        self.assertEqual(
+            [node["id"] for node in controller._media_request_queue],
+            ["media-1", "media-2"],
+        )
+        self.assertEqual(controller._media_request_timer.started, 1)
+
+        MeetingTreeController._drain_media_request_queue(controller)
+
+        self.assertEqual(requested, ["media-1", "media-2"])
+        self.assertEqual(controller._media_request_queue, deque())
+        self.assertEqual(controller._media_request_timer.stopped, 1)
 
 
 class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):

@@ -61,6 +61,7 @@ class PlaylistEditBridge(QObject):
     mediaInserted = Signal(str, int, "QVariant")  # list_id, insert_index, media nodes
     nodesInserted = Signal(str, int, "QVariant")  # list_id, insert_index, tree nodes
     nodeReplaced = Signal(str, "QVariant")      # node_id, replacement tree nodes
+    sectionChanged = Signal(str, str, str, str, str, int)
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)           # marker_id
     cloudChanged = Signal(str, bool, bool, float, str)
@@ -178,6 +179,21 @@ class PlaylistEditBridge(QObject):
             for replacement_id in replacement_ids
         ]
         self.nodeReplaced.emit(node_id, [node for node in nodes if node])
+
+    def emit_section_changed(self, section_id: str) -> None:
+        if not self._model:
+            return
+        patch = self._model.section_patch(section_id)
+        if not patch:
+            return
+        self.sectionChanged.emit(
+            section_id,
+            patch.get("title", ""),
+            patch.get("color", ""),
+            patch.get("textColor", ""),
+            patch.get("badgeBg", ""),
+            int(patch.get("itemCount", 0)),
+        )
 
     def emit_section_counts_changed(self) -> None:
         if not self._model:
