@@ -55,6 +55,10 @@ Item {
         return qsTranslate(context, source)
     }
 
+    function currentPlaylistNodes() {
+        return root.hasController ? root.playlistController.playlistData : root.playlistNodes
+    }
+
     function pointerEntered() {
         if (root.hasController)
             root.playlistController.pointerEnter()
@@ -340,7 +344,7 @@ Item {
         target: root.hasController ? root.playlistController : null
         function onStateChanged() {
             if (!dragManager.active)
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onMediaChanged(itemId, title, duration, thumbSource) {
@@ -350,23 +354,23 @@ Item {
 
         function onMediaInserted(listId, insertIndex, nodes) {
             if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onNodesInserted(listId, insertIndex, nodes) {
             if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onNodeReplaced(nodeId, nodes) {
             if (!rootPlaylist.replaceNode(nodeId, nodes))
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
         function onSectionChanged(nodeId, title, color, textColor, badgeBg, itemCount) {
             if (!rootPlaylist.updateSectionNode(
                     nodeId, title, color, textColor, badgeBg, itemCount)) {
-                rootPlaylist.scheduleRebuild(root.playlistNodes)
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
             }
         }
 
@@ -655,6 +659,23 @@ Item {
             })
         }
 
+        function childListIdForNode(node) {
+            if (!node)
+                return ""
+            if (node.type === "section")
+                return "section:" + node.id
+            if (node.type === "subsection")
+                return "subsection:" + node.id
+            return ""
+        }
+
+        function spliceArray(target, index, deleteCount, values) {
+            var args = [index, deleteCount]
+            for (var i = 0; i < values.length; i++)
+                args.push(values[i])
+            target.splice.apply(target, args)
+        }
+
         function scheduleRebuild(nodes) {
             pendingNodes = nodes || []
             pendingIndex = 0
@@ -783,16 +804,7 @@ Item {
 
         function insertNodes(targetListId, insertIndex, nodes) {
             if (listId === targetListId) {
-                var idx = Math.max(0, Math.min(insertIndex, items.length))
-                for (var n = 0; n < nodes.length; n++) {
-                    var obj = createNodeObject(nodes[n])
-                    if (obj) {
-                        items.splice(idx + n, 0, obj)
-                        updateNodeList(obj)
-                    }
-                }
-                requestLayout()
-                return true
+                return insertNodesHere(insertIndex, nodes || [])
             }
 
             for (var i = 0; i < items.length; i++) {
@@ -802,28 +814,110 @@ Item {
                     return true
                 }
             }
+            return insertNodesInPendingTree(pendingNodes, targetListId, insertIndex, nodes || [])
+        }
+
+        function insertNodesHere(insertIndex, nodes) {
+            if (!nodes || nodes.length === 0)
+                return true
+            var idx = Math.max(0, Math.min(insertIndex, pendingNodes.length))
+            var oldPendingIndex = pendingIndex
+            spliceArray(pendingNodes, idx, 0, nodes)
+
+            if (collapsed || rebuildQueued || idx > oldPendingIndex)
+                return true
+
+            var visualIdx = Math.max(0, Math.min(idx, items.length))
+            for (var n = 0; n < nodes.length; n++) {
+                var obj = createNodeObject(nodes[n])
+                if (obj) {
+                    items.splice(visualIdx + n, 0, obj)
+                    updateNodeList(obj)
+                }
+            }
+            pendingIndex += nodes.length
+            requestLayout()
+            return true
+        }
+
+        function insertNodesInPendingTree(sourceNodes, targetListId, insertIndex, nodes) {
+            if (!sourceNodes || !nodes || nodes.length === 0)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (childListIdForNode(node) === targetListId) {
+                    if (!node.children)
+                        node.children = []
+                    var idx = Math.max(0, Math.min(insertIndex, node.children.length))
+                    spliceArray(node.children, idx, 0, nodes)
+                    return true
+                }
+                if (node.children
+                        && insertNodesInPendingTree(node.children, targetListId, insertIndex, nodes)) {
+                    return true
+                }
+            }
             return false
         }
 
         function replaceNode(nodeId, nodes) {
+            var replacement = nodes || []
+            for (var pendingIdx = 0; pendingIdx < pendingNodes.length; pendingIdx++) {
+                if (pendingNodes[pendingIdx].id === nodeId)
+                    return replaceNodeHere(pendingIdx, replacement)
+            }
+
             for (var i = 0; i < items.length; i++) {
                 var child = items[i]
-                if (!child)
-                    continue
-                if (child.nodeId === nodeId) {
-                    items.splice(i, 1)
-                    child.destroy()
-                    for (var n = 0; n < nodes.length; n++) {
-                        var obj = createNodeObject(nodes[n])
-                        if (obj) {
-                            items.splice(i + n, 0, obj)
-                            updateNodeList(obj)
-                        }
-                    }
-                    requestLayout()
+                if (child && child.bodyList && child.bodyList.replaceNode(nodeId, replacement))
+                    return true
+            }
+            return replaceNodeInPendingTree(pendingNodes, nodeId, replacement)
+        }
+
+        function replaceNodeHere(pendingIdx, nodes) {
+            var oldNodeId = pendingNodes[pendingIdx].id
+            var wasHydrated = !rebuildQueued && pendingIdx < pendingIndex
+            spliceArray(pendingNodes, pendingIdx, 1, nodes)
+            if (!wasHydrated)
+                return true
+
+            var visualIdx = -1
+            for (var i = 0; i < items.length; i++) {
+                if (items[i] && items[i].nodeId === oldNodeId) {
+                    visualIdx = i
+                    break
+                }
+            }
+            if (visualIdx < 0)
+                visualIdx = Math.max(0, Math.min(pendingIdx, items.length - 1))
+
+            var existing = items[visualIdx]
+            if (existing)
+                existing.destroy()
+            items.splice(visualIdx, 1)
+            for (var n = 0; n < nodes.length; n++) {
+                var obj = createNodeObject(nodes[n])
+                if (obj) {
+                    items.splice(visualIdx + n, 0, obj)
+                    updateNodeList(obj)
+                }
+            }
+            pendingIndex += nodes.length - 1
+            requestLayout()
+            return true
+        }
+
+        function replaceNodeInPendingTree(sourceNodes, nodeId, nodes) {
+            if (!sourceNodes)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (node.id === nodeId) {
+                    spliceArray(sourceNodes, i, 1, nodes)
                     return true
                 }
-                if (child.bodyList && child.bodyList.replaceNode(nodeId, nodes))
+                if (node.children && replaceNodeInPendingTree(node.children, nodeId, nodes))
                     return true
             }
             return false
