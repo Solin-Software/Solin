@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtMultimedia import QMediaPlayer
 
+import solin.core.media.playback as playback_module
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 
@@ -121,6 +122,10 @@ class _ReconnectTimer:
     def __init__(self) -> None:
         self.started = 0
         self.stopped = 0
+        self.intervals: list[int] = []
+
+    def setInterval(self, value: int) -> None:  # noqa: N802 - Qt-style test double
+        self.intervals.append(value)
 
     def start(self) -> None:
         self.started += 1
@@ -129,42 +134,195 @@ class _ReconnectTimer:
         self.stopped += 1
 
 
-def test_network_playback_errors_become_terminal_after_bounded_retries(tmp_path):
+class _ReconnectPlayer:
+    def __init__(self) -> None:
+        self.sources: list[str] = []
+        self.positions: list[int] = []
+        self.played = 0
+        self.paused = 0
+        self.stopped = 0
+
+    def position(self) -> int:
+        return 0
+
+    def duration(self) -> int:
+        return 120_000
+
+    def playbackState(self):
+        return QMediaPlayer.PlaybackState.StoppedState
+
+    def mediaStatus(self):
+        return QMediaPlayer.MediaStatus.LoadedMedia
+
+    def stop(self) -> None:
+        self.stopped += 1
+
+    def setSource(self, url) -> None:  # noqa: N802 - Qt-style test double
+        self.sources.append(url.toString())
+
+    def setPosition(self, position: int) -> None:  # noqa: N802 - Qt-style test double
+        self.positions.append(position)
+
+    def play(self) -> None:
+        self.played += 1
+
+    def pause(self) -> None:
+        self.paused += 1
+
+
+def test_network_playback_errors_keep_projection_state_and_continue_retrying(tmp_path):
     controller, downloader, _played = _controller_with_downloader(
         tmp_path,
         auto_download=True,
     )
     reconnect_timer = _ReconnectTimer()
     controller._reconnect_timer = reconnect_timer
-    controller._max_reconnect_attempts = 2
     errors: list[str] = []
+    interruptions: list[tuple[str, str]] = []
     controller.error_occurred.connect(errors.append)
+    controller.playback_interrupted.connect(
+        lambda url, message: interruptions.append((url, message))
+    )
 
     controller.play_url("https://cdn.example/song.mp3")
     controller._on_error(None, "Error number -10054 occurred")
     controller._on_error(None, "Error number -10054 occurred")
-
-    assert reconnect_timer.started == 2
-    assert errors == []
-
     controller._on_error(None, "Error number -10054 occurred")
 
-    assert errors == ["Error number -10054 occurred"]
-    assert controller.current_url == ""
-    assert downloader.cancel_count >= 1
+    assert reconnect_timer.started == 3
+    assert reconnect_timer.intervals == [800, 1600, 3200]
+    assert errors == []
+    assert interruptions == [
+        ("https://cdn.example/song.mp3", "Error number -10054 occurred")
+    ]
+    assert controller.current_url == "https://cdn.example/song.mp3"
+    assert downloader.cancel_count == 0
 
 
-def test_qt_network_error_without_message_fails_with_user_safe_detail(tmp_path):
+def test_reconnect_flushes_source_restores_position_and_resumes(monkeypatch, tmp_path):
     controller, _downloader, _played = _controller_with_downloader(
         tmp_path,
         auto_download=True,
     )
-    controller._max_reconnect_attempts = 0
+    monkeypatch.setattr(
+        playback_module.QTimer,
+        "singleShot",
+        lambda _delay, callback: callback(),
+    )
+    player = _ReconnectPlayer()
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(42_000)
+    controller.player = player
+    controller._do_reconnect()
+
+    assert player.stopped == 1
+    assert player.sources == ["", "https://cdn.example/song.mp3"]
+    assert player.positions == [42_000]
+    assert player.played == 1
+    assert player.paused == 0
+
+
+def test_end_of_media_after_network_error_does_not_close_projection(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    controller._reconnect_timer = _ReconnectTimer()
+    ended = []
+    controller.media_ended.connect(lambda: ended.append("ended"))
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(937937)
+    controller._on_error(None, "Error number -10054 occurred")
+    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
+
+    assert ended == []
+    assert controller.current_url == "https://cdn.example/song.mp3"
+
+
+def test_unexpected_remote_end_before_error_starts_recovery(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    reconnect_timer = _ReconnectTimer()
+    controller._reconnect_timer = reconnect_timer
+    ended = []
+    interruptions: list[tuple[str, str]] = []
+    controller.media_ended.connect(lambda: ended.append("ended"))
+    controller.playback_interrupted.connect(
+        lambda url, message: interruptions.append((url, message))
+    )
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_position(937937)
+    controller._on_status(QMediaPlayer.MediaStatus.EndOfMedia)
+
+    assert ended == []
+    assert reconnect_timer.started == 1
+    assert interruptions == [
+        ("https://cdn.example/song.mp3", "The media stream was interrupted.")
+    ]
+    assert controller.current_url == "https://cdn.example/song.mp3"
+
+
+def test_network_reconnect_backoff_is_capped(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    reconnect_timer = _ReconnectTimer()
+    controller._reconnect_timer = reconnect_timer
+
+    controller.play_url("https://cdn.example/song.mp3")
+    for _ in range(8):
+        controller._on_error(None, "Error number -10054 occurred")
+
+    assert reconnect_timer.intervals == [
+        800,
+        1600,
+        3200,
+        6400,
+        12800,
+        15000,
+        15000,
+        15000,
+    ]
+
+
+def test_qt_network_error_without_message_keeps_reconnecting(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    controller._reconnect_timer = _ReconnectTimer()
     errors: list[str] = []
+    interruptions: list[tuple[str, str]] = []
     controller.error_occurred.connect(errors.append)
+    controller.playback_interrupted.connect(
+        lambda url, message: interruptions.append((url, message))
+    )
 
     controller.play_url("https://cdn.example/song.mp3")
     controller._on_error(QMediaPlayer.Error.NetworkError, "")
 
-    assert errors == ["The media could not be opened."]
-    assert controller.current_url == ""
+    assert errors == []
+    assert interruptions == [
+        ("https://cdn.example/song.mp3", "The media stream was interrupted.")
+    ]
+    assert controller.current_url == "https://cdn.example/song.mp3"
+
+
+def test_toggle_during_stream_recovery_pauses_requested_playback(tmp_path):
+    controller, _downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    controller._reconnect_timer = _ReconnectTimer()
+
+    controller.play_url("https://cdn.example/song.mp3")
+    controller._on_error(None, "Error number -10054 occurred")
+    controller.toggle_play_pause()
+
+    assert controller._session.requested_playing is False

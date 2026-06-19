@@ -32,6 +32,9 @@ class MediaPlaybackNotificationController(QObject):
         if self._started:
             return
         self._media_controller.error_occurred.connect(self.on_playback_error)
+        self._media_controller.playback_interrupted.connect(
+            self.on_playback_interrupted
+        )
         self._started = True
 
     def stop(self) -> None:
@@ -39,6 +42,12 @@ class MediaPlaybackNotificationController(QObject):
             return
         try:
             self._media_controller.error_occurred.disconnect(self.on_playback_error)
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            self._media_controller.playback_interrupted.disconnect(
+                self.on_playback_interrupted
+            )
         except (RuntimeError, TypeError):
             pass
         self._started = False
@@ -56,11 +65,27 @@ class MediaPlaybackNotificationController(QObject):
         )
         self._stop_projection()
 
-    def _media_name(self) -> str:
+    @Slot(str, str)
+    def on_playback_interrupted(self, url: str, message: str) -> None:
+        media_name = self._media_name(url)
+        error_detail = (message or "").strip() or self._tr("Unknown error")
+        detail = self._tr(
+            "Playback was interrupted for {name}.\n"
+            "Solin will keep trying to reconnect from the current position.\n"
+            "{error}"
+        )
+        detail = detail.replace("{name}", media_name).replace("{error}", error_detail)
+        self._notifications.warning(
+            detail,
+            title=self._tr("Playback interrupted"),
+            dedupe_key=f"media-playback-interrupted:{url}",
+        )
+
+    def _media_name(self, url: str | None = None) -> str:
         title = (self._current_title() or "").strip()
         if title:
             return title
-        return self._display_name(self._media_controller.current_url)
+        return self._display_name(url or self._media_controller.current_url)
 
     @staticmethod
     def _display_name(url: str) -> str:
