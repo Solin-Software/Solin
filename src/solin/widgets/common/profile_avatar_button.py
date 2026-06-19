@@ -17,28 +17,37 @@ from solin.ui.helpers import avatar_colors, initials
 
 
 class ProfileAvatarButton(QWidget):
-    """Small circular profile switch button with deterministic initials."""
+    """Small circular profile switch button with deterministic avatar colors."""
 
     clicked = Signal()
 
     _SIZE = 32
 
-    def __init__(self, profile_name: str = "", parent=None):
+    def __init__(
+        self,
+        profile_name: str = "",
+        *,
+        profile_id: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
         self._name = profile_name
+        self._profile_id = profile_id
         self._hovered = False
         self.setFixedSize(self._SIZE + 4, self._SIZE + 4)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
-    def set_name(self, name: str) -> None:
-        self._name = name
+    def set_profile(self, *, profile_id: str, profile_name: str) -> None:
+        self._profile_id = profile_id
+        self._name = profile_name
         self.update()
 
     def _colors(self) -> tuple[str, str]:
-        if not self._name:
+        avatar_key = self._profile_id or self._name
+        if not avatar_key:
             return "#30363d", "#484f58"
-        return avatar_colors(self._name)
+        return avatar_colors(avatar_key)
 
     def _initials(self) -> str:
         return initials(self._name or "?")

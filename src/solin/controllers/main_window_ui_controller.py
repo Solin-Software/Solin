@@ -71,6 +71,7 @@ class MainWindowUiContext:
     parent: QWidget
     event_filter: QObject
     set_central_widget: Callable[[QWidget], None]
+    active_profile_id: str
     active_profile_name: str
     translate: Callable[[str], str]
     lang_manager: Any
@@ -621,6 +622,7 @@ class MainWindowUiController:
     ) -> ProfileAvatarButton:
         profile_avatar_button = ProfileAvatarButton(
             self._context.active_profile_name,
+            profile_id=self._context.active_profile_id,
         )
         profile_avatar_button.setToolTip(
             self._context.translate(SWITCH_PROFILE_SOURCE)

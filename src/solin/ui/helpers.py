@@ -19,9 +19,9 @@ AVATAR_COLORS: tuple[tuple[str, str], ...] = (
 )
 
 
-def avatar_colors(profile_id: str) -> tuple[str, str]:
-    """Return the deterministic gradient colors for a profile/avatar id."""
-    idx = sum(ord(c) for c in profile_id) % len(AVATAR_COLORS)
+def avatar_colors(avatar_key: str) -> tuple[str, str]:
+    """Return deterministic gradient colors for a stable avatar key."""
+    idx = sum(ord(c) for c in avatar_key) % len(AVATAR_COLORS)
     return AVATAR_COLORS[idx]
 
 
