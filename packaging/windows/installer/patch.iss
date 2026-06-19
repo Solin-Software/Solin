@@ -41,6 +41,14 @@
 #define MyDistDir       "..\..\..\build\diff" ; release diff directory
 
 #ifndef MyPatchVersion
+  #define MyPatchVersion GetFileVersion(MyDistDir + "\" + MyAppExeName)
+#endif
+
+#if MyPatchVersion == ""
+  #error MyPatchVersion was not supplied and could not be read from build\main.dist\Solin.exe.
+#endif
+
+#ifndef MyPatchVersion
   #error MyPatchVersion must be supplied by the build pipeline.
 #endif
 

@@ -39,6 +39,14 @@
 #define MyDistDir        "..\..\..\build\main.dist"
 
 #ifndef MyAppVersion
+  #define MyAppVersion GetFileVersion(MyDistDir + "\" + MyAppExeName)
+#endif
+
+#if MyAppVersion == ""
+  #error MyAppVersion was not supplied and could not be read from build\main.dist\Solin.exe.
+#endif
+
+#ifndef MyAppVersion
   #error MyAppVersion must be supplied by the build pipeline.
 #endif
 
