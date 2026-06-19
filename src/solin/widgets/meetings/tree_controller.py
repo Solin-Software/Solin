@@ -86,7 +86,11 @@ from ...core.meetings.tree_editing import (
     replace_tree_node,
 )
 from ...core.meetings.tree_merger import MeetingTreeMerger
-from ...core.meetings.tree_store import MeetingTreeStore
+from ...core.meetings.tree_store import (
+    MeetingTreeOverview,
+    MeetingTreeSnapshot,
+    MeetingTreeStore,
+)
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
@@ -212,6 +216,7 @@ class MeetingTreeController(QObject):
         self._linked_folder_availability: tuple[tuple[str, bool], ...] = ()
         self._meeting_folder_imports: dict[str, dict[str, Any]] = {}
         self._meeting_folder_pending_sources: set[str] = set()
+        self._overview: MeetingTreeOverview | None = None
         self._connect_services()
 
     @property
@@ -278,11 +283,19 @@ class MeetingTreeController(QObject):
             self._playlist_name = wd.mwb_date_label or wd.mwb_week_title or _tr(
                 "_PubCard", "Life & Ministry"
             )
+            self._overview = MeetingTreeOverview(
+                title=wd.mwb_date_label or wd.mwb_week_title,
+                cover_bytes=wd.mwb_cover_bytes,
+            )
         else:
             canonical = self._builder.build_weekend(wd)
             issue = wd.wt_issue or ""
             self._playlist_name = wd.wt_study_title or _tr(
                 "_PubCard", "Watchtower Study"
+            )
+            self._overview = MeetingTreeOverview(
+                title=wd.wt_study_title,
+                cover_bytes=wd.wt_cover_bytes,
             )
         self._tree_key = f"{pub_type}:{wd.monday.isoformat()}:{self._language_code}:{issue}"
         self._sync_identity = MeetingSyncIdentity(
@@ -293,6 +306,43 @@ class MeetingTreeController(QObject):
         self._refresh_sync_availability()
         self._load_canonical(canonical)
 
+    def load_saved_tree(self, snapshot: MeetingTreeSnapshot) -> None:
+        """Load an already persisted meeting tree without building empty canonical data."""
+        self._meeting_type = snapshot.pub_type
+        self._tree_key = snapshot.tree_key
+        self._canonical_hash = snapshot.canonical_hash
+        self._playlist_name = snapshot.overview.title or (
+            _tr("_PubCard", "Life & Ministry")
+            if snapshot.pub_type == "mwb"
+            else _tr("_PubCard", "Watchtower Study")
+        )
+        self._overview = snapshot.overview
+        self._sync_identity = MeetingSyncIdentity(
+            tree_key=snapshot.tree_key,
+            pub_type=snapshot.pub_type,
+            monday=snapshot.monday,
+            canonical_hash=snapshot.canonical_hash,
+        )
+        self._refresh_sync_availability()
+        self._deleted_source_keys = set(snapshot.deleted_source_keys)
+        self._linked_folder_files = dict(snapshot.linked_folder_files)
+        self._meeting_folder_imports = copy.deepcopy(snapshot.meeting_folder_imports)
+        sync_record = self._load_sync_record()
+        if sync_record is not None:
+            self._apply_sync_record(sync_record)
+            self._save_local_cache()
+        else:
+            self._sync_enabled = False
+            self._sync_revision = 0
+            self._sync_folder = self._candidate_sync_folder()
+            self._nodes = clone_nodes(snapshot.nodes)
+        self._meeting_folder_pending_sources.clear()
+        self._linked_folder_availability = self._linked_folder_availability_signature()
+        self._start_media_requests()
+        self.chromeChanged.emit()
+        self.syncStateChanged.emit()
+        self.stateChanged.emit()
+
     def load_memorial(self, md: MemorialData) -> None:
         canonical = self._builder.build_memorial(md)
         year = getattr(md, "year", 0) or (
@@ -300,6 +350,7 @@ class MeetingTreeController(QObject):
         )
         date_key = md.memorial_date.isoformat() if md.memorial_date else str(year)
         self._playlist_name = _tr("_MemorialCard", "MEMORIAL")
+        self._overview = None
         self._tree_key = f"memorial:{date_key}:{self._language_code}:{year}"
         self._sync_identity = None
         self._sync_enabled = False
@@ -1591,12 +1642,22 @@ class MeetingTreeController(QObject):
                 self._deleted_source_keys,
                 self._linked_folder_files or None,
                 self._meeting_folder_imports or None,
+                self._current_overview(),
             )
         except OSError as exc:
             log_ignored_exception(__name__, "Could not save meeting tree local cache")
             self.storageSaveFailed.emit(self._tree_key, str(exc))
             return False
         return True
+
+    def _current_overview(self) -> MeetingTreeOverview | None:
+        if self._overview is None:
+            return None
+        return MeetingTreeOverview(
+            title=self._overview.title,
+            media_count=count_media(self._nodes),
+            cover_bytes=self._overview.cover_bytes,
+        )
 
     def _save_sync_manifest(self) -> None:
         if not self._sync_identity or not self._sync_folder:

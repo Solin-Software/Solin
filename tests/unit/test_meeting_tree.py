@@ -26,7 +26,10 @@ from solin.core.meetings.publication_content import (
     open_publication_database,
 )
 from solin.core.meetings.tree_builder import MeetingTreeBuilder
-from solin.core.meetings.tree_store import MeetingTreeStore
+from solin.core.meetings.tree_store import (
+    MeetingTreeOverview,
+    MeetingTreeStore,
+)
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
 from solin.core.meetings.tree_merger import MeetingTreeMerger
 from tests._paths import FIXTURES_DIR
@@ -770,6 +773,7 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         controller._linked_folder_files = {}
         controller._meeting_folder_imports = {}
         controller._store = FakeStore()
+        controller._current_overview = lambda: None
         controller.storageSaveFailed = self._Signal()
 
         saved = MeetingTreeController._save_local_cache(controller)
@@ -813,6 +817,63 @@ class MeetingTreeStoreTests(unittest.TestCase):
             loaded, digest = store.load("mwb:2026-05-25:T:20260500")
             self.assertEqual(loaded, nodes)
             self.assertEqual(digest, "hash")
+
+    def test_find_snapshot_returns_persisted_overview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            nodes = [{"id": "media", "type": "media", "children": []}]
+
+            store.save(
+                "mwb:2026-05-25:T:20260500",
+                nodes,
+                "hash",
+                overview=MeetingTreeOverview(
+                    title="May 25-31",
+                    media_count=1,
+                    cover_bytes=b"cover",
+                ),
+            )
+
+            snapshot = store.find_snapshot("mwb", date(2026, 5, 25), "T")
+
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            self.assertEqual(snapshot.tree_key, "mwb:2026-05-25:T:20260500")
+            self.assertEqual(snapshot.overview.title, "May 25-31")
+            self.assertEqual(snapshot.overview.media_count, 1)
+            self.assertEqual(snapshot.overview.cover_bytes, b"cover")
+            self.assertEqual(snapshot.media_count, 1)
+
+    def test_find_snapshot_supports_legacy_tree_without_overview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            nodes = [{"id": "media", "type": "media", "children": []}]
+
+            store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
+
+            snapshot = store.find_snapshot("mwb", date(2026, 5, 25), "T")
+
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            self.assertEqual(snapshot.overview.title, "")
+            self.assertEqual(snapshot.overview.media_count, 1)
+
+    def test_find_snapshot_is_language_scoped_and_chooses_newest_issue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            older = [{"id": "older", "type": "media", "children": []}]
+            newer = [{"id": "newer", "type": "media", "children": []}]
+
+            store.save("wt:2026-05-25:T:20260400", older, "old")
+            store.save("wt:2026-05-25:T:20260500", newer, "new")
+
+            snapshot = store.find_snapshot("wt", date(2026, 5, 25), "T")
+
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            self.assertEqual(snapshot.tree_key, "wt:2026-05-25:T:20260500")
+            self.assertEqual(snapshot.nodes, newer)
+            self.assertIsNone(store.find_snapshot("wt", date(2026, 5, 25), "E"))
 
     def test_round_trip_meeting_folder_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
