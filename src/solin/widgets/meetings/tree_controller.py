@@ -747,7 +747,7 @@ class MeetingTreeController(QObject):
                     linked_files[url] = node_id
         if nodes:
             self._insert_nodes(list_id or "root", insert_index, nodes)
-        if linked_files:
+        if linked_files and not getattr(self, "_sync_enabled", False):
             self._linked_folder_files.update(linked_files)
         self._record_meeting_folder_import(
             source,
@@ -1769,8 +1769,7 @@ class MeetingTreeController(QObject):
             Path(self._sync_folder),
             generated_roots=self._generated_asset_roots(),
         )
-        if linked_files:
-            self._linked_folder_files.update(linked_files)
+        self._linked_folder_files = linked_files
 
     def _linked_files_for_current_nodes(self) -> dict[str, str]:
         linked: dict[str, str] = {}
