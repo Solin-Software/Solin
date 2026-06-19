@@ -122,22 +122,33 @@ class MediaController(QObject):
         self._reconnect_timer.stop()
         self._reset_reconnect_state()
 
-        # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova
+        # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova.
+        # start() cancela download antigo; fontes locais/cacheadas nao chamam start().
         self._cleanup_current_temp()
 
         self._session.begin_playback(url)
         self._last_known_position = 0
 
         # Cancela prefetch ativo para esta URL
-        if MediaCacheManager.is_remote(url):
+        is_remote = MediaCacheManager.is_remote(url)
+        if is_remote:
             self._cache_manager.cancel_prefetch(url)
 
         self.player.stop()
         self.player.setSource(QUrl())
         self.buffer_progress.emit(0, 0)
 
+        if not is_remote:
+            self._downloader.cancel()
+            self._session.set_cached_local(url)
+            self._session.set_stream_persist(False)
+            self._play_source(url)
+            self.playback_source_changed.emit(True)
+            return
+
         cached = self._downloader.get_cached_path(url)
         if cached:
+            self._downloader.cancel()
             self._session.set_cached_local(cached)
             self._session.set_stream_persist(True)
             size = os.path.getsize(cached)
@@ -378,6 +389,8 @@ class MediaController(QObject):
 
     def _on_download_error(self, msg: str):
         log.warning("Downloader warning: %s", msg)
+        if not MediaCacheManager.is_remote(self._session.current_url):
+            return
         self.buffer_progress.emit(0, 0)
         if self._session.current_url:
             self.playback_download_failed.emit(

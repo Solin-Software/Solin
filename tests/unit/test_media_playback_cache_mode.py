@@ -118,6 +118,38 @@ def test_download_error_clears_buffer_and_reports_streaming_fallback(tmp_path):
     assert controller.current_url == "https://cdn.example/song.mp3"
 
 
+def test_local_media_plays_without_cache_download_or_streaming_fallback(tmp_path):
+    local_media = tmp_path / "local-video.mp4"
+    local_media.write_bytes(b"local")
+    controller, downloader, played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    buffer_events: list[tuple[int, int]] = []
+    failures: list[tuple[str, str, bool]] = []
+    source_states: list[bool] = []
+    controller.buffer_progress.connect(
+        lambda downloaded, total: buffer_events.append((downloaded, total))
+    )
+    controller.playback_download_failed.connect(
+        lambda url, message, persist: failures.append((url, message, persist))
+    )
+    controller.playback_source_changed.connect(source_states.append)
+
+    controller.play_url(str(local_media))
+    downloader.error.emit("No connection adapters were found")
+
+    assert played == [str(local_media)]
+    assert downloader.started == []
+    assert failures == []
+    assert buffer_events == [(0, 0)]
+    assert source_states == [True]
+    assert controller.current_url == str(local_media)
+    assert controller.local_path == str(local_media)
+    assert controller.stream_persist is False
+    controller.stop()
+
+
 class _ReconnectTimer:
     def __init__(self) -> None:
         self.started = 0
