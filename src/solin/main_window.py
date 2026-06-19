@@ -29,6 +29,9 @@ from .controllers.main_window_ui_controller import (
 from .controllers.media_download_notification_controller import (
     MediaDownloadNotificationController,
 )
+from .controllers.media_playback_notification_controller import (
+    MediaPlaybackNotificationController,
+)
 from .controllers.media_projection_controller import (
     MediaProjectionContext,
     MediaProjectionController,
@@ -622,6 +625,14 @@ class MainWindow(QMainWindow):
                 ),
             ),
         )
+        self._media_playback_notifications = MediaPlaybackNotificationController(
+            self.notifications,
+            self.media_ctrl,
+            current_title=self.proj_bar.current_media_title,
+            stop_projection=self._projection_stop.stop_projection,
+            parent=self,
+        )
+        self._media_playback_notifications.start()
         self._live_integrations = LiveIntegrationController(
             LiveIntegrationContext(
                 projection_session=self.projection_session,
@@ -744,6 +755,7 @@ class MainWindow(QMainWindow):
                 services=ShutdownServices(
                     remote_services=self._remote_services,
                     download_notifications=self._media_download_notifications,
+                    playback_notifications=self._media_playback_notifications,
                     notifications=self.notifications,
                     projection_integrations=self._projection_integrations,
                     background_song=self._background_song_service,

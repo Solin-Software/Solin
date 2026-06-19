@@ -105,6 +105,30 @@ def _configure_songs_bridge_language(
     )
 
 
+def _notify_meeting_tree_save_failed(
+    notifications,
+    tree_key: str,
+    error: str,
+) -> None:
+    if notifications is None:
+        return
+    detail = (error or "").strip() or _tr_ctx(
+        "MeetingTreeStorage",
+        "Unknown storage error.",
+    )
+    if len(detail) > 500:
+        detail = f"{detail[:497]}..."
+    message = _tr_ctx(
+        "MeetingTreeStorage",
+        "Could not save meeting changes.\nFree up disk space or check permissions, then try again.\n%1",
+    ).replace("%1", detail)
+    notifications.error(
+        message,
+        title=_tr_ctx("MeetingTreeStorage", "Meeting changes not saved"),
+        dedupe_key=f"meeting-tree-save:{tree_key}:{detail}",
+    )
+
+
 # ── Study detail view (QML-based) ─────────────────────────────────────────────
 
 class StudyDetailView(QWidget):
@@ -113,6 +137,7 @@ class StudyDetailView(QWidget):
 
     def __init__(self, pub_type: str, wd: "WeekData",
                  service: "JwpubService", *,
+                 notifications=None,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_media_store: ProfileMediaStore,
@@ -134,6 +159,7 @@ class StudyDetailView(QWidget):
         self._pub   = pub_type
         self._wd    = wd
         self._svc   = service
+        self._notifications = notifications
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
@@ -190,6 +216,7 @@ class StudyDetailView(QWidget):
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
+        self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
         self.controller.set_sync_root(self._watched_folder)
 
         self.catalog_bridge = JWMediaCatalogBridge(
@@ -255,6 +282,9 @@ class StudyDetailView(QWidget):
             self.catalog_bridge.set_playlist_ref(playlist_ref)
         if hasattr(self, "songs_bridge"):
             self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _on_storage_save_failed(self, tree_key: str, error: str) -> None:
+        _notify_meeting_tree_save_failed(self._notifications, tree_key, error)
 
     def _sync_songs_bridge_language(self):
         if not hasattr(self, "songs_bridge"):
@@ -383,6 +413,7 @@ class _MemorialDetailView(QWidget):
     play_requested = Signal(object)
 
     def __init__(self, md: "MemorialData", service: "JwpubService", *,
+                 notifications=None,
                  language_context: JWMediaLanguageContext,
                  meeting_tree_store: MeetingTreeStore,
                  profile_media_store: ProfileMediaStore,
@@ -403,6 +434,7 @@ class _MemorialDetailView(QWidget):
         super().__init__(parent)
         self._md  = md
         self._svc = service
+        self._notifications = notifications
         self._language_context = language_context
         self._meeting_tree_store = meeting_tree_store
         self._profile_media_store = profile_media_store
@@ -457,6 +489,7 @@ class _MemorialDetailView(QWidget):
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
+        self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
 
         self.catalog_bridge = JWMediaCatalogBridge(
             self._jw_catalog_service_factory,
@@ -502,6 +535,9 @@ class _MemorialDetailView(QWidget):
             self.catalog_bridge.set_playlist_ref(playlist_ref)
         if hasattr(self, "songs_bridge"):
             self.songs_bridge.set_playlist_ref(playlist_ref)
+
+    def _on_storage_save_failed(self, tree_key: str, error: str) -> None:
+        _notify_meeting_tree_save_failed(self._notifications, tree_key, error)
 
     def _sync_songs_bridge_language(self):
         if not hasattr(self, "songs_bridge"):
@@ -629,6 +665,7 @@ class MeetingsWidget(QWidget):
         self,
         lang_manager=None,
         *,
+        notifications=None,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
         meeting_thumbnail_store: ThumbnailStore,
@@ -652,6 +689,7 @@ class MeetingsWidget(QWidget):
     ):
         super().__init__(parent)
         self._lang_mgr  = lang_manager
+        self._notifications = notifications
         self._monday    = current_monday()
         self._cache:   dict[str, WeekData]       = {}
         self._details: dict[str, StudyDetailView | _MemorialDetailView] = {}
@@ -899,6 +937,7 @@ class MeetingsWidget(QWidget):
         detail_key = f"{pub_type}:{key}"
         if detail_key not in self._details:
             d = StudyDetailView(pub_type, wd, self._service,
+                                notifications=self._notifications,
                                 language_context=self._current_media_context(),
                                 meeting_tree_store=self._meeting_tree_store,
                                 profile_media_store=self._profile_media_store,
@@ -948,6 +987,7 @@ class MeetingsWidget(QWidget):
             d = _MemorialDetailView(
                 md,
                 self._service,
+                notifications=self._notifications,
                 language_context=self._current_media_context(),
                 meeting_tree_store=self._meeting_tree_store,
                 profile_media_store=self._profile_media_store,

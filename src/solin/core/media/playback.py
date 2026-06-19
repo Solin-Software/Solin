@@ -75,6 +75,10 @@ class MediaController(QObject):
         self._reconnect_timer.setSingleShot(True)
         self._reconnect_timer.setInterval(800)
         self._reconnect_timer.timeout.connect(self._do_reconnect)
+        self._reconnect_attempts = 0
+        self._max_reconnect_attempts = 3
+        self._last_playback_error = ""
+        self._handling_terminal_error = False
 
         self.video_sink.videoFrameChanged.connect(self._on_frame)
         self.player.playbackStateChanged.connect(self._on_state)
@@ -111,6 +115,7 @@ class MediaController(QObject):
         resilient local-switch behavior without creating persistent cache files.
         """
         self._reconnect_timer.stop()
+        self._reset_reconnect_state()
 
         # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova
         self._cleanup_current_temp()
@@ -154,6 +159,7 @@ class MediaController(QObject):
 
     def stop(self):
         self._reconnect_timer.stop()
+        self._reset_reconnect_state()
         self._downloader.cancel()
         self._session.begin_stop()
         self.player.stop()
@@ -220,28 +226,32 @@ class MediaController(QObject):
     # ── Reconexao automatica ──────────────────────────────────────────────
 
     def _on_error(self, error, error_string: str):
-        lowered = (error_string or "").lower()
+        error_detail = (error_string or "").strip()
+        lowered = error_detail.lower()
         if "immediate exit requested" in lowered:
             return
         source = self.player.source().toString()
-        is_network_drop = (
-            "10054" in error_string
-            or "10060" in error_string
-            or "ConnectionReset" in error_string
+        if not self._session.current_url and not source:
+            return
+        is_network_drop = error == QMediaPlayer.Error.NetworkError or (
+            "10054" in error_detail
+            or "10060" in error_detail
+            or "connectionreset" in lowered
             or "partial" in lowered
             or ("i/o error" in lowered and source.startswith("http"))
         )
 
         if is_network_drop and self._session.current_url:
-            self._reconnect_timer.start()
+            self._schedule_reconnect_or_fail(error_detail)
         else:
-            self.error_occurred.emit(error_string)
+            self._fail_playback(error_detail)
 
     def _do_reconnect(self):
         saved_pos = self.player.position()
         was_playing = self.is_playing or self._session.requested_playing
         source = self._session.reconnect_source()
         if not source:
+            self._fail_playback(self._last_playback_error)
             return
 
         self.player.stop()
@@ -265,6 +275,7 @@ class MediaController(QObject):
             elif status == QMediaPlayer.MediaStatus.InvalidMedia:
                 # Previne memory leak se o source falhar
                 self.player.mediaStatusChanged.disconnect(seek_on_ready)
+                self._fail_playback(self._last_playback_error)
 
         self.player.mediaStatusChanged.connect(seek_on_ready)
 
@@ -382,6 +393,11 @@ class MediaController(QObject):
         self.position_changed.emit(int(position))
 
     def _on_status(self, status):
+        if status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        ):
+            self._reset_reconnect_state()
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self._session.mark_media_ended()
             self.media_ended.emit()
@@ -418,6 +434,32 @@ class MediaController(QObject):
         else:
             self.player.setSource(QUrl.fromLocalFile(source))
         self.player.play()
+
+    def _schedule_reconnect_or_fail(self, error_detail: str) -> None:
+        self._last_playback_error = (
+            error_detail or "The media could not be opened."
+        )
+        if self._reconnect_attempts >= self._max_reconnect_attempts:
+            self._fail_playback(self._last_playback_error)
+            return
+        self._reconnect_attempts += 1
+        self._reconnect_timer.start()
+
+    def _fail_playback(self, error_detail: str) -> None:
+        if self._handling_terminal_error:
+            return
+        self._handling_terminal_error = True
+        try:
+            detail = (error_detail or "").strip() or "The media could not be opened."
+            self.error_occurred.emit(detail)
+            if self._session.current_url:
+                self.stop()
+        finally:
+            self._handling_terminal_error = False
+
+    def _reset_reconnect_state(self) -> None:
+        self._reconnect_attempts = 0
+        self._last_playback_error = ""
 
     def _cleanup_current_temp(self) -> None:
         """

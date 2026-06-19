@@ -141,6 +141,7 @@ class MeetingTreeController(QObject):
     markerEditRequested = Signal(str)
     cloudChanged = Signal(str, bool, bool, float, str)
     syncStateChanged = Signal()
+    storageSaveFailed = Signal(str, str)  # tree_key, error message
 
     def __init__(
         self,
@@ -1567,21 +1568,35 @@ class MeetingTreeController(QObject):
         if not self._tree_key:
             return
         if self._sync_enabled:
-            self._materialize_current_nodes_for_sync()
-            self._save_sync_manifest()
+            try:
+                self._materialize_current_nodes_for_sync()
+            except OSError as exc:
+                log_ignored_exception(
+                    __name__,
+                    "Could not materialize meeting sync files",
+                )
+                self._pause_sync_after_save_failure(str(exc))
+            else:
+                self._save_sync_manifest()
         self._save_local_cache()
 
-    def _save_local_cache(self) -> None:
+    def _save_local_cache(self) -> bool:
         if not self._tree_key:
-            return
-        self._store.save(
-            self._tree_key,
-            self._nodes,
-            self._canonical_hash,
-            self._deleted_source_keys,
-            self._linked_folder_files or None,
-            self._meeting_folder_imports or None,
-        )
+            return True
+        try:
+            self._store.save(
+                self._tree_key,
+                self._nodes,
+                self._canonical_hash,
+                self._deleted_source_keys,
+                self._linked_folder_files or None,
+                self._meeting_folder_imports or None,
+            )
+        except OSError as exc:
+            log_ignored_exception(__name__, "Could not save meeting tree local cache")
+            self.storageSaveFailed.emit(self._tree_key, str(exc))
+            return False
+        return True
 
     def _save_sync_manifest(self) -> None:
         if not self._sync_identity or not self._sync_folder:
@@ -1597,7 +1612,7 @@ class MeetingTreeController(QObject):
                 expected_revision=self._sync_revision,
             )
             self._apply_sync_record(saved_record)
-        except (ManifestError, MeetingSyncError) as exc:
+        except (ManifestError, MeetingSyncError, OSError) as exc:
             log_ignored_exception(__name__, "Could not save meeting sync manifest")
             self._pause_sync_after_save_failure(str(exc))
 

@@ -87,6 +87,7 @@ def _dependencies(events=None):
         services=ShutdownServices(
             remote_services=_Recorder(events, "remote"),
             download_notifications=_Recorder(events, "downloads"),
+            playback_notifications=_Recorder(events, "playback-notifications"),
             notifications=_Recorder(events, "notifications"),
             projection_integrations=_Recorder(events, "projection-integrations"),
             background_song=_Recorder(events, "background-song"),
@@ -170,6 +171,7 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
         "timer.close_all",
         "remote.stop",
         "downloads.stop",
+        "playback-notifications.stop",
         "notifications.shutdown",
         "projection-integrations.cleanup",
         "background-song.shutdown",

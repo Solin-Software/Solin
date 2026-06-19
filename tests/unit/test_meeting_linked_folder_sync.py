@@ -542,6 +542,41 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         self.assertEqual(warnings, ["manifest is unavailable"])
         self.assertEqual(controller.syncStateChanged.calls, [()])
 
+    def test_save_sync_manifest_io_failure_pauses_sync_and_warns(self):
+        class FakeController:
+            pass
+
+        class FailingService:
+            def save_tree(self, *_args, **_kwargs):
+                raise OSError(28, "No space left on device")
+
+        controller = FakeController()
+        controller._sync_identity = _identity("mwb")
+        controller._sync_folder = "C:/tmp/2026-05-25 MW"
+        controller._sync_enabled = True
+        controller._sync_revision = 4
+        controller._nodes = []
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._sync_service = FailingService()
+        controller.syncStateChanged = _Signal()
+        warnings = []
+        controller._warn_sync_failed = warnings.append
+        controller._pause_sync_after_save_failure = (
+            lambda message: MeetingTreeController._pause_sync_after_save_failure(
+                controller,
+                message,
+            )
+        )
+
+        MeetingTreeController._save_sync_manifest(controller)
+
+        self.assertFalse(controller._sync_enabled)
+        self.assertEqual(controller._sync_revision, 0)
+        self.assertEqual(warnings, ["[Errno 28] No space left on device"])
+        self.assertEqual(controller.syncStateChanged.calls, [()])
+
     def test_enable_sync_adopts_existing_manifest_without_overwrite(self):
         class FakeController:
             pass

@@ -76,7 +76,30 @@ class _BrowserStub:
         self.cleaned = True
 
 
-def _controller(window):
+class _SignalStub:
+    def __init__(self):
+        self.connected = []
+
+    def connect(self, callback):
+        self.connected.append(callback)
+
+
+class _BrowserSignalStub(_BrowserStub):
+    def __init__(self):
+        super().__init__()
+        self.project_image_signal = _SignalStub()
+        self.project_video_signal = _SignalStub()
+        self.stop_projection_signal = _SignalStub()
+        self.project_tab_pixmap_signal = _SignalStub()
+        self.stop_tab_projection_signal = _SignalStub()
+        self.add_to_playlist_signal = _SignalStub()
+        self.add_downloaded_file_to_playlist_signal = _SignalStub()
+        self.download_failed_signal = _SignalStub()
+
+
+def _controller(window, *, project_video=None):
+    if project_video is None:
+        project_video = lambda *_args: None
     return LazyPageController(
         LazyPageContext(
             parent=window,
@@ -101,7 +124,7 @@ def _controller(window):
         ),
         LazyPageHandlers(
             project_image=lambda *_args: None,
-            project_video=lambda *_args: None,
+            project_video=project_video,
             stop_projection=lambda: None,
             project_tab_frame=lambda *_args: None,
             add_current_to_playlist=lambda *_args: None,
@@ -151,6 +174,32 @@ def test_lazy_page_controller_delegates_browser_lifecycle():
 
     assert browser.stopped is True
     assert browser.cleaned is True
+
+
+def test_lazy_page_controller_adapts_browser_video_signal_to_projection_contract():
+    window = _WindowStub()
+    calls = []
+    controller = _controller(window, project_video=lambda *args: calls.append(args))
+    browser = _BrowserSignalStub()
+    controller._browser_widget = browser
+
+    controller._connect_browser_signals()
+    browser.project_video_signal.connected[0]("https://example.test/video.mp4", "Talk")
+
+    assert calls == [
+        (
+            "https://example.test/video.mp4",
+            "Talk",
+            [
+                {
+                    "url": "https://example.test/video.mp4",
+                    "title": "Talk",
+                    "type": "video",
+                }
+            ],
+            None,
+        )
+    ]
 
 
 def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
