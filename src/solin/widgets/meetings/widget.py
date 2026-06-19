@@ -50,7 +50,11 @@ from ...core.jw.language_context import (
 from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
-from ...core.meetings.tree_store import MeetingTreeSnapshot, MeetingTreeStore
+from ...core.meetings.tree_store import (
+    MeetingTreeSnapshot,
+    MeetingTreeStore,
+    parse_meeting_tree_key,
+)
 from ...core.media.cache import MediaCacheManager
 from ...core.media.settings import MediaSettingsStore
 from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
@@ -134,6 +138,7 @@ def _notify_meeting_tree_save_failed(
 class StudyDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
+    meeting_tree_saved = Signal(str)
 
     def __init__(self, pub_type: str, wd: "WeekData",
                  service: "JwpubService", *,
@@ -218,6 +223,7 @@ class StudyDetailView(QWidget):
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
+        self.controller.storageSaved.connect(self.meeting_tree_saved.emit)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
         self.controller.set_sync_root(self._watched_folder)
 
@@ -1003,11 +1009,24 @@ class MeetingsWidget(QWidget):
         )
         d.back_requested.connect(self._on_detail_back)
         d.play_requested.connect(self.project_media)
+        d.meeting_tree_saved.connect(self._on_detail_tree_saved)
         self._stack.addWidget(d)
         self._details[detail_key] = d
 
     def _on_detail_back(self):
         self._go_overview()
+
+    @Slot(str)
+    def _on_detail_tree_saved(self, tree_key: str) -> None:
+        key = parse_meeting_tree_key(tree_key)
+        if key is None or key.pub_type not in {"mwb", "wt"}:
+            return
+        self._saved_snapshots.pop(
+            self._saved_snapshot_cache_key_for(key.monday, key.language),
+            None,
+        )
+        if key.monday == self._monday:
+            self._refresh_overview_cards(self._monday)
 
     def _open_memorial_detail(self):
         md = self._memorial_svc.get_data()
@@ -1222,7 +1241,13 @@ class MeetingsWidget(QWidget):
         return self._service
 
     def _saved_snapshot_cache_key(self, monday: date) -> str:
-        return f"{monday.isoformat()}:{self._current_media_context().api_code}"
+        return self._saved_snapshot_cache_key_for(
+            monday,
+            self._current_media_context().api_code,
+        )
+
+    def _saved_snapshot_cache_key_for(self, monday: date, language: str) -> str:
+        return f"{monday.isoformat()}:{language}"
 
     def _refresh_saved_snapshots(
         self,

@@ -145,6 +145,7 @@ class MeetingTreeController(QObject):
     markerEditRequested = Signal(str)
     cloudChanged = Signal(str, bool, bool, float, str)
     syncStateChanged = Signal()
+    storageSaved = Signal(str)  # tree_key
     storageSaveFailed = Signal(str, str)  # tree_key, error message
 
     def __init__(
@@ -1648,6 +1649,7 @@ class MeetingTreeController(QObject):
             log_ignored_exception(__name__, "Could not save meeting tree local cache")
             self.storageSaveFailed.emit(self._tree_key, str(exc))
             return False
+        self.storageSaved.emit(self._tree_key)
         return True
 
     def _current_overview(self) -> MeetingTreeOverview | None:

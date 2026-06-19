@@ -51,7 +51,11 @@ class _Signal:
         self.calls += 1
 
 
-def _snapshot(pub_type: str = "mwb") -> MeetingTreeSnapshot:
+def _snapshot(
+    pub_type: str = "mwb",
+    *,
+    title: str = "Saved meeting",
+) -> MeetingTreeSnapshot:
     monday = date(2026, 5, 25)
     return MeetingTreeSnapshot(
         tree_key=f"{pub_type}:2026-05-25:T:20260500",
@@ -64,7 +68,7 @@ def _snapshot(pub_type: str = "mwb") -> MeetingTreeSnapshot:
         deleted_source_keys=set(),
         linked_folder_files={},
         meeting_folder_imports={},
-        overview=MeetingTreeOverview(title="Saved meeting", media_count=1),
+        overview=MeetingTreeOverview(title=title, media_count=1),
     )
 
 
@@ -163,6 +167,53 @@ def test_ready_week_data_uses_canonical_path_even_when_snapshot_exists() -> None
     MeetingsWidget._open_detail(widget, "mwb")
 
     assert captured["saved_snapshot"] is None
+
+
+def test_detail_save_invalidates_cached_saved_snapshot_before_next_open() -> None:
+    monday = date(2026, 5, 25)
+    old_snapshot = _snapshot("mwb", title="Before edit")
+    updated_snapshot = _snapshot("mwb", title="After edit")
+    cache_key = f"{monday.isoformat()}:T"
+    refreshed: list[date] = []
+
+    class Store:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, date, str]] = []
+
+        def find_snapshot(
+            self,
+            pub_type: str,
+            monday_arg: date,
+            language: str,
+        ) -> MeetingTreeSnapshot | None:
+            self.calls.append((pub_type, monday_arg, language))
+            if pub_type == "mwb":
+                return updated_snapshot
+            return None
+
+    store = Store()
+    widget = SimpleNamespace(
+        _saved_snapshots={cache_key: {"mwb": old_snapshot}},
+        _current_media_context=lambda: SimpleNamespace(api_code="T"),
+        _meeting_tree_store=store,
+        _monday=monday,
+        _saved_snapshot_cache_key_for=lambda monday_arg, language: (
+            f"{monday_arg.isoformat()}:{language}"
+        ),
+        _saved_snapshot_cache_key=lambda monday_arg: f"{monday_arg.isoformat()}:T",
+        _refresh_saved_snapshots=lambda monday_arg: MeetingsWidget._refresh_saved_snapshots(
+            widget,
+            monday_arg,
+        ),
+        _refresh_overview_cards=lambda refreshed_monday: refreshed.append(refreshed_monday),
+    )
+
+    MeetingsWidget._on_detail_tree_saved(widget, old_snapshot.tree_key)
+
+    assert cache_key not in widget._saved_snapshots
+    assert refreshed == [monday]
+    assert MeetingsWidget._saved_snapshots_for(widget, monday)["mwb"] is updated_snapshot
+    assert store.calls == [("mwb", monday, "T"), ("wt", monday, "T")]
 
 
 def test_controller_load_saved_tree_uses_snapshot_nodes_without_saving_canonical() -> None:

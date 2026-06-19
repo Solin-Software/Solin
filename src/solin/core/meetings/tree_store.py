@@ -22,6 +22,16 @@ log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
+class MeetingTreeKey:
+    """Structured identity encoded in a persisted meeting tree key."""
+
+    pub_type: str
+    monday: date
+    language: str
+    issue: str
+
+
+@dataclass(frozen=True, slots=True)
 class MeetingTreeOverview:
     """Small persisted summary used to render meeting cards without network I/O."""
 
@@ -264,7 +274,7 @@ def _decode_cover_bytes(value: object) -> bytes | None:
         return None
 
 
-def _parse_tree_key(tree_key: str) -> tuple[str, date, str, str] | None:
+def parse_meeting_tree_key(tree_key: str) -> MeetingTreeKey | None:
     parts = tree_key.split(":", 3)
     if len(parts) != 4:
         return None
@@ -275,7 +285,7 @@ def _parse_tree_key(tree_key: str) -> tuple[str, date, str, str] | None:
         monday = date.fromisoformat(monday_text)
     except ValueError:
         return None
-    return pub_type, monday, language, issue
+    return MeetingTreeKey(pub_type, monday, language, issue)
 
 
 def _string_set(value: object) -> set[str]:
@@ -304,13 +314,12 @@ def _snapshot_from_record(
     tree_key: str,
     record: object,
 ) -> MeetingTreeSnapshot | None:
-    key_parts = _parse_tree_key(tree_key)
-    if key_parts is None or not isinstance(record, dict):
+    key = parse_meeting_tree_key(tree_key)
+    if key is None or not isinstance(record, dict):
         return None
     nodes = record.get("nodes")
     if not isinstance(nodes, list):
         return None
-    pub_type, monday, language, issue = key_parts
     cloned_nodes = clone_nodes(nodes)
     media_count = count_media(cloned_nodes)
     overview = MeetingTreeOverview.from_record(
@@ -319,10 +328,10 @@ def _snapshot_from_record(
     )
     return MeetingTreeSnapshot(
         tree_key=tree_key,
-        pub_type=pub_type,
-        monday=monday,
-        language=language,
-        issue=issue,
+        pub_type=key.pub_type,
+        monday=key.monday,
+        language=key.language,
+        issue=key.issue,
         nodes=cloned_nodes,
         canonical_hash=str(record.get("last_canonical_hash", "")),
         deleted_source_keys=_string_set(record.get("deleted_source_keys", [])),

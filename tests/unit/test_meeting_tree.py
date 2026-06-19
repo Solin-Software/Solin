@@ -784,6 +784,37 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
             [("mwb:2026-05-25:T:20260500", "[Errno 28] No space left on device")],
         )
 
+    def test_local_cache_save_success_reports_saved_tree_key(self):
+        class FakeStore:
+            def __init__(self):
+                self.calls = []
+
+            def save(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        class FakeController:
+            pass
+
+        store = FakeStore()
+        controller = FakeController()
+        controller._tree_key = "mwb:2026-05-25:T:20260500"
+        controller._nodes = [{"id": "n1", "type": "section", "children": []}]
+        controller._canonical_hash = "hash"
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._store = store
+        controller._current_overview = lambda: None
+        controller.storageSaved = self._Signal()
+        controller.storageSaveFailed = self._Signal()
+
+        saved = MeetingTreeController._save_local_cache(controller)
+
+        self.assertTrue(saved)
+        self.assertEqual(controller.storageSaved.calls, [(controller._tree_key,)])
+        self.assertEqual(controller.storageSaveFailed.calls, [])
+        self.assertEqual(len(store.calls), 1)
+
 
 class MeetingTreeStoreTests(unittest.TestCase):
     def test_store_requires_an_explicit_path(self):
