@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from types import SimpleNamespace
 
+import solin.widgets.meetings.widget as meetings_widget_module
 from solin.core.meetings.models import WeekData
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeSnapshot
 from solin.widgets.meetings.tree_controller import MeetingTreeController
@@ -49,6 +50,14 @@ class _Signal:
 
     def emit(self, *args) -> None:
         self.calls += 1
+
+
+class _ConnectSignal:
+    def __init__(self) -> None:
+        self.handlers = []
+
+    def connect(self, handler) -> None:
+        self.handlers.append(handler)
 
 
 def _snapshot(
@@ -214,6 +223,70 @@ def test_detail_save_invalidates_cached_saved_snapshot_before_next_open() -> Non
     assert refreshed == [monday]
     assert MeetingsWidget._saved_snapshots_for(widget, monday)["mwb"] is updated_snapshot
     assert store.calls == [("mwb", monday, "T"), ("wt", monday, "T")]
+
+
+def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch) -> None:
+    monday = date(2026, 5, 25)
+    old_snapshot = _snapshot("mwb", title="Before constructor save")
+    cache_key = f"{monday.isoformat()}:T"
+    refreshed: list[date] = []
+    added = []
+
+    class FakeStudyDetailView:
+        def __init__(self, pub_type, _wd, _service, **kwargs) -> None:
+            self.back_requested = _ConnectSignal()
+            self.play_requested = _ConnectSignal()
+            handler = kwargs["meeting_tree_saved_handler"]
+            assert handler is not None
+            handler(_snapshot(pub_type, title="Saved during construction").tree_key)
+
+    monkeypatch.setattr(
+        meetings_widget_module,
+        "StudyDetailView",
+        FakeStudyDetailView,
+    )
+    widget = SimpleNamespace(
+        _service=object(),
+        _notifications=None,
+        _current_media_context=lambda: SimpleNamespace(api_code="T"),
+        _meeting_tree_store=object(),
+        _profile_media_store=object(),
+        _meeting_thumbnail_store=object(),
+        _watched_folder_file_store=object(),
+        _jwpub_import_thread_factory=object(),
+        _document_conversion_service=object(),
+        _profile_paths=object(),
+        _runtime_paths=object(),
+        _cache_manager=object(),
+        _jw_catalog_service_factory=object(),
+        _jw_catalog_thumbnail_session_factory=object(),
+        _jw_songs_store=object(),
+        _meeting_linked_folder_sync=object(),
+        _meeting_schedule_settings=object(),
+        _media_info_queue_factory=object(),
+        _watched_folder="",
+        _saved_snapshots={cache_key: {"mwb": old_snapshot}},
+        _saved_snapshot_cache_key_for=lambda monday_arg, language: (
+            f"{monday_arg.isoformat()}:{language}"
+        ),
+        _monday=monday,
+        _refresh_overview_cards=lambda refreshed_monday: refreshed.append(refreshed_monday),
+        _on_detail_tree_saved=lambda tree_key: MeetingsWidget._on_detail_tree_saved(
+            widget,
+            tree_key,
+        ),
+        _on_detail_back=lambda: None,
+        project_media=lambda _media: None,
+        _stack=SimpleNamespace(addWidget=lambda detail: added.append(detail)),
+        _details={},
+    )
+
+    MeetingsWidget._show_study_detail(widget, "mwb", WeekData(monday=monday), None)
+
+    assert cache_key not in widget._saved_snapshots
+    assert refreshed == [monday]
+    assert len(added) == 1
+    assert widget._details[f"mwb:{monday.isoformat()}"] is added[0]
 
 
 def test_controller_load_saved_tree_uses_snapshot_nodes_without_saving_canonical() -> None:

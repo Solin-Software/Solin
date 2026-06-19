@@ -159,6 +159,7 @@ class StudyDetailView(QWidget):
                  meeting_linked_folder_sync: MeetingLinkedFolderSync,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+                 meeting_tree_saved_handler: Callable[[str], None] | None = None,
                  saved_snapshot: MeetingTreeSnapshot | None = None,
                  watched_folder: str = "", parent=None):
         super().__init__(parent)
@@ -184,6 +185,7 @@ class StudyDetailView(QWidget):
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
+        self._meeting_tree_saved_handler = meeting_tree_saved_handler
         self._saved_snapshot = saved_snapshot
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
@@ -224,6 +226,8 @@ class StudyDetailView(QWidget):
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaved.connect(self.meeting_tree_saved.emit)
+        if self._meeting_tree_saved_handler is not None:
+            self.controller.storageSaved.connect(self._meeting_tree_saved_handler)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
         self.controller.set_sync_root(self._watched_folder)
 
@@ -1004,12 +1008,12 @@ class MeetingsWidget(QWidget):
             ),
             meeting_schedule_settings=self._meeting_schedule_settings,
             media_info_queue_factory=self._media_info_queue_factory,
+            meeting_tree_saved_handler=self._on_detail_tree_saved,
             saved_snapshot=saved_snapshot,
             watched_folder=self._watched_folder,
         )
         d.back_requested.connect(self._on_detail_back)
         d.play_requested.connect(self.project_media)
-        d.meeting_tree_saved.connect(self._on_detail_tree_saved)
         self._stack.addWidget(d)
         self._details[detail_key] = d
 
