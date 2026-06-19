@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import os
+import time
 import uuid
 from collections import deque
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from PySide6.QtCore import (
     Property,
     QCoreApplication,
     QTimer,
+    QUrl,
     Signal,
     Slot,
 )
@@ -107,6 +109,7 @@ if TYPE_CHECKING:
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
+_LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS = (150, 350, 750, 1_500, 3_000)
 
 
 def _clear_tree_data_cache(controller: Any) -> None:
@@ -121,11 +124,26 @@ def _reset_media_request_queue(controller: Any) -> None:
     queue = getattr(controller, "_media_request_queue", None)
     if queue is not None:
         queue.clear()
+    retry_timer = getattr(controller, "_local_image_thumb_retry_timer", None)
+    if retry_timer is not None:
+        retry_timer.stop()
+    retry_due = getattr(controller, "_local_image_thumb_retry_due", None)
+    if retry_due is not None:
+        retry_due.clear()
+    retry_attempts = getattr(controller, "_local_image_thumb_retry_attempts", None)
+    if retry_attempts is not None:
+        retry_attempts.clear()
 
 
 def _emit_controller_state_changed(controller: Any) -> None:
     _clear_tree_data_cache(controller)
     controller.stateChanged.emit()
+
+
+def _local_file_url(path: str) -> str:
+    if not path or MediaCacheManager.is_remote(path) or not os.path.exists(path):
+        return ""
+    return QUrl.fromLocalFile(path).toString()
 
 
 def _tr(context: str, source: str) -> str:
@@ -240,6 +258,13 @@ class MeetingTreeController(QObject):
         self._media_request_timer.setSingleShot(True)
         self._media_request_timer.setInterval(0)
         self._media_request_timer.timeout.connect(self._drain_media_request_queue)
+        self._local_image_thumb_retry_due: dict[str, float] = {}
+        self._local_image_thumb_retry_attempts: dict[str, int] = {}
+        self._local_image_thumb_retry_timer = QTimer(self)
+        self._local_image_thumb_retry_timer.setSingleShot(True)
+        self._local_image_thumb_retry_timer.timeout.connect(
+            self._drain_local_image_thumb_retries
+        )
         self._pdf_threads: list[Any] = []
         self._jwpub_threads: list[Any] = []
         self._lo_threads: list[Any] = []
@@ -1922,7 +1947,7 @@ class MeetingTreeController(QObject):
             "mediaType": media_type,
             "badge": self._badge_for(ref, media_type),
             "duration": self._duration_for(node),
-            "thumbSource": self._thumb_source_for(item_id),
+            "thumbSource": self._display_thumb_source_for(node, item_id),
             "url": url,
             "cloudVisible": cloud_visible,
             "cloudActive": cloud_active,
@@ -1998,6 +2023,17 @@ class MeetingTreeController(QObject):
             return f"image://playlistthumbs/{item_id}/{version}"
         return ""
 
+    def _display_thumb_source_for(self, node: Node | None, item_id: str = "") -> str:
+        item_id = item_id or str((node or {}).get("id", ""))
+        thumb_source = self._thumb_source_for(item_id)
+        if thumb_source:
+            return thumb_source
+        ref = (node or {}).get("media_ref") or {}
+        media_type = (node or {}).get("media_type") or self._media_type_from_ref(ref)
+        if media_type != "image":
+            return ""
+        return _local_file_url(self._url_for_node(node))
+
     def _url_for_node_id(self, node_id: str) -> str:
         node = self._find_node(node_id)
         return self._url_for_node(node) if node else ""
@@ -2052,6 +2088,50 @@ class MeetingTreeController(QObject):
         else:
             self._media_request_timer.stop()
 
+    def _schedule_local_image_thumb_retry(self, item_id: str) -> None:
+        if not item_id or item_id in self._local_image_thumb_retry_due:
+            return
+        attempt = self._local_image_thumb_retry_attempts.get(item_id, 0)
+        if attempt >= len(_LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS):
+            return
+        delay_ms = _LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS[attempt]
+        self._local_image_thumb_retry_attempts[item_id] = attempt + 1
+        self._local_image_thumb_retry_due[item_id] = (
+            time.monotonic() + (delay_ms / 1000.0)
+        )
+        self._arm_local_image_thumb_retry_timer()
+
+    def _clear_local_image_thumb_retry(self, item_id: str) -> None:
+        self._local_image_thumb_retry_due.pop(item_id, None)
+        self._local_image_thumb_retry_attempts.pop(item_id, None)
+
+    def _arm_local_image_thumb_retry_timer(self) -> None:
+        if not self._local_image_thumb_retry_due:
+            self._local_image_thumb_retry_timer.stop()
+            return
+        now = time.monotonic()
+        next_due = min(self._local_image_thumb_retry_due.values())
+        delay_ms = max(0, int((next_due - now) * 1000))
+        self._local_image_thumb_retry_timer.start(delay_ms)
+
+    def _drain_local_image_thumb_retries(self) -> None:
+        if not self._local_image_thumb_retry_due:
+            return
+        now = time.monotonic()
+        ready = [
+            item_id
+            for item_id, due in self._local_image_thumb_retry_due.items()
+            if due <= now
+        ]
+        for item_id in ready:
+            self._local_image_thumb_retry_due.pop(item_id, None)
+            node = self._find_node(item_id)
+            if not node or self._has_local_thumbnail(node):
+                self._clear_local_image_thumb_retry(item_id)
+                continue
+            self._start_media_request(node)
+        self._arm_local_image_thumb_retry_timer()
+
     def _start_media_request(self, node: Node) -> None:
         item_id = node.get("id", "")
         if not item_id:
@@ -2070,7 +2150,10 @@ class MeetingTreeController(QObject):
                     self._save_thumbnail_for_node(node, pix)
                     self._thumb_versions[item_id] = self._thumb_versions.get(item_id, 0) + 1
                     self._save()
+                    self._clear_local_image_thumb_retry(item_id)
                     self._emit_media_changed(item_id)
+                else:
+                    self._schedule_local_image_thumb_retry(item_id)
             return
 
         if url:
@@ -2229,7 +2312,7 @@ class MeetingTreeController(QObject):
             item_id,
             str(node.get("title", "")),
             self._duration_for(node),
-            self._thumb_source_for(item_id),
+            self._display_thumb_source_for(node, item_id),
         )
 
     def _emit_cloud_for_url(self, url: str) -> None:

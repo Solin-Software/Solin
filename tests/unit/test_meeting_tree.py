@@ -10,6 +10,7 @@ import zipfile
 from collections import deque
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
@@ -585,6 +586,17 @@ class MeetingTreeMergerTests(unittest.TestCase):
 
 
 class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
+    class _FakeTimer:
+        def __init__(self):
+            self.started: list[int] = []
+            self.stopped = 0
+
+        def start(self, delay_ms=0):
+            self.started.append(delay_ms)
+
+        def stop(self):
+            self.stopped += 1
+
     def test_stale_jwpub_video_file_path_falls_back_to_jw_resolution(self):
         calls: list[tuple[str, MeetingMedia]] = []
 
@@ -651,6 +663,211 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
                 MeetingTreeController._url_for_node(controller, node),
                 missing_path,
             )
+
+    def test_local_image_thumb_source_uses_file_until_generated_thumb_exists(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "photo.jpg"
+            source.write_bytes(b"image")
+            node = {
+                "id": "image-node",
+                "type": "media",
+                "media_type": "image",
+                "media_ref": {"file_path": str(source)},
+            }
+            controller = FakeController()
+            controller._resolved_urls = {}
+            controller._thumb_source_for = lambda _item_id: ""
+            controller._media_type_from_ref = lambda _ref: "image"
+            controller._url_for_node = (
+                lambda target: MeetingTreeController._url_for_node(controller, target)
+            )
+
+            source_url = MeetingTreeController._display_thumb_source_for(
+                controller,
+                node,
+                "image-node",
+            )
+
+            self.assertTrue(source_url.startswith("file:///"))
+            self.assertTrue(source_url.endswith("photo.jpg"))
+
+    def test_generated_thumb_source_wins_over_local_image_file_source(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "photo.jpg"
+            source.write_bytes(b"image")
+            node = {
+                "id": "image-node",
+                "type": "media",
+                "media_type": "image",
+                "media_ref": {"file_path": str(source)},
+            }
+            controller = FakeController()
+            controller._thumb_source_for = (
+                lambda _item_id: "image://playlistthumbs/image-node/1"
+            )
+
+            self.assertEqual(
+                MeetingTreeController._display_thumb_source_for(
+                    controller,
+                    node,
+                    "image-node",
+                ),
+                "image://playlistthumbs/image-node/1",
+            )
+
+    def test_local_image_thumbnail_retry_when_file_is_not_decodable_yet(self):
+        class FakeController:
+            pass
+
+        class NullPixmap:
+            def __init__(self, _path):
+                pass
+
+            def isNull(self):
+                return True
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "photo.jpg"
+            source.write_bytes(b"not-ready-yet")
+            node = {
+                "id": "image-node",
+                "type": "media",
+                "media_type": "image",
+                "media_ref": {
+                    "file_path": str(source),
+                    "mime_type": "image/jpeg",
+                },
+            }
+            controller = FakeController()
+            controller._resolved_urls = {}
+            controller._thumb_cache = {}
+            controller._thumb_versions = {}
+            controller._local_image_thumb_retry_due = {}
+            controller._local_image_thumb_retry_attempts = {}
+            controller._local_image_thumb_retry_timer = self._FakeTimer()
+            controller._schedule_local_image_thumb_retry = (
+                lambda item_id: MeetingTreeController._schedule_local_image_thumb_retry(
+                    controller,
+                    item_id,
+                )
+            )
+            controller._arm_local_image_thumb_retry_timer = (
+                lambda: MeetingTreeController._arm_local_image_thumb_retry_timer(
+                    controller
+                )
+            )
+            controller._url_for_node = (
+                lambda target: MeetingTreeController._url_for_node(controller, target)
+            )
+            controller._has_local_thumbnail = lambda _node: False
+            controller._duration_ticks = lambda _node: 0
+            controller._media_type_from_ref = lambda _ref: "image"
+            controller._save_thumbnail_for_node = (
+                lambda *_args: self.fail("thumbnail should not be saved")
+            )
+            controller._save = lambda: self.fail("tree should not be saved")
+            controller._emit_media_changed = (
+                lambda _item_id: self.fail("media should not be emitted")
+            )
+
+            with patch("solin.widgets.meetings.tree_controller.QPixmap", NullPixmap):
+                MeetingTreeController._start_media_request(controller, node)
+
+            self.assertEqual(
+                controller._local_image_thumb_retry_attempts,
+                {"image-node": 1},
+            )
+            self.assertIn("image-node", controller._local_image_thumb_retry_due)
+            self.assertTrue(controller._local_image_thumb_retry_timer.started)
+
+    def test_local_image_thumbnail_retry_recovers_and_notifies_qml(self):
+        class FakeController:
+            pass
+
+        class ReadyPixmap:
+            def __init__(self, _path):
+                pass
+
+            def isNull(self):
+                return False
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "photo.jpg"
+            source.write_bytes(b"ready")
+            node = {
+                "id": "image-node",
+                "type": "media",
+                "media_type": "image",
+                "media_ref": {
+                    "file_path": str(source),
+                    "mime_type": "image/jpeg",
+                },
+            }
+            controller = FakeController()
+            controller._nodes = [node]
+            controller._resolved_urls = {}
+            controller._thumb_cache = {}
+            controller._thumb_versions = {}
+            controller._local_image_thumb_retry_due = {"image-node": 0.0}
+            controller._local_image_thumb_retry_attempts = {"image-node": 1}
+            controller._local_image_thumb_retry_timer = self._FakeTimer()
+            saved: list[str] = []
+            emitted: list[str] = []
+            controller._start_media_request = (
+                lambda target: MeetingTreeController._start_media_request(
+                    controller,
+                    target,
+                )
+            )
+            controller._clear_local_image_thumb_retry = (
+                lambda item_id: MeetingTreeController._clear_local_image_thumb_retry(
+                    controller,
+                    item_id,
+                )
+            )
+            controller._arm_local_image_thumb_retry_timer = (
+                lambda: MeetingTreeController._arm_local_image_thumb_retry_timer(
+                    controller
+                )
+            )
+            controller._find_node = (
+                lambda item_id, nodes=None: MeetingTreeController._find_node(
+                    controller,
+                    item_id,
+                    nodes,
+                )
+            )
+            controller._url_for_node = (
+                lambda target: MeetingTreeController._url_for_node(controller, target)
+            )
+            controller._has_local_thumbnail = lambda _node: False
+            controller._duration_ticks = lambda _node: 0
+            controller._media_type_from_ref = lambda _ref: "image"
+            controller._save_thumbnail_for_node = (
+                lambda target, _pixmap: target.__setitem__(
+                    "thumbnail_local_path",
+                    str(Path(tmp) / "thumb.jpg"),
+                )
+                or saved.append(str(target["id"]))
+                or str(Path(tmp) / "thumb.jpg")
+            )
+            controller._save = lambda: saved.append("tree")
+            controller._emit_media_changed = lambda item_id: emitted.append(item_id)
+
+            with patch("solin.widgets.meetings.tree_controller.QPixmap", ReadyPixmap):
+                MeetingTreeController._drain_local_image_thumb_retries(controller)
+
+            self.assertEqual(emitted, ["image-node"])
+            self.assertIn("image-node", saved)
+            self.assertIn("tree", saved)
+            self.assertEqual(controller._local_image_thumb_retry_due, {})
+            self.assertEqual(controller._local_image_thumb_retry_attempts, {})
 
 
 class MeetingTreeControllerEditingTests(unittest.TestCase):
