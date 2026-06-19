@@ -186,7 +186,7 @@ class LazyPageController:
 
         handlers = self._handlers
         browser.project_image_signal.connect(handlers.project_image)
-        browser.project_video_signal.connect(handlers.project_video)
+        browser.project_video_signal.connect(self._project_browser_video)
         browser.stop_projection_signal.connect(handlers.stop_projection)
         browser.project_tab_pixmap_signal.connect(handlers.project_tab_frame)
         browser.stop_tab_projection_signal.connect(handlers.stop_projection)
@@ -202,6 +202,10 @@ class LazyPageController:
         )
         browser.download_failed_signal.connect(handlers.report_download_failure)
         self._browser_signals_connected = True
+
+    def _project_browser_video(self, url: str, title: str) -> None:
+        item = {"url": url, "title": title, "type": "video"}
+        self._handlers.project_video(url, title, [item], None)
 
     def _connect_cache_manager_signals(self) -> None:
         cache_manager = self._cache_manager_widget

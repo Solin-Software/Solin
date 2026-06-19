@@ -664,6 +664,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def is_audio_mode(self) -> bool:
         return self._is_audio
 
+    def current_media_title(self) -> str:
+        return (self.proj_title.text() or "").strip()
+
     def is_visual_media_active(self) -> bool:
         return self._mode == "image" or (self._mode == "video" and not self._is_audio)
 

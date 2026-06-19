@@ -438,6 +438,7 @@ class MainWindowUiController:
         )
         meetings_widget = MeetingsWidget(
             context.lang_manager,
+            notifications=context.notifications,
             meeting_tree_store=context.meeting_tree_store,
             profile_media_store=context.profile_media_store,
             jwpub_import_thread_factory=context.jwpub_import_thread_factory,

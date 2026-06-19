@@ -39,9 +39,11 @@ class MediaController(QObject):
     duration_changed  = Signal(int)
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
+    playback_interrupted = Signal(str, str)  # url, message
     media_ended       = Signal()
     cover_art_changed    = Signal(object)   # QPixmap | None
     title_from_metadata  = Signal(str)
+    playback_download_failed = Signal(str, str, bool)  # url, message, persist
 
     # (downloaded_bytes, total_bytes) — 0,0 quando nao ha download ativo
     buffer_progress   = Signal(int, int)
@@ -75,6 +77,13 @@ class MediaController(QObject):
         self._reconnect_timer.setSingleShot(True)
         self._reconnect_timer.setInterval(800)
         self._reconnect_timer.timeout.connect(self._do_reconnect)
+        self._reconnect_attempts = 0
+        self._reconnect_base_interval_ms = 800
+        self._reconnect_max_interval_ms = 15000
+        self._last_playback_error = ""
+        self._last_known_position = 0
+        self._stream_recovering = False
+        self._handling_terminal_error = False
 
         self.video_sink.videoFrameChanged.connect(self._on_frame)
         self.player.playbackStateChanged.connect(self._on_state)
@@ -111,11 +120,13 @@ class MediaController(QObject):
         resilient local-switch behavior without creating persistent cache files.
         """
         self._reconnect_timer.stop()
+        self._reset_reconnect_state()
 
         # Limpa tempfile da faixa anterior (se houver) antes de iniciar nova
         self._cleanup_current_temp()
 
         self._session.begin_playback(url)
+        self._last_known_position = 0
 
         # Cancela prefetch ativo para esta URL
         if MediaCacheManager.is_remote(url):
@@ -154,6 +165,7 @@ class MediaController(QObject):
 
     def stop(self):
         self._reconnect_timer.stop()
+        self._reset_reconnect_state()
         self._downloader.cancel()
         self._session.begin_stop()
         self.player.stop()
@@ -161,11 +173,15 @@ class MediaController(QObject):
         # Apaga tempfile se o player estiver usando um
         self._cleanup_current_temp()
         self._session.finish_stop()
+        self._last_known_position = 0
         self.buffer_progress.emit(0, 0)
         self.playback_source_changed.emit(False)
 
     def toggle_play_pause(self):
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+        if (
+            self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+            or (self._stream_recovering and self._session.requested_playing)
+        ):
             self.pause()
         else:
             self.play()
@@ -220,53 +236,51 @@ class MediaController(QObject):
     # ── Reconexao automatica ──────────────────────────────────────────────
 
     def _on_error(self, error, error_string: str):
-        lowered = (error_string or "").lower()
+        error_detail = (error_string or "").strip()
+        lowered = error_detail.lower()
         if "immediate exit requested" in lowered:
             return
         source = self.player.source().toString()
+        if not self._session.current_url and not source:
+            return
+        is_remote_playback = MediaCacheManager.is_remote(self._session.current_url)
+        started_remote_playback = is_remote_playback and (
+            self._last_known_position > 0 or self.player.duration() > 0
+        )
         is_network_drop = (
-            "10054" in error_string
-            or "10060" in error_string
-            or "ConnectionReset" in error_string
-            or "partial" in lowered
-            or ("i/o error" in lowered and source.startswith("http"))
+            error == QMediaPlayer.Error.NetworkError
+            or (started_remote_playback and error != QMediaPlayer.Error.NoError)
+            or (
+                "10054" in error_detail
+                or "10060" in error_detail
+                or "connectionreset" in lowered
+                or "partial" in lowered
+                or "unable to read from socket" in lowered
+                or ("i/o error" in lowered and MediaCacheManager.is_remote(source))
+            )
         )
 
         if is_network_drop and self._session.current_url:
-            self._reconnect_timer.start()
+            self._schedule_reconnect(error_detail)
         else:
-            self.error_occurred.emit(error_string)
+            self._fail_playback(error_detail)
 
     def _do_reconnect(self):
-        saved_pos = self.player.position()
-        was_playing = self.is_playing or self._session.requested_playing
+        saved_pos = max(self.player.position(), self._last_known_position)
         source = self._session.reconnect_source()
         if not source:
+            self._fail_playback(self._last_playback_error)
             return
 
+        reconnect_session = self._session.session_id
         self.player.stop()
-        
-        # Configura a nova fonte baseada no protocolo
-        if source.startswith("http"):
-            self.player.setSource(QUrl(source))
-        else:
-            self.player.setSource(QUrl.fromLocalFile(source))
-
-        # Best practice: Reage ao estado da mídia ao invés de usar timer de polling
-        def seek_on_ready(status):
-            if status in (QMediaPlayer.MediaStatus.LoadedMedia, QMediaPlayer.MediaStatus.BufferedMedia):
-                self.player.mediaStatusChanged.disconnect(seek_on_ready)
-                self.player.setPosition(saved_pos)
-                if was_playing:
-                    self.player.play()
-                else:
-                    self.player.pause()
-            
-            elif status == QMediaPlayer.MediaStatus.InvalidMedia:
-                # Previne memory leak se o source falhar
-                self.player.mediaStatusChanged.disconnect(seek_on_ready)
-
-        self.player.mediaStatusChanged.connect(seek_on_ready)
+        self.player.setSource(QUrl())
+        self._set_player_source(source)
+        self._restore_reconnect_position(
+            source=source,
+            saved_pos=saved_pos,
+            reconnect_session=reconnect_session,
+        )
 
     # ── Download callbacks ────────────────────────────────────────────────
 
@@ -364,6 +378,13 @@ class MediaController(QObject):
 
     def _on_download_error(self, msg: str):
         log.warning("Downloader warning: %s", msg)
+        self.buffer_progress.emit(0, 0)
+        if self._session.current_url:
+            self.playback_download_failed.emit(
+                self._session.current_url,
+                msg,
+                self._session.stream_persist,
+            )
 
     # ── Player callbacks ──────────────────────────────────────────────────
 
@@ -379,10 +400,21 @@ class MediaController(QObject):
         self.duration_changed.emit(int(duration))
 
     def _on_position(self, position):
+        self._last_known_position = int(position)
         self.position_changed.emit(int(position))
 
     def _on_status(self, status):
+        if status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        ):
+            self._reset_reconnect_state()
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            if self._stream_recovering:
+                return
+            if self._is_unexpected_remote_end():
+                self._schedule_reconnect("The media stream was interrupted.")
+                return
             self._session.mark_media_ended()
             self.media_ended.emit()
 
@@ -413,11 +445,121 @@ class MediaController(QObject):
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _play_source(self, source: str):
-        if source.startswith("http"):
+        self._set_player_source(source)
+        self.player.play()
+
+    def _set_player_source(self, source: str) -> None:
+        if MediaCacheManager.is_remote(source):
             self.player.setSource(QUrl(source))
         else:
             self.player.setSource(QUrl.fromLocalFile(source))
-        self.player.play()
+
+    def _restore_reconnect_position(
+        self,
+        *,
+        source: str,
+        saved_pos: int,
+        reconnect_session: int,
+    ) -> None:
+        max_attempts = 60
+        attempts = [0]
+
+        def _try_restore() -> None:
+            if self._session.session_id != reconnect_session:
+                return
+
+            attempts[0] += 1
+            status = self.player.mediaStatus()
+            duration = self.player.duration()
+
+            if status == QMediaPlayer.MediaStatus.InvalidMedia:
+                if MediaCacheManager.is_remote(source) and self._session.current_url:
+                    self._schedule_reconnect(self._last_playback_error)
+                else:
+                    self._fail_playback(self._last_playback_error)
+                return
+
+            ready_statuses = (
+                QMediaPlayer.MediaStatus.LoadedMedia,
+                QMediaPlayer.MediaStatus.BufferedMedia,
+                QMediaPlayer.MediaStatus.BufferingMedia,
+                QMediaPlayer.MediaStatus.StalledMedia,
+            )
+            if status in ready_statuses and (duration > 0 or attempts[0] >= 8):
+                if saved_pos > 0:
+                    self.player.setPosition(saved_pos)
+                QTimer.singleShot(
+                    40,
+                    lambda: self._resume_after_reconnect(reconnect_session),
+                )
+                return
+
+            if attempts[0] < max_attempts:
+                QTimer.singleShot(50, _try_restore)
+                return
+
+            if self._session.requested_playing:
+                self.player.play()
+            else:
+                self.player.pause()
+
+        QTimer.singleShot(50, _try_restore)
+
+    def _resume_after_reconnect(
+        self,
+        reconnect_session: int,
+    ) -> None:
+        if self._session.session_id != reconnect_session:
+            return
+        if self._session.requested_playing:
+            self.player.play()
+        else:
+            self.player.pause()
+
+    def _schedule_reconnect(self, error_detail: str) -> None:
+        self._last_playback_error = (
+            error_detail or "The media stream was interrupted."
+        )
+        if not self._stream_recovering:
+            self._stream_recovering = True
+            self.playback_interrupted.emit(
+                self._session.current_url,
+                self._last_playback_error,
+            )
+        self._reconnect_attempts += 1
+        exponent = min(self._reconnect_attempts - 1, 5)
+        delay = min(
+            self._reconnect_base_interval_ms * (2 ** exponent),
+            self._reconnect_max_interval_ms,
+        )
+        self._reconnect_timer.setInterval(delay)
+        self._reconnect_timer.start()
+
+    def _fail_playback(self, error_detail: str) -> None:
+        if self._handling_terminal_error:
+            return
+        self._handling_terminal_error = True
+        try:
+            detail = (error_detail or "").strip() or "The media could not be opened."
+            self.error_occurred.emit(detail)
+            if self._session.current_url:
+                self.stop()
+        finally:
+            self._handling_terminal_error = False
+
+    def _reset_reconnect_state(self) -> None:
+        self._reconnect_attempts = 0
+        self._last_playback_error = ""
+        self._stream_recovering = False
+
+    def _is_unexpected_remote_end(self) -> bool:
+        if not MediaCacheManager.is_remote(self._session.current_url):
+            return False
+        duration = self.player.duration()
+        position = max(self.player.position(), self._last_known_position)
+        if duration <= 0:
+            return False
+        return position + 1500 < duration
 
     def _cleanup_current_temp(self) -> None:
         """

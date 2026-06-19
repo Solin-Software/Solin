@@ -17,6 +17,7 @@ class ShutdownServices:
 
     remote_services: Any | None
     download_notifications: Any | None
+    playback_notifications: Any | None
     notifications: Any | None
     projection_integrations: Any
     background_song: Any
@@ -80,6 +81,8 @@ class ShutdownController:
         services = self._dependencies.services
         if services.download_notifications is not None:
             services.download_notifications.stop()
+        if services.playback_notifications is not None:
+            services.playback_notifications.stop()
         if services.notifications is not None:
             services.notifications.shutdown()
 

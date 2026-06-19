@@ -746,6 +746,41 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(controller.count_updates, 0)
 
 
+class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
+    class _Signal:
+        def __init__(self):
+            self.calls = []
+
+        def emit(self, *args):
+            self.calls.append(args)
+
+    def test_local_cache_save_failure_reports_without_raising(self):
+        class FakeStore:
+            def save(self, *_args, **_kwargs):
+                raise OSError(28, "No space left on device")
+
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._tree_key = "mwb:2026-05-25:T:20260500"
+        controller._nodes = [{"id": "n1", "type": "section", "children": []}]
+        controller._canonical_hash = "hash"
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._store = FakeStore()
+        controller.storageSaveFailed = self._Signal()
+
+        saved = MeetingTreeController._save_local_cache(controller)
+
+        self.assertFalse(saved)
+        self.assertEqual(
+            controller.storageSaveFailed.calls,
+            [("mwb:2026-05-25:T:20260500", "[Errno 28] No space left on device")],
+        )
+
+
 class MeetingTreeStoreTests(unittest.TestCase):
     def test_store_requires_an_explicit_path(self):
         path_param = inspect.signature(MeetingTreeStore).parameters["path"]
