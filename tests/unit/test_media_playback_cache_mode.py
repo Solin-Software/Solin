@@ -88,6 +88,35 @@ def test_play_url_can_force_temporary_download(tmp_path):
     controller.stop()
 
 
+def test_download_error_clears_buffer_and_reports_streaming_fallback(tmp_path):
+    controller, downloader, _played = _controller_with_downloader(
+        tmp_path,
+        auto_download=True,
+    )
+    buffer_events: list[tuple[int, int]] = []
+    failures: list[tuple[str, str, bool]] = []
+    controller.buffer_progress.connect(
+        lambda downloaded, total: buffer_events.append((downloaded, total))
+    )
+    controller.playback_download_failed.connect(
+        lambda url, message, persist: failures.append((url, message, persist))
+    )
+
+    controller.play_url("https://cdn.example/song.mp3")
+    downloader.progress.emit(50, 100)
+    downloader.error.emit("[Errno 28] No space left on device")
+
+    assert buffer_events[-2:] == [(50, 100), (0, 0)]
+    assert failures == [
+        (
+            "https://cdn.example/song.mp3",
+            "[Errno 28] No space left on device",
+            True,
+        )
+    ]
+    assert controller.current_url == "https://cdn.example/song.mp3"
+
+
 class _ReconnectTimer:
     def __init__(self) -> None:
         self.started = 0

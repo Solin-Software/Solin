@@ -333,6 +333,7 @@ class MainWindow(QMainWindow):
         self._media_download_notifications = MediaDownloadNotificationController(
             self.notifications,
             media_cache_manager,
+            self.media_ctrl,
             self,
         )
         self._media_download_notifications.start()

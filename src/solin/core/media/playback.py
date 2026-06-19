@@ -42,6 +42,7 @@ class MediaController(QObject):
     media_ended       = Signal()
     cover_art_changed    = Signal(object)   # QPixmap | None
     title_from_metadata  = Signal(str)
+    playback_download_failed = Signal(str, str, bool)  # url, message, persist
 
     # (downloaded_bytes, total_bytes) — 0,0 quando nao ha download ativo
     buffer_progress   = Signal(int, int)
@@ -375,6 +376,13 @@ class MediaController(QObject):
 
     def _on_download_error(self, msg: str):
         log.warning("Downloader warning: %s", msg)
+        self.buffer_progress.emit(0, 0)
+        if self._session.current_url:
+            self.playback_download_failed.emit(
+                self._session.current_url,
+                msg,
+                self._session.stream_persist,
+            )
 
     # ── Player callbacks ──────────────────────────────────────────────────
 
