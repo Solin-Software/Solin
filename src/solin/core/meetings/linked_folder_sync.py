@@ -30,6 +30,18 @@ log = logging.getLogger(__name__)
 
 MEETING_TREE_KEY = "meeting_tree"
 MEETING_TREE_SCHEMA_VERSION = 1
+MEETING_TREE_CONTENT_KEYS = (
+    "schema_version",
+    "tree_key",
+    "pub_type",
+    "monday",
+    "meeting_tag",
+    "folder_date",
+    "nodes",
+    "deleted_source_keys",
+    "meeting_folder_imports",
+    "linked_folder_files",
+)
 MeetingWeekdayResolver = Callable[[str], int]
 
 
@@ -197,6 +209,12 @@ class MeetingLinkedFolderSync:
                 meeting_folder_imports=save_imports,
                 revision=revision,
             )
+            if (
+                isinstance(existing, dict)
+                and self._block_matches(existing, identity)
+                and self._same_tree_content(existing, saved_block)
+            ):
+                return self._record_from_block(folder, existing, identity)
             manifest[MEETING_TREE_KEY] = saved_block
             if not save_manifest(folder, manifest):
                 raise MeetingSyncError(f"Could not write {MANIFEST_FILE}.")
@@ -367,6 +385,19 @@ class MeetingLinkedFolderSync:
             "linked_folder_files": self._portable_linked_files(linked_folder_files, folder),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "revision": revision,
+        }
+
+    def _same_tree_content(
+        self,
+        existing: dict[str, Any],
+        candidate: dict[str, Any],
+    ) -> bool:
+        return self._content_fingerprint(existing) == self._content_fingerprint(candidate)
+
+    def _content_fingerprint(self, block: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: clean_dict(block.get(key))
+            for key in MEETING_TREE_CONTENT_KEYS
         }
 
     def _portable_nodes(self, nodes: list[Node], folder: Path) -> list[Node]:
