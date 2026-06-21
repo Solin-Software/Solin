@@ -366,6 +366,12 @@ class FullscreenVideoOverlay(QWidget):
     def set_reconnect_active(self, active: bool) -> None:
         self.seek_slider.setReconnectActive(active)
 
+    def set_play_enabled(self, enabled: bool) -> None:
+        self.play_btn.setEnabled(enabled)
+
+    def set_seek_enabled(self, enabled: bool) -> None:
+        self.seek_slider.setEnabled(enabled)
+
     def set_volume(self, value: float) -> None:
         volume = max(0.0, min(1.0, float(value)))
         if volume > 0:

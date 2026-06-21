@@ -31,6 +31,22 @@ class _Slider:
         self.buffer_ratios.append(ratio)
 
 
+class _EnabledControl:
+    def __init__(self, enabled=True):
+        self.enabled = enabled
+
+    def isEnabled(self):
+        return self.enabled
+
+
+class _ValueSignal:
+    def __init__(self):
+        self.values = []
+
+    def emit(self, value):
+        self.values.append(value)
+
+
 class _Overlay:
     def __init__(self, *, active=False):
         self.active = active
@@ -40,6 +56,8 @@ class _Overlay:
         self.reconnect_states = []
         self.buffer_progress = []
         self.navigation = []
+        self.play_enabled = []
+        self.seek_enabled = []
 
     def is_active(self):
         return self.active
@@ -63,6 +81,12 @@ class _Overlay:
 
     def set_navigation(self, *, show, can_previous, can_next):
         self.navigation.append((show, can_previous, can_next))
+
+    def set_play_enabled(self, enabled):
+        self.play_enabled.append(enabled)
+
+    def set_seek_enabled(self, enabled):
+        self.seek_enabled.append(enabled)
 
 
 def _bar(*, mode="video", audio=False, overlay=None):
@@ -159,6 +183,34 @@ def test_playlist_navigation_state_is_mirrored_to_app_fullscreen():
     bar._sync_app_fullscreen_navigation()
 
     assert overlay.navigation == [(True, True, True)]
+
+
+def test_fullscreen_seek_respects_song_announcement_lock():
+    bar = _bar(mode="video")
+    bar.seek_requested = _ValueSignal()
+
+    bar._announce_state = "gate"
+    bar._on_fullscreen_seek_requested(1234)
+
+    bar._announce_state = "ready"
+    bar._on_fullscreen_seek_requested(2345)
+
+    bar._announce_state = "off"
+    bar._on_fullscreen_seek_requested(3456)
+
+    assert bar.seek_requested.values == [3456]
+
+
+def test_fullscreen_controls_mirror_announcement_enabled_state():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", overlay=overlay)
+    bar.play_btn = _EnabledControl(enabled=True)
+    bar.seek_slider = _EnabledControl(enabled=False)
+
+    bar._sync_fullscreen_announcement_controls()
+
+    assert overlay.play_enabled == [True]
+    assert overlay.seek_enabled == [False]
 
 
 def test_fullscreen_overlay_uses_parent_translator_and_original_control_order():

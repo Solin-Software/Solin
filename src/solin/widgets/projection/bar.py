@@ -693,8 +693,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             parent=self,
         )
         overlay.exit_requested.connect(self.exit_app_fullscreen)
-        overlay.seek_requested.connect(lambda value: self.seek_requested.emit(value))
-        overlay.toggle_requested.connect(self.toggle_requested.emit)
+        overlay.seek_requested.connect(self._on_fullscreen_seek_requested)
+        overlay.toggle_requested.connect(self._on_play_btn_clicked)
         overlay.volume_changed.connect(self._on_fullscreen_volume_changed)
         overlay.stop_requested.connect(self.stop_requested.emit)
         overlay.previous_requested.connect(self._on_prev_clicked)
@@ -717,6 +717,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.set_buffer_progress(*self._last_buffer_progress)
         overlay.set_reconnect_active(self._playback_recovering)
         overlay.set_playback_state(self.media.player.playbackState())
+        self._sync_fullscreen_announcement_controls(overlay)
         self._sync_app_fullscreen_navigation()
 
     def _exit_app_fullscreen(self, *, clear_frame: bool = False) -> None:
@@ -748,6 +749,21 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _on_fullscreen_volume_changed(self, volume: float) -> None:
         self.vol_slider.setValue(int(round(max(0.0, min(1.0, volume)) * 100)))
+
+    def _on_fullscreen_seek_requested(self, value: int) -> None:
+        if self._announce_state != "off":
+            return
+        self.seek_requested.emit(value)
+
+    def _sync_fullscreen_announcement_controls(
+        self,
+        overlay: FullscreenVideoOverlay | None = None,
+    ) -> None:
+        overlay = overlay or getattr(self, "_fullscreen_overlay", None)
+        if overlay is None:
+            return
+        overlay.set_play_enabled(self.play_btn.isEnabled())
+        overlay.set_seek_enabled(self.seek_slider.isEnabled())
 
     def set_projected_title(self, title: str) -> None:
         if not title:
@@ -1041,6 +1057,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
         self.seek_slider.setEnabled(False)
+        self._sync_fullscreen_announcement_controls()
         # Polls media position; this is media-time, not wall-clock time.
         self._announce_timer.start()
 
@@ -1072,6 +1089,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         # Only play button is re-enabled; slider remains locked
         self.play_btn.setEnabled(True)
+        self._sync_fullscreen_announcement_controls()
 
     def _on_play_btn_clicked(self) -> None:
         """
@@ -1087,6 +1105,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.seek_slider.setEnabled(True)
             self.media.seek(0)
             self.media.play()
+            self._sync_fullscreen_announcement_controls()
             return
         self.toggle_requested.emit()
 
@@ -1104,6 +1123,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Restore controls
         self.play_btn.setEnabled(True)
         self.seek_slider.setEnabled(True)
+        self._sync_fullscreen_announcement_controls()
 
     def deactivate(self):
         self._cancel_announcement_mode()
