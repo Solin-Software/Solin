@@ -42,7 +42,7 @@ from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
-from ...core.tree_reorder import reorder_only_moves
+from ...core.tree_delta import incremental_tree_changes
 from ...ui.media_info import MediaInfoQueue
 from .drag_drop import PlaylistDragDropMixin
 from .edit_actions import PlaylistEditActionsMixin
@@ -502,24 +502,48 @@ class PlaylistEditView(
             return
         availability = self._watched_file_availability(pl)
         if availability == self._wf_file_availability:
-            moves = reorder_only_moves(
+            changes = incremental_tree_changes(
                 self.model.storage_tree(),
                 self.model.storage_tree(pl),
                 ignored_payload_keys=_PLAYLIST_REORDER_LOCATION_KEYS,
+                section_patch_keys={"name", "color_hue", "collapsed"},
             )
-            if moves is not None:
+            if changes is not None:
                 self._pl = pl
                 self._wf_file_availability = availability
                 self.model.rebuild(self._pl)
                 self._sync_playlist_chrome(emit_data_changed=False)
-                for move in moves:
+                for removal in changes.removals:
+                    self.bridge.emit_node_replaced(removal.node_id, [])
+                for insertion in changes.inserts:
+                    self.bridge.emit_nodes_inserted(
+                        insertion.target_list_id,
+                        insertion.insert_index,
+                        [
+                            str(node.get("id", ""))
+                            for node in insertion.nodes
+                            if node.get("id")
+                        ],
+                    )
+                for move in changes.moves:
                     self.bridge.emit_node_moved(
                         move.node_id,
                         move.target_list_id,
                         move.insert_index,
                     )
-                if moves:
+                for update in changes.section_updates:
+                    if update.metadata_changed:
+                        self.bridge.emit_section_changed(update.node_id)
+                    if update.collapsed_changed:
+                        section = self._section_by_id(update.node_id)
+                        if section is not None:
+                            self.bridge.emit_section_collapse_changed(
+                                update.node_id,
+                                bool(section.get("collapsed", False)),
+                            )
+                if changes.has_changes:
                     self.bridge.emit_section_counts_changed()
+                    QTimer.singleShot(0, self._request_missing_thumbnails)
                 self._start_wf_sync()
                 return
         self._pl = pl
@@ -703,6 +727,17 @@ class PlaylistEditView(
         for child in node.get("children", []):
             media_ids.extend(self._media_ids_in_tree_node(child))
         return [item_id for item_id in media_ids if item_id]
+
+    def _section_by_id(self, section_id: str) -> dict | None:
+        if not self._pl:
+            return None
+        return next(
+            (
+                section for section in self._pl.get("sections", [])
+                if section.get("id") == section_id
+            ),
+            None,
+        )
 
     def _create_section(self):
         if not self._pl: return

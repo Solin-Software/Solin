@@ -98,7 +98,7 @@ from ...core.meetings.tree_store import (
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
-from ...core.tree_reorder import reorder_only_moves
+from ...core.tree_delta import incremental_tree_changes
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
@@ -185,6 +185,7 @@ class MeetingTreeController(QObject):
     nodeReplaced = Signal(str, "QVariant")
     nodeMoved = Signal(str, str, int)
     sectionChanged = Signal(str, str, str, str, str, int)
+    sectionCollapseChanged = Signal(str, bool)
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)
     cloudChanged = Signal(str, bool, bool, float, str)
@@ -518,8 +519,12 @@ class MeetingTreeController(QObject):
         if self._sync_enabled and record.revision == self._sync_revision:
             return True
 
-        moves = reorder_only_moves(self._nodes, record.nodes)
-        if moves is not None:
+        changes = incremental_tree_changes(
+            self._nodes,
+            record.nodes,
+            section_patch_keys={"title", "color_hue", "collapsed"},
+        )
+        if changes is not None:
             self._apply_sync_record(record)
             self._meeting_folder_pending_sources.clear()
             availability = self._linked_folder_availability_signature()
@@ -532,14 +537,34 @@ class MeetingTreeController(QObject):
                 self.syncStateChanged.emit()
                 _emit_controller_state_changed(self)
                 return True
-            for move in moves:
+            for removal in changes.removals:
+                self.nodeReplaced.emit(removal.node_id, [])
+            for insertion in changes.inserts:
+                self.nodesInserted.emit(
+                    insertion.target_list_id,
+                    insertion.insert_index,
+                    [self._qml_node(node) for node in insertion.nodes],
+                )
+            for move in changes.moves:
                 self.nodeMoved.emit(
                     move.node_id,
                     move.target_list_id,
                     move.insert_index,
                 )
-            if moves:
+            for update in changes.section_updates:
+                node = self._find_node(update.node_id)
+                if node is None:
+                    continue
+                if update.metadata_changed:
+                    self._emit_section_changed(node)
+                if update.collapsed_changed:
+                    self.sectionCollapseChanged.emit(
+                        update.node_id,
+                        bool(node.get("collapsed", False)),
+                    )
+            if changes.has_changes:
                 self._emit_section_counts()
+                self._start_media_requests()
             self.chromeChanged.emit()
             self.syncStateChanged.emit()
             return True

@@ -381,6 +381,11 @@ Item {
             }
         }
 
+        function onSectionCollapseChanged(nodeId, collapsed) {
+            if (!rootPlaylist.updateSectionCollapse(nodeId, collapsed))
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+        }
+
         function onSectionCountsChanged(counts) {
             rootPlaylist.updateSectionCounts(counts)
         }
@@ -1249,6 +1254,70 @@ Item {
                     return true
                 }
             }
+            return updateSectionNodeInPendingTree(
+                pendingNodes, nodeId, title, color, textColor, badgeBg, itemCount)
+        }
+
+        function updateSectionNodeInPendingTree(
+                sourceNodes, nodeId, title, color, textColor, badgeBg, itemCount) {
+            if (!sourceNodes)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (!node)
+                    continue
+                if ((node.type === "section" || node.type === "subsection")
+                        && node.id === nodeId) {
+                    node.title = title
+                    node.color = color
+                    node.textColor = textColor
+                    node.badgeBg = badgeBg
+                    node.itemCount = itemCount
+                    return true
+                }
+                if (node.children && updateSectionNodeInPendingTree(
+                        node.children, nodeId, title, color, textColor, badgeBg, itemCount)) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        function updateSectionCollapse(nodeId, collapsedValue) {
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (!child)
+                    continue
+                if ((child.nodeType === "section" || child.nodeType === "subsection")
+                        && child.nodeId === nodeId) {
+                    child.applySectionCollapsePatch(collapsedValue)
+                    return true
+                }
+                if (child.bodyList
+                        && child.bodyList.updateSectionCollapse(nodeId, collapsedValue)) {
+                    return true
+                }
+            }
+            return updateSectionCollapseInPendingTree(pendingNodes, nodeId, collapsedValue)
+        }
+
+        function updateSectionCollapseInPendingTree(sourceNodes, nodeId, collapsedValue) {
+            if (!sourceNodes)
+                return false
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (!node)
+                    continue
+                if ((node.type === "section" || node.type === "subsection")
+                        && node.id === nodeId) {
+                    node.collapsed = collapsedValue
+                    return true
+                }
+                if (node.children && updateSectionCollapseInPendingTree(
+                        node.children, nodeId, collapsedValue)) {
+                    return true
+                }
+            }
             return false
         }
 
@@ -1834,6 +1903,12 @@ Item {
                 node.badgeBg = badgeBg
                 node.itemCount = itemCount
             }
+        }
+
+        function applySectionCollapsePatch(collapsedValue) {
+            collapsed = collapsedValue
+            if (node)
+                node.collapsed = collapsedValue
         }
 
         onClicked: sectionRoot.toggleCollapsed()
