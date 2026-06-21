@@ -42,6 +42,7 @@ from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
+from ...core.tree_reorder import reorder_only_moves
 from ...ui.media_info import MediaInfoQueue
 from .drag_drop import PlaylistDragDropMixin
 from .edit_actions import PlaylistEditActionsMixin
@@ -55,6 +56,12 @@ from ...core.playlists.storage import (
 from ...ui.thumbnail_images import load_thumbnail, save_thumbnail
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
+_PLAYLIST_REORDER_LOCATION_KEYS = frozenset({
+    "parent_id",
+    "position",
+    "section_id",
+    "slot_order",
+})
 
 log = logging.getLogger(__name__)
 
@@ -493,9 +500,31 @@ class PlaylistEditView(
                 QTimer.singleShot(0, self._request_missing_thumbnails)
             self._start_wf_sync()
             return
+        availability = self._watched_file_availability(pl)
+        if availability == self._wf_file_availability:
+            moves = reorder_only_moves(
+                self.model.storage_tree(),
+                self.model.storage_tree(pl),
+                ignored_payload_keys=_PLAYLIST_REORDER_LOCATION_KEYS,
+            )
+            if moves is not None:
+                self._pl = pl
+                self._wf_file_availability = availability
+                self.model.rebuild(self._pl)
+                self._sync_playlist_chrome(emit_data_changed=False)
+                for move in moves:
+                    self.bridge.emit_node_moved(
+                        move.node_id,
+                        move.target_list_id,
+                        move.insert_index,
+                    )
+                if moves:
+                    self.bridge.emit_section_counts_changed()
+                self._start_wf_sync()
+                return
         self._pl = pl
         self._rebuild_list()
-        self._wf_file_availability = self._watched_file_availability(pl)
+        self._wf_file_availability = availability
         self._start_wf_sync()
 
     def _rebuild_list(self):

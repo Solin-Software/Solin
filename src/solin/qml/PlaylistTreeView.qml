@@ -367,6 +367,13 @@ Item {
                 rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
         }
 
+        function onNodeMoved(nodeId, targetListId, insertIndex) {
+            if (dragManager.active)
+                return
+            if (!rootPlaylist.moveExistingNode(nodeId, targetListId, insertIndex))
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+        }
+
         function onSectionChanged(nodeId, title, color, textColor, badgeBg, itemCount) {
             if (!rootPlaylist.updateSectionNode(
                     nodeId, title, color, textColor, badgeBg, itemCount)) {
@@ -800,6 +807,125 @@ Item {
                 items.splice(idx, 1)
                 requestLayout()
             }
+        }
+
+        function moveExistingNode(nodeId, targetListId, insertIndex) {
+            if (root.treeHydrating || rebuildQueued)
+                return false
+            var taken = takePendingNode(pendingNodes, nodeId)
+            if (!taken)
+                return false
+            var inserted = insertPendingNode(
+                pendingNodes,
+                targetListId,
+                insertIndex,
+                taken.node
+            )
+            if (!inserted) {
+                spliceArray(taken.siblings, taken.index, 0, [taken.node])
+                return false
+            }
+
+            var visual = takeVisualNode(nodeId)
+            var targetList = findList(targetListId)
+            if (targetList && !targetList.collapsed) {
+                if (!visual)
+                    visual = targetList.createNodeObject(taken.node)
+                if (visual && targetList.insertVisualNode(insertIndex, visual))
+                    return true
+            }
+            if (visual)
+                visual.destroy()
+            requestLayout()
+            return true
+        }
+
+        function takePendingNode(sourceNodes, nodeId) {
+            if (!sourceNodes)
+                return null
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (node.id === nodeId) {
+                    return {
+                        "node": sourceNodes.splice(i, 1)[0],
+                        "siblings": sourceNodes,
+                        "index": i
+                    }
+                }
+                var found = takePendingNode(node.children, nodeId)
+                if (found)
+                    return found
+            }
+            return null
+        }
+
+        function insertPendingNode(sourceNodes, targetListId, insertIndex, node) {
+            if (!sourceNodes || !node)
+                return false
+            if (targetListId === "root") {
+                var rootIdx = Math.max(0, Math.min(insertIndex, sourceNodes.length))
+                spliceArray(sourceNodes, rootIdx, 0, [node])
+                return true
+            }
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var current = sourceNodes[i]
+                if (childListIdForNode(current) === targetListId) {
+                    if (!current.children)
+                        current.children = []
+                    var idx = Math.max(0, Math.min(insertIndex, current.children.length))
+                    spliceArray(current.children, idx, 0, [node])
+                    return true
+                }
+                if (insertPendingNode(current.children, targetListId, insertIndex, node))
+                    return true
+            }
+            return false
+        }
+
+        function takeVisualNode(nodeId) {
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (child && child.nodeId === nodeId) {
+                    var visual = items.splice(i, 1)[0]
+                    pendingIndex = Math.max(0, pendingIndex - 1)
+                    requestLayout()
+                    return visual
+                }
+                if (child && child.bodyList) {
+                    var found = child.bodyList.takeVisualNode(nodeId)
+                    if (found)
+                        return found
+                }
+            }
+            return null
+        }
+
+        function findList(targetListId) {
+            if (listId === targetListId)
+                return listRoot
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (child && child.bodyList) {
+                    var found = child.bodyList.findList(targetListId)
+                    if (found)
+                        return found
+                }
+            }
+            return null
+        }
+
+        function insertVisualNode(insertIndex, node) {
+            if (!node || collapsed || rebuildQueued)
+                return false
+            if (insertIndex > pendingIndex)
+                return false
+            var visualIdx = Math.max(0, Math.min(insertIndex, items.length))
+            updateNodeList(node)
+            moveNodeToContainer(node)
+            items.splice(visualIdx, 0, node)
+            pendingIndex = Math.min(pendingNodes.length, pendingIndex + 1)
+            requestLayout()
+            return true
         }
 
         function insertNodes(targetListId, insertIndex, nodes) {

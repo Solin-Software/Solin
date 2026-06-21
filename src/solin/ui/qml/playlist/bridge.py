@@ -61,6 +61,7 @@ class PlaylistEditBridge(QObject):
     mediaInserted = Signal(str, int, "QVariant")  # list_id, insert_index, media nodes
     nodesInserted = Signal(str, int, "QVariant")  # list_id, insert_index, tree nodes
     nodeReplaced = Signal(str, "QVariant")      # node_id, replacement tree nodes
+    nodeMoved = Signal(str, str, int)           # node_id, target_list_id, insert_index
     sectionChanged = Signal(str, str, str, str, str, int)
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)           # marker_id
@@ -179,6 +180,9 @@ class PlaylistEditBridge(QObject):
             for replacement_id in replacement_ids
         ]
         self.nodeReplaced.emit(node_id, [node for node in nodes if node])
+
+    def emit_node_moved(self, node_id: str, target_list_id: str, insert_index: int) -> None:
+        self.nodeMoved.emit(node_id, target_list_id, insert_index)
 
     def emit_section_changed(self, section_id: str) -> None:
         if not self._model:

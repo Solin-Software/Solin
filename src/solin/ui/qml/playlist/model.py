@@ -199,6 +199,10 @@ class PlaylistEditModel(QAbstractListModel):
             self._tree_data_cache = self._build_tree_data()
         return self._tree_data_cache
 
+    def storage_tree(self, pl: dict | None = None) -> list[dict]:
+        """Return the persisted tree shape used for reorder comparisons."""
+        return self._storage_tree(pl)
+
     def section_patch(self, section_id: str) -> dict:
         """Return QML-facing fields for a section without building the full tree."""
         if not self._pl:
@@ -377,9 +381,16 @@ class PlaylistEditModel(QAbstractListModel):
             "children": children,
         }
 
-    def _markers_by_subsection(self, sections_map: dict[str, dict]) -> dict[str, list[dict]]:
+    def _markers_by_subsection(
+        self,
+        sections_map: dict[str, dict],
+        pl: dict | None = None,
+    ) -> dict[str, list[dict]]:
+        source = self._pl if pl is None else pl
+        if not source:
+            return {}
         markers_by_subsection: dict[str, list[dict]] = {}
-        for marker in self._pl.get("markers", []):
+        for marker in source.get("markers", []):
             subsection_id = marker.get("subsection_id", "")
             subsection = sections_map.get(subsection_id)
             if not subsection or not subsection.get("parent_id"):
@@ -594,11 +605,14 @@ class PlaylistEditModel(QAbstractListModel):
         kind, node_id = list_id.split(":", 1)
         return kind, node_id
 
-    def _storage_tree(self) -> list[dict]:
-        items = self._pl.get("items", [])
-        sections = self._pl.get("sections", [])
+    def _storage_tree(self, pl: dict | None = None) -> list[dict]:
+        source = self._pl if pl is None else pl
+        if not source:
+            return []
+        items = source.get("items", [])
+        sections = source.get("sections", [])
         sections_map = {s["id"]: s for s in sections}
-        markers_by_subsection = self._markers_by_subsection(sections_map)
+        markers_by_subsection = self._markers_by_subsection(sections_map, source)
         top_sections = [s for s in sections if not s.get("parent_id")]
         subsections_by_parent: dict[str, list[dict]] = {}
         for sec in sections:

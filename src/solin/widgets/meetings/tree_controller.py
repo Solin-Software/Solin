@@ -98,6 +98,7 @@ from ...core.meetings.tree_store import (
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
+from ...core.tree_reorder import reorder_only_moves
 from ...core.meetings.colors import generate_section_hue, section_colors
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
@@ -182,6 +183,7 @@ class MeetingTreeController(QObject):
     mediaInserted = Signal(str, int, "QVariant")
     nodesInserted = Signal(str, int, "QVariant")
     nodeReplaced = Signal(str, "QVariant")
+    nodeMoved = Signal(str, str, int)
     sectionChanged = Signal(str, str, str, str, str, int)
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)
@@ -514,6 +516,32 @@ class MeetingTreeController(QObject):
                 self.syncStateChanged.emit()
             return False
         if self._sync_enabled and record.revision == self._sync_revision:
+            return True
+
+        moves = reorder_only_moves(self._nodes, record.nodes)
+        if moves is not None:
+            self._apply_sync_record(record)
+            self._meeting_folder_pending_sources.clear()
+            availability = self._linked_folder_availability_signature()
+            availability_changed = availability != self._linked_folder_availability
+            self._linked_folder_availability = availability
+            self._save_local_cache()
+            if availability_changed:
+                self._start_media_requests()
+                self.chromeChanged.emit()
+                self.syncStateChanged.emit()
+                _emit_controller_state_changed(self)
+                return True
+            for move in moves:
+                self.nodeMoved.emit(
+                    move.node_id,
+                    move.target_list_id,
+                    move.insert_index,
+                )
+            if moves:
+                self._emit_section_counts()
+            self.chromeChanged.emit()
+            self.syncStateChanged.emit()
             return True
 
         self._apply_sync_record(record)
