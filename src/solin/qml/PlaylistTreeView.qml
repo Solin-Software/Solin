@@ -1213,6 +1213,23 @@ Item {
                 if (child.bodyList)
                     child.bodyList.updateSectionCounts(counts)
             }
+            updateSectionCountsInPendingTree(pendingNodes, counts)
+        }
+
+        function updateSectionCountsInPendingTree(sourceNodes, counts) {
+            if (!sourceNodes || !counts)
+                return
+            for (var i = 0; i < sourceNodes.length; i++) {
+                var node = sourceNodes[i]
+                if (!node)
+                    continue
+                if ((node.type === "section" || node.type === "subsection")
+                        && counts[node.id] !== undefined) {
+                    node.itemCount = counts[node.id]
+                }
+                if (node.children)
+                    updateSectionCountsInPendingTree(node.children, counts)
+            }
         }
 
         Timer {
