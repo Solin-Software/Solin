@@ -10,7 +10,6 @@ from PySide6.QtCore import (
     QDateTime,
     QEvent,
     QObject,
-    QSize,
     Qt,
     QTimer,
     Signal,
@@ -28,7 +27,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
-    QPushButton,
     QSizePolicy,
     QSlider,
     QStackedWidget,
@@ -47,6 +45,7 @@ from solin.styles.icons import (
     ICON_CAST,
     ICON_CHEVRON_DOWN,
     ICON_CLOSE,
+    ICON_FULLSCREEN,
     ICON_IMAGE,
     ICON_MORE_VERT,
     ICON_MUSIC,
@@ -70,6 +69,12 @@ from solin.widgets.circular_timer import CircularTimerWidget
 from solin.ui.media_info import MediaInfoQueue
 from solin.widgets.playlist.panel import PlaylistPanel
 from .audio import ProjectionAudioMixin
+from .controls import (
+    PROJECTION_MENU_STYLE as _MENU_STYLE,
+    SPEED_CHOICES,
+    icon_button as _icon_btn,
+)
+from .fullscreen import FullscreenVideoOverlay
 from .playlist import ProjectionPlaylistMixin
 from .preview import ImagePreviewWidget
 from solin.widgets.songs_widget import BufferedSlider
@@ -77,41 +82,6 @@ from solin.widgets.songs_widget import BufferedSlider
 
 # Keep ProjectionBar decoupled from PlaylistPanel internals while preserving timing.
 _ANIM_MS = 220
-
-def _icon_btn(svg: str, size: int = 30, icon_px: int = 15,
-              color: str = "#c9d1d9", tooltip: str = "") -> QPushButton:
-    btn = QPushButton()
-    btn.setFixedSize(size, size)
-    btn.setIcon(make_icon(svg, icon_px, color))
-    btn.setIconSize(QSize(icon_px, icon_px))
-    btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    if tooltip:
-        btn.setToolTip(tooltip)
-    r = size // 2
-    btn.setStyleSheet(
-        f"QPushButton{{border:none;border-radius:{r}px;"
-        "background:transparent;padding:0;}"
-        f"QPushButton:hover{{background:rgba(255,255,255,0.08);border-radius:{r}px;}}"
-        "QPushButton:pressed{background:rgba(255,255,255,0.13);}"
-    )
-    return btn
-
-
-_MENU_STYLE = """
-QMenu {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 6px 4px;
-    color: #c9d1d9;
-    font-size: 12px;
-}
-QMenu::item { padding: 6px 20px 6px 12px; border-radius: 4px; }
-QMenu::item:selected { background: #21262d; color: #e6edf3; }
-QMenu::item:checked  { color: #388bfd; font-weight: 600; }
-QMenu::separator     { height: 1px; background: #30363d; margin: 4px 8px; }
-QMenu::indicator     { width: 0; }
-"""
 
 # Projection bar (bottom-right projection control)
 
@@ -170,6 +140,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._is_audio: bool = False
         self._audio_cover_pixmap: QPixmap | None = None
         self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
+        self._fullscreen_overlay: FullscreenVideoOverlay | None = None
+        self._last_buffer_progress: tuple[int, int] = (0, 0)
+        self._playback_recovering: bool = False
 
         # ── Timer state ──────────────────────────────────────────────────
         self._timer_target: QDateTime | None = None
@@ -477,17 +450,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_panel_btn.setVisible(False)
         self.ov_panel_btn.clicked.connect(self._toggle_playlist_panel)
 
-        self.ov_close_btn = _icon_btn(ICON_CLOSE, 28, 13, "#8b949e",
-                                      self.tr("Stop projection"))
-        self.ov_close_btn.setStyleSheet(
-            "QPushButton{border:none;border-radius:14px;"
-            "background:transparent;padding:0;}"
-            "QPushButton:hover{background:rgba(248,81,73,0.18);}"
-            "QPushButton:pressed{background:rgba(248,81,73,0.30);}"
-        )
-        self.ov_close_btn.clicked.connect(self.stop_requested)
-        self.ov_close_btn.installEventFilter(self)
-
         # Botão "Adicionar à Playlist"
         self.ov_add_playlist_btn = _icon_btn(
             ICON_ADD_TO_PLAYLIST, 28, 13, "#8b949e",
@@ -513,13 +475,20 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_set_idle_btn.setVisible(False)
         self.ov_set_idle_btn.clicked.connect(self._on_set_as_idle_clicked)
 
+        self.ov_fullscreen_btn = _icon_btn(
+            ICON_FULLSCREEN, 28, 14, "#8b949e",
+            self.tr("Fullscreen"),
+        )
+        self.ov_fullscreen_btn.setVisible(False)
+        self.ov_fullscreen_btn.clicked.connect(self.enter_app_fullscreen)
+
         ov_top_lay.addWidget(self.minimize_btn)
         ov_top_lay.addWidget(self.ov_title, stretch=1)
         ov_top_lay.addWidget(self.ov_send_temp_btn)
         ov_top_lay.addWidget(self.ov_add_playlist_btn)
         ov_top_lay.addWidget(self.ov_set_idle_btn)
+        ov_top_lay.addWidget(self.ov_fullscreen_btn)
         ov_top_lay.addWidget(self.ov_panel_btn)
-        ov_top_lay.addWidget(self.ov_close_btn)
         ov_lay.addWidget(ov_top)
 
         # ── Body: preview + painel lateral ───────────────────────────────
@@ -539,6 +508,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self.preview_content.apply_transform.connect(self._on_image_apply_transform)
         self.preview_content.reset_transform.connect(self._on_image_reset_transform)
+        self.preview_content.installEventFilter(self)
         self.overlay_stack.addWidget(self.preview_content)   # index 0
 
         self.circular_timer = CircularTimerWidget()
@@ -564,9 +534,16 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def eventFilter(self, obj, event):
         from PySide6.QtCore import QEvent
+        if (
+            obj is getattr(self, "preview_content", None)
+            and event.type() == QEvent.Type.MouseButtonDblClick
+            and getattr(event, "button", lambda: None)() == Qt.MouseButton.LeftButton
+        ):
+            if self._is_app_fullscreen_available():
+                self.enter_app_fullscreen()
+                return True
         _close_btns = (
             getattr(self, "close_btn", None),
-            getattr(self, "ov_close_btn", None),
         )
         if obj in _close_btns:
             if event.type() == QEvent.Type.Enter:
@@ -618,7 +595,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _on_video_frame(self, frame):
         # MP3 não tem frames de vídeo — ignora para não sobrescrever a capa
-        if not self._expanded or self._mode != 'video' or self._is_audio:
+        if self._mode != 'video' or self._is_audio:
+            return
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None and overlay.is_active():
+            overlay.set_frame(frame)
+        if not self._expanded:
             return
         img = frame.toImage()
         if img.isNull():
@@ -652,9 +634,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     @Slot(bool)
     def _on_playback_recovery_changed(self, recovering: bool):
+        self._playback_recovering = bool(recovering) and self._mode == "video"
         self.seek_slider.setReconnectActive(
-            bool(recovering) and self._mode == "video"
+            self._playback_recovering
         )
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_reconnect_active(self._playback_recovering)
 
     # ── API pública ───────────────────────────────────────────────────────
 
@@ -679,6 +665,106 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def is_visual_media_active(self) -> bool:
         return self._mode == "image" or (self._mode == "video" and not self._is_audio)
 
+    def app_fullscreen_active(self) -> bool:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        return bool(overlay is not None and overlay.is_active())
+
+    def enter_app_fullscreen(self) -> None:
+        if not self._is_app_fullscreen_available():
+            return
+        overlay = self._ensure_fullscreen_overlay()
+        self._hydrate_fullscreen_overlay(overlay)
+        overlay.show_fullscreen()
+
+    def exit_app_fullscreen(self) -> None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.hide_fullscreen()
+
+    def _is_app_fullscreen_available(self) -> bool:
+        return self._mode == "video" and not self._is_audio
+
+    def _ensure_fullscreen_overlay(self) -> FullscreenVideoOverlay:
+        if getattr(self, "_fullscreen_overlay", None) is not None:
+            return self._fullscreen_overlay
+        overlay = FullscreenVideoOverlay(
+            source_widget=self._container or self,
+            translate=self.tr,
+            parent=self,
+        )
+        overlay.exit_requested.connect(self.exit_app_fullscreen)
+        overlay.seek_requested.connect(self._on_fullscreen_seek_requested)
+        overlay.toggle_requested.connect(self._on_play_btn_clicked)
+        overlay.volume_changed.connect(self._on_fullscreen_volume_changed)
+        overlay.stop_requested.connect(self.stop_requested.emit)
+        overlay.previous_requested.connect(self._on_prev_clicked)
+        overlay.next_requested.connect(self._on_next_clicked)
+        overlay.speed_selected.connect(self._set_speed)
+        overlay.loop_toggled.connect(self._toggle_loop)
+        overlay.playback_order_selected.connect(self._set_playback_order)
+        self._fullscreen_overlay = overlay
+        return overlay
+
+    def _hydrate_fullscreen_overlay(self, overlay: FullscreenVideoOverlay) -> None:
+        title = self.ov_title.text() or self.proj_title.toolTip() or self.proj_title.text()
+        overlay.set_title(title)
+        overlay.set_volume(self._volume)
+        overlay.set_speed(self._speed)
+        overlay.set_loop_enabled(self._loop)
+        overlay.set_playback_order(self._playback_order)
+        overlay.set_duration(self.media.duration)
+        overlay.set_position(self.media.position, self.media.duration)
+        overlay.set_buffer_progress(*self._last_buffer_progress)
+        overlay.set_reconnect_active(self._playback_recovering)
+        overlay.set_playback_state(self.media.player.playbackState())
+        self._sync_fullscreen_announcement_controls(overlay)
+        self._sync_app_fullscreen_navigation()
+
+    def _exit_app_fullscreen(self, *, clear_frame: bool = False) -> None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.hide_fullscreen(clear_frame=clear_frame)
+
+    def _reset_app_fullscreen(self) -> None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.reset()
+
+    def _sync_app_fullscreen_availability(self) -> None:
+        available = self._is_app_fullscreen_available()
+        self.ov_fullscreen_btn.setVisible(available)
+        if not available:
+            self._exit_app_fullscreen(clear_frame=True)
+
+    def _sync_app_fullscreen_navigation(self) -> None:
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is None:
+            return
+        item_count = len(self._playlist)
+        overlay.set_navigation(
+            show=item_count > 1,
+            can_previous=self._playlist_index > 0,
+            can_next=self._playlist_index < item_count - 1,
+        )
+
+    def _on_fullscreen_volume_changed(self, volume: float) -> None:
+        self.vol_slider.setValue(int(round(max(0.0, min(1.0, volume)) * 100)))
+
+    def _on_fullscreen_seek_requested(self, value: int) -> None:
+        if self._announce_state != "off":
+            return
+        self.seek_requested.emit(value)
+
+    def _sync_fullscreen_announcement_controls(
+        self,
+        overlay: FullscreenVideoOverlay | None = None,
+    ) -> None:
+        overlay = overlay or getattr(self, "_fullscreen_overlay", None)
+        if overlay is None:
+            return
+        overlay.set_play_enabled(self.play_btn.isEnabled())
+        overlay.set_seek_enabled(self.seek_slider.isEnabled())
+
     def set_projected_title(self, title: str) -> None:
         if not title:
             return
@@ -686,6 +772,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.proj_title.setText(short)
         self.proj_title.setToolTip(title)
         self.ov_title.setText(title)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_title(title)
 
     def hide_add_to_playlist_action(self) -> None:
         self.ov_add_playlist_btn.setVisible(False)
@@ -699,6 +788,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._is_audio = is_audio
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
+        self._last_buffer_progress = (0, 0)
+        self._playback_recovering = False
         # _live_thumb_captured sempre reseta ao trocar de faixa.
         # keep_expanded=True mantém overlay aberto mas é uma nova mídia — nova captura.
         self._live_thumb_captured = False
@@ -735,9 +826,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay_stack.setCurrentIndex(0)
         # Bar is clickable to expand when active
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sync_app_fullscreen_availability()
 
         # Aplica velocidade salva
         self.media.set_playback_rate(self._speed)
+
+        if self.app_fullscreen_active() and self._fullscreen_overlay is not None:
+            self._fullscreen_overlay.clear_frame()
+            self._hydrate_fullscreen_overlay(self._fullscreen_overlay)
 
         if self._expanded:
             if keep_expanded:
@@ -764,6 +860,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def activate_image(self, title: str = "", image_data: bytes = b"", keep_expanded: bool = False):
         self._mode = 'image'
+        self._last_buffer_progress = (0, 0)
+        self._playback_recovering = False
+        self._sync_app_fullscreen_availability()
         default_label = self.tr("Projected image")
         label = title if title else default_label
         short = (label[:28] + "…") if len(label) > 28 else label
@@ -856,6 +955,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def activate_live_stream(self, title: str, keep_expanded: bool = False):
         self._cancel_announcement_mode()
         self._mode = 'live_stream'
+        self._last_buffer_progress = (0, 0)
+        self._playback_recovering = False
+        self._sync_app_fullscreen_availability()
         self._is_audio = False
         self._is_live_tab = True
         self._image_pixmap = None
@@ -903,6 +1005,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def activate_timer(self, target_dt: QDateTime):
         self._stop_timer_internals()
         self._mode = 'timer'
+        self._last_buffer_progress = (0, 0)
+        self._playback_recovering = False
+        self._sync_app_fullscreen_availability()
         self._timer_target = target_dt
         remaining = ceil_remaining_seconds(target_dt)
         self._timer_total_secs = max(1, remaining)
@@ -952,6 +1057,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
         self.seek_slider.setEnabled(False)
+        self._sync_fullscreen_announcement_controls()
         # Polls media position; this is media-time, not wall-clock time.
         self._announce_timer.start()
 
@@ -983,6 +1089,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         # Only play button is re-enabled; slider remains locked
         self.play_btn.setEnabled(True)
+        self._sync_fullscreen_announcement_controls()
 
     def _on_play_btn_clicked(self) -> None:
         """
@@ -998,6 +1105,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.seek_slider.setEnabled(True)
             self.media.seek(0)
             self.media.play()
+            self._sync_fullscreen_announcement_controls()
             return
         self.toggle_requested.emit()
 
@@ -1015,9 +1123,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Restore controls
         self.play_btn.setEnabled(True)
         self.seek_slider.setEnabled(True)
+        self._sync_fullscreen_announcement_controls()
 
     def deactivate(self):
         self._cancel_announcement_mode()
+        self._reset_app_fullscreen()
         self._mode = None
         self._image_pixmap = None
         self._image_file_path = ""
@@ -1026,6 +1136,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._playlist = []
         self._playlist_index = 0
         self._played_indices = set()
+        self._last_buffer_progress = (0, 0)
+        self._playback_recovering = False
         self._stop_timer_internals()
         if self._expanded:
             self._collapse()
@@ -1047,6 +1159,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.obs_scene_btn.setVisible(False)
         self.ov_panel_btn.setVisible(False)
         self.ov_add_playlist_btn.setVisible(False)
+        self.ov_fullscreen_btn.setVisible(False)
         self.ov_set_idle_btn.setVisible(False)
         self._is_live_tab = False
         self.inactive_widget.setVisible(True)
@@ -1112,14 +1225,17 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.prev_btn.setToolTip(self.tr("Previous"))
         self.next_btn.setToolTip(self.tr("Next"))
         self.minimize_btn.setToolTip(self.tr("Minimize"))
-        self.ov_close_btn.setToolTip(self.tr("Stop projection"))
         self.ov_panel_btn.setToolTip(self.tr("Show playlist"))
         self.ov_send_temp_btn.setToolTip(self.tr("Open as temporary playlist"))
         self.ov_add_playlist_btn.setToolTip(self.tr("Add to Playlist"))
         self.ov_set_idle_btn.setToolTip(self.tr("Set as idle screen"))
+        self.ov_fullscreen_btn.setToolTip(self.tr("Fullscreen"))
         self.set_screen_count(self._screen_count)
         self._offline_badge.setToolTip(self.tr("Playing offline"))
         self.obs_scene_btn.setToolTip(self.tr("Hide media from OBS"))
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.retranslateUi()
         self.playlist_panel.refresh_language(self.lang)
         if hasattr(self, "_monitor_popup") and self._monitor_popup is not None:
             self._monitor_popup.retranslateUi()
@@ -1153,8 +1269,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         speed_menu.setStyleSheet(_MENU_STYLE)
         speed_group = QActionGroup(speed_menu)
         speed_group.setExclusive(True)
-        for label, val in [("0.5×", 0.5), ("0.75×", 0.75), ("1×", 1.0),
-                            ("1.25×", 1.25), ("1.5×", 1.5), ("2×", 2.0)]:
+        for label, val in SPEED_CHOICES:
             act = QAction(label, speed_group)
             act.setCheckable(True)
             act.setChecked(abs(self._speed - val) < 0.01)
@@ -1188,25 +1303,31 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             act.triggered.connect(lambda checked, v=val: self._set_playback_order(v))
             order_menu.addAction(act)
 
-        menu.exec(self.more_btn.mapToGlobal(
-            self.more_btn.rect().topLeft() - QSize(0, menu.sizeHint().height()).toSize() if False
-            else self.more_btn.rect().bottomLeft()
-        ))
+        menu.exec(self.more_btn.mapToGlobal(self.more_btn.rect().bottomLeft()))
 
     def _set_speed(self, rate: float):
         self._speed = rate
         self._playback_settings.set_speed(rate)
         self.media.set_playback_rate(rate)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_speed(rate)
 
     def _toggle_loop(self):
         self._loop = not self._loop
         self._playback_settings.set_loop_enabled(self._loop)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_loop_enabled(self._loop)
 
     def _set_playback_order(self, order: str):
         self._playback_order = order
         self._playback_settings.set_playback_order(order)
         # Reinicia rastreamento de aleatório ao mudar de modo
         self._played_indices = {self._playlist_index}
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_playback_order(order)
 
     # ── Volume ────────────────────────────────────────────────────────────
 
@@ -1222,6 +1343,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.vol_btn.setIcon(make_icon(ICON_VOLUME_LOW, 15, "#8b949e"))
         else:
             self.vol_btn.setIcon(make_icon(ICON_VOLUME_HIGH, 15, "#8b949e"))
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_volume(vol)
 
     def _toggle_mute(self):
         if self._muted:
@@ -1290,11 +1414,18 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         playing = (state == QMediaPlayer.PlaybackState.PlayingState)
         icon = ICON_PAUSE if playing else ICON_PLAY
         self.play_btn.setIcon(make_icon(icon, 15, "#c9d1d9"))
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_playback_state(state)
 
     @Slot(int)
     def _on_duration_changed(self, duration: int):
         self.seek_slider.setRange(0, duration)
         self._update_time_label(self.media.position, duration)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_duration(duration)
+            overlay.set_position(self.media.position, duration)
         # Persiste duração no item da playlist para uso no export .jwlplaylist.
         # Roda sempre que há playlist ativa — independente de ser salva ou temp.
         # (BaseDurationTicks = duration_ms × 10000 ticks de 100ns)
@@ -1312,6 +1443,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if not self.seek_slider.isSliderDown():
             self.seek_slider.setValue(position)
         self._update_time_label(position, self.media.duration)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_position(position, self.media.duration)
         if self._announce_state == "gate" and position >= self._announce_gate_ms:
             self._on_announce_gate_expired()
 
@@ -1379,10 +1513,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     @Slot(int, int)
     def _on_buffer_progress(self, downloaded: int, total: int):
+        self._last_buffer_progress = (int(downloaded), int(total))
         if total > 0:
             self.seek_slider.setBufferedRatio(downloaded / total)
         else:
             self.seek_slider.setBufferedRatio(0.0)
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_buffer_progress(downloaded, total)
 
     def _update_time_label(self, pos: int, dur: int):
         self.time_label.setText(f"{self._fmt(pos)} / {self._fmt(dur)}")
