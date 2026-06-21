@@ -72,7 +72,9 @@ def test_window_specific_chrome_stays_on_its_own_class():
 
     # Floating preview owns resize / drag / zoom-break behaviour.
     for name in ("trigger_zoom_break", "_do_resize", "_install_child_tracking",
-                 "resizeEvent", "mousePressEvent"):
+                 "resizeEvent", "mousePressEvent", "toggle_fullscreen",
+                 "enter_fullscreen", "exit_fullscreen", "keyPressEvent",
+                 "mouseDoubleClickEvent"):
         assert name in FloatingPreviewWindow.__dict__
         assert name not in ProjectionWindow.__dict__
 

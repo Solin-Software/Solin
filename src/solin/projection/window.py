@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QStackedWidget, QGraphicsOpacityEffect
 from PySide6.QtCore import Qt, Slot, Signal, QSize, QRect, QRectF, QByteArray, QPropertyAnimation, QEasingCurve, QTimer, QPoint, QEvent
-from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QFontMetrics, QGuiApplication, QMouseEvent
+from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QFontMetrics, QGuiApplication, QMouseEvent, QKeyEvent
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QVideoFrame
 
@@ -1159,7 +1159,9 @@ class FloatingPreviewWindow(BaseProjectionView):
         self._resize_origin_pos:   QPoint      = QPoint()
         self._resize_origin_geom               = self.geometry()
         self._drag_pos:            QPoint | None = None
+        self._normal_geometry_before_fullscreen: QRect = QRect()
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # ── Content stack (shared with ProjectionWindow) ──────────────────
         layout = QVBoxLayout(self)
@@ -1205,6 +1207,7 @@ class FloatingPreviewWindow(BaseProjectionView):
         self._open_anim.setEndValue(1.0)
         self._open_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         QTimer.singleShot(40, self._open_anim.start)
+        QTimer.singleShot(0, self.setFocus)
 
     # ── Child mouse-tracking helpers ─────────────────────────────────────
 
@@ -1235,14 +1238,80 @@ class FloatingPreviewWindow(BaseProjectionView):
         to call setCursor() on the parent window.  Returning False passes the
         event on to *obj* as normal.
         """
+        if event.type() == QEvent.Type.MouseButtonDblClick and isinstance(obj, QWidget):
+            if self._is_left_mouse_event(event):
+                self.toggle_fullscreen()
+                return True
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and self.isFullScreen()
+            and self._is_escape_key_event(event)
+        ):
+            self.exit_fullscreen()
+            return True
         if event.type() == QEvent.Type.MouseMove and isinstance(obj, QWidget):
             try:
+                if self.isFullScreen():
+                    self.setCursor(self._ARROW)
+                    return False
                 global_pos = obj.mapToGlobal(event.position().toPoint())
                 local_pos  = self.mapFromGlobal(global_pos)
                 self.setCursor(self._cursor_for_edges(self._edge_hits(local_pos)))
             except Exception:  # noqa: BLE001 - Qt event-filter boundary
                 log_ignored_exception(__name__, "Could not update projection resize cursor")
         return False  # do NOT consume — let the event propagate normally
+
+    @staticmethod
+    def _is_left_mouse_event(event: QEvent) -> bool:
+        return (
+            isinstance(event, QMouseEvent)
+            and event.button() == Qt.MouseButton.LeftButton
+        )
+
+    @staticmethod
+    def _is_escape_key_event(event: QEvent) -> bool:
+        return (
+            isinstance(event, QKeyEvent)
+            and event.key() == Qt.Key.Key_Escape
+        )
+
+    def toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode for the windowed preview."""
+        if self.isFullScreen():
+            self.exit_fullscreen()
+        else:
+            self.enter_fullscreen()
+
+    def enter_fullscreen(self) -> None:
+        if self.isFullScreen():
+            return
+        self._normal_geometry_before_fullscreen = self.geometry()
+        self._resize_dir = (False, False, False, False)
+        self._drag_pos = None
+        self.setCursor(self._ARROW)
+        self.showFullScreen()
+        self.setFocus()
+        self._refresh_after_window_state_change()
+
+    def exit_fullscreen(self) -> None:
+        if not self.isFullScreen():
+            return
+        restore_geometry = QRect(self._normal_geometry_before_fullscreen)
+        self._resize_dir = (False, False, False, False)
+        self._drag_pos = None
+        self.showNormal()
+        if restore_geometry.isValid() and not restore_geometry.isEmpty():
+            self.setGeometry(restore_geometry)
+        self.setCursor(self._ARROW)
+        self.setFocus()
+        self._refresh_after_window_state_change()
+
+    def _refresh_after_window_state_change(self) -> None:
+        """Repaint projection pages after fullscreen/windowed transitions."""
+        for i in range(self._stack.count()):
+            self._stack.widget(i).update()
+        if sys.platform == "win32":
+            QTimer.singleShot(60, lambda: exclude_from_aero_peek(int(self.winId())))
     
     def _toggle_keep_alive(self) -> None:
         """
@@ -1296,7 +1365,7 @@ class FloatingPreviewWindow(BaseProjectionView):
 
     def resizeEvent(self, event) -> None:                   # type: ignore[override]
         """Keep the window exactly 16:9 regardless of which edge was dragged."""
-        if self._resizing:
+        if self.isFullScreen() or self._resizing:
             super().resizeEvent(event)
             return
         new_w = event.size().width()
@@ -1348,6 +1417,9 @@ class FloatingPreviewWindow(BaseProjectionView):
         return self._ARROW
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if self.isFullScreen():
+            event.accept()
+            return
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
@@ -1365,6 +1437,10 @@ class FloatingPreviewWindow(BaseProjectionView):
         event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self.isFullScreen():
+            self.setCursor(self._ARROW)
+            event.accept()
+            return
         pos = event.position().toPoint()
         if not (event.buttons() & Qt.MouseButton.LeftButton):
             # Hover — update resize cursor
@@ -1383,6 +1459,20 @@ class FloatingPreviewWindow(BaseProjectionView):
             self._resize_dir = (False, False, False, False)
             self._drag_pos   = None
         super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_fullscreen()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Escape and self.isFullScreen():
+            self.exit_fullscreen()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _do_resize(self, global_pos: QPoint) -> None:
         """Apply a resize drag while enforcing 16:9 and minimum size."""
