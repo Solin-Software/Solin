@@ -633,6 +633,181 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertEqual(controller._linked_folder_files, {"remote.mp4": "remote"})
             self.assertEqual(controller._sync_revision, 7)
 
+    def test_refresh_sync_from_manifest_emits_incremental_reorder(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-25 MW"
+            folder.mkdir()
+            record = MeetingSyncRecord(
+                folder=folder,
+                tree_key=_identity("mwb").tree_key,
+                pub_type="mwb",
+                monday=date(2026, 5, 25),
+                meeting_tag="MW",
+                folder_date=date(2026, 5, 25),
+                canonical_hash="hash",
+                nodes=[
+                    {
+                        "id": "section",
+                        "type": "section",
+                        "title": "Section",
+                        "children": [
+                            {
+                                "id": "media",
+                                "type": "media",
+                                "title": "Media",
+                                "children": [],
+                            },
+                        ],
+                    },
+                ],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                revision=2,
+            )
+            controller = FakeController()
+            controller._nodes = [
+                {
+                    "id": "media",
+                    "type": "media",
+                    "title": "Media",
+                    "children": [],
+                },
+                {
+                    "id": "section",
+                    "type": "section",
+                    "title": "Section",
+                    "children": [],
+                },
+            ]
+            controller._sync_enabled = True
+            controller._sync_revision = 1
+            controller._deleted_source_keys = set()
+            controller._linked_folder_files = {}
+            controller._meeting_folder_imports = {}
+            controller._meeting_folder_pending_sources = set()
+            controller._load_sync_record = lambda: record
+            controller._apply_sync_record = (
+                lambda sync_record: MeetingTreeController._apply_sync_record(
+                    controller,
+                    sync_record,
+                )
+            )
+            controller._linked_folder_availability = ()
+            controller._linked_folder_availability_signature = lambda: ()
+            controller._save_local_cache = lambda: True
+            controller._start_media_requests = lambda: None
+            controller._emit_section_counts = (
+                lambda: MeetingTreeController._emit_section_counts(controller)
+            )
+            controller.nodeMoved = _Signal()
+            controller.sectionCountsChanged = _Signal()
+            controller.chromeChanged = _Signal()
+            controller.syncStateChanged = _Signal()
+            controller.stateChanged = _Signal()
+
+            self.assertTrue(MeetingTreeController._refresh_sync_from_manifest(controller))
+
+            self.assertEqual(
+                controller.nodeMoved.calls,
+                [
+                    ("section", "root", 0),
+                    ("media", "section:section", 0),
+                ],
+            )
+            self.assertEqual(controller.stateChanged.calls, [])
+            self.assertEqual(controller._nodes, record.nodes)
+            self.assertEqual(controller._sync_revision, 2)
+
+    def test_sync_refresh_applies_section_patch_without_rebuild(self):
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._nodes = [
+            {
+                "id": "section",
+                "type": "section",
+                "title": "Before",
+                "color_hue": 100,
+                "collapsed": False,
+                "children": [],
+            },
+        ]
+        record = MeetingSyncRecord(
+            folder=Path("C:/tmp/2026-05-25 MW"),
+            tree_key=_identity("mwb").tree_key,
+            pub_type="mwb",
+            monday=date(2026, 5, 25),
+            meeting_tag="MW",
+            folder_date=date(2026, 5, 25),
+            canonical_hash="hash",
+            nodes=[
+                {
+                    "id": "section",
+                    "type": "section",
+                    "title": "After",
+                    "color_hue": 220,
+                    "collapsed": True,
+                    "children": [],
+                },
+            ],
+            deleted_source_keys=set(),
+            linked_folder_files={},
+            meeting_folder_imports={},
+            revision=2,
+        )
+        controller._sync_enabled = True
+        controller._sync_revision = 1
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._meeting_folder_pending_sources = set()
+        controller._linked_folder_availability = ()
+        controller._load_sync_record = lambda: record
+        controller._apply_sync_record = (
+            lambda sync_record: MeetingTreeController._apply_sync_record(
+                controller,
+                sync_record,
+            )
+        )
+        controller._linked_folder_availability_signature = lambda: ()
+        controller._save_local_cache = lambda: True
+        controller._start_media_requests = lambda: None
+        controller._find_node = (
+            lambda node_id: MeetingTreeController._find_node(controller, node_id)
+        )
+        controller._emit_section_changed = (
+            lambda node: MeetingTreeController._emit_section_changed(controller, node)
+        )
+        controller._section_patch = (
+            lambda node: MeetingTreeController._section_patch(controller, node)
+        )
+        controller._emit_section_counts = (
+            lambda: MeetingTreeController._emit_section_counts(controller)
+        )
+        controller.nodeReplaced = _Signal()
+        controller.nodesInserted = _Signal()
+        controller.nodeMoved = _Signal()
+        controller.sectionChanged = _Signal()
+        controller.sectionCollapseChanged = _Signal()
+        controller.sectionCountsChanged = _Signal()
+        controller.chromeChanged = _Signal()
+        controller.syncStateChanged = _Signal()
+        controller.stateChanged = _Signal()
+
+        self.assertTrue(MeetingTreeController._refresh_sync_from_manifest(controller))
+
+        self.assertEqual(controller.stateChanged.calls, [])
+        self.assertEqual(controller.sectionCollapseChanged.calls, [("section", True)])
+        self.assertEqual(len(controller.sectionChanged.calls), 1)
+        self.assertEqual(controller.sectionChanged.calls[0][0], "section")
+        self.assertEqual(controller._nodes, record.nodes)
+        self.assertEqual(controller._sync_revision, 2)
+
     def test_save_sync_manifest_failure_pauses_sync_and_warns(self):
         class FakeController:
             pass
@@ -826,6 +1001,12 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._meeting_folder_pending_sources = set()
             controller._linked_folder_availability = ()
             controller._sync_service = service
+            controller.nodeReplaced = _Signal()
+            controller.nodesInserted = _Signal()
+            controller.nodeMoved = _Signal()
+            controller.sectionChanged = _Signal()
+            controller.sectionCollapseChanged = _Signal()
+            controller.sectionCountsChanged = _Signal()
             controller.chromeChanged = _Signal()
             controller.stateChanged = _Signal()
             controller.syncStateChanged = _Signal()
@@ -855,6 +1036,10 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 lambda: setattr(controller, "saved", True)
             )
             controller._start_media_requests = lambda *_args: None
+            controller._emit_section_counts = (
+                lambda: MeetingTreeController._emit_section_counts(controller)
+            )
+            controller._qml_node = lambda node: node
             controller._linked_folder_availability_signature = lambda: ()
             controller._watched_folder_file_store = WatchedFolderFileStore()
             controller._adopt_existing_meeting_folder_source = (
@@ -875,6 +1060,12 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertEqual(controller._nodes, record.nodes)
             self.assertEqual(controller._deleted_source_keys, {"remote-source"})
             self.assertTrue(controller.saved)
+            self.assertEqual(len(controller.nodesInserted.calls), 1)
+            list_id, insert_index, inserted_nodes = controller.nodesInserted.calls[0]
+            self.assertEqual((list_id, insert_index), ("root", 0))
+            self.assertEqual(inserted_nodes[0]["id"], "remote")
+            self.assertEqual(inserted_nodes[0]["type"], "media")
+            self.assertEqual(controller.stateChanged.calls, [])
 
 
 if __name__ == "__main__":
