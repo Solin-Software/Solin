@@ -164,6 +164,60 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             )
             self.assertEqual(loaded.deleted_source_keys, {"official"})
 
+    def test_save_tree_ignores_canonical_hash_only_changes(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "2026-05-25 MW"
+            folder.mkdir()
+            media = folder / "talk.mp4"
+            media.write_bytes(b"video")
+            nodes = [{
+                "id": "media",
+                "type": "media",
+                "title": "Talk",
+                "children": [],
+                "media_ref": {"file_path": str(media), "mime_type": "video/mp4"},
+            }]
+            first_identity = MeetingSyncIdentity(
+                tree_key="mwb:2026-05-25:T:issue",
+                pub_type="mwb",
+                monday=date(2026, 5, 25),
+                canonical_hash="hash-from-terminal-a",
+            )
+            second_identity = MeetingSyncIdentity(
+                tree_key=first_identity.tree_key,
+                pub_type=first_identity.pub_type,
+                monday=first_identity.monday,
+                canonical_hash="hash-from-terminal-b",
+            )
+
+            first = service.save_tree(
+                folder,
+                first_identity,
+                nodes=nodes,
+                deleted_source_keys=set(),
+                linked_folder_files={str(media): "media"},
+                meeting_folder_imports={},
+                expected_revision=0,
+            )
+            manifest_path = folder / MANIFEST_FILE
+            before = manifest_path.read_text(encoding="utf-8")
+
+            second = service.save_tree(
+                folder,
+                second_identity,
+                nodes=nodes,
+                deleted_source_keys=set(),
+                linked_folder_files={str(media): "media"},
+                meeting_folder_imports={},
+                expected_revision=first.revision,
+            )
+
+            self.assertEqual(second.revision, first.revision)
+            self.assertEqual(second.canonical_hash, "hash-from-terminal-a")
+            self.assertEqual(manifest_path.read_text(encoding="utf-8"), before)
+
     def test_manifest_import_records_are_portable_by_source_path(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
