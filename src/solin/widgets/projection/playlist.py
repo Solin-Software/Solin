@@ -86,6 +86,10 @@ class ProjectionPlaylistMixin:
                         self._playlist[self._playlist_index],
                     )
 
+        sync_fullscreen = getattr(self, "_sync_app_fullscreen_navigation", None)
+        if sync_fullscreen is not None:
+            sync_fullscreen()
+
     def _on_prev_clicked(self):
         if self._playlist_index > 0:
             self._playlist_index -= 1
