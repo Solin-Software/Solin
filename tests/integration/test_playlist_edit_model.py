@@ -183,6 +183,96 @@ def test_move_media_to_subsection_updates_storage_and_marker_positions(tmp_path)
     ]
 
 
+def test_empty_subsection_move_persists_before_section_media(tmp_path):
+    playlist = {
+        "sections": [
+            {
+                "id": "section-1",
+                "name": "Main",
+                "collapsed": False,
+                "position": 0,
+            },
+            {
+                "id": "empty-subsection",
+                "name": "Empty",
+                "parent_id": "section-1",
+                "collapsed": False,
+                "position": 2,
+            },
+        ],
+        "items": [
+            {
+                "id": "media-1",
+                "title": "First",
+                "type": "video",
+                "url": "",
+                "section_id": "section-1",
+            },
+            {
+                "id": "media-2",
+                "title": "Second",
+                "type": "video",
+                "url": "",
+                "section_id": "section-1",
+            },
+        ],
+        "markers": [],
+    }
+    model = _model(tmp_path)
+    model.rebuild(playlist)
+
+    assert model.move_node("empty-subsection", "section:section-1", 1)
+    model.rebuild(playlist)
+
+    section = model.tree_data()[0]
+    assert [node["id"] for node in section["children"]] == [
+        "media-1",
+        "empty-subsection",
+        "media-2",
+    ]
+    empty = next(
+        section for section in playlist["sections"]
+        if section["id"] == "empty-subsection"
+    )
+    assert empty["position"] == 1
+    assert empty["slot_order"] == 0
+
+
+def test_empty_top_level_section_move_persists_before_root_media(tmp_path):
+    playlist = {
+        "sections": [
+            {
+                "id": "empty-section",
+                "name": "Empty",
+                "collapsed": False,
+                "position": 1,
+            },
+        ],
+        "items": [
+            {
+                "id": "root-media",
+                "title": "Root",
+                "type": "video",
+                "url": "",
+                "section_id": None,
+            },
+        ],
+        "markers": [],
+    }
+    model = _model(tmp_path)
+    model.rebuild(playlist)
+
+    assert model.move_node("empty-section", "root", 0)
+    model.rebuild(playlist)
+
+    assert [node["id"] for node in model.tree_data()] == [
+        "empty-section",
+        "root-media",
+    ]
+    assert playlist["sections"][0]["position"] == 0
+    assert playlist["sections"][0]["slot_order"] == 0
+
+
 def test_invalid_section_drop_into_descendant_preserves_storage(tmp_path):
     playlist = _nested_playlist()
     before = copy.deepcopy(playlist)
