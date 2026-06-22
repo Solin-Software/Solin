@@ -647,12 +647,12 @@ class MainWindowUiController:
         title_col.addWidget(title_label)
         title_col.addWidget(subtitle_label)
 
-        header_row.addLayout(title_col, 1)
         header_row.addWidget(
             profile_avatar_button,
             0,
             Qt.AlignmentFlag.AlignVCenter,
         )
+        header_row.addLayout(title_col, 1)
         return header_row
 
     def _build_nav_buttons(
