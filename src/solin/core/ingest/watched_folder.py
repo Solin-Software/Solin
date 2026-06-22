@@ -34,6 +34,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -56,8 +57,10 @@ from solin.core.media.formats import (
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
     MANIFEST_LOCK as _MANIFEST_LOCK,
+    absolute_local_url_tail as _absolute_local_url_tail,
     cache_dir as _cache_dir,
     from_manifest_url as _from_manifest_url,
+    is_absolute_local_url as _is_absolute_local_url,
     load_manifest as _load_manifest,
     save_manifest as _save_manifest,
     to_manifest_url as _to_manifest_url,
@@ -133,6 +136,97 @@ def _file_fingerprint(path: Path) -> dict:
 def _fingerprint_matches(entry: dict, fp: dict) -> bool:
     """Check if a manifest entry still matches the file on disk."""
     return entry.get("size") == fp["size"] and entry.get("mtime") == fp["mtime"]
+
+
+def _path_is_inside(path: str | Path, folder: str | Path) -> bool:
+    try:
+        Path(path).resolve().relative_to(Path(folder).resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _playlist_cache_references(manifest: dict) -> set[str]:
+    """Return cache filenames directly referenced by the saved playlist."""
+
+    names: set[str] = set()
+    for item in manifest.get("playlist", {}).get("items", []):
+        url = str(item.get("url") or "")
+        if not url or url.startswith(("http://", "https://")):
+            continue
+        path = Path(url)
+        parts = path.parts
+        if len(parts) >= 2 and parts[-2] == CACHE_DIR_NAME:
+            names.add(parts[-1])
+    return names
+
+
+def _safe_cache_stem(value: str) -> str:
+    stem = "".join(
+        char if char.isalnum() or char in "._-" else "_"
+        for char in value
+    ).strip("._")
+    return stem[:48] or "media"
+
+
+def _adopted_cache_path(source: Path, cache: Path, item_id: str) -> Path:
+    stat = source.stat()
+    fingerprint = "|".join(
+        (
+            os.path.normcase(os.path.abspath(str(source))),
+            str(stat.st_size),
+            str(stat.st_mtime_ns),
+            item_id,
+        )
+    )
+    digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:12]
+    return cache / f"{_safe_cache_stem(source.stem)}-{digest}{source.suffix.lower()}"
+
+
+def _copy_external_file_to_cache(source: Path, subfolder: Path, item_id: str) -> Path:
+    cache = _cache_dir(subfolder)
+    destination = _adopted_cache_path(source, cache, item_id)
+    if destination.exists() and destination.stat().st_size == source.stat().st_size:
+        return destination
+
+    temp_path = cache / f".{destination.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        shutil.copy2(source, temp_path)
+        os.replace(temp_path, destination)
+    except OSError:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            log.warning("Cannot remove temporary cache copy %s", temp_path, exc_info=True)
+        raise
+    return destination
+
+
+def _portable_playlist_url(url: str, subfolder: Path, item_id: str) -> tuple[str, str | None]:
+    """Return (manifest_url, runtime_url) for a watched-folder playlist item."""
+
+    if not url or url.startswith(("http://", "https://")):
+        return url, None
+
+    portable = _to_manifest_url(url, subfolder)
+    if portable != url:
+        return portable, None
+
+    path = Path(url)
+    if path.is_absolute() and path.is_file():
+        if _path_is_inside(path, subfolder):
+            return _to_manifest_url(str(path), subfolder), None
+        adopted = _copy_external_file_to_cache(path, subfolder, item_id)
+        return _to_manifest_url(str(adopted), subfolder), str(adopted)
+
+    if _is_absolute_local_url(url):
+        tail = _absolute_local_url_tail(url)
+        if tail.name:
+            cache_tail = Path(CACHE_DIR_NAME) / tail.name
+            runtime_url = str(subfolder / cache_tail)
+            return cache_tail.as_posix(), runtime_url
+
+    return url, None
 
 
 # ── Escaneamento ───────────────────────────────────────────────────────────────
@@ -220,6 +314,7 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
     for _src_name, entry in manifest.get("processed", {}).items():
         for out_name in entry.get("outputs", []):
             allowed_cache_files.add(out_name)
+    allowed_cache_files.update(_playlist_cache_references(manifest))
 
     # 1. Arquivos de mídia na raiz da subpasta
     for f in sub.iterdir():
@@ -373,23 +468,43 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
 
     reconcile_manifest(subfolder_path)
 
-    # Current items from disk scan
+    # Saved playlist from manifest
+    manifest = _load_manifest(sub)
+    saved_pl = manifest.get("playlist", {})
+    saved_manifest_items = saved_pl.get("items", [])
+
+    # Resolve saved URLs to absolute paths on this machine. Legacy manifests may
+    # contain machine-local paths to profile caches; adopt those into the linked
+    # folder on load so simply opening the playlist heals the shared manifest.
+    manifest_changed = False
+    saved_items = []
+    for si in saved_manifest_items:
+        raw_url = str(si.get("url") or "")
+        resolved_url = _from_manifest_url(raw_url, sub)
+        portable_url, runtime_url = _portable_playlist_url(
+            resolved_url,
+            sub,
+            str(si.get("id") or ""),
+        )
+        if portable_url != raw_url:
+            si["url"] = portable_url
+            manifest_changed = True
+        runtime_item = dict(si)
+        runtime_item["url"] = (
+            runtime_url if runtime_url is not None else _from_manifest_url(portable_url, sub)
+        )
+        saved_items.append(runtime_item)
+
+    if manifest_changed:
+        _save_manifest(sub, manifest)
+
+    # Current items from disk scan, after any load-time adoption above.
     current_items = scan_subfolder(subfolder_path)
     current_by_url: dict[str, dict] = {}
     for ci in current_items:
         url = ci.get("url", "")
         if url:
             current_by_url[url] = ci
-
-    # Saved playlist from manifest
-    manifest = _load_manifest(sub)
-    saved_pl = manifest.get("playlist", {})
-    saved_items = saved_pl.get("items", [])
-
-    # Resolve saved URLs to absolute paths on this machine
-    for si in saved_items:
-        raw_url = si.get("url", "")
-        si["url"] = _from_manifest_url(raw_url, sub)
 
     saved_urls = {it.get("url", "") for it in saved_items if it.get("url")}
     
@@ -435,11 +550,20 @@ def save_manifest_playlist(subfolder_path: str, pl: dict) -> None:
     if not sub.is_dir():
         return
 
-    # Deep-copy items and convert URLs to relative for portability
+    # Deep-copy items and convert URLs to relative for portability.  Local files
+    # produced outside the linked folder (profile PDF cache, JWPUB/JWL imports)
+    # are adopted into this folder's .solin_cache before the manifest is saved.
     portable_items = []
     for item in pl.get("items", []):
         pi = dict(item)
-        pi["url"] = _to_manifest_url(pi.get("url", ""), sub)
+        portable_url, runtime_url = _portable_playlist_url(
+            str(pi.get("url") or ""),
+            sub,
+            str(pi.get("id") or ""),
+        )
+        pi["url"] = portable_url
+        if runtime_url is not None:
+            item["url"] = runtime_url
         portable_items.append(pi)
 
     manifest = _load_manifest(sub)

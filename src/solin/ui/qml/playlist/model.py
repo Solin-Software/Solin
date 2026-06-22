@@ -295,25 +295,20 @@ class PlaylistEditModel(QAbstractListModel):
             if parent_id:
                 first_index.setdefault(parent_id, idx)
 
-        def section_sort_key(sec: dict, fallback: int) -> tuple[float, int]:
-            pos = sec.get("position")
-            if isinstance(pos, int):
-                return (float(pos), fallback)
-            if sec["id"] in first_index:
-                return (float(first_index[sec["id"]]), fallback)
-            return (float(len(items) + fallback + 1), fallback)
-
-        root_nodes: list[tuple[float, int, str, dict]] = []
+        root_nodes: list[tuple[tuple[float, int, int, int], str, dict]] = []
         for idx, item in enumerate(items):
             if not item.get("section_id"):
-                root_nodes.append((float(idx), idx, "media", item))
+                root_nodes.append((self._media_order_key(idx), "media", item))
         for order, sec in enumerate(top_sections):
-            pos, fallback = section_sort_key(sec, order)
-            root_nodes.append((pos, len(items) + fallback, "section", sec))
-        root_nodes.sort(key=lambda node: (node[0], node[1]))
+            root_nodes.append((
+                self._section_order_key(sec, order, len(items), first_index),
+                "section",
+                sec,
+            ))
+        root_nodes.sort(key=lambda node: node[0])
 
         result: list[dict] = []
-        for _, _, node_type, obj in root_nodes:
+        for _, node_type, obj in root_nodes:
             if node_type == "media":
                 result.append(self._media_node(obj))
             else:
@@ -335,31 +330,24 @@ class PlaylistEditModel(QAbstractListModel):
     ) -> dict:
         section_id = sec["id"]
         subsections = [] if is_subsection else subsections_by_parent.get(section_id, [])
-        subsection_ids = {sub["id"] for sub in subsections}
         children: list[dict] = (
             self._subsection_children(section_id, items, markers_by_subsection)
             if is_subsection else []
         )
-        opened_subsections: set[str] = set()
 
         if not is_subsection:
-            for item in items:
-                sid = item.get("section_id")
-                if sid == section_id:
-                    children.append(self._media_node(item))
-                elif sid in subsection_ids:
-                    sub = next(s for s in subsections if s["id"] == sid)
-                    if sid not in opened_subsections:
-                        children.append(self._section_node(
-                            sub, subsections_by_parent, direct_counts, items,
-                            markers_by_subsection,
-                            is_subsection=True))
-                        opened_subsections.add(sid)
-
-            for sub in subsections:
-                if sub["id"] not in opened_subsections:
+            first_index = self._first_index_by_section(items)
+            for node_type, obj in self._ordered_section_children(
+                section_id,
+                subsections,
+                items,
+                first_index,
+            ):
+                if node_type == "media":
+                    children.append(self._media_node(obj))
+                else:
                     children.append(self._section_node(
-                        sub, subsections_by_parent, direct_counts, items,
+                        obj, subsections_by_parent, direct_counts, items,
                         markers_by_subsection,
                         is_subsection=True))
 
@@ -397,6 +385,64 @@ class PlaylistEditModel(QAbstractListModel):
                 continue
             markers_by_subsection.setdefault(subsection_id, []).append(marker)
         return markers_by_subsection
+
+    @staticmethod
+    def _media_order_key(index: int) -> tuple[float, int, int, int]:
+        return (float(index), 1, 0, index)
+
+    @staticmethod
+    def _section_order_key(
+        section: dict,
+        fallback: int,
+        item_count: int,
+        first_index: dict[str, int],
+    ) -> tuple[float, int, int, int]:
+        position = section.get("position")
+        if not isinstance(position, int):
+            position = first_index.get(section["id"], item_count + fallback + 1)
+        slot_order = section.get("slot_order")
+        if not isinstance(slot_order, int):
+            slot_order = fallback
+        return (float(position), 0, slot_order, fallback)
+
+    @staticmethod
+    def _first_index_by_section(items: list[dict]) -> dict[str, int]:
+        first_index: dict[str, int] = {}
+        for index, item in enumerate(items):
+            section_id = item.get("section_id") or ""
+            if section_id:
+                first_index.setdefault(section_id, index)
+        return first_index
+
+    def _ordered_section_children(
+        self,
+        section_id: str,
+        subsections: list[dict],
+        items: list[dict],
+        first_index: dict[str, int],
+    ) -> list[tuple[str, dict]]:
+        ordered_nodes: list[tuple[tuple[float, int, int, int], str, dict]] = []
+        subsection_ids = {sub["id"] for sub in subsections}
+        for index, item in enumerate(items):
+            if item.get("section_id") == section_id:
+                ordered_nodes.append((self._media_order_key(index), "media", item))
+        for fallback, subsection in enumerate(subsections):
+            ordered_nodes.append((
+                self._section_order_key(
+                    subsection,
+                    fallback,
+                    len(items),
+                    first_index,
+                ),
+                "subsection",
+                subsection,
+            ))
+        ordered_nodes.sort(key=lambda node: node[0])
+        return [
+            (node_type, obj)
+            for _, node_type, obj in ordered_nodes
+            if node_type == "subsection" or obj.get("section_id") not in subsection_ids
+        ]
 
     def _subsection_children(
         self,
@@ -633,14 +679,6 @@ class PlaylistEditModel(QAbstractListModel):
             if parent_id:
                 first_index.setdefault(parent_id, idx)
 
-        def section_sort_key(sec: dict, fallback: int) -> tuple[float, int]:
-            pos = sec.get("position")
-            if isinstance(pos, int):
-                return (float(pos), fallback)
-            if sec["id"] in first_index:
-                return (float(first_index[sec["id"]]), fallback)
-            return (float(len(items) + fallback + 1), fallback)
-
         def make_media(item: dict) -> dict:
             return {"id": item["id"], "type": "media", "ref": item, "children": []}
 
@@ -677,22 +715,19 @@ class PlaylistEditModel(QAbstractListModel):
             children: list[dict] = (
                 make_subsection_children(sid) if is_subsection else []
             )
-            opened_subsections: set[str] = set()
             subsections = [] if is_subsection else subsections_by_parent.get(sid, [])
-            sub_ids = {s["id"] for s in subsections}
             if not is_subsection:
-                for item in items:
-                    item_sid = item.get("section_id")
-                    if item_sid == sid:
-                        children.append(make_media(item))
-                    elif item_sid in sub_ids:
-                        sub = next(s for s in subsections if s["id"] == item_sid)
-                        if item_sid not in opened_subsections:
-                            children.append(make_section(sub, True))
-                            opened_subsections.add(item_sid)
-                for sub in subsections:
-                    if sub["id"] not in opened_subsections:
-                        children.append(make_section(sub, True))
+                child_first_index = self._first_index_by_section(items)
+                for node_type, obj in self._ordered_section_children(
+                    sid,
+                    subsections,
+                    items,
+                    child_first_index,
+                ):
+                    if node_type == "media":
+                        children.append(make_media(obj))
+                    else:
+                        children.append(make_section(obj, True))
             return {
                 "id": sid,
                 "type": "subsection" if is_subsection else "section",
@@ -700,15 +735,17 @@ class PlaylistEditModel(QAbstractListModel):
                 "children": children,
             }
 
-        root_nodes: list[tuple[float, int, dict]] = []
+        root_nodes: list[tuple[tuple[float, int, int, int], dict]] = []
         for idx, item in enumerate(items):
             if not item.get("section_id"):
-                root_nodes.append((float(idx), idx, make_media(item)))
+                root_nodes.append((self._media_order_key(idx), make_media(item)))
         for order, sec in enumerate(top_sections):
-            pos, fallback = section_sort_key(sec, order)
-            root_nodes.append((pos, len(items) + fallback, make_section(sec, False)))
-        root_nodes.sort(key=lambda node: (node[0], node[1]))
-        return [node for _, _, node in root_nodes]
+            root_nodes.append((
+                self._section_order_key(sec, order, len(items), first_index),
+                make_section(sec, False),
+            ))
+        root_nodes.sort(key=lambda node: node[0])
+        return [node for _, node in root_nodes]
 
     def _pop_tree_node(self, nodes: list[dict], node_id: str) -> dict | None:
         for idx, node in enumerate(nodes):
@@ -759,11 +796,13 @@ class PlaylistEditModel(QAbstractListModel):
         items_out: list[dict] = []
         sections_out: list[dict] = []
         markers_out: list[dict] = []
-        marker_slot_counts: dict[int, int] = {}
+        marker_slot_counts: dict[tuple[str, int], int] = {}
+        section_slot_counts: dict[tuple[str, int], int] = {}
         item_counter = 0
 
         def walk(children: list[dict], parent_section_id: str | None = None):
             nonlocal item_counter
+            list_id = parent_section_id or "root"
             for node in children:
                 ref = node["ref"]
                 if node["type"] == "media":
@@ -775,17 +814,24 @@ class PlaylistEditModel(QAbstractListModel):
                         continue
                     ref["subsection_id"] = parent_section_id
                     ref["position"] = item_counter
-                    ref["slot_order"] = marker_slot_counts.get(item_counter, 0)
-                    marker_slot_counts[item_counter] = ref["slot_order"] + 1
+                    marker_key = (parent_section_id, item_counter)
+                    ref["slot_order"] = marker_slot_counts.get(marker_key, 0)
+                    marker_slot_counts[marker_key] = ref["slot_order"] + 1
                     markers_out.append(ref)
                 elif node["type"] == "section":
                     ref["parent_id"] = None
                     ref["position"] = item_counter
+                    section_key = (list_id, item_counter)
+                    ref["slot_order"] = section_slot_counts.get(section_key, 0)
+                    section_slot_counts[section_key] = ref["slot_order"] + 1
                     sections_out.append(ref)
                     walk(node.get("children", []), ref["id"])
                 elif node["type"] == "subsection":
                     ref["parent_id"] = parent_section_id
                     ref["position"] = item_counter
+                    section_key = (list_id, item_counter)
+                    ref["slot_order"] = section_slot_counts.get(section_key, 0)
+                    section_slot_counts[section_key] = ref["slot_order"] + 1
                     sections_out.append(ref)
                     walk(node.get("children", []), ref["id"])
 
@@ -830,25 +876,20 @@ class PlaylistEditModel(QAbstractListModel):
             if parent_id:
                 first_index.setdefault(parent_id, idx)
 
-        def section_sort_key(sec: dict, fallback: int) -> tuple[float, int]:
-            pos = sec.get("position")
-            if isinstance(pos, int):
-                return (float(pos), fallback)
-            if sec["id"] in first_index:
-                return (float(first_index[sec["id"]]), fallback)
-            return (float(len(items) + fallback + 1), fallback)
-
-        root_nodes: list[tuple[float, int, str, dict]] = []
+        root_nodes: list[tuple[tuple[float, int, int, int], str, dict]] = []
         for idx, item in enumerate(items):
             if not item.get("section_id"):
-                root_nodes.append((float(idx), idx, "item", item))
+                root_nodes.append((self._media_order_key(idx), "item", item))
         for order, sec in enumerate(top_sections):
-            pos, fallback = section_sort_key(sec, order)
-            root_nodes.append((pos, len(items) + fallback, "section", sec))
-        root_nodes.sort(key=lambda node: (node[0], node[1]))
+            root_nodes.append((
+                self._section_order_key(sec, order, len(items), first_index),
+                "section",
+                sec,
+            ))
+        root_nodes.sort(key=lambda node: node[0])
 
         entries: list[dict] = []
-        for _, _, node_type, obj in root_nodes:
+        for _, node_type, obj in root_nodes:
             if node_type == "item":
                 entries.append(self._make_item_entry(
                     obj, depth=0, section=None, show_accent=False))
@@ -867,7 +908,6 @@ class PlaylistEditModel(QAbstractListModel):
     ) -> None:
         section_id = sec["id"]
         subsections = subsections_by_parent.get(section_id, [])
-        subsection_ids = {sub["id"] for sub in subsections}
         total = direct_counts.get(section_id, 0)
         for sub in subsections:
             total += direct_counts.get(sub["id"], 0)
@@ -876,26 +916,25 @@ class PlaylistEditModel(QAbstractListModel):
         if sec.get("collapsed", False):
             return
 
-        opened_subsections: set[str] = set()
-        for item in items:
-            sid = item.get("section_id")
-            if sid == section_id:
+        first_index = self._first_index_by_section(items)
+        for node_type, obj in self._ordered_section_children(
+            section_id,
+            subsections,
+            items,
+            first_index,
+        ):
+            if node_type == "media":
                 entries.append(self._make_item_entry(
-                    item, depth=1, section=sec, show_accent=True))
-            elif sid in subsection_ids:
-                sub = next(s for s in subsections if s["id"] == sid)
-                if sid not in opened_subsections:
-                    entries.append(self._make_subsection_entry(
-                        sub, direct_counts.get(sid, 0), sec))
-                    opened_subsections.add(sid)
-                if not sub.get("collapsed", False):
-                    entries.append(self._make_item_entry(
-                        item, depth=2, section=sec, show_accent=False))
-
-        for sub in subsections:
-            if sub["id"] not in opened_subsections:
+                    obj, depth=1, section=sec, show_accent=True))
+            else:
                 entries.append(self._make_subsection_entry(
-                    sub, direct_counts.get(sub["id"], 0), sec))
+                    obj, direct_counts.get(obj["id"], 0), sec))
+                if not obj.get("collapsed", False):
+                    for item in items:
+                        if item.get("section_id") != obj["id"]:
+                            continue
+                        entries.append(self._make_item_entry(
+                            item, depth=2, section=sec, show_accent=False))
 
     def _make_section_entry(self, sec: dict, count: int) -> dict:
         hue = sec.get("color_hue", 215)

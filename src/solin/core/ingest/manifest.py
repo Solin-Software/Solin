@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 import threading
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -35,21 +35,39 @@ def to_manifest_url(url: str, subfolder: Path) -> str:
         return url
 
 
+def is_absolute_local_url(url: str) -> bool:
+    """Return True for local absolute paths from the current OS or Windows."""
+
+    if not url or url.startswith(("http://", "https://")):
+        return False
+    return Path(url).is_absolute() or PureWindowsPath(url).is_absolute()
+
+
+def absolute_local_url_tail(url: str) -> Path:
+    """Return the portable tail for an absolute local URL from any supported OS."""
+
+    current_path = Path(url)
+    if current_path.is_absolute():
+        parts = current_path.parts
+    else:
+        parts = PureWindowsPath(url).parts
+    if len(parts) >= 2 and parts[-2] == CACHE_DIR_NAME:
+        return Path(CACHE_DIR_NAME) / parts[-1]
+    if parts:
+        return Path(parts[-1])
+    return Path("")
+
+
 def from_manifest_url(url: str, subfolder: Path) -> str:
     """Resolve a manifest URL back to an absolute path on this machine."""
     if not url or url.startswith(("http://", "https://")):
         return url
 
     p = Path(url)
-    if p.is_absolute():
+    if is_absolute_local_url(url):
         if p.exists():
             return str(p)
-        parts = p.parts
-        if len(parts) >= 2 and parts[-2] == CACHE_DIR_NAME:
-            tail = Path(parts[-2]) / parts[-1]
-        else:
-            tail = Path(parts[-1])
-        return str(subfolder / tail)
+        return str(subfolder / absolute_local_url_tail(url))
 
     return str(subfolder / p)
 

@@ -69,3 +69,83 @@ def test_append_temp_playlist_items_updates_matching_session():
     assert appended is True
     assert edit_view._pl["items"] == [{"title": "Imported"}]
     assert rebuilds == [True]
+
+
+class _Signal:
+    def __init__(self):
+        self.callbacks = []
+
+    def connect(self, callback):
+        self.callbacks.append(callback)
+        return callback
+
+    def emit(self, *args):
+        for callback in list(self.callbacks):
+            callback(*args)
+
+
+class _SyncThread:
+    def __init__(self):
+        self.sync_complete = _Signal()
+        self.sync_failed = _Signal()
+        self.finished = _Signal()
+        self.started = False
+
+    def start(self):
+        self.started = True
+
+    def deleteLater(self):
+        pass
+
+
+class _WatchedFolderStore:
+    def __init__(self, thread):
+        self.thread = thread
+
+    def pending_files(self, _path):
+        return ["slides.pdf"]
+
+    def create_sync_thread(self, *_args, **_kwargs):
+        return self.thread
+
+
+class _Notifications:
+    def __init__(self):
+        self.infos = []
+        self.successes = []
+        self.errors = []
+
+    def information(self, message):
+        self.infos.append(message)
+
+    def success(self, message):
+        self.successes.append(message)
+
+    def error(self, message):
+        self.errors.append(message)
+
+
+def test_watched_folder_sync_is_quiet_unless_it_fails():
+    thread = _SyncThread()
+    notifications = _Notifications()
+    refreshes = []
+    view = SimpleNamespace(
+        _watched_path="folder",
+        _watched_folder_playlist_store=_WatchedFolderStore(thread),
+        _notifications=notifications,
+        _wf_refresh_pending=False,
+        _wf_sync_thread=None,
+        _current_media_context=lambda: SimpleNamespace(api_code="E", fallback_code="T"),
+        tr=lambda text, *_args: text,
+        refresh_watched_folder=lambda: refreshes.append(True),
+    )
+
+    playlist_widget.PlaylistEditView._start_wf_sync(view)
+    thread.sync_complete.emit()
+    thread.sync_failed.emit("disk full")
+
+    assert thread.started is True
+    assert refreshes == [True]
+    assert notifications.infos == []
+    assert notifications.successes == []
+    assert notifications.errors == ["disk full"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 import os
+import uuid
 from pathlib import Path
 
 import pytest
@@ -324,6 +325,132 @@ def test_document_cache_rename_updates_saved_playlist_urls(tmp_path):
     manifest = watched_folder_module._load_manifest(tmp_path)
     assert manifest["playlist"]["items"][0]["url"] == (
         ".solin_cache/report.pdf-unique-page_001.jpg"
+    )
+
+
+def test_watched_playlist_adopts_external_generated_files_into_cache(tmp_path):
+    external = tmp_path.parent / f"external-page-{uuid.uuid4().hex}.jpg"
+    external.write_bytes(b"page")
+    playlist = {
+        "items": [
+            {
+                "id": "page-id",
+                "title": "Report — p. 1",
+                "url": str(external),
+                "type": "image",
+            },
+        ],
+    }
+
+    try:
+        watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
+
+        manifest = watched_folder_module._load_manifest(tmp_path)
+        saved_url = manifest["playlist"]["items"][0]["url"]
+        runtime_url = playlist["items"][0]["url"]
+
+        assert saved_url.startswith(".solin_cache/")
+        assert "external-page" in saved_url
+        assert Path(runtime_url).is_file()
+        assert Path(runtime_url).parent == tmp_path / ".solin_cache"
+        assert Path(runtime_url).read_bytes() == b"page"
+        assert str(external) not in watched_folder_module._load_manifest(
+            tmp_path,
+        )["playlist"]["items"][0]["url"]
+    finally:
+        external.unlink(missing_ok=True)
+
+
+def test_loading_watched_playlist_heals_existing_external_cache_url(tmp_path):
+    external = tmp_path.parent / f"legacy-page-{uuid.uuid4().hex}.jpg"
+    external.write_bytes(b"legacy")
+    watched_folder_module._save_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {},
+            "playlist": {
+                "items": [
+                    {
+                        "id": "page-id",
+                        "title": "Legacy — p. 1",
+                        "url": str(external),
+                        "type": "image",
+                    },
+                ],
+                "sections": [],
+                "markers": [],
+            },
+        },
+    )
+
+    try:
+        playlist = watched_folder_module.load_manifest_playlist(str(tmp_path))
+
+        manifest = watched_folder_module._load_manifest(tmp_path)
+        saved_url = manifest["playlist"]["items"][0]["url"]
+        runtime_url = playlist["items"][0]["url"]
+
+        assert saved_url.startswith(".solin_cache/")
+        assert str(external) not in saved_url
+        assert Path(runtime_url).is_file()
+        assert Path(runtime_url).read_bytes() == b"legacy"
+    finally:
+        external.unlink(missing_ok=True)
+
+
+def test_scan_subfolder_includes_cache_files_referenced_by_playlist(tmp_path):
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    page = cache / "page_001.jpg"
+    page.write_bytes(b"page")
+    watched_folder_module._save_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {},
+            "playlist": {
+                "items": [
+                    {
+                        "id": "page-id",
+                        "title": "Report — p. 1",
+                        "url": ".solin_cache/page_001.jpg",
+                        "type": "image",
+                    },
+                ],
+            },
+        },
+    )
+
+    items = watched_folder_module.scan_subfolder(str(tmp_path))
+
+    assert [item["url"] for item in items] == [str(page)]
+
+
+def test_watched_playlist_does_not_persist_missing_windows_absolute_urls(tmp_path):
+    playlist = {
+        "items": [
+            {
+                "id": "page-id",
+                "title": "Report — p. 1",
+                "url": (
+                    "C:\\Users\\TestUser\\AppData\\Local\\SolinDev\\"
+                    "cache\\profiles\\profile_1\\pdf_pages\\report\\page_001.jpg"
+                ),
+                "type": "image",
+            },
+        ],
+    }
+
+    watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
+
+    manifest = watched_folder_module._load_manifest(tmp_path)
+    saved_url = manifest["playlist"]["items"][0]["url"]
+
+    assert saved_url == ".solin_cache/page_001.jpg"
+    assert "C:\\Users" not in saved_url
+    assert playlist["items"][0]["url"] == str(
+        tmp_path / ".solin_cache" / "page_001.jpg"
     )
 
 
