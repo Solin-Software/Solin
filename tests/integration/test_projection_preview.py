@@ -141,3 +141,21 @@ def test_projection_aspect_keeps_tool_pill_anchored_to_preview() -> None:
     bar = widget._action_bar
     assert bar.isVisible()
     assert bar.y() == widget.height() - bar.height() - 18
+
+
+def test_set_pixmap_repositions_visible_tool_pill_after_late_layout_resize() -> None:
+    widget = ImagePreviewWidget()
+    widget.resize(1000, 360)
+    widget.show()
+    _APP.processEvents()
+    widget.set_image_mode(True)
+    pixmap = _pixmap()
+    widget.set_image_pixmap_fresh(pixmap)
+    old_y = widget._action_bar.y()
+
+    widget.resize(1000, 800)
+    widget.setPixmap(pixmap)
+
+    bar = widget._action_bar
+    assert old_y != bar.y()
+    assert bar.y() == widget.height() - bar.height() - 18

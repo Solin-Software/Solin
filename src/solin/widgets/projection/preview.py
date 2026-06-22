@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from solin.core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
@@ -88,11 +88,6 @@ class ImagePreviewWidget(QWidget):
         )
         self._zoom_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet("QFrame{color:rgba(139,148,158,0.28);}")
-        sep.setFixedHeight(16)
-
         self._reset_btn = QPushButton(self.tr("Reset"))
         self._reset_btn.setFixedHeight(26)
         self._reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -121,7 +116,6 @@ class ImagePreviewWidget(QWidget):
         lay.addWidget(self._aspect_btn)
         lay.addWidget(self._bounds_btn)
         lay.addWidget(self._zoom_lbl)
-        lay.addWidget(sep)
         lay.addWidget(self._reset_btn)
         lay.addWidget(self._apply_btn)
         bar.adjustSize()
@@ -200,6 +194,7 @@ class ImagePreviewWidget(QWidget):
     def setPixmap(self, pixmap: QPixmap):
         self._pixmap = pixmap
         self._clamp_current_transform()
+        self._check_action_bar()
         self.update()
 
     def setText(self, text: str):
@@ -239,13 +234,25 @@ class ImagePreviewWidget(QWidget):
 
     def _position_action_bar(self):
         bar = self._action_bar
-        bar.adjustSize()
-        sh = bar.sizeHint()
-        bw, bh = sh.width(), sh.height()
+        self._prepare_action_bar_geometry()
+        bw, bh = bar.width(), bar.height()
         x = (self.width() - bw) // 2
         y = self.height() - bh - 18
         bar.move(max(0, x), max(0, y))
-        bar.resize(bw, bh)
+
+    def _prepare_action_bar_geometry(self) -> None:
+        bar = self._action_bar
+        bar.ensurePolished()
+        for child in bar.findChildren(QWidget):
+            child.ensurePolished()
+        layout = bar.layout()
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+            size = layout.sizeHint()
+        else:
+            size = bar.sizeHint()
+        bar.setFixedSize(size)
 
     def _check_action_bar(self):
         show = self._image_mode and self._pixmap is not None and not self._pixmap.isNull()
