@@ -230,8 +230,8 @@ class BrowserTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._view_frame)
 
-    def set_browser_aspect_16_9(self, active: bool) -> None:
-        self._view_frame.set_aspect_ratio_locked(active)
+    def set_browser_aspect_ratio_lock(self, active: bool, ratio: float) -> None:
+        self._view_frame.set_aspect_ratio_lock(active, ratio)
 
     def _connect_view(self):
         bridge = self.view.bridge

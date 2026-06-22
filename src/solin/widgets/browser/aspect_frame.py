@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 
+from solin.core.projection.aspect_ratio import DEFAULT_BROWSER_ASPECT_RATIO
+
 
 __all__ = ("AspectRatioViewFrame",)
 
 
 class AspectRatioViewFrame(QWidget):
-    """Container that optionally forces the native webview to stay in 16:9."""
-
-    _RATIO_W = 16
-    _RATIO_H = 9
+    """Container that optionally fits the native webview to a target ratio."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._child: QWidget | None = None
         self._locked = False
+        self._target_ratio = DEFAULT_BROWSER_ASPECT_RATIO.value
         self.setStyleSheet("background:#05070a;")
 
     def set_child(self, child: QWidget) -> None:
@@ -23,10 +23,12 @@ class AspectRatioViewFrame(QWidget):
         child.setParent(self)
         self._apply_child_geometry()
 
-    def set_aspect_ratio_locked(self, locked: bool) -> None:
-        if self._locked == locked:
+    def set_aspect_ratio_lock(self, locked: bool, ratio: float | None = None) -> None:
+        target_ratio = self._target_ratio if ratio is None else max(float(ratio), 0.01)
+        if self._locked == locked and self._target_ratio == target_ratio:
             return
         self._locked = locked
+        self._target_ratio = target_ratio
         self._apply_child_geometry()
 
     def resizeEvent(self, event):
@@ -51,11 +53,11 @@ class AspectRatioViewFrame(QWidget):
             self._child.setGeometry(0, 0, 0, 0)
             return
 
-        target_h = int(avail_w * self._RATIO_H / self._RATIO_W)
+        target_h = int(avail_w / self._target_ratio)
         target_w = avail_w
         if target_h > avail_h:
             target_h = avail_h
-            target_w = int(avail_h * self._RATIO_W / self._RATIO_H)
+            target_w = int(avail_h * self._target_ratio)
 
         x = (avail_w - target_w) // 2
         y = (avail_h - target_h) // 2

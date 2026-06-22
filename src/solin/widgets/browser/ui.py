@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...styles.icons import ICON_CAST, ICON_CROP, make_icon
+from ...styles.icons import ICON_ASPECT_MATCH, ICON_CAST, ICON_CROP, make_icon
 from .tab_bar import BrowserTabBar
 
 
@@ -164,11 +164,11 @@ class BrowserUiMixin:
         self.aspect_btn = QPushButton()
         self.aspect_btn.setFixedSize(34, 34)
         self.aspect_btn.setCheckable(True)
-        self.aspect_btn.setToolTip(self.tr("Lock browser to 16:9"))
         self.aspect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.aspect_btn.setIcon(self._make_aspect_16_9_icon("#8b949e"))
+        self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#8b949e"))
         self.aspect_btn.setStyleSheet(self._aspect_btn_style_off)
-        self.aspect_btn.toggled.connect(self._on_aspect_16_9_toggled)
+        self.aspect_btn.toggled.connect(self._on_aspect_lock_toggled)
+        self._update_aspect_lock_btn_visual(False)
         nav.addWidget(self.aspect_btn)
 
         root.addWidget(topbar)

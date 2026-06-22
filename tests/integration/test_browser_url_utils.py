@@ -1,4 +1,5 @@
 import solin.widgets.browser.widget as browser_widget
+from solin.core.projection.aspect_ratio import DEFAULT_BROWSER_ASPECT_RATIO
 from solin.widgets.browser.aspect_frame import AspectRatioViewFrame
 from solin.widgets.browser.crop_overlay import CropOverlay
 from solin.ui.browser.native_adapters import (
@@ -42,8 +43,8 @@ def test_normalize_browser_input_converts_existing_relative_path(tmp_path, monke
 
 def test_browser_overlay_widgets_keep_geometry_defaults():
     assert CropOverlay._MIN_DRAG == 8
-    assert AspectRatioViewFrame._RATIO_W == 16
-    assert AspectRatioViewFrame._RATIO_H == 9
+    assert hasattr(AspectRatioViewFrame, "set_aspect_ratio_lock")
+    assert DEFAULT_BROWSER_ASPECT_RATIO.label == "16:9"
 
 
 def test_native_adapters_preserve_old_browser_surface():

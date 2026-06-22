@@ -58,7 +58,7 @@ class BrowserNavigationMixin:
         tab.view.frameStreamFailed.connect(
             lambda error, t=tab: self._on_native_frame_stream_failed(t, error)
         )
-        tab.set_browser_aspect_16_9(self._browser_aspect_16_9_active)
+        self._apply_browser_aspect_to_tab(tab)
 
         label = self.tr("New tab")
         idx = self._tab_bar.addTab(label)
