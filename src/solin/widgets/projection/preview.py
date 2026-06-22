@@ -242,9 +242,8 @@ class ImagePreviewWidget(QWidget):
         bar.adjustSize()
         sh = bar.sizeHint()
         bw, bh = sh.width(), sh.height()
-        frame = self._active_frame()
-        x = int(frame.x() + (frame.width() - bw) / 2.0)
-        y = int(frame.y() + frame.height() - bh - 18)
+        x = (self.width() - bw) // 2
+        y = self.height() - bh - 18
         bar.move(max(0, x), max(0, y))
         bar.resize(bw, bh)
 

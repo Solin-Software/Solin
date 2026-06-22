@@ -122,3 +122,22 @@ def test_projection_aspect_clips_pixels_outside_frame() -> None:
     image = rendered.toImage()
 
     assert image.pixelColor(50, 5) == QColor("#0d1117")
+
+
+def test_projection_aspect_keeps_tool_pill_anchored_to_preview() -> None:
+    widget = ImagePreviewWidget()
+    widget.resize(1000, 800)
+    widget.show()
+    _APP.processEvents()
+    widget.set_image_mode(True)
+    widget.set_image_pixmap_fresh(_pixmap())
+    widget.configure_framing(
+        match_projection_aspect=True,
+        constrain_to_frame=False,
+        aspect_ratio=16 / 9,
+        aspect_ratio_label="16:9",
+    )
+
+    bar = widget._action_bar
+    assert bar.isVisible()
+    assert bar.y() == widget.height() - bar.height() - 18
