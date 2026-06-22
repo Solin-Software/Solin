@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from solin.core.projection.aspect_ratio import (
-    DEFAULT_BROWSER_ASPECT_RATIO,
+    DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
-    browser_aspect_ratio_from_projection_windows,
+    projection_aspect_ratio_from_windows,
 )
 
 
@@ -62,33 +62,33 @@ def test_projection_aspect_ratio_formats_known_display_label() -> None:
     assert ratio.value == 1.6
 
 
-def test_browser_aspect_ratio_uses_first_visible_projection_screen() -> None:
+def test_projection_aspect_ratio_uses_first_visible_projection_screen() -> None:
     hidden = _Window(visible=False, screen=_Screen(1024, 768))
     visible = _Window(screen=_Screen(1920, 1200))
 
-    ratio = browser_aspect_ratio_from_projection_windows([hidden, visible])
+    ratio = projection_aspect_ratio_from_windows([hidden, visible])
 
     assert ratio.label == "16:10"
     assert not ratio.is_fallback
 
 
-def test_browser_aspect_ratio_skips_minimized_projection_windows() -> None:
+def test_projection_aspect_ratio_skips_minimized_projection_windows() -> None:
     minimized = _Window(minimized=True, screen=_Screen(1920, 1080))
 
-    ratio = browser_aspect_ratio_from_projection_windows([minimized])
+    ratio = projection_aspect_ratio_from_windows([minimized])
 
-    assert ratio == DEFAULT_BROWSER_ASPECT_RATIO
+    assert ratio == DEFAULT_PROJECTION_ASPECT_RATIO
 
 
-def test_browser_aspect_ratio_falls_back_to_window_geometry() -> None:
+def test_projection_aspect_ratio_falls_back_to_window_geometry() -> None:
     window = _Window(screen=None, geometry=_Geometry(1024, 768))
 
-    ratio = browser_aspect_ratio_from_projection_windows([window])
+    ratio = projection_aspect_ratio_from_windows([window])
 
     assert ratio.label == "4:3"
 
 
-def test_browser_aspect_ratio_falls_back_without_visible_projection() -> None:
-    ratio = browser_aspect_ratio_from_projection_windows([])
+def test_projection_aspect_ratio_falls_back_without_visible_projection() -> None:
+    ratio = projection_aspect_ratio_from_windows([])
 
-    assert ratio == DEFAULT_BROWSER_ASPECT_RATIO
+    assert ratio == DEFAULT_PROJECTION_ASPECT_RATIO

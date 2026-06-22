@@ -60,8 +60,8 @@ class _WindowStub:
             "play_next_requested",
             "playlist_navigate",
             "image_apply_transform",
+            "image_apply_transform_instant",
             "image_reset_transform",
-            "image_reset_transform_instant",
             "obs_scene_toggle_requested",
             "set_as_idle_requested",
         )
@@ -157,8 +157,8 @@ class _WindowStub:
             project_next_auto=_slot("project_next"),
             on_playlist_navigate=_slot("playlist_navigate"),
             on_image_apply_transform=_slot("image_apply"),
+            on_image_apply_transform_instant=_slot("image_apply_instant"),
             on_image_reset_transform=_slot("image_reset"),
-            on_image_reset_transform_instant=_slot("image_reset_instant"),
         )
         self._timer_theme = SimpleNamespace(
             start_timer=_slot("start_timer"),

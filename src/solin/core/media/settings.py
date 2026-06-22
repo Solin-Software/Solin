@@ -121,3 +121,33 @@ class ProjectionPlaybackSettingsStore:
 
     def set_volume(self, volume: float) -> None:
         self.settings.set_value(SettingsKey.PLAYBACK_VOLUME, max(0.0, min(1.0, volume)))
+
+    def image_match_projection_aspect(self) -> bool:
+        return bool(
+            self.settings.value(
+                SettingsKey.IMAGE_MATCH_PROJECTION_ASPECT,
+                False,
+                bool,
+            )
+        )
+
+    def set_image_match_projection_aspect(self, enabled: bool) -> None:
+        self.settings.set_value(
+            SettingsKey.IMAGE_MATCH_PROJECTION_ASPECT,
+            bool(enabled),
+        )
+
+    def image_constrain_to_frame(self) -> bool:
+        return bool(
+            self.settings.value(
+                SettingsKey.IMAGE_CONSTRAIN_TO_FRAME,
+                False,
+                bool,
+            )
+        )
+
+    def set_image_constrain_to_frame(self, enabled: bool) -> None:
+        self.settings.set_value(
+            SettingsKey.IMAGE_CONSTRAIN_TO_FRAME,
+            bool(enabled),
+        )

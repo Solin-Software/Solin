@@ -109,7 +109,7 @@ class MainWindowUiContext:
     background_song_settings: Any
     projection_playback_settings: Any
     window_geometry_settings: Any
-    browser_aspect_ratio_provider: Callable[[], Any]
+    projection_aspect_ratio_provider: Callable[[], Any]
     background_song_service: Any
     timer_bridge: Any
     playlist_storage_paths: Any
@@ -356,8 +356,8 @@ class MainWindowUiController:
                 browser_image_fetch_service_factory=(
                     self._browser_image_fetch_service_factory
                 ),
-                browser_aspect_ratio_provider=(
-                    context.browser_aspect_ratio_provider
+                projection_aspect_ratio_provider=(
+                    context.projection_aspect_ratio_provider
                 ),
                 media_info_service_factory=self._media_info_service_factory,
             ),
@@ -595,6 +595,7 @@ class MainWindowUiController:
             profile_media_store=context.profile_media_store,
             media_cache_dir=context.media_cache_manager.media_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=context.projection_aspect_ratio_provider,
             lang_manager=context.lang_manager,
             container=right_col,
         )

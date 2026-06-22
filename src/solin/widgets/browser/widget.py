@@ -13,7 +13,7 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
 from ...core.projection.aspect_ratio import (
-    DEFAULT_BROWSER_ASPECT_RATIO,
+    DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
 )
 from ...styles.icons import ICON_ASPECT_MATCH, ICON_CAST, ICON_CROP, make_icon
@@ -733,7 +733,7 @@ class BrowserWidget(
         self.lang = lang_manager
         self._download_service = download_service
         self._aspect_ratio_provider = (
-            aspect_ratio_provider or (lambda: DEFAULT_BROWSER_ASPECT_RATIO)
+            aspect_ratio_provider or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
 
         self._session_id = profile_paths.native_webview_data_dir.name
@@ -741,7 +741,7 @@ class BrowserWidget(
         self._image_fetches = image_fetch_service
 
         self._browser_aspect_locked = False
-        self._browser_aspect_ratio = DEFAULT_BROWSER_ASPECT_RATIO
+        self._browser_aspect_ratio = DEFAULT_PROJECTION_ASPECT_RATIO
 
         self._build_ui()
         self.setAcceptDrops(True)
@@ -1056,11 +1056,11 @@ class BrowserWidget(
             ratio = self._aspect_ratio_provider()
         except Exception:  # noqa: BLE001 - defensive projection state boundary
             log.debug("Browser aspect ratio provider failed", exc_info=True)
-            return DEFAULT_BROWSER_ASPECT_RATIO
+            return DEFAULT_PROJECTION_ASPECT_RATIO
         if not isinstance(ratio, ProjectionAspectRatio):
-            return DEFAULT_BROWSER_ASPECT_RATIO
+            return DEFAULT_PROJECTION_ASPECT_RATIO
         if ratio.width <= 0 or ratio.height <= 0:
-            return DEFAULT_BROWSER_ASPECT_RATIO
+            return DEFAULT_PROJECTION_ASPECT_RATIO
         return ratio
 
     # ── Spotlight de cursor ─────────────────────────────────────────────────────

@@ -22,6 +22,8 @@ class SettingsKey:
     PLAYBACK_ORDER: Final = "playback_order"
     PLAYBACK_SPEED: Final = "speed"
     PLAYBACK_VOLUME: Final = "volume"
+    IMAGE_MATCH_PROJECTION_ASPECT: Final = "image_projection/match_projection_aspect"
+    IMAGE_CONSTRAIN_TO_FRAME: Final = "image_projection/constrain_to_frame"
 
     AUTO_DOWNLOAD_ON_PLAY: Final = "auto_download_on_play"
     MEETINGS_AUTO_DOWNLOAD: Final = "meetings_auto_download"

@@ -40,6 +40,14 @@ from solin.core.foundation.time_utils import ceil_remaining_seconds
 from solin.core.media.playback import MediaController
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.media.settings import ProjectionPlaybackSettingsStore
+from solin.core.projection.aspect_ratio import (
+    DEFAULT_PROJECTION_ASPECT_RATIO,
+    ProjectionAspectRatio,
+)
+from solin.core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    ImageTransform,
+)
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
     ICON_CAST,
@@ -121,6 +129,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         profile_media_store: ProfileMediaStore,
         media_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        projection_aspect_ratio_provider: Callable[[], ProjectionAspectRatio] | None = None,
         lang_manager=None,
         container: QWidget = None,
         parent=None,
@@ -131,6 +140,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._profile_paths = profile_paths
         self._profile_media_store = profile_media_store
         self._media_cache_dir = media_cache_dir
+        self._projection_aspect_ratio_provider = (
+            projection_aspect_ratio_provider
+            or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
+        )
         self.lang       = lang_manager
         self._container = container
         self._expanded  = False
@@ -181,6 +194,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._playback_order: str = self._playback_settings.playback_order()
         self._speed: float = self._playback_settings.speed()
         self._volume: float = self._playback_settings.volume()
+        self._image_match_projection_aspect: bool = (
+            self._playback_settings.image_match_projection_aspect()
+        )
+        self._image_constrain_to_frame: bool = (
+            self._playback_settings.image_constrain_to_frame()
+        )
 
         # ── Song Announcement Mode state machine ─────────────────────────
         # States: "off" | "gate" | "ready"
@@ -217,6 +236,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._build_bar_ui()
         self._build_overlay()
         self._connect_media()
+        if self._container is not None:
+            self._container.installEventFilter(self)
 
         # Aplica volume salvo
         self.vol_slider.setValue(int(self._volume * 100))
@@ -419,6 +440,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         parent = self._container if self._container else self
         self.overlay = QWidget(parent)
         self.overlay.setVisible(False)
+        self.overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.overlay.setAutoFillBackground(True)
         self.overlay.setStyleSheet("background: #0d1117;")
         self.overlay.raise_()
 
@@ -493,7 +516,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Body: preview + painel lateral ───────────────────────────────
         body = QWidget()
-        body.setStyleSheet("background: transparent;")
+        body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        body.setStyleSheet("background: #0d1117;")
         body_lay = QHBoxLayout(body)
         body_lay.setContentsMargins(0, 0, 0, 0)
         body_lay.setSpacing(0)
@@ -508,6 +532,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self.preview_content.apply_transform.connect(self._on_image_apply_transform)
         self.preview_content.reset_transform.connect(self._on_image_reset_transform)
+        self.preview_content.match_projection_aspect_changed.connect(
+            self._on_image_match_projection_aspect_changed
+        )
+        self.preview_content.constrain_to_frame_changed.connect(
+            self._on_image_constrain_to_frame_changed
+        )
         self.preview_content.installEventFilter(self)
         self.overlay_stack.addWidget(self.preview_content)   # index 0
 
@@ -534,6 +564,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def eventFilter(self, obj, event):
         from PySide6.QtCore import QEvent
+        if obj is self._container and event.type() == QEvent.Type.Resize:
+            if self._expanded:
+                self._update_overlay_geometry()
+                self.overlay.raise_()
         if (
             obj is getattr(self, "preview_content", None)
             and event.type() == QEvent.Type.MouseButtonDblClick
@@ -872,9 +906,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # Enable interactive image mode on the preview widget
         self.preview_content.set_image_mode(True)
-        # Snap-reset projection windows transform for the new image.
-        # Uses the instant variant — no lerp animation when switching images.
-        self.image_reset_transform_instant.emit()
 
         if image_data:
             try:
@@ -903,6 +934,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._image_pixmap = None
             self._image_file_path = ""
             self.thumb_label.setPixmap(make_icon(ICON_IMAGE, 18, "#3fb950").pixmap(18, 18))
+            self.preview_content.set_image_pixmap_fresh(QPixmap())
+
+        transform = self._configure_image_preview_framing(reset=True)
+        self._emit_image_transform(transform, instant=True)
 
         self.seek_slider.setVisible(False)
         self.time_label.setVisible(False)
@@ -1245,8 +1280,71 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     # Signals forwarded to MainWindow so it can apply the transform to all
     # projection windows without ProjectionBar knowing about them directly.
     image_apply_transform = Signal(float, float, float)  # zoom, norm_x, norm_y
+    image_apply_transform_instant = Signal(float, float, float)
     image_reset_transform = Signal()           # animated reset (user pressed Reset btn)
-    image_reset_transform_instant = Signal()   # snap reset (image switch — no animation)
+
+    def _resolve_projection_aspect_ratio(self) -> ProjectionAspectRatio:
+        try:
+            ratio = self._projection_aspect_ratio_provider()
+        except Exception:  # noqa: BLE001 - defensive UI provider boundary
+            return DEFAULT_PROJECTION_ASPECT_RATIO
+        if not isinstance(ratio, ProjectionAspectRatio):
+            return DEFAULT_PROJECTION_ASPECT_RATIO
+        return ratio
+
+    def _configure_image_preview_framing(
+        self,
+        *,
+        reset: bool,
+    ) -> ImageTransform:
+        ratio = self._resolve_projection_aspect_ratio()
+        return self.preview_content.configure_framing(
+            match_projection_aspect=self._image_match_projection_aspect,
+            constrain_to_frame=self._image_constrain_to_frame,
+            aspect_ratio=ratio.value,
+            aspect_ratio_label=ratio.label,
+            reset=reset,
+        )
+
+    def _emit_image_transform(
+        self,
+        transform: ImageTransform,
+        *,
+        instant: bool = False,
+    ) -> None:
+        if instant:
+            self.image_apply_transform_instant.emit(
+                transform.zoom,
+                transform.norm_x,
+                transform.norm_y,
+            )
+            return
+        if transform == IDENTITY_IMAGE_TRANSFORM:
+            self.image_reset_transform.emit()
+        else:
+            self.image_apply_transform.emit(
+                transform.zoom,
+                transform.norm_x,
+                transform.norm_y,
+            )
+
+    @Slot(bool)
+    def _on_image_match_projection_aspect_changed(self, enabled: bool) -> None:
+        self._image_match_projection_aspect = bool(enabled)
+        self._playback_settings.set_image_match_projection_aspect(
+            self._image_match_projection_aspect
+        )
+        transform = self._configure_image_preview_framing(reset=True)
+        self._emit_image_transform(transform)
+
+    @Slot(bool)
+    def _on_image_constrain_to_frame_changed(self, enabled: bool) -> None:
+        self._image_constrain_to_frame = bool(enabled)
+        self._playback_settings.set_image_constrain_to_frame(
+            self._image_constrain_to_frame
+        )
+        transform = self._configure_image_preview_framing(reset=False)
+        self._emit_image_transform(transform)
 
     @Slot(float, float, float)
     def _on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float):

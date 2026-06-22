@@ -55,16 +55,22 @@ def test_projection_playback_settings_validate_and_clamp_values():
         assert store.playback_order() == ORDER_OFF
         assert store.speed() == 1.0
         assert store.volume() == 0.80
+        assert store.image_match_projection_aspect() is False
+        assert store.image_constrain_to_frame() is False
 
         store.set_loop_enabled(True)
         store.set_playback_order(ORDER_NEXT)
         store.set_speed(8.0)
         store.set_volume(-1.0)
+        store.set_image_match_projection_aspect(True)
+        store.set_image_constrain_to_frame(True)
 
         assert store.loop_enabled() is True
         assert store.playback_order() == ORDER_NEXT
         assert store.speed() == 4.0
         assert store.volume() == 0.0
+        assert store.image_match_projection_aspect() is True
+        assert store.image_constrain_to_frame() is True
 
         settings.set_value(SettingsKey.PLAYBACK_ORDER, "bad")
         settings.set_value(SettingsKey.PLAYBACK_SPEED, "bad")
