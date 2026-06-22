@@ -412,9 +412,6 @@ class PlaylistEditView(
         if not pending:
             return
         context = self._current_media_context()
-        self._notifications.information(
-            self.tr("Processing %n file(s)...", None, len(pending))
-        )
         thread = self._watched_folder_playlist_store.create_sync_thread(
             self._watched_path,
             media_lang=context.api_code,
@@ -430,7 +427,6 @@ class PlaylistEditView(
                 self.refresh_watched_folder()
             else:
                 self.refresh_watched_folder()
-            self._notifications.success(self.tr("All files processed"))
         @thread.sync_failed.connect
         def _on_err(err):
             self._wf_sync_thread = None
