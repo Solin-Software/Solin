@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QApplication
 
+from solin.core.projection.image_framing import cover_zoom_for_frame
 from solin.widgets.projection.preview import ImagePreviewWidget
 
 
@@ -159,3 +160,47 @@ def test_set_pixmap_repositions_visible_tool_pill_after_late_layout_resize() -> 
     bar = widget._action_bar
     assert old_y != bar.y()
     assert bar.y() == widget.height() - bar.height() - 18
+
+
+def test_constrained_zoom_snaps_to_exact_frame_cover_threshold() -> None:
+    widget = ImagePreviewWidget()
+    widget.resize(1600, 900)
+    widget.set_image_mode(True)
+    widget.set_image_pixmap_fresh(_pixmap(900, 1600))
+    widget.configure_framing(
+        match_projection_aspect=True,
+        constrain_to_frame=True,
+        aspect_ratio=16 / 9,
+        aspect_ratio_label="16:9",
+    )
+    cover_zoom = cover_zoom_for_frame(900, 1600, 1600, 900)
+
+    widget._zoom = cover_zoom - 0.02
+    widget._apply_zoom_factor(1.15)
+    snapped_zoom = widget.current_transform().zoom
+    widget._apply_zoom_factor(1.15)
+
+    assert snapped_zoom == cover_zoom
+    assert widget.current_transform().zoom > cover_zoom
+
+
+def test_constrained_zoom_snaps_to_exact_cover_threshold_in_tall_frame() -> None:
+    widget = ImagePreviewWidget()
+    widget.resize(900, 1600)
+    widget.set_image_mode(True)
+    widget.set_image_pixmap_fresh(_pixmap(1600, 900))
+    widget.configure_framing(
+        match_projection_aspect=True,
+        constrain_to_frame=True,
+        aspect_ratio=9 / 16,
+        aspect_ratio_label="9:16",
+    )
+    cover_zoom = cover_zoom_for_frame(1600, 900, 900, 1600)
+
+    widget._zoom = cover_zoom - 0.02
+    widget._apply_zoom_factor(1.15)
+    snapped_zoom = widget.current_transform().zoom
+    widget._apply_zoom_factor(1.15)
+
+    assert snapped_zoom == cover_zoom
+    assert widget.current_transform().zoom > cover_zoom
