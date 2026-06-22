@@ -16,6 +16,7 @@ class SettingsKey:
 
     WINDOW_WIDTH: Final = "size/width"
     WINDOW_HEIGHT: Final = "size/height"
+    SIDEBAR_COLLAPSED: Final = "sidebar/collapsed"
 
     PLAYBACK_LOOP: Final = "loop"
     PLAYBACK_ORDER: Final = "playback_order"

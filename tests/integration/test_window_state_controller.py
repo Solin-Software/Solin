@@ -148,3 +148,20 @@ def test_window_geometry_settings_store_roundtrips_size():
         assert store.size(1200, 760) == (1440, 900)
     finally:
         store.settings.clear()
+
+
+def test_window_geometry_settings_store_roundtrips_sidebar_collapsed():
+    store = WindowGeometrySettingsStore.for_profile_settings(
+        ProfileSettings.for_profile_id(f"window_geometry_{uuid.uuid4().hex}")
+    )
+    store.settings.clear()
+    try:
+        assert store.sidebar_collapsed() is False
+
+        store.save_sidebar_collapsed(True)
+        assert store.sidebar_collapsed() is True
+
+        store.save_sidebar_collapsed(False)
+        assert store.sidebar_collapsed() is False
+    finally:
+        store.settings.clear()
