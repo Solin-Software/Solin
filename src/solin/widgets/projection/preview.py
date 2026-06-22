@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
+
+from solin.core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    ImageTransform,
+    clamp_transform_to_frame,
+    frame_for_aspect,
+    initial_transform_for_frame,
+)
+from solin.styles.icons import ICON_ASPECT_MATCH, ICON_BOUNDS, make_icon
 
 
 class ImagePreviewWidget(QWidget):
@@ -15,35 +24,62 @@ class ImagePreviewWidget(QWidget):
 
     apply_transform = Signal(float, float, float)
     reset_transform = Signal()
+    match_projection_aspect_changed = Signal(bool)
+    constrain_to_frame_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pixmap: QPixmap | None = None
         self._zoom: float = 1.0
-        self._offset: QPointF = QPointF(0.0, 0.0)
+        self._norm_x: float = 0.0
+        self._norm_y: float = 0.0
         self._drag_start: QPointF | None = None
-        self._drag_offset_start: QPointF = QPointF(0.0, 0.0)
+        self._drag_norm_start: tuple[float, float] = (0.0, 0.0)
+        self._drag_frame_size: tuple[float, float] = (1.0, 1.0)
         self._image_mode: bool = False
+        self._match_projection_aspect: bool = False
+        self._requested_constrain_to_frame: bool = False
+        self._aspect_ratio: float = 16.0 / 9.0
+        self._aspect_ratio_label: str = "16:9"
 
         self.setStyleSheet("background: #0d1117;")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._action_bar = self._build_action_bar()
         self._action_bar.setVisible(False)
+        self._sync_tool_buttons()
 
     def _build_action_bar(self) -> QWidget:
         bar = QWidget(self)
-        bar.setObjectName("ZoomActionBar")
+        bar.setObjectName("ImageToolPill")
         bar.setStyleSheet(
-            "QWidget#ZoomActionBar{"
-            "background:rgba(13,17,23,0.93);"
-            "border:1px solid #30363d;"
-            "border-radius:20px;"
+            "QWidget#ImageToolPill{"
+            "background:rgba(13,17,23,0.94);"
+            "border:1px solid rgba(139,148,158,0.28);"
+            "border-radius:19px;"
             "}"
         )
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(14, 7, 14, 7)
-        lay.setSpacing(10)
+        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setSpacing(8)
+
+        self._aspect_btn = self._tool_button(
+            ICON_ASPECT_MATCH,
+            self.tr("Match projection aspect"),
+        )
+        self._aspect_btn.setCheckable(True)
+        self._aspect_btn.clicked.connect(
+            lambda checked: self.match_projection_aspect_changed.emit(bool(checked))
+        )
+
+        self._bounds_btn = self._tool_button(
+            ICON_BOUNDS,
+            self.tr("Keep image covering the frame"),
+        )
+        self._bounds_btn.setCheckable(True)
+        self._bounds_btn.clicked.connect(
+            lambda checked: self.constrain_to_frame_changed.emit(bool(checked))
+        )
 
         self._zoom_lbl = QLabel("100%")
         self._zoom_lbl.setStyleSheet(
@@ -54,7 +90,7 @@ class ImagePreviewWidget(QWidget):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet("QFrame{color:#30363d;}")
+        sep.setStyleSheet("QFrame{color:rgba(139,148,158,0.28);}")
         sep.setFixedHeight(16)
 
         self._reset_btn = QPushButton(self.tr("Reset"))
@@ -62,11 +98,11 @@ class ImagePreviewWidget(QWidget):
         self._reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._reset_btn.setStyleSheet(
             "QPushButton{background:transparent;color:#8b949e;"
-            "border:1px solid #30363d;border-radius:6px;"
+            "border:1px solid rgba(139,148,158,0.28);border-radius:13px;"
             "font-size:11px;font-weight:500;padding:0 10px;}"
-            "QPushButton:hover{background:#21262d;color:#c9d1d9;"
-            "border-color:#484f58;}"
-            "QPushButton:pressed{background:#161b22;}"
+            "QPushButton:hover{background:rgba(255,255,255,0.08);color:#c9d1d9;"
+            "border-color:rgba(139,148,158,0.42);}"
+            "QPushButton:pressed{background:rgba(255,255,255,0.12);}"
         )
         self._reset_btn.clicked.connect(self._on_reset)
 
@@ -74,14 +110,16 @@ class ImagePreviewWidget(QWidget):
         self._apply_btn.setFixedHeight(26)
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_btn.setStyleSheet(
-            "QPushButton{background:#1f6feb;color:#ffffff;"
-            "border:none;border-radius:6px;"
-            "font-size:11px;font-weight:600;padding:0 14px;}"
+            "QPushButton{background:rgba(31,111,235,0.92);color:#ffffff;"
+            "border:none;border-radius:13px;"
+            "font-size:11px;font-weight:600;padding:0 13px;}"
             "QPushButton:hover{background:#388bfd;}"
             "QPushButton:pressed{background:#1158c7;}"
         )
         self._apply_btn.clicked.connect(self._on_apply)
 
+        lay.addWidget(self._aspect_btn)
+        lay.addWidget(self._bounds_btn)
         lay.addWidget(self._zoom_lbl)
         lay.addWidget(sep)
         lay.addWidget(self._reset_btn)
@@ -89,51 +127,54 @@ class ImagePreviewWidget(QWidget):
         bar.adjustSize()
         return bar
 
+    def _tool_button(self, icon: str, tooltip: str) -> QPushButton:
+        button = QPushButton()
+        button.setFixedSize(26, 26)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(tooltip)
+        button._solin_icon = icon  # type: ignore[attr-defined]
+        button.setStyleSheet(
+            "QPushButton{background:transparent;border:none;border-radius:13px;"
+            "padding:0;}"
+            "QPushButton:hover{background:rgba(255,255,255,0.08);}"
+            "QPushButton:checked{background:rgba(56,139,253,0.20);}"
+            "QPushButton:checked:hover{background:rgba(56,139,253,0.28);}"
+            "QPushButton:disabled{background:transparent;}"
+        )
+        return button
+
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self._reset_btn.setText(self.tr("Reset"))
             self._apply_btn.setText(self.tr("Apply to Projector"))
+            self._sync_tool_buttons()
         super().changeEvent(event)
 
-    def _position_action_bar(self):
-        bar = self._action_bar
-        bar.adjustSize()
-        sh = bar.sizeHint()
-        bw, bh = sh.width(), sh.height()
-        x = (self.width() - bw) // 2
-        y = self.height() - bh - 18
-        bar.move(max(0, x), max(0, y))
-        bar.resize(bw, bh)
-
-    def _check_action_bar(self):
-        show = (
-            abs(self._zoom - 1.0) >= 0.05
-            or abs(self._offset.x()) > 3.0
-            or abs(self._offset.y()) > 3.0
-        )
-        if show and not self._action_bar.isVisible():
-            self._action_bar.setVisible(True)
-            self._action_bar.raise_()
-            self._position_action_bar()
-        elif not show and self._action_bar.isVisible():
-            self._action_bar.setVisible(False)
-
-    def _update_zoom_label(self):
-        self._zoom_lbl.setText(f"{int(round(self._zoom * 100))}%")
-
-    def _on_reset(self):
-        self._zoom = 1.0
-        self._offset = QPointF(0.0, 0.0)
+    def configure_framing(
+        self,
+        *,
+        match_projection_aspect: bool,
+        constrain_to_frame: bool,
+        aspect_ratio: float,
+        aspect_ratio_label: str,
+        reset: bool = False,
+    ) -> ImageTransform:
+        self._match_projection_aspect = bool(match_projection_aspect)
+        self._requested_constrain_to_frame = bool(constrain_to_frame)
+        self._aspect_ratio = aspect_ratio if aspect_ratio > 0 else 16.0 / 9.0
+        self._aspect_ratio_label = aspect_ratio_label or "16:9"
+        self._sync_tool_buttons()
+        if reset:
+            self._set_initial_transform()
+        else:
+            self._clamp_current_transform()
         self._update_zoom_label()
         self._check_action_bar()
         self.update()
-        self.reset_transform.emit()
+        return self.current_transform()
 
-    def _on_apply(self):
-        w, h = self.width(), self.height()
-        norm_x = self._offset.x() / w if w > 0 else 0.0
-        norm_y = self._offset.y() / h if h > 0 else 0.0
-        self.apply_transform.emit(self._zoom, norm_x, norm_y)
+    def current_transform(self) -> ImageTransform:
+        return ImageTransform(self._zoom, self._norm_x, self._norm_y)
 
     def set_image_mode(self, active: bool):
         self._image_mode = active
@@ -143,20 +184,22 @@ class ImagePreviewWidget(QWidget):
         else:
             self.unsetCursor()
             self._zoom = 1.0
-            self._offset = QPointF(0.0, 0.0)
+            self._norm_x = 0.0
+            self._norm_y = 0.0
             self._update_zoom_label()
             self._action_bar.setVisible(False)
+        self._check_action_bar()
 
     def set_image_pixmap_fresh(self, pixmap: QPixmap):
         self._pixmap = pixmap
-        self._zoom = 1.0
-        self._offset = QPointF(0.0, 0.0)
+        self._set_initial_transform()
         self._update_zoom_label()
-        self._action_bar.setVisible(False)
+        self._check_action_bar()
         self.update()
 
     def setPixmap(self, pixmap: QPixmap):
         self._pixmap = pixmap
+        self._clamp_current_transform()
         self.update()
 
     def setText(self, text: str):
@@ -165,6 +208,78 @@ class ImagePreviewWidget(QWidget):
     def setAlignment(self, *args):
         pass
 
+    def _sync_tool_buttons(self) -> None:
+        self._sync_icon_button(self._aspect_btn, self._match_projection_aspect)
+        self._aspect_btn.setChecked(self._match_projection_aspect)
+        self._aspect_btn.setToolTip(
+            self.tr("Match projection aspect ({ratio})").format(
+                ratio=self._aspect_ratio_label
+            )
+        )
+
+        self._bounds_btn.setEnabled(self._match_projection_aspect)
+        self._bounds_btn.setChecked(
+            self._match_projection_aspect and self._requested_constrain_to_frame
+        )
+        self._sync_icon_button(
+            self._bounds_btn,
+            self._match_projection_aspect and self._requested_constrain_to_frame,
+        )
+        if self._match_projection_aspect:
+            self._bounds_btn.setToolTip(self.tr("Keep image covering the frame"))
+        else:
+            self._bounds_btn.setToolTip(self.tr("Enable projection aspect first"))
+
+    def _sync_icon_button(self, button: QPushButton, active: bool) -> None:
+        icon = getattr(button, "_solin_icon", "")
+        color = "#58a6ff" if active else "#8b949e"
+        if not button.isEnabled():
+            color = "#484f58"
+        button.setIcon(make_icon(icon, 15, color))
+
+    def _position_action_bar(self):
+        bar = self._action_bar
+        bar.adjustSize()
+        sh = bar.sizeHint()
+        bw, bh = sh.width(), sh.height()
+        frame = self._active_frame()
+        x = int(frame.x() + (frame.width() - bw) / 2.0)
+        y = int(frame.y() + frame.height() - bh - 18)
+        bar.move(max(0, x), max(0, y))
+        bar.resize(bw, bh)
+
+    def _check_action_bar(self):
+        show = self._image_mode and self._pixmap is not None and not self._pixmap.isNull()
+        if show and not self._action_bar.isVisible():
+            self._action_bar.setVisible(True)
+            self._action_bar.raise_()
+            self._position_action_bar()
+        elif not show and self._action_bar.isVisible():
+            self._action_bar.setVisible(False)
+        elif show:
+            self._position_action_bar()
+
+    def _update_zoom_label(self):
+        self._zoom_lbl.setText(f"{int(round(self._zoom * 100))}%")
+
+    def _on_reset(self):
+        transform = self.reset_to_initial_transform()
+        if transform == IDENTITY_IMAGE_TRANSFORM:
+            self.reset_transform.emit()
+        else:
+            self.apply_transform.emit(transform.zoom, transform.norm_x, transform.norm_y)
+
+    def reset_to_initial_transform(self) -> ImageTransform:
+        self._set_initial_transform()
+        self._update_zoom_label()
+        self._check_action_bar()
+        self.update()
+        return self.current_transform()
+
+    def _on_apply(self):
+        transform = self.current_transform()
+        self.apply_transform.emit(transform.zoom, transform.norm_x, transform.norm_y)
+
     def wheelEvent(self, event):
         if self._image_mode and (
             event.modifiers() & Qt.KeyboardModifier.ControlModifier
@@ -172,6 +287,7 @@ class ImagePreviewWidget(QWidget):
             delta = event.angleDelta().y()
             factor = 1.12 if delta > 0 else (1.0 / 1.12)
             self._zoom = max(0.1, min(10.0, self._zoom * factor))
+            self._clamp_current_transform()
             self._update_zoom_label()
             self._check_action_bar()
             self.update()
@@ -183,6 +299,7 @@ class ImagePreviewWidget(QWidget):
         if self._image_mode:
             if event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
                 self._zoom = min(10.0, self._zoom * 1.15)
+                self._clamp_current_transform()
                 self._update_zoom_label()
                 self._check_action_bar()
                 self.update()
@@ -190,6 +307,7 @@ class ImagePreviewWidget(QWidget):
                 return
             if event.key() == Qt.Key.Key_Minus:
                 self._zoom = max(0.1, self._zoom / 1.15)
+                self._clamp_current_transform()
                 self._update_zoom_label()
                 self._check_action_bar()
                 self.update()
@@ -199,8 +317,13 @@ class ImagePreviewWidget(QWidget):
 
     def mousePressEvent(self, event):
         if self._image_mode and event.button() == Qt.MouseButton.LeftButton:
+            frame = self._active_frame()
             self._drag_start = event.position()
-            self._drag_offset_start = QPointF(self._offset)
+            self._drag_norm_start = (self._norm_x, self._norm_y)
+            self._drag_frame_size = (
+                max(1.0, frame.width()),
+                max(1.0, frame.height()),
+            )
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
             event.accept()
         else:
@@ -209,7 +332,11 @@ class ImagePreviewWidget(QWidget):
     def mouseMoveEvent(self, event):
         if self._image_mode and self._drag_start is not None:
             delta = event.position() - self._drag_start
-            self._offset = self._drag_offset_start + delta
+            frame_w, frame_h = self._drag_frame_size
+            start_x, start_y = self._drag_norm_start
+            self._norm_x = start_x + (delta.x() / frame_w)
+            self._norm_y = start_y + (delta.y() / frame_h)
+            self._clamp_current_transform()
             self._check_action_bar()
             self.update()
             event.accept()
@@ -227,8 +354,54 @@ class ImagePreviewWidget(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._clamp_current_transform()
         if self._action_bar.isVisible():
             self._position_action_bar()
+
+    def _constraint_active(self) -> bool:
+        return self._match_projection_aspect and self._requested_constrain_to_frame
+
+    def _active_frame(self) -> QRectF:
+        if self._match_projection_aspect:
+            frame = frame_for_aspect(self.width(), self.height(), self._aspect_ratio)
+            return QRectF(frame.x, frame.y, frame.width, frame.height)
+        return QRectF(0.0, 0.0, float(self.width()), float(self.height()))
+
+    def _set_initial_transform(self) -> None:
+        pix = self._pixmap
+        frame = self._active_frame()
+        if pix is None or pix.isNull():
+            transform = IDENTITY_IMAGE_TRANSFORM
+        else:
+            transform = initial_transform_for_frame(
+                pix.width(),
+                pix.height(),
+                frame.width(),
+                frame.height(),
+                constrain_to_frame=self._constraint_active(),
+            )
+        self._zoom = transform.zoom
+        self._norm_x = transform.norm_x
+        self._norm_y = transform.norm_y
+
+    def _clamp_current_transform(self) -> None:
+        self._zoom = max(0.1, min(10.0, self._zoom))
+        if not self._constraint_active():
+            return
+        pix = self._pixmap
+        if pix is None or pix.isNull():
+            return
+        frame = self._active_frame()
+        transform = clamp_transform_to_frame(
+            pix.width(),
+            pix.height(),
+            frame.width(),
+            frame.height(),
+            self.current_transform(),
+        )
+        self._zoom = transform.zoom
+        self._norm_x = transform.norm_x
+        self._norm_y = transform.norm_y
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -241,30 +414,34 @@ class ImagePreviewWidget(QWidget):
             painter.end()
             return
 
-        w, h = self.width(), self.height()
+        frame = self._active_frame()
         pw, ph = pix.width(), pix.height()
-        if pw <= 0 or ph <= 0 or w <= 0 or h <= 0:
+        if pw <= 0 or ph <= 0 or frame.width() <= 0 or frame.height() <= 0:
             painter.end()
             return
 
-        base_scale = min(w / pw, h / ph)
+        base_scale = min(frame.width() / pw, frame.height() / ph)
 
         if self._image_mode:
             scale = base_scale * self._zoom
             dw = pw * scale
             dh = ph * scale
-            dx = (w - dw) / 2.0 + self._offset.x()
-            dy = (h - dh) / 2.0 + self._offset.y()
+            dx = frame.x() + (frame.width() - dw) / 2.0 + self._norm_x * frame.width()
+            dy = frame.y() + (frame.height() - dh) / 2.0 + self._norm_y * frame.height()
         else:
             scale = base_scale
             dw = pw * scale
             dh = ph * scale
-            dx = (w - dw) / 2.0
-            dy = (h - dh) / 2.0
+            dx = frame.x() + (frame.width() - dw) / 2.0
+            dy = frame.y() + (frame.height() - dh) / 2.0
 
-        painter.drawPixmap(
-            QRectF(dx, dy, dw, dh),
-            pix,
-            QRectF(0, 0, pw, ph),
-        )
+        if self._match_projection_aspect:
+            painter.save()
+            painter.setClipRect(frame)
+        painter.drawPixmap(QRectF(dx, dy, dw, dh), pix, QRectF(0, 0, pw, ph))
+        if self._match_projection_aspect:
+            painter.restore()
+        if self._match_projection_aspect:
+            painter.setPen(QPen(QColor(139, 148, 158, 92), 1))
+            painter.drawRoundedRect(frame.adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
         painter.end()

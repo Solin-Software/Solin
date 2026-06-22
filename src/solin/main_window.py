@@ -86,7 +86,7 @@ from .controllers.wifi_playlist_controller import (
     WifiPlaylistHandlers,
 )
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
-from .core.projection.aspect_ratio import browser_aspect_ratio_from_projection_windows
+from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
 from .core.projection.application import ObsSceneSession, ProjectionSession
 from .core.timer.application import TimerSession
 from .core.i18n.manager import LanguageManager
@@ -374,8 +374,8 @@ class MainWindow(QMainWindow):
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,
                 window_geometry_settings=profile_settings_bundle.window_geometry,
-                browser_aspect_ratio_provider=(
-                    lambda: browser_aspect_ratio_from_projection_windows(
+                projection_aspect_ratio_provider=(
+                    lambda: projection_aspect_ratio_from_windows(
                         tuple(self.projection_session.projection_windows)
                     )
                 ),

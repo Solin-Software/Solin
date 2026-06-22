@@ -58,6 +58,8 @@ EXPECTED_SETTINGS_KEYS = {
     "PLAYBACK_ORDER": "playback_order",
     "PLAYBACK_SPEED": "speed",
     "PLAYBACK_VOLUME": "volume",
+    "IMAGE_MATCH_PROJECTION_ASPECT": "image_projection/match_projection_aspect",
+    "IMAGE_CONSTRAIN_TO_FRAME": "image_projection/constrain_to_frame",
     "AUTO_DOWNLOAD_ON_PLAY": "auto_download_on_play",
     "MEETINGS_AUTO_DOWNLOAD": "meetings_auto_download",
     "SJJM_ANNOUNCE_MODE": "sjjm_announce_mode",

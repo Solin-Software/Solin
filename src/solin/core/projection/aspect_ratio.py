@@ -6,9 +6,9 @@ from typing import Any
 
 
 __all__ = (
-    "DEFAULT_BROWSER_ASPECT_RATIO",
+    "DEFAULT_PROJECTION_ASPECT_RATIO",
     "ProjectionAspectRatio",
-    "browser_aspect_ratio_from_projection_windows",
+    "projection_aspect_ratio_from_windows",
 )
 
 
@@ -52,14 +52,14 @@ class ProjectionAspectRatio:
         return f"{width}:{height}"
 
 
-DEFAULT_BROWSER_ASPECT_RATIO = ProjectionAspectRatio(
+DEFAULT_PROJECTION_ASPECT_RATIO = ProjectionAspectRatio(
     width=16,
     height=9,
     source="fallback",
 )
 
 
-def browser_aspect_ratio_from_projection_windows(
+def projection_aspect_ratio_from_windows(
     windows: list[Any] | tuple[Any, ...],
 ) -> ProjectionAspectRatio:
     """Return the first visible media projection window ratio, or 16:9."""
@@ -73,7 +73,7 @@ def browser_aspect_ratio_from_projection_windows(
         ratio = _aspect_ratio_from_window_geometry(window)
         if ratio is not None:
             return ratio
-    return DEFAULT_BROWSER_ASPECT_RATIO
+    return DEFAULT_PROJECTION_ASPECT_RATIO
 
 
 def _is_visible(window: Any) -> bool:

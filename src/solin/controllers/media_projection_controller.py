@@ -315,6 +315,24 @@ class MediaProjectionController:
         context.projection_bar.update_tab_live_preview(frame)
 
     def on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float) -> None:
+        self._apply_image_transform(zoom, norm_x, norm_y, animate=True)
+
+    def on_image_apply_transform_instant(
+        self,
+        zoom: float,
+        norm_x: float,
+        norm_y: float,
+    ) -> None:
+        self._apply_image_transform(zoom, norm_x, norm_y, animate=False)
+
+    def _apply_image_transform(
+        self,
+        zoom: float,
+        norm_x: float,
+        norm_y: float,
+        *,
+        animate: bool,
+    ) -> None:
         # Persist the transform as part of the projection state so a surface
         # created later (hot-plugged monitor / respawned preview) is replayed
         # with the same framing instead of showing it untransformed.  Applies to
@@ -323,7 +341,12 @@ class MediaProjectionController:
         if state.get("type") in _TRANSFORMABLE_STATES:
             state["transform"] = (zoom, norm_x, norm_y)
         for projection_window in self._context.projection_windows():
-            projection_window.set_image_transform(zoom, norm_x, norm_y)
+            projection_window.set_image_transform(
+                zoom,
+                norm_x,
+                norm_y,
+                animate=animate,
+            )
 
     def on_image_reset_transform(self) -> None:
         state = self._session.state
@@ -331,10 +354,6 @@ class MediaProjectionController:
             state["transform"] = _IDENTITY_TRANSFORM
         for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
-
-    def on_image_reset_transform_instant(self) -> None:
-        for projection_window in self._context.projection_windows():
-            projection_window.reset_image_transform_instant()
 
     def on_cache_play(
         self,
@@ -510,6 +529,9 @@ class MediaProjectionController:
             projection_window.clear()
             projection_window.show_image_from_url_data(data)
 
+        self._session.set_state(
+            {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
+        )
         context.projection_bar.activate_image(
             title,
             image_data=data,
@@ -519,7 +541,4 @@ class MediaProjectionController:
             True,
             title,
             auto_keys_media=True,
-        )
-        self._session.set_state(
-            {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
         )

@@ -116,11 +116,11 @@ class SignalConnectionController:
         projection_bar.image_apply_transform.connect(
             media_projection.on_image_apply_transform
         )
+        projection_bar.image_apply_transform_instant.connect(
+            media_projection.on_image_apply_transform_instant
+        )
         projection_bar.image_reset_transform.connect(
             media_projection.on_image_reset_transform
-        )
-        projection_bar.image_reset_transform_instant.connect(
-            media_projection.on_image_reset_transform_instant
         )
 
         sources.screen_manager.screens_changed.connect(

@@ -180,8 +180,8 @@ class _ProjectionWindowStub:
     def update_frame(self, frame):
         self.frames.append(frame)
 
-    def set_image_transform(self, zoom, norm_x, norm_y):
-        self.transforms.append((zoom, norm_x, norm_y))
+    def set_image_transform(self, zoom, norm_x, norm_y, *, animate=True):
+        self.transforms.append((zoom, norm_x, norm_y, animate))
 
     def reset_image_transform_instant(self):
         self.instant_resets += 1
@@ -443,17 +443,15 @@ def test_frame_and_image_transform_helpers_respect_projection_modes():
     controller.distribute_frame("frame-2")
     controller.on_image_apply_transform(1.5, 0.2, 0.3)
     controller.on_image_reset_transform()
-    controller.on_image_reset_transform_instant()
 
     assert [projection_window.frames for projection_window in window.windows] == [
         ["frame-1"],
         ["frame-1"],
     ]
     assert [projection_window.transforms for projection_window in window.windows] == [
-        [(1.5, 0.2, 0.3), (1.0, 0.0, 0.0)],
-        [(1.5, 0.2, 0.3), (1.0, 0.0, 0.0)],
+        [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
+        [(1.5, 0.2, 0.3, True), (1.0, 0.0, 0.0, True)],
     ]
-    assert [projection_window.instant_resets for projection_window in window.windows] == [1, 1]
 
 
 def test_image_transform_is_persisted_in_projection_state():
@@ -468,6 +466,22 @@ def test_image_transform_is_persisted_in_projection_state():
 
     controller.on_image_reset_transform()
     assert window.projection_session.state["transform"] == (1.0, 0.0, 0.0)
+
+
+def test_instant_image_transform_is_persisted_without_animation():
+    window = _WindowStub()
+    controller = _controller(window)
+    window.projection_session.set_state(
+        {"type": "image", "data": b"x", "transform": (1.0, 0.0, 0.0)}
+    )
+
+    controller.on_image_apply_transform_instant(1.8, 0.0, 0.2)
+
+    assert window.projection_session.state["transform"] == (1.8, 0.0, 0.2)
+    assert [projection_window.transforms for projection_window in window.windows] == [
+        [(1.8, 0.0, 0.2, False)],
+        [(1.8, 0.0, 0.2, False)],
+    ]
 
 
 def test_sermon_theme_transform_is_persisted_in_projection_state():

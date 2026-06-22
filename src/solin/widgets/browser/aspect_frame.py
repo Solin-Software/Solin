@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QWidget
 
-from solin.core.projection.aspect_ratio import DEFAULT_BROWSER_ASPECT_RATIO
+from solin.core.projection.aspect_ratio import DEFAULT_PROJECTION_ASPECT_RATIO
 
 
 __all__ = ("AspectRatioViewFrame",)
@@ -15,7 +15,7 @@ class AspectRatioViewFrame(QWidget):
         super().__init__(parent)
         self._child: QWidget | None = None
         self._locked = False
-        self._target_ratio = DEFAULT_BROWSER_ASPECT_RATIO.value
+        self._target_ratio = DEFAULT_PROJECTION_ASPECT_RATIO.value
         self.setStyleSheet("background:#05070a;")
 
     def set_child(self, child: QWidget) -> None:
