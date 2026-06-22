@@ -10,6 +10,7 @@ from solin.core.projection.image_framing import (
     clamp_transform_to_frame,
     frame_for_aspect,
     initial_transform_for_frame,
+    snap_zoom_to_frame_cover,
 )
 from solin.styles.icons import ICON_ASPECT_MATCH, ICON_BOUNDS, make_icon
 
@@ -292,11 +293,7 @@ class ImagePreviewWidget(QWidget):
         ):
             delta = event.angleDelta().y()
             factor = 1.12 if delta > 0 else (1.0 / 1.12)
-            self._zoom = max(0.1, min(10.0, self._zoom * factor))
-            self._clamp_current_transform()
-            self._update_zoom_label()
-            self._check_action_bar()
-            self.update()
+            self._apply_zoom_factor(factor)
             event.accept()
         else:
             super().wheelEvent(event)
@@ -304,19 +301,11 @@ class ImagePreviewWidget(QWidget):
     def keyPressEvent(self, event):
         if self._image_mode:
             if event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
-                self._zoom = min(10.0, self._zoom * 1.15)
-                self._clamp_current_transform()
-                self._update_zoom_label()
-                self._check_action_bar()
-                self.update()
+                self._apply_zoom_factor(1.15)
                 event.accept()
                 return
             if event.key() == Qt.Key.Key_Minus:
-                self._zoom = max(0.1, self._zoom / 1.15)
-                self._clamp_current_transform()
-                self._update_zoom_label()
-                self._check_action_bar()
-                self.update()
+                self._apply_zoom_factor(1.0 / 1.15)
                 event.accept()
                 return
         super().keyPressEvent(event)
@@ -408,6 +397,27 @@ class ImagePreviewWidget(QWidget):
         self._zoom = transform.zoom
         self._norm_x = transform.norm_x
         self._norm_y = transform.norm_y
+
+    def _apply_zoom_factor(self, factor: float) -> None:
+        previous_zoom = self._zoom
+        requested_zoom = max(0.1, min(10.0, previous_zoom * factor))
+        if self._constraint_active():
+            pix = self._pixmap
+            if pix is not None and not pix.isNull():
+                frame = self._active_frame()
+                requested_zoom = snap_zoom_to_frame_cover(
+                    previous_zoom,
+                    requested_zoom,
+                    pix.width(),
+                    pix.height(),
+                    frame.width(),
+                    frame.height(),
+                )
+        self._zoom = requested_zoom
+        self._clamp_current_transform()
+        self._update_zoom_label()
+        self._check_action_bar()
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)

@@ -4,9 +4,11 @@ from solin.core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     ImageTransform,
     clamp_transform_to_frame,
+    cover_zoom_for_frame,
     frame_for_aspect,
     initial_transform_for_frame,
     pan_bounds_for_frame,
+    snap_zoom_to_frame_cover,
 )
 
 
@@ -49,6 +51,46 @@ def test_pan_bounds_enable_axis_after_user_zoom_creates_overflow() -> None:
 
     assert max_x > 0.0
     assert max_y == 0.0
+
+
+def test_cover_zoom_returns_exact_threshold_for_tall_image_in_wide_frame() -> None:
+    zoom = cover_zoom_for_frame(900, 1600, 1600, 900)
+
+    assert round(zoom, 6) == round(1600 / 506.25, 6)
+
+
+def test_snap_zoom_lands_on_cover_threshold_once_when_crossing_it() -> None:
+    cover_zoom = cover_zoom_for_frame(900, 1600, 1600, 900)
+
+    snapped = snap_zoom_to_frame_cover(3.0, 3.4, 900, 1600, 1600, 900)
+    next_step = snap_zoom_to_frame_cover(
+        snapped,
+        snapped * 1.15,
+        900,
+        1600,
+        1600,
+        900,
+    )
+
+    assert snapped == cover_zoom
+    assert next_step > cover_zoom
+
+
+def test_snap_zoom_lands_on_cover_threshold_for_wide_image_in_tall_frame() -> None:
+    cover_zoom = cover_zoom_for_frame(1600, 900, 900, 1600)
+
+    snapped = snap_zoom_to_frame_cover(3.0, 3.4, 1600, 900, 900, 1600)
+    next_step = snap_zoom_to_frame_cover(
+        snapped,
+        snapped * 1.15,
+        1600,
+        900,
+        900,
+        1600,
+    )
+
+    assert snapped == cover_zoom
+    assert next_step > cover_zoom
 
 
 def test_constrained_initial_transform_keeps_original_image_fitted() -> None:

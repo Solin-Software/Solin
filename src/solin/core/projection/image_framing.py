@@ -83,6 +83,61 @@ def pan_bounds_for_frame(
     return (max_x, max_y)
 
 
+def cover_zoom_for_frame(
+    image_width: float,
+    image_height: float,
+    frame_width: float,
+    frame_height: float,
+) -> float:
+    """Return the zoom where a fitted image first covers the whole frame."""
+
+    image_width = float(image_width)
+    image_height = float(image_height)
+    frame_width = float(frame_width)
+    frame_height = float(frame_height)
+    if (
+        image_width <= 0.0
+        or image_height <= 0.0
+        or frame_width <= 0.0
+        or frame_height <= 0.0
+    ):
+        return 1.0
+
+    fit_scale = min(frame_width / image_width, frame_height / image_height)
+    if fit_scale <= 0.0:
+        return 1.0
+
+    fitted_width = image_width * fit_scale
+    fitted_height = image_height * fit_scale
+    return max(frame_width / fitted_width, frame_height / fitted_height)
+
+
+def snap_zoom_to_frame_cover(
+    previous_zoom: float,
+    requested_zoom: float,
+    image_width: float,
+    image_height: float,
+    frame_width: float,
+    frame_height: float,
+) -> float:
+    """Snap a zoom-in step to the exact frame-cover threshold when it crosses it."""
+
+    previous_zoom = max(0.1, float(previous_zoom))
+    requested_zoom = max(0.1, float(requested_zoom))
+    if requested_zoom <= previous_zoom:
+        return requested_zoom
+
+    cover_zoom = cover_zoom_for_frame(
+        image_width,
+        image_height,
+        frame_width,
+        frame_height,
+    )
+    if previous_zoom < cover_zoom < requested_zoom:
+        return cover_zoom
+    return requested_zoom
+
+
 def clamp_transform_to_frame(
     image_width: float,
     image_height: float,
