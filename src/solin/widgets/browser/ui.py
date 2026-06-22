@@ -34,6 +34,7 @@ class BrowserUiMixin:
         topbar = QFrame()
         topbar.setObjectName("Card")
         topbar.setFixedHeight(52)
+        topbar.setCursor(Qt.CursorShape.ArrowCursor)
         topbar.setStyleSheet(
             "QFrame#Card { border-radius:0; border-left:none;"
             " border-right:none; border-top:none; }"
@@ -85,6 +86,7 @@ class BrowserUiMixin:
         self.url_edit = QLineEdit()
         self.url_edit.setObjectName("UrlBar")
         self.url_edit.setPlaceholderText(self.tr("Paste or type a URL…"))
+        self.url_edit.setCursor(Qt.CursorShape.IBeamCursor)
         self.url_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.url_edit.setFixedHeight(34)
         self.url_edit.setStyleSheet(
@@ -180,6 +182,7 @@ class BrowserUiMixin:
 
         tab_row = QFrame()
         tab_row.setFixedHeight(row_h)
+        tab_row.setCursor(Qt.CursorShape.ArrowCursor)
         tab_row.setStyleSheet("QFrame { background:#161b22; border:none; }")
 
         tab_lay = QHBoxLayout(tab_row)
@@ -188,6 +191,7 @@ class BrowserUiMixin:
 
         self._tab_bar = BrowserTabBar()
         self._tab_bar.setFixedHeight(row_h)
+        self._tab_bar.setCursor(Qt.CursorShape.ArrowCursor)
         self._tab_bar.setSizePolicy(
             QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed
         )
