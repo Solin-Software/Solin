@@ -32,6 +32,7 @@ EXPECTED_SETTINGS_KEYS = {
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_WIDTH": "size/width",
     "WINDOW_HEIGHT": "size/height",
+    "SIDEBAR_COLLAPSED": "sidebar/collapsed",
     "PLAYBACK_LOOP": "loop",
     "PLAYBACK_ORDER": "playback_order",
     "PLAYBACK_SPEED": "speed",
