@@ -15,6 +15,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton
 
+from .profile_avatar_button import ProfileAvatarButton
 from .sidebar_button import SidebarButton
 
 SIDEBAR_EXPANDED_WIDTH = 220
@@ -45,6 +46,7 @@ class SidebarChromeController(QObject):
         frame: CollapsibleSidebarFrame,
         title_label: QLabel,
         subtitle_label: QLabel,
+        profile_avatar_button: ProfileAvatarButton,
         nav_buttons: Sequence[SidebarButton],
         toggle_button: QPushButton,
         settings: Any,
@@ -56,6 +58,7 @@ class SidebarChromeController(QObject):
         self._frame = frame
         self._title_label = title_label
         self._subtitle_label = subtitle_label
+        self._profile_avatar_button = profile_avatar_button
         self._nav_buttons = tuple(nav_buttons)
         self._toggle_button = toggle_button
         self._settings = settings
@@ -106,8 +109,7 @@ class SidebarChromeController(QObject):
         if collapsed:
             self._apply_compact(True)
         else:
-            self._set_text_visible(False)
-            self._set_nav_compact(True)
+            self._apply_compact(False)
 
         end_width = self._target_width(collapsed)
         if not animate:
@@ -139,6 +141,7 @@ class SidebarChromeController(QObject):
     def _set_text_visible(self, visible: bool) -> None:
         self._title_label.setVisible(visible)
         self._subtitle_label.setVisible(visible)
+        self._profile_avatar_button.setVisible(visible)
 
     def _set_nav_compact(self, compact: bool) -> None:
         for button in self._nav_buttons:

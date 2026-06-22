@@ -525,7 +525,7 @@ class MainWindowUiController:
         subtitle_label = QLabel(context.translate(SIDEBAR_SUBTITLE_SOURCE))
         subtitle_label.setObjectName("SectionSubtitle")
         subtitle_label.setStyleSheet(
-            "background: transparent; padding: 0 8px 12px 8px;"
+            "background: transparent; padding: 0 8px 0 8px;"
         )
 
         profile_avatar_button = self._build_sidebar_header(
@@ -536,14 +536,15 @@ class MainWindowUiController:
         shared_nav_buttons.extend(nav_buttons)
 
         toggle_button = self._build_sidebar_toggle_button()
-        layout.addWidget(toggle_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addLayout(
             self._build_sidebar_header_layout(
                 title_label,
                 subtitle_label,
                 profile_avatar_button,
+                toggle_button,
             )
         )
+        layout.addSpacing(8)
         layout.addWidget(self._separator())
         layout.addSpacing(4)
         for attr_name in self._SIDEBAR_LAYOUT_ORDER:
@@ -555,6 +556,7 @@ class MainWindowUiController:
             frame=sidebar,
             title_label=title_label,
             subtitle_label=subtitle_label,
+            profile_avatar_button=profile_avatar_button,
             nav_buttons=nav_buttons,
             toggle_button=toggle_button,
             settings=context.window_geometry_settings,
@@ -675,6 +677,7 @@ class MainWindowUiController:
         title_label: QLabel,
         subtitle_label: QLabel,
         profile_avatar_button: ProfileAvatarButton,
+        toggle_button: QPushButton,
     ) -> QHBoxLayout:
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
@@ -691,6 +694,11 @@ class MainWindowUiController:
             Qt.AlignmentFlag.AlignVCenter,
         )
         header_row.addLayout(title_col, 1)
+        header_row.addWidget(
+            toggle_button,
+            0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
         return header_row
 
     def _build_nav_buttons(

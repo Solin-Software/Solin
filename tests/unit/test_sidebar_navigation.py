@@ -13,6 +13,7 @@ from solin.widgets.common.collapsible_sidebar import (
     SIDEBAR_EXPANDED_WIDTH,
     SidebarChromeController,
 )
+from solin.widgets.common.profile_avatar_button import ProfileAvatarButton
 from solin.widgets.common.sidebar_button import SidebarButton
 
 
@@ -64,6 +65,7 @@ def test_sidebar_chrome_applies_collapsed_and_expanded_states() -> None:
     frame = CollapsibleSidebarFrame()
     title = QLabel("Solin")
     subtitle = QLabel("Audio & Video")
+    avatar = ProfileAvatarButton("Main Hall", profile_id="main_hall")
     nav_button = SidebarButton(ICON_NAV_MEETINGS, "Meetings")
     toggle = QPushButton()
     settings = _SidebarSettingsStub()
@@ -71,6 +73,7 @@ def test_sidebar_chrome_applies_collapsed_and_expanded_states() -> None:
         frame=frame,
         title_label=title,
         subtitle_label=subtitle,
+        profile_avatar_button=avatar,
         nav_buttons=[nav_button],
         toggle_button=toggle,
         settings=settings,
@@ -86,6 +89,7 @@ def test_sidebar_chrome_applies_collapsed_and_expanded_states() -> None:
     assert frame.maximumWidth() == SIDEBAR_COLLAPSED_WIDTH
     assert title.isHidden()
     assert subtitle.isHidden()
+    assert avatar.isHidden()
     assert nav_button.text() == ""
     assert nav_button.toolTip() == "Meetings"
     assert toggle.toolTip() == "Expand sidebar"
@@ -97,6 +101,7 @@ def test_sidebar_chrome_applies_collapsed_and_expanded_states() -> None:
     assert frame.maximumWidth() == SIDEBAR_EXPANDED_WIDTH
     assert not title.isHidden()
     assert not subtitle.isHidden()
+    assert not avatar.isHidden()
     assert nav_button.text() == "  Meetings"
     assert toggle.toolTip() == "Collapse sidebar"
 
@@ -106,11 +111,13 @@ def test_sidebar_chrome_reads_initial_collapsed_state() -> None:
     frame = CollapsibleSidebarFrame()
     title = QLabel("Solin")
     subtitle = QLabel("Audio & Video")
+    avatar = ProfileAvatarButton("Main Hall", profile_id="main_hall")
     nav_button = SidebarButton(ICON_NAV_MEETINGS, "Meetings")
     controller = SidebarChromeController(
         frame=frame,
         title_label=title,
         subtitle_label=subtitle,
+        profile_avatar_button=avatar,
         nav_buttons=[nav_button],
         toggle_button=QPushButton(),
         settings=_SidebarSettingsStub(collapsed=True),
@@ -120,4 +127,32 @@ def test_sidebar_chrome_reads_initial_collapsed_state() -> None:
 
     assert controller.is_collapsed() is True
     assert frame.minimumWidth() == SIDEBAR_COLLAPSED_WIDTH
+    assert avatar.isHidden()
     assert nav_button.text() == ""
+
+
+def test_sidebar_chrome_reveals_text_as_expansion_starts() -> None:
+    _app()
+    frame = CollapsibleSidebarFrame()
+    title = QLabel("Solin")
+    subtitle = QLabel("Audio & Video")
+    avatar = ProfileAvatarButton("Main Hall", profile_id="main_hall")
+    nav_button = SidebarButton(ICON_NAV_MEETINGS, "Meetings")
+    controller = SidebarChromeController(
+        frame=frame,
+        title_label=title,
+        subtitle_label=subtitle,
+        profile_avatar_button=avatar,
+        nav_buttons=[nav_button],
+        toggle_button=QPushButton(),
+        settings=_SidebarSettingsStub(collapsed=True),
+        collapse_tooltip="Collapse sidebar",
+        expand_tooltip="Expand sidebar",
+    )
+
+    controller.set_collapsed(False, animate=True)
+
+    assert not title.isHidden()
+    assert not subtitle.isHidden()
+    assert not avatar.isHidden()
+    assert nav_button.text() == "  Meetings"
