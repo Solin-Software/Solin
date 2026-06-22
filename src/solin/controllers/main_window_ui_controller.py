@@ -109,6 +109,7 @@ class MainWindowUiContext:
     background_song_settings: Any
     projection_playback_settings: Any
     window_geometry_settings: Any
+    browser_aspect_ratio_provider: Callable[[], Any]
     background_song_service: Any
     timer_bridge: Any
     playlist_storage_paths: Any
@@ -354,6 +355,9 @@ class MainWindowUiController:
                 ),
                 browser_image_fetch_service_factory=(
                     self._browser_image_fetch_service_factory
+                ),
+                browser_aspect_ratio_provider=(
+                    context.browser_aspect_ratio_provider
                 ),
                 media_info_service_factory=self._media_info_service_factory,
             ),

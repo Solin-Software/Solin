@@ -51,6 +51,7 @@ class _WindowStub:
         self.browser_image_fetch_service_factory = (
             lambda: self.browser_image_fetch_service
         )
+        self.browser_aspect_ratio_provider = lambda: object()
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
         self.document_conversion_service = object()
@@ -120,6 +121,7 @@ def _controller(window, *, project_video=None):
             browser_image_fetch_service_factory=(
                 window.browser_image_fetch_service_factory
             ),
+            browser_aspect_ratio_provider=window.browser_aspect_ratio_provider,
             media_info_service_factory=window.media_info_service_factory,
         ),
         LazyPageHandlers(
@@ -242,12 +244,14 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             profile_paths,
             download_service,
             image_fetch_service,
+            aspect_ratio_provider,
             parent=None,
         ):
             self.lang_manager = lang_manager
             self.profile_paths = profile_paths
             self.download_service = download_service
             self.image_fetch_service = image_fetch_service
+            self.aspect_ratio_provider = aspect_ratio_provider
             self.parent = parent
 
     window = _WindowStub()
@@ -262,6 +266,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser.profile_paths is window.profile_paths
     assert browser.download_service is window.browser_download_service
     assert browser.image_fetch_service is window.browser_image_fetch_service
+    assert browser.aspect_ratio_provider is window.browser_aspect_ratio_provider
     assert browser.parent is None
 
 

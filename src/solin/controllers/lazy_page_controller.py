@@ -39,6 +39,7 @@ class LazyPageContext:
     wifi_receive_server_factory: Callable[[QObject], WifiReceiveServer]
     browser_download_service_factory: Callable[[], BrowserDownloadService]
     browser_image_fetch_service_factory: Callable[[], BrowserImageFetchService]
+    browser_aspect_ratio_provider: Callable[[], Any]
     media_info_service_factory: Callable[[QObject], MediaInfoService]
 
 
@@ -118,6 +119,7 @@ class LazyPageController:
             profile_paths=context.profile_paths,
             download_service=context.browser_download_service_factory(),
             image_fetch_service=context.browser_image_fetch_service_factory(),
+            aspect_ratio_provider=context.browser_aspect_ratio_provider,
         )
         self._replace_stack_widget(self.BROWSER_INDEX, self._browser_widget)
         self._connect_browser_signals()

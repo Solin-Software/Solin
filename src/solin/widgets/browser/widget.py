@@ -4,6 +4,7 @@ import binascii
 import logging
 import re
 import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 from PySide6.QtWidgets import QWidget, QApplication
 from PySide6.QtCore import Qt, Signal, Slot, QEvent, QTimer
@@ -11,7 +12,11 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
-from ...styles.icons import make_icon, ICON_CAST, ICON_CROP
+from ...core.projection.aspect_ratio import (
+    DEFAULT_BROWSER_ASPECT_RATIO,
+    ProjectionAspectRatio,
+)
+from ...styles.icons import ICON_ASPECT_MATCH, ICON_CAST, ICON_CROP, make_icon
 from ...ui.browser.scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
 from .crop_overlay import CropOverlay
 from .downloads import BrowserDownloadsMixin
@@ -722,16 +727,21 @@ class BrowserWidget(
         image_fetch_service: BrowserImageFetchService,
         parent=None,
         projection_fps: int | None = None,
+        aspect_ratio_provider: Callable[[], ProjectionAspectRatio] | None = None,
     ):
         super().__init__(parent)
         self.lang = lang_manager
         self._download_service = download_service
+        self._aspect_ratio_provider = (
+            aspect_ratio_provider or (lambda: DEFAULT_BROWSER_ASPECT_RATIO)
+        )
 
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root
         self._image_fetches = image_fetch_service
 
-        self._browser_aspect_16_9_active: bool = False
+        self._browser_aspect_locked = False
+        self._browser_aspect_ratio = DEFAULT_BROWSER_ASPECT_RATIO
 
         self._build_ui()
         self.setAcceptDrops(True)
@@ -1001,47 +1011,57 @@ class BrowserWidget(
         p.end()
         return QIcon(px)
 
-    @staticmethod
-    def _make_aspect_16_9_icon(color: str, size: int = 16) -> QIcon:
-        """Ícone compacto de proporção 16:9."""
-        from PySide6.QtGui import QFont, QPixmap
-        px = QPixmap(size, size)
-        px.fill(Qt.GlobalColor.transparent)
-        p = QPainter(px)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        c = QColor(color)
-        pen = QPen(c)
-        pen.setWidthF(1.4)
-        p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-
-        font = QFont()
-        font.setPointSizeF(max(4.8, size * 0.34))
-        font.setBold(True)
-        p.setFont(font)
-        p.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "16:9")
-        p.end()
-        return QIcon(px)
-
     # ── Aspect ratio do browser ───────────────────────────────────────────────
 
-    def _on_aspect_16_9_toggled(self, checked: bool):
-        self._browser_aspect_16_9_active = checked
-        self._update_aspect_16_9_btn_visual(checked)
+    def _on_aspect_lock_toggled(self, checked: bool):
+        self._browser_aspect_locked = checked
+        if checked:
+            self._browser_aspect_ratio = self._resolve_browser_aspect_ratio()
+        self._update_aspect_lock_btn_visual(checked)
         for i in range(self._stack.count()):
             tab = self._stack.widget(i)
             if isinstance(tab, BrowserTab):
-                tab.set_browser_aspect_16_9(checked)
+                self._apply_browser_aspect_to_tab(tab)
 
-    def _update_aspect_16_9_btn_visual(self, active: bool):
+    def _apply_browser_aspect_to_tab(self, tab: BrowserTab) -> None:
+        tab.set_browser_aspect_ratio_lock(
+            self._browser_aspect_locked,
+            self._browser_aspect_ratio.value,
+        )
+
+    def _update_aspect_lock_btn_visual(self, active: bool):
         if active:
-            self.aspect_btn.setIcon(self._make_aspect_16_9_icon("#a371f7"))
+            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#a371f7"))
             self.aspect_btn.setStyleSheet(self._aspect_btn_style_on)
-            self.aspect_btn.setToolTip(self.tr("Return browser to normal size"))
+            self.aspect_btn.setToolTip(
+                self.tr("Return browser to normal size ({ratio} active)").format(
+                    ratio=self._browser_aspect_ratio.label,
+                )
+            )
         else:
-            self.aspect_btn.setIcon(self._make_aspect_16_9_icon("#8b949e"))
+            ratio = self._resolve_browser_aspect_ratio()
+            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#8b949e"))
             self.aspect_btn.setStyleSheet(self._aspect_btn_style_off)
-            self.aspect_btn.setToolTip(self.tr("Lock browser to 16:9"))
+            self.aspect_btn.setToolTip(self._aspect_lock_tooltip(ratio))
+
+    def _aspect_lock_tooltip(self, ratio: ProjectionAspectRatio) -> str:
+        if ratio.is_fallback:
+            return self.tr("Lock browser to 16:9")
+        return self.tr("Match browser to projection screen ({ratio})").format(
+            ratio=ratio.label,
+        )
+
+    def _resolve_browser_aspect_ratio(self) -> ProjectionAspectRatio:
+        try:
+            ratio = self._aspect_ratio_provider()
+        except Exception:  # noqa: BLE001 - defensive projection state boundary
+            log.debug("Browser aspect ratio provider failed", exc_info=True)
+            return DEFAULT_BROWSER_ASPECT_RATIO
+        if not isinstance(ratio, ProjectionAspectRatio):
+            return DEFAULT_BROWSER_ASPECT_RATIO
+        if ratio.width <= 0 or ratio.height <= 0:
+            return DEFAULT_BROWSER_ASPECT_RATIO
+        return ratio
 
     # ── Spotlight de cursor ─────────────────────────────────────────────────────
 
@@ -1377,8 +1397,5 @@ class BrowserWidget(
             self.tr("Disable cursor spotlight") if self.cursor_btn.isChecked()
             else self.tr("Cursor spotlight (presentation mode)")
         )
-        self.aspect_btn.setToolTip(
-            self.tr("Return browser to normal size") if self.aspect_btn.isChecked()
-            else self.tr("Lock browser to 16:9")
-        )
+        self._update_aspect_lock_btn_visual(self.aspect_btn.isChecked())
 
