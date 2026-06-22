@@ -17,6 +17,8 @@ class SidebarButton(QPushButton):
         self._svg_icon = svg_icon
         self._label = label
         self._active = False
+        self._compact = False
+        self.setProperty("compact", "false")
         self.setCheckable(False)
         self.setMinimumHeight(52)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -33,8 +35,16 @@ class SidebarButton(QPushButton):
         self._label = label
         self._update_icon_and_text()
 
+    def set_compact(self, compact: bool) -> None:
+        self._compact = compact
+        self.setProperty("compact", "true" if compact else "false")
+        self._update_icon_and_text()
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def _update_icon_and_text(self) -> None:
         color = "#e6edf3" if self._active else "#8b949e"
         self.setIcon(make_icon(self._svg_icon, 16, color))
         self.setIconSize(QSize(16, 16))
-        self.setText(f"  {self._label}")
+        self.setText("" if self._compact else f"  {self._label}")
+        self.setToolTip(self._label)

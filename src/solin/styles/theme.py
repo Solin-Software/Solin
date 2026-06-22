@@ -104,6 +104,16 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
     border-right: 1px solid %(border)s;
 }
 
+#SidebarToggleBtn {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 0;
+}
+#SidebarToggleBtn:hover {
+    background-color: %(bg2)s;
+}
+
 #SidebarBtn {
     background: transparent;
     border: none;
@@ -120,6 +130,10 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 #SidebarBtn[active="true"] {
     background-color: %(accent_muted)s;
     color: %(accent2)s;
+}
+#SidebarBtn[compact="true"] {
+    padding: 10px 12px;
+    text-align: center;
 }
 
 #SidebarLangBtn {

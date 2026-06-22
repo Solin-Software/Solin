@@ -4,11 +4,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt
+from PySide6.QtCore import QObject, QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -25,6 +26,7 @@ from ..core.playlists.cleanup import (
     flush_thumbs_dir,
 )
 from ..styles.icons import (
+    ICON_MENU,
     ICON_NAV_BROWSER,
     ICON_NAV_CACHE,
     ICON_NAV_CLIPS,
@@ -35,8 +37,14 @@ from ..styles.icons import (
     ICON_NAV_THEME,
     ICON_NAV_TIMER,
     ICON_NAV_WIFI,
+    make_icon,
 )
 from ..widgets.clips_widget import ClipsWidget
+from ..widgets.common.collapsible_sidebar import (
+    CollapsibleSidebarFrame,
+    SIDEBAR_EXPANDED_WIDTH,
+    SidebarChromeController,
+)
 from ..widgets.common.profile_avatar_button import ProfileAvatarButton
 from ..widgets.common.sidebar_button import SidebarButton
 from ..ui.media_info import MediaInfoQueue, MediaInfoService
@@ -54,6 +62,8 @@ from .lazy_page_controller import (
     LazyPageHandlers,
 )
 from .main_window_nav import (
+    COLLAPSE_SIDEBAR_SOURCE,
+    EXPAND_SIDEBAR_SOURCE,
     NAV_LABELS,
     SIDEBAR_SUBTITLE_SOURCE,
     SIDEBAR_TITLE_SOURCE,
@@ -98,6 +108,7 @@ class MainWindowUiContext:
     auto_share_accessibility_trusted: Callable[[], bool]
     background_song_settings: Any
     projection_playback_settings: Any
+    window_geometry_settings: Any
     background_song_service: Any
     timer_bridge: Any
     playlist_storage_paths: Any
@@ -165,6 +176,7 @@ class MainWindowUiResources:
     sidebar_title_label: QLabel
     sidebar_subtitle_label: QLabel
     profile_avatar_button: ProfileAvatarButton
+    sidebar_chrome: SidebarChromeController
     nav_buttons: list[SidebarButton]
     nav_buttons_by_name: dict[str, SidebarButton]
 
@@ -186,6 +198,7 @@ class _SidebarResources:
     title_label: QLabel
     subtitle_label: QLabel
     profile_avatar_button: ProfileAvatarButton
+    sidebar_chrome: SidebarChromeController
     nav_buttons: list[SidebarButton]
     nav_buttons_by_name: dict[str, SidebarButton]
 
@@ -314,6 +327,7 @@ class MainWindowUiController:
             sidebar_title_label=sidebar.title_label,
             sidebar_subtitle_label=sidebar.subtitle_label,
             profile_avatar_button=sidebar.profile_avatar_button,
+            sidebar_chrome=sidebar.sidebar_chrome,
             nav_buttons=nav_buttons,
             nav_buttons_by_name=sidebar.nav_buttons_by_name,
         )
@@ -494,9 +508,9 @@ class MainWindowUiController:
         shared_nav_buttons: list[SidebarButton],
     ) -> _SidebarResources:
         context = self._context
-        sidebar = QFrame()
+        sidebar = CollapsibleSidebarFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(220)
+        sidebar.setFixedWidth(SIDEBAR_EXPANDED_WIDTH)
 
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(12, 16, 12, 16)
@@ -511,7 +525,7 @@ class MainWindowUiController:
         subtitle_label = QLabel(context.translate(SIDEBAR_SUBTITLE_SOURCE))
         subtitle_label.setObjectName("SectionSubtitle")
         subtitle_label.setStyleSheet(
-            "background: transparent; padding: 0 8px 12px 8px;"
+            "background: transparent; padding: 0 8px 0 8px;"
         )
 
         profile_avatar_button = self._build_sidebar_header(
@@ -521,13 +535,16 @@ class MainWindowUiController:
         nav_buttons_by_name, nav_buttons = self._build_nav_buttons(navigation)
         shared_nav_buttons.extend(nav_buttons)
 
+        toggle_button = self._build_sidebar_toggle_button()
         layout.addLayout(
             self._build_sidebar_header_layout(
                 title_label,
                 subtitle_label,
                 profile_avatar_button,
+                toggle_button,
             )
         )
+        layout.addSpacing(8)
         layout.addWidget(self._separator())
         layout.addSpacing(4)
         for attr_name in self._SIDEBAR_LAYOUT_ORDER:
@@ -535,12 +552,25 @@ class MainWindowUiController:
         layout.addStretch()
         layout.addWidget(nav_buttons_by_name["nav_settings_btn"])
 
+        sidebar_chrome = SidebarChromeController(
+            frame=sidebar,
+            title_label=title_label,
+            subtitle_label=subtitle_label,
+            profile_avatar_button=profile_avatar_button,
+            nav_buttons=nav_buttons,
+            toggle_button=toggle_button,
+            settings=context.window_geometry_settings,
+            collapse_tooltip=context.translate(COLLAPSE_SIDEBAR_SOURCE),
+            expand_tooltip=context.translate(EXPAND_SIDEBAR_SOURCE),
+            parent=sidebar,
+        )
         navigation.switch_page(1)
         return _SidebarResources(
             frame=sidebar,
             title_label=title_label,
             subtitle_label=subtitle_label,
             profile_avatar_button=profile_avatar_button,
+            sidebar_chrome=sidebar_chrome,
             nav_buttons=nav_buttons,
             nav_buttons_by_name=nav_buttons_by_name,
         )
@@ -633,10 +663,21 @@ class MainWindowUiController:
         return profile_avatar_button
 
     @staticmethod
+    def _build_sidebar_toggle_button() -> QPushButton:
+        button = QPushButton()
+        button.setObjectName("SidebarToggleBtn")
+        button.setFixedSize(36, 36)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setIcon(make_icon(ICON_MENU, 18, "#8b949e"))
+        button.setIconSize(QSize(18, 18))
+        return button
+
+    @staticmethod
     def _build_sidebar_header_layout(
         title_label: QLabel,
         subtitle_label: QLabel,
         profile_avatar_button: ProfileAvatarButton,
+        toggle_button: QPushButton,
     ) -> QHBoxLayout:
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
@@ -647,11 +688,16 @@ class MainWindowUiController:
         title_col.addWidget(title_label)
         title_col.addWidget(subtitle_label)
 
-        header_row.addLayout(title_col, 1)
         header_row.addWidget(
             profile_avatar_button,
             0,
             Qt.AlignmentFlag.AlignVCenter,
+        )
+        header_row.addLayout(title_col, 1)
+        header_row.addWidget(
+            toggle_button,
+            0,
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
         )
         return header_row
 

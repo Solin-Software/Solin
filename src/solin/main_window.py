@@ -372,6 +372,7 @@ class MainWindow(QMainWindow):
                 ),
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,
+                window_geometry_settings=profile_settings_bundle.window_geometry,
                 background_song_service=self._background_song_service,
                 timer_bridge=self.timer_bridge,
                 playlist_storage_paths=self.playlist_storage_paths,
@@ -688,6 +689,7 @@ class MainWindow(QMainWindow):
                 sidebar_subtitle_label=self._sidebar_subtitle_lbl,
                 nav_buttons=self._nav_buttons_by_name,
                 translate=self.tr,
+                sidebar_chrome=self._sidebar_chrome,
             )
         )
         self._signal_connections = SignalConnectionController(
@@ -809,6 +811,7 @@ class MainWindow(QMainWindow):
         self._sidebar_title_lbl = resources.sidebar_title_label
         self._sidebar_subtitle_lbl = resources.sidebar_subtitle_label
         self._profile_avatar_btn = resources.profile_avatar_button
+        self._sidebar_chrome = resources.sidebar_chrome
         self._nav_btns = resources.nav_buttons
         self._nav_buttons_by_name = resources.nav_buttons_by_name
         for attr_name, button in resources.nav_buttons_by_name.items():

@@ -4,7 +4,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .main_window_nav import NAV_LABELS, SIDEBAR_SUBTITLE_SOURCE, SIDEBAR_TITLE_SOURCE
+from .main_window_nav import (
+    COLLAPSE_SIDEBAR_SOURCE,
+    EXPAND_SIDEBAR_SOURCE,
+    NAV_LABELS,
+    SIDEBAR_SUBTITLE_SOURCE,
+    SIDEBAR_TITLE_SOURCE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +22,7 @@ class LanguageContext:
     sidebar_subtitle_label: Any
     nav_buttons: Mapping[str, Any]
     translate: Callable[[str], str]
+    sidebar_chrome: Any | None = None
 
 
 class LanguageController:
@@ -35,6 +42,11 @@ class LanguageController:
             context.translate(SIDEBAR_SUBTITLE_SOURCE)
         )
         self.retranslate_sidebar()
+        if context.sidebar_chrome is not None:
+            context.sidebar_chrome.set_toggle_tooltips(
+                collapse=context.translate(COLLAPSE_SIDEBAR_SOURCE),
+                expand=context.translate(EXPAND_SIDEBAR_SOURCE),
+            )
 
     def retranslate_sidebar(self) -> None:
         context = self._context

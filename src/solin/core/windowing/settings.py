@@ -36,3 +36,11 @@ class WindowGeometrySettingsStore:
         self.settings.set_value(SettingsKey.WINDOW_WIDTH, int(width), sync=False)
         self.settings.set_value(SettingsKey.WINDOW_HEIGHT, int(height), sync=False)
         self.settings.sync()
+
+    def sidebar_collapsed(self, default: bool = False) -> bool:
+        return bool(
+            self.settings.value(SettingsKey.SIDEBAR_COLLAPSED, default, bool)
+        )
+
+    def save_sidebar_collapsed(self, collapsed: bool) -> None:
+        self.settings.set_value(SettingsKey.SIDEBAR_COLLAPSED, bool(collapsed))

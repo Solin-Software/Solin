@@ -9,6 +9,8 @@ MAIN_WINDOW_TR_CONTEXT = "MainWindow"
 SIDEBAR_TITLE_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Solin")
 SIDEBAR_SUBTITLE_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Audio & Video")
 SWITCH_PROFILE_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Switch profile")
+COLLAPSE_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Collapse sidebar")
+EXPAND_SIDEBAR_SOURCE = QT_TRANSLATE_NOOP("MainWindow", "Expand sidebar")
 
 NAV_LABELS = (
     ("nav_songs_btn", QT_TRANSLATE_NOOP("MainWindow", "Songs")),
