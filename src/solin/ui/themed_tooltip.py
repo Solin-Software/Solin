@@ -8,12 +8,19 @@ from solin.styles.theme import PALETTE
 
 
 class _ThemedTooltipPopup(QFrame):
+    _SHADOW_PAD = 8
+    _SHADOW_OFFSET_Y = 2
+    _BUBBLE_RADIUS = 6
+    _TEXT_MARGIN_X = 8
+    _TEXT_MARGIN_Y = 5
+
     def __init__(self) -> None:
         super().__init__(
             None,
-            Qt.WindowType.Tool
+            Qt.WindowType.ToolTip
             | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint,
+            | Qt.WindowType.NoDropShadowWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -23,8 +30,16 @@ class _ThemedTooltipPopup(QFrame):
         self._label = QLabel(self)
         self._label.setWordWrap(False)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setContentsMargins(
+            self._SHADOW_PAD + self._TEXT_MARGIN_X,
+            self._SHADOW_PAD + self._TEXT_MARGIN_Y,
+            self._SHADOW_PAD + self._TEXT_MARGIN_X,
+            self._SHADOW_PAD + self._TEXT_MARGIN_Y,
+        )
         layout.addWidget(self._label)
+
+    def visual_offset(self) -> QPoint:
+        return QPoint(self._SHADOW_PAD, self._SHADOW_PAD)
 
     def set_text(self, text: str) -> None:
         self._label.setText(text)
@@ -45,8 +60,28 @@ class _ThemedTooltipPopup(QFrame):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
+
+        bubble = QRectF(self.rect()).adjusted(
+            self._SHADOW_PAD,
+            self._SHADOW_PAD,
+            -self._SHADOW_PAD,
+            -self._SHADOW_PAD,
+        )
+        shadow_color = QColor(0, 0, 0)
+        for spread, alpha in ((5, 10), (3, 16), (1, 26)):
+            shadow_color.setAlpha(alpha)
+            painter.setBrush(shadow_color)
+            painter.drawRoundedRect(
+                bubble.adjusted(-spread, -spread, spread, spread).translated(
+                    0,
+                    self._SHADOW_OFFSET_Y,
+                ),
+                self._BUBBLE_RADIUS + spread,
+                self._BUBBLE_RADIUS + spread,
+            )
+
         painter.setBrush(QColor(PALETTE.surface_overlay))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
+        painter.drawRoundedRect(bubble, self._BUBBLE_RADIUS, self._BUBBLE_RADIUS)
         painter.end()
 
 
@@ -66,7 +101,7 @@ def show_themed_tooltip(global_pos: QPoint, text: str) -> None:
         return
     popup = _popup()
     popup.set_text(text)
-    popup.move(global_pos)
+    popup.move(global_pos - popup.visual_offset())
     popup.show()
     popup.raise_()
 

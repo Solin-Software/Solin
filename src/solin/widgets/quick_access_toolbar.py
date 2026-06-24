@@ -452,6 +452,10 @@ class QuickAccessToolbar(QQuickWidget):
             self.set_camera_stream_active(True)
         if self._background_song_panel is not None:
             self._background_song_panel.apply_theme()
+        self._zoom_panel.apply_theme()
+        self._scene_popup.apply_theme()
+        if self._camera_panel is not None:
+            self._camera_panel.apply_theme()
         self._sync_background_song_state()
         self._bridge.stateChanged.emit()
 

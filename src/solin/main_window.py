@@ -855,6 +855,7 @@ class MainWindow(QMainWindow):
             getattr(self, "meetings_widget", None),
             getattr(self, "proj_bar", None),
             getattr(self, "_quick_toolbar", None),
+            getattr(self, "_monitor_popup", None),
             getattr(self, "_profile_avatar_btn", None),
         ):
             if widget is None:
