@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from solin.styles.theme import PALETTE, slider_handle_border, slider_handle_fill
+from solin.styles.theme import PALETTE, current_theme_scheme, slider_handle_border, slider_handle_fill
 from .media_library_widget import MediaLibraryWidget
 
 
@@ -74,24 +74,29 @@ class BufferedSlider(QWidget):
         track_h = 4
         y = (h - track_h) // 2
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(PALETTE.border_muted))
+        dark = current_theme_scheme() == "dark"
+        p.setBrush(QColor(60, 60, 65) if dark else QColor(PALETTE.border_muted))
         p.drawRoundedRect(0, y, w, track_h, 2, 2)
         if self._buffered > 0 and self._max > 0:
-            p.setBrush(QColor(PALETTE.border_strong))
+            p.setBrush(QColor(110, 110, 120) if dark else QColor(PALETTE.border_strong))
             p.drawRoundedRect(0, y, int(w * self._buffered), track_h, 2, 2)
         prog_w = None
         if self._max > 0 and self._value >= self._min:
             ratio = (self._value - self._min) / (self._max - self._min)
             prog_w = int(w * ratio)
-            p.setBrush(QColor(PALETTE.accent))
+            p.setBrush(QColor(100, 160, 255) if dark else QColor(PALETTE.accent))
             p.drawRoundedRect(0, y, prog_w, track_h, 2, 2)
 
         if self._reconnect_active:
             self._paint_reconnect_overlay(p, w, y, track_h)
 
         if prog_w is not None:
-            p.setBrush(QColor(slider_handle_fill()))
-            p.setPen(QPen(QColor(slider_handle_border()), 1))
+            if dark:
+                p.setBrush(QColor(220, 230, 255))
+                p.setPen(QPen(QColor(100, 160, 255), 1))
+            else:
+                p.setBrush(QColor(slider_handle_fill()))
+                p.setPen(QPen(QColor(slider_handle_border()), 1))
             p.drawEllipse(prog_w - 6, h // 2 - 6, 12, 12)
 
     def showEvent(self, event):

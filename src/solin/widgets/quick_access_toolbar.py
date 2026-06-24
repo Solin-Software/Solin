@@ -16,7 +16,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtWidgets import QToolTip, QWidget
+from PySide6.QtWidgets import QWidget
 
 from solin.core.integrations.automation.settings import (
     CameraSettingsStore,
@@ -27,6 +27,7 @@ from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.macos_layer import apply_corner_radius
 from solin.ui.background_song_status import translate_background_song_status
 from solin.styles.theme import PALETTE
+from solin.ui.themed_tooltip import hide_themed_tooltip, show_themed_tooltip
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
@@ -148,7 +149,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.pointerEntered.connect(self._begin_qml_pointer_cursor)
         self._bridge.pointerExited.connect(self._end_qml_pointer_cursor)
         self._bridge.tooltipRequested.connect(self._show_native_tooltip)
-        self._bridge.tooltipHidden.connect(QToolTip.hideText)
+        self._bridge.tooltipHidden.connect(hide_themed_tooltip)
 
         if _MAC:
             self._bridge.set_solid_mode(True)
@@ -238,7 +239,7 @@ class QuickAccessToolbar(QQuickWidget):
     def _reset_qml_pointer_cursor(self):
         self._qml_pointer_depth = 0
         end_qml_pointer_cursor(self)
-        QToolTip.hideText()
+        hide_themed_tooltip()
 
     def eventFilter(self, obj, event):
         if obj is self and event.type() == QEvent.Type.Leave:
@@ -271,7 +272,7 @@ class QuickAccessToolbar(QQuickWidget):
         height: float,
     ) -> None:
         if not text:
-            QToolTip.hideText()
+            hide_themed_tooltip()
             return
 
         rect = QRect(round(x), round(y), round(width), round(height))
@@ -288,7 +289,7 @@ class QuickAccessToolbar(QQuickWidget):
         tooltip_gap = 25
         cursor_clearance = 16
         available = screen.availableGeometry() if screen else QRect()
-        metrics = QFontMetrics(QToolTip.font())
+        metrics = QFontMetrics(self.font())
         tooltip_w = metrics.horizontalAdvance(text) + 18
         if available.isValid():
             tooltip_w = min(tooltip_w, max(24, available.width() - margin * 2))
@@ -336,7 +337,7 @@ class QuickAccessToolbar(QQuickWidget):
                     pos_y = candidate
                     break
 
-        QToolTip.showText(QPoint(pos_x, pos_y), text, self, rect)
+        show_themed_tooltip(QPoint(pos_x, pos_y), text)
 
     # ── Public API (identical to the old QWidget version) ─────────────────
 
@@ -439,7 +440,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._reposition()
 
     def apply_theme(self) -> None:
-        QToolTip.hideText()
+        hide_themed_tooltip()
         apply_qml_theme(self, clear_color=QColor(0, 0, 0, 0))
         self.set_screen_count(self._screen_count)
         if self._obs_connected:
@@ -565,7 +566,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._apply_mac_corners()
 
     def _toggle_minimize(self):
-        QToolTip.hideText()
+        hide_themed_tooltip()
         p = self.parent()
         if not p:
             return
@@ -650,7 +651,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._slide_anim.start()
 
     def _on_obs_clicked(self):
-        QToolTip.hideText()
+        hide_themed_tooltip()
         if not self._obs or not self._obs.is_connected:
             return
         scenes = self._obs.scenes
@@ -663,7 +664,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._obs.request_scenes_refresh()
 
     def _on_background_song_clicked(self):
-        QToolTip.hideText()
+        hide_themed_tooltip()
         if not self._background_song_panel or not self._background_song:
             return
         if not self._background_song.is_enabled:
@@ -671,13 +672,13 @@ class QuickAccessToolbar(QQuickWidget):
         self._background_song_panel.show_above(self)
 
     def _on_zoom_clicked(self):
-        QToolTip.hideText()
+        hide_themed_tooltip()
         if not self._zoom or not self._zoom.is_connected:
             return
         self._zoom_panel.show_above(self)
 
     def _on_camera_clicked(self):
-        QToolTip.hideText()
+        hide_themed_tooltip()
         if not self._camera_panel:
             return
         self._camera_panel.show_above(self)

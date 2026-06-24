@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QSizePolicy,
-    QSlider,
     QWidget,
 )
 
@@ -47,7 +46,9 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet
+from solin.styles.theme import PALETTE, qss_rgba
+from solin.ui.themed_tooltip import install_themed_tooltip
+from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 from solin.widgets.songs_widget import BufferedSlider
 
 from .controls import SPEED_CHOICES, icon_button, projection_menu_style
@@ -173,9 +174,6 @@ class FullscreenVideoOverlay(QWidget):
             "}"
         )
 
-    def _volume_slider_stylesheet(self) -> str:
-        return slider_stylesheet(groove_height=3, handle_size=12)
-
     def _stop_button_stylesheet(self) -> str:
         return (
             "QPushButton{border:none;border-radius:17px;background:transparent;padding:0;}"
@@ -221,6 +219,7 @@ class FullscreenVideoOverlay(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
+        install_themed_tooltip(self.title_label)
 
         self.exit_btn = icon_button(
             ICON_FULLSCREEN_EXIT,
@@ -305,11 +304,15 @@ class FullscreenVideoOverlay(QWidget):
         self.vol_btn.clicked.connect(self._toggle_mute)
         self.vol_btn.setStyleSheet(self._icon_button_stylesheet(self.vol_btn))
 
-        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider = ThemedHorizontalSlider(
+            track_height=3,
+            handle_diameter=12,
+            dark_track=QColor(255, 255, 255, 61),
+            dark_handle=QColor("#e6edf3"),
+        )
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(82)
         self.vol_slider.setFixedHeight(22)
-        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
         self.more_btn = icon_button(
@@ -472,7 +475,7 @@ class FullscreenVideoOverlay(QWidget):
             f"background: transparent; color: {PALETTE.text_secondary};"
             " font-size: 12px; font-weight: 500;"
         )
-        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
+        self.vol_slider.apply_theme()
         self.stop_btn.setStyleSheet(self._stop_button_stylesheet())
         self._apply_icon_button_styles()
         self.exit_btn.setIcon(make_icon(ICON_FULLSCREEN_EXIT, 15, PALETTE.text_secondary))

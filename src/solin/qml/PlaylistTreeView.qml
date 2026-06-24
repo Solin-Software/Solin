@@ -1961,6 +1961,7 @@ Item {
             // reads as part of the surface instead of as an external border.
             Rectangle {
                 width: 4
+                z: 2
                 anchors.left: parent.left
                 anchors.leftMargin: 8
                 anchors.top: parent.top

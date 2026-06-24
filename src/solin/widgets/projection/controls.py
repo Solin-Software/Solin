@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QPushButton
 
 from solin.styles.icons import make_icon
 from solin.styles.theme import PALETTE
+from solin.ui.themed_tooltip import install_themed_tooltip
 
 
 def projection_menu_style() -> str:
@@ -50,6 +51,7 @@ def icon_button(
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
     if tooltip:
         btn.setToolTip(tooltip)
+        install_themed_tooltip(btn)
     radius = size // 2
     btn.setStyleSheet(
         f"QPushButton{{border:none;border-radius:{radius}px;"

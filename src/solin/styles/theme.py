@@ -130,12 +130,12 @@ def apply_application_palette(
 
 def slider_handle_fill(theme: AppTheme | None = None) -> str:
     p = (theme or THEME).palette
-    return p.accent_hover if current_theme_scheme(theme) == "dark" else p.accent
+    return p.text_secondary if current_theme_scheme(theme) == "dark" else p.accent
 
 
 def slider_handle_border(theme: AppTheme | None = None) -> str:
     p = (theme or THEME).palette
-    return p.accent_text_hover if current_theme_scheme(theme) == "dark" else p.white
+    return "transparent" if current_theme_scheme(theme) == "dark" else p.white
 
 
 def slider_stylesheet(
@@ -145,22 +145,38 @@ def slider_stylesheet(
     handle_size: int = 12,
     groove_color: str | None = None,
     progress_color: str | None = None,
+    handle_fill: str | None = None,
+    handle_hover: str | None = None,
+    handle_border: str | None = None,
 ) -> str:
     p = (theme or THEME).palette
     handle_margin = -max(0, (handle_size - groove_height) // 2)
     handle_radius = handle_size // 2
     groove_radius = max(1, groove_height // 2)
+    resolved_handle_fill = handle_fill or slider_handle_fill(theme)
+    resolved_handle_hover = handle_hover or (
+        p.text_primary if current_theme_scheme(theme) == "dark" else p.accent_text_hover
+    )
+    resolved_handle_border = handle_border or slider_handle_border(theme)
+    border_rule = (
+        "border:none;"
+        if resolved_handle_border == "transparent"
+        else f"border:1px solid {resolved_handle_border};"
+    )
+    resolved_progress = progress_color or (
+        p.accent_hover if current_theme_scheme(theme) == "dark" else p.accent
+    )
     return (
         "QSlider{background:transparent;border:none;}"
         f"QSlider::groove:horizontal{{height:{groove_height}px;"
         f"background:{groove_color or p.border_muted};"
         f"border-radius:{groove_radius}px;}}"
         f"QSlider::handle:horizontal{{width:{handle_size}px;height:{handle_size}px;"
-        f"margin:{handle_margin}px 0;background:{slider_handle_fill(theme)};"
-        f"border:1px solid {slider_handle_border(theme)};"
+        f"margin:{handle_margin}px 0;background:{resolved_handle_fill};"
+        f"{border_rule}"
         f"border-radius:{handle_radius}px;}}"
-        f"QSlider::handle:horizontal:hover{{background:{p.accent_text_hover};}}"
-        f"QSlider::sub-page:horizontal{{background:{progress_color or p.accent};"
+        f"QSlider::handle:horizontal:hover{{background:{resolved_handle_hover};}}"
+        f"QSlider::sub-page:horizontal{{background:{resolved_progress};"
         f"border-radius:{groove_radius}px;}}"
     )
 

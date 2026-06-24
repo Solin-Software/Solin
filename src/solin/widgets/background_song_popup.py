@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -29,7 +28,8 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet
+from solin.styles.theme import PALETTE, qss_rgba
+from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 
 
 class _PaletteToken:
@@ -160,10 +160,8 @@ class BackgroundSongPopup(QWidget):
         self._volume_icon = QLabel()
         self._volume_icon.setFixedSize(16, 16)
         self._volume_icon.setStyleSheet("background: transparent;")
-        self._volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self._volume_slider = ThemedHorizontalSlider(track_height=4, handle_diameter=12)
         self._volume_slider.setRange(0, 100)
-        self._volume_slider.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._volume_slider.setStyleSheet(self._slider_style())
         self._volume_value_lbl = QLabel("")
         self._volume_value_lbl.setFixedWidth(34)
         self._volume_value_lbl.setAlignment(
@@ -320,7 +318,7 @@ class BackgroundSongPopup(QWidget):
         self._status_lbl.setStyleSheet(
             f"color: {_MUTED}; font-size: 11px; background: transparent;"
         )
-        self._volume_slider.setStyleSheet(self._slider_style())
+        self._volume_slider.apply_theme()
         self._volume_value_lbl.setStyleSheet(
             f"color: {_MUTED}; font-size: 11px; background: transparent;"
         )
@@ -434,10 +432,6 @@ class BackgroundSongPopup(QWidget):
             f" border-color: {PALETTE.text_dim}; }}"
             f"QPushButton:disabled {{ border-color: {qss_rgba(PALETTE.border, 0.5)}; }}"
         )
-
-    @staticmethod
-    def _slider_style() -> str:
-        return slider_stylesheet(groove_height=4, handle_size=12)
 
     @staticmethod
     def _spin_style() -> str:

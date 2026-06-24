@@ -37,99 +37,129 @@ from .shared import (
 )
 
 _DAY_DATA = tuple(range(7))
-_FIELD_BUTTON_STYLE = (
-    "QPushButton {"
-    f" background: {SETTINGS_SURFACE};"
-    f" color: {SETTINGS_TEXT};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
-    " border-radius: 8px;"
-    " padding: 0 10px;"
-    " font-size: 12px;"
-    " font-weight: 500;"
-    "}"
-    "QPushButton:hover {"
-    f" background: {SETTINGS_BORDER};"
-    f" border-color: {SETTINGS_ACCENT};"
-    "}"
-    "QPushButton:pressed {"
-    f" background: {SETTINGS_BG};"
-    "}"
-    "QPushButton:disabled {"
-    f" background: {SETTINGS_BG};"
-    f" color: {SETTINGS_DIM};"
-    f" border-color: {SETTINGS_BORDER};"
-    "}"
-)
-_MENU_STYLE = (
-    "QMenu {"
-    f" background: {SETTINGS_SURFACE};"
-    f" color: {SETTINGS_TEXT};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
-    " border-radius: 8px;"
-    " padding: 6px;"
-    "}"
-    "QMenu::item {"
-    " padding: 7px 28px 7px 12px;"
-    " border-radius: 6px;"
-    "}"
-    "QMenu::item:selected {"
-    f" background: {SETTINGS_BORDER};"
-    "}"
-    "QMenu::indicator { width: 14px; height: 14px; }"
-)
-_TIME_POPUP_CARD_STYLE = (
-    "QFrame#ScheduleTimePickerCard {"
-    f" background: {SETTINGS_SURFACE};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
-    " border-radius: 12px;"
-    "}"
-)
-_TIME_LABEL_STYLE = f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
-_TIME_PREVIEW_STYLE = (
-    f"font-size: 19px; font-weight: 700; color: {SETTINGS_TEXT};"
-    " background: transparent; border: none; padding: 0;"
-)
-_STEPPER_CARD_STYLE = (
-    "QFrame {"
-    f" background: {SETTINGS_BG};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
-    " border-radius: 8px;"
-    "}"
-)
-_STEPPER_VALUE_STYLE = (
-    f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};"
-    " background: transparent; border: none;"
-)
-_STEPPER_BUTTON_STYLE = (
-    "QToolButton {"
-    " background: transparent;"
-    " border: none;"
-    " border-radius: 5px;"
-    " padding: 0;"
-    "}"
-    f"QToolButton:hover {{ background: {SETTINGS_BORDER}; }}"
-    f"QToolButton:pressed {{ background: {SETTINGS_BORDER_STRONG}; }}"
-)
-_TIME_APPLY_STYLE = (
-    "QPushButton {"
-    f" background: {SETTINGS_ACCENT};"
-    " color: white;"
-    " border: none;"
-    " border-radius: 8px;"
-    " font-weight: 600;"
-    "}"
-    f"QPushButton:hover {{ background: {SETTINGS_ACCENT_HOVER}; }}"
-    f"QPushButton:pressed {{ background: {SETTINGS_ACCENT_PRESSED}; }}"
-)
-_TIME_CANCEL_STYLE = (
-    "QPushButton {"
-    f" background: {SETTINGS_BORDER};"
-    f" color: {SETTINGS_TEXT};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG};"
-    " border-radius: 8px;"
-    "}"
-    f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
-)
+
+
+def _field_button_style() -> str:
+    return (
+        "QPushButton {"
+        f" background: {SETTINGS_SURFACE};"
+        f" color: {SETTINGS_TEXT};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 8px;"
+        " padding: 0 10px;"
+        " font-size: 12px;"
+        " font-weight: 500;"
+        "}"
+        "QPushButton:hover {"
+        f" background: {SETTINGS_BORDER};"
+        f" border-color: {SETTINGS_ACCENT};"
+        "}"
+        "QPushButton:pressed {"
+        f" background: {SETTINGS_BG};"
+        "}"
+        "QPushButton:disabled {"
+        f" background: {SETTINGS_BG};"
+        f" color: {SETTINGS_DIM};"
+        f" border-color: {SETTINGS_BORDER};"
+        "}"
+    )
+
+
+def _menu_style() -> str:
+    return (
+        "QMenu {"
+        f" background: {SETTINGS_SURFACE};"
+        f" color: {SETTINGS_TEXT};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 8px;"
+        " padding: 6px;"
+        "}"
+        "QMenu::item {"
+        " padding: 7px 28px 7px 12px;"
+        " border-radius: 6px;"
+        "}"
+        "QMenu::item:selected {"
+        f" background: {SETTINGS_BORDER};"
+        "}"
+        "QMenu::indicator { width: 14px; height: 14px; }"
+    )
+
+
+def _time_popup_card_style() -> str:
+    return (
+        "QFrame#ScheduleTimePickerCard {"
+        f" background: {SETTINGS_SURFACE};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 12px;"
+        "}"
+    )
+
+
+def _time_label_style() -> str:
+    return f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
+
+
+def _time_preview_style() -> str:
+    return (
+        f"font-size: 19px; font-weight: 700; color: {SETTINGS_TEXT};"
+        " background: transparent; border: none; padding: 0;"
+    )
+
+
+def _stepper_card_style() -> str:
+    return (
+        "QFrame {"
+        f" background: {SETTINGS_BG};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 8px;"
+        "}"
+    )
+
+
+def _stepper_value_style() -> str:
+    return (
+        f"font-size: 16px; font-weight: 700; color: {SETTINGS_TEXT};"
+        " background: transparent; border: none;"
+    )
+
+
+def _stepper_button_style() -> str:
+    return (
+        "QToolButton {"
+        " background: transparent;"
+        " border: none;"
+        " border-radius: 5px;"
+        " padding: 0;"
+        "}"
+        f"QToolButton:hover {{ background: {SETTINGS_BORDER}; }}"
+        f"QToolButton:pressed {{ background: {SETTINGS_BORDER_STRONG}; }}"
+    )
+
+
+def _time_apply_style() -> str:
+    return (
+        "QPushButton {"
+        f" background: {SETTINGS_ACCENT};"
+        " color: white;"
+        " border: none;"
+        " border-radius: 8px;"
+        " font-weight: 600;"
+        "}"
+        f"QPushButton:hover {{ background: {SETTINGS_ACCENT_HOVER}; }}"
+        f"QPushButton:pressed {{ background: {SETTINGS_ACCENT_PRESSED}; }}"
+    )
+
+
+def _time_cancel_style() -> str:
+    return (
+        "QPushButton {"
+        f" background: {SETTINGS_BORDER};"
+        f" color: {SETTINGS_TEXT};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+        " border-radius: 8px;"
+        "}"
+        f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+    )
 
 
 class _ScheduleDayButton(QPushButton):
@@ -142,7 +172,7 @@ class _ScheduleDayButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(36)
         self.setFixedWidth(154)
-        self.setStyleSheet(_FIELD_BUTTON_STYLE)
+        self.setStyleSheet(_field_button_style())
         self.clicked.connect(self._open_menu)
 
     def set_options(self, options: list[tuple[str, int]]) -> None:
@@ -168,7 +198,7 @@ class _ScheduleDayButton(QPushButton):
 
     def _open_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
+        menu.setStyleSheet(_menu_style())
         for label, value in self._options:
             action = menu.addAction(label)
             action.setCheckable(True)
@@ -194,12 +224,12 @@ class _TimeStepper(QWidget):
 
         title = QLabel(label)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(_TIME_LABEL_STYLE)
+        title.setStyleSheet(_time_label_style())
         layout.addWidget(title)
 
         card = QFrame()
         card.setFixedSize(70, 92)
-        card.setStyleSheet(_STEPPER_CARD_STYLE)
+        card.setStyleSheet(_stepper_card_style())
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(5, 5, 5, 5)
         card_layout.setSpacing(2)
@@ -208,7 +238,7 @@ class _TimeStepper(QWidget):
         down_btn = self._step_button(cast(str, ICON_CHEVRON_DOWN), self.tr("Decrease"))
         self._value_label = QLabel()
         self._value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._value_label.setStyleSheet(_STEPPER_VALUE_STYLE)
+        self._value_label.setStyleSheet(_stepper_value_style())
         self._value_label.setMinimumHeight(30)
 
         card_layout.addWidget(up_btn)
@@ -247,7 +277,7 @@ class _TimeStepper(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedSize(60, 24)
         button.setToolTip(tooltip)
-        button.setStyleSheet(_STEPPER_BUTTON_STYLE)
+        button.setStyleSheet(_stepper_button_style())
         button.setIcon(make_icon(icon_svg, size=14, color=SETTINGS_MUTED))
         button.setIconSize(QSize(14, 14))
         return button
@@ -269,14 +299,14 @@ class _TimePickerPopup(QWidget):
 
         card = QFrame()
         card.setObjectName("ScheduleTimePickerCard")
-        card.setStyleSheet(_TIME_POPUP_CARD_STYLE)
+        card.setStyleSheet(_time_popup_card_style())
         layout = QVBoxLayout(card)
         layout.setContentsMargins(12, 10, 12, 12)
         layout.setSpacing(10)
 
         self._preview = QLabel(f"{minutes // 60:02d}:{minutes % 60:02d}")
         self._preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview.setStyleSheet(_TIME_PREVIEW_STYLE)
+        self._preview.setStyleSheet(_time_preview_style())
         layout.addWidget(self._preview)
 
         spin_row = QHBoxLayout()
@@ -294,10 +324,10 @@ class _TimePickerPopup(QWidget):
         button_row.setSpacing(8)
         cancel_btn = QPushButton(self.tr("Cancel"))
         cancel_btn.setMinimumHeight(32)
-        cancel_btn.setStyleSheet(_TIME_CANCEL_STYLE)
+        cancel_btn.setStyleSheet(_time_cancel_style())
         apply_btn = QPushButton(self.tr("Apply"))
         apply_btn.setMinimumHeight(32)
-        apply_btn.setStyleSheet(_TIME_APPLY_STYLE)
+        apply_btn.setStyleSheet(_time_apply_style())
         button_row.addWidget(cancel_btn)
         button_row.addWidget(apply_btn)
         layout.addLayout(button_row)
@@ -338,7 +368,7 @@ class _ScheduleTimeButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(36)
         self.setFixedWidth(86)
-        self.setStyleSheet(_FIELD_BUTTON_STYLE)
+        self.setStyleSheet(_field_button_style())
         self.clicked.connect(self._open_picker)
 
     def minutes(self) -> int:

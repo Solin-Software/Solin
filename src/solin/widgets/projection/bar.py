@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QSizePolicy,
-    QSlider,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -73,9 +72,11 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet, tooltip_stylesheet
+from solin.styles.theme import PALETTE, qss_rgba, tooltip_stylesheet
+from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.circular_timer import CircularTimerWidget
 from solin.ui.media_info import MediaInfoQueue
+from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 from solin.widgets.playlist.panel import PlaylistPanel
 from .audio import ProjectionAudioMixin
 from .controls import (
@@ -246,9 +247,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Barra (sempre visível) ────────────────────────────────────────────
 
-    def _volume_slider_stylesheet(self) -> str:
-        return slider_stylesheet(groove_height=3, handle_size=12)
-
     def _offline_badge_stylesheet(self) -> str:
         return (
             "QLabel {"
@@ -349,6 +347,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self.proj_title.setMaximumWidth(175)
         self.proj_title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        install_themed_tooltip(self.proj_title)
 
         # Badge de reprodução offline — ponto de status verde (10 px).
         # Padrão de design universal (Slack, Spotify, Discord) para indicadores
@@ -360,6 +359,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.tr("Playing offline")
         )
         self._offline_badge.setVisible(False)
+        install_themed_tooltip(self._offline_badge)
         # Ponto verde sólido. QToolTip override garante que o tooltip não herda
         # o background verde do widget pai.
         self._offline_badge.setStyleSheet(self._offline_badge_stylesheet())
@@ -398,10 +398,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._muted = False
         self._pre_mute_vol = self._volume
 
-        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider = ThemedHorizontalSlider(track_height=3, handle_diameter=10)
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(70)
-        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
         # Mais opções (só vídeo)
@@ -1293,7 +1292,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.time_label.setStyleSheet(
             f"background: transparent; font-size: 11px; color: {PALETTE.text_muted};"
         )
-        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
+        self.vol_slider.apply_theme()
         timer_color = PALETTE.danger if self._blink_on else PALETTE.accent
         self.timer_countdown_label.setStyleSheet(
             f"background: transparent; color: {timer_color}; font-size: 18px;"
