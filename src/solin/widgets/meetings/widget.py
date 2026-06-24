@@ -60,12 +60,10 @@ from ...core.media.settings import MediaSettingsStore
 from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
 from solin.ui.qml.meeting_detail import MeetingDetailQmlHost
+from ...styles.theme import PALETTE
 from .tree_controller import MeetingTreeController
 from .overview import Overview
 from .visuals import (
-    MEETING_ACCENT,
-    MEETING_BG,
-    MEETING_GOLD,
     MEETING_PURPLE,
 )
 from .week_nav import WeekNavBar, WeekPicker
@@ -199,7 +197,7 @@ class StudyDetailView(QWidget):
         root.setSpacing(0)
 
         is_mwb = self._pub == "mwb"
-        self.pill_color = MEETING_ACCENT if is_mwb else MEETING_PURPLE
+        self.pill_color = PALETTE.accent if is_mwb else MEETING_PURPLE
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
@@ -326,6 +324,14 @@ class StudyDetailView(QWidget):
                 meeting_date=self.date_text,
                 no_items_text=self.no_items_text,
             )
+
+    def apply_theme(self) -> None:
+        self.pill_color = PALETTE.accent if self._pub == "mwb" else MEETING_PURPLE
+        if hasattr(self, "qml_widget"):
+            self.qml_widget.set_pill_color(self.pill_color)
+            self.qml_widget.apply_theme()
+        if hasattr(self, "controller"):
+            self.controller.refresh_theme()
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -479,7 +485,7 @@ class _MemorialDetailView(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.pill_color = MEETING_GOLD
+        self.pill_color = PALETTE.warning
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
@@ -573,6 +579,14 @@ class _MemorialDetailView(QWidget):
                 meeting_date=self.date_text,
                 no_items_text=self.no_items_text,
             )
+
+    def apply_theme(self) -> None:
+        self.pill_color = PALETTE.warning
+        if hasattr(self, "qml_widget"):
+            self.qml_widget.set_pill_color(self.pill_color)
+            self.qml_widget.apply_theme()
+        if hasattr(self, "controller"):
+            self.controller.refresh_theme()
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -801,7 +815,7 @@ class MeetingsWidget(QWidget):
         root.addWidget(self._navbar)
 
         self._stack = QStackedWidget()
-        self._stack.setStyleSheet(f"background:{MEETING_BG};")
+        self._stack.setStyleSheet(f"background:{PALETTE.bg0};")
         self._overview = Overview()
         self._overview.open_mwb.connect(lambda: self._open_detail("mwb"))
         self._overview.open_wt.connect(lambda: self._open_detail("wt"))
@@ -810,6 +824,19 @@ class MeetingsWidget(QWidget):
         root.addWidget(self._stack, stretch=1)
 
         self._navbar.update_week(self._monday)
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background:{PALETTE.bg0};")
+        if hasattr(self, "_stack"):
+            self._stack.setStyleSheet(f"background:{PALETTE.bg0};")
+        if hasattr(self, "_navbar"):
+            self._navbar.apply_theme()
+        if hasattr(self, "_overview"):
+            self._overview.apply_theme()
+            self._refresh_overview_cards(self._monday)
+        for detail in getattr(self, "_details", {}).values():
+            if hasattr(detail, "apply_theme"):
+                detail.apply_theme()
 
     # ── Navigation ────────────────────────────────────────────────────────────
 

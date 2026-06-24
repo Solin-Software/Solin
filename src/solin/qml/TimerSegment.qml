@@ -119,10 +119,28 @@ Rectangle {
                     onClicked: seg.picked(index)
                 }
 
-                ToolTip.visible: label.truncated && mouse.containsMouse
-                ToolTip.text: modelData
-                ToolTip.delay: 450
+                ThemedToolTip {
+                    visible: label.truncated && mouse.containsMouse
+                    text: modelData
+                }
             }
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 450
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
         }
     }
 }

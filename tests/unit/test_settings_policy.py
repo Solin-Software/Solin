@@ -28,6 +28,7 @@ EXPECTED_SETTINGS_KEYS = {
     "LAST_ACTIVE_PROFILE": "last_active_profile",
     "BOOTSTRAP_LANGUAGE": "bootstrap_language",
     "APP_LANGUAGE": "language",
+    "APP_THEME": "theme",
     "MEDIA_LANGUAGE_CODE": "media_language_code",
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_WIDTH": "size/width",

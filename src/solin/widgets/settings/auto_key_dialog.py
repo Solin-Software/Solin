@@ -20,12 +20,12 @@ from .shared import (
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
-    SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET,
-    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_picker_primary_button_stylesheet,
+    settings_picker_secondary_button_stylesheet,
 )
 from solin.styles.theme import PALETTE
 
@@ -225,12 +225,12 @@ class AutoKeyEditorDialog(QDialog):
         cancel = QPushButton(self.tr("Cancel"))
         cancel.setMinimumHeight(34)
         cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel.setStyleSheet(SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET)
+        cancel.setStyleSheet(settings_picker_secondary_button_stylesheet())
         cancel.clicked.connect(self.reject)
         self._save_btn = QPushButton(self.tr("Save"))
         self._save_btn.setMinimumHeight(34)
         self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._save_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
+        self._save_btn.setStyleSheet(settings_picker_primary_button_stylesheet())
         self._save_btn.clicked.connect(self._accept)
         btn_row.addWidget(cancel)
         btn_row.addWidget(self._save_btn)

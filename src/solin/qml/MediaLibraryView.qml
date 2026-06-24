@@ -47,6 +47,10 @@ Rectangle {
     readonly property string videoTooltip: root.hasController ? controller.videoTooltip : ""
     readonly property string audioTooltip: root.hasController ? controller.audioTooltip : ""
 
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
+    }
+
     function refreshClicked() {
         if (root.hasController) controller.refreshClicked()
     }
@@ -453,7 +457,7 @@ Rectangle {
                 Layout.preferredWidth:  14
                 Layout.preferredHeight: 14
                 source: "image://mediaicons/search/14/"
-                        + (searchInput.activeFocus ? "6e7a8a" : "4d5866")
+                        + root.iconHex(searchInput.activeFocus ? root.textMuted : root.textDim)
             }
 
             Item {
@@ -580,7 +584,7 @@ Rectangle {
             width:  14
             height: 14
             source: "image://mediaicons/" + half.iconName + "/14/"
-                    + (half.checked ? "c9d1d9" : "4d5866")
+                    + root.iconHex(half.checked ? root.textSecondary : root.textDim)
         }
 
         MouseArea {
@@ -592,10 +596,9 @@ Rectangle {
             onClicked:  half.clicked()
         }
 
-        ToolTip {
+        ThemedToolTip {
             visible: halfMa.containsMouse && half.toolTipText !== ""
             text:    half.toolTipText
-            delay:   400
         }
     }
 
@@ -624,7 +627,11 @@ Rectangle {
             width:  14
             height: 14
             source: "image://mediaicons/" + iconButton.iconName + "/14/"
-                    + (iconButton.activeState ? "d29922" : (btnMa.containsMouse ? "c9d1d9" : "8b949e"))
+                    + root.iconHex(
+                        iconButton.activeState
+                        ? root.amber
+                        : (btnMa.containsMouse ? root.textSecondary : root.textMuted)
+                    )
         }
 
         MouseArea {
@@ -637,10 +644,26 @@ Rectangle {
             onClicked:  iconButton.clicked()
         }
 
-        ToolTip {
+        ThemedToolTip {
             visible: btnMa.containsMouse && iconButton.toolTipText !== ""
             text:    iconButton.toolTipText
-            delay:   400
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: root.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: root.surface
+            radius: 6
+            border.width: 1
+            border.color: root.border
         }
     }
 

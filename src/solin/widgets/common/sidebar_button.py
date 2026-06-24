@@ -43,6 +43,11 @@ class SidebarButton(QPushButton):
         self.style().unpolish(self)
         self.style().polish(self)
 
+    def apply_theme(self) -> None:
+        self._update_icon_and_text()
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def _update_icon_and_text(self) -> None:
         color = PALETTE.text_primary if self._active else PALETTE.text_muted
         self.setIcon(make_icon(self._svg_icon, 16, color))

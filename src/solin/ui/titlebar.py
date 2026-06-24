@@ -123,7 +123,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def apply_titlebar_color(window, hex_color: str = PALETTE.titlebar) -> bool:
+def apply_titlebar_color(window, hex_color: str | None = None) -> bool:
     """
     Aplica `hex_color` à barra de título nativa da `window` (QMainWindow ou similar).
 
@@ -132,6 +132,7 @@ def apply_titlebar_color(window, hex_color: str = PALETTE.titlebar) -> bool:
 
     Retorna True se algum nível de personalização foi aplicado.
     """
+    hex_color = hex_color or PALETTE.titlebar
     if not hex_color:
         return False
 

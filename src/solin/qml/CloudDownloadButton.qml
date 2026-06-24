@@ -163,9 +163,25 @@ Rectangle {
         onClicked: root.clicked()
     }
 
-    ToolTip {
+    ThemedToolTip {
         visible: root.active && hitArea.containsMouse && root.toolTipText !== ""
         text: root.toolTipText
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
         delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
+        }
     }
 }

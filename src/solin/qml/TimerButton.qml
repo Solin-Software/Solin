@@ -2,7 +2,6 @@
 // Controlled & presentational: callers set `variant`/`accent` and react to
 // `clicked()`. Variants: "primary" (filled), "soft" (tinted) and "ghost".
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 
 Rectangle {
     id: ctl
@@ -77,6 +76,11 @@ Rectangle {
         }
     }
 
+    ThemedToolTip {
+        visible: ctl.tip !== "" && ma.containsMouse
+        text: ctl.tip
+    }
+
     TimerPointerArea {
         id: ma
         anchors.fill: parent
@@ -84,7 +88,26 @@ Rectangle {
         onClicked: ctl.clicked()
     }
 
-    ToolTip.visible: ctl.tip !== "" && ma.containsMouse
-    ToolTip.text: ctl.tip
-    ToolTip.delay: 450
+    component ThemedToolTip: Rectangle {
+        id: tip
+        property alias text: label.text
+
+        z: 10
+        x: Math.round((parent.width - width) / 2)
+        y: -height - 6
+        implicitWidth: label.implicitWidth + 12
+        implicitHeight: label.implicitHeight + 12
+        color: appTheme.surface
+        radius: 6
+        border.width: 1
+        border.color: appTheme.border_
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+    }
 }

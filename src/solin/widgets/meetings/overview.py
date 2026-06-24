@@ -15,17 +15,9 @@ from PySide6.QtWidgets import (
 
 from ...core.i18n.date import format_single_date
 from ...styles.icons import ICON_CHEVRON_RIGHT, make_icon
+from ...styles.theme import PALETTE
 from .visuals import (
-    MEETING_ACCENT,
-    MEETING_BG,
-    MEETING_BORDER,
-    MEETING_CARD,
-    MEETING_DANGER,
-    MEETING_GOLD,
-    MEETING_MUTED,
     MEETING_PURPLE,
-    MEETING_TEXT,
-    MEETING_WARNING,
     rounded_meeting_pixmap,
 )
 
@@ -47,6 +39,7 @@ class _PubCard(QFrame):
         self._is_mwb = pub_type == "mwb"
         self._last_pct: int = -1
         self._progress_style_set = False
+        self._style_active = False
         self.setObjectName("PubCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(148)
@@ -55,13 +48,32 @@ class _PubCard(QFrame):
         self.set_loading()
 
     def _apply_style(self, active: bool):
-        accent = MEETING_ACCENT if self._is_mwb else MEETING_PURPLE
-        border = accent if active else MEETING_BORDER
+        self._style_active = active
+        accent = PALETTE.accent if self._is_mwb else MEETING_PURPLE
+        border = accent if active else PALETTE.border_muted
         self.setStyleSheet(
-            f"QFrame#PubCard{{background:{MEETING_CARD};"
+            f"QFrame#PubCard{{background:{PALETTE.surface};"
             f"border:1px solid {border};border-radius:16px;}}"
-            f"QFrame#PubCard:hover{{background:#1a1f2b;"
+            f"QFrame#PubCard:hover{{background:{PALETTE.surface_hover_strong};"
             f"border-color:{accent};}}"
+        )
+
+    def apply_theme(self) -> None:
+        self._apply_style(self._style_active)
+        self._cover.setStyleSheet(
+            f"background:{PALETTE.media_placeholder};"
+            f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
+        )
+        pill_color = PALETTE.accent if self._is_mwb else MEETING_PURPLE
+        self._pill.setStyleSheet(
+            f"background:transparent;color:{pill_color};"
+            "font-size:9px;font-weight:800;letter-spacing:1px;"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
+        )
+        self._sub_lbl.setStyleSheet(
+            f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
         )
 
     def _build(self):
@@ -73,7 +85,8 @@ class _PubCard(QFrame):
         self._cover.setFixedSize(self._CW, self._CH)
         self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._cover.setStyleSheet(
-            f"background:#21262d;border-radius:8px;border:1px solid {MEETING_BORDER};"
+            f"background:{PALETTE.media_placeholder};"
+            f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
         )
         outer.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -83,7 +96,7 @@ class _PubCard(QFrame):
         rl.setContentsMargins(0, 2, 0, 2)
         rl.setSpacing(0)
 
-        pill_color = MEETING_ACCENT if self._is_mwb else MEETING_PURPLE
+        pill_color = PALETTE.accent if self._is_mwb else MEETING_PURPLE
         self._pill = QLabel("")
         self._pill.setStyleSheet(
             f"background:transparent;color:{pill_color};"
@@ -95,7 +108,7 @@ class _PubCard(QFrame):
         self._title_lbl = QLabel("")
         self._title_lbl.setWordWrap(True)
         self._title_lbl.setStyleSheet(
-            f"color:{MEETING_TEXT};font-size:15px;font-weight:700;background:transparent;"
+            f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
         )
         self._title_lbl.setMaximumWidth(260)
         rl.addWidget(self._title_lbl)
@@ -104,7 +117,7 @@ class _PubCard(QFrame):
         self._sub_lbl = QLabel("")
         self._sub_lbl.setWordWrap(True)
         self._sub_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:11px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
         )
         self._sub_lbl.setMaximumWidth(260)
         rl.addWidget(self._sub_lbl)
@@ -116,9 +129,9 @@ class _PubCard(QFrame):
         bot.setSpacing(4)
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
-        arrow_col = MEETING_ACCENT if self._is_mwb else MEETING_PURPLE
+        arrow_col = PALETTE.accent if self._is_mwb else MEETING_PURPLE
         self._arrow = QLabel()
         self._arrow.setPixmap(
             make_icon(ICON_CHEVRON_RIGHT, 13, arrow_col).pixmap(13, 13)
@@ -148,7 +161,7 @@ class _PubCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Fetching publication…"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._cover.setPixmap(QPixmap())
         self._arrow.setVisible(False)
@@ -175,7 +188,7 @@ class _PubCard(QFrame):
         word = self.tr("item") if n_items == 1 else self.tr("items")
         self._status_lbl.setText(f"{n_items} media {word}")
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
 
@@ -186,7 +199,7 @@ class _PubCard(QFrame):
                 self._cover.setPixmap(rounded_meeting_pixmap(pix, self._CW, self._CH, 8))
                 return
         ph = QPixmap(self._CW, self._CH)
-        ph.fill(QColor("#21262d"))
+        ph.fill(QColor(PALETTE.media_placeholder))
         self._cover.setPixmap(ph)
 
     def set_saved(self, snapshot: "MeetingTreeSnapshot"):
@@ -204,7 +217,7 @@ class _PubCard(QFrame):
         word = self.tr("item") if n_items == 1 else self.tr("items")
         self._status_lbl.setText(f"{n_items} media {word}")
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
 
@@ -215,7 +228,7 @@ class _PubCard(QFrame):
                 self._cover.setPixmap(rounded_meeting_pixmap(pix, self._CW, self._CH, 8))
                 return
         ph = QPixmap(self._CW, self._CH)
-        ph.fill(QColor("#21262d"))
+        ph.fill(QColor(PALETTE.media_placeholder))
         self._cover.setPixmap(ph)
 
     def set_empty(self):
@@ -241,7 +254,7 @@ class _PubCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Tap to retry"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_DANGER};font-size:10px;background:transparent;"
+            f"color:{PALETTE.danger};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
 
@@ -257,7 +270,7 @@ class _PubCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Tap to retry"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_WARNING};font-size:10px;background:transparent;"
+            f"color:{PALETTE.warning};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
 
@@ -268,7 +281,7 @@ class _PubCard(QFrame):
 
         if not self._progress_style_set:
             self._status_lbl.setStyleSheet(
-                f"color:{MEETING_ACCENT};font-size:10px;background:transparent;"
+                f"color:{PALETTE.accent};font-size:10px;background:transparent;"
             )
             self._arrow.setVisible(False)
             self._progress_style_set = True
@@ -285,6 +298,7 @@ class _MemorialCard(QFrame):
         super().__init__(parent)
         self._last_pct: int = -1
         self._progress_style_set = False
+        self._style_active = False
         self.setObjectName("MemCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(148)
@@ -293,12 +307,30 @@ class _MemorialCard(QFrame):
         self.set_loading()
 
     def _apply_style(self, active: bool):
-        border = MEETING_GOLD if active else MEETING_BORDER
+        self._style_active = active
+        border = PALETTE.warning if active else PALETTE.border_muted
         self.setStyleSheet(
-            f"QFrame#MemCard{{background:{MEETING_CARD};"
+            f"QFrame#MemCard{{background:{PALETTE.surface};"
             f"border:1px solid {border};border-radius:16px;}}"
-            f"QFrame#MemCard:hover{{background:#1a1a10;"
-            f"border-color:{MEETING_GOLD};}}"
+            f"QFrame#MemCard:hover{{background:{PALETTE.surface_hover_strong};"
+            f"border-color:{PALETTE.warning};}}"
+        )
+
+    def apply_theme(self) -> None:
+        self._apply_style(self._style_active)
+        self._cover.setStyleSheet(
+            f"background:{PALETTE.media_placeholder};"
+            f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
+        )
+        self._pill.setStyleSheet(
+            f"background:transparent;color:{PALETTE.warning};"
+            "font-size:9px;font-weight:800;letter-spacing:1px;"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
+        )
+        self._sub_lbl.setStyleSheet(
+            f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
         )
 
     def _build(self):
@@ -310,7 +342,8 @@ class _MemorialCard(QFrame):
         self._cover.setFixedSize(self._CW, self._CH)
         self._cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._cover.setStyleSheet(
-            f"background:#21262d;border-radius:8px;border:1px solid {MEETING_BORDER};"
+            f"background:{PALETTE.media_placeholder};"
+            f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
         )
         outer.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -322,7 +355,7 @@ class _MemorialCard(QFrame):
 
         self._pill = QLabel("")
         self._pill.setStyleSheet(
-            f"background:transparent;color:{MEETING_GOLD};"
+            f"background:transparent;color:{PALETTE.warning};"
             "font-size:9px;font-weight:800;letter-spacing:1px;"
         )
         rl.addWidget(self._pill)
@@ -331,7 +364,7 @@ class _MemorialCard(QFrame):
         self._title_lbl = QLabel("")
         self._title_lbl.setWordWrap(True)
         self._title_lbl.setStyleSheet(
-            f"color:{MEETING_TEXT};font-size:15px;font-weight:700;background:transparent;"
+            f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
         )
         self._title_lbl.setMaximumWidth(260)
         rl.addWidget(self._title_lbl)
@@ -340,7 +373,7 @@ class _MemorialCard(QFrame):
         self._sub_lbl = QLabel("")
         self._sub_lbl.setWordWrap(True)
         self._sub_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:11px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
         )
         self._sub_lbl.setMaximumWidth(260)
         rl.addWidget(self._sub_lbl)
@@ -352,11 +385,11 @@ class _MemorialCard(QFrame):
         bot.setSpacing(4)
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._arrow = QLabel()
         self._arrow.setPixmap(
-            make_icon(ICON_CHEVRON_RIGHT, 13, MEETING_GOLD).pixmap(13, 13)
+            make_icon(ICON_CHEVRON_RIGHT, 13, PALETTE.warning).pixmap(13, 13)
         )
         self._arrow.setStyleSheet("background:transparent;")
         bot.addWidget(self._status_lbl)
@@ -379,7 +412,7 @@ class _MemorialCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Fetching publication…"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._cover.setPixmap(QPixmap())
         self._arrow.setVisible(False)
@@ -398,7 +431,7 @@ class _MemorialCard(QFrame):
         word = self.tr("item") if n == 1 else self.tr("items")
         self._status_lbl.setText(f"{n} media {word}")
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
         self._apply_style(active=True)
@@ -410,7 +443,7 @@ class _MemorialCard(QFrame):
                 self._cover.setPixmap(rounded_meeting_pixmap(pix, self._CW, self._CH, 8))
                 return
         ph = QPixmap(self._CW, self._CH)
-        ph.fill(QColor("#2a2200"))
+        ph.fill(QColor(PALETTE.media_placeholder))
         self._cover.setPixmap(ph)
 
     def set_empty(self):
@@ -431,7 +464,7 @@ class _MemorialCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Tap to retry"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_DANGER};font-size:10px;background:transparent;"
+            f"color:{PALETTE.danger};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
         self._apply_style(active=False)
@@ -444,7 +477,7 @@ class _MemorialCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Not available · Tap to retry"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_WARNING};font-size:10px;background:transparent;"
+            f"color:{PALETTE.warning};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(True)
         self._apply_style(active=False)
@@ -458,7 +491,7 @@ class _MemorialCard(QFrame):
         self._sub_lbl.setText("")
         self._status_lbl.setText(self.tr("Media removed by JW.ORG"))
         self._status_lbl.setStyleSheet(
-            f"color:{MEETING_MUTED};font-size:10px;background:transparent;"
+            f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         self._arrow.setVisible(False)
         self._apply_style(active=False)
@@ -470,7 +503,7 @@ class _MemorialCard(QFrame):
         self._last_pct = pct
         if not self._progress_style_set:
             self._status_lbl.setStyleSheet(
-                f"color:{MEETING_GOLD};font-size:10px;background:transparent;"
+                f"color:{PALETTE.warning};font-size:10px;background:transparent;"
             )
             self._arrow.setVisible(False)
             self._progress_style_set = True
@@ -487,21 +520,18 @@ class Overview(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(f"background:{MEETING_BG};")
+        self._scroll: QScrollArea | None = None
+        self._content: QWidget | None = None
+        self.apply_theme()
         self._build()
 
     def _build(self):
         scroll = QScrollArea()
+        self._scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(
-            f"QScrollArea{{border:none;background:{MEETING_BG};}}"
-            "QScrollBar:vertical{width:4px;background:transparent;}"
-            "QScrollBar::handle:vertical{background:#30363d;border-radius:2px;min-height:20px;}"
-            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
-        )
         content = QWidget()
-        content.setStyleSheet(f"background:{MEETING_BG};")
+        self._content = content
         cl = QVBoxLayout(content)
         cl.setContentsMargins(16, 12, 16, 24)
         cl.setSpacing(12)
@@ -525,3 +555,24 @@ class Overview(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll)
+        self.apply_theme()
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background:{PALETTE.bg0};")
+        if self._scroll is not None:
+            self._scroll.setStyleSheet(
+                f"QScrollArea{{border:none;background:{PALETTE.bg0};}}"
+                "QScrollBar:vertical{width:4px;background:transparent;}"
+                f"QScrollBar::handle:vertical{{background:{PALETTE.border};"
+                "border-radius:2px;min-height:20px;}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+            )
+        if self._content is not None:
+            self._content.setStyleSheet(f"background:{PALETTE.bg0};")
+        for card in (
+            getattr(self, "mwb_card", None),
+            getattr(self, "wt_card", None),
+            getattr(self, "memorial_card", None),
+        ):
+            if card is not None:
+                card.apply_theme()

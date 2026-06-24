@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
 from PySide6.QtCore import QObject, QTimer, Signal, QEvent
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
@@ -103,6 +103,7 @@ from .core.media.thumbnail_store import ThumbnailStore
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
+from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
@@ -196,6 +197,7 @@ class MainWindow(QMainWindow):
         self.meeting_linked_folder_sync = meeting_linked_folder_sync
         self.timer_session = timer_session
         self.active_profile = active_profile
+        self._app_settings = profile_settings_bundle.app
         self._obs_settings = profile_settings_bundle.obs
         self._zoom_settings = profile_settings_bundle.zoom
         self._auto_share_settings = profile_settings_bundle.auto_share
@@ -358,6 +360,7 @@ class MainWindow(QMainWindow):
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
                 camera_service=self._camera_service,
+                app_settings=self._app_settings,
                 obs_settings=self._obs_settings,
                 zoom_settings=self._zoom_settings,
                 auto_share_settings=self._auto_share_settings,
@@ -727,6 +730,7 @@ class MainWindow(QMainWindow):
                 live_integrations=self._live_integrations,
                 background_song_service=self._background_song_service,
                 projection_integrations=self._projection_integrations,
+                apply_theme=self._apply_theme,
                 timer_output=self.timer_output,
                 timer_bridge=self.timer_bridge,
             ),
@@ -751,7 +755,7 @@ class MainWindow(QMainWindow):
                     open_media_files=self.open_media_files,
                 ),
                 remote_services_factory=lambda: service_factories.remote_services(self),
-                apply_stylesheet=self.setStyleSheet,
+                apply_stylesheet=self._apply_global_stylesheet,
             )
         )
         startup_resources = self._bootstrap_controller.finish_startup()
@@ -822,6 +826,49 @@ class MainWindow(QMainWindow):
         self._nav_buttons_by_name = resources.nav_buttons_by_name
         for attr_name, button in resources.nav_buttons_by_name.items():
             setattr(self, attr_name, button)
+
+    def _apply_global_stylesheet(self, stylesheet: str) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            apply_application_palette(app)
+            app.setStyleSheet(stylesheet)
+        self.setStyleSheet(stylesheet)
+
+    def _apply_theme(self, theme_id: str) -> None:
+        theme = activate_theme(theme_id)
+        self._apply_global_stylesheet(app_stylesheet(theme))
+        self._window_state.apply_titlebar_color()
+        self._refresh_theme_chrome()
+
+    def _refresh_theme_chrome(self) -> None:
+        for button in getattr(self, "_nav_btns", ()):
+            if hasattr(button, "apply_theme"):
+                button.apply_theme()
+
+        for widget in (
+            getattr(self, "songs_widget", None),
+            getattr(self, "clips_widget", None),
+            getattr(self, "settings_widget", None),
+            getattr(self, "timer_widget", None),
+            getattr(self, "sermon_theme_widget", None),
+            getattr(self, "playlist_widget", None),
+            getattr(self, "meetings_widget", None),
+            getattr(self, "proj_bar", None),
+            getattr(self, "_quick_toolbar", None),
+            getattr(self, "_profile_avatar_btn", None),
+        ):
+            if widget is None:
+                continue
+            if hasattr(widget, "apply_theme"):
+                widget.apply_theme()
+            widget.update()
+
+        for widget in self.findChildren(QWidget):
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
+        self.update()
 
     # Signal emitted when user wants to return to profile selector.
     switch_profile_requested = Signal()

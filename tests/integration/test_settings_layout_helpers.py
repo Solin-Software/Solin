@@ -10,6 +10,8 @@ from solin.widgets.settings.screens_section import ScreensSectionMixin
 from solin.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
 from solin.widgets.settings.yearly_text_section import YearlyTextSectionMixin
 from solin.widgets.settings.zoom_section import ZoomSectionMixin
+from solin.styles.theme import get_theme
+from solin.widgets import settings_widget as settings_widget_module
 from solin.widgets.settings_widget import SettingsWidget
 
 
@@ -33,6 +35,88 @@ def test_settings_widget_uses_shared_layout_helpers():
     assert SettingsWidget._divider is SettingsLayoutMixin._divider
     assert SettingsWidget._toggle_row is SettingsLayoutMixin._toggle_row
     assert SettingsWidget._clickable_row is SettingsLayoutMixin._clickable_row
+
+
+class _ThemeSelectorComboStub:
+    def __init__(self):
+        self.items = []
+        self.current_index = -1
+        self.visible = None
+        self.signals_blocked = False
+
+    def blockSignals(self, blocked):
+        self.signals_blocked = blocked
+
+    def clear(self):
+        self.items.clear()
+
+    def addItem(self, text, data):
+        self.items.append((text, data))
+
+    def findData(self, data):
+        for index, (_text, item_data) in enumerate(self.items):
+            if item_data == data:
+                return index
+        return -1
+
+    def itemData(self, index):
+        return self.items[index][1]
+
+    def setCurrentIndex(self, index):
+        self.current_index = index
+
+    def setVisible(self, visible):
+        self.visible = visible
+
+
+class _AppSettingsStub:
+    def __init__(self, theme_id="dark"):
+        self._theme_id = theme_id
+        self.saved = []
+
+    def app_theme_id(self):
+        return self._theme_id
+
+    def set_app_theme_id(self, theme_id):
+        self.saved.append(theme_id)
+        self._theme_id = theme_id
+
+
+class _ThemeSelectorWidgetStub:
+    def __init__(self, theme_id="dark"):
+        self._theme_combo = _ThemeSelectorComboStub()
+        self._app_settings = _AppSettingsStub(theme_id)
+
+    def tr(self, text):
+        return text
+
+
+def test_settings_theme_selector_hides_when_only_one_theme(monkeypatch):
+    monkeypatch.setattr(
+        settings_widget_module,
+        "available_themes",
+        lambda: (get_theme("dark"),),
+    )
+    widget = _ThemeSelectorWidgetStub()
+
+    SettingsWidget._populate_theme_selector(widget)
+
+    assert widget._theme_combo.items == [("Dark", "dark")]
+    assert widget._theme_combo.visible is False
+
+
+def test_settings_theme_selector_lists_available_themes_and_saves_choice():
+    widget = _ThemeSelectorWidgetStub("light")
+
+    SettingsWidget._populate_theme_selector(widget)
+
+    assert widget._theme_combo.items == [("Dark", "dark"), ("Light", "light")]
+    assert widget._theme_combo.current_index == 1
+    assert widget._theme_combo.visible is True
+
+    SettingsWidget._on_theme_selected(widget, 0)
+
+    assert widget._app_settings.saved == ["dark"]
 
 
 def test_settings_widget_uses_language_section_mixin():

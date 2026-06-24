@@ -22,9 +22,12 @@ Item {
     property string tooltipText: ""
     readonly property color toolbarSurface: appTheme.surfaceChrome
     readonly property color toolbarBorder: appTheme.borderChrome
+    readonly property color toolbarHover: appTheme.hover
+    readonly property color toolbarPressed: appTheme.hoverStrong
     readonly property color accent: appTheme.accent
     readonly property color success: appTheme.success
-    readonly property color white: appTheme.white
+    readonly property color iconMuted: appTheme.textDim
+    readonly property color iconSecondary: appTheme.textMuted
 
     function withAlpha(c, a) {
         return Qt.rgba(c.r, c.g, c.b, a)
@@ -102,9 +105,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: monitorMA.pressed
-                           ? root.withAlpha(root.white, 0.13)
+                           ? root.toolbarPressed
                            : monitorMA.containsMouse
-                             ? root.withAlpha(root.white, 0.08) : "transparent"
+                             ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -129,9 +132,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: backgroundSongMA.pressed
-                           ? root.withAlpha(root.white, 0.13)
+                           ? root.toolbarPressed
                            : backgroundSongMA.containsMouse
-                             ? root.withAlpha(root.white, 0.08) : "transparent"
+                             ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -164,9 +167,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: obsMA.pressed
-                           ? root.withAlpha(root.white, 0.13)
+                           ? root.toolbarPressed
                            : obsMA.containsMouse
-                             ? root.withAlpha(root.white, 0.08) : "transparent"
+                             ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -199,9 +202,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: cameraMA.pressed
-                           ? root.withAlpha(root.white, 0.13)
+                           ? root.toolbarPressed
                            : cameraMA.containsMouse
-                             ? root.withAlpha(root.white, 0.08) : "transparent"
+                             ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -226,9 +229,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: zoomMA.pressed
-                           ? root.withAlpha(root.white, 0.13)
+                           ? root.toolbarPressed
                            : zoomMA.containsMouse
-                             ? root.withAlpha(root.white, 0.08) : "transparent"
+                             ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -253,11 +256,11 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 11
                     color: minMA.containsMouse
-                           ? root.withAlpha(root.white, 0.06) : "transparent"
+                           ? root.toolbarHover : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
-                    source: "image://icons/chevron_down/10/484f58"
+                    source: "image://icons/chevron_down/10/" + String(root.iconMuted).replace("#", "")
                     sourceSize: Qt.size(10, 10)
                     cache: true
                 }
@@ -301,7 +304,7 @@ Item {
         Image {
             anchors.verticalCenter: parent.verticalCenter
             x: 8  // Center of the visible 26px width (26 - 10)/2 = 8
-            source: "image://icons/chevron_left/10/6e7681"
+            source: "image://icons/chevron_left/10/" + String(root.iconSecondary).replace("#", "")
             sourceSize: Qt.size(10, 10)
             cache: true
         }

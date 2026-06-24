@@ -221,12 +221,9 @@ class SermonThemeWidget(QWidget):
         )
         outer.addWidget(self.subtitle_label)
 
-        card = QFrame()
-        card.setObjectName("ThemeCard")
-        card.setStyleSheet(
-            f"#ThemeCard {{ background: {PALETTE.surface}; border: 1px solid {PALETTE.border}; border-radius: 16px; }}"
-        )
-        card_lay = QVBoxLayout(card)
+        self.theme_card = QFrame()
+        self.theme_card.setObjectName("ThemeCard")
+        card_lay = QVBoxLayout(self.theme_card)
         card_lay.setContentsMargins(24, 24, 24, 24)
         card_lay.setSpacing(16)
 
@@ -238,17 +235,15 @@ class SermonThemeWidget(QWidget):
 
         self.preview = SermonThemePreview()
         self.preview.setStyleSheet("border-radius: 10px")
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(14)
-        shadow.setOffset(0, 3)
-        shadow.setColor(QColor(0, 0, 0, 70))
-        self.preview.setGraphicsEffect(shadow)
+        self._preview_shadow = QGraphicsDropShadowEffect()
+        self._preview_shadow.setBlurRadius(14)
+        self._preview_shadow.setOffset(0, 3)
+        self.preview.setGraphicsEffect(self._preview_shadow)
         card_lay.addWidget(self.preview)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color: {PALETTE.border}; margin: 4px 0;")
-        card_lay.addWidget(sep)
+        self.separator = QFrame()
+        self.separator.setFrameShape(QFrame.Shape.HLine)
+        card_lay.addWidget(self.separator)
 
         self.input_label = QLabel()
         self.input_label.setStyleSheet(
@@ -370,9 +365,10 @@ class SermonThemeWidget(QWidget):
         self._panel_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._panel_expanded_height = 90  # approximate
 
-        outer.addWidget(card)
+        outer.addWidget(self.theme_card)
         outer.addStretch()
 
+        self.apply_theme()
         self.retranslateUi()
         self._update_project_btn()
 
@@ -402,6 +398,79 @@ class SermonThemeWidget(QWidget):
         if text:
             subtitle = self.subtitle_input.text().strip() or self.tr("PUBLIC TALK")
             self.project_theme_signal.emit(text, subtitle)
+
+    def apply_theme(self) -> None:
+        self.subtitle_label.setStyleSheet(
+            f"padding-bottom: 20px; color: {PALETTE.text_muted}; font-size: 12px; background: transparent;"
+        )
+        self.theme_card.setStyleSheet(
+            f"#ThemeCard {{ background: {PALETTE.surface}; border: 1px solid {PALETTE.border}; border-radius: 16px; }}"
+        )
+        self.preview_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self._preview_shadow.setColor(QColor(0, 0, 0, 70))
+        self.separator.setStyleSheet(
+            f"color: {PALETTE.border}; background: {PALETTE.border}; margin: 4px 0;"
+        )
+        self.input_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self.theme_input.setStyleSheet(f"""
+            QTextEdit#ThemeInput {{
+                background: {PALETTE.bg0}; border: 1px solid {PALETTE.border}; border-radius: 8px;
+                color: {PALETTE.text_primary}; font-size: 14px; padding: 10px 12px;
+                selection-background-color: {PALETTE.accent_selection};
+            }}
+            QTextEdit#ThemeInput:focus {{ border-color: {PALETTE.accent}; }}
+        """)
+        self.project_btn.setStyleSheet(f"""
+            QPushButton#ProjectThemeBtn {{
+                background: {PALETTE.projection}; border: 1px solid {PALETTE.success}; border-radius: 8px;
+                color: {PALETTE.text_on_accent}; font-size: 13px; font-weight: 600; padding: 0 20px;
+            }}
+            QPushButton#ProjectThemeBtn:hover   {{ background: {PALETTE.success}; }}
+            QPushButton#ProjectThemeBtn:pressed  {{ background: {PALETTE.success_pressed}; }}
+            QPushButton#ProjectThemeBtn:disabled {{
+                background: {PALETTE.bg2}; border-color: {PALETTE.border}; color: {PALETTE.text_dim};
+            }}
+        """)
+        self.settings_toggle_btn.setIcon(
+            make_icon(ICON_NAV_SETTINGS, size=16, color=PALETTE.text_muted)
+        )
+        self.settings_toggle_btn.setStyleSheet(f"""
+            QPushButton#SettingsToggleBtn {{
+                background: transparent;
+                border: 1px solid {PALETTE.border};
+                border-radius: 8px;
+                padding: 0;
+            }}
+            QPushButton#SettingsToggleBtn:hover   {{ background: {PALETTE.bg2}; border-color: {PALETTE.text_dim}; }}
+            QPushButton#SettingsToggleBtn:checked  {{ background: {PALETTE.bg2}; border-color: {PALETTE.accent}; }}
+        """)
+        self.subtitle_panel.setStyleSheet(f"""
+            QFrame#SubtitlePanel {{
+                background: {PALETTE.bg0};
+                border: 1px solid {PALETTE.border};
+                border-radius: 8px;
+            }}
+        """)
+        self.sub_prefix_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self.subtitle_input.setStyleSheet(f"""
+            QLineEdit#SubtitleInput {{
+                background: {PALETTE.surface};
+                border: 1px solid {PALETTE.border};
+                border-radius: 6px;
+                color: {PALETTE.text_primary};
+                font-size: 13px;
+                font-weight: 600;
+                letter-spacing: 1px;
+                padding: 6px 10px;
+            }}
+            QLineEdit#SubtitleInput:focus {{ border-color: {PALETTE.accent}; }}
+        """)
 
     # ── i18n ──────────────────────────────────────────────────────────────
 

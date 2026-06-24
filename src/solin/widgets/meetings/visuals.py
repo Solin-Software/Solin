@@ -8,20 +8,8 @@ from ...styles.icons import (
     ICON_SEC_MINISTRY as _SVG_WHEAT,
     ICON_SEC_LIVING as _SVG_SHEEP,
 )
-from ...styles.theme import PALETTE
 
-MEETING_BG = PALETTE.bg0
-MEETING_CARD = PALETTE.surface
-MEETING_BORDER = PALETTE.border_muted
-MEETING_MUTED = PALETTE.text_muted
-MEETING_TEXT = PALETTE.text_primary
-MEETING_SUBTLE_TEXT = PALETTE.text_secondary
-MEETING_ACCENT = PALETTE.accent
-MEETING_SUCCESS = PALETTE.success
-MEETING_WARNING = PALETTE.warning
-MEETING_DANGER = PALETTE.danger
 MEETING_PURPLE = "#a371f7"
-MEETING_GOLD = PALETTE.warning
 
 MEETING_SECTION_ICONS: dict[str, tuple[str, int]] = {
     "tgw": (_SVG_DIAMOND, 14),

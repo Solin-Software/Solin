@@ -22,15 +22,23 @@ from ...styles.icons import (
     ICON_TRASH,
     make_icon,
 )
-from ...styles.theme import PALETTE
+from ...styles.theme import PALETTE, qss_rgba
 
-PLAYLIST_CARD_MENU_STYLESHEET = (
-    f"QMenu{{background:{PALETTE.surface};border:1px solid {PALETTE.border};border-radius:6px;"
-    f"padding:4px;color:{PALETTE.text_secondary};font-size:11px;}}"
-    "QMenu::item{padding:7px 18px;border-radius:4px;}"
-    f"QMenu::item:selected{{background:{PALETTE.accent_muted};color:{PALETTE.accent_text};}}"
-    f"QMenu::separator{{height:1px;background:{PALETTE.border_muted};margin:3px 8px;}}"
-)
+
+def playlist_card_menu_stylesheet() -> str:
+    return (
+        f"QMenu{{background:{PALETTE.surface};border:1px solid {PALETTE.border};"
+        f"border-radius:6px;padding:4px;color:{PALETTE.text_secondary};"
+        "font-size:11px;}}"
+        "QMenu::item{padding:7px 18px;border-radius:4px;}"
+        f"QMenu::item:selected{{background:{PALETTE.accent_muted};"
+        f"color:{PALETTE.accent_text};}}"
+        f"QMenu::separator{{height:1px;background:{PALETTE.border_muted};"
+        "margin:3px 8px;}}"
+    )
+
+
+PLAYLIST_CARD_MENU_STYLESHEET = playlist_card_menu_stylesheet()
 
 __all__ = (
     "CollapsibleSection",
@@ -50,6 +58,7 @@ class PlaylistCard(QFrame):
         super().__init__(parent)
         self._id = playlist_id
         self._lang = lang
+        self._hovered = False
         self.setObjectName("PCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(88)
@@ -60,11 +69,9 @@ class PlaylistCard(QFrame):
         lay.setContentsMargins(12, 0, 6, 0)
         lay.setSpacing(10)
 
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
-        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setPixmap(make_icon(ICON_NAV_PLAYLIST, 20, PALETTE.accent).pixmap(20, 20))
-        icon_lbl.setStyleSheet(f"background:{PALETTE.accent_tint};border-radius:8px;")
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setFixedSize(36, 36)
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         txt = QVBoxLayout()
         txt.setContentsMargins(0, 0, 0, 0)
@@ -92,18 +99,16 @@ class PlaylistCard(QFrame):
         self._mbtn.setIcon(make_icon(ICON_MORE_VERT, 13, PALETTE.text_dim))
         self._mbtn.setIconSize(QSize(13, 13))
         self._mbtn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._mbtn.setStyleSheet(
-            "QPushButton{border:none;background:transparent;border-radius:4px;}"
-            f"QPushButton:hover{{background:{PALETTE.bg2};}}"
-        )
         self._mbtn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._mbtn.clicked.connect(self._show_menu)
 
-        lay.addWidget(icon_lbl)
+        lay.addWidget(self.icon_lbl)
         lay.addLayout(txt, stretch=1)
         lay.addWidget(self._mbtn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        self.apply_theme()
 
     def _set_style(self, hovered: bool) -> None:
+        self._hovered = hovered
         if hovered:
             self.setStyleSheet(
                 f"QFrame#PCard{{background:{PALETTE.surface_hover_strong};"
@@ -116,6 +121,22 @@ class PlaylistCard(QFrame):
                 f"border-radius:8px;border:1px solid {PALETTE.border_muted};}}"
                 "QLabel{background:transparent;}"
             )
+
+    def apply_theme(self) -> None:
+        self.icon_lbl.setPixmap(make_icon(ICON_NAV_PLAYLIST, 20, PALETTE.accent).pixmap(20, 20))
+        self.icon_lbl.setStyleSheet(f"background:{PALETTE.accent_tint};border-radius:8px;")
+        self.name_lbl.setStyleSheet(
+            f"color:{PALETTE.text_primary};font-size:12px;font-weight:600;background:transparent;"
+        )
+        self.count_lbl.setStyleSheet(
+            f"color:{PALETTE.text_dim};font-size:10px;background:transparent;"
+        )
+        self._mbtn.setIcon(make_icon(ICON_MORE_VERT, 13, PALETTE.text_dim))
+        self._mbtn.setStyleSheet(
+            "QPushButton{border:none;background:transparent;border-radius:4px;}"
+            f"QPushButton:hover{{background:{PALETTE.bg2};}}"
+        )
+        self._set_style(self._hovered)
 
     def _count_str(self, count: int) -> str:
         word = self.tr("item") if count == 1 else self.tr("items")
@@ -138,7 +159,7 @@ class PlaylistCard(QFrame):
 
     def _show_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(PLAYLIST_CARD_MENU_STYLESHEET)
+        menu.setStyleSheet(playlist_card_menu_stylesheet())
         ar = QAction(self)
         ar.setIcon(make_icon(ICON_EDIT, 13, PALETTE.text_secondary))
         ar.setText("  " + self.tr("Rename"))
@@ -205,6 +226,7 @@ class CollapsibleSection(QWidget):
             f"color:{PALETTE.border_muted};background:{PALETTE.border_muted};"
             "border:none;max-height:1px;"
         )
+        self._sep = sep
 
         hdr.addWidget(self._toggle_btn)
         hdr.addWidget(self._title_lbl)
@@ -230,6 +252,23 @@ class CollapsibleSection(QWidget):
 
     def set_title(self, text: str) -> None:
         self._title_lbl.setText(text)
+
+    def apply_theme(self) -> None:
+        self._toggle_btn.setStyleSheet(
+            "QPushButton{border:none;background:transparent;border-radius:3px;}"
+            f"QPushButton:hover{{background:{PALETTE.bg2};}}"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color:{PALETTE.text_muted};font-size:10px;font-weight:700;background:transparent;"
+        )
+        self._count_lbl.setStyleSheet(
+            f"color:{PALETTE.text_dim};font-size:10px;background:transparent;"
+        )
+        self._sep.setStyleSheet(
+            f"color:{PALETTE.border_muted};background:{PALETTE.border_muted};"
+            "border:none;max-height:1px;"
+        )
+        self._update_chevron()
 
     def is_collapsed(self) -> bool:
         return self._collapsed
@@ -260,13 +299,11 @@ class WatchedFolderCard(QFrame):
     delete_req = Signal(str)
     export_req = Signal(str)
 
-    _AMBER = "#e3a436"
-    _AMBER_BG = "#2a1f0a"
-
     def __init__(self, path: str, name: str, count: int, lang, parent=None):
         super().__init__(parent)
         self._path = path
         self._lang = lang
+        self._hovered = False
         self.setObjectName("PCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(88)
@@ -277,11 +314,9 @@ class WatchedFolderCard(QFrame):
         lay.setContentsMargins(12, 0, 6, 0)
         lay.setSpacing(10)
 
-        icon_lbl = QLabel()
-        icon_lbl.setFixedSize(36, 36)
-        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, 20, self._AMBER).pixmap(20, 20))
-        icon_lbl.setStyleSheet(f"background:{self._AMBER_BG};border-radius:8px;")
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setFixedSize(36, 36)
+        self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         txt = QVBoxLayout()
         txt.setContentsMargins(0, 0, 0, 0)
@@ -308,24 +343,40 @@ class WatchedFolderCard(QFrame):
         self._mbtn.setIcon(make_icon(ICON_MORE_VERT, 13, PALETTE.text_dim))
         self._mbtn.setIconSize(QSize(13, 13))
         self._mbtn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._mbtn.setStyleSheet(
-            "QPushButton{border:none;background:transparent;border-radius:4px;}"
-            f"QPushButton:hover{{background:{PALETTE.bg2};}}"
-        )
         self._mbtn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._mbtn.clicked.connect(self._show_menu)
 
-        lay.addWidget(icon_lbl)
+        lay.addWidget(self.icon_lbl)
         lay.addLayout(txt, stretch=1)
         lay.addWidget(self._mbtn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        self.apply_theme()
 
     def _set_style(self, hovered: bool) -> None:
-        border = self._AMBER if hovered else "#2d1e08"
-        bg = "#1c1810" if hovered else "#13120e"
+        self._hovered = hovered
+        border = PALETTE.warning if hovered else qss_rgba(PALETTE.warning, 0.28)
+        bg = qss_rgba(PALETTE.warning, 0.12 if hovered else 0.07)
         self.setStyleSheet(
             f"QFrame#PCard{{background:{bg};border-radius:8px;border:1px solid {border};}}"
             "QLabel{background:transparent;}"
         )
+
+    def apply_theme(self) -> None:
+        self.icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, 20, PALETTE.warning).pixmap(20, 20))
+        self.icon_lbl.setStyleSheet(
+            f"background:{qss_rgba(PALETTE.warning, 0.14)};border-radius:8px;"
+        )
+        self.name_lbl.setStyleSheet(
+            f"color:{PALETTE.text_primary};font-size:12px;font-weight:600;background:transparent;"
+        )
+        self.count_lbl.setStyleSheet(
+            f"color:{PALETTE.text_dim};font-size:10px;background:transparent;"
+        )
+        self._mbtn.setIcon(make_icon(ICON_MORE_VERT, 13, PALETTE.text_dim))
+        self._mbtn.setStyleSheet(
+            "QPushButton{border:none;background:transparent;border-radius:4px;}"
+            f"QPushButton:hover{{background:{PALETTE.bg2};}}"
+        )
+        self._set_style(self._hovered)
 
     def _count_str(self, count: int) -> str:
         word = self.tr("item") if count == 1 else self.tr("items")
@@ -348,7 +399,7 @@ class WatchedFolderCard(QFrame):
 
     def _show_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(PLAYLIST_CARD_MENU_STYLESHEET)
+        menu.setStyleSheet(playlist_card_menu_stylesheet())
 
         ar = QAction(self)
         ar.setIcon(make_icon(ICON_EDIT, 13, PALETTE.text_secondary))

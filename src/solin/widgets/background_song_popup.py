@@ -29,15 +29,27 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba
+from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet
 
-_SURF = PALETTE.surface
-_TEXT = PALETTE.text_primary
-_SUBTLE = PALETTE.text_secondary
-_MUTED = PALETTE.text_muted
-_DIM = PALETTE.text_faint
-_ACCENT = PALETTE.accent_hover
-_RED = PALETTE.danger
+
+class _PaletteToken:
+    def __init__(self, palette_attr: str) -> None:
+        self._palette_attr = palette_attr
+
+    def __str__(self) -> str:
+        return getattr(PALETTE, self._palette_attr)
+
+    def __format__(self, spec: str) -> str:
+        return format(str(self), spec)
+
+
+_SURF = _PaletteToken("surface")
+_TEXT = _PaletteToken("text_primary")
+_SUBTLE = _PaletteToken("text_secondary")
+_MUTED = _PaletteToken("text_muted")
+_DIM = _PaletteToken("text_faint")
+_ACCENT = _PaletteToken("accent_hover")
+_RED = _PaletteToken("danger")
 
 
 class BackgroundSongPopup(QWidget):
@@ -71,16 +83,9 @@ class BackgroundSongPopup(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        card = QFrame()
-        card.setObjectName("BackgroundSongCard")
-        card.setStyleSheet(
-            "QFrame#BackgroundSongCard {"
-            f" background: {_SURF};"
-            f" border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
-            " border-radius: 16px;"
-            "}"
-        )
-        layout = QVBoxLayout(card)
+        self._card = QFrame()
+        self._card.setObjectName("BackgroundSongCard")
+        layout = QVBoxLayout(self._card)
         layout.setContentsMargins(18, 16, 18, 18)
         layout.setSpacing(16)
 
@@ -88,24 +93,25 @@ class BackgroundSongPopup(QWidget):
         layout.addLayout(self._build_now_playing())
         layout.addLayout(self._build_controls())
         layout.addLayout(self._build_volume())
-        layout.addWidget(self._divider())
+        self._divider_frame = self._divider()
+        layout.addWidget(self._divider_frame)
         layout.addLayout(self._build_timing())
 
-        root.addWidget(card)
+        root.addWidget(self._card)
         self.setFixedWidth(self._POP_W)
+        self.apply_theme()
 
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
         header.setSpacing(9)
-        icon = QLabel()
-        icon.setPixmap(make_icon(ICON_MUSIC, 14, _DIM).pixmap(14, 14))
-        icon.setFixedSize(14, 14)
-        icon.setStyleSheet("background: transparent;")
+        self._header_icon = QLabel()
+        self._header_icon.setFixedSize(14, 14)
+        self._header_icon.setStyleSheet("background: transparent;")
         self._title_lbl = QLabel(self.tr("Background Song"))
         self._title_lbl.setStyleSheet(
             f"color: {_TEXT}; font-size: 13px; font-weight: 600; background: transparent;"
         )
-        header.addWidget(icon)
+        header.addWidget(self._header_icon)
         header.addWidget(self._title_lbl)
         header.addStretch()
         return header
@@ -296,6 +302,44 @@ class BackgroundSongPopup(QWidget):
             glyph, color = ICON_VOLUME_HIGH, _MUTED
         self._volume_icon.setPixmap(make_icon(glyph, 15, color).pixmap(15, 15))
 
+    def apply_theme(self) -> None:
+        self._card.setStyleSheet(
+            "QFrame#BackgroundSongCard {"
+            f" background: {_SURF};"
+            f" border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
+            " border-radius: 16px;"
+            "}"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color: {_TEXT}; font-size: 13px; font-weight: 600; background: transparent;"
+        )
+        self._header_icon.setPixmap(make_icon(ICON_MUSIC, 14, _DIM).pixmap(14, 14))
+        self._song_lbl.setStyleSheet(
+            f"color: {_TEXT}; font-size: 14px; font-weight: 600; background: transparent;"
+        )
+        self._status_lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 11px; background: transparent;"
+        )
+        self._volume_slider.setStyleSheet(self._slider_style())
+        self._volume_value_lbl.setStyleSheet(
+            f"color: {_MUTED}; font-size: 11px; background: transparent;"
+        )
+        self._divider_frame.setStyleSheet(
+            f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;"
+        )
+        self._timing_title_lbl.setStyleSheet(
+            f"color: {_DIM}; font-size: 10px; font-weight: 700;"
+            " letter-spacing: 0.6px; background: transparent;"
+        )
+        for label in (self._stop_before_lbl, self._fade_lbl):
+            label.setStyleSheet(f"color: {_SUBTLE}; font-size: 12px; background: transparent;")
+        for spin in (self._stop_before_spin, self._fade_spin):
+            spin.setStyleSheet(self._spin_style())
+        self._next_btn.setIcon(make_icon(ICON_SKIP_NEXT, 14, _SUBTLE))
+        self._next_btn.setStyleSheet(self._ghost_button_style())
+        self._sync_buttons()
+        self._update_volume_icon(self._volume_slider.value())
+
     # ── Placement / animation ─────────────────────────────────────────────────
     def show_above(self, anchor: QWidget) -> None:
         self._sync_all()
@@ -393,13 +437,7 @@ class BackgroundSongPopup(QWidget):
 
     @staticmethod
     def _slider_style() -> str:
-        return (
-            f"QSlider::groove:horizontal{{height:4px;background:{PALETTE.border_muted};border-radius:2px;}}"
-            "QSlider::handle:horizontal{width:12px;height:12px;margin:-4px 0;"
-            f"background:{PALETTE.text_primary};border-radius:6px;}}"
-            f"QSlider::handle:horizontal:hover{{background:{PALETTE.white};}}"
-            f"QSlider::sub-page:horizontal{{background:{_ACCENT};border-radius:2px;}}"
-        )
+        return slider_stylesheet(groove_height=4, handle_size=12)
 
     @staticmethod
     def _spin_style() -> str:

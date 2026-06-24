@@ -57,6 +57,25 @@ Item {
         return String(colorValue).replace("#", "")
     }
 
+    function alphaColor(colorValue, alphaValue) {
+        return Qt.rgba(colorValue.r, colorValue.g, colorValue.b, alphaValue)
+    }
+
+    function mediaToneColor(mediaType, missing) {
+        if (missing)
+            return appTheme.warning
+        if (mediaType === "image")
+            return appTheme.success
+        if (mediaType === "audio")
+            return appTheme.warning
+        return appTheme.accent
+    }
+
+    function mediaBadgeBg(mediaType, missing) {
+        var alpha = appTheme.isDark ? 0.18 : 0.12
+        return root.alphaColor(root.mediaToneColor(mediaType, missing), missing ? alpha + 0.04 : alpha)
+    }
+
     function commonTr(context, source) {
         return qsTranslate(context, source)
     }
@@ -431,7 +450,7 @@ Item {
                         Layout.alignment: Qt.AlignHCenter
                         width: 28
                         height: 28
-                        source: root.picon("plus", 28, "30363d")
+                        source: root.picon("plus", 28, root.iconHex(root.textDim))
                         opacity: 0.65
                     }
                     Text {
@@ -1588,9 +1607,7 @@ Item {
                             : node && node.mediaType === "image" ? "media_image"
                             : "media_video",
                             22,
-                            node && node.mediaType === "audio" ? "d2a8ff"
-                            : node && node.mediaType === "image" ? "7ee787"
-                            : "58a6ff")
+                            root.iconHex(root.mediaToneColor(node ? node.mediaType : "video", false)))
                     }
 
                     // Duration pill on thumbnail
@@ -1644,10 +1661,7 @@ Item {
                         width: badgeText.implicitWidth + 10
                         height: 16
                         radius: 4
-                        color: mediaRoot.isMissing ? "#2d1b00"
-                             : node && node.mediaType === "audio" ? "#1d1530"
-                             : node && node.mediaType === "image" ? "#122218"
-                             : "#101d2e"
+                        color: root.mediaBadgeBg(node ? node.mediaType : "video", mediaRoot.isMissing)
 
                         Text {
                             id: badgeText
@@ -1655,10 +1669,7 @@ Item {
                             text: mediaRoot.isMissing
                                   ? "⚠ " + qsTranslate("_PlaylistEditView", "Offline / Syncing")
                                   : (node ? node.badge : "")
-                            color: mediaRoot.isMissing ? "#e3a008"
-                                 : node && node.mediaType === "audio" ? "#d2a8ff"
-                                 : node && node.mediaType === "image" ? "#7ee787"
-                                 : "#58a6ff"
+                            color: root.mediaToneColor(node ? node.mediaType : "video", mediaRoot.isMissing)
                             font.pixelSize: 9
                             font.weight: Font.Bold
                             font.letterSpacing: 0.4
@@ -1682,7 +1693,7 @@ Item {
                             Layout.preferredWidth: 26
                             Layout.preferredHeight: 26
                             Layout.alignment: Qt.AlignVCenter
-                            iconSource: root.picon("cloud", 13, "8b949e")
+                            iconSource: root.picon("cloud", 13, root.iconHex(root.textMuted))
                             toolTipText: mediaRoot.cloudTooltip
                             downloading: mediaRoot.cloudActive
                             progress: mediaRoot.cloudProgress
@@ -1698,7 +1709,7 @@ Item {
                         HeaderButton {
                             iconName: "more"
                             iconSize: 12
-                            colorHex: "484f58"
+                            colorHex: root.iconHex(root.textDim)
                             implicitWidth: 26
                             implicitHeight: 26
                             onClicked: itemMenu.open()
@@ -1708,7 +1719,7 @@ Item {
                                 background: MenuPanel {}
                                 MenuItem {
                                     text: root.commonTr("MediaDownloadActionDialog", "Play")
-                                    icon.source: root.picon("play_all", 13, "8b949e")
+                                    icon.source: root.picon("play_all", 13, root.iconHex(root.textMuted))
                                     enabled: !mediaRoot.isMissing
                                     onTriggered: if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
@@ -1716,7 +1727,7 @@ Item {
                                 }
                                 MenuItem {
                                     text: root.commonTr("_WatchedFolderCard", "Rename")
-                                    icon.source: root.picon("edit", 13, "8b949e")
+                                    icon.source: root.picon("edit", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.renameItem(mediaRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
@@ -1724,7 +1735,7 @@ Item {
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: root.borderStrong } }
                                 MenuItem {
                                     text: root.commonTr("_WatchedFolderCard", "Delete")
-                                    icon.source: root.picon("trash", 13, "f85149")
+                                    icon.source: root.picon("trash", 13, root.iconHex(root.danger))
                                     onTriggered: if (root.hasController) root.playlistController.removeItem(mediaRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source; danger: true }
                                     background: MenuBg { hovered: parent.hovered; danger: true }
@@ -1792,7 +1803,7 @@ Item {
                     anchors.centerIn: parent
                     width: 12
                     height: 12
-                    source: root.picon("grip", 12, "484f58")
+                    source: root.picon("grip", 12, root.iconHex(root.textDim))
                     opacity: 0.42
                 }
             }
@@ -1865,7 +1876,7 @@ Item {
             HeaderButton {
                 iconName: "trash"
                 iconSize: 12
-                colorHex: "8b949e"
+                colorHex: root.iconHex(root.textMuted)
                 implicitWidth: 24
                 implicitHeight: 24
                 toolTipText: qsTranslate("_PlaylistEditView", "Delete marker")
@@ -1975,7 +1986,7 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        color: headerMa.containsMouse ? Qt.rgba(1, 1, 1, 0.02) : "transparent"
+                        color: headerMa.containsMouse ? root.hover : "transparent"
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
 
@@ -2004,7 +2015,7 @@ Item {
                                 anchors.centerIn: parent
                                 width: 12
                                 height: 12
-                                source: root.picon("grip", 12, "484f58")
+                                source: root.picon("grip", 12, root.iconHex(root.textDim))
                                 opacity: 0.5
                             }
                         }
@@ -2049,7 +2060,7 @@ Item {
                             Layout.preferredWidth: 12
                             Layout.preferredHeight: 12
                             Layout.alignment: Qt.AlignVCenter
-                            source: root.picon("chevron_down", 12, "484f58")
+                            source: root.picon("chevron_down", 12, root.iconHex(root.textDim))
                             rotation: sectionRoot.collapsed ? -180 : 0
                             Behavior on rotation { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                             MouseArea {
@@ -2066,7 +2077,7 @@ Item {
                         HeaderButton {
                             iconName: "more"
                             iconSize: 12
-                            colorHex: "484f58"
+                            colorHex: root.iconHex(root.textDim)
                             implicitWidth: 24
                             implicitHeight: 24
                             onClicked: sectionMenu.open()
@@ -2078,7 +2089,7 @@ Item {
                                     text: sectionRoot.isSubsection
                                           ? qsTranslate("_PlaylistEditView", "Rename subsection")
                                           : qsTranslate("_PlaylistEditView", "Rename section")
-                                    icon.source: root.picon("edit", 13, "8b949e")
+                                    icon.source: root.picon("edit", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.renameSection(sectionRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
@@ -2087,7 +2098,7 @@ Item {
                                     visible: !sectionRoot.isSubsection
                                     height: visible ? implicitHeight : 0
                                     text: qsTranslate("_PlaylistEditView", "Change color")
-                                    icon.source: root.picon("palette", 13, "8b949e")
+                                    icon.source: root.picon("palette", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.recolorSection(sectionRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
@@ -2096,7 +2107,7 @@ Item {
                                     visible: !sectionRoot.isSubsection
                                     height: visible ? implicitHeight : 0
                                     text: qsTranslate("_PlaylistEditView", "Add subsection")
-                                    icon.source: root.picon("section", 13, "8b949e")
+                                    icon.source: root.picon("section", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.newSubsectionClicked(sectionRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
@@ -2105,7 +2116,7 @@ Item {
                                     visible: sectionRoot.isSubsection
                                     height: visible ? implicitHeight : 0
                                     text: qsTranslate("_PlaylistEditView", "Add marker")
-                                    icon.source: root.picon("marker", 13, "8b949e")
+                                    icon.source: root.picon("marker", 13, root.iconHex(root.textMuted))
                                     onTriggered: if (root.hasController) root.playlistController.newMarkerClicked(sectionRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
@@ -2115,7 +2126,7 @@ Item {
                                     text: sectionRoot.isSubsection
                                           ? qsTranslate("_PlaylistEditView", "Delete subsection")
                                           : qsTranslate("_PlaylistEditView", "Delete section")
-                                    icon.source: root.picon("trash", 13, "f85149")
+                                    icon.source: root.picon("trash", 13, root.iconHex(root.danger))
                                     onTriggered: if (root.hasController) root.playlistController.deleteSection(sectionRoot.nodeId)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source; danger: true }
                                     background: MenuBg { hovered: parent.hovered; danger: true }
@@ -2198,9 +2209,27 @@ Item {
             onClicked: hdrBtn.clicked()
         }
 
-        ToolTip.visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
-        ToolTip.text: hdrBtn.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
+            text: hdrBtn.toolTipText
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: root.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: root.surface
+            radius: 6
+            border.width: 1
+            border.color: root.border_
+        }
     }
 
     component MenuPanel: Rectangle {

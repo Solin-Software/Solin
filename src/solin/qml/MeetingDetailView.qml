@@ -25,6 +25,7 @@ Rectangle {
     readonly property color accentTint: appTheme.accentTint
     readonly property color previewBg: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
     readonly property color previewBorder: appTheme.accent
+    readonly property color success: appTheme.success
     readonly property color danger: appTheme.danger
     readonly property color dangerSubtle: appTheme.dangerSubtle
 
@@ -124,7 +125,7 @@ Rectangle {
                     enabled: root.hasController && controller.syncAvailable && !controller.syncBusy
                     iconName: "folder_link"
                     iconSize: 14
-                    colorHex: controller.syncEnabled ? "3fb950" : "8b949e"
+                    colorHex: root.iconHex(controller.syncEnabled ? root.success : root.textMuted)
                     accentButton: controller.syncEnabled
                     toolTipText: controller.syncEnabled
                                  ? qsTranslate("MeetingSync", "Turn off meeting sync")
@@ -136,7 +137,7 @@ Rectangle {
                     id: plusBtn
                     iconName: "plus"
                     iconSize: 14
-                    colorHex: "79c0ff"
+                    colorHex: root.iconHex(root.accent)
                     accentButton: true
                     toolTipText: qsTranslate("_PlaylistEditView", "Add Media")
                     onClicked: addMenu.open()
@@ -149,7 +150,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Local File...")
-                            icon.source: root.picon("plus", 13, "8b949e")
+                            icon.source: root.picon("plus", 13, root.iconHex(root.textMuted))
                             onTriggered: if (root.hasController) controller.addClicked()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -157,7 +158,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Search JW.org...")
-                            icon.source: root.picon("media_video", 13, "8b949e")
+                            icon.source: root.picon("media_video", 13, root.iconHex(root.textMuted))
                             onTriggered: jwCatalogModal.open()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -165,7 +166,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Add Song...")
-                            icon.source: root.picon("media_audio", 13, "8b949e")
+                            icon.source: root.picon("media_audio", 13, root.iconHex(root.textMuted))
                             onTriggered: jwSongsModal.open()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -234,7 +235,7 @@ Rectangle {
         id: hdrBtn
         property string iconName: ""
         property int iconSize: 14
-        property string colorHex: "8b949e"
+        property string colorHex: root.iconHex(root.textMuted)
         property string toolTipText: ""
         property bool accentButton: false
         signal clicked()
@@ -258,7 +259,7 @@ Rectangle {
             width: hdrBtn.iconSize
             height: hdrBtn.iconSize
             source: root.picon(hdrBtn.iconName, hdrBtn.iconSize,
-                               hdrMa.containsMouse ? "c9d1d9" : hdrBtn.colorHex)
+                               hdrMa.containsMouse ? root.iconHex(root.textSecondary) : hdrBtn.colorHex)
         }
 
         MouseArea {
@@ -271,9 +272,10 @@ Rectangle {
             onClicked: hdrBtn.clicked()
         }
 
-        ToolTip.visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
-        ToolTip.text: hdrBtn.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
+            text: hdrBtn.toolTipText
+        }
     }
 
     component SmallToolButton: Rectangle {
@@ -299,7 +301,11 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 13
                 height: 13
-                source: root.picon(stb.iconName, 13, stbMa.containsMouse ? "c9d1d9" : "8b949e")
+                source: root.picon(
+                    stb.iconName,
+                    13,
+                    root.iconHex(stbMa.containsMouse ? root.textSecondary : root.textMuted)
+                )
             }
             Text {
                 visible: stb.label !== ""
@@ -319,9 +325,27 @@ Rectangle {
             onClicked: stb.clicked()
         }
 
-        ToolTip.visible: stb.enabled && stbMa.containsMouse && stb.toolTipText !== ""
-        ToolTip.text: stb.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: stb.enabled && stbMa.containsMouse && stb.toolTipText !== ""
+            text: stb.toolTipText
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: root.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: root.surface
+            radius: 6
+            border.width: 1
+            border.color: root.border_
+        }
     }
 
     component MenuPanel: Rectangle {

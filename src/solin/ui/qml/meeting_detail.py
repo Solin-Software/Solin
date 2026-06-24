@@ -8,7 +8,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE
-from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.playlist.visuals import (
     PlaylistIconProvider,
     PlaylistThumbnailProvider,
@@ -71,8 +71,14 @@ class MeetingDetailQmlHost(QQuickWidget):
         if retranslate and hasattr(self.engine(), "retranslate"):
             self.engine().retranslate()
 
+    def set_pill_color(self, pill_color: str) -> None:
+        self.rootContext().setContextProperty("pillColor", pill_color)
+
     def clear_scene(self) -> None:
         self.setSource(QUrl())
+
+    def apply_theme(self) -> None:
+        apply_qml_theme(self, clear_color=PALETTE.bg0)
 
     def preview_external_drop(self, source, point) -> None:
         root = cast(Any, self.rootObject())

@@ -47,9 +47,10 @@ Row {
             anchors.fill: parent
             onClicked: sb.pressed_()
         }
-        ToolTip.visible: sb.tip !== "" && sbMa.containsMouse
-        ToolTip.text: sb.tip
-        ToolTip.delay: 450
+        ThemedToolTip {
+            visible: sb.tip !== "" && sbMa.containsMouse
+            text: sb.tip
+        }
     }
 
     StepBtn {
@@ -74,6 +75,7 @@ Row {
             font.weight: Font.Bold
 
             TimerPointerArea {
+                id: valueMa
                 anchors.fill: parent
                 enabled: ctl.editable
                 onDoubleClicked: {
@@ -82,9 +84,11 @@ Row {
                     editField.forceActiveFocus()
                     editField.selectAll()
                 }
-                ToolTip.visible: ctl.editable && containsMouse
-                ToolTip.text: qsTr("Double-click to edit")
-                ToolTip.delay: 600
+                ThemedToolTip {
+                    visible: ctl.editable && valueMa.containsMouse
+                    text: qsTr("Double-click to edit")
+                    delay: 600
+                }
             }
         }
 
@@ -123,5 +127,22 @@ Row {
         glyph: "+"
         tip: ctl.incTip
         onPressed_: ctl.incremented()
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 450
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
+        }
     }
 }

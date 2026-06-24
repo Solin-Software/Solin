@@ -48,6 +48,10 @@ Item {
         return available ? 1.0 : 0.68
     }
 
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
+    }
+
     function optionRows(rows, fallback) {
         if (rows && rows.length > 0)
             return rows
@@ -411,7 +415,8 @@ Item {
                                         anchors.centerIn: parent
                                         width: 16; height: 16
                                         sourceSize.width: 32; sourceSize.height: 32
-                                        source: "image://timericons/monitor/32/" + (modelData.reserved ? "79c0ff" : "8b949e")
+                                        source: "image://timericons/monitor/32/"
+                                                + page.iconHex(modelData.reserved ? page.pal_accent : page.pal_textMuted)
                                     }
                                 }
                                 ColumnLayout {

@@ -21,7 +21,7 @@ Item {
         width: parent.width
         height: 5
         radius: 2.5
-        color: appTheme.borderStrong
+        color: appTheme.border_
 
         Rectangle {
             width: handle.x + handle.width / 2
@@ -38,7 +38,7 @@ Item {
         radius: 8
         anchors.verticalCenter: parent.verticalCenter
         x: ctl._frac * (ctl.width - width)
-        color: appTheme.white
+        color: appTheme.surfaceChrome
         border.color: ctl.accent
         border.width: 2
         scale: ma.pressed ? 1.18 : 1.0

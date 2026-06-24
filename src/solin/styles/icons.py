@@ -105,8 +105,9 @@ def make_flag_icon(svg_str: str, size: int = 24) -> QIcon:
     return QIcon(pix)
 
 
-def make_icon(svg_str: str, size: int = 18, color: str = PALETTE.text_secondary) -> QIcon:
+def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
     """Renderiza SVG string como QIcon, substituindo 'currentColor' por *color*."""
+    color = str(color or PALETTE.text_secondary)
     svg = svg_str.replace("currentColor", color)
     data = QByteArray(svg.encode("utf-8"))
     renderer = QSvgRenderer(data)

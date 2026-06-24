@@ -4,10 +4,11 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QPushButton
 
 from solin.styles.icons import make_icon
-from solin.styles.theme import PALETTE, qss_rgba
+from solin.styles.theme import PALETTE
 
 
-PROJECTION_MENU_STYLE = f"""
+def projection_menu_style() -> str:
+    return f"""
 QMenu {{
     background: {PALETTE.surface};
     border: 1px solid {PALETTE.border};
@@ -23,6 +24,7 @@ QMenu::separator     {{ height: 1px; background: {PALETTE.border}; margin: 4px 8
 QMenu::indicator     {{ width: 0; }}
 """
 
+
 SPEED_CHOICES = (
     ("0.5x", 0.5),
     ("0.75x", 0.75),
@@ -37,9 +39,10 @@ def icon_button(
     svg: str,
     size: int = 30,
     icon_px: int = 15,
-    color: str = PALETTE.text_secondary,
+    color: str | None = None,
     tooltip: str = "",
 ) -> QPushButton:
+    color = color or PALETTE.text_secondary
     btn = QPushButton()
     btn.setFixedSize(size, size)
     btn.setIcon(make_icon(svg, icon_px, color))
@@ -51,7 +54,7 @@ def icon_button(
     btn.setStyleSheet(
         f"QPushButton{{border:none;border-radius:{radius}px;"
         "background:transparent;padding:0;}"
-        f"QPushButton:hover{{background:{qss_rgba(PALETTE.white, 0.08)};border-radius:{radius}px;}}"
-        f"QPushButton:pressed{{background:{qss_rgba(PALETTE.white, 0.13)};}}"
+        f"QPushButton:hover{{background:{PALETTE.surface_hover};border-radius:{radius}px;}}"
+        f"QPushButton:pressed{{background:{PALETTE.surface_hover_strong};}}"
     )
     return btn

@@ -96,6 +96,7 @@ class MainWindowUiContext:
     ndi_service: Any
     zoom_service: Any
     camera_service: Any
+    app_settings: Any
     obs_settings: Any
     zoom_settings: Any
     auto_share_settings: Any
@@ -399,6 +400,7 @@ class MainWindowUiController:
             context.screen_manager,
             obs_service=context.obs_service,
             ndi_service=context.ndi_service,
+            app_settings=context.app_settings,
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
@@ -725,12 +727,10 @@ class MainWindowUiController:
     @staticmethod
     def _separator() -> QFrame:
         sep = QFrame()
+        sep.setObjectName("SidebarSeparator")
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFrameShadow(QFrame.Shadow.Plain)
         sep.setFixedHeight(1)
-        sep.setStyleSheet(
-            f"background:{PALETTE.border_muted}; border:none; margin: 4px 0;"
-        )
         return sep
 
     def _flush_orphaned_media_files(self) -> None:

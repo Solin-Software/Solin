@@ -14,23 +14,47 @@ from PySide6.QtWidgets import QWidget
 
 from solin.styles.theme import PALETTE
 
-SETTINGS_BG = PALETTE.bg0
-SETTINGS_SURFACE = PALETTE.surface
-SETTINGS_CARD = PALETTE.surface
-SETTINGS_BORDER = PALETTE.border_muted
-SETTINGS_ACCENT = PALETTE.accent
-SETTINGS_ACCENT_MUTED = PALETTE.accent_muted
-SETTINGS_ACCENT_HOVER = PALETTE.accent_hover
-SETTINGS_ACCENT_PRESSED = PALETTE.accent_pressed
-SETTINGS_BORDER_STRONG = PALETTE.border
-SETTINGS_MUTED = PALETTE.text_muted
-SETTINGS_TEXT = PALETTE.text_primary
-SETTINGS_TEXT_SECONDARY = PALETTE.text_secondary
-SETTINGS_TEXT_ON_ACCENT = PALETTE.text_on_accent
-SETTINGS_DIM = PALETTE.text_dim
-SETTINGS_SUCCESS = PALETTE.success
-SETTINGS_WARNING_TEXT = PALETTE.warning_text
-SETTINGS_DANGER = PALETTE.danger
+
+class _SettingsColorToken:
+    def __init__(self, palette_attr: str) -> None:
+        self._palette_attr = palette_attr
+
+    def value(self) -> str:
+        return getattr(PALETTE, self._palette_attr)
+
+    def __str__(self) -> str:
+        return self.value()
+
+    def __format__(self, spec: str) -> str:
+        return format(self.value(), spec)
+
+    def __eq__(self, other) -> bool:
+        return self.value() == other
+
+    def __hash__(self) -> int:
+        return hash(self.value())
+
+    def __repr__(self) -> str:
+        return repr(self.value())
+
+
+SETTINGS_BG = _SettingsColorToken("bg0")
+SETTINGS_SURFACE = _SettingsColorToken("surface")
+SETTINGS_CARD = _SettingsColorToken("surface")
+SETTINGS_BORDER = _SettingsColorToken("border_muted")
+SETTINGS_ACCENT = _SettingsColorToken("accent")
+SETTINGS_ACCENT_MUTED = _SettingsColorToken("accent_muted")
+SETTINGS_ACCENT_HOVER = _SettingsColorToken("accent_hover")
+SETTINGS_ACCENT_PRESSED = _SettingsColorToken("accent_pressed")
+SETTINGS_BORDER_STRONG = _SettingsColorToken("border")
+SETTINGS_MUTED = _SettingsColorToken("text_muted")
+SETTINGS_TEXT = _SettingsColorToken("text_primary")
+SETTINGS_TEXT_SECONDARY = _SettingsColorToken("text_secondary")
+SETTINGS_TEXT_ON_ACCENT = _SettingsColorToken("text_on_accent")
+SETTINGS_DIM = _SettingsColorToken("text_dim")
+SETTINGS_SUCCESS = _SettingsColorToken("success")
+SETTINGS_WARNING_TEXT = _SettingsColorToken("warning_text")
+SETTINGS_DANGER = _SettingsColorToken("danger")
 
 __all__ = (
     "SETTINGS_ACCENT",
@@ -53,15 +77,14 @@ __all__ = (
     "SETTINGS_TEXT_ON_ACCENT",
     "SETTINGS_WARNING_TEXT",
     "SettingsToggleSwitch",
+    "settings_picker_primary_button_stylesheet",
+    "settings_picker_secondary_button_stylesheet",
     "settings_compact_secondary_button_stylesheet",
 )
 
 
 class SettingsToggleSwitch(QWidget):
     toggled = Signal(bool)
-    _TRACK_ON = QColor(SETTINGS_ACCENT)
-    _TRACK_OFF = QColor(SETTINGS_BORDER_STRONG)
-    _THUMB = QColor(PALETTE.white)
     _W, _H = 40, 22
 
     def __init__(self, checked: bool = True, parent=None):
@@ -112,10 +135,12 @@ class SettingsToggleSwitch(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         t = self._anim_value
+        track_on = QColor(str(SETTINGS_ACCENT))
+        track_off = QColor(str(SETTINGS_BORDER_STRONG))
         track = QColor(
-            int(self._TRACK_OFF.red() + (self._TRACK_ON.red() - self._TRACK_OFF.red()) * t),
-            int(self._TRACK_OFF.green() + (self._TRACK_ON.green() - self._TRACK_OFF.green()) * t),
-            int(self._TRACK_OFF.blue() + (self._TRACK_ON.blue() - self._TRACK_OFF.blue()) * t),
+            int(track_off.red() + (track_on.red() - track_off.red()) * t),
+            int(track_off.green() + (track_on.green() - track_off.green()) * t),
+            int(track_off.blue() + (track_on.blue() - track_off.blue()) * t),
         )
         painter.setBrush(track)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -124,23 +149,30 @@ class SettingsToggleSwitch(QWidget):
         diameter = self._H - 2 * margin
         travel = self._W - 2 * margin - diameter
         x = margin + int(travel * t)
-        painter.setBrush(self._THUMB)
+        painter.setBrush(QColor(PALETTE.white))
         painter.drawEllipse(x, margin, diameter, diameter)
         painter.end()
 
 
-SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {SETTINGS_ACCENT}; color: {PALETTE.white};"
-    " border: none; border-radius: 8px; font-weight: 600; }"
-    f"QPushButton:hover {{ background: {PALETTE.accent_hover}; }}"
-    f"QPushButton:pressed {{ background: {PALETTE.accent_pressed}; }}"
-)
+def settings_picker_primary_button_stylesheet() -> str:
+    return (
+        f"QPushButton {{ background: {SETTINGS_ACCENT}; color: {PALETTE.white};"
+        " border: none; border-radius: 8px; font-weight: 600; }"
+        f"QPushButton:hover {{ background: {PALETTE.accent_hover}; }}"
+        f"QPushButton:pressed {{ background: {PALETTE.accent_pressed}; }}"
+    )
 
-SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {SETTINGS_BORDER}; color: {PALETTE.text_secondary};"
-    f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px; }}"
-    f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; color: {SETTINGS_TEXT}; }}"
-)
+
+def settings_picker_secondary_button_stylesheet() -> str:
+    return (
+        f"QPushButton {{ background: {SETTINGS_BORDER}; color: {PALETTE.text_secondary};"
+        f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 8px; }}"
+        f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; color: {SETTINGS_TEXT}; }}"
+    )
+
+
+SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET = settings_picker_primary_button_stylesheet()
+SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET = settings_picker_secondary_button_stylesheet()
 
 
 def settings_compact_secondary_button_stylesheet(

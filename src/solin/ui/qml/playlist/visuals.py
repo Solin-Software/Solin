@@ -29,8 +29,11 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, QML_THEME
 
-PLAYLIST_PLACEHOLDER_COLOR = QML_THEME["mediaPlaceholder"]
 UNSECTIONED_CARD_BACKGROUND = "transparent"
+
+
+def playlist_placeholder_color() -> str:
+    return str(QML_THEME["mediaPlaceholder"])
 
 
 def playlist_media_badge(media_type: str) -> str:
@@ -50,7 +53,7 @@ def round_playlist_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:
     """Return a copy with rounded corners."""
     if pixmap is None or pixmap.isNull() or pixmap.width() <= 0 or pixmap.height() <= 0:
         fallback = QPixmap(PLAYLIST_THUMBNAIL_WIDTH, PLAYLIST_THUMBNAIL_HEIGHT)
-        fallback.fill(QColor(PLAYLIST_PLACEHOLDER_COLOR))
+        fallback.fill(QColor(playlist_placeholder_color()))
         pixmap = fallback
     result = QPixmap(pixmap.size())
     result.fill(Qt.GlobalColor.transparent)
@@ -106,7 +109,7 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
             return round_playlist_pixmap(cropped, 7)
         # Placeholder
         ph = QPixmap(w, h)
-        ph.fill(QColor(PLAYLIST_PLACEHOLDER_COLOR))
+        ph.fill(QColor(playlist_placeholder_color()))
         return round_playlist_pixmap(ph, 7)
 
 

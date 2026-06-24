@@ -42,7 +42,6 @@ class WindowStateController:
 
     _DEFAULT_WIDTH = 1200
     _DEFAULT_HEIGHT = 760
-    _TITLEBAR_COLOR = PALETTE.titlebar
 
     def __init__(
         self,
@@ -87,7 +86,7 @@ class WindowStateController:
         )
 
     def apply_titlebar_color(self) -> None:
-        apply_titlebar_color(self._context.titlebar_window, self._TITLEBAR_COLOR)
+        apply_titlebar_color(self._context.titlebar_window, PALETTE.titlebar)
 
     def bring_to_front(self) -> None:
         """

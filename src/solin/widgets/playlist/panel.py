@@ -31,20 +31,11 @@ class _PlaylistItem(QFrame):
 
     clicked_index = Signal(int)
 
-    _CSS_NORMAL = (
-        f"QFrame{{background:{PALETTE.surface_card};border-radius:6px;border:1px solid {PALETTE.border_muted};outline:none;}}"
-        f"QFrame:hover{{background:{PALETTE.surface_hover_strong};border-color:{PALETTE.accent};outline:none;}}"
-        "QLabel{outline:none;border:none;background:transparent;}"
-    )
-    _CSS_ACTIVE = (
-        f"QFrame{{background:{PALETTE.surface_hover_strong};border-radius:6px;border:1.5px solid {PALETTE.accent};outline:none;}}"
-        "QLabel{outline:none;border:none;background:transparent;}"
-    )
-
     def __init__(self, index: int, title: str, media_type: str, type_label: str, parent=None):
         super().__init__(parent)
         self._index = index
         self._media_type = media_type
+        self._active = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(60)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -104,7 +95,20 @@ class _PlaylistItem(QFrame):
 
         layout.addWidget(self.thumb)
         layout.addWidget(info, stretch=1)
-        self.setStyleSheet(self._CSS_NORMAL)
+        self.set_active(False)
+
+    def _normal_stylesheet(self) -> str:
+        return (
+            f"QFrame{{background:{PALETTE.surface_card};border-radius:6px;border:1px solid {PALETTE.border_muted};outline:none;}}"
+            f"QFrame:hover{{background:{PALETTE.surface_hover_strong};border-color:{PALETTE.accent};outline:none;}}"
+            "QLabel{outline:none;border:none;background:transparent;}"
+        )
+
+    def _active_stylesheet(self) -> str:
+        return (
+            f"QFrame{{background:{PALETTE.surface_hover_strong};border-radius:6px;border:1.5px solid {PALETTE.accent};outline:none;}}"
+            "QLabel{outline:none;border:none;background:transparent;}"
+        )
 
     def set_thumbnail(self, pixmap: QPixmap) -> None:
         self.thumb.setPixmap(make_rounded_thumb(pixmap))
@@ -113,7 +117,8 @@ class _PlaylistItem(QFrame):
         self.type_lbl.setText(type_label)
 
     def set_active(self, active: bool) -> None:
-        self.setStyleSheet(self._CSS_ACTIVE if active else self._CSS_NORMAL)
+        self._active = active
+        self.setStyleSheet(self._active_stylesheet() if active else self._normal_stylesheet())
         color = PALETTE.text_primary if active else PALETTE.text_secondary
         weight = "700" if active else "500"
         self.title_lbl.setStyleSheet(
@@ -123,6 +128,12 @@ class _PlaylistItem(QFrame):
         self.type_lbl.setStyleSheet(
             f"background:transparent;color:{PALETTE.text_dim};font-size:9px;outline:none;border:none;"
         )
+
+    def apply_theme(self) -> None:
+        self.thumb.setStyleSheet(
+            f"background:{PALETTE.bg0};border-radius:4px;border:1px solid {PALETTE.border};"
+        )
+        self.set_active(self._active)
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -186,6 +197,7 @@ class PlaylistPanel(QWidget):
 
         outer.addWidget(header)
         outer.addWidget(scroll, stretch=1)
+        self._header = header
 
     def _get_panel_width(self) -> int:
         return self.maximumWidth()
@@ -250,6 +262,25 @@ class PlaylistPanel(QWidget):
         self._update_count_label(len(self._items))
         for item in self._items:
             item.refresh_language_label(self._get_type_label(item._media_type))
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background:{PALETTE.bg0};border-left:1px solid {PALETTE.border_muted};")
+        self._header.setStyleSheet(
+            f"background:{PALETTE.surface};border-bottom:1px solid {PALETTE.border};"
+        )
+        self._count_lbl.setStyleSheet(
+            f"background:transparent;color:{PALETTE.text_muted};"
+            "font-size:10px;font-weight:600;letter-spacing:0.5px;"
+        )
+        self._scroll.setStyleSheet(
+            "QScrollArea{border:none;background:transparent;}"
+            f"QScrollBar:vertical{{width:4px;background:{PALETTE.bg0};border-radius:2px;}}"
+            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:2px;"
+            "min-height:20px;}"
+            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+        )
+        for item in self._items:
+            item.apply_theme()
 
     def toggle(self) -> None:
         self.close_panel() if self._open else self.open_panel()

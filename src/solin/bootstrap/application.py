@@ -31,7 +31,6 @@ from solin.bootstrap.single_instance import (
     try_forward_to_running,
 )
 from solin.core.profiles.application import ProfileRegistryLoadError
-from solin.styles.theme import PALETTE
 
 
 def _build_main_window_profile_settings(profile_settings):
@@ -56,6 +55,7 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
+        app=profile_settings.app_settings(),
         media=MediaSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
@@ -246,6 +246,7 @@ def _launch_main_window(
         PlaylistRepository,
         PlaylistStoragePaths,
     )
+    from solin.styles.theme import PALETTE
     from solin.ui.titlebar import apply_titlebar_color
 
     playlist_storage_paths = PlaylistStoragePaths(
@@ -404,6 +405,7 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
     from solin.core.meetings.meeting_weeks import current_monday
     from solin.core.timer.application import TimerSession
     from solin.core.timer.infrastructure import QSettingsTimerRepository
+    from solin.styles.theme import activate_theme
 
     profile_context = container.profile_runtime.create(profile_id)
     active_profile = container.profile_service.get_profile(profile_id)
@@ -411,6 +413,7 @@ def _launch_profile_window(container, lang_manager, file_args, profile_id: str):
         raise RuntimeError(f"Profile disappeared during startup: {profile_id}")
 
     lang_manager.activate_profile(profile_context.settings)
+    activate_theme(profile_context.settings.app_settings().app_theme_id())
     window = _launch_main_window(
         container.app,
         lang_manager,

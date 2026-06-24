@@ -26,7 +26,8 @@ from solin.core.integrations.camera_options import CameraOption
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.macos_layer import apply_corner_radius
 from solin.ui.background_song_status import translate_background_song_status
-from solin.ui.qml.host import configure_qml_host
+from solin.styles.theme import PALETTE
+from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.camera_popup import CameraPopup
@@ -55,6 +56,11 @@ _QAT_MINI_RADIUS = 8
 # corners are recovered by clipping the native layer. Windows keeps the proven
 # fixed-size + translucent + mask path untouched.
 _MAC = sys.platform == "darwin"
+
+
+def _icon_hex(color: str) -> str:
+    return color.lstrip("#")
+
 
 class QuickAccessToolbar(QQuickWidget):
     """
@@ -96,7 +102,10 @@ class QuickAccessToolbar(QQuickWidget):
         self._background_song = background_song_service
         self._minimized = False
         self._obs_connected = False
+        self._screen_count = 0
+        self._zoom_connected = False
         self._camera_enabled = False
+        self._camera_stream_active = False
         self._qml_pointer_depth = 0
 
         # ── QQuickWidget setup: transparent, always on top ────────────────
@@ -332,21 +341,24 @@ class QuickAccessToolbar(QQuickWidget):
     # ── Public API (identical to the old QWidget version) ─────────────────
 
     def set_screen_count(self, n: int):
-        self._bridge.set_monitor_icon_color("c9d1d9" if n > 0 else "8b949e")
+        self._screen_count = n
+        color = PALETTE.text_secondary if n > 0 else PALETTE.text_muted
+        self._bridge.set_monitor_icon_color(_icon_hex(color))
 
     def set_obs_connected(self, connected: bool):
         self._obs_connected = connected
         self._bridge.set_obs_visible(connected)
         self._bridge.set_obs_dot_visible(connected)
         if connected:
-            self._bridge.set_obs_icon_color("8b949e")
+            self._bridge.set_obs_icon_color(_icon_hex(PALETTE.text_muted))
         self._update_separator()
         self._reposition()
 
     def set_zoom_connected(self, connected: bool):
+        self._zoom_connected = connected
         self._zoom_panel.set_connected(connected)
         self._bridge.set_zoom_visible(connected)
-        self._bridge.set_zoom_icon_color("8b949e")
+        self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.text_muted))
         self._update_separator()
         self._reposition()
 
@@ -359,12 +371,17 @@ class QuickAccessToolbar(QQuickWidget):
     def set_camera_enabled(self, enabled: bool):
         self._camera_enabled = bool(enabled)
         self._bridge.set_camera_visible(self._camera_enabled)
-        self._bridge.set_camera_icon_color("8b949e" if enabled else "484f58")
+        self._bridge.set_camera_icon_color(
+            _icon_hex(PALETTE.text_muted if enabled else PALETTE.text_dim)
+        )
         self._update_separator()
         self._reposition()
 
     def set_camera_stream_active(self, active: bool):
-        self._bridge.set_camera_icon_color("58a6ff" if active else "8b949e")
+        self._camera_stream_active = bool(active)
+        self._bridge.set_camera_icon_color(
+            _icon_hex(PALETTE.accent if active else PALETTE.text_muted)
+        )
         if self._camera_panel:
             self._camera_panel.set_stream_active(active)
         self._scene_popup.set_camera_stream_active(active)
@@ -374,13 +391,13 @@ class QuickAccessToolbar(QQuickWidget):
         visible = bool(service is not None and service.is_enabled)
         self._bridge.set_background_song_visible(visible)
         if not visible:
-            self._bridge.set_background_song_icon_color("484f58")
+            self._bridge.set_background_song_icon_color(_icon_hex(PALETTE.text_dim))
             self._bridge.set_background_song_tooltip(self.tr("Background Song"))
             if self._background_song_panel and self._background_song_panel.isVisible():
                 self._background_song_panel.close()
         else:
             self._bridge.set_background_song_icon_color(
-                "58a6ff" if service.is_playing else "8b949e"
+                _icon_hex(PALETTE.accent if service.is_playing else PALETTE.text_muted)
             )
             status_text = translate_background_song_status(service.status_text)
             tooltip = service.current_title or status_text or self.tr("Background Song")
@@ -420,6 +437,22 @@ class QuickAccessToolbar(QQuickWidget):
 
     def reposition(self):
         self._reposition()
+
+    def apply_theme(self) -> None:
+        QToolTip.hideText()
+        apply_qml_theme(self, clear_color=QColor(0, 0, 0, 0))
+        self.set_screen_count(self._screen_count)
+        if self._obs_connected:
+            self.set_obs_connected(True)
+        if self._zoom_connected:
+            self.set_zoom_connected(True)
+        self.set_camera_enabled(self._camera_enabled)
+        if self._camera_stream_active:
+            self.set_camera_stream_active(True)
+        if self._background_song_panel is not None:
+            self._background_song_panel.apply_theme()
+        self._sync_background_song_state()
+        self._bridge.stateChanged.emit()
 
     def set_browser_rect_mode(self, enabled: bool):
         # Windows only: when the native webview is visible, transparent QML

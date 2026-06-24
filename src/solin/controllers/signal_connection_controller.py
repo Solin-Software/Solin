@@ -39,6 +39,7 @@ class MainWindowSignalHandlers:
     live_integrations: Any
     background_song_service: Any
     projection_integrations: Any
+    apply_theme: Any | None = None
     timer_output: Any | None = None
     timer_bridge: Any | None = None
 
@@ -165,6 +166,8 @@ class SignalConnectionController:
         settings.meeting_schedule_changed.connect(
             handlers.background_song_service.reload_settings
         )
+        if handlers.apply_theme is not None:
+            settings.theme_changed.connect(handlers.apply_theme)
 
         sources.obs_service.state_changed.connect(
             live_integrations.on_obs_state_changed

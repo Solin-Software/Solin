@@ -73,15 +73,15 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba
+from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet, tooltip_stylesheet
 from solin.widgets.circular_timer import CircularTimerWidget
 from solin.ui.media_info import MediaInfoQueue
 from solin.widgets.playlist.panel import PlaylistPanel
 from .audio import ProjectionAudioMixin
 from .controls import (
-    PROJECTION_MENU_STYLE as _MENU_STYLE,
     SPEED_CHOICES,
     icon_button as _icon_btn,
+    projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
 from .playlist import ProjectionPlaylistMixin
@@ -246,6 +246,53 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Barra (sempre visível) ────────────────────────────────────────────
 
+    def _volume_slider_stylesheet(self) -> str:
+        return slider_stylesheet(groove_height=3, handle_size=12)
+
+    def _offline_badge_stylesheet(self) -> str:
+        return (
+            "QLabel {"
+            f"  background: {PALETTE.success};"
+            "  border-radius: 5px;"
+            f"  border: 1.5px solid {qss_rgba(PALETTE.bg0, 0.60)};"
+            "}"
+            f"{tooltip_stylesheet()}"
+        )
+
+    def _close_button_stylesheet(self) -> str:
+        return (
+            "QPushButton{border:none;border-radius:15px;"
+            "background:transparent;padding:0;}"
+            f"QPushButton:hover{{background:{qss_rgba(PALETTE.danger, 0.18)};}}"
+            f"QPushButton:pressed{{background:{qss_rgba(PALETTE.danger, 0.30)};}}"
+        )
+
+    def _circular_button_stylesheet(self, button: QWidget) -> str:
+        radius = max(1, button.width() // 2)
+        return (
+            f"QPushButton{{border:none;border-radius:{radius}px;"
+            "background:transparent;padding:0;}"
+            f"QPushButton:hover{{background:{PALETTE.surface_hover};border-radius:{radius}px;}}"
+            f"QPushButton:pressed{{background:{PALETTE.surface_hover_strong};}}"
+        )
+
+    def _apply_icon_button_styles(self) -> None:
+        for button in (
+            self.play_btn,
+            self.prev_btn,
+            self.next_btn,
+            self.vol_btn,
+            self.more_btn,
+            self.obs_scene_btn,
+            self.minimize_btn,
+            self.ov_panel_btn,
+            self.ov_add_playlist_btn,
+            self.ov_send_temp_btn,
+            self.ov_set_idle_btn,
+            self.ov_fullscreen_btn,
+        ):
+            button.setStyleSheet(self._circular_button_stylesheet(button))
+
     def _build_bar_ui(self):
         bar_lay = QHBoxLayout(self)
         # Deixamos o topo e a base em 0 para o Qt centralizar verticalmente de forma automática.
@@ -315,21 +362,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._offline_badge.setVisible(False)
         # Ponto verde sólido. QToolTip override garante que o tooltip não herda
         # o background verde do widget pai.
-        self._offline_badge.setStyleSheet(
-            "QLabel {"
-            f"  background: {PALETTE.success};"
-            "  border-radius: 5px;"
-            f"  border: 1.5px solid {qss_rgba(PALETTE.black, 0.30)};"
-            "}"
-            "QToolTip {"
-            f"  background: {PALETTE.surface};"
-            f"  color: {PALETTE.text_secondary};"
-            f"  border: 1px solid {PALETTE.border};"
-            "  border-radius: 6px;"
-            "  padding: 4px 8px;"
-            "  font-size: 12px;"
-            "}"
-        )
+        self._offline_badge.setStyleSheet(self._offline_badge_stylesheet())
 
         # Seek slider
         self.seek_slider = BufferedSlider()
@@ -368,12 +401,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_slider = QSlider(Qt.Orientation.Horizontal)
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(70)
-        self.vol_slider.setStyleSheet(
-            f"QSlider::groove:horizontal{{height:3px;background:{PALETTE.bg3};border-radius:2px;}}"
-            "QSlider::handle:horizontal{width:10px;height:10px;margin:-4px 0;"
-            f"background:{PALETTE.text_secondary};border-radius:5px;}}"
-            f"QSlider::sub-page:horizontal{{background:{PALETTE.accent_hover};border-radius:2px;}}"
-        )
+        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
         # Mais opções (só vídeo)
@@ -402,12 +430,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Fechar / parar — circular, transparente, vermelho só no hover
         self.close_btn = _icon_btn(ICON_CLOSE, 30, 13, PALETTE.text_muted,
                                    self.tr("Stop projection"))
-        self.close_btn.setStyleSheet(
-            "QPushButton{border:none;border-radius:15px;"
-            "background:transparent;padding:0;}"
-            f"QPushButton:hover{{background:{qss_rgba(PALETTE.danger, 0.18)};}}"
-            f"QPushButton:pressed{{background:{qss_rgba(PALETTE.danger, 0.30)};}}"
-        )
+        self.close_btn.setStyleSheet(self._close_button_stylesheet())
         # Muda cor do ícone para vermelho no hover via evento
         self.close_btn.installEventFilter(self)
         self.close_btn.clicked.connect(self.stop_requested)
@@ -454,6 +477,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Topo ─────────────────────────────────────────────────────────
         ov_top = QWidget()
+        self._overlay_header = ov_top
         ov_top.setFixedHeight(42)
         ov_top.setStyleSheet(
             f"background: {PALETTE.surface}; border-bottom: 1px solid {PALETTE.border};"
@@ -521,6 +545,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Body: preview + painel lateral ───────────────────────────────
         body = QWidget()
+        self._overlay_body = body
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         body.setStyleSheet(f"background: {PALETTE.bg0};")
         body_lay = QHBoxLayout(body)
@@ -1249,6 +1274,51 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         label = self.tr("secondary screen") if n == 1 else self.tr("secondary screens")
         self.screen_count_label.setText(f"{n} {label}")
 
+    def apply_theme(self) -> None:
+        self.monitor_icon.setPixmap(
+            make_icon(ICON_SCREEN, 15, PALETTE.text_dim).pixmap(15, 15)
+        )
+        self.screen_count_label.setStyleSheet(
+            f"color: {PALETTE.text_dim}; font-size: 11px; background: transparent;"
+        )
+        self.thumb_label.setStyleSheet(
+            f"background: {qss_rgba(PALETTE.accent_hover, 0.10)}; border-radius: 6px;"
+            f" border: 1px solid {qss_rgba(PALETTE.accent_hover, 0.20)};"
+        )
+        self.proj_title.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_primary}; font-weight: 600; font-size: 12px;"
+            " letter-spacing: 0.1px;"
+        )
+        self._offline_badge.setStyleSheet(self._offline_badge_stylesheet())
+        self.time_label.setStyleSheet(
+            f"background: transparent; font-size: 11px; color: {PALETTE.text_muted};"
+        )
+        self.vol_slider.setStyleSheet(self._volume_slider_stylesheet())
+        timer_color = PALETTE.danger if self._blink_on else PALETTE.accent
+        self.timer_countdown_label.setStyleSheet(
+            f"background: transparent; color: {timer_color}; font-size: 18px;"
+            " font-weight: 700; letter-spacing: 1px; min-width: 90px;"
+        )
+        self.close_btn.setStyleSheet(self._close_button_stylesheet())
+        self._apply_icon_button_styles()
+        self.overlay.setStyleSheet(f"background: {PALETTE.bg0};")
+        self._overlay_header.setStyleSheet(
+            f"background: {PALETTE.surface}; border-bottom: 1px solid {PALETTE.border};"
+        )
+        self.ov_title.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
+        )
+        self._overlay_body.setStyleSheet(f"background: {PALETTE.bg0};")
+        self.seek_slider.update()
+        self._on_state_changed(self.media.player.playbackState())
+        self._on_volume_slider(self.vol_slider.value())
+        self._update_nav_buttons()
+        self._refresh_obs_scene_btn()
+        self.playlist_panel.apply_theme()
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None and hasattr(overlay, "apply_theme"):
+            overlay.apply_theme()
+
     # ── i18n ──────────────────────────────────────────────────────────────
 
     def changeEvent(self, event: QEvent) -> None:
@@ -1365,11 +1435,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _show_more_menu(self):
         menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
+        menu.setStyleSheet(projection_menu_style())
 
         # ── Velocidade ──────────────────────────────────────────────────
         speed_menu = menu.addMenu("  " + self.tr("Speed"))
-        speed_menu.setStyleSheet(_MENU_STYLE)
+        speed_menu.setStyleSheet(projection_menu_style())
         speed_group = QActionGroup(speed_menu)
         speed_group.setExclusive(True)
         for label, val in SPEED_CHOICES:
@@ -1392,7 +1462,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # ── Ordem de reprodução ─────────────────────────────────────────
         order_menu = menu.addMenu("  " + self.tr("Playback Order"))
-        order_menu.setStyleSheet(_MENU_STYLE)
+        order_menu.setStyleSheet(projection_menu_style())
         order_group = QActionGroup(order_menu)
         order_group.setExclusive(True)
         for label, val in [

@@ -54,24 +54,32 @@ __all__ = (
     "PlaylistListView",
 )
 
-PLAYLIST_SECONDARY_BUTTON_STYLESHEET = (
-    f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
-    f"background:{PALETTE.bg2};padding:0 10px;min-height:28px;"
-    f"color:{PALETTE.text_muted};font-size:11px;}}"
-    f"QPushButton:hover{{background:{PALETTE.bg3};border-color:{PALETTE.text_dim};"
-    f"color:{PALETTE.text_secondary};}}"
-    f"QPushButton:pressed{{background:{PALETTE.bg1};}}"
-    "QPushButton:disabled{opacity:0.4;}"
-)
-PLAYLIST_PRIMARY_BUTTON_STYLESHEET = (
-    f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
-    f"background:{PALETTE.accent_muted};padding:0 10px;min-height:28px;"
-    f"color:{PALETTE.accent_text};font-size:11px;font-weight:600;}}"
-    f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};"
-    f"border-color:{PALETTE.accent_hover};color:{PALETTE.accent_text_hover};}}"
-    f"QPushButton:pressed{{background:{PALETTE.accent_tint};}}"
-    "QPushButton:disabled{opacity:0.4;}"
-)
+def playlist_secondary_button_stylesheet() -> str:
+    return (
+        f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
+        f"background:{PALETTE.bg2};padding:0 10px;min-height:28px;"
+        f"color:{PALETTE.text_muted};font-size:11px;}}"
+        f"QPushButton:hover{{background:{PALETTE.bg3};border-color:{PALETTE.text_dim};"
+        f"color:{PALETTE.text_secondary};}}"
+        f"QPushButton:pressed{{background:{PALETTE.bg1};}}"
+        "QPushButton:disabled{opacity:0.4;}"
+    )
+
+
+def playlist_primary_button_stylesheet() -> str:
+    return (
+        f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
+        f"background:{PALETTE.accent_muted};padding:0 10px;min-height:28px;"
+        f"color:{PALETTE.accent_text};font-size:11px;font-weight:600;}}"
+        f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};"
+        f"border-color:{PALETTE.accent_hover};color:{PALETTE.accent_text_hover};}}"
+        f"QPushButton:pressed{{background:{PALETTE.accent_tint};}}"
+        "QPushButton:disabled{opacity:0.4;}"
+    )
+
+
+PLAYLIST_SECONDARY_BUTTON_STYLESHEET = playlist_secondary_button_stylesheet()
+PLAYLIST_PRIMARY_BUTTON_STYLESHEET = playlist_primary_button_stylesheet()
 
 
 class PlaylistListView(QWidget):
@@ -140,7 +148,7 @@ class PlaylistListView(QWidget):
         self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, PALETTE.text_muted))
         self._import_btn.setIconSize(QSize(14, 14))
         self._import_btn.setText("  " + self.tr("Import"))
-        self._import_btn.setStyleSheet(PLAYLIST_SECONDARY_BUTTON_STYLESHEET)
+        self._import_btn.setStyleSheet(playlist_secondary_button_stylesheet())
         self._import_btn.setFixedHeight(30)
         self._import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._import_btn.setToolTip(self.tr("Import .jwlplaylist"))
@@ -151,7 +159,7 @@ class PlaylistListView(QWidget):
         self._new_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.accent_text))
         self._new_btn.setIconSize(QSize(14, 14))
         self._new_btn.setText("  " + self.tr("New Playlist"))
-        self._new_btn.setStyleSheet(PLAYLIST_PRIMARY_BUTTON_STYLESHEET)
+        self._new_btn.setStyleSheet(playlist_primary_button_stylesheet())
         self._new_btn.setFixedHeight(30)
         self._new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._new_btn.clicked.connect(self._create_playlist)
@@ -162,16 +170,10 @@ class PlaylistListView(QWidget):
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setStyleSheet(
-            "QScrollArea{background:transparent;border:none;}"
-            f"QScrollBar:vertical{{background:{PALETTE.bg0};width:6px;border-radius:3px;}}"
-            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:3px;}}"
-            f"QScrollBar::handle:vertical:hover{{background:{PALETTE.text_dim};}}"
-            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
-        )
-
+        self._apply_scroll_style()
         self._scroll_wrap = QWidget(self)
         self._scroll_wrap.setStyleSheet("background:transparent;")
+
         wrap_lay = QVBoxLayout(self._scroll_wrap)
         wrap_lay.setContentsMargins(0, 0, 0, 0)
         wrap_lay.setSpacing(20)
@@ -225,6 +227,32 @@ class PlaylistListView(QWidget):
         wrap_lay.addStretch(1)
         self._scroll.setWidget(self._scroll_wrap)
         root.addWidget(self._scroll, stretch=1)
+
+    def _apply_scroll_style(self) -> None:
+        self._scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+            f"QScrollBar:vertical{{background:{PALETTE.bg0};width:6px;border-radius:3px;}}"
+            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:3px;}}"
+            f"QScrollBar::handle:vertical:hover{{background:{PALETTE.text_dim};}}"
+            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+        )
+
+    def apply_theme(self) -> None:
+        self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, PALETTE.text_muted))
+        self._import_btn.setStyleSheet(playlist_secondary_button_stylesheet())
+        self._new_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.accent_text))
+        self._new_btn.setStyleSheet(playlist_primary_button_stylesheet())
+        self._apply_scroll_style()
+        self._empty_lbl.setStyleSheet(
+            f"color:{PALETTE.text_dim};font-size:12px;padding:24px;background:transparent;"
+        )
+        self._wf_empty_lbl.setStyleSheet(
+            f"color:{PALETTE.text_dim};font-size:12px;padding:24px;background:transparent;"
+        )
+        for section in (self._app_section, self._wf_section):
+            section.apply_theme()
+        for card in (*self._pl_cards, *self._wf_cards):
+            card.apply_theme()
 
     def _rebuild_app_cards(self) -> None:
         while self._app_grid_lay.count():

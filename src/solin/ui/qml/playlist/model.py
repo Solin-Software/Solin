@@ -19,18 +19,34 @@ from solin.core.i18n.strings import (
 )
 from solin.core.meetings.colors import (
     accent_from_hue,
-    badge_bg_from_hue,
-    card_bg_from_hue,
-    card_border_from_hue,
-    section_text_from_hue,
+    badge_bg_from_hue as core_badge_bg_from_hue,
+    card_bg_from_hue as core_card_bg_from_hue,
+    card_border_from_hue as core_card_border_from_hue,
+    section_text_from_hue as core_section_text_from_hue,
 )
-from solin.styles.theme import PALETTE
+from solin.styles.theme import PALETTE, current_theme_scheme
 from solin.ui.qml.playlist.visuals import (
     UNSECTIONED_CARD_BACKGROUND,
     playlist_media_badge,
 )
 
 _MARKER_POSITION_FALLBACK = 1_000_000_000
+
+
+def section_text_from_hue(hue: int) -> str:
+    return core_section_text_from_hue(hue, current_theme_scheme())
+
+
+def badge_bg_from_hue(hue: int) -> str:
+    return core_badge_bg_from_hue(hue, current_theme_scheme())
+
+
+def card_bg_from_hue(hue: int) -> str:
+    return core_card_bg_from_hue(hue, current_theme_scheme())
+
+
+def card_border_from_hue(hue: int) -> str:
+    return core_card_border_from_hue(hue, current_theme_scheme())
 
 
 # ── Flat model ─────────────────────────────────────────────────────────────────

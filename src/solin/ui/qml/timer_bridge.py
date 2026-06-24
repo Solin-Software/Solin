@@ -38,6 +38,7 @@ from solin.core.meetings.colors import section_colors
 from solin.core.timer.part_titles import is_indexed_part_title_source
 from solin.controllers.timer_monitor_controller import TimerMonitorController
 from solin.controllers.timer_pdf_export_controller import TimerPdfExportController
+from solin.styles.theme import current_theme_scheme
 
 if TYPE_CHECKING:
     _QVARIANT = object
@@ -81,7 +82,7 @@ _CONFIGURABLE_COUNT = {Section.MINISTRY, Section.LIVING}
 def section_palette(section: Section) -> dict[str, str]:
     code = _SECTION_CODES.get(section, "")
     hue = SECTION_META.get(code, ("", 215))[1]
-    colors = section_colors(hue)
+    colors = section_colors(hue, current_theme_scheme())
     return {
         "accent": colors["accent"],
         "text": colors["text"],
@@ -214,6 +215,11 @@ class TimerBridge(QObject):
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
         self.clockConfigChanged.emit()
+
+    def refresh_theme(self) -> None:
+        self.scheduleChanged.emit()
+        self.clockConfigChanged.emit()
+        self.monitorsChanged.emit()
 
     def _on_engine_state(self, snapshot: dict) -> None:
         # Engine transitions mutate run-state in place → persist so a meeting in

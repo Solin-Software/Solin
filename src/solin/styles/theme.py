@@ -1,144 +1,92 @@
-"""Single source of truth for Solin's UI theme.
+"""Theme manager and public theme tokens for Solin's UI.
 
-Keep product-level colors here and import tokens from consumers. Component
-styles may still live with their widgets, but the palette, state colors, and
-shared stylesheets should come from this module.
+Theme definitions live in ``solin.styles.themes``. This module keeps the
+application-facing API stable and owns the active theme used while widgets are
+constructed.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from types import MappingProxyType
+from collections.abc import Iterator, Mapping
+from typing import Literal
+
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication
+
+from solin.styles.themes.base import AppTheme, ThemeMetrics, ThemePalette
+from solin.styles.themes.registry import (
+    DEFAULT_THEME_ID,
+    available_themes,
+    get_theme,
+    normalize_theme_id,
+)
 
 
-@dataclass(frozen=True)
-class ThemePalette:
-    """Semantic color tokens for the current Solin dark theme."""
-
-    bg0: str = "#0d1117"
-    bg1: str = "#161b22"
-    bg2: str = "#21262d"
-    bg3: str = "#2d333b"
-
-    surface: str = "#161b22"
-    surface_card: str = "#13161c"
-    surface_alt: str = "#0f131a"
-    surface_input_focus: str = "#0e1720"
-    surface_hover: str = "#1a1f2a"
-    surface_hover_strong: str = "#1c2128"
-    surface_overlay: str = "#11161d"
-    media_placeholder: str = "#0a0e14"
-
-    border: str = "#30363d"
-    border_muted: str = "#21262d"
-    border_subtle: str = "#1e2430"
-    border_strong: str = "#2a3040"
-
-    text_primary: str = "#e6edf3"
-    text_secondary: str = "#c9d1d9"
-    text_muted: str = "#8b949e"
-    text_dim: str = "#484f58"
-    text_faint: str = "#6e7681"
-    text_on_accent: str = "#ffffff"
-
-    accent: str = "#388bfd"
-    accent_alt: str = "#4f8cc9"
-    accent_hover: str = "#58a6ff"
-    accent_pressed: str = "#2f7be0"
-    accent_selection: str = "#1f6feb"
-    accent_muted: str = "#1f3a5f"
-    accent_muted_hover: str = "#2a4f7f"
-    accent_tint: str = "#132a46"
-    accent_text: str = "#79c0ff"
-    accent_text_hover: str = "#cae8ff"
-
-    success: str = "#3fb950"
-    success_surface: str = "#182518"
-    success_surface_strong: str = "#0f2d16"
-    success_border: str = "#1a5c2a"
-    success_hover: str = "#46b556"
-    success_pressed: str = "#1a6e2a"
-    warning: str = "#d29922"
-    warning_text: str = "#e3b341"
-    danger: str = "#f85149"
-    danger_text: str = "#ff7b72"
-    danger_surface: str = "#2d1b1b"
-    danger_border: str = "#3d2020"
-    danger_surface_hover: str = "#3d2424"
-    danger_subtle: str = "#3d1214"
-
-    projection: str = "#2ea043"
-    titlebar: str = "#1A231F"
-    black: str = "#000000"
-    white: str = "#ffffff"
-
-    def as_qml(self) -> dict[str, str]:
-        """Return color tokens in the names used by QML views."""
-
-        return {
-            "bg": self.bg0,
-            "surface": self.surface_card,
-            "surfaceChrome": self.surface,
-            "surfaceAlt": self.surface_alt,
-            "surfaceInputFocus": self.surface_input_focus,
-            "surface2": self.surface_overlay,
-            "hover": self.surface_hover,
-            "hoverStrong": self.surface_hover_strong,
-            "hoverBorder": self.border_strong,
-            "border": self.border_muted,
-            "border_": self.border_subtle,
-            "borderChrome": self.border,
-            "borderStrong": self.border_strong,
-            "textPrimary": self.text_primary,
-            "textSecondary": self.text_secondary,
-            "textMuted": self.text_muted,
-            "textDim": self.text_dim,
-            "textFaint": self.text_faint,
-            "textOnAccent": self.text_on_accent,
-            "accent": self.accent,
-            "accentHover": self.accent_hover,
-            "accentPressed": self.accent_pressed,
-            "accentSelection": self.accent_selection,
-            "accentMuted": self.accent_muted,
-            "accentMutedHover": self.accent_muted_hover,
-            "accentTint": self.accent_tint,
-            "accentText": self.accent_text,
-            "accentTextHover": self.accent_text_hover,
-            "success": self.success,
-            "successSurface": self.success_surface,
-            "successSurfaceStrong": self.success_surface_strong,
-            "successBorder": self.success_border,
-            "warning": self.warning,
-            "amber": self.warning,
-            "danger": self.danger,
-            "dangerText": self.danger_text,
-            "dangerSubtle": self.danger_subtle,
-            "white": self.white,
-            "black": self.black,
-            "mediaPlaceholder": self.media_placeholder,
-        }
-
-
-@dataclass(frozen=True)
-class ThemeMetrics:
-    sidebar_w: str = "64px"
-    sidebar_expanded_w: str = "220px"
-
-
-@dataclass(frozen=True)
-class AppTheme:
-    palette: ThemePalette = ThemePalette()
-    metrics: ThemeMetrics = ThemeMetrics()
-
-    def qml_palette(self) -> dict[str, str]:
-        return self.palette.as_qml()
-
-
-THEME = AppTheme()
+THEME = get_theme(DEFAULT_THEME_ID)
 APP_THEME = THEME
-PALETTE = THEME.palette
-METRICS = THEME.metrics
-QML_THEME = MappingProxyType(THEME.qml_palette())
+SCROLLBAR_STYLESHEET = ""
+STYLESHEET = ""
+
+
+class _PaletteProxy:
+    """Stable public palette object that always resolves the active theme."""
+
+    def __getattr__(self, name: str) -> str:
+        return getattr(THEME.palette, name)
+
+
+class _MetricsProxy:
+    """Stable public metrics object that always resolves the active theme."""
+
+    def __getattr__(self, name: str) -> str:
+        return getattr(THEME.metrics, name)
+
+
+class _QmlThemeProxy(Mapping[str, object]):
+    """Mapping facade used by QML hosts without freezing imported references."""
+
+    def _data(self) -> dict[str, object]:
+        return THEME.qml_palette()
+
+    def __getitem__(self, key: str) -> object:
+        return self._data()[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._data())
+
+    def __len__(self) -> int:
+        return len(self._data())
+
+
+PALETTE = _PaletteProxy()
+METRICS = _MetricsProxy()
+QML_THEME = _QmlThemeProxy()
+
+
+def _theme_runtime(theme: AppTheme) -> tuple[AppTheme, str, str]:
+    return (
+        theme,
+        scrollbar_stylesheet(theme),
+        app_stylesheet(theme),
+    )
+
+
+def activate_theme(theme_id: str) -> AppTheme:
+    """Activate a registered theme for widgets constructed after this call."""
+
+    global APP_THEME, SCROLLBAR_STYLESHEET, STYLESHEET, THEME
+    theme = get_theme(theme_id)
+    THEME, SCROLLBAR_STYLESHEET, STYLESHEET = _theme_runtime(theme)
+    APP_THEME = THEME
+    return THEME
+
+
+def current_theme() -> AppTheme:
+    return THEME
+
+
+def current_theme_scheme(theme: AppTheme | None = None) -> Literal["dark", "light"]:
+    return "light" if (theme or THEME).id == "light" else "dark"
 
 
 def qss_rgba(hex_color: str, alpha: float) -> str:
@@ -153,8 +101,72 @@ def qss_rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha:g})"
 
 
-def scrollbar_stylesheet() -> str:
-    p = PALETTE
+def tooltip_stylesheet(theme: AppTheme | None = None) -> str:
+    p = (theme or THEME).palette
+    return f"""
+QToolTip {{
+    background-color: {p.surface_overlay};
+    color: {p.text_primary};
+    border: 1px solid {p.border};
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+}}
+"""
+
+
+def apply_application_palette(
+    app: QApplication | None,
+    theme: AppTheme | None = None,
+) -> None:
+    if app is None:
+        return
+    p = (theme or THEME).palette
+    palette = app.palette()
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(p.surface_overlay))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor(p.text_primary))
+    app.setPalette(palette)
+
+
+def slider_handle_fill(theme: AppTheme | None = None) -> str:
+    p = (theme or THEME).palette
+    return p.accent_hover if current_theme_scheme(theme) == "dark" else p.accent
+
+
+def slider_handle_border(theme: AppTheme | None = None) -> str:
+    p = (theme or THEME).palette
+    return p.accent_text_hover if current_theme_scheme(theme) == "dark" else p.white
+
+
+def slider_stylesheet(
+    *,
+    theme: AppTheme | None = None,
+    groove_height: int = 4,
+    handle_size: int = 12,
+    groove_color: str | None = None,
+    progress_color: str | None = None,
+) -> str:
+    p = (theme or THEME).palette
+    handle_margin = -max(0, (handle_size - groove_height) // 2)
+    handle_radius = handle_size // 2
+    groove_radius = max(1, groove_height // 2)
+    return (
+        "QSlider{background:transparent;border:none;}"
+        f"QSlider::groove:horizontal{{height:{groove_height}px;"
+        f"background:{groove_color or p.border_muted};"
+        f"border-radius:{groove_radius}px;}}"
+        f"QSlider::handle:horizontal{{width:{handle_size}px;height:{handle_size}px;"
+        f"margin:{handle_margin}px 0;background:{slider_handle_fill(theme)};"
+        f"border:1px solid {slider_handle_border(theme)};"
+        f"border-radius:{handle_radius}px;}}"
+        f"QSlider::handle:horizontal:hover{{background:{p.accent_text_hover};}}"
+        f"QSlider::sub-page:horizontal{{background:{progress_color or p.accent};"
+        f"border-radius:{groove_radius}px;}}"
+    )
+
+
+def scrollbar_stylesheet(theme: AppTheme | None = None) -> str:
+    p = (theme or THEME).palette
     return f"""
 QScrollArea {{
     background: transparent;
@@ -190,8 +202,9 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 """
 
 
-def app_stylesheet() -> str:
-    p = PALETTE
+def app_stylesheet(theme: AppTheme | None = None) -> str:
+    theme = theme or THEME
+    p = theme.palette
     return f"""
 /* === Global === */
 QWidget {{
@@ -208,7 +221,7 @@ QMainWindow, QDialog {{
 }}
 
 /* === Scrollbars === */
-{scrollbar_stylesheet()}
+{scrollbar_stylesheet(theme)}
 
 /* === Sidebar === */
 #Sidebar {{
@@ -260,6 +273,12 @@ QMainWindow, QDialog {{
 #SidebarLangBtn:hover {{
     background: {p.bg3};
     color: {p.text_primary};
+}}
+
+#SidebarSeparator {{
+    background: {p.border_muted};
+    border: none;
+    margin: 4px 0;
 }}
 
 /* === Content Area === */
@@ -416,14 +435,15 @@ QSlider::groove:horizontal {{
     border-radius: 2px;
 }}
 QSlider::handle:horizontal {{
-    background: {p.accent};
+    background: {slider_handle_fill(theme)};
     width: 14px;
     height: 14px;
     margin: -5px 0;
+    border: 1px solid {slider_handle_border(theme)};
     border-radius: 7px;
 }}
 QSlider::handle:horizontal:hover {{
-    background: {p.white};
+    background: {p.accent_text_hover};
     width: 16px;
     height: 16px;
     margin: -6px 0;
@@ -505,14 +525,7 @@ QSlider::sub-page:horizontal {{
 }}
 
 /* === Tooltip === */
-QToolTip {{
-    background-color: {p.bg3};
-    color: {p.text_primary};
-    border: 1px solid {p.border};
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 12px;
-}}
+{tooltip_stylesheet(theme)}
 
 /* === ComboBox === */
 QComboBox {{
@@ -551,11 +564,11 @@ QMenu::item:selected {{
 """
 
 
-SCROLLBAR_STYLESHEET = scrollbar_stylesheet()
-STYLESHEET = app_stylesheet()
+activate_theme(DEFAULT_THEME_ID)
 
 __all__ = [
     "APP_THEME",
+    "DEFAULT_THEME_ID",
     "METRICS",
     "PALETTE",
     "QML_THEME",
@@ -565,7 +578,18 @@ __all__ = [
     "AppTheme",
     "ThemeMetrics",
     "ThemePalette",
+    "activate_theme",
+    "apply_application_palette",
     "app_stylesheet",
+    "available_themes",
+    "current_theme",
+    "current_theme_scheme",
+    "get_theme",
+    "normalize_theme_id",
     "qss_rgba",
     "scrollbar_stylesheet",
+    "slider_handle_border",
+    "slider_handle_fill",
+    "slider_stylesheet",
+    "tooltip_stylesheet",
 ]

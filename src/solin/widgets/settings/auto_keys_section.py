@@ -21,11 +21,11 @@ from .shared import (
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
-    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_picker_primary_button_stylesheet,
 )
 from ...ui.auto_key_labels import auto_key_event_label
 from .auto_key_dialog import AutoKeyEditorDialog
@@ -108,7 +108,7 @@ class AutoKeysSectionMixin:
         self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.white))
         self._auto_keys_add_btn.setMinimumHeight(34)
         self._auto_keys_add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._auto_keys_add_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
+        self._auto_keys_add_btn.setStyleSheet(settings_picker_primary_button_stylesheet())
         self._auto_keys_add_btn.clicked.connect(self._add_auto_key_action)
         add_row.addWidget(self._auto_keys_add_btn)
         container_layout.addLayout(add_row)
