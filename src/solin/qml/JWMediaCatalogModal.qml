@@ -28,6 +28,7 @@ Rectangle {
     readonly property color accentTint:      appTheme.accentTint
     readonly property color success:         appTheme.success
     readonly property color dangerSubtle:    appTheme.dangerSubtle
+    readonly property real hoverOpacity:     appTheme.hoverOpacity
 
     // ── State ─────────────────────────────────────────────────────────────────
     property bool isOpen: false
@@ -305,11 +306,19 @@ Rectangle {
                     width: 32
                     height: 32
                     radius: 8
-                    color: closeMa.containsMouse ? modalRoot.hover : "transparent"
-                    border.width: closeMa.containsMouse ? 1 : 0
+                    color: "transparent"
+                    border.width: 0
                     border.color: modalRoot.border_
 
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                    ThemeHoverBackground {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        hovered: closeMa.containsMouse
+                        fillColor: modalRoot.hover
+                        fillOpacity: modalRoot.hoverOpacity
+                        showBorder: true
+                        borderColor: modalRoot.border_
+                    }
 
                     Text {
                         anchors.centerIn: parent
@@ -409,7 +418,15 @@ Rectangle {
                             Layout.preferredHeight: 22
                             radius: 6
                             visible: searchField.text.length > 0
-                            color: clearSearchMa.containsMouse ? modalRoot.hover : "transparent"
+                            color: "transparent"
+
+                            ThemeHoverBackground {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                hovered: clearSearchMa.containsMouse
+                                fillColor: modalRoot.hover
+                                fillOpacity: modalRoot.hoverOpacity
+                            }
 
                             Text {
                                 anchors.centerIn: parent
@@ -859,12 +876,19 @@ Rectangle {
         width: chipContent.implicitWidth + 18
         height: 28
         radius: 7
-        color: chipMa.containsMouse ? modalRoot.hover : "transparent"
+        color: "transparent"
         border.width: 1
         border.color: checked ? modalRoot.accentSelection : modalRoot.border_
 
-        Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
+
+        ThemeHoverBackground {
+            anchors.fill: parent
+            radius: parent.radius
+            hovered: chipMa.containsMouse
+            fillColor: modalRoot.hover
+            fillOpacity: modalRoot.hoverOpacity
+        }
 
         Row {
             id: chipContent
@@ -920,14 +944,16 @@ Rectangle {
         width: 32
         height: 32
         radius: 8
-        color: {
-            if (!enabled) return "transparent"
-            if (arrowMa.containsMouse) return modalRoot.hover
-            return "transparent"
-        }
+        color: "transparent"
         opacity: enabled ? 1.0 : 0.35
 
-        Behavior on color { ColorAnimation { duration: 120 } }
+        ThemeHoverBackground {
+            anchors.fill: parent
+            radius: parent.radius
+            hovered: enabled && arrowMa.containsMouse
+            fillColor: modalRoot.hover
+            fillOpacity: modalRoot.hoverOpacity
+        }
 
         Canvas {
             id: arrowCanvas
@@ -982,17 +1008,20 @@ Rectangle {
         width: Math.max(32, pageLabel.implicitWidth + 16)
         height: 32
         radius: 8
-        color: {
-            if (!enabled) return "transparent"
-            if (active) return modalRoot.accentTint
-            if (pageMa.containsMouse) return modalRoot.hover
-            return "transparent"
-        }
+        color: active ? modalRoot.accentTint : "transparent"
         border.width: active ? 1 : 0
         border.color: modalRoot.accentSelection
         opacity: enabled ? 1.0 : 0.35
 
         Behavior on color { ColorAnimation { duration: 120 } }
+
+        ThemeHoverBackground {
+            anchors.fill: parent
+            radius: parent.radius
+            hovered: enabled && !pageBtn.active && pageMa.containsMouse
+            fillColor: modalRoot.hover
+            fillOpacity: modalRoot.hoverOpacity
+        }
 
         Text {
             id: pageLabel
@@ -1028,14 +1057,22 @@ Rectangle {
         signal clicked()
 
         radius: 8
-        color: cardMa.containsMouse ? modalRoot.hover : "transparent"
-        border.width: cardMa.containsMouse ? 1 : 0
-        border.color: cardMa.containsMouse ? modalRoot.borderStrong : "transparent"
+        color: "transparent"
+        border.width: 0
+        border.color: "transparent"
         scale: cardMa.containsMouse ? 1.03 : 1.0
 
-        Behavior on color        { ColorAnimation   { duration: 120 } }
-        Behavior on border.color { ColorAnimation   { duration: 120 } }
         Behavior on scale        { NumberAnimation  { duration: 120; easing.type: Easing.OutCubic } }
+
+        ThemeHoverBackground {
+            anchors.fill: parent
+            radius: parent.radius
+            hovered: cardMa.containsMouse
+            fillColor: modalRoot.hover
+            fillOpacity: modalRoot.hoverOpacity
+            showBorder: true
+            borderColor: modalRoot.borderStrong
+        }
 
         ColumnLayout {
             anchors.fill: parent

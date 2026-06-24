@@ -26,6 +26,7 @@ Rectangle {
     readonly property color accentTint:      appTheme.accentTint
     readonly property color success:         appTheme.success
     readonly property color dangerSubtle:    appTheme.dangerSubtle
+    readonly property real hoverOpacity:     appTheme.hoverOpacity
 
     property bool isOpen: false
 
@@ -187,9 +188,19 @@ Rectangle {
                     width: 32
                     height: 32
                     radius: 8
-                    color: closeMa.containsMouse ? modalRoot.hover : "transparent"
-                    border.width: closeMa.containsMouse ? 1 : 0
+                    color: "transparent"
+                    border.width: 0
                     border.color: modalRoot.border_
+
+                    ThemeHoverBackground {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        hovered: closeMa.containsMouse
+                        fillColor: modalRoot.hover
+                        fillOpacity: modalRoot.hoverOpacity
+                        showBorder: true
+                        borderColor: modalRoot.border_
+                    }
 
                     Text {
                         anchors.centerIn: parent
@@ -281,7 +292,15 @@ Rectangle {
                             Layout.preferredHeight: 22
                             radius: 6
                             visible: searchField.text.length > 0
-                            color: clearSearchMa.containsMouse ? modalRoot.hover : "transparent"
+                            color: "transparent"
+
+                            ThemeHoverBackground {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                hovered: clearSearchMa.containsMouse
+                                fillColor: modalRoot.hover
+                                fillOpacity: modalRoot.hoverOpacity
+                            }
 
                             Text {
                                 anchors.centerIn: parent
@@ -494,9 +513,19 @@ Rectangle {
                             id: rowBg
                             anchors.fill: parent
                             radius: 7
-                            color: rowMa.containsMouse ? modalRoot.hover : "transparent"
-                            border.width: rowMa.containsMouse ? 1 : 0
-                            border.color: rowMa.containsMouse ? modalRoot.borderStrong : "transparent"
+                            color: "transparent"
+                            border.width: 0
+                            border.color: "transparent"
+
+                            ThemeHoverBackground {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                hovered: rowMa.containsMouse
+                                fillColor: modalRoot.hover
+                                fillOpacity: modalRoot.hoverOpacity
+                                showBorder: true
+                                borderColor: modalRoot.borderStrong
+                            }
 
                             Rectangle {
                                 anchors.left: parent.left
@@ -570,9 +599,19 @@ Rectangle {
                                     Layout.preferredHeight: 26
                                     Layout.alignment: Qt.AlignVCenter
                                     radius: 7
-                                    color: rowMa.containsMouse ? modalRoot.accentTint : "transparent"
+                                    color: "transparent"
                                     border.width: 1
-                                    border.color: rowMa.containsMouse ? modalRoot.accent : modalRoot.border_
+                                    border.color: modalRoot.border_
+
+                                    ThemeHoverBackground {
+                                        anchors.fill: parent
+                                        radius: parent.radius
+                                        hovered: rowMa.containsMouse
+                                        fillColor: modalRoot.accentTint
+                                        fillOpacity: modalRoot.hoverOpacity
+                                        showBorder: true
+                                        borderColor: modalRoot.accent
+                                    }
 
                                     Text {
                                         anchors.centerIn: parent

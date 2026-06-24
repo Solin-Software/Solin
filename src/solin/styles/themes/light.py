@@ -58,4 +58,7 @@ LIGHT_THEME = AppTheme(
         black="#000000",
         white="#ffffff",
     ),
+    hover_opacity=0.92,
+    hover_strong_opacity=0.96,
+    section_hover_opacity=0.86,
 )

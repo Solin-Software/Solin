@@ -123,9 +123,15 @@ class AppTheme:
     display_name: str
     palette: ThemePalette
     metrics: ThemeMetrics = ThemeMetrics()
+    hover_opacity: float = 1.0
+    hover_strong_opacity: float = 1.0
+    section_hover_opacity: float = 0.9
 
     def qml_palette(self) -> dict[str, object]:
         palette = self.palette.as_qml()
         palette["themeId"] = self.id
         palette["isDark"] = self.id == "dark"
+        palette["hoverOpacity"] = self.hover_opacity
+        palette["hoverStrongOpacity"] = self.hover_strong_opacity
+        palette["sectionHoverOpacity"] = self.section_hover_opacity
         return palette

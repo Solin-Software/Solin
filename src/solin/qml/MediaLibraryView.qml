@@ -14,6 +14,7 @@ Rectangle {
     readonly property color surfaceInputFocus: appTheme.surfaceInputFocus
     readonly property color hover:         appTheme.hover
     readonly property color hoverBorder:   appTheme.hoverBorder
+    readonly property real hoverOpacity:   appTheme.hoverOpacity
     readonly property color border:        appTheme.border
     readonly property color borderStrong:  appTheme.borderStrong
     readonly property color textPrimary:   appTheme.textPrimary
@@ -318,12 +319,19 @@ Rectangle {
                         id: rowBg
                         anchors.fill: parent
                         radius: 7
-                        color:        rowMa.containsMouse ? root.hover : "transparent"
-                        border.width: rowMa.containsMouse ? 1 : 0
-                        border.color: rowMa.containsMouse ? root.hoverBorder : "transparent"
+                        color:        "transparent"
+                        border.width: 0
+                        border.color: "transparent"
 
-                        Behavior on color        { ColorAnimation { duration: 120 } }
-                        Behavior on border.color { ColorAnimation { duration: 120 } }
+                        ThemeHoverBackground {
+                            anchors.fill: parent
+                            radius: parent.radius
+                            hovered: rowMa.containsMouse
+                            fillColor: root.hover
+                            fillOpacity: root.hoverOpacity
+                            showBorder: true
+                            borderColor: root.hoverBorder
+                        }
 
                         // Left accent bar — animates height on hover
                         Rectangle {
@@ -494,9 +502,19 @@ Rectangle {
                 Layout.preferredHeight: 22
                 radius: 5
                 visible:      searchInput.text.length > 0
-                color:        clearMa.containsMouse ? root.hover : "transparent"
-                border.width: clearMa.containsMouse ? 1 : 0
+                color:        "transparent"
+                border.width: 0
                 border.color: root.border
+
+                ThemeHoverBackground {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    hovered: clearMa.containsMouse
+                    fillColor: root.hover
+                    fillOpacity: root.hoverOpacity
+                    showBorder: true
+                    borderColor: root.border
+                }
 
                 Text {
                     anchors.centerIn: parent
@@ -614,13 +632,20 @@ Rectangle {
         implicitHeight: 32
         radius: 8
         // Transparent by default — border + bg only on hover (more modern feel)
-        color:        enabled && btnMa.containsMouse ? root.hover : "transparent"
+        color:        "transparent"
         border.width: 1
         border.color: iconButton.activeState ? root.amber : (enabled && btnMa.containsMouse ? root.borderStrong : root.border)
         opacity: enabled ? 1.0 : 0.38
 
-        Behavior on color        { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
+
+        ThemeHoverBackground {
+            anchors.fill: parent
+            radius: parent.radius
+            hovered: enabled && btnMa.containsMouse
+            fillColor: root.hover
+            fillOpacity: root.hoverOpacity
+        }
 
         Image {
             anchors.centerIn: parent

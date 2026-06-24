@@ -13,6 +13,8 @@ def test_light_theme_generates_light_qss_and_qml_tokens() -> None:
 
     assert light.palette.bg0 == "#f6f8fa"
     assert light.qml_palette()["bg"] == "#f6f8fa"
+    assert light.qml_palette()["hoverOpacity"] < 1.0
+    assert light.qml_palette()["sectionHoverOpacity"] < 1.0
     assert "#f6f8fa" in theme.app_stylesheet(light)
 
 

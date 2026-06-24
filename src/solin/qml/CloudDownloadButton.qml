@@ -18,7 +18,7 @@ Rectangle {
     implicitWidth: 26
     implicitHeight: 26
     radius: 7
-    color: active && hitArea.containsMouse ? appTheme.accentTint : "transparent"
+    color: "transparent"
 
     readonly property real normalizedProgress: Math.max(0, Math.min(1, progress))
     readonly property color trackColor: appTheme.textMuted
@@ -30,7 +30,13 @@ Rectangle {
         return Qt.rgba(c.r, c.g, c.b, a)
     }
 
-    Behavior on color { ColorAnimation { duration: 120 } }
+    ThemeHoverBackground {
+        anchors.fill: parent
+        radius: parent.radius
+        hovered: root.active && hitArea.containsMouse
+        fillColor: appTheme.accentTint
+        fillOpacity: appTheme.hoverOpacity
+    }
 
     Image {
         anchors.centerIn: parent
