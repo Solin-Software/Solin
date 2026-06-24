@@ -10,7 +10,6 @@ from ...styles.icons import ICON_CROSSHAIR, ICON_EDIT, ICON_SHARE_SCREEN, make_i
 from .shared import (
     SETTINGS_BG,
     SETTINGS_BORDER,
-    SETTINGS_BORDER_STRONG,
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
@@ -18,6 +17,7 @@ from .shared import (
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_compact_secondary_button_stylesheet,
 )
 from .auto_key_dialog import AutoKeyEditorDialog
 
@@ -148,10 +148,7 @@ class AutoShareSectionMixin:
             self._autoshare_access_btn.setFixedHeight(28)
             self._autoshare_access_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._autoshare_access_btn.setStyleSheet(
-                f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-                f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-                f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
-                f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+                settings_compact_secondary_button_stylesheet()
             )
             self._autoshare_access_btn.clicked.connect(self._open_macos_accessibility_settings)
             access_lay.addWidget(self._autoshare_access_btn)
@@ -219,12 +216,7 @@ class AutoShareSectionMixin:
             make_icon(ICON_CROSSHAIR, size=14, color=SETTINGS_MUTED)
         )
         self._autoshare_config_btn.setStyleSheet(
-            f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
-            f"QPushButton:disabled {{ color: {SETTINGS_DIM};"
-            f" border-color: {SETTINGS_BORDER}; background: transparent; }}"
+            settings_compact_secondary_button_stylesheet(include_disabled=True)
         )
         self._autoshare_config_btn.clicked.connect(self._on_autoshare_configure)
         qc_cfg_lay.addWidget(self._autoshare_config_btn)

@@ -42,6 +42,7 @@ from ..styles.icons import (
     ICON_CLAPPERBOARD, ICON_PLUG, ICON_OBS,
     ICON_PACKAGE,
 )
+from ..styles.theme import PALETTE
 
 from .profile_obs_setup import ProfileOBSSetupMixin
 from .profile_widgets import (
@@ -165,11 +166,15 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         # Header
         header = QWidget()
         header.setFixedHeight(72)
-        header.setStyleSheet(f"background: {PROFILE_SURFACE}; border-bottom: 1px solid #21262d;")
+        header.setStyleSheet(
+            f"background: {PROFILE_SURFACE}; border-bottom: 1px solid {PALETTE.border_muted};"
+        )
         hlay = QHBoxLayout(header)
         hlay.setContentsMargins(32, 0, 32, 0)
         logo = QLabel("Solin")
-        logo.setStyleSheet("color: #e6edf3; font-size: 22px; font-weight: 700; background: transparent;")
+        logo.setStyleSheet(
+            f"color: {PROFILE_TEXT}; font-size: 22px; font-weight: 700; background: transparent;"
+        )
         hlay.addWidget(logo)
         hlay.addStretch()
         lay.addWidget(header)
@@ -278,13 +283,13 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         header = QWidget()
         header.setFixedHeight(56)
         header.setStyleSheet(
-            f"background: {PROFILE_SURFACE}; border-bottom: 1px solid #21262d;"
+            f"background: {PROFILE_SURFACE}; border-bottom: 1px solid {PALETTE.border_muted};"
         )
         hlay = QHBoxLayout(header)
         hlay.setContentsMargins(32, 0, 32, 0)
         logo = QLabel("Solin")
         logo.setStyleSheet(
-            "color: #e6edf3; font-size: 17px; font-weight: 700; "
+            f"color: {PROFILE_TEXT}; font-size: 17px; font-weight: 700; "
             "background: transparent;"
         )
         hlay.addWidget(logo)
@@ -351,7 +356,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         footer = QWidget()
         footer.setFixedHeight(56)
         footer.setStyleSheet(
-            f"background: {PROFILE_SURFACE}; border-top: 1px solid #21262d;"
+            f"background: {PROFILE_SURFACE}; border-top: 1px solid {PALETTE.border_muted};"
         )
         flay = QHBoxLayout(footer)
         flay.setContentsMargins(32, 0, 32, 0)
@@ -511,16 +516,16 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: #13161c;
+                background: {PALETTE.surface_card};
                 color: {PROFILE_TEXT};
-                border: 1.5px solid #21262d;
+                border: 1.5px solid {PALETTE.border_muted};
                 border-radius: 10px;
                 font-size: 13px;
                 text-align: left;
                 padding: 0 14px;
             }}
-            QPushButton:hover {{ border-color: {PROFILE_ACCENT}; background: #181d27; }}
-            QPushButton:pressed {{ background: #0d1520; }}
+            QPushButton:hover {{ border-color: {PROFILE_ACCENT}; background: {PALETTE.surface_hover}; }}
+            QPushButton:pressed {{ background: {PALETTE.surface_alt}; }}
         """)
         if interface:
             self._ob_iface_button = btn
@@ -696,7 +701,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             num.setFixedSize(24, 24)
             num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             num.setStyleSheet(
-                "background: #1a2d4d; color: #79c0ff; border-radius: 12px; "
+                f"background: {PALETTE.accent_tint}; color: {PALETTE.accent_text}; border-radius: 12px; "
                 "font-size: 11px; font-weight: 700; border: none;"
             )
             row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
@@ -709,8 +714,8 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         rtsp_frame.setObjectName("RtspFrame")
         rtsp_frame.setStyleSheet(
             "QFrame#RtspFrame {"
-            "  background: #13161c;"
-            "  border: 1px solid #21262d;"
+            f"  background: {PALETTE.surface_card};"
+            f"  border: 1px solid {PALETTE.border_muted};"
             "  border-radius: 10px;"
             "}"
         )
@@ -787,7 +792,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
             num.setFixedSize(24, 24)
             num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             num.setStyleSheet(
-                "background: #2a1a4d; color: #a371f7; border-radius: 12px; "
+                f"background: {PALETTE.accent_tint}; color: {PALETTE.accent_text}; border-radius: 12px; "
                 "font-size: 11px; font-weight: 700; border: none;"
             )
             row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
@@ -885,7 +890,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
 
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background: #21262d; border: none;")
+        sep.setStyleSheet(f"background: {PALETTE.border_muted}; border: none;")
         scenes_lay.addWidget(sep)
 
         # Default / idle scene
@@ -980,7 +985,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         card.setStyleSheet(f"""
             QFrame {{
                 background: {PROFILE_SURFACE};
-                border: 1px solid #21262d;
+                border: 1px solid {PALETTE.border_muted};
                 border-radius: 14px;
             }}
         """)
@@ -992,7 +997,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
         icon_label.setFixedSize(52, 52)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet(
-            "background: #13161c; border: 1px solid #21262d; "
+            f"background: {PALETTE.surface_card}; border: 1px solid {PALETTE.border_muted}; "
             "border-radius: 14px;"
         )
         icon_label.setPixmap(make_icon(ICON_PACKAGE, size=24, color=PROFILE_ACCENT).pixmap(24, 24))
@@ -1107,7 +1112,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 border-radius: 6px;
             }}
             QMenu::item:selected {{
-                background: #21262d;
+                background: {PALETTE.bg2};
                 color: {PROFILE_TEXT};
             }}
             QMenu::separator {{
@@ -1170,7 +1175,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 border: 1px solid {PROFILE_BORDER}; border-radius: 7px;
                 padding: 7px 18px; min-width: 82px;
             }}
-            QPushButton:hover {{ background: #21262d; }}
+            QPushButton:hover {{ background: {PALETTE.bg2}; }}
         """)
         if box.exec() == QMessageBox.StandardButton.Yes:
             if self._profiles.delete_profile(profile_id):
@@ -1254,7 +1259,7 @@ class ProfileScreen(ProfileOBSSetupMixin, QWidget):
                 border: 1px solid {PROFILE_BORDER}; border-radius: 6px;
                 padding: 6px 18px; min-width: 80px;
             }}
-            QPushButton:hover {{ background: #21262d; }}
+            QPushButton:hover {{ background: {PALETTE.bg2}; }}
         """)
         if dlg.exec() == QMessageBox.StandardButton.Yes:
             self._finish_onboarding(skip=True)

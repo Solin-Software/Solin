@@ -23,6 +23,7 @@ from solin.styles.icons import (
     ICON_SEC_TREASURES,
     ICON_SEC_WATCHTOWER,
 )
+from solin.styles.theme import PALETTE
 
 _ICON_PDF = """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
@@ -65,7 +66,7 @@ class TimerIconProvider(QQuickImageProvider):
         parts = id_str.split("/")
         name = parts[0] if parts else ""
         px = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 16
-        color = f"#{parts[2]}" if len(parts) > 2 else "#c9d1d9"
+        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_secondary
 
         pix = QPixmap(px, px)
         pix.fill(Qt.GlobalColor.transparent)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtGui import QPixmap
 
+from solin.styles.theme import PALETTE
+
 
 class ProjectionAudioMixin:
     def _refresh_audio_cover_in_overlay(self):
@@ -72,15 +74,15 @@ class ProjectionAudioMixin:
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
             "<defs>"
             '<radialGradient id="glow" cx="50%" cy="50%" r="50%">'
-            '<stop offset="0%"  stop-color="#1c2a3d" stop-opacity="1"/>'
-            '<stop offset="100%" stop-color="#0d1117" stop-opacity="1"/>'
+            f'<stop offset="0%"  stop-color="{PALETTE.accent_tint}" stop-opacity="1"/>'
+            f'<stop offset="100%" stop-color="{PALETTE.bg0}" stop-opacity="1"/>'
             "</radialGradient>"
             '<linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">'
-            '<stop offset="0%"  stop-color="#388bfd" stop-opacity="0.9"/>'
-            '<stop offset="100%" stop-color="#79c0ff" stop-opacity="0.6"/>'
+            f'<stop offset="0%"  stop-color="{PALETTE.accent}" stop-opacity="0.9"/>'
+            f'<stop offset="100%" stop-color="{PALETTE.accent_text}" stop-opacity="0.6"/>'
             "</linearGradient>"
             "</defs>"
-            '<rect width="200" height="200" fill="#0d1117"/>'
+            f'<rect width="200" height="200" fill="{PALETTE.bg0}"/>'
             '<rect width="200" height="200" fill="url(#glow)"/>'
             + "".join(bars_svg)
             + "</svg>"

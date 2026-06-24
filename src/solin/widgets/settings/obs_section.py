@@ -9,6 +9,7 @@ from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
 from ...ui.controls import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
+    SETTINGS_ACCENT_MUTED,
     SETTINGS_BG,
     SETTINGS_BORDER,
     SETTINGS_BORDER_STRONG,
@@ -18,7 +19,9 @@ from .shared import (
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
+    SETTINGS_WARNING_TEXT,
     SettingsToggleSwitch,
+    settings_compact_secondary_button_stylesheet,
 )
 
 
@@ -213,9 +216,7 @@ class ObsSectionMixin:
         self._obs_stream_refresh_btn.setIcon(make_icon(ICON_CAST, size=13, color=SETTINGS_MUTED))
         self._obs_stream_refresh_btn.setIconSize(QSize(13, 13))
         self._obs_stream_refresh_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 7px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+            settings_compact_secondary_button_stylesheet(radius=7)
         )
         self._obs_stream_refresh_btn.clicked.connect(self._refresh_obs_ndi_sources)
         source_row.addWidget(self._obs_stream_refresh_btn)
@@ -323,7 +324,7 @@ class ObsSectionMixin:
             f" border-left: 4px solid transparent; border-right: 4px solid transparent;"
             f" border-top: 5px solid {SETTINGS_MUTED}; margin-right: 10px; }}"
             f"QComboBox QAbstractItemView {{ background: {SETTINGS_SURFACE}; color: {SETTINGS_TEXT};"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: #1f3a6e; }}"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: {SETTINGS_ACCENT_MUTED}; }}"
         )
 
     def _on_obs_toggled(self, checked):
@@ -514,7 +515,7 @@ class ObsSectionMixin:
     def _sync_obs_ui_state(self, state, message):
         dot_color = {
             OBSConnectionState.DISCONNECTED: SETTINGS_DIM,
-            OBSConnectionState.CONNECTING: "#e3b341",
+            OBSConnectionState.CONNECTING: SETTINGS_WARNING_TEXT,
             OBSConnectionState.CONNECTED: SETTINGS_SUCCESS,
             OBSConnectionState.ERROR: SETTINGS_DANGER,
         }.get(state, SETTINGS_DIM)

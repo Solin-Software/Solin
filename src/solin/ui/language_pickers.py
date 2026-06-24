@@ -18,25 +18,25 @@ from PySide6.QtWidgets import (
 
 from solin.core.i18n.manager import LanguageManager
 from solin.core.jw.languages import JWLanguageService
-from solin.styles.theme import SCROLLBAR_STYLESHEET
+from solin.styles.theme import PALETTE, SCROLLBAR_STYLESHEET
 
-_BG = "#0d1117"
-_SURFACE = "#161b22"
-_BORDER = "#21262d"
-_BORDER_STRONG = "#30363d"
-_MUTED = "#8b949e"
-_TEXT = "#e6edf3"
-_ACCENT = "#388bfd"
+_BG = PALETTE.bg0
+_SURFACE = PALETTE.surface
+_BORDER = PALETTE.border_muted
+_BORDER_STRONG = PALETTE.border
+_MUTED = PALETTE.text_muted
+_TEXT = PALETTE.text_primary
+_ACCENT = PALETTE.accent
 
 PICKER_PRIMARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {_ACCENT}; color: white;"
+    f"QPushButton {{ background: {_ACCENT}; color: {PALETTE.white};"
     " border: none; border-radius: 8px; font-weight: 600; }"
-    "QPushButton:hover { background: #58a6ff; }"
-    "QPushButton:pressed { background: #2f7be0; }"
+    f"QPushButton:hover {{ background: {PALETTE.accent_hover}; }}"
+    f"QPushButton:pressed {{ background: {PALETTE.accent_pressed}; }}"
 )
 
 PICKER_SECONDARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {_BORDER}; color: #c9d1d9;"
+    f"QPushButton {{ background: {_BORDER}; color: {PALETTE.text_secondary};"
     f" border: 1px solid {_BORDER_STRONG}; border-radius: 8px; }}"
     f"QPushButton:hover {{ background: {_BORDER_STRONG}; color: {_TEXT}; }}"
 )
@@ -62,7 +62,7 @@ _PICKER_LIST_STYLESHEET = (
 
 
 class _LangItemDelegate(QStyledItemDelegate):
-    _SELECTED_BG = QColor("#1f3a6e")
+    _SELECTED_BG = QColor(PALETTE.accent_muted)
     _HOVER_BG = QColor(_BORDER)
     _TEXT_PRIMARY = QColor(_TEXT)
     _TEXT_SECONDARY = QColor(_MUTED)

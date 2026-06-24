@@ -27,37 +27,37 @@ from ..core.profiles.models import ProfileInfo
 from .helpers import avatar_colors
 from .helpers import initials
 from ..styles.icons import make_icon
-from ..styles.theme import SCROLLBAR_STYLESHEET
+from ..styles.theme import PALETTE, SCROLLBAR_STYLESHEET
 
 # ── Cores ────────────────────────────────────────────────────────────────────
-PROFILE_BG      = "#0d1117"
-PROFILE_SURFACE    = "#161b22"
-PROFILE_CARD    = "#1c2128"
-PROFILE_BORDER  = "#30363d"
-PROFILE_MUTED   = "#8b949e"
-PROFILE_TEXT    = "#e6edf3"
-PROFILE_DIM     = "#484f58"
-PROFILE_ACCENT  = "#388bfd"
-PROFILE_SUCCESS   = "#3fb950"
-PROFILE_DANGER     = "#f85149"
-PROFILE_WARNING   = "#d29922"
+PROFILE_BG = PALETTE.bg0
+PROFILE_SURFACE = PALETTE.surface
+PROFILE_CARD = PALETTE.surface_hover_strong
+PROFILE_BORDER = PALETTE.border
+PROFILE_MUTED = PALETTE.text_muted
+PROFILE_TEXT = PALETTE.text_primary
+PROFILE_DIM = PALETTE.text_dim
+PROFILE_ACCENT = PALETTE.accent
+PROFILE_SUCCESS = PALETTE.success
+PROFILE_DANGER = PALETTE.danger
+PROFILE_WARNING = PALETTE.warning
 
 PROFILE_SCROLLBAR_STYLESHEET = SCROLLBAR_STYLESHEET
 
 
 def obs_field_style() -> str:
     return (
-        f"QLineEdit {{ background: #13161c; color: {PROFILE_TEXT};"
-        f" border: 1.5px solid #21262d; border-radius: 10px;"
+        f"QLineEdit {{ background: {PALETTE.surface_card}; color: {PROFILE_TEXT};"
+        f" border: 1.5px solid {PALETTE.border_muted}; border-radius: 10px;"
         f" font-size: 13px; padding: 0 14px; }}"
-        f"QLineEdit:focus {{ border-color: {PROFILE_ACCENT}; background: #181d27; }}"
+        f"QLineEdit:focus {{ border-color: {PROFILE_ACCENT}; background: {PALETTE.surface_hover}; }}"
     )
 
 
 def obs_combo_style() -> str:
     return (
-        f"QComboBox {{ background: #13161c; color: {PROFILE_TEXT};"
-        f" border: 1.5px solid #21262d; border-radius: 10px;"
+        f"QComboBox {{ background: {PALETTE.surface_card}; color: {PROFILE_TEXT};"
+        f" border: 1.5px solid {PALETTE.border_muted}; border-radius: 10px;"
         f" font-size: 13px; padding: 0 14px; min-height: 44px; }}"
         f"QComboBox:focus {{ border-color: {PROFILE_ACCENT}; }}"
         f"QComboBox::drop-down {{ border: none; width: 28px; }}"
@@ -67,8 +67,8 @@ def obs_combo_style() -> str:
         f" border-top: 5px solid {PROFILE_MUTED}; margin-right: 12px; }}"
         f"QComboBox QAbstractItemView {{"
         f" background: {PROFILE_SURFACE}; color: {PROFILE_TEXT};"
-        f" border: 1px solid #21262d;"
-        f" selection-background-color: #1f3a6e; }}"
+        f" border: 1px solid {PALETTE.border_muted};"
+        f" selection-background-color: {PALETTE.accent_muted}; }}"
     )
 
 
@@ -132,7 +132,7 @@ class ProfileCard(QWidget):
         p.translate(-cx, -cy)
 
         # Fundo do card
-        bg_color = QColor("#21262d") if self._hovered else QColor(PROFILE_CARD)
+        bg_color = QColor(PALETTE.bg2) if self._hovered else QColor(PROFILE_CARD)
         border_c = QColor(PROFILE_ACCENT if self._hovered else PROFILE_BORDER)
         path     = QPainterPath()
         path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
@@ -153,7 +153,7 @@ class ProfileCard(QWidget):
         # Iniciais
         font = QFont("Segoe UI", 20, QFont.Weight.Bold)
         p.setFont(font)
-        p.setPen(QColor("white"))
+        p.setPen(QColor(PALETTE.white))
         p.drawText(
             QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2),
             Qt.AlignmentFlag.AlignCenter,
@@ -231,7 +231,7 @@ class AddProfileCard(QWidget):
         # Borda pontilhada
         pen = QPen(QColor(PROFILE_ACCENT if self._hovered else PROFILE_BORDER), 2, Qt.PenStyle.DashLine)
         p.setPen(pen)
-        p.setBrush(QColor("#1a2130" if self._hovered else "transparent"))
+        p.setBrush(QColor(PALETTE.accent_tint if self._hovered else "transparent"))
         path = QPainterPath()
         path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
         p.drawPath(path)
@@ -293,7 +293,7 @@ class StepProgress(QWidget):
         if self._current > 0:
             fill_w = step_w * self._current
             grad = QLinearGradient(margin, cy, margin + fill_w, cy)
-            grad.setColorAt(0, QColor("#1f6feb"))
+            grad.setColorAt(0, QColor(PALETTE.accent_pressed))
             grad.setColorAt(1, QColor(PROFILE_ACCENT))
             p.setBrush(QBrush(grad))
             p.drawRoundedRect(QRectF(margin, cy - 1.5, fill_w, 3), 1.5, 1.5)
@@ -308,7 +308,7 @@ class StepProgress(QWidget):
                 p.setPen(Qt.PenStyle.NoPen)
                 p.drawEllipse(QPointF(cx_dot, cy), r_done, r_done)
                 # Check mark
-                pen = QPen(QColor("white"), 1.5)
+                pen = QPen(QColor(PALETTE.white), 1.5)
                 pen.setCapStyle(Qt.PenCapStyle.RoundCap)
                 p.setPen(pen)
                 p.drawLine(
@@ -347,15 +347,15 @@ def profile_button(text: str, primary: bool = True) -> QPushButton:
         b.setStyleSheet(f"""
             QPushButton {{
                 background: {PROFILE_ACCENT};
-                color: white;
+                color: {PALETTE.white};
                 border: none;
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: 600;
                 padding: 0 24px;
             }}
-            QPushButton:hover {{ background: #4f9eff; }}
-            QPushButton:pressed {{ background: #2d72d9; }}
+            QPushButton:hover {{ background: {PROFILE_ACCENT}; }}
+            QPushButton:pressed {{ background: {PALETTE.accent_pressed}; }}
             QPushButton:disabled {{ background: {PROFILE_DIM}; color: {PROFILE_MUTED}; }}
         """)
     else:
@@ -373,7 +373,7 @@ def profile_button(text: str, primary: bool = True) -> QPushButton:
                 color: {PROFILE_TEXT};
                 border-color: {PROFILE_MUTED};
             }}
-            QPushButton:pressed {{ background: #21262d; }}
+            QPushButton:pressed {{ background: {PALETTE.bg2}; }}
         """)
     return b
 
@@ -384,16 +384,16 @@ def profile_field(placeholder: str = "") -> QLineEdit:
     f.setFixedHeight(44)
     f.setStyleSheet(f"""
         QLineEdit {{
-            background: #13161c;
+            background: {PALETTE.surface_card};
             color: {PROFILE_TEXT};
-            border: 1.5px solid #21262d;
+            border: 1.5px solid {PALETTE.border_muted};
             border-radius: 10px;
             font-size: 14px;
             padding: 0 14px;
         }}
         QLineEdit:focus {{
             border-color: {PROFILE_ACCENT};
-            background: #181d27;
+            background: {PALETTE.surface_hover};
         }}
         QLineEdit::placeholder {{ color: {PROFILE_DIM}; }}
     """)
@@ -420,7 +420,7 @@ def profile_section_card(title: str, icon: str, desc: str,
     card.setStyleSheet(f"""
         QFrame#SectionCard {{
             background: {PROFILE_SURFACE};
-            border: 1px solid #21262d;
+            border: 1px solid {PALETTE.border_muted};
             border-radius: 14px;
         }}
     """)
@@ -435,8 +435,8 @@ def profile_section_card(title: str, icon: str, desc: str,
     icon_bg.setFixedSize(38, 38)
     icon_bg.setAlignment(Qt.AlignmentFlag.AlignCenter)
     icon_bg.setStyleSheet(
-        "background: #13161c; "
-        "border: 1px solid #21262d; border-radius: 11px;"
+        f"background: {PALETTE.surface_card}; "
+        f"border: 1px solid {PALETTE.border_muted}; border-radius: 11px;"
     )
     # Render as SVG pixmap (clean, professional)
     pix = make_icon(icon, size=18, color=PROFILE_MUTED).pixmap(18, 18)
@@ -552,7 +552,7 @@ class OBSToggle(QWidget):
         margin = 3
         dia    = self._H - 2 * margin
         x      = (self._W - margin - dia) if self._checked else margin
-        p.setBrush(QColor("white"))
+        p.setBrush(QColor(PALETTE.white))
         p.drawEllipse(x, margin, dia, dia)
         p.end()
 

@@ -5,6 +5,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from solin.styles.icons import ICON_SET_AS_IDLE, make_icon
+from solin.styles.theme import PALETTE, qss_rgba
 
 
 class SetAsIdleConfirmDialog(QDialog):
@@ -31,11 +32,11 @@ class SetAsIdleConfirmDialog(QDialog):
         card = QFrame()
         card.setObjectName("IdleConfirmCard")
         card.setStyleSheet(
-            "QFrame#IdleConfirmCard {"
-            "  background: #1c2128;"
-            "  border: 1px solid #30363d;"
-            "  border-radius: 12px;"
-            "}"
+            f"QFrame#IdleConfirmCard {{"
+            f"  background: {PALETTE.surface_hover_strong};"
+            f"  border: 1px solid {PALETTE.border};"
+            f"  border-radius: 12px;"
+            f"}}"
             "QWidget { background: transparent; }"
             "QLabel  { background: transparent; }"
         )
@@ -51,8 +52,8 @@ class SetAsIdleConfirmDialog(QDialog):
         thumb_box = QFrame()
         thumb_box.setFixedSize(52, 52)
         thumb_box.setStyleSheet(
-            "QFrame { background: #0d1117; border: 1px solid #21262d;"
-            "         border-radius: 8px; }"
+            f"QFrame {{ background: {PALETTE.bg0}; border: 1px solid {PALETTE.border_muted};"
+            f"         border-radius: 8px; }}"
         )
         thumb_lay = QVBoxLayout(thumb_box)
         thumb_lay.setContentsMargins(0, 0, 0, 0)
@@ -69,7 +70,7 @@ class SetAsIdleConfirmDialog(QDialog):
             )
             thumb_img.setPixmap(scaled)
         else:
-            thumb_img.setPixmap(make_icon(ICON_SET_AS_IDLE, 22, "#8b949e").pixmap(22, 22))
+            thumb_img.setPixmap(make_icon(ICON_SET_AS_IDLE, 22, PALETTE.text_muted).pixmap(22, 22))
         thumb_lay.addWidget(thumb_img)
 
         text_col = QWidget()
@@ -79,11 +80,11 @@ class SetAsIdleConfirmDialog(QDialog):
 
         lbl_action = QLabel(self.tr("Set as Idle Screen?"))
         lbl_action.setStyleSheet(
-            "color: #e6edf3; font-size: 14px; font-weight: 700;"
+            f"color: {PALETTE.text_primary}; font-size: 14px; font-weight: 700;"
         )
 
         lbl_title = QLabel(title)
-        lbl_title.setStyleSheet("color: #8b949e; font-size: 12px;")
+        lbl_title.setStyleSheet(f"color: {PALETTE.text_muted}; font-size: 12px;")
         lbl_title.setWordWrap(True)
         lbl_title.setMaximumWidth(220)
 
@@ -96,7 +97,7 @@ class SetAsIdleConfirmDialog(QDialog):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background: #21262d; max-height: 1px; border: none;")
+        sep.setStyleSheet(f"background: {PALETTE.border_muted}; max-height: 1px; border: none;")
         sep.setFixedHeight(1)
 
         lbl_desc = QLabel(
@@ -106,7 +107,7 @@ class SetAsIdleConfirmDialog(QDialog):
             )
         )
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #6e7681; font-size: 11px;")
+        lbl_desc.setStyleSheet(f"color: {PALETTE.text_faint}; font-size: 11px;")
         lbl_desc.setMaximumWidth(320)
 
         btn_row = QWidget()
@@ -118,17 +119,17 @@ class SetAsIdleConfirmDialog(QDialog):
         self._cancel_btn.setFixedHeight(32)
         self._cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cancel_btn.setStyleSheet(
-            "QPushButton {"
-            "  background: transparent;"
-            "  color: #8b949e;"
-            "  border: 1px solid #30363d;"
-            "  border-radius: 6px;"
-            "  font-size: 12px;"
-            "  font-weight: 600;"
-            "  padding: 0 16px;"
-            "}"
-            "QPushButton:hover  { background: rgba(99,110,123,0.15); color: #c9d1d9; }"
-            "QPushButton:pressed{ background: rgba(99,110,123,0.28); }"
+            f"QPushButton {{"
+            f"  background: transparent;"
+            f"  color: {PALETTE.text_muted};"
+            f"  border: 1px solid {PALETTE.border};"
+            f"  border-radius: 6px;"
+            f"  font-size: 12px;"
+            f"  font-weight: 600;"
+            f"  padding: 0 16px;"
+            f"}}"
+            f"QPushButton:hover  {{ background: {qss_rgba(PALETTE.text_faint, 0.15)}; color: {PALETTE.text_secondary}; }}"
+            f"QPushButton:pressed{{ background: {qss_rgba(PALETTE.text_faint, 0.28)}; }}"
         )
         self._cancel_btn.clicked.connect(self.reject)
 
@@ -136,17 +137,17 @@ class SetAsIdleConfirmDialog(QDialog):
         self._confirm_btn.setFixedHeight(32)
         self._confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._confirm_btn.setStyleSheet(
-            "QPushButton {"
-            "  background: #238636;"
-            "  color: #ffffff;"
-            "  border: 1px solid #2ea043;"
-            "  border-radius: 6px;"
-            "  font-size: 12px;"
-            "  font-weight: 600;"
-            "  padding: 0 16px;"
-            "}"
-            "QPushButton:hover  { background: #2ea043; }"
-            "QPushButton:pressed{ background: #196127; }"
+            f"QPushButton {{"
+            f"  background: {PALETTE.success_surface_strong};"
+            f"  color: {PALETTE.text_on_accent};"
+            f"  border: 1px solid {PALETTE.success};"
+            f"  border-radius: 6px;"
+            f"  font-size: 12px;"
+            f"  font-weight: 600;"
+            f"  padding: 0 16px;"
+            f"}}"
+            f"QPushButton:hover  {{ background: {PALETTE.success}; }}"
+            f"QPushButton:pressed{{ background: {PALETTE.success_pressed}; }}"
         )
         self._confirm_btn.setDefault(True)
         self._confirm_btn.clicked.connect(self._on_confirm)

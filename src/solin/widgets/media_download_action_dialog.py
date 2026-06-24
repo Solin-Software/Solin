@@ -5,6 +5,8 @@ from enum import Enum
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
+from solin.styles.theme import PALETTE
+
 
 class MediaDownloadAction(str, Enum):
     PLAY = "play"
@@ -22,13 +24,14 @@ class MediaDownloadActionDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(330)
         self.setStyleSheet(
-            "QDialog{background:#161b22;border:1px solid #30363d;border-radius:8px;}"
-            "QLabel{color:#c9d1d9;font-size:12px;background:transparent;}"
-            "QPushButton{border:1px solid #30363d;border-radius:6px;background:#21262d;"
-            "color:#c9d1d9;font-size:12px;padding:7px 12px;}"
-            "QPushButton:hover{background:#2d333b;border-color:#484f58;}"
-            "QPushButton#primary{border-color:#388bfd;background:#1f3a5f;color:#79c0ff;font-weight:600;}"
-            "QPushButton#primary:hover{background:#2a4f7f;color:#cae8ff;}"
+            f"QDialog{{background:{PALETTE.surface};border:1px solid {PALETTE.border};border-radius:8px;}}"
+            f"QLabel{{color:{PALETTE.text_secondary};font-size:12px;background:transparent;}}"
+            f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;background:{PALETTE.bg2};"
+            f"color:{PALETTE.text_secondary};font-size:12px;padding:7px 12px;}}"
+            f"QPushButton:hover{{background:{PALETTE.bg3};border-color:{PALETTE.text_dim};}}"
+            f"QPushButton#primary{{border-color:{PALETTE.accent};background:{PALETTE.accent_muted};"
+            f"color:{PALETTE.accent_text};font-weight:600;}}"
+            f"QPushButton#primary:hover{{background:{PALETTE.accent_muted_hover};color:{PALETTE.accent_text_hover};}}"
         )
 
         root = QVBoxLayout(self)
@@ -42,8 +45,8 @@ class MediaDownloadActionDialog(QDialog):
         name = QLabel(title)
         name.setWordWrap(True)
         name.setStyleSheet(
-            "color:#8b949e;font-size:11px;background:#13161c;"
-            "border:1px solid #21262d;border-radius:5px;padding:6px 9px;"
+            f"color:{PALETTE.text_muted};font-size:11px;background:{PALETTE.surface_card};"
+            f"border:1px solid {PALETTE.border_muted};border-radius:5px;padding:6px 9px;"
         )
         root.addWidget(name)
 

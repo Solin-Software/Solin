@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from solin.ui.helpers import make_rounded_thumb
 from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_IMAGE, ICON_MUSIC, ICON_VIDEO, make_icon
+from solin.styles.theme import PALETTE
 
 
 _PANEL_W = 210
@@ -31,12 +32,12 @@ class _PlaylistItem(QFrame):
     clicked_index = Signal(int)
 
     _CSS_NORMAL = (
-        "QFrame{background:#13161c;border-radius:6px;border:1px solid #21262d;outline:none;}"
-        "QFrame:hover{background:#1c2128;border-color:#388bfd;outline:none;}"
+        f"QFrame{{background:{PALETTE.surface_card};border-radius:6px;border:1px solid {PALETTE.border_muted};outline:none;}}"
+        f"QFrame:hover{{background:{PALETTE.surface_hover_strong};border-color:{PALETTE.accent};outline:none;}}"
         "QLabel{outline:none;border:none;background:transparent;}"
     )
     _CSS_ACTIVE = (
-        "QFrame{background:#1c2128;border-radius:6px;border:1.5px solid #388bfd;outline:none;}"
+        f"QFrame{{background:{PALETTE.surface_hover_strong};border-radius:6px;border:1.5px solid {PALETTE.accent};outline:none;}}"
         "QLabel{outline:none;border:none;background:transparent;}"
     )
 
@@ -57,12 +58,12 @@ class _PlaylistItem(QFrame):
         self.thumb.setFixedSize(_THUMB_W, _THUMB_H)
         self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb.setStyleSheet(
-            "background:#0d1117;border-radius:4px;border:1px solid #30363d;"
+            f"background:{PALETTE.bg0};border-radius:4px;border:1px solid {PALETTE.border};"
         )
         icon_svg = ICON_IMAGE if media_type == "image" else (
             ICON_MUSIC if media_type == "audio" else ICON_VIDEO
         )
-        self.thumb.setPixmap(make_icon(icon_svg, 18, "#484f58").pixmap(18, 18))
+        self.thumb.setPixmap(make_icon(icon_svg, 18, PALETTE.text_dim).pixmap(18, 18))
 
         info = QWidget()
         info.setStyleSheet("background:transparent;")
@@ -75,7 +76,7 @@ class _PlaylistItem(QFrame):
         self.title_lbl.setWordWrap(False)
         self.title_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.title_lbl.setStyleSheet(
-            "background:transparent;color:#c9d1d9;font-size:10px;font-weight:500;"
+            f"background:transparent;color:{PALETTE.text_secondary};font-size:10px;font-weight:500;"
         )
         self.title_lbl.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -94,7 +95,7 @@ class _PlaylistItem(QFrame):
         self.type_lbl = QLabel(type_label)
         self.type_lbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.type_lbl.setStyleSheet(
-            "background:transparent;color:#484f58;font-size:9px;"
+            f"background:transparent;color:{PALETTE.text_dim};font-size:9px;"
         )
 
         info_layout.addWidget(self.title_lbl)
@@ -113,14 +114,14 @@ class _PlaylistItem(QFrame):
 
     def set_active(self, active: bool) -> None:
         self.setStyleSheet(self._CSS_ACTIVE if active else self._CSS_NORMAL)
-        color = "#e6edf3" if active else "#c9d1d9"
+        color = PALETTE.text_primary if active else PALETTE.text_secondary
         weight = "700" if active else "500"
         self.title_lbl.setStyleSheet(
             f"background:transparent;color:{color};"
             f"font-size:10px;font-weight:{weight};outline:none;border:none;"
         )
         self.type_lbl.setStyleSheet(
-            "background:transparent;color:#484f58;font-size:9px;outline:none;border:none;"
+            f"background:transparent;color:{PALETTE.text_dim};font-size:9px;outline:none;border:none;"
         )
 
     def mousePressEvent(self, event) -> None:
@@ -144,7 +145,7 @@ class PlaylistPanel(QWidget):
         self.setMaximumWidth(0)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.setStyleSheet("background:#0d1117;border-left:1px solid #21262d;")
+        self.setStyleSheet(f"background:{PALETTE.bg0};border-left:1px solid {PALETTE.border_muted};")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -152,12 +153,12 @@ class PlaylistPanel(QWidget):
 
         header = QWidget()
         header.setFixedHeight(34)
-        header.setStyleSheet("background:#161b22;border-bottom:1px solid #30363d;")
+        header.setStyleSheet(f"background:{PALETTE.surface};border-bottom:1px solid {PALETTE.border};")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
         self._count_lbl = QLabel("Playlist")
         self._count_lbl.setStyleSheet(
-            "background:transparent;color:#8b949e;"
+            f"background:transparent;color:{PALETTE.text_muted};"
             "font-size:10px;font-weight:600;letter-spacing:0.5px;"
         )
         header_layout.addWidget(self._count_lbl)
@@ -168,8 +169,8 @@ class PlaylistPanel(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             "QScrollArea{border:none;background:transparent;}"
-            "QScrollBar:vertical{width:4px;background:#0d1117;border-radius:2px;}"
-            "QScrollBar::handle:vertical{background:#30363d;border-radius:2px;"
+            f"QScrollBar:vertical{{width:4px;background:{PALETTE.bg0};border-radius:2px;}}"
+            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:2px;"
             "min-height:20px;}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         )

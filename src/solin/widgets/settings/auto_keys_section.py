@@ -29,6 +29,7 @@ from .shared import (
 )
 from ...ui.auto_key_labels import auto_key_event_label
 from .auto_key_dialog import AutoKeyEditorDialog
+from solin.styles.theme import PALETTE
 
 
 class AutoKeysSectionMixin:
@@ -104,7 +105,7 @@ class AutoKeysSectionMixin:
         add_row = QHBoxLayout()
         add_row.addStretch()
         self._auto_keys_add_btn = QPushButton(self.tr("Add shortcut"))
-        self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, "#ffffff"))
+        self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.white))
         self._auto_keys_add_btn.setMinimumHeight(34)
         self._auto_keys_add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._auto_keys_add_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)

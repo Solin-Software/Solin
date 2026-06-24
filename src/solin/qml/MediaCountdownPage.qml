@@ -6,16 +6,16 @@ import QtQuick.Controls 2.15
 
 Item {
     id: page
-    property color pal_bg: "#0d1117"
-    property color pal_surface: "#13161c"
-    property color pal_surfaceAlt: "#0f131a"
-    property color pal_hover: "#1a1f2a"
-    property color pal_border: "#1e2430"
-    property color pal_borderStrong: "#2a3040"
-    property color pal_textPrimary: "#e6edf3"
-    property color pal_textSecondary: "#c9d1d9"
-    property color pal_textMuted: "#8b949e"
-    property color pal_accent: "#388bfd"
+    property color pal_bg: appTheme.bg
+    property color pal_surface: appTheme.surface
+    property color pal_surfaceAlt: appTheme.surfaceAlt
+    property color pal_hover: appTheme.hover
+    property color pal_border: appTheme.border_
+    property color pal_borderStrong: appTheme.borderStrong
+    property color pal_textPrimary: appTheme.textPrimary
+    property color pal_textSecondary: appTheme.textSecondary
+    property color pal_textMuted: appTheme.textMuted
+    property color pal_accent: appTheme.accent
 
     property string nowText: "--:--:--"
     property int hourValue: (new Date().getHours() + 1) % 24
@@ -146,7 +146,7 @@ Item {
                         Layout.preferredHeight: 40
                         radius: 8
                         color: chipMa.containsMouse
-                               ? Qt.rgba(0.22, 0.55, 0.99, 0.14) : page.pal_surfaceAlt
+                               ? Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.14) : page.pal_surfaceAlt
                         border.width: 1
                         border.color: chipMa.containsMouse ? page.pal_accent : page.pal_border
                         scale: chipMa.pressed ? 0.95 : 1.0
@@ -160,7 +160,7 @@ Item {
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: "" + modelData
-                                color: chipMa.containsMouse ? "#79c0ff" : page.pal_textPrimary
+                                color: chipMa.containsMouse ? appTheme.accentText : page.pal_textPrimary
                                 font.pixelSize: 17; font.weight: Font.Bold
                                 Behavior on color { ColorAnimation { duration: 130 } }
                             }

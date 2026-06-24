@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView,
 )
 
-from solin.styles.theme import COLORS, STYLESHEET
+from solin.styles.theme import PALETTE, STYLESHEET, qss_rgba
 from solin.core.integrations.automation.zoom.poll_parser import parse_zoom_poll_csv
 
 
@@ -68,15 +68,15 @@ def _identity_str(name, email):
 # Shared UI primitives
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TABLE_STYLE = """
+_TABLE_STYLE = f"""
     QTableWidget {{
-        background: {bg1};
-        alternate-background-color: {bg2};
-        border: 1px solid {border};
+        background: {PALETTE.surface};
+        alternate-background-color: {PALETTE.bg2};
+        border: 1px solid {PALETTE.border};
         border-radius: 8px;
         gridline-color: transparent;
-        selection-background-color: {accent_muted};
-        color: {text_primary};
+        selection-background-color: {PALETTE.accent_muted};
+        color: {PALETTE.text_primary};
         outline: 0;
     }}
     QTableWidget::item {{
@@ -84,25 +84,25 @@ _TABLE_STYLE = """
         border: none;
     }}
     QTableWidget::item:selected {{
-        background: {accent_muted};
-        color: {text_primary};
+        background: {PALETTE.accent_muted};
+        color: {PALETTE.text_primary};
     }}
     QHeaderView::section {{
-        background: {bg3};
-        color: {text_secondary};
+        background: {PALETTE.bg3};
+        color: {PALETTE.text_muted};
         font-size: 11px;
         font-weight: 600;
         padding: 7px 14px;
         border: none;
-        border-bottom: 1px solid {border};
+        border-bottom: 1px solid {PALETTE.border};
         letter-spacing: 0.4px;
     }}
     QHeaderView::section:hover {{
-        background: {bg2};
-        color: {text_primary};
+        background: {PALETTE.bg2};
+        color: {PALETTE.text_primary};
     }}
     QHeaderView::section:pressed {{
-        background: {accent_muted};
+        background: {PALETTE.accent_muted};
     }}
     QHeaderView::up-arrow {{
         width: 8px;
@@ -126,7 +126,7 @@ def _make_table(rows, headers):
     t.setShowGrid(False)
     t.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     t.verticalHeader().setDefaultSectionSize(38)
-    t.setStyleSheet(_TABLE_STYLE.format(**COLORS))
+    t.setStyleSheet(_TABLE_STYLE)
     return t
 
 
@@ -165,7 +165,7 @@ def _num_cell(value: int, align=Qt.AlignmentFlag.AlignRight,
     return item
 
 
-def _section_lbl(text, size=12, color=COLORS["text_secondary"]):
+def _section_lbl(text, size=12, color=PALETTE.text_muted):
     lbl = QLabel(text)
     f = QFont()
     f.setPointSize(size)
@@ -177,7 +177,7 @@ def _section_lbl(text, size=12, color=COLORS["text_secondary"]):
     return lbl
 
 
-def _body_lbl(text, size=13, color=COLORS["text_primary"], bold=False):
+def _body_lbl(text, size=13, color=PALETTE.text_primary, bold=False):
     lbl = QLabel(text)
     f = QFont()
     f.setPointSize(size)
@@ -212,7 +212,7 @@ class ZoomPollWindow(QDialog):
             Qt.WindowType.WindowMinimizeButtonHint |
             Qt.WindowType.WindowMaximizeButtonHint
         )
-        self.setStyleSheet(STYLESHEET % COLORS)
+        self.setStyleSheet(STYLESHEET)
         self._build_chrome()
         self._load()
 
@@ -232,8 +232,8 @@ class ZoomPollWindow(QDialog):
         bar.setFixedHeight(54)
         bar.setStyleSheet(f"""
             QFrame {{
-                background: {COLORS['bg1']};
-                border-bottom: 1px solid {COLORS['border']};
+                background: {PALETTE.surface};
+                border-bottom: 1px solid {PALETTE.border};
                 border-radius: 0;
             }}
         """)
@@ -250,21 +250,21 @@ class ZoomPollWindow(QDialog):
         tf = QFont(); tf.setPointSize(13); tf.setBold(True)
         tl.setFont(tf)
         tl.setStyleSheet(
-            f"color: {COLORS['text_primary']}; background: transparent; border: none;"
+            f"color: {PALETTE.text_primary}; background: transparent; border: none;"
         )
         bl.addWidget(tl)
         bl.addSpacing(14)
 
         sep = QLabel("·")
         sep.setStyleSheet(
-            f"color: {COLORS['text_muted']}; background: transparent; border: none;"
+            f"color: {PALETTE.text_dim}; background: transparent; border: none;"
         )
         bl.addWidget(sep)
         bl.addSpacing(14)
 
         fn = QLabel(Path(self._filepath).name)
         fn.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 12px; background: transparent; border: none;"
+            f"color: {PALETTE.text_muted}; font-size: 12px; background: transparent; border: none;"
         )
         bl.addWidget(fn)
         bl.addStretch()
@@ -276,12 +276,12 @@ class ZoomPollWindow(QDialog):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         body = QWidget()
-        body.setStyleSheet(f"background: {COLORS['bg0']};")
+        body.setStyleSheet(f"background: {PALETTE.bg0};")
         self._body = QVBoxLayout(body)
         self._body.setContentsMargins(28, 28, 28, 28)
         self._body.setSpacing(20)
 
-        ph = _body_lbl(self.tr("Loading report…"), 13, COLORS["text_secondary"])
+        ph = _body_lbl(self.tr("Loading report…"), 13, PALETTE.text_muted)
         ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._body.addWidget(ph)
         self._body.addStretch()
@@ -304,7 +304,7 @@ class ZoomPollWindow(QDialog):
                 item.widget().deleteLater()
 
         if r.parse_error:
-            self._body.addWidget(_body_lbl(f"⚠  {r.parse_error}", 13, COLORS["danger"]))
+            self._body.addWidget(_body_lbl(f"⚠  {r.parse_error}", 13, PALETTE.danger))
             self._body.addStretch()
             return
 
@@ -328,8 +328,8 @@ class ZoomPollWindow(QDialog):
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
-                background: {COLORS['bg2']};
-                border: 1px solid {COLORS['border']};
+                background: {PALETTE.bg2};
+                border: 1px solid {PALETTE.border};
                 border-radius: 10px;
             }}
         """)
@@ -338,7 +338,7 @@ class ZoomPollWindow(QDialog):
         lay.setSpacing(5)
 
         topic = r.meeting.topic or self.tr("Untitled meeting")
-        lay.addWidget(_body_lbl(topic, 15, COLORS["text_primary"], bold=True))
+        lay.addWidget(_body_lbl(topic, 15, PALETTE.text_primary, bold=True))
 
         parts = []
         if r.meeting.meeting_id:
@@ -347,7 +347,7 @@ class ZoomPollWindow(QDialog):
             parts.append(_format_date(r.meeting.start_time, self._dfmt()))
         if parts:
             lay.addWidget(_body_lbl(
-                "  ·  ".join(parts), 12, COLORS["text_secondary"]
+                "  ·  ".join(parts), 12, PALETTE.text_muted
             ))
         return card
 
@@ -369,13 +369,13 @@ class ZoomPollWindow(QDialog):
         h.addWidget(self._big_card(
             str(r.total_respondents),
             self.tr("Responses received"),
-            COLORS["text_secondary"],
+            PALETTE.text_muted,
             accent=False,
         ))
         h.addWidget(self._big_card(
             str(r.raw_total_attendance),
             self.tr("Attendance"),
-            COLORS["accent2"],
+            PALETTE.accent,
             accent=True,
             stretch=True,
         ))
@@ -389,10 +389,10 @@ class ZoomPollWindow(QDialog):
             card.setMinimumWidth(180)
             card.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         card.setFixedHeight(100)
-        border_top = "border-top: 3px solid " + COLORS["accent2"] + ";" if accent else ""
+        border_top = f"border-top: 3px solid {PALETTE.accent};" if accent else ""
         card.setStyleSheet(
-            "QFrame { background: " + COLORS["bg2"] + "; border: 1px solid " + COLORS["border"] + "; " +
-            border_top + " border-radius: 10px; }"
+            f"QFrame {{ background: {PALETTE.bg2}; border: 1px solid {PALETTE.border}; "
+            f"{border_top} border-radius: 10px; }}"
         )
         lay = QVBoxLayout(card)
         lay.setContentsMargins(22, 14, 22, 14)
@@ -405,7 +405,9 @@ class ZoomPollWindow(QDialog):
         lbl = QLabel(label)
         lf = QFont(); lf.setPointSize(12)
         lbl.setFont(lf)
-        lbl.setStyleSheet("color: " + COLORS["text_secondary"] + "; background: transparent; border: none;")
+        lbl.setStyleSheet(
+            f"color: {PALETTE.text_muted}; background: transparent; border: none;"
+        )
         lay.addWidget(num_lbl)
         lay.addWidget(lbl)
         return card
@@ -420,7 +422,7 @@ class ZoomPollWindow(QDialog):
         outer.setStyleSheet(f"""
             QFrame {{
                 background: transparent;
-                border: 1px solid {COLORS['warning']}44;
+                border: 1px solid {qss_rgba(PALETTE.warning, 0.27)};
                 border-radius: 10px;
             }}
         """)
@@ -432,18 +434,18 @@ class ZoomPollWindow(QDialog):
         texto_inconsistencias = self.tr("Inconsistencies found")
         v.addWidget(_section_lbl(
             f'⚠  {texto_inconsistencias}',
-            12, COLORS["warning"]
+            12, PALETTE.warning
         ))
 
         # ── Subsection: Duplicados ─────────────────────────────────────────
         if r.duplicate_alerts:
             v.addWidget(_section_lbl(
                 f'🔁  {self.tr("Duplicates")}',
-                11, COLORS["danger"]
+                11, PALETTE.danger
             ))
             for a in r.duplicate_alerts:
                 v.addWidget(self._alert_row(
-                    "🔁", COLORS["danger"],
+                    "🔁", PALETTE.danger,
                     a.name,
                     self.tr("Responded {count}× with the same value ({value}). Counted once.").replace("{count}", str(a.count)).replace("{value}", str(a.value)),
                 ))
@@ -452,12 +454,12 @@ class ZoomPollWindow(QDialog):
         if r.divergence_alerts:
             v.addWidget(_section_lbl(
                 f'🔀  {self.tr("Divergences")}',
-                11, COLORS["warning"]
+                11, PALETTE.warning
             ))
             for a in r.divergence_alerts:
                 vals = ", ".join(str(x) for x in a.values)
                 v.addWidget(self._alert_row(
-                    "🔀", COLORS["warning"],
+                    "🔀", PALETTE.warning,
                     _identity_str(a.name, a.email),
                     self.tr("Submitted different values: [{values}]. Highest value used: {kept}.").replace("{values}", str(vals)).replace("{kept}", str(a.kept_value)),
                 ))
@@ -479,7 +481,7 @@ class ZoomPollWindow(QDialog):
         if r.family_alerts:
             v.addWidget(_section_lbl(
                 '👨‍👩‍👧  ' + self.tr("Same family"),
-                11, COLORS["accent2"]
+                11, PALETTE.accent
             ))
 
             base            = r.total_attendance   # base fixa = total já corrigido pelo dedup
@@ -497,7 +499,7 @@ class ZoomPollWindow(QDialog):
 
                 members_str = "  ·  ".join(f"{m.name} ({m.value})" for m in a.members)
                 v.addWidget(self._alert_row(
-                    "👨‍👩‍👧", COLORS["accent2"],
+                    "👨‍👩‍👧", PALETTE.accent,
                     self.tr("Possible family — last name \"{lastname}\"").replace("{lastname}", str(a.last_name)),
                     members_str,
                     extra_note=correction_note,
@@ -507,7 +509,7 @@ class ZoomPollWindow(QDialog):
                     fam_details.append((
                         "👨‍👩‍👧",
                         f"{a.last_name}: −{fam_delta}",
-                        COLORS["accent2"],
+                        PALETTE.accent,
                     ))
 
             if total_fam_delta > 0:
@@ -530,7 +532,7 @@ class ZoomPollWindow(QDialog):
             details.append((
                 "🔁",
                 self.tr("{n} duplicate response(s) removed  −{delta} person(s)").replace("{n}", str(len(r.duplicate_alerts))).replace("{delta}", str(dup_delta)),
-                COLORS["danger"],
+                PALETTE.danger,
             ))
         div_raw   = sum(sum(a.values) for a in r.divergence_alerts)
         div_kept  = sum(a.kept_value for a in r.divergence_alerts)
@@ -539,7 +541,7 @@ class ZoomPollWindow(QDialog):
             details.append((
                 "🔀",
                 self.tr("{n} conflicting response(s) resolved  −{delta} person(s)").replace("{n}", str(len(r.divergence_alerts))).replace("{delta}", str(div_delta)),
-                COLORS["warning"],
+                PALETTE.warning,
             ))
         return details
 
@@ -556,9 +558,8 @@ class ZoomPollWindow(QDialog):
         """
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: " + COLORS["bg1"] +
-            "; border: 1px solid " + COLORS["border_muted"] +
-            "; border-radius: 8px; }"
+            f"QFrame {{ background: {PALETTE.surface}; border: 1px solid "
+            f"{PALETTE.border_muted}; border-radius: 8px; }}"
         )
         v = QVBoxLayout(card)
         v.setContentsMargins(18, 10, 18, 10)
@@ -574,17 +575,16 @@ class ZoomPollWindow(QDialog):
         lf = QFont(); lf.setPointSize(11); lf.setBold(True)
         lbl_w.setFont(lf)
         lbl_w.setStyleSheet(
-            "color: " + COLORS["text_secondary"] +
-            "; background: transparent; border: none;"
+            f"color: {PALETTE.text_muted}; background: transparent; border: none;"
         )
         tl.addWidget(lbl_w)
         tl.addStretch()
 
-        after_color = COLORS["text_secondary"] if muted else COLORS["accent2"]
-        delta_color = COLORS["text_muted"]     if muted else COLORS["warning"]
+        after_color = PALETTE.text_muted if muted else PALETTE.accent
+        delta_color = PALETTE.text_dim if muted else PALETTE.warning
         for txt, color, bold in [
-            (str(before),      COLORS["text_muted"], True),
-            ("→",              COLORS["text_muted"], False),
+            (str(before),      PALETTE.text_dim, True),
+            ("→",              PALETTE.text_dim, False),
             (str(after),       after_color,          True),
             (f"(−{delta})",    delta_color,          False),
         ]:
@@ -602,8 +602,7 @@ class ZoomPollWindow(QDialog):
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
             sep.setStyleSheet(
-                "background: " + COLORS["border_muted"] +
-                "; border: none; max-height: 1px;"
+                f"background: {PALETTE.border_muted}; border: none; max-height: 1px;"
             )
             v.addWidget(sep)
 
@@ -632,8 +631,8 @@ class ZoomPollWindow(QDialog):
         card = QFrame()
         card.setStyleSheet(f"""
             QFrame {{
-                background: {color}0e;
-                border: 1px solid {color}33;
+                background: {qss_rgba(color, 0.05)};
+                border: 1px solid {qss_rgba(color, 0.20)};
                 border-left: 3px solid {color};
                 border-radius: 8px;
             }}
@@ -658,7 +657,7 @@ class ZoomPollWindow(QDialog):
         tf = QFont(); tf.setPointSize(12); tf.setBold(True)
         tl.setFont(tf)
         tl.setStyleSheet(
-            f"color: {COLORS['text_primary']}; background: transparent; border: none;"
+            f"color: {PALETTE.text_primary}; background: transparent; border: none;"
         )
         cl.addWidget(tl)
 
@@ -666,7 +665,7 @@ class ZoomPollWindow(QDialog):
         bf = QFont(); bf.setPointSize(11)
         bl.setFont(bf)
         bl.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; background: transparent; border: none;"
+            f"color: {PALETTE.text_muted}; background: transparent; border: none;"
         )
         bl.setWordWrap(True)
         cl.addWidget(bl)
@@ -676,7 +675,7 @@ class ZoomPollWindow(QDialog):
             nf = QFont(); nf.setPointSize(11)
             note_lbl.setFont(nf)
             note_lbl.setStyleSheet(
-                f"color: {COLORS['text_secondary']}; background: transparent; border: none;"
+                f"color: {PALETTE.text_muted}; background: transparent; border: none;"
             )
             cl.addWidget(note_lbl)
 
@@ -700,13 +699,13 @@ class ZoomPollWindow(QDialog):
         hl.setContentsMargins(0, 0, 0, 0)
         hl.addWidget(_section_lbl(
             f'💬  {self.tr("Not counted ({n})").replace("{n}", str(len(r.skipped_responses)))}',
-            12, COLORS["text_secondary"]
+            12, PALETTE.text_muted
         ))
         hl.addStretch()
         v.addWidget(hrow)
 
         v.addWidget(_body_lbl(
-            self.tr("These people did not enter a numbe."), 11, COLORS["text_muted"]
+            self.tr("These people did not enter a numbe."), 11, PALETTE.text_dim
         ))
 
         table = _make_table(len(r.skipped_responses), [
@@ -717,12 +716,12 @@ class ZoomPollWindow(QDialog):
 
         dfmt = self._dfmt()
         for ri, resp in enumerate(r.skipped_responses):
-            table.setItem(ri, 0, _cell(resp.name, color=COLORS["text_secondary"]))
+            table.setItem(ri, 0, _cell(resp.name, color=PALETTE.text_muted))
             table.setItem(ri, 1, _cell(
                 _format_date(resp.submitted_at, dfmt),
-                color=COLORS["text_muted"]
+                color=PALETTE.text_dim
             ))
-            table.setItem(ri, 2, _cell(resp.raw_value, color=COLORS["text_muted"]))
+            table.setItem(ri, 2, _cell(resp.raw_value, color=PALETTE.text_dim))
 
         hh = table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -749,7 +748,7 @@ class ZoomPollWindow(QDialog):
         hl = QHBoxLayout(hrow)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.addWidget(_section_lbl(
-            self.tr("Counted responses"), 12, COLORS["text_primary"]
+            self.tr("Counted responses"), 12, PALETTE.text_primary
         ))
         hl.addStretch()
 
@@ -758,7 +757,7 @@ class ZoomPollWindow(QDialog):
         if removed > 0:
             hl.addWidget(_body_lbl(
                 self.tr("{n} removed as duplicate(s)").replace("{n}", str(removed)),
-                11, COLORS["text_muted"]
+                11, PALETTE.text_dim
             ))
         v.addWidget(hrow)
 
@@ -798,22 +797,22 @@ class ZoomPollWindow(QDialog):
             is_family = dk in family_keys
 
             if is_alert:
-                name_color  = COLORS["warning"]
-                value_color = COLORS["warning"]
+                name_color  = PALETTE.warning
+                value_color = PALETTE.warning
             elif is_family:
-                name_color  = COLORS["accent2"]
-                value_color = COLORS["accent2"]
+                name_color  = PALETTE.accent
+                value_color = PALETTE.accent
             else:
-                name_color  = COLORS["text_primary"]
-                value_color = COLORS["accent2"] if resp.value > 1 else COLORS["text_secondary"]
+                name_color  = PALETTE.text_primary
+                value_color = PALETTE.accent if resp.value > 1 else PALETTE.text_muted
 
             email_display = resp.email if resp.email else "—"
-            email_color   = COLORS["text_secondary"] if resp.email else COLORS["text_muted"]
+            email_color   = PALETTE.text_muted if resp.email else PALETTE.text_dim
 
             table.setItem(ri, 0, _num_cell(
                 ri + 1,
                 Qt.AlignmentFlag.AlignRight,
-                COLORS["text_muted"]
+                PALETTE.text_dim
             ))
             table.setItem(ri, 1, _cell(
                 resp.name, color=name_color,
@@ -822,7 +821,7 @@ class ZoomPollWindow(QDialog):
             table.setItem(ri, 2, _cell(email_display, color=email_color))
             table.setItem(ri, 3, _cell(
                 _format_date(resp.submitted_at, dfmt),
-                color=COLORS["text_secondary"]
+                color=PALETTE.text_muted
             ))
             table.setItem(ri, 4, _num_cell(
                 resp.value,

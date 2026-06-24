@@ -10,16 +10,16 @@ Rectangle {
     property var partData
     property var live
     property int number: 0
-    property color accent: "#388bfd"
-    property color pal_surface: "#13161c"
-    property color pal_surfaceAlt: "#0f131a"
-    property color pal_border: "#1e2430"
-    property color pal_borderStrong: "#2a3040"
-    property color pal_textPrimary: "#e6edf3"
-    property color pal_textSecondary: "#c9d1d9"
-    property color pal_textMuted: "#8b949e"
-    property color pal_textDim: "#484f58"
-    property color pal_danger: "#f85149"
+    property color accent: appTheme.accent
+    property color pal_surface: appTheme.surface
+    property color pal_surfaceAlt: appTheme.surfaceAlt
+    property color pal_border: appTheme.border_
+    property color pal_borderStrong: appTheme.borderStrong
+    property color pal_textPrimary: appTheme.textPrimary
+    property color pal_textSecondary: appTheme.textSecondary
+    property color pal_textMuted: appTheme.textMuted
+    property color pal_textDim: appTheme.textDim
+    property color pal_danger: appTheme.danger
 
     readonly property string pid: partData ? partData.id : ""
     readonly property string state: partData ? partData.state : "idle"

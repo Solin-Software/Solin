@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.meetings.colors import section_colors
+from ...styles.theme import PALETTE
 
 
 class NameDialog(QDialog):
@@ -46,11 +47,11 @@ class NameDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(320)
         self.setStyleSheet(
-            "QDialog{background:#161b22;border:1px solid #30363d;border-radius:8px;}"
-            "QLabel{color:#c9d1d9;font-size:12px;background:transparent;}"
-            "QLineEdit{background:#0d1117;border:1px solid #30363d;border-radius:6px;"
-            "color:#e6edf3;font-size:13px;padding:6px 10px;}"
-            "QLineEdit:focus{border-color:#388bfd;}"
+            f"QDialog{{background:{PALETTE.surface};border:1px solid {PALETTE.border};border-radius:8px;}}"
+            f"QLabel{{color:{PALETTE.text_secondary};font-size:12px;background:transparent;}}"
+            f"QLineEdit{{background:{PALETTE.bg0};border:1px solid {PALETTE.border};border-radius:6px;"
+            f"color:{PALETTE.text_primary};font-size:13px;padding:6px 10px;}}"
+            f"QLineEdit:focus{{border-color:{PALETTE.accent};}}"
         )
 
         lay = QVBoxLayout(self)
@@ -69,14 +70,15 @@ class NameDialog(QDialog):
         ok.setFixedHeight(30)
         cancel.setFixedHeight(30)
         ok.setStyleSheet(
-            "QPushButton{border:1px solid #388bfd;border-radius:6px;"
-            "background:#1f3a5f;padding:0 16px;color:#79c0ff;font-size:11px;font-weight:600;}"
-            "QPushButton:hover{background:#2a4f7f;}"
+            f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
+            f"background:{PALETTE.accent_muted};padding:0 16px;color:{PALETTE.accent_text};"
+            "font-size:11px;font-weight:600;}"
+            f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};}}"
         )
         cancel.setStyleSheet(
-            "QPushButton{border:1px solid #30363d;border-radius:6px;"
-            "background:#21262d;padding:0 16px;color:#8b949e;font-size:11px;}"
-            "QPushButton:hover{background:#2d333b;color:#c9d1d9;}"
+            f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
+            f"background:{PALETTE.bg2};padding:0 16px;color:{PALETTE.text_muted};font-size:11px;}}"
+            f"QPushButton:hover{{background:{PALETTE.bg3};color:{PALETTE.text_secondary};}}"
         )
         ok.clicked.connect(self.accept)
         cancel.clicked.connect(self.reject)
@@ -163,8 +165,8 @@ class HuePickerDialog(QDialog):
         self.setModal(True)
         self.setFixedWidth(300)
         self.setStyleSheet(
-            "QDialog{background:#161b22;border:1px solid #30363d;border-radius:10px;}"
-            "QLabel{color:#c9d1d9;font-size:11px;background:transparent;}"
+            f"QDialog{{background:{PALETTE.surface};border:1px solid {PALETTE.border};border-radius:10px;}}"
+            f"QLabel{{color:{PALETTE.text_secondary};font-size:11px;background:transparent;}}"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 18, 20, 16)
@@ -185,14 +187,15 @@ class HuePickerDialog(QDialog):
         ok.setFixedHeight(30)
         cancel.setFixedHeight(30)
         ok.setStyleSheet(
-            "QPushButton{border:1px solid #388bfd;border-radius:6px;"
-            "background:#1f3a5f;padding:0 16px;color:#79c0ff;font-size:11px;font-weight:600;}"
-            "QPushButton:hover{background:#2a4f7f;}"
+            f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
+            f"background:{PALETTE.accent_muted};padding:0 16px;color:{PALETTE.accent_text};"
+            "font-size:11px;font-weight:600;}"
+            f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};}}"
         )
         cancel.setStyleSheet(
-            "QPushButton{border:1px solid #30363d;border-radius:6px;"
-            "background:#21262d;padding:0 16px;color:#8b949e;font-size:11px;}"
-            "QPushButton:hover{background:#2d333b;color:#c9d1d9;}"
+            f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
+            f"background:{PALETTE.bg2};padding:0 16px;color:{PALETTE.text_muted};font-size:11px;}}"
+            f"QPushButton:hover{{background:{PALETTE.bg3};color:{PALETTE.text_secondary};}}"
         )
         ok.clicked.connect(self.accept)
         cancel.clicked.connect(self.reject)

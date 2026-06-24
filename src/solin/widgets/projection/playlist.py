@@ -8,6 +8,7 @@ from PySide6.QtGui import QImage, QPixmap
 from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
 from solin.core.media.download_storage import completed_cached_path
 from solin.styles.icons import ICON_PANEL_RIGHT, ICON_SKIP_NEXT, ICON_SKIP_PREV, make_icon
+from solin.styles.theme import PALETTE
 from .idle_dialog import SetAsIdleConfirmDialog
 
 
@@ -36,7 +37,7 @@ class ProjectionPlaylistMixin:
         self._live_thumb_captured = False
         if self.playlist_panel.is_open():
             self.playlist_panel.close_panel()
-            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, "#8b949e"))
+            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, PALETTE.text_muted))
         self._update_nav_buttons()
 
     def playlist_items(self) -> list:
@@ -66,8 +67,8 @@ class ProjectionPlaylistMixin:
         if show:
             can_prev = self._playlist_index > 0
             can_next = self._playlist_index < n - 1
-            prev_col = "#c9d1d9" if can_prev else "#484f58"
-            next_col = "#c9d1d9" if can_next else "#484f58"
+            prev_col = PALETTE.text_secondary if can_prev else PALETTE.text_dim
+            next_col = PALETTE.text_secondary if can_next else PALETTE.text_dim
 
             self.prev_btn.setEnabled(can_prev)
             self.next_btn.setEnabled(can_next)
@@ -107,11 +108,11 @@ class ProjectionPlaylistMixin:
     def _toggle_playlist_panel(self):
         if self.playlist_panel.is_open():
             self.playlist_panel.close_panel()
-            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, "#8b949e"))
+            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, PALETTE.text_muted))
         else:
             self._ensure_panel_populated()
             self.playlist_panel.open_panel()
-            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, "#388bfd"))
+            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, PALETTE.accent))
             QTimer.singleShot(_ANIM_MS + 30, self._redraw_current_preview)
 
     def _ensure_panel_populated(self):

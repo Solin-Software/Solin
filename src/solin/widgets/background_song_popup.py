@@ -29,15 +29,15 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
+from solin.styles.theme import PALETTE, qss_rgba
 
-# ── Palette (GitHub-dark, shared with sibling popups) ─────────────────────────
-_SURF = "#161b22"
-_TEXT = "#e6edf3"
-_SUBTLE = "#c9d1d9"
-_MUTED = "#8b949e"
-_DIM = "#6e7681"
-_ACCENT = "#58a6ff"
-_RED = "#f85149"
+_SURF = PALETTE.surface
+_TEXT = PALETTE.text_primary
+_SUBTLE = PALETTE.text_secondary
+_MUTED = PALETTE.text_muted
+_DIM = PALETTE.text_faint
+_ACCENT = PALETTE.accent_hover
+_RED = PALETTE.danger
 
 
 class BackgroundSongPopup(QWidget):
@@ -76,7 +76,7 @@ class BackgroundSongPopup(QWidget):
         card.setStyleSheet(
             "QFrame#BackgroundSongCard {"
             f" background: {_SURF};"
-            " border: 1px solid rgba(48,54,61,0.85);"
+            f" border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
             " border-radius: 16px;"
             "}"
         )
@@ -356,18 +356,22 @@ class BackgroundSongPopup(QWidget):
     def _divider() -> QFrame:
         divider = QFrame()
         divider.setFixedHeight(1)
-        divider.setStyleSheet("background: rgba(48,54,61,0.5); border: none;")
+        divider.setStyleSheet(f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;")
         return divider
 
     @staticmethod
     def _toggle_button_style(*, playing: bool) -> str:
         if playing:
-            base, border = "rgba(248,81,73,0.08)", "rgba(248,81,73,0.30)"
-            hover_bg, hover_border = "rgba(248,81,73,0.14)", "rgba(248,81,73,0.45)"
+            base = qss_rgba(PALETTE.danger, 0.08)
+            border = qss_rgba(PALETTE.danger, 0.30)
+            hover_bg = qss_rgba(PALETTE.danger, 0.14)
+            hover_border = qss_rgba(PALETTE.danger, 0.45)
             color = _SUBTLE
         else:
-            base, border = "rgba(56,139,253,0.10)", "rgba(56,139,253,0.30)"
-            hover_bg, hover_border = "rgba(56,139,253,0.17)", "rgba(56,139,253,0.45)"
+            base = qss_rgba(PALETTE.accent, 0.10)
+            border = qss_rgba(PALETTE.accent, 0.30)
+            hover_bg = qss_rgba(PALETTE.accent, 0.17)
+            hover_border = qss_rgba(PALETTE.accent, 0.45)
             color = _ACCENT
         return (
             "QPushButton {"
@@ -380,29 +384,29 @@ class BackgroundSongPopup(QWidget):
     @staticmethod
     def _ghost_button_style() -> str:
         return (
-            "QPushButton { background: transparent; border: 1px solid #30363d;"
+            f"QPushButton {{ background: transparent; border: 1px solid {PALETTE.border};"
             " border-radius: 9px; }"
-            "QPushButton:hover { background: rgba(255,255,255,0.05);"
-            " border-color: #484f58; }"
-            "QPushButton:disabled { border-color: rgba(48,54,61,0.5); }"
+            f"QPushButton:hover {{ background: {qss_rgba(PALETTE.white, 0.05)};"
+            f" border-color: {PALETTE.text_dim}; }}"
+            f"QPushButton:disabled {{ border-color: {qss_rgba(PALETTE.border, 0.5)}; }}"
         )
 
     @staticmethod
     def _slider_style() -> str:
         return (
-            "QSlider::groove:horizontal{height:4px;background:#21262d;border-radius:2px;}"
+            f"QSlider::groove:horizontal{{height:4px;background:{PALETTE.border_muted};border-radius:2px;}}"
             "QSlider::handle:horizontal{width:12px;height:12px;margin:-4px 0;"
-            "background:#e6edf3;border-radius:6px;}"
-            "QSlider::handle:horizontal:hover{background:#ffffff;}"
-            "QSlider::sub-page:horizontal{background:#58a6ff;border-radius:2px;}"
+            f"background:{PALETTE.text_primary};border-radius:6px;}}"
+            f"QSlider::handle:horizontal:hover{{background:{PALETTE.white};}}"
+            f"QSlider::sub-page:horizontal{{background:{_ACCENT};border-radius:2px;}}"
         )
 
     @staticmethod
     def _spin_style() -> str:
         return (
-            "QSpinBox { background: #0d1117; color: #e6edf3;"
-            " border: 1px solid #30363d; border-radius: 8px;"
+            f"QSpinBox {{ background: {PALETTE.bg0}; color: {PALETTE.text_primary};"
+            f" border: 1px solid {PALETTE.border}; border-radius: 8px;"
             " padding: 0 6px; font-size: 12px; font-weight: 600; }"
-            "QSpinBox:hover { border-color: #484f58; }"
-            "QSpinBox:focus { border-color: #58a6ff; }"
+            f"QSpinBox:hover {{ border-color: {PALETTE.text_dim}; }}"
+            f"QSpinBox:focus {{ border-color: {_ACCENT}; }}"
         )

@@ -7,7 +7,7 @@ Rectangle {
 
     property var options: []
     property int current: 0
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     property int controlHeight: 34
     property int labelPixelSize: 12
     signal picked(int index)
@@ -19,8 +19,8 @@ Rectangle {
     implicitHeight: controlHeight
     implicitWidth: 206
     radius: 9
-    color: menu.opened ? "#141a23" : (mouse.containsMouse ? "#1a1f2a" : "#0f131a")
-    border.color: menu.opened ? select.accent : "#1e2430"
+    color: menu.opened ? appTheme.hover : (mouse.containsMouse ? appTheme.hover : appTheme.surfaceAlt)
+    border.color: menu.opened ? select.accent : appTheme.border_
     border.width: 1
     opacity: enabled ? 1.0 : 0.72
 
@@ -34,7 +34,7 @@ Rectangle {
         anchors.leftMargin: 12
         anchors.rightMargin: 34
         text: select.currentLabel
-        color: select.enabled ? "#e6edf3" : "#8b949e"
+        color: select.enabled ? appTheme.textPrimary : appTheme.textMuted
         font.pixelSize: select.labelPixelSize
         font.weight: Font.DemiBold
         horizontalAlignment: Text.AlignLeft
@@ -55,7 +55,7 @@ Rectangle {
         opacity: select.enabled ? 0.95 : 0.55
         sourceSize.width: 28
         sourceSize.height: 28
-        source: "image://timericons/chevron_right/28/8b949e"
+        source: "image://timericons/chevron_right/28/" + String(appTheme.textMuted).replace("#", "")
         Behavior on rotation { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
         Behavior on opacity { NumberAnimation { duration: 140 } }
     }
@@ -92,8 +92,8 @@ Rectangle {
 
         background: Rectangle {
             radius: 9
-            color: "#13161c"
-            border.color: "#2a3040"
+            color: appTheme.surface
+            border.color: appTheme.borderStrong
             border.width: 1
         }
 
@@ -111,8 +111,10 @@ Rectangle {
                     height: 34
                     radius: 7
                     color: optionMouse.containsMouse
-                           ? Qt.rgba(0.22, 0.55, 0.99, 0.14)
-                           : (index === select.safeCurrent ? Qt.rgba(0.22, 0.55, 0.99, 0.10) : "transparent")
+                           ? Qt.rgba(select.accent.r, select.accent.g, select.accent.b, 0.14)
+                           : (index === select.safeCurrent
+                              ? Qt.rgba(select.accent.r, select.accent.g, select.accent.b, 0.10)
+                              : "transparent")
 
                     Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -132,7 +134,7 @@ Rectangle {
                         anchors.leftMargin: 16
                         anchors.rightMargin: 12
                         text: modelData
-                        color: index === select.safeCurrent ? "#e6edf3" : "#c9d1d9"
+                        color: index === select.safeCurrent ? appTheme.textPrimary : appTheme.textSecondary
                         font.pixelSize: select.labelPixelSize
                         font.weight: index === select.safeCurrent ? Font.DemiBold : Font.Medium
                         horizontalAlignment: Text.AlignLeft

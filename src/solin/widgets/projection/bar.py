@@ -73,6 +73,7 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
+from solin.styles.theme import PALETTE, qss_rgba
 from solin.widgets.circular_timer import CircularTimerWidget
 from solin.ui.media_info import MediaInfoQueue
 from solin.widgets.playlist.panel import PlaylistPanel
@@ -262,13 +263,15 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Monitor icon — static, non-interactive
         self.monitor_icon = QLabel()
         self.monitor_icon.setFixedSize(28, 28)
-        self.monitor_icon.setPixmap(make_icon(ICON_SCREEN, 15, "#484f58").pixmap(15, 15))
+        self.monitor_icon.setPixmap(make_icon(ICON_SCREEN, 15, PALETTE.text_dim).pixmap(15, 15))
         self.monitor_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.monitor_icon.setStyleSheet("background: transparent; border: none;")
 
         self.screen_count_label = QLabel()
         self.screen_count_label.setObjectName("StatusLabel")
-        self.screen_count_label.setStyleSheet("color: #484f58; font-size: 11px; background: transparent;")
+        self.screen_count_label.setStyleSheet(
+            f"color: {PALETTE.text_dim}; font-size: 11px; background: transparent;"
+        )
         inact_lay.addWidget(self.monitor_icon)
         inact_lay.addWidget(self.screen_count_label)
         bar_lay.addWidget(self.inactive_widget)
@@ -286,15 +289,15 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.thumb_label.setFixedSize(28, 28)
         self.thumb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb_label.setStyleSheet(
-            "background: rgba(88,166,255,0.10); border-radius: 6px;"
-            " border: 1px solid rgba(88,166,255,0.20);"
+            f"background: {qss_rgba(PALETTE.accent_hover, 0.10)}; border-radius: 6px;"
+            f" border: 1px solid {qss_rgba(PALETTE.accent_hover, 0.20)};"
         )
 
         # Título
         self.proj_title = QLabel()
         self.proj_title.setObjectName("StatusLabel")
         self.proj_title.setStyleSheet(
-            "background: transparent; color: #e6edf3; font-weight: 600; font-size: 12px;"
+            f"background: transparent; color: {PALETTE.text_primary}; font-weight: 600; font-size: 12px;"
             " letter-spacing: 0.1px;"
         )
         self.proj_title.setMaximumWidth(175)
@@ -314,14 +317,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # o background verde do widget pai.
         self._offline_badge.setStyleSheet(
             "QLabel {"
-            "  background: #3fb950;"
+            f"  background: {PALETTE.success};"
             "  border-radius: 5px;"
-            "  border: 1.5px solid rgba(0,0,0,0.30);"
+            f"  border: 1.5px solid {qss_rgba(PALETTE.black, 0.30)};"
             "}"
             "QToolTip {"
-            "  background: #161b22;"
-            "  color: #c9d1d9;"
-            "  border: 1px solid #30363d;"
+            f"  background: {PALETTE.surface};"
+            f"  color: {PALETTE.text_secondary};"
+            f"  border: 1px solid {PALETTE.border};"
             "  border-radius: 6px;"
             "  padding: 4px 8px;"
             "  font-size: 12px;"
@@ -337,26 +340,26 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.time_label = QLabel("0:00 / 0:00")
         self.time_label.setObjectName("StatusLabel")
         self.time_label.setStyleSheet(
-            "background: transparent; font-size: 11px; color: #8b949e;"
+            f"background: transparent; font-size: 11px; color: {PALETTE.text_muted};"
         )
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.time_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
         # Play/Pause — mesmo tamanho e estilo dos demais botoes
-        self.play_btn = _icon_btn(ICON_PAUSE, 30, 15, "#c9d1d9",
+        self.play_btn = _icon_btn(ICON_PAUSE, 30, 15, PALETTE.text_secondary,
                                   self.tr("Pause/Resume"))
         self.play_btn.clicked.connect(self._on_play_btn_clicked)
 
         # Prev / Next playlist navigation
-        self.prev_btn = _icon_btn(ICON_SKIP_PREV, 30, 15, "#6e7681", self.tr("Previous"))
-        self.next_btn = _icon_btn(ICON_SKIP_NEXT, 30, 15, "#6e7681", self.tr("Next"))
+        self.prev_btn = _icon_btn(ICON_SKIP_PREV, 30, 15, PALETTE.text_faint, self.tr("Previous"))
+        self.next_btn = _icon_btn(ICON_SKIP_NEXT, 30, 15, PALETTE.text_faint, self.tr("Next"))
         self.prev_btn.clicked.connect(self._on_prev_clicked)
         self.next_btn.clicked.connect(self._on_next_clicked)
         self.prev_btn.setVisible(False)
         self.next_btn.setVisible(False)
 
         # Volume
-        self.vol_btn = _icon_btn(ICON_VOLUME_HIGH, 30, 15, "#8b949e",
+        self.vol_btn = _icon_btn(ICON_VOLUME_HIGH, 30, 15, PALETTE.text_muted,
                                  self.tr("Volume"))
         self.vol_btn.clicked.connect(self._toggle_mute)
         self._muted = False
@@ -366,22 +369,22 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(70)
         self.vol_slider.setStyleSheet(
-            "QSlider::groove:horizontal{height:3px;background:#3d444d;border-radius:2px;}"
+            f"QSlider::groove:horizontal{{height:3px;background:{PALETTE.bg3};border-radius:2px;}}"
             "QSlider::handle:horizontal{width:10px;height:10px;margin:-4px 0;"
-            "background:#c9d1d9;border-radius:5px;}"
-            "QSlider::sub-page:horizontal{background:#58a6ff;border-radius:2px;}"
+            f"background:{PALETTE.text_secondary};border-radius:5px;}}"
+            f"QSlider::sub-page:horizontal{{background:{PALETTE.accent_hover};border-radius:2px;}}"
         )
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
         # Mais opções (só vídeo)
-        self.more_btn = _icon_btn(ICON_MORE_VERT, 30, 15, "#8b949e",
+        self.more_btn = _icon_btn(ICON_MORE_VERT, 30, 15, PALETTE.text_muted,
                                   self.tr("Playback options"))
         self.more_btn.setVisible(False)
         self.more_btn.clicked.connect(self._show_more_menu)
 
         # OBS scene toggle — só imagem, só quando OBS conectado + cena de mídia configurada
         # Alterna entre a cena de mídia (projetor visível) e a cena anterior/idle (projetor oculto)
-        self.obs_scene_btn = _icon_btn(ICON_OBS, 30, 14, "#8b949e",
+        self.obs_scene_btn = _icon_btn(ICON_OBS, 30, 14, PALETTE.text_muted,
                                        self.tr("Toggle OBS scene"))
         self.obs_scene_btn.setVisible(False)
         self.obs_scene_btn.clicked.connect(self._on_obs_scene_btn_clicked)
@@ -390,20 +393,20 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Timer countdown (só modo timer)
         self.timer_countdown_label = QLabel("00:00")
         self.timer_countdown_label.setStyleSheet(
-            "background: transparent; color: #3b82f6; font-size: 18px;"
+            f"background: transparent; color: {PALETTE.accent}; font-size: 18px;"
             " font-weight: 700; letter-spacing: 1px; min-width: 90px;"
         )
         self.timer_countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.timer_countdown_label.setVisible(False)
 
         # Fechar / parar — circular, transparente, vermelho só no hover
-        self.close_btn = _icon_btn(ICON_CLOSE, 30, 13, "#8b949e",
+        self.close_btn = _icon_btn(ICON_CLOSE, 30, 13, PALETTE.text_muted,
                                    self.tr("Stop projection"))
         self.close_btn.setStyleSheet(
             "QPushButton{border:none;border-radius:15px;"
             "background:transparent;padding:0;}"
-            "QPushButton:hover{background:rgba(248,81,73,0.18);}"
-            "QPushButton:pressed{background:rgba(248,81,73,0.30);}"
+            f"QPushButton:hover{{background:{qss_rgba(PALETTE.danger, 0.18)};}}"
+            f"QPushButton:pressed{{background:{qss_rgba(PALETTE.danger, 0.30)};}}"
         )
         # Muda cor do ícone para vermelho no hover via evento
         self.close_btn.installEventFilter(self)
@@ -442,7 +445,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay.setVisible(False)
         self.overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.overlay.setAutoFillBackground(True)
-        self.overlay.setStyleSheet("background: #0d1117;")
+        self.overlay.setStyleSheet(f"background: {PALETTE.bg0};")
         self.overlay.raise_()
 
         ov_lay = QVBoxLayout(self.overlay)
@@ -452,30 +455,32 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # ── Topo ─────────────────────────────────────────────────────────
         ov_top = QWidget()
         ov_top.setFixedHeight(42)
-        ov_top.setStyleSheet("background: #161b22; border-bottom: 1px solid #30363d;")
+        ov_top.setStyleSheet(
+            f"background: {PALETTE.surface}; border-bottom: 1px solid {PALETTE.border};"
+        )
         ov_top_lay = QHBoxLayout(ov_top)
         ov_top_lay.setContentsMargins(12, 0, 12, 0)
         ov_top_lay.setSpacing(8)
 
-        self.minimize_btn = _icon_btn(ICON_CHEVRON_DOWN, 28, 14, "#8b949e",
+        self.minimize_btn = _icon_btn(ICON_CHEVRON_DOWN, 28, 14, PALETTE.text_muted,
                                       self.tr("Minimize"))
         self.minimize_btn.clicked.connect(self._collapse)
 
         self.ov_title = QLabel()
         self.ov_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.ov_title.setStyleSheet(
-            "background: transparent; color: #e6edf3; font-size: 13px; font-weight: 600;"
+            f"background: transparent; color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
         )
 
         # Botão de toggle do painel de playlist (só aparece com > 1 item)
-        self.ov_panel_btn = _icon_btn(ICON_PANEL_RIGHT, 28, 14, "#8b949e",
+        self.ov_panel_btn = _icon_btn(ICON_PANEL_RIGHT, 28, 14, PALETTE.text_muted,
                                       self.tr("Show playlist"))
         self.ov_panel_btn.setVisible(False)
         self.ov_panel_btn.clicked.connect(self._toggle_playlist_panel)
 
         # Botão "Adicionar à Playlist"
         self.ov_add_playlist_btn = _icon_btn(
-            ICON_ADD_TO_PLAYLIST, 28, 13, "#8b949e",
+            ICON_ADD_TO_PLAYLIST, 28, 13, PALETTE.text_muted,
             self.tr("Add to Playlist"),
         )
         self.ov_add_playlist_btn.setVisible(False)
@@ -483,7 +488,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # Botão "Enviar para playlist temporária" (só aparece se não for de playlist salva)
         self.ov_send_temp_btn = _icon_btn(
-            ICON_SEND_TO_PLAYLIST, 28, 14, "#8b949e",
+            ICON_SEND_TO_PLAYLIST, 28, 14, PALETTE.text_muted,
             self.tr("Open as temporary playlist"),
         )
         self.ov_send_temp_btn.setVisible(False)
@@ -492,14 +497,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Botão "Definir como Idle Screen"
         # Visível apenas para vídeo (não-áudio) e imagem; nunca para timer ou aba ao vivo.
         self.ov_set_idle_btn = _icon_btn(
-            ICON_SET_AS_IDLE, 28, 14, "#8b949e",
+            ICON_SET_AS_IDLE, 28, 14, PALETTE.text_muted,
             self.tr("Set as idle screen"),
         )
         self.ov_set_idle_btn.setVisible(False)
         self.ov_set_idle_btn.clicked.connect(self._on_set_as_idle_clicked)
 
         self.ov_fullscreen_btn = _icon_btn(
-            ICON_FULLSCREEN, 28, 14, "#8b949e",
+            ICON_FULLSCREEN, 28, 14, PALETTE.text_muted,
             self.tr("Fullscreen"),
         )
         self.ov_fullscreen_btn.setVisible(False)
@@ -517,7 +522,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # ── Body: preview + painel lateral ───────────────────────────────
         body = QWidget()
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        body.setStyleSheet("background: #0d1117;")
+        body.setStyleSheet(f"background: {PALETTE.bg0};")
         body_lay = QHBoxLayout(body)
         body_lay.setContentsMargins(0, 0, 0, 0)
         body_lay.setSpacing(0)
@@ -581,9 +586,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         if obj in _close_btns:
             if event.type() == QEvent.Type.Enter:
-                obj.setIcon(make_icon(ICON_CLOSE, 13, "#f85149"))
+                obj.setIcon(make_icon(ICON_CLOSE, 13, PALETTE.danger))
             elif event.type() == QEvent.Type.Leave:
-                obj.setIcon(make_icon(ICON_CLOSE, 13, "#8b949e"))
+                obj.setIcon(make_icon(ICON_CLOSE, 13, PALETTE.text_muted))
         return super().eventFilter(obj, event)
 
     # ── Expand / Collapse ─────────────────────────────────────────────────
@@ -836,7 +841,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         # Ícone correto: música para áudio, vídeo para vídeo
         _thumb_icon = ICON_MUSIC if is_audio else ICON_VIDEO
-        self.thumb_label.setPixmap(make_icon(_thumb_icon, 18, "#3fb950").pixmap(18, 18))
+        self.thumb_label.setPixmap(make_icon(_thumb_icon, 18, PALETTE.success).pixmap(18, 18))
 
         short = (title[:22] + "…") if len(title) > 22 else title
         self.proj_title.setText(short)
@@ -845,7 +850,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         self.seek_slider.reset()
         self.time_label.setText("0:00 / 0:00")
-        self.play_btn.setIcon(make_icon(ICON_PAUSE, 15, "#c9d1d9"))
+        self.play_btn.setIcon(make_icon(ICON_PAUSE, 15, PALETTE.text_secondary))
         self.play_btn.setVisible(True)
         self.seek_slider.setVisible(True)
         self.time_label.setVisible(True)
@@ -933,7 +938,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         else:
             self._image_pixmap = None
             self._image_file_path = ""
-            self.thumb_label.setPixmap(make_icon(ICON_IMAGE, 18, "#3fb950").pixmap(18, 18))
+            self.thumb_label.setPixmap(make_icon(ICON_IMAGE, 18, PALETTE.success).pixmap(18, 18))
             self.preview_content.set_image_pixmap_fresh(QPixmap())
 
         transform = self._configure_image_preview_framing(reset=True)
@@ -1006,7 +1011,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.proj_title.setText(short)
         self.proj_title.setToolTip(title)
         self.ov_title.setText(title)
-        self.thumb_label.setPixmap(make_icon(ICON_CAST, 18, "#58a6ff").pixmap(18, 18))
+        self.thumb_label.setPixmap(make_icon(ICON_CAST, 18, PALETTE.accent_hover).pixmap(18, 18))
 
         self.seek_slider.reset()
         self.seek_slider.setVisible(False)
@@ -1051,7 +1056,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay_stack.setCurrentIndex(1)
         self.timer_updated.emit(remaining, self._timer_total_secs)
 
-        self.thumb_label.setPixmap(make_icon(ICON_NAV_TIMER, 18, "#3b82f6").pixmap(18, 18))
+        self.thumb_label.setPixmap(make_icon(ICON_NAV_TIMER, 18, PALETTE.accent).pixmap(18, 18))
         target_str = target_dt.time().toString("HH:mm")
         prefix = self.tr("Timer →")
         short_title = f"{prefix} {target_str}"
@@ -1179,7 +1184,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Fecha e reseta o painel
         if self.playlist_panel.is_open():
             self.playlist_panel.close_panel()
-            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, "#8b949e"))
+            self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, PALETTE.text_muted))
         self._live_thumb_timer.stop()
         self._thumb_queue.clear()
         self._panel_populated = False
@@ -1228,11 +1233,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         """Atualiza cor e tooltip do botão para refletir o estado atual."""
         if self._obs_scene_is_media:
             # Cena de mídia ativa → ícone destacado (azul), tooltip indica "ocultar"
-            self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, "#8b949e"))
+            self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, PALETTE.text_muted))
             self.obs_scene_btn.setToolTip(self.tr("Hide media from OBS"))
         else:
             # Cena anterior ativa → ícone neutro, tooltip indica "mostrar"
-            self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, "#484f58"))
+            self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, PALETTE.text_dim))
             self.obs_scene_btn.setToolTip(self.tr("Show media in OBS"))
 
     def _on_obs_scene_btn_clicked(self):
@@ -1436,11 +1441,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.volume_changed.emit(vol)
         # Atualiza ícone
         if value == 0:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_MUTE, 15, "#8b949e"))
+            self.vol_btn.setIcon(make_icon(ICON_VOLUME_MUTE, 15, PALETTE.text_muted))
         elif value < 50:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_LOW, 15, "#8b949e"))
+            self.vol_btn.setIcon(make_icon(ICON_VOLUME_LOW, 15, PALETTE.text_muted))
         else:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_HIGH, 15, "#8b949e"))
+            self.vol_btn.setIcon(make_icon(ICON_VOLUME_HIGH, 15, PALETTE.text_muted))
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_volume(vol)
@@ -1487,7 +1492,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._blink_on = not self._blink_on
         self.circular_timer.set_blink(self._blink_on)
         self.timer_blink.emit(self._blink_on)
-        color = "#ef4444" if self._blink_on else "#3b82f6"
+        color = PALETTE.danger if self._blink_on else PALETTE.accent
         self.timer_countdown_label.setStyleSheet(
             f"background: transparent; color: {color}; font-size: 18px;"
             " font-weight: 700; letter-spacing: 1px; min-width: 90px;"
@@ -1511,7 +1516,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _on_state_changed(self, state):
         playing = (state == QMediaPlayer.PlaybackState.PlayingState)
         icon = ICON_PAUSE if playing else ICON_PLAY
-        self.play_btn.setIcon(make_icon(icon, 15, "#c9d1d9"))
+        self.play_btn.setIcon(make_icon(icon, 15, PALETTE.text_secondary))
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_playback_state(state)

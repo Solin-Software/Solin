@@ -4,7 +4,13 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...ui.screens import ScreenManager
 from ...styles.icons import ICON_MONITOR, ICON_TV, make_icon
-from .shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
+from .shared import (
+    SETTINGS_DIM,
+    SETTINGS_MUTED,
+    SETTINGS_SUCCESS,
+    SETTINGS_TEXT,
+    SETTINGS_TEXT_ON_ACCENT,
+)
 
 
 class ScreensSectionMixin:
@@ -101,8 +107,8 @@ class ScreensSectionMixin:
             s_lay_h.addLayout(s_col, stretch=1)
             badge = QLabel(self.tr("PROJECTION"))
             badge.setStyleSheet(
-                "background: #2ea043; border-radius: 4px;"
-                " padding: 2px 6px; color: white;"
+                f"background: {SETTINGS_SUCCESS}; border-radius: 4px;"
+                f" padding: 2px 6px; color: {SETTINGS_TEXT_ON_ACCENT};"
                 " font-size: 10px; font-weight: 700;"
             )
             s_lay_h.addWidget(badge)

@@ -31,6 +31,7 @@ from solin.bootstrap.single_instance import (
     try_forward_to_running,
 )
 from solin.core.profiles.application import ProfileRegistryLoadError
+from solin.styles.theme import PALETTE
 
 
 def _build_main_window_profile_settings(profile_settings):
@@ -360,7 +361,7 @@ def _launch_main_window(
     background_media_controller.setParent(window)
     window.show()
 
-    apply_titlebar_color(window, "#1A231F")
+    apply_titlebar_color(window, PALETTE.titlebar)
 
     if file_args:
         QTimer.singleShot(200, lambda: window.open_media_files(file_args))

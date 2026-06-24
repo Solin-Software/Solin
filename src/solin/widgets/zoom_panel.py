@@ -20,19 +20,19 @@ from ..styles.icons import (
     make_icon, ICON_ZOOM, ICON_PEOPLE,
     ICON_INFO_CIRCLE, ICON_SPEAKER_PHONE,
 )
+from ..styles.theme import PALETTE, qss_rgba
 
 
-# ── Color palette (same as settings_widget / OBSScenePopup) ───────────────────
-_BG      = "#0d1117"
-_SURF    = "#161b22"
-_BORDER  = "#21262d"
-_BORDER2 = "#30363d"
-_TEXT    = "#e6edf3"
-_MUTED   = "#8b949e"
-_DIM     = "#6e7681"
-_ACCENT  = "#388bfd"
-_GREEN   = "#3fb950"
-_RED     = "#f85149"
+_BG = PALETTE.bg0
+_SURF = PALETTE.surface
+_BORDER = PALETTE.border_muted
+_BORDER2 = PALETTE.border
+_TEXT = PALETTE.text_primary
+_MUTED = PALETTE.text_muted
+_DIM = PALETTE.text_faint
+_ACCENT = PALETTE.accent
+_GREEN = PALETTE.success
+_RED = PALETTE.danger
 
 
 class ZoomPanel(QWidget):
@@ -84,8 +84,8 @@ class ZoomPanel(QWidget):
         self._card.setObjectName("ZoomPanelCard")
         self._card.setStyleSheet(
             "QFrame#ZoomPanelCard {"
-            "  background: rgba(22,27,34,0.96);"
-            "  border: 1px solid rgba(48,54,61,0.85);"
+            f"  background: {qss_rgba(PALETTE.surface, 0.96)};"
+            f"  border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
             "  border-radius: 16px;"
             "}"
         )
@@ -141,7 +141,7 @@ class ZoomPanel(QWidget):
         # ── Separator thin ────────────────────────────────────────────────
         sep1 = QFrame()
         sep1.setFixedHeight(1)
-        sep1.setStyleSheet("background: rgba(48,54,61,0.5); border: none;")
+        sep1.setStyleSheet(f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;")
         card_lay.addWidget(sep1)
 
         # ── Content area (participants + sharing) ─────────────────────────
@@ -182,7 +182,7 @@ class ZoomPanel(QWidget):
             "  border: none; background: transparent; padding: 0;"
             "}"
             "QPushButton:hover {"
-            "  background: rgba(255,255,255,0.06); border-radius: 9px;"
+            f"  background: {qss_rgba(PALETTE.white, 0.06)}; border-radius: 9px;"
             "}"
         )
         self._info_btn.setToolTip("")  # set dynamically
@@ -223,7 +223,7 @@ class ZoomPanel(QWidget):
         # ── Separator ─────────────────────────────────────────────────────
         self._sep2 = QFrame()
         self._sep2.setFixedHeight(1)
-        self._sep2.setStyleSheet("background: rgba(48,54,61,0.5); border: none;")
+        self._sep2.setStyleSheet(f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;")
         card_lay.addWidget(self._sep2)
 
         # ── Action button ─────────────────────────────────────────────────
@@ -237,13 +237,13 @@ class ZoomPanel(QWidget):
         self._audio_btn.setObjectName("ZoomAudioBtn")
         self._audio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._audio_btn.setFixedHeight(36)
-        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, "#e6edf3"))
+        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, PALETTE.text_primary))
         self._audio_btn.setIconSize(QSize(14, 14))
         self._audio_btn.setText(self.tr("Open audio for all"))
         self._audio_btn.setStyleSheet(
             "QPushButton#ZoomAudioBtn {"
-            f"  background: rgba(56,139,253,0.10);"
-            f"  border: 1px solid rgba(56,139,253,0.25);"
+            f"  background: {qss_rgba(PALETTE.accent, 0.10)};"
+            f"  border: 1px solid {qss_rgba(PALETTE.accent, 0.25)};"
             "  border-radius: 10px;"
             f"  color: {_ACCENT};"
             "  font-size: 12px; font-weight: 600;"
@@ -251,14 +251,14 @@ class ZoomPanel(QWidget):
             "  text-align: center;"
             "}"
             "QPushButton#ZoomAudioBtn:hover {"
-            "  background: rgba(56,139,253,0.18);"
-            "  border-color: rgba(56,139,253,0.45);"
+            f"  background: {qss_rgba(PALETTE.accent, 0.18)};"
+            f"  border-color: {qss_rgba(PALETTE.accent, 0.45)};"
             "}"
             "QPushButton#ZoomAudioBtn:pressed {"
-            "  background: rgba(56,139,253,0.28);"
+            f"  background: {qss_rgba(PALETTE.accent, 0.28)};"
             "}"
             "QPushButton#ZoomAudioBtn:disabled {"
-            f"  color: {_DIM}; border-color: rgba(48,54,61,0.5);"
+            f"  color: {_DIM}; border-color: {qss_rgba(PALETTE.border, 0.5)};"
             "  background: transparent;"
             "}"
         )

@@ -46,20 +46,21 @@ if TYPE_CHECKING:
     from solin.core.remote.patch_installer import PatchDownloadWorker
     from solin.core.remote.update_policy import UpdateInfo
 
+from solin.styles.theme import PALETTE, qss_rgba
+
 log = logging.getLogger(__name__)
 
-# ── Palette (mirrors theme.py without circular import) ────────────────────────
 _C = {
-    "bg0": "#0d1117",
-    "bg1": "#161b22",
-    "bg2": "#21262d",
-    "border": "#30363d",
-    "text": "#e6edf3",
-    "muted": "#8b949e",
-    "accent": "#388bfd",
-    "green": "#3fb950",
-    "yellow": "#d29922",
-    "red": "#f85149",
+    "bg0": PALETTE.bg0,
+    "bg1": PALETTE.bg1,
+    "bg2": PALETTE.bg2,
+    "border": PALETTE.border,
+    "text": PALETTE.text_primary,
+    "muted": PALETTE.text_muted,
+    "accent": PALETTE.accent,
+    "green": PALETTE.success,
+    "yellow": PALETTE.warning,
+    "red": PALETTE.danger,
 }
 
 # The QDialog itself must be transparent (WA_TranslucentBackground is set).
@@ -91,14 +92,14 @@ QLabel#version_badge {{
     color: {_C["green"]};
     font-size: 11px;
     font-weight: 600;
-    background: rgba(63,185,80,0.12);
-    border: 1px solid rgba(63,185,80,0.3);
+    background: {qss_rgba(PALETTE.success, 0.12)};
+    border: 1px solid {qss_rgba(PALETTE.success, 0.3)};
     border-radius: 4px;
     padding: 2px 8px;
 }}
 QPushButton#btn_primary {{
     background: {_C["accent"]};
-    color: #ffffff;
+    color: {PALETTE.white};
     border: none;
     border-radius: 6px;
     padding: 8px 20px;
@@ -106,8 +107,8 @@ QPushButton#btn_primary {{
     font-weight: 600;
     min-width: 100px;
 }}
-QPushButton#btn_primary:hover   {{ background: #4d9fff; }}
-QPushButton#btn_primary:pressed {{ background: #2c7de0; }}
+QPushButton#btn_primary:hover   {{ background: {PALETTE.accent_hover}; }}
+QPushButton#btn_primary:pressed {{ background: {PALETTE.accent_pressed}; }}
 QPushButton#btn_secondary {{
     background: transparent;
     color: {_C["muted"]};

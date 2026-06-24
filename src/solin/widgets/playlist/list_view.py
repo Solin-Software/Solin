@@ -35,6 +35,7 @@ from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.playlists.storage import PlaylistStoragePaths
 from ...core.i18n.manager import LanguageManager
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
+from ...styles.theme import PALETTE
 from ...core.media.cache import MediaCacheManager
 from .components import CollapsibleSection, PlaylistCard, WatchedFolderCard
 from .dialogs import NameDialog
@@ -54,19 +55,21 @@ __all__ = (
 )
 
 PLAYLIST_SECONDARY_BUTTON_STYLESHEET = (
-    "QPushButton{border:1px solid #30363d;border-radius:6px;"
-    "background:#21262d;padding:0 10px;min-height:28px;"
-    "color:#8b949e;font-size:11px;}"
-    "QPushButton:hover{background:#2d333b;border-color:#484f58;color:#c9d1d9;}"
-    "QPushButton:pressed{background:#161b22;}"
+    f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
+    f"background:{PALETTE.bg2};padding:0 10px;min-height:28px;"
+    f"color:{PALETTE.text_muted};font-size:11px;}}"
+    f"QPushButton:hover{{background:{PALETTE.bg3};border-color:{PALETTE.text_dim};"
+    f"color:{PALETTE.text_secondary};}}"
+    f"QPushButton:pressed{{background:{PALETTE.bg1};}}"
     "QPushButton:disabled{opacity:0.4;}"
 )
 PLAYLIST_PRIMARY_BUTTON_STYLESHEET = (
-    "QPushButton{border:1px solid #388bfd;border-radius:6px;"
-    "background:#1f3a5f;padding:0 10px;min-height:28px;"
-    "color:#79c0ff;font-size:11px;font-weight:600;}"
-    "QPushButton:hover{background:#2a4f7f;border-color:#58a6ff;color:#cae8ff;}"
-    "QPushButton:pressed{background:#163050;}"
+    f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
+    f"background:{PALETTE.accent_muted};padding:0 10px;min-height:28px;"
+    f"color:{PALETTE.accent_text};font-size:11px;font-weight:600;}}"
+    f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};"
+    f"border-color:{PALETTE.accent_hover};color:{PALETTE.accent_text_hover};}}"
+    f"QPushButton:pressed{{background:{PALETTE.accent_tint};}}"
     "QPushButton:disabled{opacity:0.4;}"
 )
 
@@ -134,7 +137,7 @@ class PlaylistListView(QWidget):
         hdr.addStretch()
 
         self._import_btn = QPushButton(self)
-        self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, "#8b949e"))
+        self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, PALETTE.text_muted))
         self._import_btn.setIconSize(QSize(14, 14))
         self._import_btn.setText("  " + self.tr("Import"))
         self._import_btn.setStyleSheet(PLAYLIST_SECONDARY_BUTTON_STYLESHEET)
@@ -145,7 +148,7 @@ class PlaylistListView(QWidget):
         hdr.addWidget(self._import_btn)
 
         self._new_btn = QPushButton(self)
-        self._new_btn.setIcon(make_icon(ICON_PLUS, 14, "#79c0ff"))
+        self._new_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.accent_text))
         self._new_btn.setIconSize(QSize(14, 14))
         self._new_btn.setText("  " + self.tr("New Playlist"))
         self._new_btn.setStyleSheet(PLAYLIST_PRIMARY_BUTTON_STYLESHEET)
@@ -161,9 +164,9 @@ class PlaylistListView(QWidget):
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setStyleSheet(
             "QScrollArea{background:transparent;border:none;}"
-            "QScrollBar:vertical{background:#0d1117;width:6px;border-radius:3px;}"
-            "QScrollBar::handle:vertical{background:#30363d;border-radius:3px;}"
-            "QScrollBar::handle:vertical:hover{background:#484f58;}"
+            f"QScrollBar:vertical{{background:{PALETTE.bg0};width:6px;border-radius:3px;}}"
+            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:3px;}}"
+            f"QScrollBar::handle:vertical:hover{{background:{PALETTE.text_dim};}}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         )
 
@@ -191,7 +194,7 @@ class PlaylistListView(QWidget):
         )
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_lbl.setStyleSheet(
-            "color:#484f58;font-size:12px;padding:24px;background:transparent;"
+            f"color:{PALETTE.text_dim};font-size:12px;padding:24px;background:transparent;"
         )
         wrap_lay.addWidget(self._empty_lbl)
 
@@ -214,7 +217,7 @@ class PlaylistListView(QWidget):
         )
         self._wf_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._wf_empty_lbl.setStyleSheet(
-            "color:#484f58;font-size:12px;padding:24px;background:transparent;"
+            f"color:{PALETTE.text_dim};font-size:12px;padding:24px;background:transparent;"
         )
         self._wf_empty_lbl.setVisible(False)
         wrap_lay.addWidget(self._wf_empty_lbl)

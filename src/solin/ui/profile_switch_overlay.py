@@ -26,16 +26,21 @@ from PySide6.QtWidgets import (
 from .helpers import avatar_colors, fade_in, initials
 from ..core.profiles.models import ProfileInfo
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
+from ..styles.theme import PALETTE
 
-_BG     = "#0d1117"
-_SURF   = "#161b22"
-_CARD   = "#1c2128"
-_BORDER = "#30363d"
-_MUTED  = "#8b949e"
-_TEXT   = "#e6edf3"
-_DIM    = "#484f58"
-_ACCENT = "#388bfd"
-_GREEN  = "#3fb950"
+_BG     = PALETTE.bg0
+_SURF   = PALETTE.surface
+_CARD   = PALETTE.surface_hover_strong
+_CARD_HOVER = PALETTE.bg2
+_ADD_CARD_HOVER = PALETTE.accent_tint
+_BORDER = PALETTE.border
+_MUTED  = PALETTE.text_muted
+_TEXT   = PALETTE.text_primary
+_DIM    = PALETTE.text_dim
+_ACCENT = PALETTE.accent
+_GREEN  = PALETTE.success
+_GREEN_BG = PALETTE.success_surface
+_WHITE = PALETTE.white
 
 class _SwitchProfileCard(QWidget):
     clicked = Signal(str)
@@ -87,11 +92,11 @@ class _SwitchProfileCard(QWidget):
         p.translate(-cx, -cy)
 
         if self._is_active:
-            bg_color = QColor("#182518")
+            bg_color = QColor(_GREEN_BG)
             border_c = QColor(_GREEN)
             border_w = 2.0
         else:
-            bg_color = QColor("#21262d") if self._hovered else QColor(_CARD)
+            bg_color = QColor(_CARD_HOVER) if self._hovered else QColor(_CARD)
             border_c = QColor(_ACCENT if self._hovered else _BORDER)
             border_w = 1.5
 
@@ -112,7 +117,7 @@ class _SwitchProfileCard(QWidget):
 
         font = QFont("Segoe UI", 20, QFont.Weight.Bold)
         p.setFont(font)
-        p.setPen(QColor("white"))
+        p.setPen(QColor(_WHITE))
         p.drawText(
             QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2),
             Qt.AlignmentFlag.AlignCenter,
@@ -194,7 +199,7 @@ class _SwitchAddProfileCard(QWidget):
 
         pen = QPen(QColor(_ACCENT if self._hovered else _BORDER), 2, Qt.PenStyle.DashLine)
         p.setPen(pen)
-        p.setBrush(QColor("#1a2130" if self._hovered else "transparent"))
+        p.setBrush(QColor(_ADD_CARD_HOVER if self._hovered else "transparent"))
         path = QPainterPath()
         path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
         p.drawPath(path)
@@ -232,15 +237,15 @@ class _CloseButton(QPushButton):
         self.setIcon(self._icon_normal)
         self.setIconSize(QSize(24, 24))
 
-        self.setStyleSheet("""
-            QPushButton {
+        self.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
                 border: none;
                 border-radius: 20px;
                 padding: 4px;
-            }
-            QPushButton:hover { background: #21262d; }
-            QPushButton:pressed { background: #161b22; }
+            }}
+            QPushButton:hover {{ background: {_CARD_HOVER}; }}
+            QPushButton:pressed {{ background: {_SURF}; }}
         """)
 
     def enterEvent(self, event):
@@ -312,7 +317,7 @@ class ProfileSwitchOverlay(QWidget):
 
         logo = QLabel("Solin")
         logo.setStyleSheet(
-            "color: #e6edf3; font-size: 22px; font-weight: 700; background: transparent;"
+            f"color: {_TEXT}; font-size: 22px; font-weight: 700; background: transparent;"
         )
         hlay.addWidget(logo)
         hlay.addStretch()
@@ -334,7 +339,7 @@ class ProfileSwitchOverlay(QWidget):
         self._title_lbl = QLabel(self.tr("Who is using Solin?"))
         self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self._title_lbl.setStyleSheet(
-            "color: #e6edf3; font-size: 28px; font-weight: 700; background: transparent;"
+            f"color: {_TEXT}; font-size: 28px; font-weight: 700; background: transparent;"
         )
         blay.addWidget(self._title_lbl)
         blay.addSpacing(8)

@@ -10,19 +10,22 @@ Rectangle {
     z: 1000
     color: "transparent"
 
-    readonly property color bg:              "#0d1117"
-    readonly property color surface:         "#13161c"
-    readonly property color surfaceElevated: "#1c2128"
-    readonly property color hover:           "#1a1f2a"
-    readonly property color border_:         "#1e2430"
-    readonly property color borderStrong:    "#2a3040"
-    readonly property color textPrimary:     "#e6edf3"
-    readonly property color textSecondary:   "#c9d1d9"
-    readonly property color textMuted:       "#8b949e"
-    readonly property color textDim:         "#484f58"
-    readonly property color accent:          "#388bfd"
-    readonly property color accentTint:      "#132a46"
-    readonly property color success:         "#3fb950"
+    readonly property color bg:              appTheme.bg
+    readonly property color surface:         appTheme.surface
+    readonly property color surfaceElevated: appTheme.hoverStrong
+    readonly property color surfaceInputFocus: appTheme.surfaceInputFocus
+    readonly property color hover:           appTheme.hover
+    readonly property color border_:         appTheme.border_
+    readonly property color borderStrong:    appTheme.borderStrong
+    readonly property color textPrimary:     appTheme.textPrimary
+    readonly property color textSecondary:   appTheme.textSecondary
+    readonly property color textMuted:       appTheme.textMuted
+    readonly property color textDim:         appTheme.textDim
+    readonly property color accent:          appTheme.accent
+    readonly property color accentSelection: appTheme.accentSelection
+    readonly property color accentTint:      appTheme.accentTint
+    readonly property color success:         appTheme.success
+    readonly property color dangerSubtle:    appTheme.dangerSubtle
 
     property bool isOpen: false
 
@@ -225,7 +228,7 @@ Rectangle {
                     anchors.topMargin: 10
                     anchors.bottomMargin: 4
                     radius: 8
-                    color: searchField.activeFocus ? "#0e1720" : modalRoot.bg
+                    color: searchField.activeFocus ? modalRoot.surfaceInputFocus : modalRoot.bg
                     border.width: 1
                     border.color: searchField.activeFocus ? modalRoot.accent : modalRoot.border_
 
@@ -263,8 +266,8 @@ Rectangle {
                                 id: searchField
                                 anchors.fill: parent
                                 color: modalRoot.textPrimary
-                                selectionColor: "#1f6feb"
-                                selectedTextColor: "#ffffff"
+                                selectionColor: modalRoot.accentSelection
+                                selectedTextColor: appTheme.white
                                 selectByMouse: true
                                 font.pixelSize: 13
                                 verticalAlignment: TextInput.AlignVCenter
@@ -376,7 +379,7 @@ Rectangle {
                     radius: 10
                     color: "transparent"
                     border.width: 1
-                    border.color: "#3d1214"
+                    border.color: modalRoot.dangerSubtle
                     visible: modalRoot.hasBridge
                              && !songsBridge.isLoading
                              && songsBridge.errorMessage !== ""
@@ -530,12 +533,12 @@ Rectangle {
                                     radius: 7
                                     color: rowMa.containsMouse ? modalRoot.accentTint : modalRoot.bg
                                     border.width: 1
-                                    border.color: rowMa.containsMouse ? "#1f4470" : modalRoot.border_
+                                    border.color: rowMa.containsMouse ? modalRoot.accent : modalRoot.border_
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: rowShell.numberText
-                                        color: rowMa.containsMouse ? "#79c0ff" : modalRoot.textMuted
+                                        color: rowMa.containsMouse ? appTheme.accentText : modalRoot.textMuted
                                         font.pixelSize: 12
                                         font.family: "Consolas"
                                         font.weight: Font.DemiBold
@@ -569,12 +572,12 @@ Rectangle {
                                     radius: 7
                                     color: rowMa.containsMouse ? modalRoot.accentTint : "transparent"
                                     border.width: 1
-                                    border.color: rowMa.containsMouse ? "#1f4470" : modalRoot.border_
+                                    border.color: rowMa.containsMouse ? modalRoot.accent : modalRoot.border_
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: "+"
-                                        color: rowMa.containsMouse ? "#79c0ff" : modalRoot.textDim
+                                        color: rowMa.containsMouse ? appTheme.accentText : modalRoot.textDim
                                         font.pixelSize: 15
                                         font.weight: Font.DemiBold
                                     }

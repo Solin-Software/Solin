@@ -7,6 +7,7 @@ from typing import Any, cast
 from PySide6.QtCore import QUrl
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.styles.theme import PALETTE
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.visuals import (
     PlaylistIconProvider,
@@ -34,7 +35,7 @@ class MeetingDetailQmlHost(QQuickWidget):
         configure_qml_host(
             self,
             type_name="MeetingDetailView",
-            clear_color="#0d1117",
+            clear_color=PALETTE.bg0,
             image_providers={
                 "playlistthumbs": PlaylistThumbnailProvider(
                     controller.thumb_cache,

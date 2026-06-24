@@ -39,6 +39,7 @@ from ..core.media.cache import MediaCacheManager
 from ..core.media.cache_listing import CachedMediaItem
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import make_icon, ICON_MUSIC, ICON_VIDEO, ICON_IMAGE
+from ..styles.theme import PALETTE, qss_rgba
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
@@ -52,11 +53,32 @@ _CARD_H       = 152
 _THUMB_W      = 148
 _THUMB_H      = 88
 _GRID_SPACING = 12
-_ACCENT       = "#388bfd"
-_BG_CARD      = "#13161c"
-_BG_CARD_SEL  = "#1a2d4f"
-_BORDER_NORM  = "#21262d"
-_BORDER_SEL   = "#388bfd"
+_ACCENT       = PALETTE.accent
+_ACCENT_MUTED = PALETTE.accent_muted
+_ACCENT_TEXT  = PALETTE.accent_text
+_ACCENT_HOVER = PALETTE.accent_muted_hover
+_WHITE        = PALETTE.white
+_BG           = PALETTE.bg0
+_BG_CARD_HOVER = PALETTE.surface_hover_strong
+_BG_CARD      = PALETTE.surface_card
+_BG_CARD_SEL  = PALETTE.accent_tint
+_SURFACE      = PALETTE.surface
+_SURFACE_2    = PALETTE.bg2
+_SURFACE_3    = PALETTE.bg3
+_SURFACE_BAR  = PALETTE.surface_hover
+_BORDER_NORM  = PALETTE.border_muted
+_BORDER       = PALETTE.border
+_BORDER_SEL   = PALETTE.accent
+_TEXT         = PALETTE.text_primary
+_TEXT_BODY    = PALETTE.text_secondary
+_TEXT_MUTED   = PALETTE.text_muted
+_TEXT_DIM     = PALETTE.text_dim
+_TEXT_FAINT   = PALETTE.text_faint
+_DANGER       = PALETTE.danger
+_DANGER_TEXT  = PALETTE.danger_text
+_DANGER_BG    = PALETTE.danger_surface
+_DANGER_BORDER = PALETTE.danger_border
+_DANGER_HOVER = PALETTE.danger_surface_hover
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -173,35 +195,35 @@ class MediaCard(QFrame):
         self._thumb_lbl.setFixedSize(_THUMB_W, _THUMB_H)
         self._thumb_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._thumb_lbl.setStyleSheet(
-            "background:#0d1117;border-radius:6px;border:1px solid #21262d;"
+            f"background:{_BG};border-radius:6px;border:1px solid {_BORDER_NORM};"
         )
         icon_map = {"video": ICON_VIDEO, "audio": ICON_MUSIC, "image": ICON_IMAGE}
         self._thumb_lbl.setPixmap(
-            make_icon(icon_map.get(self._item.media_type, ICON_VIDEO), 28, "#30363d").pixmap(28, 28)
+            make_icon(icon_map.get(self._item.media_type, ICON_VIDEO), 28, _BORDER).pixmap(28, 28)
         )
 
         # Check badge (canto superior direito)
         self._check_badge = QLabel(thumb_area)
         self._check_badge.setFixedSize(22, 22)
         self._check_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._check_badge.setPixmap(make_icon(_ICON_CHECK, 12, "#ffffff").pixmap(12, 12))
+        self._check_badge.setPixmap(make_icon(_ICON_CHECK, 12, _WHITE).pixmap(12, 12))
         self._check_badge.move(_THUMB_W - 28, 4)
-        self._check_badge.setStyleSheet("background:#388bfd;border-radius:11px;")
+        self._check_badge.setStyleSheet(f"background:{_ACCENT};border-radius:11px;")
         self._check_badge.setVisible(False)
 
         # Botão play
         if self._item.media_type in ("video", "audio", "image"):
             play_btn = QPushButton(thumb_area)
             play_btn.setFixedSize(36, 36)
-            play_btn.setIcon(make_icon(_ICON_PLAY_CIRCLE, 22, "#ffffff"))
+            play_btn.setIcon(make_icon(_ICON_PLAY_CIRCLE, 22, _WHITE))
             play_btn.setIconSize(QSize(22, 22))
             play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             play_btn.setToolTip(self.tr("Play"))
             play_btn.move((_THUMB_W - 36) // 2, (_THUMB_H - 36) // 2)
             play_btn.setStyleSheet(
-                "QPushButton{background:rgba(0,0,0,0.55);border-radius:18px;"
-                "border:1.5px solid rgba(255,255,255,0.25);}"
-                "QPushButton:hover{background:rgba(56,139,253,0.85);border-color:#388bfd;}"
+                f"QPushButton{{background:{qss_rgba(PALETTE.black, 0.55)};border-radius:18px;"
+                f"border:1.5px solid {qss_rgba(_WHITE, 0.25)};}}"
+                f"QPushButton:hover{{background:{qss_rgba(_ACCENT, 0.85)};border-color:{_ACCENT};}}"
             )
             play_btn.clicked.connect(
                 lambda _=False: self._emit_play_requested()
@@ -212,7 +234,7 @@ class MediaCard(QFrame):
         # ── Título ────────────────────────────────────────────────────────
         self._title_lbl = QLabel()
         self._title_lbl.setStyleSheet(
-            "background:transparent;border:none;color:#c9d1d9;font-size:10px;font-weight:500;"
+            f"background:transparent;border:none;color:{_TEXT_BODY};font-size:10px;font-weight:500;"
         )
         self._title_lbl.setFixedWidth(_THUMB_W - 4)
         elided = self._title_lbl.fontMetrics().elidedText(
@@ -226,7 +248,7 @@ class MediaCard(QFrame):
         self._title_lbl.setToolTip(tt)
         
         size_lbl = QLabel(_fmt_size(self._item.size))
-        size_lbl.setStyleSheet("background:transparent;border:none;color:#484f58;font-size:9px;")
+        size_lbl.setStyleSheet(f"background:transparent;border:none;color:{_TEXT_DIM};font-size:9px;")
 
         lay.addWidget(self._title_lbl)
         lay.addWidget(size_lbl)
@@ -291,7 +313,7 @@ class MediaCard(QFrame):
             self.setStyleSheet(
                 f"QFrame#MediaCard{{background:{_BG_CARD};border-radius:10px;"
                 f"border:1.5px solid {_BORDER_NORM};}}"
-                f"QFrame#MediaCard:hover{{background:#1c2128;border-color:#30363d;}}"
+                f"QFrame#MediaCard:hover{{background:{_BG_CARD_HOVER};border-color:{_BORDER};}}"
             )
 
     def mousePressEvent(self, event):
@@ -316,13 +338,13 @@ class _Chip(QPushButton):
         if self.isChecked():
             self.setStyleSheet(
                 f"QPushButton{{background:{_ACCENT};border-radius:15px;border:none;"
-                f"color:#fff;font-size:11px;font-weight:600;padding:0 14px;}}"
+                f"color:{_WHITE};font-size:11px;font-weight:600;padding:0 14px;}}"
             )
         else:
             self.setStyleSheet(
-                "QPushButton{background:#21262d;border-radius:15px;border:1px solid #30363d;"
-                "color:#8b949e;font-size:11px;padding:0 14px;}"
-                "QPushButton:hover{background:#2d333b;color:#c9d1d9;border-color:#484f58;}"
+                f"QPushButton{{background:{_SURFACE_2};border-radius:15px;border:1px solid {_BORDER};"
+                f"color:{_TEXT_MUTED};font-size:11px;padding:0 14px;}}"
+                f"QPushButton:hover{{background:{_SURFACE_3};color:{_TEXT_BODY};border-color:{_TEXT_DIM};}}"
             )
 
 
@@ -371,26 +393,26 @@ class CacheManagerWidget(QWidget):
 
     def _make_header(self) -> QFrame:
         hdr = QFrame()
-        hdr.setStyleSheet("QFrame{background:#161b22;border-bottom:1px solid #21262d;}")
+        hdr.setStyleSheet(f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER_NORM};}}")
         hdr.setFixedHeight(54)
         lay = QHBoxLayout(hdr)
         lay.setContentsMargins(20, 0, 20, 0)
         lay.setSpacing(10)
 
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(make_icon(_ICON_STORAGE, 18, "#8b949e").pixmap(18, 18))
+        icon_lbl.setPixmap(make_icon(_ICON_STORAGE, 18, _TEXT_MUTED).pixmap(18, 18))
         icon_lbl.setStyleSheet("background:transparent;")
 
         self._title_lbl = QLabel(self.tr("Media Manager"))
         self._title_lbl.setObjectName("SectionTitle")
         self._title_lbl.setStyleSheet(
-            "background:transparent;font-size:14px;font-weight:700;color:#e6edf3;"
+            f"background:transparent;font-size:14px;font-weight:700;color:{_TEXT};"
         )
 
         self._size_badge = QLabel()
         self._size_badge.setStyleSheet(
             "background:transparent;border:none;"
-            "color:#6e7681;font-size:10px;padding:2px 0;"
+            f"color:{_TEXT_FAINT};font-size:10px;padding:2px 0;"
         )
         self._size_badge.setVisible(False)
 
@@ -402,7 +424,7 @@ class CacheManagerWidget(QWidget):
 
     def _make_toolbar(self) -> QFrame:
         tb = QFrame()
-        tb.setStyleSheet("QFrame{background:#0d1117;border-bottom:1px solid #1c2128;}")
+        tb.setStyleSheet(f"QFrame{{background:{_BG};border-bottom:1px solid {_BG_CARD_HOVER};}}")
         tb.setFixedHeight(52)
         lay = QHBoxLayout(tb)
         lay.setContentsMargins(16, 0, 16, 0)
@@ -429,31 +451,31 @@ class CacheManagerWidget(QWidget):
 
     def _make_stack(self) -> QStackedWidget:
         self._stack = QStackedWidget()
-        self._stack.setStyleSheet("background:#0d1117;")
+        self._stack.setStyleSheet(f"background:{_BG};")
 
         # 0 — Loading
         load_w = QWidget()
-        load_w.setStyleSheet("background:#0d1117;")
+        load_w.setStyleSheet(f"background:{_BG};")
         ll = QVBoxLayout(load_w)
         ll.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._loading_lbl = QLabel(self.tr("Loading cached media…"))
         self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._loading_lbl.setStyleSheet("color:#484f58;font-size:13px;")
+        self._loading_lbl.setStyleSheet(f"color:{_TEXT_DIM};font-size:13px;")
         ll.addWidget(self._loading_lbl)
 
         # 1 — Empty
         empty_w = QWidget()
-        empty_w.setStyleSheet("background:#0d1117;")
+        empty_w.setStyleSheet(f"background:{_BG};")
         el = QVBoxLayout(empty_w)
         el.setAlignment(Qt.AlignmentFlag.AlignCenter)
         el.setSpacing(10)
         ei = QLabel()
         ei.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ei.setPixmap(make_icon(_ICON_STORAGE, 40, "#21262d").pixmap(40, 40))
+        ei.setPixmap(make_icon(_ICON_STORAGE, 40, _BORDER_NORM).pixmap(40, 40))
         ei.setStyleSheet("background:transparent;")
         self._empty_lbl = QLabel(self.tr("No cached media found."))
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet("color:#484f58;font-size:13px;")
+        self._empty_lbl.setStyleSheet(f"color:{_TEXT_DIM};font-size:13px;")
         el.addWidget(ei)
         el.addWidget(self._empty_lbl)
 
@@ -463,13 +485,13 @@ class CacheManagerWidget(QWidget):
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setStyleSheet(
-            "QScrollArea{background:#0d1117;border:none;}"
-            "QScrollBar:vertical{width:6px;background:#0d1117;border-radius:3px;}"
-            "QScrollBar::handle:vertical{background:#21262d;border-radius:3px;min-height:20px;}"
+            f"QScrollArea{{background:{_BG};border:none;}}"
+            f"QScrollBar:vertical{{width:6px;background:{_BG};border-radius:3px;}}"
+            f"QScrollBar::handle:vertical{{background:{_BORDER_NORM};border-radius:3px;min-height:20px;}}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         )
         self._grid_host = QWidget()
-        self._grid_host.setStyleSheet("background:#0d1117;")
+        self._grid_host.setStyleSheet(f"background:{_BG};")
         self._grid_lay = QGridLayout(self._grid_host)
         self._grid_lay.setContentsMargins(16, 16, 16, 16)
         self._grid_lay.setSpacing(_GRID_SPACING)
@@ -488,8 +510,8 @@ class CacheManagerWidget(QWidget):
         bar.setStyleSheet(
             "QFrame#CacheActionBar{"
             "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-            "stop:0 #1a1f29,stop:1 #161b22);"
-            "border-top:1px solid #21262d;}"
+            f"stop:0 {_SURFACE_BAR},stop:1 {_SURFACE});"
+            f"border-top:1px solid {_BORDER_NORM};}}"
         )
         bar.setVisible(False)
         self._action_bar = bar
@@ -505,13 +527,13 @@ class CacheManagerWidget(QWidget):
         self._sel_count_lbl = QLabel()
         self._sel_count_lbl.setStyleSheet(
             "background:transparent;border:none;"
-            "color:#e6edf3;font-size:12px;font-weight:600;"
+            f"color:{_TEXT};font-size:12px;font-weight:600;"
         )
 
         self._sel_size_lbl = QLabel()
         self._sel_size_lbl.setStyleSheet(
             "background:transparent;border:none;"
-            "color:#6e7681;font-size:10px;"
+            f"color:{_TEXT_FAINT};font-size:10px;"
         )
 
         info_col.addWidget(self._sel_count_lbl)
@@ -521,29 +543,29 @@ class CacheManagerWidget(QWidget):
         lay.addStretch()
 
         self._sel_all_btn = QPushButton()
-        self._sel_all_btn.setIcon(make_icon(_ICON_SELECT_ALL, 14, "#8b949e"))
+        self._sel_all_btn.setIcon(make_icon(_ICON_SELECT_ALL, 14, _TEXT_MUTED))
         self._sel_all_btn.setIconSize(QSize(14, 14))
         self._sel_all_btn.setFixedHeight(34)
         self._sel_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sel_all_btn.setStyleSheet(
-            "QPushButton{background:transparent;border:1px solid #30363d;"
-            "border-radius:6px;color:#8b949e;font-size:10px;padding:0 12px;}"
-            "QPushButton:hover{background:#21262d;color:#c9d1d9;border-color:#484f58;}"
+            f"QPushButton{{background:transparent;border:1px solid {_BORDER};"
+            f"border-radius:6px;color:{_TEXT_MUTED};font-size:10px;padding:0 12px;}}"
+            f"QPushButton:hover{{background:{_SURFACE_2};color:{_TEXT_BODY};border-color:{_TEXT_DIM};}}"
         )
         self._sel_all_btn.setVisible(False)
         self._sel_all_btn.clicked.connect(self._toggle_select_all)
 
         self._del_btn = QPushButton()
         self._del_btn.setFixedHeight(34)
-        self._del_btn.setIcon(make_icon(_ICON_TRASH, 14, "#ff7b72"))
+        self._del_btn.setIcon(make_icon(_ICON_TRASH, 14, _DANGER_TEXT))
         self._del_btn.setIconSize(QSize(14, 14))
         self._del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._del_btn.setStyleSheet(
-            "QPushButton{background:#2d1b1b;border:1px solid #3d2020;"
-            "border-radius:6px;color:#ff7b72;font-size:11px;"
+            f"QPushButton{{background:{_DANGER_BG};border:1px solid {_DANGER_BORDER};"
+            f"border-radius:6px;color:{_DANGER_TEXT};font-size:11px;"
             "font-weight:600;padding:0 16px;}"
-            "QPushButton:hover{background:#3d2424;border-color:#f85149;color:#f85149;}"
-            "QPushButton:pressed{background:#2d1b1b;}"
+            f"QPushButton:hover{{background:{_DANGER_HOVER};border-color:{_DANGER};color:{_DANGER};}}"
+            f"QPushButton:pressed{{background:{_DANGER_BG};}}"
         )
         self._del_btn.clicked.connect(self._confirm_delete)
 
@@ -731,10 +753,10 @@ class CacheManagerWidget(QWidget):
         all_sel = bool(self._vis_cards) and all(c.is_selected() for c in self._vis_cards)
         if all_sel:
             self._sel_all_btn.setText(self.tr("Deselect all"))
-            self._sel_all_btn.setIcon(make_icon(_ICON_DESELECT, 14, "#8b949e"))
+            self._sel_all_btn.setIcon(make_icon(_ICON_DESELECT, 14, _TEXT_MUTED))
         else:
             self._sel_all_btn.setText(self.tr("Select all"))
-            self._sel_all_btn.setIcon(make_icon(_ICON_SELECT_ALL, 14, "#8b949e"))
+            self._sel_all_btn.setIcon(make_icon(_ICON_SELECT_ALL, 14, _TEXT_MUTED))
 
         total_sz = sum(c.file_size for c in self._all_cards if c.path in self._selected)
         one  = n == 1
@@ -775,11 +797,11 @@ class CacheManagerWidget(QWidget):
         dlg.setDefaultButton(QMessageBox.StandardButton.Cancel)
         dlg.setIcon(QMessageBox.Icon.Warning)
         dlg.setStyleSheet(
-            "QMessageBox{background:#161b22;}"
-            "QLabel{color:#e6edf3;background:transparent;}"
-            "QPushButton{background:#21262d;border:1px solid #30363d;border-radius:6px;"
-            "color:#c9d1d9;padding:5px 16px;min-width:60px;}"
-            "QPushButton:hover{background:#2d333b;}"
+            f"QMessageBox{{background:{_SURFACE};}}"
+            f"QLabel{{color:{_TEXT};background:transparent;}}"
+            f"QPushButton{{background:{_SURFACE_2};border:1px solid {_BORDER};border-radius:6px;"
+            f"color:{_TEXT_BODY};padding:5px 16px;min-width:60px;}}"
+            f"QPushButton:hover{{background:{_SURFACE_3};}}"
         )
         if dlg.exec() != QMessageBox.StandardButton.Yes:
             return

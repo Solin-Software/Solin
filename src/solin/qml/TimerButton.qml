@@ -9,7 +9,7 @@ Rectangle {
 
     property string text: ""
     property string variant: "ghost"          // primary | soft | ghost
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     property string iconName: ""
     property string iconColorHex: ""
     property int iconSize: 14
@@ -18,6 +18,10 @@ Rectangle {
 
     readonly property bool _filled: variant === "primary"
     readonly property bool _soft: variant === "soft"
+
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
+    }
 
     implicitHeight: 34
     implicitWidth: row.implicitWidth + (row.implicitWidth > 0 ? 26 : 22)
@@ -28,13 +32,13 @@ Rectangle {
            ? (ma.containsMouse ? Qt.lighter(accent, 1.14) : accent)
            : _soft
              ? Qt.rgba(accent.r, accent.g, accent.b, ma.containsMouse ? 0.22 : 0.14)
-             : (ma.containsMouse ? "#1a1f2a" : "transparent")
+             : (ma.containsMouse ? appTheme.hover : "transparent")
     border.width: 1
     border.color: _filled
                   ? "transparent"
                   : _soft
                     ? Qt.rgba(accent.r, accent.g, accent.b, ma.containsMouse ? 0.55 : 0.3)
-                    : (ma.containsMouse ? "#2a3040" : "#1e2430")
+                    : (ma.containsMouse ? appTheme.borderStrong : appTheme.border_)
 
     scale: ma.pressed && enabled ? 0.97 : 1.0
 
@@ -57,16 +61,16 @@ Rectangle {
             source: ctl.iconName === "" ? "" :
                     "image://timericons/" + ctl.iconName + "/" + (ctl.iconSize * 2) + "/" +
                     (ctl.iconColorHex !== "" ? ctl.iconColorHex
-                     : ctl._filled ? "ffffff" : "c9d1d9")
+                     : ctl._filled ? ctl.iconHex(appTheme.white) : ctl.iconHex(appTheme.textSecondary))
         }
 
         Text {
             visible: ctl.text !== ""
             anchors.verticalCenter: parent.verticalCenter
             text: ctl.text
-            color: ctl._filled ? "#ffffff"
+            color: ctl._filled ? appTheme.white
                    : ctl._soft ? ctl.accent
-                   : (ma.containsMouse ? "#e6edf3" : "#c9d1d9")
+                   : (ma.containsMouse ? appTheme.textPrimary : appTheme.textSecondary)
             font.pixelSize: 13
             font.weight: Font.DemiBold
             Behavior on color { ColorAnimation { duration: 130 } }

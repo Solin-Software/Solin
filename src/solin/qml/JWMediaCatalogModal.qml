@@ -11,19 +11,23 @@ Rectangle {
     z: 1000
     color: "transparent"
 
-    // ── Theme ─────────────────────────────────────────────────────────────────
-    readonly property color bg:              "#0d1117"
-    readonly property color surface:         "#13161c"
-    readonly property color surfaceElevated: "#1c2128"
-    readonly property color hover:           "#1a1f2a"
-    readonly property color border_:         "#1e2430"
-    readonly property color borderStrong:    "#2a3040"
-    readonly property color textPrimary:     "#e6edf3"
-    readonly property color textSecondary:   "#c9d1d9"
-    readonly property color textMuted:       "#8b949e"
-    readonly property color textDim:         "#484f58"
-    readonly property color accent:          "#388bfd"
-    readonly property color accentTint:      "#132a46"
+    readonly property color bg:              appTheme.bg
+    readonly property color surface:         appTheme.surface
+    readonly property color surfaceElevated: appTheme.hoverStrong
+    readonly property color surfaceInputFocus: appTheme.surfaceInputFocus
+    readonly property color hover:           appTheme.hover
+    readonly property color border_:         appTheme.border_
+    readonly property color borderStrong:    appTheme.borderStrong
+    readonly property color textPrimary:     appTheme.textPrimary
+    readonly property color textSecondary:   appTheme.textSecondary
+    readonly property color textMuted:       appTheme.textMuted
+    readonly property color textDim:         appTheme.textDim
+    readonly property color textFaint:       appTheme.textFaint
+    readonly property color accent:          appTheme.accent
+    readonly property color accentSelection: appTheme.accentSelection
+    readonly property color accentTint:      appTheme.accentTint
+    readonly property color success:         appTheme.success
+    readonly property color dangerSubtle:    appTheme.dangerSubtle
 
     // ── State ─────────────────────────────────────────────────────────────────
     property bool isOpen: false
@@ -348,7 +352,7 @@ Rectangle {
                     anchors.topMargin: 10
                     anchors.bottomMargin: 4
                     radius: 8
-                    color: searchField.activeFocus ? "#0e1720" : modalRoot.bg
+                    color: searchField.activeFocus ? modalRoot.surfaceInputFocus : modalRoot.bg
                     border.width: 1
                     border.color: searchField.activeFocus ? modalRoot.accent : modalRoot.border_
 
@@ -386,8 +390,8 @@ Rectangle {
                                 id: searchField
                                 anchors.fill: parent
                                 color: modalRoot.textPrimary
-                                selectionColor: "#1f6feb"
-                                selectedTextColor: "#ffffff"
+                                selectionColor: modalRoot.accentSelection
+                                selectedTextColor: appTheme.white
                                 selectByMouse: true
                                 font.pixelSize: 13
                                 verticalAlignment: TextInput.AlignVCenter
@@ -501,7 +505,7 @@ Rectangle {
                     radius: 10
                     color: "transparent"
                     border.width: 1
-                    border.color: "#3d1214"
+                    border.color: modalRoot.dangerSubtle
                     visible: modalRoot.hasBridge && catalogBridge.errorMessage !== ""
                     z: 2
 
@@ -514,7 +518,7 @@ Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             text: "⚠"
                             font.pixelSize: 24
-                            color: "#f85149"
+                            color: appTheme.danger
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
@@ -774,7 +778,7 @@ Rectangle {
         onPaint: {
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
-            ctx.strokeStyle = active ? "#6e7a8a" : "#4d5866"
+            ctx.strokeStyle = active ? modalRoot.textFaint : modalRoot.textDim
             ctx.lineWidth = 1.7
             ctx.lineCap = "round"
             ctx.lineJoin = "round"
@@ -835,7 +839,7 @@ Rectangle {
                 ctx.lineWidth = 2
                 ctx.lineCap = "round"
                 ctx.lineJoin = "round"
-                ctx.strokeStyle = "#3fb950"
+                ctx.strokeStyle = modalRoot.success
                 ctx.beginPath()
                 ctx.moveTo(4, 8.4)
                 ctx.lineTo(7, 11.2)
@@ -857,7 +861,7 @@ Rectangle {
         radius: 7
         color: chipMa.containsMouse ? modalRoot.hover : "transparent"
         border.width: 1
-        border.color: checked ? "#1f6feb" : modalRoot.border_
+        border.color: checked ? modalRoot.accentSelection : modalRoot.border_
 
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -882,7 +886,7 @@ Rectangle {
                     radius: 4
                     y: 3
                     x: chip.checked ? 13 : 3
-                    color: chip.checked ? "#79c0ff" : modalRoot.textDim
+                    color: chip.checked ? appTheme.accentText : modalRoot.textDim
 
                     Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: 120 } }
@@ -985,7 +989,7 @@ Rectangle {
             return "transparent"
         }
         border.width: active ? 1 : 0
-        border.color: "#1f6feb"
+        border.color: modalRoot.accentSelection
         opacity: enabled ? 1.0 : 0.35
 
         Behavior on color { ColorAnimation { duration: 120 } }
@@ -995,7 +999,7 @@ Rectangle {
             anchors.centerIn: parent
             text: pageBtn.label
             color: {
-                if (pageBtn.active) return "#79c0ff"
+                if (pageBtn.active) return appTheme.accentText
                 if (pageMa.containsMouse) return modalRoot.textSecondary
                 return modalRoot.textMuted
             }
@@ -1087,7 +1091,7 @@ Rectangle {
                         id: durationLabel
                         anchors.centerIn: parent
                         text: card.cardDuration
-                        color: "#ffffff"
+                        color: appTheme.white
                         font.pixelSize: 10
                         font.weight: Font.Medium
                         font.family: "Consolas"

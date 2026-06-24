@@ -21,6 +21,7 @@ from ..ui.fonts import timer_digit_font_family
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.timer_bridge import TimerBridge
 from solin.ui.qml.timer_icons import TimerIconProvider
+from solin.styles.theme import PALETTE
 
 
 class TimerWidget(QWidget):
@@ -57,7 +58,7 @@ class TimerWidget(QWidget):
         configure_qml_host(
             self._qml,
             type_name="TimerView",
-            clear_color="#0d1117",
+            clear_color=PALETTE.bg0,
             image_providers={"timericons": TimerIconProvider()},
             context_properties={
                 "timerDigitFontFamily": timer_digit_font_family(),

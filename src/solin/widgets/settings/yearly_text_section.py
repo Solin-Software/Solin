@@ -31,6 +31,8 @@ from .shared import (
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
+    SETTINGS_TEXT_SECONDARY,
+    settings_compact_secondary_button_stylesheet,
 )
 
 
@@ -94,10 +96,7 @@ class YearlyTextSectionMixin:
         )
         self._yt_refresh_btn.setIconSize(QSize(14, 14))
         self._yt_refresh_btn.setStyleSheet(
-            f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+            settings_compact_secondary_button_stylesheet()
         )
         self._yt_refresh_btn.clicked.connect(self._refresh_yeartext)
         status_row.addWidget(self._yt_refresh_btn)
@@ -165,12 +164,12 @@ class YearlyTextSectionMixin:
         self._yearly_save_btn.setMinimumHeight(34)
         self._yearly_save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._yearly_save_btn.setIcon(
-            make_icon(ICON_SAVE_PLAYLIST, size=14, color="#c9d1d9")
+            make_icon(ICON_SAVE_PLAYLIST, size=14, color=SETTINGS_TEXT_SECONDARY)
         )
         self._yearly_save_btn.setIconSize(QSize(14, 14))
         self._yearly_save_btn.setStyleSheet(
             f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 12px; }}"
+            f" background: {SETTINGS_BORDER}; color: {SETTINGS_TEXT_SECONDARY}; font-size: 12px; }}"
             f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
         )
         self._yearly_save_btn.clicked.connect(self._save_yearly_text)

@@ -9,18 +9,19 @@ import QtQuick.Controls 2.15
 Item {
     id: page
 
-    property color pal_bg: "#0d1117"
-    property color pal_surface: "#13161c"
-    property color pal_surfaceAlt: "#0f131a"
-    property color pal_hover: "#1a1f2a"
-    property color pal_border: "#1e2430"
-    property color pal_borderStrong: "#2a3040"
-    property color pal_textPrimary: "#e6edf3"
-    property color pal_textSecondary: "#c9d1d9"
-    property color pal_textMuted: "#8b949e"
-    property color pal_textDim: "#484f58"
-    property color pal_accent: "#388bfd"
-    property color pal_danger: "#f85149"
+    property color pal_bg: appTheme.bg
+    property color pal_surface: appTheme.surface
+    property color pal_surfaceAlt: appTheme.surfaceAlt
+    property color pal_hover: appTheme.hover
+    property color pal_border: appTheme.border_
+    property color pal_borderStrong: appTheme.borderStrong
+    property color pal_textPrimary: appTheme.textPrimary
+    property color pal_textSecondary: appTheme.textSecondary
+    property color pal_textMuted: appTheme.textMuted
+    property color pal_textDim: appTheme.textDim
+    property color pal_accent: appTheme.accent
+    property color pal_warning: appTheme.warning
+    property color pal_danger: appTheme.danger
 
     readonly property var cfg: timer.clockConfig
     readonly property bool clockHasAnalog: page.cfg.mode === "analog" || page.cfg.mode === "analog_digital"
@@ -387,7 +388,7 @@ Item {
                             Layout.fillWidth: true
                             radius: 11
                             color: modelData.reserved
-                                   ? Qt.rgba(0.22, 0.55, 0.99, 0.08) : page.pal_surfaceAlt
+                                   ? Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.08) : page.pal_surfaceAlt
                             border.color: modelData.reserved ? page.pal_accent : page.pal_border
                             border.width: 1
                             implicitHeight: 58
@@ -403,7 +404,7 @@ Item {
                                 Rectangle {
                                     Layout.preferredWidth: 34; Layout.preferredHeight: 34
                                     radius: 8
-                                    color: modelData.reserved ? Qt.rgba(0.22, 0.55, 0.99, 0.14) : page.pal_bg
+                                    color: modelData.reserved ? Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.14) : page.pal_bg
                                     border.color: modelData.reserved ? page.pal_accent : page.pal_border
                                     border.width: 1
                                     Image {
@@ -593,11 +594,11 @@ Item {
                     delegate: ColumnLayout {
                     id: partGroup
                     required property var modelData
-                    readonly property color secAccent: modelData.sectionColor || "#388bfd"
-                    readonly property color secTextColor: modelData.sectionTextColor || modelData.sectionColor || "#79c0ff"
-                    readonly property color secBadgeBg: modelData.sectionBadgeBg || "#0d2035"
-                    readonly property color secBorderColor: modelData.sectionBorderColor || modelData.sectionColor || "#388bfd"
-                    readonly property string secIconHex: ("" + (modelData.sectionTextColor || modelData.sectionColor || "#79c0ff")).replace("#", "")
+                    readonly property color secAccent: modelData.sectionColor || appTheme.accent
+                    readonly property color secTextColor: modelData.sectionTextColor || modelData.sectionColor || appTheme.accentText
+                    readonly property color secBadgeBg: modelData.sectionBadgeBg || appTheme.accentTint
+                    readonly property color secBorderColor: modelData.sectionBorderColor || modelData.sectionColor || appTheme.accent
+                    readonly property string secIconHex: ("" + (modelData.sectionTextColor || modelData.sectionColor || appTheme.accentText)).replace("#", "")
                     Layout.fillWidth: true
                     spacing: 8
 
@@ -713,7 +714,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            color: "#000000"
+            color: appTheme.black
             opacity: 0.55
             MouseArea {
                 anchors.fill: parent
@@ -751,8 +752,8 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 46; Layout.preferredHeight: 46
                     radius: 12
-                    color: Qt.rgba(0.82, 0.6, 0.13, 0.14)
-                    border.color: Qt.rgba(0.82, 0.6, 0.13, 0.34)
+                    color: Qt.rgba(page.pal_warning.r, page.pal_warning.g, page.pal_warning.b, 0.14)
+                    border.color: Qt.rgba(page.pal_warning.r, page.pal_warning.g, page.pal_warning.b, 0.34)
                     border.width: 1
                     Image {
                         anchors.centerIn: parent

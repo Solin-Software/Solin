@@ -6,6 +6,7 @@ from typing import Any
 from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.styles.theme import QML_THEME
 from solin.ui.qml.loader import load_qml_type
 
 
@@ -34,7 +35,9 @@ def configure_qml_host(
         engine.addImageProvider(name, provider)
 
     context = widget.rootContext()
-    for name, value in (context_properties or {}).items():
+    merged_context: dict[str, Any] = {"appTheme": dict(QML_THEME)}
+    merged_context.update(context_properties or {})
+    for name, value in merged_context.items():
         context.setContextProperty(name, value)
 
     if resize_to_root:

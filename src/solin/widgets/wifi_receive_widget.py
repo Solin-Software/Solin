@@ -45,6 +45,7 @@ from ..core.media.formats import (
 )
 from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..styles.icons import make_icon
+from ..styles.theme import PALETTE, qss_rgba
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
@@ -57,18 +58,25 @@ if TYPE_CHECKING:
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 
-_BG      = "#0d1117"
-_SURFACE = "#161b22"
-_SURFACE2= "#1c2128"
-_BORDER  = "#21262d"
-_BORDER2 = "#30363d"
-_MUTED   = "#8b949e"
-_MUTED2  = "#484f58"
-_TEXT    = "#e6edf3"
-_TEXT2   = "#c9d1d9"
-_ACCENT  = "#388bfd"
-_OK      = "#3fb950"
-_ERR     = "#f85149"
+_BG = PALETTE.bg0
+_SURFACE = PALETTE.surface
+_SURFACE2 = PALETTE.surface_hover_strong
+_BORDER = PALETTE.border_muted
+_BORDER2 = PALETTE.border
+_MUTED = PALETTE.text_muted
+_MUTED2 = PALETTE.text_dim
+_TEXT = PALETTE.text_primary
+_TEXT2 = PALETTE.text_secondary
+_ACCENT = PALETTE.accent
+_ACCENT_HOVER = PALETTE.accent_selection
+_ACCENT_PRESSED = PALETTE.accent_pressed
+_OK = PALETTE.success
+_ERR = PALETTE.danger
+_ERR_TEXT = PALETTE.danger_text
+_ERR_SURFACE = PALETTE.danger_surface
+_ERR_BORDER = PALETTE.danger_border
+_ERR_HOVER = PALETTE.danger_surface_hover
+_WHITE = PALETTE.white
 
 _CARD_W  = 148
 _CARD_H  = 168
@@ -185,10 +193,10 @@ def _file_media_type(path: str) -> str:
 def _type_meta(path: str) -> tuple[str, str]:
     """Returns (icon_svg, accent_color) based on file type."""
     t = _file_media_type(path)
-    if t == "video":    return _I_VIDEO,    "#79c0ff"
+    if t == "video":    return _I_VIDEO,    PALETTE.accent_text
     if t == "audio":    return _I_AUDIO,    "#d2a8ff"
     if t == "pdf":      return _I_PDF,      "#ffa657"
-    if t == "playlist": return _I_PLAYLIST, "#56d364"
+    if t == "playlist": return _I_PLAYLIST, PALETTE.success
     return _I_IMAGE, "#7ee787"
 
 
@@ -249,7 +257,7 @@ class _ThumbArea(QWidget):
     clicked = Signal()
 
     _OVERLAY_SIZE = 34
-    _OVERLAY_BG   = "rgba(0,0,0,180)"
+    _OVERLAY_BG   = qss_rgba(PALETTE.black, 0.71)
 
     def __init__(self, w: int, h: int, playable: bool,
                  parent: QWidget | None = None) -> None:
@@ -275,7 +283,7 @@ class _ThumbArea(QWidget):
             self._overlay.setStyleSheet(
                 f"background:{self._OVERLAY_BG};border-radius:{oz // 2}px;"
             )
-            self._overlay.setPixmap(make_icon(_I_PLAY, 18, "#ffffff").pixmap(18, 18))
+            self._overlay.setPixmap(make_icon(_I_PLAY, 18, _WHITE).pixmap(18, 18))
             self._overlay.hide()
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -354,7 +362,7 @@ class _MediaCard(QFrame):
             _badge_text = {"video": video, "audio": audio, "image": image}[_mtype]
             self._type_badge = QLabel(_badge_text, self._thumb_area)
             self._type_badge.setStyleSheet(
-                f"background:rgba(13,17,23,0.78);border-radius:4px;"
+                f"background:{qss_rgba(PALETTE.bg0, 0.78)};border-radius:4px;"
                 f"color:{_badge_color};font-size:7px;font-weight:700;"
                 "padding:2px 6px;letter-spacing:0.5px;border:none;"
             )
@@ -388,7 +396,7 @@ class _MediaCard(QFrame):
         pl_btn.setStyleSheet(
             f"QPushButton{{background:transparent;border:1px solid {_BORDER2};"
             "border-radius:5px;}"
-            f"QPushButton:hover{{background:#1f3a5f;border-color:{_ACCENT};}}"
+            f"QPushButton:hover{{background:{PALETTE.accent_muted};border-color:{_ACCENT};}}"
         )
         pl_btn.clicked.connect(lambda: self.add_to_playlist.emit(self._path, self._title, self._orig_name))
 
@@ -589,7 +597,7 @@ class WifiReceiveWidget(QWidget):
         # QR
         qr_frame = QFrame()
         qr_frame.setStyleSheet(
-            "QFrame{background:#ffffff;border-radius:10px;padding:6px;}"
+            f"QFrame{{background:{_WHITE};border-radius:10px;padding:6px;}}"
         )
         qr_frame.setFixedSize(_QR_SIZE + 14, _QR_SIZE + 14)
         qr_inner = QVBoxLayout(qr_frame)
@@ -666,9 +674,9 @@ class WifiReceiveWidget(QWidget):
         self._stop_btn.setFixedHeight(32)
         self._stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._stop_btn.setStyleSheet(
-            "QPushButton{background:#2d1b1b;border:1px solid #3d2020;"
-            "border-radius:7px;color:#ff7b72;font-size:11px;font-weight:600;padding:0 12px;}"
-            "QPushButton:hover{background:#3d2424;border-color:#f85149;color:#f85149;}"
+            f"QPushButton{{background:{_ERR_SURFACE};border:1px solid {_ERR_BORDER};"
+            f"border-radius:7px;color:{_ERR_TEXT};font-size:11px;font-weight:600;padding:0 12px;}}"
+            f"QPushButton:hover{{background:{_ERR_HOVER};border-color:{_ERR};color:{_ERR};}}"
         )
         self._stop_btn.clicked.connect(lambda: self._server.stop())
         info.addWidget(self._stop_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -702,9 +710,9 @@ class WifiReceiveWidget(QWidget):
         self._send_all_btn.setEnabled(False)
         self._send_all_btn.setStyleSheet(
             f"QPushButton{{background:{_BORDER};border:1px solid {_BORDER2};"
-            "border-radius:6px;color:#484f58;font-size:10px;font-weight:600;"
-            "padding:0 10px;}"
-            "QPushButton:enabled{color:#8b949e;}"
+            f"border-radius:6px;color:{_MUTED2};font-size:10px;font-weight:600;"
+            f"padding:0 10px;}}"
+            f"QPushButton:enabled{{color:{_MUTED};}}"
             f"QPushButton:enabled:hover{{background:{_BORDER2};color:{_TEXT2};"
             f"border-color:{_ACCENT};}}"
         )
@@ -723,8 +731,8 @@ class WifiReceiveWidget(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             f"QScrollArea{{background:{_BG};border:none;}}"
-            "QScrollBar:vertical{background:#0d1117;width:4px;border-radius:2px;margin:0;}"
-            "QScrollBar::handle:vertical{background:#21262d;border-radius:2px;min-height:20px;}"
+            f"QScrollBar:vertical{{background:{_BG};width:4px;border-radius:2px;margin:0;}}"
+            f"QScrollBar::handle:vertical{{background:{_BORDER};border-radius:2px;min-height:20px;}}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         )
 
@@ -799,7 +807,7 @@ class WifiReceiveWidget(QWidget):
         lay.addSpacing(28)
 
         self._start_btn = QPushButton()
-        self._start_btn.setIcon(make_icon(_I_PLAY, 16, "#ffffff"))
+        self._start_btn.setIcon(make_icon(_I_PLAY, 16, _WHITE))
         self._start_btn.setIconSize(QSize(16, 16))
         self._start_btn.setText(self.tr("  Start server"))
         self._start_btn.setFixedHeight(44)
@@ -807,9 +815,9 @@ class WifiReceiveWidget(QWidget):
         self._start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._start_btn.setStyleSheet(
             f"QPushButton{{background:{_ACCENT};border:none;border-radius:12px;"
-            "color:#fff;font-size:13px;font-weight:700;padding:0 28px;}"
-            "QPushButton:hover{background:#1f6feb;}"
-            "QPushButton:pressed{background:#1158c7;}"
+            f"color:{_WHITE};font-size:13px;font-weight:700;padding:0 28px;}}"
+            f"QPushButton:hover{{background:{_ACCENT_HOVER};}}"
+            f"QPushButton:pressed{{background:{_ACCENT_PRESSED};}}"
         )
         self._start_btn.clicked.connect(self._start_server)
         lay.addWidget(self._start_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -829,9 +837,28 @@ class WifiReceiveWidget(QWidget):
             "error":     self.tr("Upload error"),
         }
 
+    def _build_html_theme(self) -> dict[str, str]:
+        return {
+            "bg": PALETTE.bg0,
+            "surface": PALETTE.surface,
+            "surface2": PALETTE.surface_hover_strong,
+            "border": PALETTE.border,
+            "border2": PALETTE.border_muted,
+            "accent": PALETTE.accent,
+            "accent_hover": PALETTE.accent_selection,
+            "accent_soft": qss_rgba(PALETTE.accent, 0.12),
+            "accent_subtle": qss_rgba(PALETTE.accent, 0.03),
+            "accent_subtle_hover": qss_rgba(PALETTE.accent, 0.09),
+            "text": PALETTE.text_primary,
+            "text_on_accent": PALETTE.text_on_accent,
+            "muted": PALETTE.text_muted,
+            "ok": PALETTE.success,
+            "err": PALETTE.danger,
+        }
+
     def _start_server(self) -> None:
         self._stack.setCurrentIndex(0)
-        self._server.start(self._build_html_labels())
+        self._server.start(self._build_html_labels(), self._build_html_theme())
 
     # ═══════════════════════════════════════════════════════════════════════
     # SLOTS DO SERVIDOR
@@ -1189,7 +1216,7 @@ class WifiReceiveWidget(QWidget):
         self._copy_btn.setIcon(make_icon(_I_CHECK, 13, _OK))
         # Flash sutil: só o texto do link escurece levemente e volta
         self._url_lbl.setStyleSheet(
-            "background:transparent;border:none;color:#1f4f99;"
+            f"background:transparent;border:none;color:{_ACCENT_PRESSED};"
             "font-size:10px;font-family:monospace;"
         )
         QTimer.singleShot(350, lambda: self._url_lbl.setStyleSheet(
@@ -1229,8 +1256,8 @@ class WifiReceiveWidget(QWidget):
     @Slot()
     def _on_qr_failed(self) -> None:
         self._qr_lbl.setStyleSheet(
-            "background:#f6f8fa;border:none;font-size:8px;"
-            "font-family:monospace;color:#0d1117;padding:6px;border-radius:6px;"
+            f"background:{_WHITE};border:none;font-size:8px;"
+            f"font-family:monospace;color:{_BG};padding:6px;border-radius:6px;"
         )
         self._qr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._qr_lbl.setWordWrap(True)

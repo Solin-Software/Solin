@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...styles.icons import ICON_ASPECT_MATCH, ICON_CAST, ICON_CROP, make_icon
+from ...styles.theme import PALETTE
 from .tab_bar import BrowserTabBar
 
 
@@ -45,11 +46,14 @@ class BrowserUiMixin:
 
         btn_style = (
             "QPushButton {"
-            "  padding:0; border:1px solid #30363d; border-radius:6px;"
-            "  background:#21262d; min-width:0; }"
-            "QPushButton:hover:enabled  { background:#2d333b; border-color:#8b949e; }"
-            "QPushButton:pressed:enabled{ background:#161b22; }"
-            "QPushButton:disabled { background:#191d23; border-color:#21262d; opacity:0.38; }"
+            f"  padding:0; border:1px solid {PALETTE.border}; border-radius:6px;"
+            f"  background:{PALETTE.bg2}; min-width:0; }}"
+            f"QPushButton:hover:enabled  {{ background:{PALETTE.bg3};"
+            f" border-color:{PALETTE.text_muted}; }}"
+            f"QPushButton:pressed:enabled{{ background:{PALETTE.bg1}; }}"
+            f"QPushButton:disabled {{ background:{PALETTE.surface_overlay};"
+            f" border-color:{PALETTE.border_muted};"
+            " opacity:0.38; }"
         )
 
         self.back_btn = QPushButton()
@@ -91,11 +95,11 @@ class BrowserUiMixin:
         self.url_edit.setFixedHeight(34)
         self.url_edit.setStyleSheet(
             "QLineEdit#UrlBar {"
-            "  border:1px solid #30363d; border-radius:6px;"
+            f"  border:1px solid {PALETTE.border}; border-radius:6px;"
             "  padding:0 10px; font-size:12px;"
-            "  background:#0d1117; color:#c9d1d9;"
-            "  selection-background-color:#388bfd; }"
-            "QLineEdit#UrlBar:focus { border-color:#388bfd; }"
+            f"  background:{PALETTE.bg0}; color:{PALETTE.text_secondary};"
+            f"  selection-background-color:{PALETTE.accent}; }}"
+            f"QLineEdit#UrlBar:focus {{ border-color:{PALETTE.accent}; }}"
         )
         self.url_edit.returnPressed.connect(self._navigate_from_bar)
         nav.addWidget(self.url_edit)
@@ -114,7 +118,7 @@ class BrowserUiMixin:
             "QPushButton:hover:enabled  { background:#0a2a5e; border-color:#58a6ff; }"
             "QPushButton:pressed:enabled{ background:#07173a; }"
         )
-        self.cast_btn.setIcon(make_icon(ICON_CAST, 16, "#8b949e"))
+        self.cast_btn.setIcon(make_icon(ICON_CAST, 16, PALETTE.text_muted))
         self.cast_btn.setStyleSheet(self._cast_btn_style_off)
         self.cast_btn.clicked.connect(self._on_cast_clicked)
         nav.addWidget(self.cast_btn)
@@ -132,7 +136,7 @@ class BrowserUiMixin:
         self.crop_btn.setCheckable(True)
         self.crop_btn.setToolTip(self.tr("Project region of page"))
         self.crop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.crop_btn.setIcon(make_icon(ICON_CROP, 16, "#8b949e"))
+        self.crop_btn.setIcon(make_icon(ICON_CROP, 16, PALETTE.text_muted))
         self.crop_btn.setStyleSheet(self._crop_btn_style_off)
         self.crop_btn.toggled.connect(self._on_crop_toggled)
         nav.addWidget(self.crop_btn)
@@ -150,7 +154,7 @@ class BrowserUiMixin:
         self.cursor_btn.setCheckable(True)
         self.cursor_btn.setToolTip(self.tr("Cursor spotlight (presentation mode)"))
         self.cursor_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cursor_btn.setIcon(self._make_spotlight_icon("#8b949e"))
+        self.cursor_btn.setIcon(self._make_spotlight_icon(PALETTE.text_muted))
         self.cursor_btn.setStyleSheet(self._cursor_btn_style_off)
         self.cursor_btn.toggled.connect(self._on_cursor_toggled)
         nav.addWidget(self.cursor_btn)
@@ -167,7 +171,7 @@ class BrowserUiMixin:
         self.aspect_btn.setFixedSize(34, 34)
         self.aspect_btn.setCheckable(True)
         self.aspect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#8b949e"))
+        self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, PALETTE.text_muted))
         self.aspect_btn.setStyleSheet(self._aspect_btn_style_off)
         self.aspect_btn.toggled.connect(self._on_aspect_lock_toggled)
         self._update_aspect_lock_btn_visual(False)
@@ -183,7 +187,7 @@ class BrowserUiMixin:
         tab_row = QFrame()
         tab_row.setFixedHeight(row_h)
         tab_row.setCursor(Qt.CursorShape.ArrowCursor)
-        tab_row.setStyleSheet("QFrame { background:#161b22; border:none; }")
+        tab_row.setStyleSheet(f"QFrame {{ background:{PALETTE.surface}; border:none; }}")
 
         tab_lay = QHBoxLayout(tab_row)
         tab_lay.setContentsMargins(0, 0, gap, 0)
@@ -199,23 +203,24 @@ class BrowserUiMixin:
         self._tab_bar.tabCloseRequested.connect(self._close_tab)
         self._tab_bar.tabMoved.connect(self._on_tab_moved)
         self._tab_bar.setStyleSheet(
-            "QTabBar { background:#161b22; border:none; }"
+            f"QTabBar {{ background:{PALETTE.surface}; border:none; }}"
             "QTabBar::tab {"
             f"  min-height:{row_h - 2}px;"
-            "  background:#161b22; color:#8b949e;"
+            f"  background:{PALETTE.surface}; color:{PALETTE.text_muted};"
             "  padding:0 14px; font-size:12px;"
             "  min-width:60px; max-width:180px;"
-            "  border-right:1px solid #21262d; }"
+            f"  border-right:1px solid {PALETTE.border_muted}; }}"
             "QTabBar::tab:selected {"
-            "  color:#e6edf3; border-bottom:2px solid #388bfd; font-weight:600; }"
-            "QTabBar::tab:hover { background:#21262d; color:#c9d1d9; }"
+            f"  color:{PALETTE.text_primary}; border-bottom:2px solid {PALETTE.accent};"
+            " font-weight:600; }"
+            f"QTabBar::tab:hover {{ background:{PALETTE.bg2}; color:{PALETTE.text_secondary}; }}"
             "QTabBar::close-button { subcontrol-position:right; }"
             "QTabBar QToolButton {"
             f"  width:{btn_w}px; height:{btn_h}px;"
             f"  margin: {(row_h - btn_h)//2}px 2px;"
-            "  background:#161b22; border:none; border-radius:4px; }"
-            "QTabBar QToolButton:hover   { background:#2d333b; }"
-            "QTabBar QToolButton:pressed { background:#21262d; }"
+            f"  background:{PALETTE.surface}; border:none; border-radius:4px; }}"
+            f"QTabBar QToolButton:hover   {{ background:{PALETTE.bg3}; }}"
+            f"QTabBar QToolButton:pressed {{ background:{PALETTE.bg2}; }}"
             "QTabBar QToolButton:disabled{ color:#555; }"
         )
         tab_lay.addWidget(self._tab_bar)
@@ -228,9 +233,10 @@ class BrowserUiMixin:
         self.new_tab_btn.setStyleSheet(
             "QPushButton {"
             "  padding:0; border:none; background:transparent;"
-            "  font-size:17px; font-weight:300; color:#8b949e; min-width:0; }"
-            "QPushButton:hover  { background:#2d333b; border-radius:4px; color:#e6edf3; }"
-            "QPushButton:pressed{ background:#21262d; color:#c9d1d9; }"
+            f"  font-size:17px; font-weight:300; color:{PALETTE.text_muted}; min-width:0; }}"
+            f"QPushButton:hover  {{ background:{PALETTE.bg3}; border-radius:4px;"
+            f" color:{PALETTE.text_primary}; }}"
+            f"QPushButton:pressed{{ background:{PALETTE.bg2}; color:{PALETTE.text_secondary}; }}"
         )
         self.new_tab_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_tab_btn.clicked.connect(lambda: self._new_tab())
@@ -264,6 +270,6 @@ class BrowserUiMixin:
 
         self.loading_bar = QFrame()
         self.loading_bar.setFixedHeight(2)
-        self.loading_bar.setStyleSheet("background:#388bfd;")
+        self.loading_bar.setStyleSheet(f"background:{PALETTE.accent};")
         self.loading_bar.setVisible(False)
         root.addWidget(self.loading_bar)

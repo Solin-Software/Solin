@@ -6,6 +6,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QPushButton
 
 from solin.styles.icons import make_icon
+from solin.styles.theme import PALETTE
 
 
 class SidebarButton(QPushButton):
@@ -43,7 +44,7 @@ class SidebarButton(QPushButton):
         self.style().polish(self)
 
     def _update_icon_and_text(self) -> None:
-        color = "#e6edf3" if self._active else "#8b949e"
+        color = PALETTE.text_primary if self._active else PALETTE.text_muted
         self.setIcon(make_icon(self._svg_icon, 16, color))
         self.setIconSize(QSize(16, 16))
         self.setText("" if self._compact else f"  {self._label}")

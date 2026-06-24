@@ -11,21 +11,23 @@ Item {
     property int contentRightInset: 12
     property int scrollbarGutter: 12
     property int scrollbarContentGap: 8
-    property color bg: "#0d1117"
-    property color surface: "#13161c"
-    property color hover: "#1a1f2a"
-    property color border_: "#1e2430"
-    property color borderStrong: "#2a3040"
-    property color textPrimary: "#e6edf3"
-    property color textSecondary: "#c9d1d9"
-    property color textMuted: "#8b949e"
-    property color textDim: "#484f58"
-    property color accent: "#388bfd"
-    property color accentTint: "#132a46"
-    property color previewBg: Qt.rgba(0.22, 0.55, 0.99, 0.12)
-    property color previewBorder: "#388bfd"
-    property color danger: "#f85149"
-    property color dangerSubtle: "#3d1214"
+    property color bg: appTheme.bg
+    property color surface: appTheme.surface
+    property color surfaceAlt: appTheme.surfaceAlt
+    property color surfaceInputFocus: appTheme.surfaceInputFocus
+    property color hover: appTheme.hover
+    property color border_: appTheme.border_
+    property color borderStrong: appTheme.borderStrong
+    property color textPrimary: appTheme.textPrimary
+    property color textSecondary: appTheme.textSecondary
+    property color textMuted: appTheme.textMuted
+    property color textDim: appTheme.textDim
+    property color accent: appTheme.accent
+    property color accentTint: appTheme.accentTint
+    property color previewBg: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+    property color previewBorder: appTheme.accent
+    property color danger: appTheme.danger
+    property color dangerSubtle: appTheme.dangerSubtle
 
     property var playlistController: null
     property bool hasItems: false
@@ -49,6 +51,10 @@ Item {
 
     function picon(name, size, colorHex) {
         return "image://playlisticons/" + name + "/" + size + "/" + colorHex
+    }
+
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
     }
 
     function commonTr(context, source) {
@@ -446,7 +452,7 @@ Item {
                 width: hydrationRow.implicitWidth + 24
                 height: 34
                 radius: 8
-                color: "#161b22"
+                color: appTheme.surfaceChrome
                 border.width: 1
                 border.color: root.borderStrong
                 opacity: root.treeHydrating && root.hasItems ? 0.96 : 0.0
@@ -1540,7 +1546,7 @@ Item {
                         anchors.centerIn: parent
                         width: 12
                         height: 12
-                        source: root.picon("grip", 12, "484f58")
+                        source: root.picon("grip", 12, root.iconHex(root.textDim))
                         opacity: 0.6
                     }
                 }
@@ -1551,7 +1557,7 @@ Item {
                     Layout.preferredHeight: 58
                     Layout.alignment: Qt.AlignVCenter
                     radius: 6
-                    color: "#0d1117"
+                    color: root.bg
                     clip: true
 
                     Image {
@@ -1597,13 +1603,13 @@ Item {
                         width: durationLbl.implicitWidth + 8
                         height: 16
                         radius: 3
-                        color: "#cc000000"
+                        color: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.80)
 
                         Text {
                             id: durationLbl
                             anchors.centerIn: parent
                             text: mediaRoot.displayDuration
-                            color: "#e6edf3"
+                            color: root.textPrimary
                             font.pixelSize: 9
                             font.weight: Font.DemiBold
                         }
@@ -1840,7 +1846,7 @@ Item {
                     verticalAlignment: TextInput.AlignVCenter
                     background: Rectangle {
                         radius: 5
-                        color: "#0f141c"
+                        color: root.surfaceInputFocus
                         border.width: 1
                         border.color: markerEditor.activeFocus ? root.borderStrong : root.border_
                     }
@@ -1885,7 +1891,7 @@ Item {
         property string displayTitle: node ? node.title : ""
         property string displayColor: node ? node.color : root.accent
         property string displayTextColor: node ? node.textColor : root.textPrimary
-        property string displayBadgeBg: node ? node.badgeBg : "#1a1f28"
+        property string displayBadgeBg: node ? node.badgeBg : root.hover
         property int displayItemCount: node ? node.itemCount : 0
 
         Component.onCompleted: {
@@ -1935,9 +1941,9 @@ Item {
             width: sectionRoot.width
             height: contentColumn.implicitHeight
             radius: sectionRoot.isSubsection ? 6 : 10
-            color: sectionRoot.isSubsection ? "#0f1318" : root.surface
+            color: sectionRoot.isSubsection ? root.surfaceAlt : root.surface
             border.width: 1
-            border.color: sectionRoot.isSubsection ? "#181e28" : root.border_
+            border.color: root.border_
             clip: true
 
             // Section accent rail. It sits inside the card so the section color
@@ -2023,7 +2029,7 @@ Item {
                             Layout.preferredHeight: 18
                             radius: 9
                             color: sectionRoot.isSubsection
-                                   ? "#151a22"
+                                   ? root.hover
                                    : sectionRoot.displayBadgeBg
 
                             Text {
@@ -2155,7 +2161,7 @@ Item {
         id: hdrBtn
         property string iconName: ""
         property int iconSize: 14
-        property string colorHex: "8b949e"
+        property string colorHex: root.iconHex(root.textMuted)
         property string toolTipText: ""
         property bool accentButton: false
         signal clicked()
@@ -2164,12 +2170,12 @@ Item {
         implicitHeight: 32
         radius: 8
         color: enabled && hdrMa.containsMouse
-               ? (accentButton ? "#1a3d6d" : root.hover)
+               ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26) : root.hover)
                : (accentButton ? root.accentTint : "transparent")
         border.width: 1
         border.color: enabled && hdrMa.containsMouse
-                      ? (accentButton ? "#2d5fa6" : root.borderStrong)
-                      : (accentButton ? "#1f4470" : root.border_)
+                      ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55) : root.borderStrong)
+                      : (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_)
         opacity: enabled ? 1.0 : 0.38
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -2179,7 +2185,7 @@ Item {
             width: hdrBtn.iconSize
             height: hdrBtn.iconSize
             source: root.picon(hdrBtn.iconName, hdrBtn.iconSize,
-                               hdrMa.containsMouse ? "c9d1d9" : hdrBtn.colorHex)
+                               hdrMa.containsMouse ? root.iconHex(root.textSecondary) : hdrBtn.colorHex)
         }
 
         MouseArea {
@@ -2198,7 +2204,7 @@ Item {
     }
 
     component MenuPanel: Rectangle {
-        color: "#1c2128"
+        color: appTheme.hoverStrong
         radius: 8
         border.width: 1
         border.color: root.borderStrong
@@ -2226,7 +2232,7 @@ Item {
     component MenuBg: Rectangle {
         property bool hovered: false
         property bool danger: false
-        color: hovered ? (danger ? root.dangerSubtle : "#262c36") : "transparent"
+        color: hovered ? (danger ? root.dangerSubtle : root.hover) : "transparent"
         radius: 6
     }
 }

@@ -11,6 +11,8 @@ from PySide6.QtSvg import QSvgRenderer
 
 import sys
 
+from solin.styles.theme import PALETTE
+
 # ── Configuracao de bandeiras ─────────────────────────────────────────────────
 #
 # USE_EMOJI_FLAGS = True   → renderiza bandeiras como emoji Unicode (🇧🇷 🇺🇸 etc.)
@@ -103,7 +105,7 @@ def make_flag_icon(svg_str: str, size: int = 24) -> QIcon:
     return QIcon(pix)
 
 
-def make_icon(svg_str: str, size: int = 18, color: str = "#c9d1d9") -> QIcon:
+def make_icon(svg_str: str, size: int = 18, color: str = PALETTE.text_secondary) -> QIcon:
     """Renderiza SVG string como QIcon, substituindo 'currentColor' por *color*."""
     svg = svg_str.replace("currentColor", color)
     data = QByteArray(svg.encode("utf-8"))

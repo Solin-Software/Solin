@@ -23,7 +23,18 @@ from ...core.meetings.schedule import (
     parse_time_text,
 )
 from ...styles.icons import ICON_CALENDAR, ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, make_icon
-from .shared import SETTINGS_ACCENT, SETTINGS_BG, SETTINGS_BORDER, SETTINGS_BORDER_STRONG, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_SURFACE, SETTINGS_TEXT
+from .shared import (
+    SETTINGS_ACCENT,
+    SETTINGS_ACCENT_HOVER,
+    SETTINGS_ACCENT_PRESSED,
+    SETTINGS_BG,
+    SETTINGS_BORDER,
+    SETTINGS_BORDER_STRONG,
+    SETTINGS_DIM,
+    SETTINGS_MUTED,
+    SETTINGS_SURFACE,
+    SETTINGS_TEXT,
+)
 
 _DAY_DATA = tuple(range(7))
 _FIELD_BUTTON_STYLE = (
@@ -107,8 +118,8 @@ _TIME_APPLY_STYLE = (
     " border-radius: 8px;"
     " font-weight: 600;"
     "}"
-    "QPushButton:hover { background: #58a6ff; }"
-    "QPushButton:pressed { background: #2f7be0; }"
+    f"QPushButton:hover {{ background: {SETTINGS_ACCENT_HOVER}; }}"
+    f"QPushButton:pressed {{ background: {SETTINGS_ACCENT_PRESSED}; }}"
 )
 _TIME_CANCEL_STYLE = (
     "QPushButton {"

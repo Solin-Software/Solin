@@ -27,8 +27,9 @@ from solin.styles.icons import (
     ICON_TRASH,
     ICON_VIDEO,
 )
+from solin.styles.theme import PALETTE, QML_THEME
 
-PLAYLIST_PLACEHOLDER_COLOR = "#0a0e14"
+PLAYLIST_PLACEHOLDER_COLOR = QML_THEME["mediaPlaceholder"]
 UNSECTIONED_CARD_BACKGROUND = "transparent"
 
 
@@ -149,7 +150,7 @@ class PlaylistIconProvider(QQuickImageProvider):
         parts = id_str.split("/")
         name = parts[0] if len(parts) > 0 else "grip"
         px_size = int(parts[1]) if len(parts) > 1 else 16
-        color = f"#{parts[2]}" if len(parts) > 2 else "#8b949e"
+        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_muted
 
         svg_str = PLAYLIST_ICON_SVGS.get(name, ICON_GRIP)
         svg = svg_str.replace("currentColor", color)

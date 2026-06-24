@@ -14,6 +14,7 @@ from solin.styles.icons import (
     ICON_MONITOR, ICON_OBS, ICON_ZOOM, ICON_CAMERA, ICON_MUSIC,
     ICON_CHEVRON_DOWN, ICON_CHEVRON_LEFT,
 )
+from solin.styles.theme import PALETTE
 
 # ── Icon mapping ──────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ class SvgIconProvider(QQuickImageProvider):
         parts = id_str.split("/")
         name = parts[0] if parts else ""
         px = int(parts[1]) if len(parts) > 1 else 14
-        color = f"#{parts[2]}" if len(parts) > 2 else "#c9d1d9"
+        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_secondary
 
         svg_str = _ICON_MAP.get(name, "")
         if not svg_str:

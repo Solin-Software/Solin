@@ -20,6 +20,15 @@ Item {
 
     property Item tooltipItem: null
     property string tooltipText: ""
+    readonly property color toolbarSurface: appTheme.surfaceChrome
+    readonly property color toolbarBorder: appTheme.borderChrome
+    readonly property color accent: appTheme.accent
+    readonly property color success: appTheme.success
+    readonly property color white: appTheme.white
+
+    function withAlpha(c, a) {
+        return Qt.rgba(c.r, c.g, c.b, a)
+    }
 
     Timer {
         id: tooltipTimer
@@ -74,12 +83,12 @@ Item {
 
         radius: (bridge.solidMode || bridge.browserRectMode) ? 0 : 20
         color: bridge.solidMode
-               ? Qt.rgba(0.0863, 0.1059, 0.1333, 1.0)    // #161b22 opaque
-               : Qt.rgba(0.0863, 0.1059, 0.1333, 0.94)   // #161b22 @ 94 %
+               ? root.withAlpha(root.toolbarSurface, 1.0)
+               : root.withAlpha(root.toolbarSurface, 0.94)
         // solidMode: border is drawn on the native CALayer so it follows the
         // rounded-corner clip; a QML rectangular border would be clipped flat.
         border.width: bridge.solidMode ? 0 : 1
-        border.color: Qt.rgba(0.1882, 0.2118, 0.2392, 0.7)  // #30363d @ 70 %
+        border.color: root.withAlpha(root.toolbarBorder, 0.7)
 
         Row {
             id: btnRow
@@ -93,9 +102,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: monitorMA.pressed
-                           ? Qt.rgba(1,1,1,0.13)
+                           ? root.withAlpha(root.white, 0.13)
                            : monitorMA.containsMouse
-                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                             ? root.withAlpha(root.white, 0.08) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -120,9 +129,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: backgroundSongMA.pressed
-                           ? Qt.rgba(1,1,1,0.13)
+                           ? root.withAlpha(root.white, 0.13)
                            : backgroundSongMA.containsMouse
-                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                             ? root.withAlpha(root.white, 0.08) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -143,7 +152,7 @@ Item {
             Rectangle {
                 visible: bridge.separatorVisible
                 width: 1; height: 18
-                color: Qt.rgba(0.1882, 0.2118, 0.2392, 0.6)
+                color: root.withAlpha(root.toolbarBorder, 0.6)
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -155,9 +164,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: obsMA.pressed
-                           ? Qt.rgba(1,1,1,0.13)
+                           ? root.withAlpha(root.white, 0.13)
                            : obsMA.containsMouse
-                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                             ? root.withAlpha(root.white, 0.08) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -169,9 +178,9 @@ Item {
                 Rectangle {
                     visible: bridge.obsDotVisible
                     x: 21; y: 3; width: 7; height: 7; radius: 3.5
-                    color: "#3fb950"
+                    color: root.success
                     border.width: 1.5
-                    border.color: Qt.rgba(0.0863, 0.1059, 0.1333, 0.95)
+                    border.color: root.withAlpha(root.toolbarSurface, 0.95)
                 }
                 MouseArea {
                     id: obsMA; anchors.fill: parent
@@ -190,9 +199,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: cameraMA.pressed
-                           ? Qt.rgba(1,1,1,0.13)
+                           ? root.withAlpha(root.white, 0.13)
                            : cameraMA.containsMouse
-                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                             ? root.withAlpha(root.white, 0.08) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -217,9 +226,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 15
                     color: zoomMA.pressed
-                           ? Qt.rgba(1,1,1,0.13)
+                           ? root.withAlpha(root.white, 0.13)
                            : zoomMA.containsMouse
-                             ? Qt.rgba(1,1,1,0.08) : "transparent"
+                             ? root.withAlpha(root.white, 0.08) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -244,7 +253,7 @@ Item {
                 Rectangle {
                     anchors.fill: parent; radius: 11
                     color: minMA.containsMouse
-                           ? Qt.rgba(1,1,1,0.06) : "transparent"
+                           ? root.withAlpha(root.white, 0.06) : "transparent"
                 }
                 Image {
                     anchors.centerIn: parent
@@ -279,15 +288,15 @@ Item {
         radius: (bridge.solidMode || bridge.browserRectMode) ? 0 : 8
 
         color: (bridge.solidMode || bridge.browserRectMode)
-               ? (miniMA.containsMouse ? Qt.rgba(0.0863, 0.1059, 0.1333, 1.0) : Qt.rgba(0.0863, 0.1059, 0.1333, 0.94))
-               : (miniMA.containsMouse ? Qt.rgba(0.0863, 0.1059, 0.1333, 0.92) : Qt.rgba(0.0863, 0.1059, 0.1333, 0.55))
+               ? (miniMA.containsMouse ? root.withAlpha(root.toolbarSurface, 1.0) : root.withAlpha(root.toolbarSurface, 0.94))
+               : (miniMA.containsMouse ? root.withAlpha(root.toolbarSurface, 0.92) : root.withAlpha(root.toolbarSurface, 0.55))
         // solidMode: border drawn on the native CALayer to follow the rounding.
         border.width: bridge.solidMode ? 0 : 1
         border.color: (bridge.solidMode || bridge.browserRectMode)
-                      ? Qt.rgba(0.1882, 0.2118, 0.2392, 0.7)
+                      ? root.withAlpha(root.toolbarBorder, 0.7)
                       : (miniMA.containsMouse
-                         ? Qt.rgba(0.2196, 0.5451, 0.9922, 0.35)
-                         : Qt.rgba(0.1882, 0.2118, 0.2392, 0.35))
+                         ? root.withAlpha(root.accent, 0.35)
+                         : root.withAlpha(root.toolbarBorder, 0.35))
 
         Image {
             anchors.verticalCenter: parent.verticalCenter

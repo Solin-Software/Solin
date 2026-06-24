@@ -26,6 +26,17 @@ from solin.core.integrations.camera import CameraService
 from solin.core.integrations.camera_options import CameraOption
 from solin.core.integrations.automation.settings import CameraSettingsStore
 from solin.styles.icons import ICON_CAMERA, ICON_CAST, make_icon
+from solin.styles.theme import PALETTE, qss_rgba
+
+_BG = PALETTE.bg0
+_SURFACE = PALETTE.surface
+_BORDER = PALETTE.border
+_TEXT = PALETTE.text_primary
+_TEXT_SECONDARY = PALETTE.text_secondary
+_MUTED = PALETTE.text_faint
+_ACCENT = PALETTE.accent_hover
+_ACCENT_BASE = PALETTE.accent
+_DANGER = PALETTE.danger
 
 
 class CameraPopup(QWidget):
@@ -69,8 +80,8 @@ class CameraPopup(QWidget):
         card.setObjectName("CameraCard")
         card.setStyleSheet(
             "QFrame#CameraCard {"
-            "  background: #161b22;"
-            "  border: 1px solid rgba(48,54,61,0.85);"
+            f"  background: {_SURFACE};"
+            f"  border: 1px solid {_BORDER};"
             "  border-radius: 16px;"
             "}"
         )
@@ -81,12 +92,12 @@ class CameraPopup(QWidget):
         header = QHBoxLayout()
         header.setSpacing(8)
         icon = QLabel()
-        icon.setPixmap(make_icon(ICON_CAMERA, 14, "#6e7681").pixmap(14, 14))
+        icon.setPixmap(make_icon(ICON_CAMERA, 14, _MUTED).pixmap(14, 14))
         icon.setFixedSize(14, 14)
         icon.setStyleSheet("background: transparent;")
         self._title = QLabel(self.tr("Camera"))
         self._title.setStyleSheet(
-            "color: #6e7681; font-size: 10px; font-weight: 700;"
+            f"color: {_MUTED}; font-size: 10px; font-weight: 700;"
             " letter-spacing: 0.6px; background: transparent;"
         )
         header.addWidget(icon)
@@ -97,12 +108,12 @@ class CameraPopup(QWidget):
         self._combo = QComboBox()
         self._combo.setMinimumHeight(34)
         self._combo.setStyleSheet(
-            "QComboBox { background: #0d1117; color: #e6edf3;"
-            " border: 1px solid #30363d; border-radius: 8px;"
+            f"QComboBox {{ background: {_BG}; color: {_TEXT};"
+            f" border: 1px solid {_BORDER}; border-radius: 8px;"
             " padding: 0 10px; font-size: 12px; }"
             "QComboBox::drop-down { border: none; width: 26px; }"
-            "QComboBox QAbstractItemView { background: #161b22; color: #e6edf3;"
-            " border: 1px solid #30363d; selection-background-color: #1f3a6e; }"
+            f"QComboBox QAbstractItemView {{ background: {_SURFACE}; color: {_TEXT};"
+            f" border: 1px solid {_BORDER}; selection-background-color: {PALETTE.accent_muted}; }}"
         )
         self._combo.currentIndexChanged.connect(self._on_selected)
         layout.addWidget(self._combo)
@@ -113,9 +124,9 @@ class CameraPopup(QWidget):
         self._refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._refresh_btn.setFixedHeight(32)
         self._refresh_btn.setStyleSheet(
-            "QPushButton { background: #21262d; border: 1px solid #30363d;"
-            " border-radius: 8px; color: #c9d1d9; font-size: 12px; padding: 0 12px; }"
-            "QPushButton:hover { background: #2d333b; }"
+            f"QPushButton {{ background: {PALETTE.bg2}; border: 1px solid {_BORDER};"
+            f" border-radius: 8px; color: {_TEXT_SECONDARY}; font-size: 12px; padding: 0 12px; }}"
+            f"QPushButton:hover {{ background: {PALETTE.bg3}; }}"
         )
         self._refresh_btn.clicked.connect(self.refresh)
 
@@ -134,13 +145,13 @@ class CameraPopup(QWidget):
         self._status = QLabel("")
         self._status.setWordWrap(False)
         self._status.setStyleSheet(
-            "color: #6e7681; font-size: 10px; background: transparent;"
+            f"color: {_MUTED}; font-size: 10px; background: transparent;"
         )
 
         self._help_link = QLabel()
         self._help_link.setOpenExternalLinks(True)
         self._help_link.setStyleSheet(
-            "color: #58a6ff; font-size: 10px; background: transparent;"
+            f"color: {_ACCENT}; font-size: 10px; background: transparent;"
         )
         self._help_link.setVisible(False)
         self._update_help_link()
@@ -156,7 +167,7 @@ class CameraPopup(QWidget):
 
     def refresh(self) -> None:
         self._status.setStyleSheet(
-            "color: #6e7681; font-size: 10px; background: transparent;"
+            f"color: {_MUTED}; font-size: 10px; background: transparent;"
         )
         self._status.setText(self.tr("Looking for cameras..."))
         self._help_link.setVisible(False)
@@ -203,33 +214,33 @@ class CameraPopup(QWidget):
 
     def _show_error(self, message: str) -> None:
         self._status.setStyleSheet(
-            "color: #f85149; font-size: 10px; background: transparent;"
+            f"color: {_DANGER}; font-size: 10px; background: transparent;"
         )
         self._status.setText(message)
         self.set_stream_active(False)
 
     def _update_stream_button(self) -> None:
         if self._active:
-            icon_color = "#f85149"
+            icon_color = _DANGER
             text = self.tr("Stop Stream")
-            bg = "rgba(248,81,73,0.08)"
-            border = "rgba(248,81,73,0.30)"
-            hover_bg = "rgba(248,81,73,0.15)"
-            hover_border = "rgba(248,81,73,0.45)"
+            bg = qss_rgba(_DANGER, 0.08)
+            border = qss_rgba(_DANGER, 0.30)
+            hover_bg = qss_rgba(_DANGER, 0.15)
+            hover_border = qss_rgba(_DANGER, 0.45)
         else:
-            icon_color = "#58a6ff"
+            icon_color = _ACCENT
             text = self.tr("Show Stream")
-            bg = "rgba(56,139,253,0.08)"
-            border = "rgba(56,139,253,0.28)"
-            hover_bg = "rgba(56,139,253,0.15)"
-            hover_border = "rgba(56,139,253,0.45)"
+            bg = qss_rgba(_ACCENT_BASE, 0.08)
+            border = qss_rgba(_ACCENT_BASE, 0.28)
+            hover_bg = qss_rgba(_ACCENT_BASE, 0.15)
+            hover_border = qss_rgba(_ACCENT_BASE, 0.45)
         self._stream_btn.setIcon(make_icon(ICON_CAST, 14, icon_color))
         self._stream_btn.setIconSize(QSize(14, 14))
         self._stream_btn.setText(text)
         self._stream_btn.setStyleSheet(
             "QPushButton {"
             f" background: {bg}; border: 1px solid {border}; border-radius: 8px;"
-            " color: #c9d1d9; font-size: 12px; font-weight: 500; padding: 0 12px;"
+            f" color: {_TEXT_SECONDARY}; font-size: 12px; font-weight: 500; padding: 0 12px;"
             "}"
             f"QPushButton:hover {{ background: {hover_bg}; border-color: {hover_border}; }}"
         )
@@ -274,6 +285,6 @@ class CameraPopup(QWidget):
         url = "https://solinav.vercel.app/faq#why-doesnt-obs-virtual-camera-appear"
         need_help = self.tr("Need help?")
         self._help_link.setText(
-            f'<a href="{url}" style="color:#58a6ff; text-decoration:none;">'
+            f'<a href="{url}" style="color:{_ACCENT}; text-decoration:none;">'
             f"{need_help}</a>"
         )

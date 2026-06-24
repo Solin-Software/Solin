@@ -45,6 +45,26 @@ _INACTIVITY_SECS: int = 15 * 60          # 15 minutos
 _POLL_INTERVAL_MS: int = 30_000          # checa inatividade a cada 30 s
 _PORT_RANGE: tuple[int, int] = (8765, 8865)
 
+_UPLOAD_THEME_KEYS = frozenset(
+    {
+        "bg",
+        "surface",
+        "surface2",
+        "border",
+        "border2",
+        "accent",
+        "accent_hover",
+        "accent_soft",
+        "accent_subtle",
+        "accent_subtle_hover",
+        "text",
+        "text_on_accent",
+        "muted",
+        "ok",
+        "err",
+    }
+)
+
 # ── Helpers de rede ───────────────────────────────────────────────────────────
 
 def get_local_ip() -> str:
@@ -72,9 +92,20 @@ def _find_free_port(start: int, end: int) -> Optional[int]:
 
 # ── HTML da página de upload ──────────────────────────────────────────────────
 
-def build_upload_html(labels: dict[str, str]) -> str:
+def _upload_theme(theme: dict[str, str]) -> dict[str, str]:
+    missing = sorted(key for key in _UPLOAD_THEME_KEYS if not theme.get(key))
+    if missing:
+        raise ValueError(f"Missing Wi-Fi upload theme tokens: {', '.join(missing)}")
+    return {key: theme[key] for key in _UPLOAD_THEME_KEYS}
+
+
+def build_upload_html(
+    labels: dict[str, str],
+    theme: dict[str, str],
+) -> str:
     """
-    Gera o HTML da página de upload com os textos localizados de `labels`.
+    Gera o HTML da página de upload com textos localizados e tema injetado.
+
     Chaves esperadas: title, subtitle, btn_label, success, error, drop_hint.
     """
     title      = labels.get("title",     "Enviar Mídias")
@@ -87,6 +118,7 @@ def build_upload_html(labels: dict[str, str]) -> str:
     # Escapar aspas simples no JS:
     safe_success = success.replace("'", "\\'")
     safe_error_lbl = error_lbl.replace("'", "\\'")
+    t = _upload_theme(theme)
 
     return (
         "<!DOCTYPE html>"
@@ -96,18 +128,21 @@ def build_upload_html(labels: dict[str, str]) -> str:
         f"<title>{title}</title>"
         "<style>"
         "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}"
-        ":root{"
-        "--bg:#0d1117;--surface:#161b22;--surface2:#1c2128;"
-        "--border:#30363d;--border2:#21262d;"
-        "--accent:#388bfd;--accent-dk:#1f6feb;"
-        "--text:#e6edf3;--muted:#8b949e;"
-        "--ok:#3fb950;--err:#f85149;"
-        "--r:16px}"
+        f":root{{"
+        f"--bg:{t['bg']};--surface:{t['surface']};--surface2:{t['surface2']};"
+        f"--border:{t['border']};--border2:{t['border2']};"
+        f"--accent:{t['accent']};--accent-hover:{t['accent_hover']};"
+        f"--accent-soft:{t['accent_soft']};"
+        f"--accent-subtle:{t['accent_subtle']};"
+        f"--accent-subtle-hover:{t['accent_subtle_hover']};"
+        f"--text:{t['text']};--text-on-accent:{t['text_on_accent']};--muted:{t['muted']};"
+        f"--ok:{t['ok']};--err:{t['err']};"
+        f"--r:16px}}"
         "html,body{min-height:100%;background:var(--bg);color:var(--text);"
         "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
         "display:flex;align-items:flex-start;justify-content:center;padding:20px 0 40px}"
         ".card{width:min(94vw,420px);display:flex;flex-direction:column;align-items:center;gap:18px}"
-        ".logo-wrap{width:64px;height:64px;background:rgba(56,139,253,.12);"
+        ".logo-wrap{width:64px;height:64px;background:var(--accent-soft);"
         "border-radius:20px;display:flex;align-items:center;justify-content:center;margin-top:8px}"
         "h1{font-size:22px;font-weight:700;text-align:center;letter-spacing:-.01em}"
         ".subtitle{font-size:13px;color:var(--muted);text-align:center;line-height:1.55;max-width:300px}"
@@ -115,17 +150,17 @@ def build_upload_html(labels: dict[str, str]) -> str:
         "border-radius:14px;display:flex;flex-direction:column;"
         "align-items:center;justify-content:center;gap:10px;"
         "cursor:pointer;transition:border-color .2s,background .2s;"
-        "background:rgba(56,139,253,.03);padding:28px 20px;text-align:center}"
-        ".drop.over{border-color:var(--accent);background:rgba(56,139,253,.09)}"
+        "background:var(--accent-subtle);padding:28px 20px;text-align:center}"
+        ".drop.over{border-color:var(--accent);background:var(--accent-subtle-hover)}"
         ".drop svg{opacity:.45}"
         ".drop p{font-size:13px;color:var(--muted)}"
         ".btn{width:100%;padding:20px;font-size:17px;font-weight:700;"
         "border:none;border-radius:14px;cursor:pointer;"
-        "background:var(--accent);color:#fff;"
+        "background:var(--accent);color:var(--text-on-accent);"
         "transition:background .15s,transform .1s,opacity .2s;"
         "display:flex;align-items:center;justify-content:center;gap:12px;"
         "letter-spacing:.01em;-webkit-tap-highlight-color:transparent}"
-        ".btn:hover{background:var(--accent-dk)}"
+        ".btn:hover{background:var(--accent-hover)}"
         ".btn:active{transform:scale(.97)}"
         ".btn:disabled{opacity:.45;cursor:not-allowed;transform:none}"
         ".files{width:100%;display:flex;flex-direction:column;gap:8px}"
@@ -159,19 +194,19 @@ def build_upload_html(labels: dict[str, str]) -> str:
         '<div class="card">'
         '<div class="logo-wrap">'
         '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" '
-        'stroke="#388bfd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        f'stroke="{t["accent"]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'
         '<polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
         "</svg></div>"
         f"<h1>{title}</h1>"
         f'<p class="subtitle">{subtitle}</p>'
         '<div class="drop" id="dz">'
-        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8b949e" '
+        f'<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{t["muted"]}" '
         'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
         '<rect x="2" y="3" width="20" height="14" rx="2"/>'
         '<path d="M8 21h8M12 17v4"/>'
-        '<circle cx="8.5" cy="8.5" r="1.5" fill="#8b949e" stroke="none"/>'
-        '<path d="M21 15l-5-5-4 4-2-2-3 3" stroke="#8b949e"/>'
+        f'<circle cx="8.5" cy="8.5" r="1.5" fill="{t["muted"]}" stroke="none"/>'
+        f'<path d="M21 15l-5-5-4 4-2-2-3 3" stroke="{t["muted"]}"/>'
         f"</svg><p>{drop_hint}</p></div>"
         '<div class="files" id="fl"></div>'
         '<div class="prog-wrap" id="pw"><div class="prog" id="pb"></div></div>'
@@ -415,7 +450,9 @@ class WifiReceiveServer(QObject):
         self._generation:    int                        = 0
         self._stopping:      bool                       = False
         self._shutdown_inactivity: bool                 = False
-        self._pending_start: Optional[dict[str, str]]    = None
+        self._pending_start: Optional[
+            dict[str, str] | tuple[dict[str, str], dict[str, str]]
+        ] = None
         # True enquanto a janela de recepção Wi-Fi estiver visível ao usuário.
         # Quando aberta, o contador de inatividade é suspenso; ao fechar, recomeça
         # do zero (i.e. _last_activity é atualizado no momento em que fecha).
@@ -459,7 +496,11 @@ class WifiReceiveServer(QObject):
             # Janela fechada → começa a contar a partir de agora
             self._last_activity = time.monotonic()
 
-    def start(self, html_labels: dict[str, str]) -> bool:
+    def start(
+        self,
+        html_labels: dict[str, str],
+        html_theme: dict[str, str],
+    ) -> bool:
         """
         Inicia o servidor. Retorna True se bem-sucedido.
         Se já estiver rodando, retorna True sem reiniciar.
@@ -467,7 +508,10 @@ class WifiReceiveServer(QObject):
         if self.is_running:
             return True
         if self._stopping:
-            self._pending_start = dict(html_labels)
+            self._pending_start = (
+                dict(html_labels),
+                dict(html_theme),
+            )
             return True
 
         port = _find_free_port(*_PORT_RANGE)
@@ -478,7 +522,7 @@ class WifiReceiveServer(QObject):
         self._token = uuid.uuid4().hex[:12]   # token curto mas suficientemente aleatório
         self._generation += 1
         generation = self._generation
-        html = build_upload_html(html_labels)
+        html = build_upload_html(html_labels, html_theme)
 
         handler_cls = make_handler(
             token       = self._token,
@@ -626,7 +670,8 @@ class WifiReceiveServer(QObject):
             self.inactivity_stopped.emit()
         pending, self._pending_start = self._pending_start, None
         if pending is not None:
-            self.start(pending)
+            labels, theme = pending
+            self.start(labels, theme)
 
 
 __all__ = [

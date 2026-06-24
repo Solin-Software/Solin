@@ -9,7 +9,7 @@ Rectangle {
     id: seg
     property var options: []
     property int current: 0
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     property int segWidth: 92
     property int segHeight: 32
     property int labelPadding: 10
@@ -37,8 +37,8 @@ Rectangle {
     implicitHeight: segHeight
     implicitWidth: _count * _minSegW + 6
     radius: 9
-    color: "#0f131a"
-    border.color: "#1e2430"
+    color: appTheme.surfaceAlt
+    border.color: appTheme.border_
     border.width: 1
     opacity: enabled ? 1.0 : 0.72
     Behavior on opacity { NumberAnimation { duration: 140 } }
@@ -102,7 +102,7 @@ Rectangle {
                     anchors.leftMargin: seg.labelPadding
                     anchors.rightMargin: seg.labelPadding
                     text: modelData
-                    color: index === seg.current ? "#ffffff" : "#8b949e"
+                    color: index === seg.current ? appTheme.white : appTheme.textMuted
                     font.pixelSize: seg.labelPixelSize
                     font.weight: seg.labelWeight
                     horizontalAlignment: Text.AlignHCenter

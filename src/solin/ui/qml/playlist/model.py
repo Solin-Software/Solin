@@ -24,6 +24,7 @@ from solin.core.meetings.colors import (
     card_border_from_hue,
     section_text_from_hue,
 )
+from solin.styles.theme import PALETTE
 from solin.ui.qml.playlist.visuals import (
     UNSECTIONED_CARD_BACKGROUND,
     playlist_media_badge,
@@ -1001,8 +1002,8 @@ class PlaylistEditModel(QAbstractListModel):
             "duration_text": "",
             "section_id":    sub["id"],
             "parent_id":     parent_id,
-            "section_text":  "#8b949e",
-            "badge_bg":      "#1a1f28",
+            "section_text":  PALETTE.text_muted,
+            "badge_bg":      PALETTE.surface_hover,
             "url":           "",
             "sub_card_top":  False,
             "sub_card_bottom": False,

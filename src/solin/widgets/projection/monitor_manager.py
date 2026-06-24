@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_CLOSE, ICON_IMAGE, ICON_MONITOR, ICON_TV, ICON_VIDEO, make_icon
+from solin.styles.theme import PALETTE, qss_rgba
 
 # ── Monitor Manager Popup ─────────────────────────────────────────────────────
 
@@ -75,11 +76,11 @@ class MonitorManagerPopup(QWidget):
         card = QFrame()
         card.setObjectName("MonitorPopupCard")
         card.setStyleSheet(
-            "QFrame#MonitorPopupCard {"
-            "  background: #161b22;"
-            "  border: 1px solid #30363d;"
-            "  border-radius: 12px;"
-            "}"
+            f"QFrame#MonitorPopupCard {{"
+            f"  background: {PALETTE.surface};"
+            f"  border: 1px solid {PALETTE.border};"
+            f"  border-radius: 12px;"
+            f"}}"
         )
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
@@ -93,12 +94,12 @@ class MonitorManagerPopup(QWidget):
         h_lay.setSpacing(8)
 
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(make_icon(ICON_MONITOR, 15, "#8b949e").pixmap(15, 15))
+        icon_lbl.setPixmap(make_icon(ICON_MONITOR, 15, PALETTE.text_muted).pixmap(15, 15))
         icon_lbl.setStyleSheet("background: transparent;")
 
         self._header_title_lbl = QLabel(self.tr("Monitors"))
         self._header_title_lbl.setStyleSheet(
-            "color: #e6edf3; font-size: 13px; font-weight: 600; background: transparent;"
+            f"color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600; background: transparent;"
         )
         h_lay.addWidget(icon_lbl)
         h_lay.addWidget(self._header_title_lbl)
@@ -126,8 +127,18 @@ class MonitorManagerPopup(QWidget):
         f_lay.setContentsMargins(10, 8, 10, 8)
         f_lay.setSpacing(8)
 
-        self._all_on_btn  = self._make_action_btn(self.tr("Project all"),  "#388bfd", "rgba(56,139,253,0.10)",  "rgba(56,139,253,0.20)")
-        self._all_off_btn = self._make_action_btn(self.tr("Remove all"),   "#f85149", "rgba(248,81,73,0.10)",   "rgba(248,81,73,0.20)")
+        self._all_on_btn  = self._make_action_btn(
+            self.tr("Project all"),
+            PALETTE.accent,
+            qss_rgba(PALETTE.accent, 0.10),
+            qss_rgba(PALETTE.accent, 0.20),
+        )
+        self._all_off_btn = self._make_action_btn(
+            self.tr("Remove all"),
+            PALETTE.danger,
+            qss_rgba(PALETTE.danger, 0.10),
+            qss_rgba(PALETTE.danger, 0.20),
+        )
 
         self._all_on_btn.clicked.connect(lambda: self.projection_all_requested.emit(True))
         self._all_off_btn.clicked.connect(lambda: self.projection_all_requested.emit(False))
@@ -145,7 +156,9 @@ class MonitorManagerPopup(QWidget):
     def _make_divider(self) -> QFrame:
         d = QFrame()
         d.setFrameShape(QFrame.Shape.HLine)
-        d.setStyleSheet("background: #21262d; border: none; max-height: 1px; min-height: 1px;")
+        d.setStyleSheet(
+            f"background: {PALETTE.border_muted}; border: none; max-height: 1px; min-height: 1px;"
+        )
         d.setFixedHeight(1)
         return d
 
@@ -167,7 +180,7 @@ class MonitorManagerPopup(QWidget):
             f"QPushButton:hover {{ background: {hover_bg}; }}"
             f"QPushButton:pressed {{ background: {press_bg}; }}"
             f"QPushButton:disabled {{"
-            f"  color: #484f58; border-color: #30363d;"
+            f"  color: {PALETTE.text_dim}; border-color: {PALETTE.border};"
             f"}}"
         )
         return btn
@@ -186,12 +199,12 @@ class MonitorManagerPopup(QWidget):
         title_row.setContentsMargins(0, 0, 0, 0)
 
         tv_icon = QLabel()
-        tv_icon.setPixmap(make_icon(ICON_TV, 13, "#8b949e").pixmap(13, 13))
+        tv_icon.setPixmap(make_icon(ICON_TV, 13, PALETTE.text_muted).pixmap(13, 13))
         tv_icon.setStyleSheet("background: transparent;")
 
         self._idle_section_title_lbl = QLabel(self.tr("Idle Screen"))
         self._idle_section_title_lbl.setStyleSheet(
-            "color: #8b949e; font-size: 11px; font-weight: 600;"
+            f"color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
             " letter-spacing: 0.5px; background: transparent;"
         )
         title_row.addWidget(tv_icon)
@@ -209,12 +222,12 @@ class MonitorManagerPopup(QWidget):
         self._idle_type_icon.setFixedSize(18, 18)
         self._idle_type_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._idle_type_icon.setStyleSheet("background: transparent;")
-        self._idle_type_icon.setPixmap(make_icon(ICON_IMAGE, 14, "#484f58").pixmap(14, 14))
+        self._idle_type_icon.setPixmap(make_icon(ICON_IMAGE, 14, PALETTE.text_dim).pixmap(14, 14))
 
         # File name / placeholder label
         self._idle_name_lbl = QLabel(self.tr("No media selected"))
         self._idle_name_lbl.setStyleSheet(
-            "color: #484f58; font-size: 11px; background: transparent;"
+            f"color: {PALETTE.text_dim}; font-size: 11px; background: transparent;"
         )
         self._idle_name_lbl.setMaximumWidth(180)
         # Truncate long names with ellipsis on the left (shows filename end)
@@ -225,19 +238,19 @@ class MonitorManagerPopup(QWidget):
         self._idle_pick_btn.setFixedHeight(28)
         self._idle_pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._idle_pick_btn.setStyleSheet(
-            "QPushButton {"
-            "  color: #8b949e;"
-            "  background: #21262d;"
-            "  border: 1px solid #30363d;"
-            "  border-radius: 6px;"
-            "  font-size: 11px;"
-            "  font-weight: 500;"
-            "  padding: 0 10px;"
-            "}"
-            "QPushButton:hover {"
-            "  background: #30363d; border-color: #484f58; color: #c9d1d9;"
-            "}"
-            "QPushButton:pressed { background: #161b22; }"
+            f"QPushButton {{"
+            f"  color: {PALETTE.text_muted};"
+            f"  background: {PALETTE.bg2};"
+            f"  border: 1px solid {PALETTE.border};"
+            f"  border-radius: 6px;"
+            f"  font-size: 11px;"
+            f"  font-weight: 500;"
+            f"  padding: 0 10px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background: {PALETTE.border}; border-color: {PALETTE.text_dim}; color: {PALETTE.text_secondary};"
+            f"}}"
+            f"QPushButton:pressed {{ background: {PALETTE.surface}; }}"
         )
         self._idle_pick_btn.clicked.connect(self._on_pick_idle_media)
 
@@ -245,7 +258,7 @@ class MonitorManagerPopup(QWidget):
         self._idle_clear_btn = QPushButton()
         self._idle_clear_btn.setFixedSize(28, 28)
         self._idle_clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._idle_clear_btn.setIcon(make_icon(ICON_CLOSE, 11, "#f85149"))
+        self._idle_clear_btn.setIcon(make_icon(ICON_CLOSE, 11, PALETTE.danger))
         self._idle_clear_btn.setIconSize(QSize(11, 11))
         self._idle_clear_btn.setToolTip(self.tr("Remove idle media"))
         self._idle_clear_btn.setStyleSheet(
@@ -254,11 +267,11 @@ class MonitorManagerPopup(QWidget):
             "  border: 1px solid transparent;"
             "  border-radius: 6px;"
             "}"
-            "QPushButton:hover {"
-            "  background: rgba(248,81,73,0.10);"
-            "  border-color: rgba(248,81,73,0.40);"
-            "}"
-            "QPushButton:pressed { background: rgba(248,81,73,0.20); }"
+            f"QPushButton:hover {{"
+            f"  background: {qss_rgba(PALETTE.danger, 0.10)};"
+            f"  border-color: {qss_rgba(PALETTE.danger, 0.40)};"
+            f"}}"
+            f"QPushButton:pressed {{ background: {qss_rgba(PALETTE.danger, 0.20)}; }}"
         )
         self._idle_clear_btn.setVisible(False)
         self._idle_clear_btn.clicked.connect(self._on_clear_idle_media)
@@ -272,7 +285,7 @@ class MonitorManagerPopup(QWidget):
         # Hint label
         self._idle_hint_lbl = QLabel(self.tr("Session only · not saved on exit"))
         self._idle_hint_lbl.setStyleSheet(
-            "color: #30363d; font-size: 10px; background: transparent;"
+            f"color: {PALETTE.border}; font-size: 10px; background: transparent;"
         )
         lay.addWidget(self._idle_hint_lbl)
 
@@ -300,7 +313,7 @@ class MonitorManagerPopup(QWidget):
         if not screens_info:
             empty = QLabel(self.tr("No secondary monitors detected"))
             empty.setStyleSheet(
-                "color: #484f58; font-size: 12px; background: transparent;"
+                f"color: {PALETTE.text_dim}; font-size: 12px; background: transparent;"
                 " padding: 6px 6px 8px 6px;"
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -329,20 +342,20 @@ class MonitorManagerPopup(QWidget):
             display = ("…" + name[-(max_len - 1):]) if len(name) > max_len else name
             self._idle_name_lbl.setText(display)
             self._idle_name_lbl.setStyleSheet(
-                "color: #c9d1d9; font-size: 11px; background: transparent;"
+                f"color: {PALETTE.text_secondary}; font-size: 11px; background: transparent;"
             )
             # Pick icon based on extension
             mtype = media_type_from_path(path)
             icon_svg = ICON_VIDEO if mtype == "video" else ICON_IMAGE
-            icon_color = "#3fb950" if mtype == "video" else "#58a6ff"
+            icon_color = PALETTE.success if mtype == "video" else PALETTE.accent_hover
             self._idle_type_icon.setPixmap(make_icon(icon_svg, 14, icon_color).pixmap(14, 14))
             self._idle_clear_btn.setVisible(True)
         else:
             self._idle_name_lbl.setText(self.tr("No media selected"))
             self._idle_name_lbl.setStyleSheet(
-                "color: #484f58; font-size: 11px; background: transparent;"
+                f"color: {PALETTE.text_dim}; font-size: 11px; background: transparent;"
             )
-            self._idle_type_icon.setPixmap(make_icon(ICON_IMAGE, 14, "#484f58").pixmap(14, 14))
+            self._idle_type_icon.setPixmap(make_icon(ICON_IMAGE, 14, PALETTE.text_dim).pixmap(14, 14))
             self._idle_clear_btn.setVisible(False)
 
     # ─────────────────────────────────────────────────────────────────────
@@ -382,15 +395,15 @@ class MonitorManagerPopup(QWidget):
         row = QFrame()
         row.setObjectName("MonitorRow")
         row.setStyleSheet(
-            "QFrame#MonitorRow {"
-            "  background: #0d1117;"
-            "  border: 1px solid #21262d;"
-            "  border-radius: 8px;"
-            "}"
-            "QFrame#MonitorRow:hover {"
-            "  border-color: #30363d;"
-            "  background: #161b22;"
-            "}"
+            f"QFrame#MonitorRow {{"
+            f"  background: {PALETTE.bg0};"
+            f"  border: 1px solid {PALETTE.border_muted};"
+            f"  border-radius: 8px;"
+            f"}}"
+            f"QFrame#MonitorRow:hover {{"
+            f"  border-color: {PALETTE.border};"
+            f"  background: {PALETTE.surface};"
+            f"}}"
         )
         row_lay = QHBoxLayout(row)
         row_lay.setContentsMargins(12, 10, 10, 10)
@@ -403,16 +416,16 @@ class MonitorManagerPopup(QWidget):
         icon_lbl = QLabel(icon_container)
         icon_lbl.setGeometry(0, 0, 32, 32)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_color = "#3fb950" if active else "#484f58"
+        icon_color = PALETTE.success if active else PALETTE.text_dim
         icon_lbl.setPixmap(make_icon(icon_svg, 18, icon_color).pixmap(18, 18))
 
         dot = QLabel(icon_container)
         dot.setFixedSize(8, 8)
         dot.move(22, 22)
         dot.setStyleSheet(
-            f"background: {'#3fb950' if active else '#484f58'};"
+            f"background: {PALETTE.success if active else PALETTE.text_dim};"
             f"border-radius: 4px;"
-            f"border: 1.5px solid #161b22;"
+            f"border: 1.5px solid {PALETTE.surface};"
         )
 
         # Text column
@@ -420,11 +433,11 @@ class MonitorManagerPopup(QWidget):
         text_col.setSpacing(1)
         name_lbl = QLabel(name)
         name_lbl.setStyleSheet(
-            "color: #e6edf3; font-size: 12px; font-weight: 600; background: transparent;"
+            f"color: {PALETTE.text_primary}; font-size: 12px; font-weight: 600; background: transparent;"
         )
         sub_lbl = QLabel(subtitle)
         sub_lbl.setStyleSheet(
-            "color: #484f58; font-size: 10px; background: transparent;"
+            f"color: {PALETTE.text_dim}; font-size: 10px; background: transparent;"
         )
         text_col.addWidget(name_lbl)
         text_col.addWidget(sub_lbl)
@@ -432,20 +445,20 @@ class MonitorManagerPopup(QWidget):
         # Toggle button — fixed min-width so short/long labels are handled
         if active:
             btn_text, btn_color, btn_hover, btn_press = (
-                self.tr("Hide"), "#f85149",
-                "rgba(248,81,73,0.10)", "rgba(248,81,73,0.20)"
+                self.tr("Hide"), PALETTE.danger,
+                qss_rgba(PALETTE.danger, 0.10), qss_rgba(PALETTE.danger, 0.20)
             )
         elif reserved:
             # Inactive *and* reserved by the timer — offer to take it over
             # (the controller will ask for confirmation before displacing it).
             btn_text, btn_color, btn_hover, btn_press = (
-                self.tr("Use here"), "#d29922",
-                "rgba(210,153,34,0.10)", "rgba(210,153,34,0.20)"
+                self.tr("Use here"), PALETTE.warning,
+                qss_rgba(PALETTE.warning, 0.10), qss_rgba(PALETTE.warning, 0.20)
             )
         else:
             btn_text, btn_color, btn_hover, btn_press = (
-                self.tr("Show"), "#388bfd",
-                "rgba(56,139,253,0.10)", "rgba(56,139,253,0.20)"
+                self.tr("Show"), PALETTE.accent,
+                qss_rgba(PALETTE.accent, 0.10), qss_rgba(PALETTE.accent, 0.20)
             )
 
         toggle_btn = QPushButton(btn_text)

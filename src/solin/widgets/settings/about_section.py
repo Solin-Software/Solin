@@ -5,7 +5,14 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from ...core.foundation.constants import APP_VERSION
-from .shared import SETTINGS_ACCENT, SETTINGS_BORDER, SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
+from .shared import (
+    SETTINGS_ACCENT,
+    SETTINGS_ACCENT_HOVER,
+    SETTINGS_BORDER,
+    SETTINGS_DIM,
+    SETTINGS_MUTED,
+    SETTINGS_TEXT,
+)
 
 
 class AboutSectionMixin:
@@ -51,7 +58,7 @@ class AboutSectionMixin:
         self._link_site_btn.setStyleSheet(
             f"QPushButton {{ color: {SETTINGS_ACCENT}; font-size: 12px; font-weight: 500;"
             f" background: transparent; border: none; padding: 0px; }}"
-            f"QPushButton:hover {{ color: #58a6ff; }}"
+            f"QPushButton:hover {{ color: {SETTINGS_ACCENT_HOVER}; }}"
         )
         self._link_site_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl("https://solinav.vercel.app/"))
@@ -62,7 +69,7 @@ class AboutSectionMixin:
         self._link_changelog_btn.setStyleSheet(
             f"QPushButton {{ color: {SETTINGS_ACCENT}; font-size: 12px; font-weight: 500;"
             f" background: transparent; border: none; padding: 0px; }}"
-            f"QPushButton:hover {{ color: #58a6ff; }}"
+            f"QPushButton:hover {{ color: {SETTINGS_ACCENT_HOVER}; }}"
         )
         self._link_changelog_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(

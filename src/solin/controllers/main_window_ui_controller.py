@@ -39,6 +39,7 @@ from ..styles.icons import (
     ICON_NAV_WIFI,
     make_icon,
 )
+from ..styles.theme import PALETTE
 from ..widgets.clips_widget import ClipsWidget
 from ..widgets.common.collapsible_sidebar import (
     CollapsibleSidebarFrame,
@@ -673,7 +674,7 @@ class MainWindowUiController:
         button.setObjectName("SidebarToggleBtn")
         button.setFixedSize(36, 36)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setIcon(make_icon(ICON_MENU, 18, "#8b949e"))
+        button.setIcon(make_icon(ICON_MENU, 18, PALETTE.text_muted))
         button.setIconSize(QSize(18, 18))
         return button
 
@@ -727,7 +728,9 @@ class MainWindowUiController:
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFrameShadow(QFrame.Shadow.Plain)
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background:#21262d; border:none; margin: 4px 0;")
+        sep.setStyleSheet(
+            f"background:{PALETTE.border_muted}; border:none; margin: 4px 0;"
+        )
         return sep
 
     def _flush_orphaned_media_files(self) -> None:

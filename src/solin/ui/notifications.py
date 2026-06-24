@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QWidget
 from pyqttoast import Toast, ToastPosition, ToastPreset
 
 from solin.styles.icons import make_icon
-from solin.styles.theme import COLORS
+from solin.styles.theme import PALETTE
 
 
 class NotificationKind(Enum):
@@ -34,22 +34,22 @@ class _NotificationStyle:
 _STYLES = {
     NotificationKind.SUCCESS: _NotificationStyle(
         ToastPreset.SUCCESS_DARK,
-        COLORS["success"],
+        PALETTE.success,
         3200,
     ),
     NotificationKind.INFORMATION: _NotificationStyle(
         ToastPreset.INFORMATION_DARK,
-        COLORS["accent2"],
+        PALETTE.accent,
         3800,
     ),
     NotificationKind.WARNING: _NotificationStyle(
         ToastPreset.WARNING_DARK,
-        COLORS["warning"],
+        PALETTE.warning,
         5200,
     ),
     NotificationKind.ERROR: _NotificationStyle(
         ToastPreset.ERROR_DARK,
-        COLORS["danger"],
+        PALETTE.danger,
         7000,
     ),
 }
@@ -352,10 +352,10 @@ class NotificationCenter:
         toast.setFadeInDuration(180)
         toast.setFadeOutDuration(220)
 
-        toast.setBackgroundColor(QColor(COLORS["bg1"]))
-        toast.setTitleColor(QColor(COLORS["text_primary"]))
-        toast.setTextColor(QColor(COLORS["text_secondary"]))
-        toast.setCloseButtonIconColor(QColor(COLORS["text_muted"]))
+        toast.setBackgroundColor(QColor(PALETTE.surface))
+        toast.setTitleColor(QColor(PALETTE.text_primary))
+        toast.setTextColor(QColor(PALETTE.text_muted))
+        toast.setCloseButtonIconColor(QColor(PALETTE.text_dim))
         toast.setIconColor(accent_color)
         toast.setDurationBarColor(accent_color)
 

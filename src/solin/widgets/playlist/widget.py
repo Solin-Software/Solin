@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.styles.theme import QML_THEME
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.model import PlaylistEditModel
@@ -262,7 +263,7 @@ class PlaylistEditView(
         configure_qml_host(
             self.qml_widget,
             type_name="PlaylistEditView",
-            clear_color="#0a0e14",
+            clear_color=QML_THEME["mediaPlaceholder"],
             image_providers={
                 "playlistthumbs": PlaylistThumbnailProvider(
                     self._id_to_thumb,

@@ -15,15 +15,15 @@ Rectangle {
     readonly property string pendingTitle: hasBridge ? placementBridge.pendingItemTitle : ""
     readonly property string pendingThumb: hasBridge ? placementBridge.pendingItemThumb : ""
 
-    property color surface: "#13161c"
-    property color surfaceElevated: "#1c2128"
-    property color hover: "#1a1f2a"
-    property color border_: "#1e2430"
-    property color borderStrong: "#2a3040"
-    property color textPrimary: "#e6edf3"
-    property color textSecondary: "#c9d1d9"
-    property color textMuted: "#8b949e"
-    property color accent: "#388bfd"
+    property color surface: appTheme.surface
+    property color surfaceElevated: appTheme.hoverStrong
+    property color hover: appTheme.hover
+    property color border_: appTheme.border_
+    property color borderStrong: appTheme.borderStrong
+    property color textPrimary: appTheme.textPrimary
+    property color textSecondary: appTheme.textSecondary
+    property color textMuted: appTheme.textMuted
+    property color accent: appTheme.accent
 
     Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 

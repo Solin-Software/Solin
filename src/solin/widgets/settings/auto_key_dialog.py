@@ -14,6 +14,7 @@ from ...ui.auto_key_labels import auto_key_event_label
 from ...ui.controls import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
+    SETTINGS_ACCENT_MUTED,
     SETTINGS_BG,
     SETTINGS_BORDER_STRONG,
     SETTINGS_DIM,
@@ -26,6 +27,7 @@ from .shared import (
     SETTINGS_TEXT,
     SettingsToggleSwitch,
 )
+from solin.styles.theme import PALETTE
 
 
 class _ShortcutSequenceEdit(QPushButton):
@@ -149,7 +151,8 @@ class AutoKeyEditorDialog(QDialog):
             f"QPushButton#AutoKeyShortcut:hover {{ border-color: {SETTINGS_MUTED}; }}"
             f"QPushButton#AutoKeyShortcut:focus {{ border-color: {SETTINGS_ACCENT}; }}"
             f"QPushButton#AutoKeyShortcut[recording=\"true\"] {{"
-            f" background-color: #0f1a2a; border-color: {SETTINGS_ACCENT}; color: #ffffff; }}"
+            f" background-color: {PALETTE.accent_tint}; border-color: {SETTINGS_ACCENT};"
+            f" color: {PALETTE.white}; }}"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 20, 20, 16)
@@ -265,7 +268,7 @@ class AutoKeyEditorDialog(QDialog):
             f" border-left: 4px solid transparent; border-right: 4px solid transparent;"
             f" border-top: 5px solid {SETTINGS_MUTED}; margin-right: 12px; }}"
             f"QComboBox QAbstractItemView {{ background-color: {SETTINGS_BG}; color: {SETTINGS_TEXT};"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: #1f3a6e;"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: {SETTINGS_ACCENT_MUTED};"
             f" outline: none; }}"
         )
 

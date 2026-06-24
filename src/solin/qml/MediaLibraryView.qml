@@ -5,23 +5,25 @@ import QtQuick.Controls.Basic
 
 Rectangle {
     id: root
-    color: "#0d1117"
+    color: appTheme.bg
 
     readonly property int pagePad: Math.max(16, Math.min(28, width * 0.035))
-    readonly property color bg:            "#0d1117"
-    readonly property color surface:       "#161b22"
-    readonly property color surface2:      "#11161d"
-    readonly property color hover:         "#1b2130"
-    readonly property color hoverBorder:   "#252d3d"
-    readonly property color border:        "#21262d"
-    readonly property color borderStrong:  "#30363d"
-    readonly property color textPrimary:   "#e6edf3"
-    readonly property color textSecondary: "#b8c0cc"
-    readonly property color textMuted:     "#8b949e"
-    readonly property color textDim:       "#4d5866"
-    readonly property color accent:        "#388bfd"
-    readonly property color accentSubtle:  "#1a3358"
-    readonly property color amber:         "#d29922"
+    readonly property color bg:            appTheme.bg
+    readonly property color surface:       appTheme.surfaceChrome
+    readonly property color surface2:      appTheme.surface2
+    readonly property color surfaceInputFocus: appTheme.surfaceInputFocus
+    readonly property color hover:         appTheme.hover
+    readonly property color hoverBorder:   appTheme.hoverBorder
+    readonly property color border:        appTheme.border
+    readonly property color borderStrong:  appTheme.borderStrong
+    readonly property color textPrimary:   appTheme.textPrimary
+    readonly property color textSecondary: appTheme.textSecondary
+    readonly property color textMuted:     appTheme.textMuted
+    readonly property color textDim:       appTheme.textDim
+    readonly property color accent:        appTheme.accent
+    readonly property color accentSelection: appTheme.accentSelection
+    readonly property color accentSubtle:  appTheme.accentTint
+    readonly property color amber:         appTheme.amber
 
     readonly property bool hasController: typeof controller !== "undefined" && controller !== null
     readonly property string titleText: root.hasController ? controller.titleText : ""
@@ -434,7 +436,7 @@ Rectangle {
     component SearchField: Rectangle {
         id: searchBox
         radius: 8
-        color:        searchInput.activeFocus ? "#0e1720" : root.surface2
+        color:        searchInput.activeFocus ? root.surfaceInputFocus : root.surface2
         border.width: 1
         border.color: searchInput.activeFocus ? root.accent : root.border
 
@@ -473,8 +475,8 @@ Rectangle {
                     id: searchInput
                     anchors.fill:      parent
                     color:             root.textSecondary
-                    selectionColor:    "#1f6feb"
-                    selectedTextColor: "#ffffff"
+                    selectionColor:    root.accentSelection
+                    selectedTextColor: appTheme.white
                     font.pixelSize:    13
                     verticalAlignment: TextInput.AlignVCenter
                     clip: true
@@ -534,7 +536,7 @@ Rectangle {
             radius: 6
             color:  root.accentSubtle
             border.width: 1
-            border.color: "#2a5a9e"
+            border.color: root.accent
 
             Behavior on x {
                 NumberAnimation { duration: 200; easing.type: Easing.OutCubic }

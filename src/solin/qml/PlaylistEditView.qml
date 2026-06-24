@@ -6,27 +6,28 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: "#0d1117"
+    color: appTheme.bg
 
     readonly property int contentLeftInset: 16
     readonly property int contentRightInset: 12
     readonly property int scrollbarGutter: 12
     readonly property int scrollbarContentGap: 8
-    readonly property color bg: "#0d1117"
-    readonly property color surface: "#13161c"
-    readonly property color hover: "#1a1f2a"
-    readonly property color border_: "#1e2430"
-    readonly property color borderStrong: "#2a3040"
-    readonly property color textPrimary: "#e6edf3"
-    readonly property color textSecondary: "#c9d1d9"
-    readonly property color textMuted: "#8b949e"
-    readonly property color textDim: "#484f58"
-    readonly property color accent: "#388bfd"
-    readonly property color accentTint: "#132a46"
-    readonly property color previewBg: Qt.rgba(0.22, 0.55, 0.99, 0.12)
-    readonly property color previewBorder: "#388bfd"
-    readonly property color danger: "#f85149"
-    readonly property color dangerSubtle: "#3d1214"
+    readonly property color bg: appTheme.bg
+    readonly property color surface: appTheme.surface
+    readonly property color hover: appTheme.hover
+    readonly property color hoverStrong: appTheme.hoverStrong
+    readonly property color border_: appTheme.border_
+    readonly property color borderStrong: appTheme.borderStrong
+    readonly property color textPrimary: appTheme.textPrimary
+    readonly property color textSecondary: appTheme.textSecondary
+    readonly property color textMuted: appTheme.textMuted
+    readonly property color textDim: appTheme.textDim
+    readonly property color accent: appTheme.accent
+    readonly property color accentTint: appTheme.accentTint
+    readonly property color previewBg: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+    readonly property color previewBorder: appTheme.accent
+    readonly property color danger: appTheme.danger
+    readonly property color dangerSubtle: appTheme.dangerSubtle
 
     readonly property bool hasController: typeof controller !== "undefined" && controller !== null
     readonly property string playlistName: hasController ? controller.playlistName : ""
@@ -46,6 +47,10 @@ Rectangle {
 
     function commonTr(context, source) {
         return qsTranslate(context, source)
+    }
+
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
     }
 
     function pointerEntered() {
@@ -92,7 +97,7 @@ Rectangle {
                 HeaderButton {
                     iconName: "back"
                     iconSize: 15
-                    colorHex: "8b949e"
+                    colorHex: root.iconHex(root.textMuted)
                     toolTipText: qsTranslate("_PlaylistEditView", "Back")
                     onClicked: if (root.hasController) controller.backClicked()
                 }
@@ -262,12 +267,12 @@ Rectangle {
         implicitHeight: 32
         radius: 8
         color: enabled && hdrMa.containsMouse
-               ? (accentButton ? "#1a3d6d" : root.hover)
+               ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26) : root.hover)
                : (accentButton ? root.accentTint : "transparent")
         border.width: 1
         border.color: enabled && hdrMa.containsMouse
-                      ? (accentButton ? "#2d5fa6" : root.borderStrong)
-                      : (accentButton ? "#1f4470" : root.border_)
+                      ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55) : root.borderStrong)
+                      : (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_)
         opacity: enabled ? 1.0 : 0.38
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -303,14 +308,18 @@ Rectangle {
         implicitWidth: actionLabel.implicitWidth + 20
         implicitHeight: 30
         radius: 7
-        color: actionMouse.containsMouse ? "#1a3d6d" : root.accentTint
+        color: actionMouse.containsMouse
+               ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26)
+               : root.accentTint
         border.width: 1
-        border.color: actionMouse.containsMouse ? "#2d5fa6" : "#1f4470"
+        border.color: actionMouse.containsMouse
+                      ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55)
+                      : Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35)
         Text {
             id: actionLabel
             anchors.centerIn: parent
             text: actionBtn.label
-            color: "#79c0ff"
+            color: appTheme.accentText
             font.pixelSize: 11
             font.weight: Font.DemiBold
         }
@@ -389,7 +398,7 @@ Rectangle {
     }
 
     component MenuPanel: Rectangle {
-        color: "#1c2128"
+        color: root.hoverStrong
         radius: 8
         border.width: 1
         border.color: root.borderStrong
@@ -417,7 +426,7 @@ Rectangle {
     component MenuBg: Rectangle {
         property bool hovered: false
         property bool danger: false
-        color: hovered ? (danger ? root.dangerSubtle : "#262c36") : "transparent"
+        color: hovered ? (danger ? root.dangerSubtle : root.hoverStrong) : "transparent"
         radius: 6
     }
 }
