@@ -136,8 +136,16 @@ class SettingsWidget(
             if child_layout is not None:
                 self._clear_layout(child_layout)
             if child_widget is not None:
-                child_widget.setParent(None)
+                child_widget.hide()
                 child_widget.deleteLater()
+
+    def _build_theme_selector(self, header: QHBoxLayout) -> None:
+        self._theme_combo = NoScrollComboBox(self)
+        self._theme_combo.setFixedHeight(34)
+        self._theme_combo.setMinimumWidth(120)
+        header.addWidget(self._theme_combo)
+        self._populate_theme_selector()
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
 
     def _build_ui(self):
         outer = self.layout()
@@ -155,12 +163,7 @@ class SettingsWidget(
         self._main_title.setObjectName("SectionTitle")
         header.addWidget(self._main_title)
         header.addStretch()
-        self._theme_combo = NoScrollComboBox()
-        self._theme_combo.setFixedHeight(34)
-        self._theme_combo.setMinimumWidth(120)
-        self._populate_theme_selector()
-        self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
-        header.addWidget(self._theme_combo)
+        self._build_theme_selector(header)
         outer.addLayout(header)
         outer.addSpacing(20)
 

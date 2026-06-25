@@ -1,3 +1,8 @@
+from PySide6.QtCore import QEvent, QObject
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
+
+from solin.styles.theme import get_theme
+from solin.ui.controls import NoScrollComboBox
 from solin.widgets.settings.about_section import AboutSectionMixin
 from solin.widgets.settings.auto_keys_section import AutoKeysSectionMixin
 from solin.widgets.settings.auto_share_section import AutoShareSectionMixin
@@ -10,9 +15,11 @@ from solin.widgets.settings.screens_section import ScreensSectionMixin
 from solin.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
 from solin.widgets.settings.yearly_text_section import YearlyTextSectionMixin
 from solin.widgets.settings.zoom_section import ZoomSectionMixin
-from solin.styles.theme import get_theme
 from solin.widgets import settings_widget as settings_widget_module
 from solin.widgets.settings_widget import SettingsWidget
+
+
+_APP = QApplication.instance() or QApplication([])
 
 
 def test_settings_shared_visual_contracts_are_public():
@@ -91,6 +98,36 @@ class _ThemeSelectorWidgetStub:
         return text
 
 
+class _ThemeSelectorBuildHarness(QWidget):
+    def __init__(self, theme_id="dark"):
+        super().__init__()
+        self._app_settings = _AppSettingsStub(theme_id)
+
+    def tr(self, text):
+        return text
+
+    def _populate_theme_selector(self):
+        SettingsWidget._populate_theme_selector(self)
+
+    def _on_theme_selected(self, index):
+        SettingsWidget._on_theme_selected(self, index)
+
+
+class _TopLevelShowRecorder(QObject):
+    def __init__(self):
+        super().__init__()
+        self.shown_top_levels: list[str] = []
+
+    def eventFilter(self, obj, event):
+        if (
+            event.type() == QEvent.Type.Show
+            and isinstance(obj, QWidget)
+            and obj.isWindow()
+        ):
+            self.shown_top_levels.append(type(obj).__name__)
+        return False
+
+
 def test_settings_theme_selector_hides_when_only_one_theme(monkeypatch):
     monkeypatch.setattr(
         settings_widget_module,
@@ -117,6 +154,23 @@ def test_settings_theme_selector_lists_available_themes_and_saves_choice():
     SettingsWidget._on_theme_selected(widget, 0)
 
     assert widget._app_settings.saved == ["dark"]
+
+
+def test_settings_theme_selector_is_parented_before_visibility_changes():
+    recorder = _TopLevelShowRecorder()
+    _APP.installEventFilter(recorder)
+    try:
+        widget = _ThemeSelectorBuildHarness()
+        header = QHBoxLayout(widget)
+
+        SettingsWidget._build_theme_selector(widget, header)
+        _APP.processEvents()
+    finally:
+        _APP.removeEventFilter(recorder)
+
+    assert widget._theme_combo.parent() is widget
+    assert isinstance(widget._theme_combo, NoScrollComboBox)
+    assert recorder.shown_top_levels == []
 
 
 def test_settings_widget_uses_language_section_mixin():
