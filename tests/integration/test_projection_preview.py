@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QEvent, qInstallMessageHandler
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QApplication
 
@@ -15,6 +15,24 @@ def _pixmap(width: int = 300, height: int = 400) -> QPixmap:
     pixmap = QPixmap(width, height)
     pixmap.fill(QColor("#ffffff"))
     return pixmap
+
+
+def test_preview_theme_styles_do_not_emit_qss_parse_warnings() -> None:
+    messages: list[str] = []
+    previous_handler = qInstallMessageHandler(
+        lambda _mode, _context, message: messages.append(message)
+    )
+    try:
+        widget = ImagePreviewWidget()
+        widget.apply_theme()
+        _APP.processEvents()
+    finally:
+        qInstallMessageHandler(previous_handler)
+
+    stylesheet_errors = [
+        message for message in messages if "parse stylesheet" in message.lower()
+    ]
+    assert stylesheet_errors == []
 
 
 def test_preview_framing_buttons_update_tooltips_and_state() -> None:

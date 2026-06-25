@@ -78,7 +78,7 @@ class ImagePreviewWidget(QWidget):
         return (
             f"QPushButton{{background:transparent;color:{PALETTE.text_muted};"
             f"border:1px solid {qss_rgba(PALETTE.border, 0.95)};border-radius:13px;"
-            "font-size:11px;font-weight:500;padding:0 10px;}}"
+            "font-size:11px;font-weight:500;padding:0 10px;}"
             f"QPushButton:hover{{background:{PALETTE.surface_hover};color:{PALETTE.text_secondary};"
             f"border-color:{PALETTE.border_strong};}}"
             f"QPushButton:pressed{{background:{PALETTE.surface_hover_strong};}}"
@@ -89,7 +89,7 @@ class ImagePreviewWidget(QWidget):
         return (
             f"QPushButton{{background:{PALETTE.accent_selection};color:{PALETTE.text_on_accent};"
             "border:none;border-radius:13px;"
-            "font-size:11px;font-weight:600;padding:0 13px;}}"
+            "font-size:11px;font-weight:600;padding:0 13px;}"
             f"QPushButton:hover{{background:{PALETTE.accent_hover};}}"
             f"QPushButton:pressed{{background:{PALETTE.accent_pressed};}}"
         )
