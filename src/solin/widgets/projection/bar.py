@@ -1308,6 +1308,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             f"background: transparent; color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
         )
         self._overlay_body.setStyleSheet(f"background: {PALETTE.bg0};")
+        self.preview_content.apply_theme()
         self.seek_slider.update()
         self._on_state_changed(self.media.player.playbackState())
         self._on_volume_slider(self.vol_slider.value())

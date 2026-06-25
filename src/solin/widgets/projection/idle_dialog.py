@@ -138,15 +138,15 @@ class SetAsIdleConfirmDialog(QDialog):
         self._confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._confirm_btn.setStyleSheet(
             f"QPushButton {{"
-            f"  background: {PALETTE.success_surface_strong};"
+            f"  background: {PALETTE.success};"
             f"  color: {PALETTE.text_on_accent};"
-            f"  border: 1px solid {PALETTE.success};"
+            f"  border: 1px solid {PALETTE.success_pressed};"
             f"  border-radius: 6px;"
             f"  font-size: 12px;"
             f"  font-weight: 600;"
             f"  padding: 0 16px;"
             f"}}"
-            f"QPushButton:hover  {{ background: {PALETTE.success}; }}"
+            f"QPushButton:hover  {{ background: {PALETTE.success_hover}; }}"
             f"QPushButton:pressed{{ background: {PALETTE.success_pressed}; }}"
         )
         self._confirm_btn.setDefault(True)
