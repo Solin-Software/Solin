@@ -1987,12 +1987,10 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.leftMargin: sectionRoot.isSubsection ? 0 : 16
-                        anchors.rightMargin: 4
-                        anchors.topMargin: 4
-                        anchors.bottomMargin: 4
-                        radius: sectionRoot.isSubsection ? 6 : 8
-                        color: headerMa.containsMouse ? root.hover : "transparent"
+                        radius: sectionRoot.isSubsection ? 6 : 10
+                        color: headerMa.containsMouse
+                               ? root.alphaColor(root.textPrimary, appTheme.sectionHeaderHoverAlpha)
+                               : "transparent"
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
 

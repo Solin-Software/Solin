@@ -58,4 +58,5 @@ DARK_THEME = AppTheme(
         black="#000000",
         white="#ffffff",
     ),
+    section_header_hover_alpha=0.035,
 )

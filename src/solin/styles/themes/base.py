@@ -123,9 +123,11 @@ class AppTheme:
     display_name: str
     palette: ThemePalette
     metrics: ThemeMetrics = ThemeMetrics()
+    section_header_hover_alpha: float = 0.04
 
     def qml_palette(self) -> dict[str, object]:
         palette = self.palette.as_qml()
         palette["themeId"] = self.id
         palette["isDark"] = self.id == "dark"
+        palette["sectionHeaderHoverAlpha"] = self.section_header_hover_alpha
         return palette
