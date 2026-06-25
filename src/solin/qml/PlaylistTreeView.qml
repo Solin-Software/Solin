@@ -28,8 +28,6 @@ Item {
     property color previewBorder: appTheme.accent
     property color danger: appTheme.danger
     property color dangerSubtle: appTheme.dangerSubtle
-    property real hoverOpacity: appTheme.hoverOpacity
-    property real sectionHoverOpacity: appTheme.sectionHoverOpacity
 
     property var playlistController: null
     property bool hasItems: false
@@ -1528,22 +1526,15 @@ Item {
             id: mediaCard
             anchors.fill: parent
             radius: 8
-            color: root.surface
+            color: mediaRoot.dragArea.containsMouse ? root.hover : root.surface
             border.width: 1
-            border.color: root.border_
+            border.color: mediaRoot.dragArea.containsMouse ? root.borderStrong : root.border_
             clip: true
             opacity: mediaRoot.isMissing ? 0.50 : 1.0
             Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
-            ThemeHoverBackground {
-                anchors.fill: parent
-                radius: parent.radius
-                hovered: mediaRoot.dragArea.containsMouse
-                fillColor: root.hover
-                fillOpacity: root.hoverOpacity
-                showBorder: true
-                borderColor: root.borderStrong
-            }
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
 
             MouseArea {
                 anchors.fill: parent
@@ -1996,20 +1987,8 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.leftMargin: sectionRoot.isSubsection ? 0 : 16
-                        anchors.rightMargin: 4
-                        anchors.topMargin: 4
-                        anchors.bottomMargin: 4
-                        radius: sectionRoot.isSubsection ? 6 : 8
-                        color: "transparent"
-
-                        ThemeHoverBackground {
-                            anchors.fill: parent
-                            radius: parent.radius
-                            hovered: headerMa.containsMouse
-                            fillColor: root.hover
-                            fillOpacity: root.sectionHoverOpacity
-                        }
+                        color: headerMa.containsMouse ? root.hover : "transparent"
+                        Behavior on color { ColorAnimation { duration: 120 } }
                     }
 
                     MouseArea {
@@ -2202,21 +2181,16 @@ Item {
         implicitWidth: 32
         implicitHeight: 32
         radius: 8
-        color: accentButton ? root.accentTint : "transparent"
+        color: enabled && hdrMa.containsMouse
+               ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26) : root.hover)
+               : (accentButton ? root.accentTint : "transparent")
         border.width: 1
-        border.color: accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_
+        border.color: enabled && hdrMa.containsMouse
+                      ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55) : root.borderStrong)
+                      : (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_)
         opacity: enabled ? 1.0 : 0.38
-
-        ThemeHoverBackground {
-            anchors.fill: parent
-            radius: parent.radius
-            hovered: enabled && hdrMa.containsMouse
-            fillColor: hdrBtn.accentButton ? root.accent : root.hover
-            fillOpacity: hdrBtn.accentButton ? 0.26 : root.hoverOpacity
-            showBorder: true
-            borderColor: hdrBtn.accentButton ? root.accent : root.borderStrong
-            borderOpacity: hdrBtn.accentButton ? 0.55 : 1.0
-        }
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
 
         Image {
             anchors.centerIn: parent
@@ -2286,18 +2260,9 @@ Item {
     }
 
     component MenuBg: Rectangle {
-        id: menuBg
         property bool hovered: false
         property bool danger: false
-        color: "transparent"
+        color: hovered ? (danger ? root.dangerSubtle : root.hover) : "transparent"
         radius: 6
-
-        ThemeHoverBackground {
-            anchors.fill: parent
-            radius: parent.radius
-            hovered: menuBg.hovered
-            fillColor: menuBg.danger ? root.dangerSubtle : root.hover
-            fillOpacity: menuBg.danger ? 1.0 : root.hoverOpacity
-        }
     }
 }

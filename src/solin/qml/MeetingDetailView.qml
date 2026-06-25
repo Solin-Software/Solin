@@ -15,8 +15,6 @@ Rectangle {
     readonly property color surface: appTheme.surface
     readonly property color hover: appTheme.hover
     readonly property color hoverStrong: appTheme.hoverStrong
-    readonly property real hoverOpacity: appTheme.hoverOpacity
-    readonly property real hoverStrongOpacity: appTheme.hoverStrongOpacity
     readonly property color border_: appTheme.border_
     readonly property color borderStrong: appTheme.borderStrong
     readonly property color textPrimary: appTheme.textPrimary
@@ -245,21 +243,16 @@ Rectangle {
         implicitWidth: 32
         implicitHeight: 32
         radius: 8
-        color: accentButton ? root.accentTint : "transparent"
+        color: enabled && hdrMa.containsMouse
+               ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26) : root.hover)
+               : (accentButton ? root.accentTint : "transparent")
         border.width: 1
-        border.color: accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_
+        border.color: enabled && hdrMa.containsMouse
+                      ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55) : root.borderStrong)
+                      : (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_)
         opacity: enabled ? 1.0 : 0.38
-
-        ThemeHoverBackground {
-            anchors.fill: parent
-            radius: parent.radius
-            hovered: enabled && hdrMa.containsMouse
-            fillColor: hdrBtn.accentButton ? root.accent : root.hover
-            fillOpacity: hdrBtn.accentButton ? 0.26 : root.hoverOpacity
-            showBorder: true
-            borderColor: hdrBtn.accentButton ? root.accent : root.borderStrong
-            borderOpacity: hdrBtn.accentButton ? 0.55 : 1.0
-        }
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
 
         Image {
             anchors.centerIn: parent
@@ -294,19 +287,11 @@ Rectangle {
         implicitWidth: stbRow.implicitWidth + 14
         implicitHeight: 30
         radius: 7
-        color: "transparent"
+        color: stbMa.containsMouse ? root.hover : "transparent"
         border.width: 1
-        border.color: root.border_
-
-        ThemeHoverBackground {
-            anchors.fill: parent
-            radius: parent.radius
-            hovered: stbMa.containsMouse
-            fillColor: root.hover
-            fillOpacity: root.hoverOpacity
-            showBorder: true
-            borderColor: root.borderStrong
-        }
+        border.color: stbMa.containsMouse ? root.borderStrong : root.border_
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
 
         Row {
             id: stbRow
@@ -390,18 +375,9 @@ Rectangle {
     }
 
     component MenuBg: Rectangle {
-        id: menuBg
         property bool hovered: false
         property bool danger: false
-        color: "transparent"
+        color: hovered ? (danger ? root.dangerSubtle : root.hoverStrong) : "transparent"
         radius: 6
-
-        ThemeHoverBackground {
-            anchors.fill: parent
-            radius: parent.radius
-            hovered: menuBg.hovered
-            fillColor: menuBg.danger ? root.dangerSubtle : root.hoverStrong
-            fillOpacity: menuBg.danger ? 1.0 : root.hoverStrongOpacity
-        }
     }
 }

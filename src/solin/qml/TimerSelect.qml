@@ -111,19 +111,13 @@ Rectangle {
                     width: menu.width - 8
                     height: 34
                     radius: 7
-                    color: index === select.safeCurrent
-                           ? Qt.rgba(select.accent.r, select.accent.g, select.accent.b, 0.10)
-                           : "transparent"
+                    color: optionMouse.containsMouse
+                           ? Qt.rgba(select.accent.r, select.accent.g, select.accent.b, 0.14)
+                           : (index === select.safeCurrent
+                              ? Qt.rgba(select.accent.r, select.accent.g, select.accent.b, 0.10)
+                              : "transparent")
 
                     Behavior on color { ColorAnimation { duration: 120 } }
-
-                    ThemeHoverBackground {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        hovered: optionMouse.containsMouse
-                        fillColor: select.accent
-                        fillOpacity: 0.14
-                    }
 
                     Rectangle {
                         anchors.left: parent.left

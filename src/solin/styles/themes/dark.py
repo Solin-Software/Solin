@@ -58,7 +58,4 @@ DARK_THEME = AppTheme(
         black="#000000",
         white="#ffffff",
     ),
-    hover_opacity=1.0,
-    hover_strong_opacity=1.0,
-    section_hover_opacity=0.9,
 )

@@ -24,7 +24,6 @@ Rectangle {
     property color textSecondary: appTheme.textSecondary
     property color textMuted: appTheme.textMuted
     property color accent: appTheme.accent
-    property real hoverOpacity: appTheme.hoverOpacity
 
     Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
@@ -144,20 +143,11 @@ Rectangle {
                         Layout.fillWidth: true
                         height: 38
                         radius: 8
-                        color: "transparent"
-                        border.width: 0
-                        border.color: "transparent"
+                        color: optionMa.containsMouse ? root.hover : "transparent"
+                        border.width: optionMa.containsMouse ? 1 : 0
+                        border.color: optionMa.containsMouse ? root.borderStrong : "transparent"
 
-                        ThemeHoverBackground {
-                            anchors.fill: parent
-                            radius: parent.radius
-                            hovered: optionMa.containsMouse
-                            fillColor: root.hover
-                            fillOpacity: root.hoverOpacity
-                            showBorder: true
-                            borderColor: root.borderStrong
-                            animationDuration: 100
-                        }
+                        Behavior on color { ColorAnimation { duration: 100 } }
 
                         Rectangle {
                             anchors.left: parent.left

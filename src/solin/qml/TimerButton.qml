@@ -31,7 +31,7 @@ Rectangle {
            ? (ma.containsMouse ? Qt.lighter(accent, 1.14) : accent)
            : _soft
              ? Qt.rgba(accent.r, accent.g, accent.b, ma.containsMouse ? 0.22 : 0.14)
-             : "transparent"
+             : (ma.containsMouse ? appTheme.hover : "transparent")
     border.width: 1
     border.color: _filled
                   ? "transparent"
@@ -44,15 +44,6 @@ Rectangle {
     Behavior on color { ColorAnimation { duration: 130 } }
     Behavior on border.color { ColorAnimation { duration: 130 } }
     Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
-
-    ThemeHoverBackground {
-        anchors.fill: parent
-        radius: parent.radius
-        hovered: !ctl._filled && !ctl._soft && ma.containsMouse
-        fillColor: appTheme.hover
-        fillOpacity: appTheme.hoverOpacity
-        animationDuration: 130
-    }
 
     Row {
         id: row
