@@ -45,7 +45,7 @@ from ..core.media.formats import (
 )
 from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..styles.icons import make_icon
-from ..styles.theme import PALETTE, qss_rgba
+from ..styles.theme import PALETTE, palette_token, qss_rgba
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
@@ -58,25 +58,25 @@ if TYPE_CHECKING:
 
 # ── Paleta ────────────────────────────────────────────────────────────────────
 
-_BG = PALETTE.bg0
-_SURFACE = PALETTE.surface
-_SURFACE2 = PALETTE.surface_hover_strong
-_BORDER = PALETTE.border_muted
-_BORDER2 = PALETTE.border
-_MUTED = PALETTE.text_muted
-_MUTED2 = PALETTE.text_dim
-_TEXT = PALETTE.text_primary
-_TEXT2 = PALETTE.text_secondary
-_ACCENT = PALETTE.accent
-_ACCENT_HOVER = PALETTE.accent_selection
-_ACCENT_PRESSED = PALETTE.accent_pressed
-_OK = PALETTE.success
-_ERR = PALETTE.danger
-_ERR_TEXT = PALETTE.danger_text
-_ERR_SURFACE = PALETTE.danger_surface
-_ERR_BORDER = PALETTE.danger_border
-_ERR_HOVER = PALETTE.danger_surface_hover
-_WHITE = PALETTE.white
+_BG = palette_token("bg0")
+_SURFACE = palette_token("surface")
+_SURFACE2 = palette_token("surface_hover_strong")
+_BORDER = palette_token("border_muted")
+_BORDER2 = palette_token("border")
+_MUTED = palette_token("text_muted")
+_MUTED2 = palette_token("text_dim")
+_TEXT = palette_token("text_primary")
+_TEXT2 = palette_token("text_secondary")
+_ACCENT = palette_token("accent")
+_ACCENT_HOVER = palette_token("accent_selection")
+_ACCENT_PRESSED = palette_token("accent_pressed")
+_OK = palette_token("success")
+_ERR = palette_token("danger")
+_ERR_TEXT = palette_token("danger_text")
+_ERR_SURFACE = palette_token("danger_surface")
+_ERR_BORDER = palette_token("danger_border")
+_ERR_HOVER = palette_token("danger_surface_hover")
+_WHITE = palette_token("white")
 
 _CARD_W  = 148
 _CARD_H  = 168
@@ -194,10 +194,10 @@ def _type_meta(path: str) -> tuple[str, str]:
     """Returns (icon_svg, accent_color) based on file type."""
     t = _file_media_type(path)
     if t == "video":    return _I_VIDEO,    PALETTE.accent_text
-    if t == "audio":    return _I_AUDIO,    "#d2a8ff"
-    if t == "pdf":      return _I_PDF,      "#ffa657"
+    if t == "audio":    return _I_AUDIO,    PALETTE.accent_alt
+    if t == "pdf":      return _I_PDF,      PALETTE.warning_text
     if t == "playlist": return _I_PLAYLIST, PALETTE.success
-    return _I_IMAGE, "#7ee787"
+    return _I_IMAGE, PALETTE.success
 
 
 def _rounded_pixmap(src: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
@@ -326,14 +326,13 @@ class _MediaCard(QFrame):
         self._path      = path
         self._title     = title
         self._orig_name = orig_name or Path(path).name
+        self._has_custom_thumbnail = False
+        self._type_badge: QLabel | None = None
+        self._playlist_btn: QPushButton | None = None
         self.setObjectName("WifiCard")
         self.setFixedSize(_CARD_W, _CARD_H)
         self.setCursor(Qt.CursorShape.ArrowCursor)
-        self.setStyleSheet(
-            f"QFrame#WifiCard{{background:{_SURFACE};border-radius:12px;"
-            f"border:1px solid {_BORDER};}}"
-            f"QFrame#WifiCard:hover{{border-color:{_BORDER2};}}"
-        )
+        self._apply_style()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 10)
@@ -361,11 +360,7 @@ class _MediaCard(QFrame):
             image = self.tr("image")
             _badge_text = {"video": video, "audio": audio, "image": image}[_mtype]
             self._type_badge = QLabel(_badge_text, self._thumb_area)
-            self._type_badge.setStyleSheet(
-                f"background:{qss_rgba(PALETTE.bg0, 0.78)};border-radius:4px;"
-                f"color:{_badge_color};font-size:7px;font-weight:700;"
-                "padding:2px 6px;letter-spacing:0.5px;border:none;"
-            )
+            self._style_type_badge(_badge_color)
             self._type_badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             self._type_badge.adjustSize()
             self._type_badge.move(6, 6)
@@ -388,6 +383,7 @@ class _MediaCard(QFrame):
 
         tip = self.tr("Add to playlist")
         pl_btn = QPushButton()
+        self._playlist_btn = pl_btn
         pl_btn.setIcon(make_icon(_I_PLUS, 11, _MUTED))
         pl_btn.setIconSize(QSize(11, 11))
         pl_btn.setFixedSize(24, 24)
@@ -410,7 +406,7 @@ class _MediaCard(QFrame):
         """Fundo escuro com ícone de tipo como placeholder."""
         svg, color = _type_meta(self._path)
         ph = QPixmap(_CARD_W, _THUMB_H)
-        ph.fill(QColor(_SURFACE2))
+        ph.fill(QColor(str(_SURFACE2)))
         # Arredonda apenas cantos superiores
         rounded = QPixmap(_CARD_W, _THUMB_H)
         rounded.fill(Qt.GlobalColor.transparent)
@@ -434,6 +430,7 @@ class _MediaCard(QFrame):
     def set_thumbnail(self, pixmap: QPixmap) -> None:
         if pixmap.isNull():
             return
+        self._has_custom_thumbnail = True
         thumb = _rounded_pixmap_top(pixmap, _CARD_W, _THUMB_H, radius=12)
         self._thumb_lbl.setPixmap(thumb)
 
@@ -445,6 +442,43 @@ class _MediaCard(QFrame):
         short = title if len(title) <= 22 else title[:20] + "…"
         self._name_lbl.setText(short)
         self._name_lbl.setToolTip(title)
+
+    def _apply_style(self) -> None:
+        self.setStyleSheet(
+            f"QFrame#WifiCard{{background:{_SURFACE};border-radius:12px;"
+            f"border:1px solid {_BORDER};}}"
+            f"QFrame#WifiCard:hover{{border-color:{_BORDER2};}}"
+        )
+
+    def _style_type_badge(self, color: str) -> None:
+        if self._type_badge is None:
+            return
+        self._type_badge.setStyleSheet(
+            f"background:{qss_rgba(PALETTE.bg0, 0.78)};border-radius:4px;"
+            f"color:{color};font-size:7px;font-weight:700;"
+            "padding:2px 6px;letter-spacing:0.5px;border:none;"
+        )
+
+    def apply_theme(self) -> None:
+        self._apply_style()
+        if not self._has_custom_thumbnail:
+            self._set_placeholder()
+        if self._type_badge is not None:
+            _, badge_color = _type_meta(self._path)
+            self._style_type_badge(badge_color)
+            self._type_badge.adjustSize()
+        self._name_lbl.setStyleSheet(
+            f"background:transparent;color:{_TEXT2};font-size:10px;"
+            "font-weight:500;border:none;"
+        )
+        if self._playlist_btn is not None:
+            self._playlist_btn.setIcon(make_icon(_I_PLUS, 11, _MUTED))
+            self._playlist_btn.setStyleSheet(
+                f"QPushButton{{background:transparent;border:1px solid {_BORDER2};"
+                "border-radius:5px;}"
+                f"QPushButton:hover{{background:{PALETTE.accent_muted};border-color:{_ACCENT};}}"
+            )
+        self.update()
 
 
 def _rounded_pixmap_top(src: QPixmap, w: int, h: int, radius: int = 12) -> QPixmap:
@@ -545,6 +579,7 @@ class WifiReceiveWidget(QWidget):
 
     def _make_header(self) -> QFrame:
         hdr = QFrame()
+        self._header_frame = hdr
         hdr.setStyleSheet(
             f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
         )
@@ -553,6 +588,7 @@ class WifiReceiveWidget(QWidget):
         lay.setContentsMargins(20, 0, 20, 0); lay.setSpacing(10)
 
         ico = QLabel()
+        self._header_icon_lbl = ico
         ico.setPixmap(make_icon(_I_WIFI, 18, _MUTED).pixmap(18, 18))
         ico.setStyleSheet("background:transparent;")
 
@@ -569,7 +605,7 @@ class WifiReceiveWidget(QWidget):
     # ── Página 0: iniciando ────────────────────────────────────────────────
 
     def _make_starting_page(self) -> QWidget:
-        w = QWidget(); w.setStyleSheet(f"background:{_BG};")
+        w = QWidget(); self._starting_page = w; w.setStyleSheet(f"background:{_BG};")
         lay = QVBoxLayout(w); lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._starting_lbl = QLabel(self.tr("Starting server…"))
         self._starting_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -583,11 +619,12 @@ class WifiReceiveWidget(QWidget):
 
     def _make_active_page(self) -> QWidget:
         """Zona superior (QR + URL + stop) + zona inferior (grid de cards)."""
-        w = QWidget(); w.setStyleSheet(f"background:{_BG};")
+        w = QWidget(); self._active_page = w; w.setStyleSheet(f"background:{_BG};")
         root = QVBoxLayout(w); root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
 
         # ── Barra superior do servidor ────────────────────────────────────
         bar = QFrame()
+        self._server_bar = bar
         bar.setStyleSheet(
             f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
         )
@@ -596,6 +633,7 @@ class WifiReceiveWidget(QWidget):
 
         # QR
         qr_frame = QFrame()
+        self._qr_frame = qr_frame
         qr_frame.setStyleSheet(
             f"QFrame{{background:{_WHITE};border-radius:10px;padding:6px;}}"
         )
@@ -686,6 +724,7 @@ class WifiReceiveWidget(QWidget):
 
         # ── Cabeçalho da seção de mídias ──────────────────────────────────
         media_hdr = QWidget()
+        self._media_header = media_hdr
         media_hdr.setStyleSheet(f"background:{_BG};")
         mh_lay = QHBoxLayout(media_hdr)
         mh_lay.setContentsMargins(20, 12, 20, 8); mh_lay.setSpacing(8)
@@ -726,6 +765,7 @@ class WifiReceiveWidget(QWidget):
 
         # ── Scroll + grid de cards ─────────────────────────────────────────
         scroll = QScrollArea()
+        self._media_scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -742,6 +782,7 @@ class WifiReceiveWidget(QWidget):
 
         # Página 0 do stack: placeholder centralizado
         ph_page = QWidget()
+        self._placeholder_page = ph_page
         ph_page.setStyleSheet(f"background:{_BG};")
         ph_lay = QVBoxLayout(ph_page)
         ph_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -772,13 +813,14 @@ class WifiReceiveWidget(QWidget):
 
     def _make_idle_page(self) -> QWidget:
         """Tela centrada, tela inteira, servidor parado."""
-        w = QWidget(); w.setStyleSheet(f"background:{_BG};")
+        w = QWidget(); self._idle_page = w; w.setStyleSheet(f"background:{_BG};")
         lay = QVBoxLayout(w)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.setContentsMargins(40, 0, 40, 0); lay.setSpacing(0)
 
         # Ícone grande
         ico = QLabel()
+        self._idle_icon_lbl = ico
         ico.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ico.setPixmap(make_icon(_I_WIFI, 56, _BORDER2).pixmap(56, 56))
         ico.setStyleSheet("background:transparent;")
@@ -822,6 +864,102 @@ class WifiReceiveWidget(QWidget):
         self._start_btn.clicked.connect(self._start_server)
         lay.addWidget(self._start_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return w
+
+    def apply_theme(self) -> None:
+        if hasattr(self, "_header_frame"):
+            self._header_frame.setStyleSheet(
+                f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
+            )
+            self._header_icon_lbl.setPixmap(make_icon(_I_WIFI, 18, _MUTED).pixmap(18, 18))
+            self._header_title.setStyleSheet(
+                f"background:transparent;font-size:14px;font-weight:700;color:{_TEXT};"
+            )
+        if hasattr(self, "_stack"):
+            self._stack.setStyleSheet(f"background:{_BG};")
+            self._starting_page.setStyleSheet(f"background:{_BG};")
+            self._starting_lbl.setStyleSheet(
+                f"color:{_MUTED};font-size:13px;background:transparent;"
+            )
+        if hasattr(self, "_active_page"):
+            self._active_page.setStyleSheet(f"background:{_BG};")
+            self._server_bar.setStyleSheet(
+                f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
+            )
+            self._qr_frame.setStyleSheet(
+                f"QFrame{{background:{_WHITE};border-radius:10px;padding:6px;}}"
+            )
+            self._instruction_lbl.setStyleSheet(
+                f"background:transparent;color:{_TEXT2};font-size:12px;line-height:1.5;"
+            )
+            self._url_frame.setStyleSheet(
+                f"QFrame#UrlFrame{{background:{_BG};border-radius:8px;border:1px solid {_BORDER};}}"
+            )
+            self._url_lbl.setStyleSheet(
+                f"background:transparent;border:none;color:{_ACCENT};"
+                "font-size:10px;font-family:monospace;"
+            )
+            self._copy_btn.setIcon(make_icon(_I_COPY, 13, _MUTED))
+            self._copy_btn.setStyleSheet(
+                "QPushButton{background:transparent;border:none;border-radius:5px;}"
+            )
+            self._inact_lbl.setStyleSheet(
+                f"background:transparent;color:{_MUTED2};font-size:9px;"
+            )
+            self._stop_btn.setIcon(make_icon(_I_STOP, 12, _ERR))
+            self._stop_btn.setStyleSheet(
+                f"QPushButton{{background:{_ERR_SURFACE};border:1px solid {_ERR_BORDER};"
+                f"border-radius:7px;color:{_ERR_TEXT};font-size:11px;font-weight:600;padding:0 12px;}}"
+                f"QPushButton:hover{{background:{_ERR_HOVER};border-color:{_ERR};color:{_ERR};}}"
+            )
+            self._media_header.setStyleSheet(f"background:{_BG};")
+            self._section_lbl.setStyleSheet(
+                f"background:transparent;font-size:11px;font-weight:600;color:{_MUTED};"
+            )
+            self._count_badge.setStyleSheet(
+                f"background:{_BORDER2};color:{_MUTED};font-size:9px;font-weight:600;"
+                "border-radius:7px;padding:1px 7px;"
+            )
+            self._send_all_btn.setIcon(make_icon(_I_LIST, 12, _MUTED))
+            self._send_all_btn.setStyleSheet(
+                f"QPushButton{{background:{_BORDER};border:1px solid {_BORDER2};"
+                f"border-radius:6px;color:{_MUTED2};font-size:10px;font-weight:600;"
+                f"padding:0 10px;}}"
+                f"QPushButton:enabled{{color:{_MUTED};}}"
+                f"QPushButton:enabled:hover{{background:{_BORDER2};color:{_TEXT2};"
+                f"border-color:{_ACCENT};}}"
+            )
+            self._media_scroll.setStyleSheet(
+                f"QScrollArea{{background:{_BG};border:none;}}"
+                f"QScrollBar:vertical{{background:{_BG};width:4px;border-radius:2px;margin:0;}}"
+                f"QScrollBar::handle:vertical{{background:{_BORDER};border-radius:2px;min-height:20px;}}"
+                "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+            )
+            self._content_stack.setStyleSheet(f"background:{_BG};")
+            self._placeholder_page.setStyleSheet(f"background:{_BG};")
+            self._placeholder.setStyleSheet(
+                f"color:{_MUTED2};font-size:12px;background:transparent;padding:32px 0;"
+            )
+            self._grid_container.setStyleSheet(f"background:{_BG};")
+        if hasattr(self, "_idle_page"):
+            self._idle_page.setStyleSheet(f"background:{_BG};")
+            self._idle_icon_lbl.setPixmap(make_icon(_I_WIFI, 56, _BORDER2).pixmap(56, 56))
+            self._idle_title.setStyleSheet(
+                f"background:transparent;font-size:18px;font-weight:700;color:{_TEXT};"
+            )
+            self._idle_subtitle.setStyleSheet(
+                f"background:transparent;font-size:12px;color:{_MUTED};"
+                "max-width:340px;"
+            )
+            self._start_btn.setIcon(make_icon(_I_PLAY, 16, _WHITE))
+            self._start_btn.setStyleSheet(
+                f"QPushButton{{background:{_ACCENT};border:none;border-radius:12px;"
+                f"color:{_WHITE};font-size:13px;font-weight:700;padding:0 28px;}}"
+                f"QPushButton:hover{{background:{_ACCENT_HOVER};}}"
+                f"QPushButton:pressed{{background:{_ACCENT_PRESSED};}}"
+            )
+        for card in self._cards:
+            card.apply_theme()
+        self.update()
 
     # ═══════════════════════════════════════════════════════════════════════
     # SERVIDOR

@@ -853,6 +853,7 @@ class MainWindow(QMainWindow):
             getattr(self, "sermon_theme_widget", None),
             getattr(self, "playlist_widget", None),
             getattr(self, "meetings_widget", None),
+            getattr(self, "_lazy_pages", None),
             getattr(self, "proj_bar", None),
             getattr(self, "_quick_toolbar", None),
             getattr(self, "_monitor_popup", None),
@@ -862,7 +863,8 @@ class MainWindow(QMainWindow):
                 continue
             if hasattr(widget, "apply_theme"):
                 widget.apply_theme()
-            widget.update()
+            if hasattr(widget, "update"):
+                widget.update()
 
         for widget in self.findChildren(QWidget):
             style = widget.style()

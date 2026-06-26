@@ -29,6 +29,20 @@ def test_activate_theme_updates_public_runtime_tokens() -> None:
         theme.activate_theme("dark")
 
 
+def test_palette_token_resolves_current_theme_after_activation() -> None:
+    token = theme.palette_token("bg0")
+
+    try:
+        theme.activate_theme("light")
+        assert str(token) == "#f6f8fa"
+        assert f"{token}" == "#f6f8fa"
+
+        theme.activate_theme("dark")
+        assert token == "#0d1117"
+    finally:
+        theme.activate_theme("dark")
+
+
 def test_invalid_theme_ids_fall_back_to_default() -> None:
     assert theme.normalize_theme_id("missing") == theme.DEFAULT_THEME_ID
     assert theme.get_theme("missing").id == theme.DEFAULT_THEME_ID

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView,
 )
 
-from solin.styles.theme import PALETTE, STYLESHEET, qss_rgba
+from solin.styles.theme import PALETTE, qss_rgba
 from solin.core.integrations.automation.zoom.poll_parser import parse_zoom_poll_csv
 
 
@@ -212,7 +212,6 @@ class ZoomPollWindow(QDialog):
             Qt.WindowType.WindowMinimizeButtonHint |
             Qt.WindowType.WindowMaximizeButtonHint
         )
-        self.setStyleSheet(STYLESHEET)
         self._build_chrome()
         self._load()
 

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import (
-    Qt, Signal, QEvent, QObject,
+    Qt, Signal, QEvent, QObject, QTimer,
 )
 
 from ..core.i18n.manager import LanguageManager
@@ -115,6 +115,7 @@ class SettingsWidget(
         self._yeartext_settings = yeartext_settings
         self._background_song_settings = background_song_settings
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
+        self._theme_persistent_connections: set[str] = set()
         self._init_yearly_text_section()
         self._build_ui()
         screen_manager.screens_changed.connect(self._refresh_screens)
@@ -239,11 +240,20 @@ class SettingsWidget(
         lay.addStretch()
 
         scroll.setWidget(content)
+        self._settings_scroll = scroll
         outer.addWidget(scroll)
 
     def apply_theme(self) -> None:
+        scroll_value = 0
+        if hasattr(self, "_settings_scroll"):
+            scroll_value = self._settings_scroll.verticalScrollBar().value()
         self._build_ui()
         self.retranslateUi()
+        if scroll_value:
+            QTimer.singleShot(
+                0,
+                lambda: self._settings_scroll.verticalScrollBar().setValue(scroll_value),
+            )
         self.update()
 
     # ── i18n ───────────────────────────────────────────────────────────────

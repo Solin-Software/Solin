@@ -295,12 +295,24 @@ class ObsSectionMixin:
             self._obs_container.setMaximumHeight(16777215)
 
         if self._obs:
-            self._obs.state_changed.connect(self._on_obs_state_changed)
-            self._obs.scenes_updated.connect(self._on_obs_scenes_updated)
+            state_key = "obs:state_changed"
+            if state_key not in self._theme_persistent_connections:
+                self._obs.state_changed.connect(self._on_obs_state_changed)
+                self._theme_persistent_connections.add(state_key)
+            scenes_key = "obs:scenes_updated"
+            if scenes_key not in self._theme_persistent_connections:
+                self._obs.scenes_updated.connect(self._on_obs_scenes_updated)
+                self._theme_persistent_connections.add(scenes_key)
             self._sync_obs_ui_state(self._obs.state, "")
         if self._ndi:
-            self._ndi.sources_ready.connect(self._on_obs_ndi_sources_ready)
-            self._ndi.error.connect(self._on_obs_ndi_error)
+            sources_key = "ndi:sources_ready"
+            if sources_key not in self._theme_persistent_connections:
+                self._ndi.sources_ready.connect(self._on_obs_ndi_sources_ready)
+                self._theme_persistent_connections.add(sources_key)
+            error_key = "ndi:error"
+            if error_key not in self._theme_persistent_connections:
+                self._ndi.error.connect(self._on_obs_ndi_error)
+                self._theme_persistent_connections.add(error_key)
         return card
 
     @staticmethod

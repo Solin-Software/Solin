@@ -26,21 +26,25 @@ from PySide6.QtWidgets import (
 from .helpers import avatar_colors, fade_in, initials
 from ..core.profiles.models import ProfileInfo
 from ..styles.icons import make_icon, ICON_OVERLAY_CLOSE
-from ..styles.theme import PALETTE
+from ..styles.theme import palette_token
 
-_BG     = PALETTE.bg0
-_SURF   = PALETTE.surface
-_CARD   = PALETTE.surface_hover_strong
-_CARD_HOVER = PALETTE.bg2
-_ADD_CARD_HOVER = PALETTE.accent_tint
-_BORDER = PALETTE.border
-_MUTED  = PALETTE.text_muted
-_TEXT   = PALETTE.text_primary
-_DIM    = PALETTE.text_dim
-_ACCENT = PALETTE.accent
-_GREEN  = PALETTE.success
-_GREEN_BG = PALETTE.success_surface
-_WHITE = PALETTE.white
+_BG     = palette_token("bg0")
+_SURF   = palette_token("surface")
+_CARD   = palette_token("surface_hover_strong")
+_CARD_HOVER = palette_token("bg2")
+_ADD_CARD_HOVER = palette_token("accent_tint")
+_BORDER = palette_token("border")
+_MUTED  = palette_token("text_muted")
+_TEXT   = palette_token("text_primary")
+_DIM    = palette_token("text_dim")
+_ACCENT = palette_token("accent")
+_GREEN  = palette_token("success")
+_GREEN_BG = palette_token("success_surface")
+_WHITE = palette_token("white")
+
+
+def _qcolor(color: object) -> QColor:
+    return QColor(str(color))
 
 class _SwitchProfileCard(QWidget):
     clicked = Signal(str)
@@ -92,12 +96,12 @@ class _SwitchProfileCard(QWidget):
         p.translate(-cx, -cy)
 
         if self._is_active:
-            bg_color = QColor(_GREEN_BG)
-            border_c = QColor(_GREEN)
+            bg_color = _qcolor(_GREEN_BG)
+            border_c = _qcolor(_GREEN)
             border_w = 2.0
         else:
-            bg_color = QColor(_CARD_HOVER) if self._hovered else QColor(_CARD)
-            border_c = QColor(_ACCENT if self._hovered else _BORDER)
+            bg_color = _qcolor(_CARD_HOVER if self._hovered else _CARD)
+            border_c = _qcolor(_ACCENT if self._hovered else _BORDER)
             border_w = 1.5
 
         path = QPainterPath()
@@ -117,7 +121,7 @@ class _SwitchProfileCard(QWidget):
 
         font = QFont("Segoe UI", 20, QFont.Weight.Bold)
         p.setFont(font)
-        p.setPen(QColor(_WHITE))
+        p.setPen(_qcolor(_WHITE))
         p.drawText(
             QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2),
             Qt.AlignmentFlag.AlignCenter,
@@ -125,8 +129,8 @@ class _SwitchProfileCard(QWidget):
         )
 
         if self._is_active:
-            p.setBrush(QColor(_GREEN))
-            p.setPen(QPen(QColor(_BG), 2.5))
+            p.setBrush(_qcolor(_GREEN))
+            p.setPen(QPen(_qcolor(_BG), 2.5))
             dot_x = av_x + self._AVATAR_R * 2 - 15
             dot_y = av_y + self._AVATAR_R * 2 - 15
             p.drawEllipse(QRectF(dot_x, dot_y, 14, 14))
@@ -137,7 +141,7 @@ class _SwitchProfileCard(QWidget):
         fm     = QFontMetrics(font2)
         elided = fm.elidedText(self.profile.name, Qt.TextElideMode.ElideRight, self._W - 20)
         p.setFont(font2)
-        p.setPen(QColor(_GREEN if self._is_active else _TEXT))
+        p.setPen(_qcolor(_GREEN if self._is_active else _TEXT))
         p.drawText(
             QRectF(0, name_y, self._W, name_h),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
@@ -197,14 +201,14 @@ class _SwitchAddProfileCard(QWidget):
         p.scale(scale, scale)
         p.translate(-cx, -cy)
 
-        pen = QPen(QColor(_ACCENT if self._hovered else _BORDER), 2, Qt.PenStyle.DashLine)
+        pen = QPen(_qcolor(_ACCENT if self._hovered else _BORDER), 2, Qt.PenStyle.DashLine)
         p.setPen(pen)
-        p.setBrush(QColor(_ADD_CARD_HOVER if self._hovered else "transparent"))
+        p.setBrush(_qcolor(_ADD_CARD_HOVER if self._hovered else "transparent"))
         path = QPainterPath()
         path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
         p.drawPath(path)
 
-        c = QColor(_ACCENT if self._hovered else _DIM)
+        c = _qcolor(_ACCENT if self._hovered else _DIM)
         p.setPen(QPen(c, 2.5))
         cx2, cy2 = self._W / 2, self._H / 2 - 12
         r = 16
@@ -213,7 +217,7 @@ class _SwitchAddProfileCard(QWidget):
 
         font = QFont("Segoe UI", 11)
         p.setFont(font)
-        p.setPen(QColor(_ACCENT if self._hovered else _MUTED))
+        p.setPen(_qcolor(_ACCENT if self._hovered else _MUTED))
         p.drawText(
             QRectF(0, cy2 + r + 10, self._W, 30),
             Qt.AlignmentFlag.AlignHCenter,

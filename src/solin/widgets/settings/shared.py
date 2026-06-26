@@ -12,49 +12,26 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QWidget
 
-from solin.styles.theme import PALETTE
+from solin.styles.theme import PALETTE, palette_token
 
 
-class _SettingsColorToken:
-    def __init__(self, palette_attr: str) -> None:
-        self._palette_attr = palette_attr
-
-    def value(self) -> str:
-        return getattr(PALETTE, self._palette_attr)
-
-    def __str__(self) -> str:
-        return self.value()
-
-    def __format__(self, spec: str) -> str:
-        return format(self.value(), spec)
-
-    def __eq__(self, other) -> bool:
-        return self.value() == other
-
-    def __hash__(self) -> int:
-        return hash(self.value())
-
-    def __repr__(self) -> str:
-        return repr(self.value())
-
-
-SETTINGS_BG = _SettingsColorToken("bg0")
-SETTINGS_SURFACE = _SettingsColorToken("surface")
-SETTINGS_CARD = _SettingsColorToken("surface")
-SETTINGS_BORDER = _SettingsColorToken("border_muted")
-SETTINGS_ACCENT = _SettingsColorToken("accent")
-SETTINGS_ACCENT_MUTED = _SettingsColorToken("accent_muted")
-SETTINGS_ACCENT_HOVER = _SettingsColorToken("accent_hover")
-SETTINGS_ACCENT_PRESSED = _SettingsColorToken("accent_pressed")
-SETTINGS_BORDER_STRONG = _SettingsColorToken("border")
-SETTINGS_MUTED = _SettingsColorToken("text_muted")
-SETTINGS_TEXT = _SettingsColorToken("text_primary")
-SETTINGS_TEXT_SECONDARY = _SettingsColorToken("text_secondary")
-SETTINGS_TEXT_ON_ACCENT = _SettingsColorToken("text_on_accent")
-SETTINGS_DIM = _SettingsColorToken("text_dim")
-SETTINGS_SUCCESS = _SettingsColorToken("success")
-SETTINGS_WARNING_TEXT = _SettingsColorToken("warning_text")
-SETTINGS_DANGER = _SettingsColorToken("danger")
+SETTINGS_BG = palette_token("bg0")
+SETTINGS_SURFACE = palette_token("surface")
+SETTINGS_CARD = palette_token("surface")
+SETTINGS_BORDER = palette_token("border_muted")
+SETTINGS_ACCENT = palette_token("accent")
+SETTINGS_ACCENT_MUTED = palette_token("accent_muted")
+SETTINGS_ACCENT_HOVER = palette_token("accent_hover")
+SETTINGS_ACCENT_PRESSED = palette_token("accent_pressed")
+SETTINGS_BORDER_STRONG = palette_token("border")
+SETTINGS_MUTED = palette_token("text_muted")
+SETTINGS_TEXT = palette_token("text_primary")
+SETTINGS_TEXT_SECONDARY = palette_token("text_secondary")
+SETTINGS_TEXT_ON_ACCENT = palette_token("text_on_accent")
+SETTINGS_DIM = palette_token("text_dim")
+SETTINGS_SUCCESS = palette_token("success")
+SETTINGS_WARNING_TEXT = palette_token("warning_text")
+SETTINGS_DANGER = palette_token("danger")
 
 __all__ = (
     "SETTINGS_ACCENT",

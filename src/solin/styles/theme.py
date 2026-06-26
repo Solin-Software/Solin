@@ -42,6 +42,37 @@ class _MetricsProxy:
         return getattr(THEME.metrics, name)
 
 
+class ThemeColorToken:
+    """String-like palette token that resolves against the active theme lazily."""
+
+    def __init__(self, palette_attr: str) -> None:
+        self._palette_attr = palette_attr
+
+    @property
+    def palette_attr(self) -> str:
+        return self._palette_attr
+
+    def value(self) -> str:
+        return getattr(PALETTE, self._palette_attr)
+
+    def __str__(self) -> str:
+        return self.value()
+
+    def __format__(self, spec: str) -> str:
+        return format(self.value(), spec)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, ThemeColorToken):
+            return self.value() == other.value()
+        return self.value() == other
+
+    def __hash__(self) -> int:
+        return hash(self.value())
+
+    def __repr__(self) -> str:
+        return repr(self.value())
+
+
 class _QmlThemeProxy(Mapping[str, object]):
     """Mapping facade used by QML hosts without freezing imported references."""
 
@@ -61,6 +92,12 @@ class _QmlThemeProxy(Mapping[str, object]):
 PALETTE = _PaletteProxy()
 METRICS = _MetricsProxy()
 QML_THEME = _QmlThemeProxy()
+
+
+def palette_token(palette_attr: str) -> ThemeColorToken:
+    """Return a color token safe to store at module scope for QSS generation."""
+
+    return ThemeColorToken(palette_attr)
 
 
 def _theme_runtime(theme: AppTheme) -> tuple[AppTheme, str, str]:
