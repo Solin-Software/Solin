@@ -52,6 +52,9 @@ class ThemePalette:
     success_pressed: str
     warning: str
     warning_text: str
+    warning_surface: str
+    warning_surface_hover: str
+    warning_border: str
     danger: str
     danger_text: str
     danger_surface: str
@@ -101,6 +104,9 @@ class ThemePalette:
             "successSurfaceStrong": self.success_surface_strong,
             "successBorder": self.success_border,
             "warning": self.warning,
+            "warningSurface": self.warning_surface,
+            "warningSurfaceHover": self.warning_surface_hover,
+            "warningBorder": self.warning_border,
             "amber": self.warning,
             "danger": self.danger,
             "dangerText": self.danger_text,

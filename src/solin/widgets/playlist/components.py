@@ -22,7 +22,7 @@ from ...styles.icons import (
     ICON_TRASH,
     make_icon,
 )
-from ...styles.theme import PALETTE, qss_rgba
+from ...styles.theme import PALETTE
 
 
 def playlist_card_menu_stylesheet() -> str:
@@ -353,8 +353,8 @@ class WatchedFolderCard(QFrame):
 
     def _set_style(self, hovered: bool) -> None:
         self._hovered = hovered
-        border = PALETTE.warning if hovered else qss_rgba(PALETTE.warning, 0.28)
-        bg = qss_rgba(PALETTE.warning, 0.12 if hovered else 0.07)
+        bg = PALETTE.warning_surface_hover if hovered else PALETTE.warning_surface
+        border = PALETTE.warning if hovered else PALETTE.warning_border
         self.setStyleSheet(
             f"QFrame#PCard{{background:{bg};border-radius:8px;border:1px solid {border};}}"
             "QLabel{background:transparent;}"
@@ -363,7 +363,7 @@ class WatchedFolderCard(QFrame):
     def apply_theme(self) -> None:
         self.icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, 20, PALETTE.warning).pixmap(20, 20))
         self.icon_lbl.setStyleSheet(
-            f"background:{qss_rgba(PALETTE.warning, 0.14)};border-radius:8px;"
+            f"background:{PALETTE.warning_surface_hover};border-radius:8px;"
         )
         self.name_lbl.setStyleSheet(
             f"color:{PALETTE.text_primary};font-size:12px;font-weight:600;background:transparent;"
