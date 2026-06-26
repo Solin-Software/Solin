@@ -19,7 +19,10 @@ class ZoomSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         zoom_icon = QLabel()
-        zoom_icon.setPixmap(make_icon(ICON_ZOOM, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
+        self._zoom_icon_lbl = zoom_icon
+        zoom_icon.setPixmap(
+            make_icon(ICON_ZOOM, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
         zoom_icon.setFixedSize(20, 20)
         zoom_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         zoom_icon.setStyleSheet("background: transparent; border: none;")
@@ -48,6 +51,21 @@ class ZoomSectionMixin:
 
         self._zoom_settings.set_show_participants(True)
         return card
+
+    def _apply_zoom_theme(self) -> None:
+        if not hasattr(self, "_zoom_icon_lbl"):
+            return
+        self._zoom_icon_lbl.setPixmap(
+            make_icon(ICON_ZOOM, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._zoom_enabled_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._zoom_enabled_desc.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
 
     def _on_zoom_enabled_toggled(self, checked):
         self._zoom_settings.set_enabled(checked)

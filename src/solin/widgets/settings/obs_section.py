@@ -30,6 +30,7 @@ class ObsSectionMixin:
 
     def _build_obs_card(self):
         card, lay = self._card()
+        self._obs_last_state_message = ""
 
         header = QFrame()
         header.setStyleSheet("background: transparent; border: none;")
@@ -37,6 +38,7 @@ class ObsSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         obs_icon = QLabel()
+        self._obs_icon_lbl = obs_icon
         obs_icon.setPixmap(make_icon(ICON_OBS, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
         obs_icon.setFixedSize(20, 20)
         obs_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -146,6 +148,7 @@ class ObsSectionMixin:
         stream_header_lay.setSpacing(10)
 
         stream_icon = QLabel()
+        self._obs_stream_icon_lbl = stream_icon
         stream_icon.setPixmap(make_icon(ICON_CAST, size=16, color=SETTINGS_MUTED).pixmap(16, 16))
         stream_icon.setFixedSize(20, 20)
         stream_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -223,8 +226,9 @@ class ObsSectionMixin:
         stream_lay.addLayout(source_row)
 
         self._obs_stream_status_lbl = QLabel("")
+        self._obs_stream_status_tone = "dim"
         self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
+            self._obs_stream_status_style()
         )
         self._obs_stream_status_lbl.setWordWrap(True)
         stream_lay.addWidget(self._obs_stream_status_lbl)
@@ -238,6 +242,7 @@ class ObsSectionMixin:
         sep = QFrame()
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
+        self._obs_scenes_sep = sep
         scenes_lay.addWidget(sep)
 
         self._obs_default_lbl = QLabel(self.tr("Default scene (idle)"))
@@ -314,6 +319,91 @@ class ObsSectionMixin:
                 self._ndi.error.connect(self._on_obs_ndi_error)
                 self._theme_persistent_connections.add(error_key)
         return card
+
+    def _apply_obs_theme(self) -> None:
+        self._obs_icon_lbl.setPixmap(
+            make_icon(ICON_OBS, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._obs_header_lbl.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._obs_header_desc.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
+        )
+        self._obs_container.setStyleSheet(
+            f"background: {SETTINGS_BG}; border: none;"
+            f" border-top: 1px solid {SETTINGS_BORDER};"
+        )
+        if self._obs:
+            self._sync_obs_ui_state(
+                self._obs.state,
+                getattr(self, "_obs_last_state_message", ""),
+            )
+        else:
+            self._obs_dot.setStyleSheet(
+                f"color: {SETTINGS_DIM}; font-size: 10px; background: transparent; border: none;"
+            )
+            self._obs_status_lbl.setStyleSheet(
+                f"font-size: 12px; color: {SETTINGS_MUTED}; background: transparent; border: none;"
+            )
+        for label in (
+            self._obs_port_lbl,
+            self._obs_pwd_lbl,
+            self._obs_stream_source_lbl,
+            self._obs_default_lbl,
+            self._obs_media_lbl,
+        ):
+            label.setStyleSheet(
+                f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT};"
+                " background: transparent; border: none;"
+            )
+        self._obs_stream_title_lbl.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        for label in (
+            self._obs_stream_desc_lbl,
+            self._obs_stream_hint_lbl,
+            self._obs_default_hint,
+            self._obs_media_hint,
+        ):
+            label.setStyleSheet(
+                f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
+            )
+        self._obs_port_edit.setStyleSheet(self._obs_field_style())
+        self._obs_pwd_edit.setStyleSheet(self._obs_field_style())
+        self._obs_stream_sources_combo.setStyleSheet(self._obs_combo_style())
+        self._obs_default_combo.setStyleSheet(self._obs_combo_style())
+        self._obs_media_combo.setStyleSheet(self._obs_combo_style())
+        self._obs_save_hint.setStyleSheet(
+            f"color: {SETTINGS_DIM}; font-size: 10px; background: transparent; border: none;"
+        )
+        self._obs_stream_sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
+        self._obs_scenes_sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
+        self._obs_stream_icon_lbl.setPixmap(
+            make_icon(ICON_CAST, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
+        )
+        self._obs_stream_refresh_btn.setIcon(
+            make_icon(ICON_CAST, size=13, color=SETTINGS_MUTED)
+        )
+        self._obs_stream_refresh_btn.setStyleSheet(
+            settings_compact_secondary_button_stylesheet(radius=7)
+        )
+        self._obs_stream_status_lbl.setStyleSheet(self._obs_stream_status_style())
+
+    def _obs_stream_status_style(self, tone: str | None = None) -> str:
+        color = {
+            "success": SETTINGS_SUCCESS,
+            "danger": SETTINGS_DANGER,
+            "dim": SETTINGS_DIM,
+        }.get(tone or getattr(self, "_obs_stream_status_tone", "dim"), SETTINGS_DIM)
+        return f"font-size: 10px; color: {color}; background: transparent; border: none;"
+
+    def _set_obs_stream_status(self, text: str, tone: str = "dim") -> None:
+        self._obs_stream_status_tone = tone
+        self._obs_stream_status_lbl.setStyleSheet(self._obs_stream_status_style(tone))
+        self._obs_stream_status_lbl.setText(text)
 
     @staticmethod
     def _obs_field_style():
@@ -443,14 +533,17 @@ class ObsSectionMixin:
 
     def _refresh_obs_ndi_sources(self):
         if not self._ndi:
-            self._obs_stream_status_lbl.setText(self.tr("NDI receiver is not available."))
+            self._set_obs_stream_status(
+                self.tr("NDI receiver is not available."),
+                "danger",
+            )
             return
         self._obs_stream_refresh_btn.setEnabled(False)
         self._obs_stream_refresh_btn.setText(self.tr("Searching\u2026"))
-        self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
+        self._set_obs_stream_status(
+            self.tr("Looking for NDI sources on this network."),
+            "dim",
         )
-        self._obs_stream_status_lbl.setText(self.tr("Looking for NDI sources on this network."))
         self._ndi.refresh_sources()
 
     def _on_obs_ndi_sources_ready(self, sources: list):
@@ -472,19 +565,17 @@ class ObsSectionMixin:
             if isinstance(selected, str) and selected:
                 self._obs_settings.set_ndi_source(selected)
                 self.obs_stream_config_changed.emit()
-            self._obs_stream_status_lbl.setStyleSheet(
-                f"font-size: 10px; color: {SETTINGS_SUCCESS}; background: transparent; border: none;"
-            )
-            self._obs_stream_status_lbl.setText(
-                self.tr("%n NDI source found.", None, len(sources))
+            self._set_obs_stream_status(
+                self.tr("%n NDI source found.", None, len(sources)),
+                "success",
             )
         else:
             self._obs_stream_sources_combo.addItem(self.tr("No NDI sources found"), "")
-            self._obs_stream_status_lbl.setStyleSheet(
-                f"font-size: 10px; color: {SETTINGS_DIM}; background: transparent; border: none;"
-            )
-            self._obs_stream_status_lbl.setText(
-                self.tr("No NDI sources found. Check that DistroAV Main Output is enabled in OBS.")
+            self._set_obs_stream_status(
+                self.tr(
+                    "No NDI sources found. Check that DistroAV Main Output is enabled in OBS."
+                ),
+                "dim",
             )
         self._obs_stream_sources_combo.blockSignals(False)
 
@@ -493,10 +584,7 @@ class ObsSectionMixin:
             return
         self._obs_stream_refresh_btn.setEnabled(True)
         self._obs_stream_refresh_btn.setText(self.tr("Find sources"))
-        self._obs_stream_status_lbl.setStyleSheet(
-            f"font-size: 10px; color: {SETTINGS_DANGER}; background: transparent; border: none;"
-        )
-        self._obs_stream_status_lbl.setText(message)
+        self._set_obs_stream_status(message, "danger")
 
     def _on_obs_stream_source_selected(self, text: str):
         data = self._obs_stream_sources_combo.currentData()
@@ -518,6 +606,7 @@ class ObsSectionMixin:
             self._obs_media_combo.setEnabled(idle_set)
 
     def _on_obs_state_changed(self, state, message):
+        self._obs_last_state_message = message or ""
         self._sync_obs_ui_state(state, message)
 
     def _on_obs_scenes_updated(self, scenes):
@@ -525,6 +614,10 @@ class ObsSectionMixin:
         self._obs_scenes_frame.setVisible(bool(scenes))
 
     def _sync_obs_ui_state(self, state, message):
+        if message:
+            self._obs_last_state_message = message
+        elif state != OBSConnectionState.ERROR:
+            self._obs_last_state_message = ""
         dot_color = {
             OBSConnectionState.DISCONNECTED: SETTINGS_DIM,
             OBSConnectionState.CONNECTING: SETTINGS_WARNING_TEXT,
@@ -542,6 +635,10 @@ class ObsSectionMixin:
         }.get(state, message or self.tr("Disconnected"))
         self._obs_dot.setStyleSheet(
             f"color: {dot_color}; font-size: 10px; background: transparent; border: none;"
+        )
+        self._obs_status_lbl.setStyleSheet(
+            f"font-size: 12px; color: {SETTINGS_MUTED};"
+            " background: transparent; border: none;"
         )
         self._obs_status_lbl.setText(label)
         if state != OBSConnectionState.CONNECTED:

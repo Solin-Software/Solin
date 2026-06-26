@@ -1,3 +1,5 @@
+import inspect
+
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
 
@@ -93,9 +95,14 @@ class _ThemeSelectorWidgetStub:
     def __init__(self, theme_id="dark"):
         self._theme_combo = _ThemeSelectorComboStub()
         self._app_settings = _AppSettingsStub(theme_id)
+        self.translated: list[str] = []
 
     def tr(self, text):
+        self.translated.append(text)
         return text
+
+    def _theme_display_name(self, theme):
+        return SettingsWidget._theme_display_name(self, theme)
 
 
 class _ThemeSelectorBuildHarness(QWidget):
@@ -111,6 +118,55 @@ class _ThemeSelectorBuildHarness(QWidget):
 
     def _on_theme_selected(self, index):
         SettingsWidget._on_theme_selected(self, index)
+
+    def _theme_display_name(self, theme):
+        return SettingsWidget._theme_display_name(self, theme)
+
+
+class _ApplyThemeHarness(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.calls: list[str] = []
+        self._yt_status_kind = "success"
+        self._yt_status_text = "Annual text updated for 2026"
+
+    def _apply_settings_theme_bindings(self):
+        self.calls.append("bindings")
+
+    def _build_ui(self):
+        raise AssertionError("apply_theme must not rebuild Settings UI")
+
+    def retranslateUi(self):
+        raise AssertionError("apply_theme must not retranslate Settings UI")
+
+    def _apply_yearly_text_theme(self):
+        assert self._yt_status_kind == "success"
+        assert self._yt_status_text == "Annual text updated for 2026"
+        self.calls.append("yearly")
+
+    def _apply_obs_theme(self):
+        self.calls.append("obs")
+
+    def _apply_auto_share_theme(self):
+        self.calls.append("auto_share")
+
+    def _apply_auto_keys_theme(self):
+        self.calls.append("auto_keys")
+
+    def _apply_watched_folder_theme(self):
+        self.calls.append("watched_folder")
+
+    def _apply_about_theme(self):
+        self.calls.append("about")
+
+    def _apply_zoom_theme(self):
+        self.calls.append("zoom")
+
+    def _apply_meeting_schedule_theme(self):
+        self.calls.append("meeting_schedule")
+
+    def _apply_screens_theme(self):
+        self.calls.append("screens")
 
 
 class _TopLevelShowRecorder(QObject):
@@ -154,6 +210,51 @@ def test_settings_theme_selector_lists_available_themes_and_saves_choice():
     SettingsWidget._on_theme_selected(widget, 0)
 
     assert widget._app_settings.saved == ["dark"]
+
+
+def test_settings_builtin_theme_names_are_lupdate_visible_literals():
+    source = inspect.getsource(SettingsWidget._theme_display_name)
+
+    assert 'self.tr("Dark")' in source
+    assert 'self.tr("Light")' in source
+
+
+def test_settings_apply_theme_hooks_are_implemented():
+    hook_names = (
+        "_apply_yearly_text_theme",
+        "_apply_obs_theme",
+        "_apply_auto_share_theme",
+        "_apply_auto_keys_theme",
+        "_apply_watched_folder_theme",
+        "_apply_about_theme",
+        "_apply_zoom_theme",
+        "_apply_meeting_schedule_theme",
+        "_apply_screens_theme",
+    )
+
+    for hook_name in hook_names:
+        assert hasattr(SettingsWidget, hook_name)
+
+
+def test_settings_apply_theme_preserves_state_instead_of_rebuilding():
+    widget = _ApplyThemeHarness()
+
+    SettingsWidget.apply_theme(widget)
+
+    assert widget.calls == [
+        "bindings",
+        "yearly",
+        "obs",
+        "auto_share",
+        "auto_keys",
+        "watched_folder",
+        "about",
+        "zoom",
+        "meeting_schedule",
+        "screens",
+    ]
+    assert widget._yt_status_kind == "success"
+    assert widget._yt_status_text == "Annual text updated for 2026"
 
 
 def test_settings_theme_selector_is_parented_before_visibility_changes():

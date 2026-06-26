@@ -172,8 +172,11 @@ class _ScheduleDayButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(36)
         self.setFixedWidth(154)
-        self.setStyleSheet(_field_button_style())
+        self.apply_theme()
         self.clicked.connect(self._open_menu)
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(_field_button_style())
 
     def set_options(self, options: list[tuple[str, int]]) -> None:
         self._options = options
@@ -222,33 +225,40 @@ class _TimeStepper(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
 
-        title = QLabel(label)
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(_time_label_style())
-        layout.addWidget(title)
+        self._title_label = QLabel(label)
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title_label.setStyleSheet(_time_label_style())
+        layout.addWidget(self._title_label)
 
-        card = QFrame()
-        card.setFixedSize(70, 92)
-        card.setStyleSheet(_stepper_card_style())
-        card_layout = QVBoxLayout(card)
+        self._card = QFrame()
+        self._card.setFixedSize(70, 92)
+        self._card.setStyleSheet(_stepper_card_style())
+        card_layout = QVBoxLayout(self._card)
         card_layout.setContentsMargins(5, 5, 5, 5)
         card_layout.setSpacing(2)
 
-        up_btn = self._step_button(cast(str, ICON_CHEVRON_UP), self.tr("Increase"))
-        down_btn = self._step_button(cast(str, ICON_CHEVRON_DOWN), self.tr("Decrease"))
+        self._up_btn = self._step_button(cast(str, ICON_CHEVRON_UP), self.tr("Increase"))
+        self._down_btn = self._step_button(cast(str, ICON_CHEVRON_DOWN), self.tr("Decrease"))
         self._value_label = QLabel()
         self._value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._value_label.setStyleSheet(_stepper_value_style())
         self._value_label.setMinimumHeight(30)
 
-        card_layout.addWidget(up_btn)
+        card_layout.addWidget(self._up_btn)
         card_layout.addWidget(self._value_label, stretch=1)
-        card_layout.addWidget(down_btn)
-        layout.addWidget(card)
+        card_layout.addWidget(self._down_btn)
+        layout.addWidget(self._card)
 
-        up_btn.clicked.connect(lambda: self._shift(1))
-        down_btn.clicked.connect(lambda: self._shift(-1))
+        self._up_btn.clicked.connect(lambda: self._shift(1))
+        self._down_btn.clicked.connect(lambda: self._shift(-1))
         self.set_value(value)
+
+    def apply_theme(self) -> None:
+        self._title_label.setStyleSheet(_time_label_style())
+        self._card.setStyleSheet(_stepper_card_style())
+        self._value_label.setStyleSheet(_stepper_value_style())
+        self._apply_step_button_theme(self._up_btn, cast(str, ICON_CHEVRON_UP))
+        self._apply_step_button_theme(self._down_btn, cast(str, ICON_CHEVRON_DOWN))
 
     def value(self) -> int:
         return self._value
@@ -277,10 +287,14 @@ class _TimeStepper(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedSize(60, 24)
         button.setToolTip(tooltip)
-        button.setStyleSheet(_stepper_button_style())
-        button.setIcon(make_icon(icon_svg, size=14, color=SETTINGS_MUTED))
+        self._apply_step_button_theme(button, icon_svg)
         button.setIconSize(QSize(14, 14))
         return button
+
+    @staticmethod
+    def _apply_step_button_theme(button: QToolButton, icon_svg: str) -> None:
+        button.setStyleSheet(_stepper_button_style())
+        button.setIcon(make_icon(icon_svg, size=14, color=SETTINGS_MUTED))
 
 
 class _TimePickerPopup(QWidget):
@@ -297,10 +311,10 @@ class _TimePickerPopup(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        card = QFrame()
-        card.setObjectName("ScheduleTimePickerCard")
-        card.setStyleSheet(_time_popup_card_style())
-        layout = QVBoxLayout(card)
+        self._card = QFrame()
+        self._card.setObjectName("ScheduleTimePickerCard")
+        self._card.setStyleSheet(_time_popup_card_style())
+        layout = QVBoxLayout(self._card)
         layout.setContentsMargins(12, 10, 12, 12)
         layout.setSpacing(10)
 
@@ -311,8 +325,14 @@ class _TimePickerPopup(QWidget):
 
         spin_row = QHBoxLayout()
         spin_row.setSpacing(10)
-        self._hour_stepper = _TimeStepper(self.tr("Hour"), 0, 23, minutes // 60, card)
-        self._minute_stepper = _TimeStepper(self.tr("Minute"), 0, 59, minutes % 60, card)
+        self._hour_stepper = _TimeStepper(self.tr("Hour"), 0, 23, minutes // 60, self._card)
+        self._minute_stepper = _TimeStepper(
+            self.tr("Minute"),
+            0,
+            59,
+            minutes % 60,
+            self._card,
+        )
         spin_row.addWidget(self._hour_stepper)
         spin_row.addWidget(self._minute_stepper)
         layout.addLayout(spin_row)
@@ -322,19 +342,27 @@ class _TimePickerPopup(QWidget):
 
         button_row = QHBoxLayout()
         button_row.setSpacing(8)
-        cancel_btn = QPushButton(self.tr("Cancel"))
-        cancel_btn.setMinimumHeight(32)
-        cancel_btn.setStyleSheet(_time_cancel_style())
-        apply_btn = QPushButton(self.tr("Apply"))
-        apply_btn.setMinimumHeight(32)
-        apply_btn.setStyleSheet(_time_apply_style())
-        button_row.addWidget(cancel_btn)
-        button_row.addWidget(apply_btn)
+        self._cancel_btn = QPushButton(self.tr("Cancel"))
+        self._cancel_btn.setMinimumHeight(32)
+        self._cancel_btn.setStyleSheet(_time_cancel_style())
+        self._apply_btn = QPushButton(self.tr("Apply"))
+        self._apply_btn.setMinimumHeight(32)
+        self._apply_btn.setStyleSheet(_time_apply_style())
+        button_row.addWidget(self._cancel_btn)
+        button_row.addWidget(self._apply_btn)
         layout.addLayout(button_row)
-        root.addWidget(card)
+        root.addWidget(self._card)
 
-        cancel_btn.clicked.connect(self.close)
-        apply_btn.clicked.connect(self._apply)
+        self._cancel_btn.clicked.connect(self.close)
+        self._apply_btn.clicked.connect(self._apply)
+
+    def apply_theme(self) -> None:
+        self._card.setStyleSheet(_time_popup_card_style())
+        self._preview.setStyleSheet(_time_preview_style())
+        self._hour_stepper.apply_theme()
+        self._minute_stepper.apply_theme()
+        self._cancel_btn.setStyleSheet(_time_cancel_style())
+        self._apply_btn.setStyleSheet(_time_apply_style())
 
     def _selected_minutes(self) -> int:
         return self._hour_stepper.value() * 60 + self._minute_stepper.value()
@@ -368,8 +396,13 @@ class _ScheduleTimeButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(36)
         self.setFixedWidth(86)
-        self.setStyleSheet(_field_button_style())
+        self.apply_theme()
         self.clicked.connect(self._open_picker)
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(_field_button_style())
+        if self._popup is not None and self._popup.isVisible():
+            self._popup.apply_theme()
 
     def minutes(self) -> int:
         return self._minutes
@@ -429,9 +462,13 @@ class MeetingScheduleSectionMixin:
             "Used by automatic features that depend on the meeting start time."
         ))
         self._schedule_hint_lbl.setWordWrap(True)
-        self._schedule_hint_lbl.setStyleSheet(
-            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
-            " padding: 12px 14px 2px 14px;"
+        self._bind_theme_style(
+            self._schedule_hint_lbl,
+            lambda: (
+                f"font-size: 11px; color: {SETTINGS_DIM};"
+                " background: transparent; border: none;"
+                " padding: 12px 14px 2px 14px;"
+            ),
         )
         lay.addWidget(self._schedule_hint_lbl)
 
@@ -464,8 +501,11 @@ class MeetingScheduleSectionMixin:
         row_layout.setSpacing(12)
 
         icon_label = QLabel()
-        icon_label.setPixmap(
-            make_icon(cast(str, ICON_CALENDAR), size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        self._bind_theme_pixmap(
+            icon_label,
+            cast(str, ICON_CALENDAR),
+            size=18,
+            color=SETTINGS_MUTED,
         )
         icon_label.setFixedSize(20, 20)
         icon_label.setStyleSheet("background: transparent; border: none;")
@@ -474,14 +514,21 @@ class MeetingScheduleSectionMixin:
         text_col = QVBoxLayout()
         text_col.setSpacing(1)
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
-            " background: transparent; border: none;"
+        self._bind_theme_style(
+            title_label,
+            lambda: (
+                f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+                " background: transparent; border: none;"
+            ),
         )
         desc_label = QLabel(desc)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet(
-            f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
+        self._bind_theme_style(
+            desc_label,
+            lambda: (
+                f"font-size: 11px; color: {SETTINGS_DIM};"
+                " background: transparent; border: none;"
+            ),
         )
         text_col.addWidget(title_label)
         text_col.addWidget(desc_label)
@@ -573,6 +620,11 @@ class MeetingScheduleSectionMixin:
         )
         for day_button, _time_button in self._schedule_rows.values():
             self._populate_day_button(day_button)
+
+    def _apply_meeting_schedule_theme(self) -> None:
+        for day_button, time_button in self._schedule_rows.values():
+            day_button.apply_theme()
+            time_button.apply_theme()
 
     def get_meeting_schedule(self):
         return self._meeting_schedule_settings.load()

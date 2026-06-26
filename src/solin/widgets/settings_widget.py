@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import (
-    Qt, Signal, QEvent, QObject, QTimer,
+    Qt, Signal, QEvent, QObject,
 )
 
 from ..core.i18n.manager import LanguageManager
@@ -40,6 +40,7 @@ from .settings.media_section import MediaSectionMixin
 from .settings.meeting_schedule_section import MeetingScheduleSectionMixin
 from .settings.obs_section import ObsSectionMixin
 from .settings.screens_section import ScreensSectionMixin
+from .settings.shared import SettingsToggleSwitch
 from .settings.watched_folder_section import WatchedFolderSectionMixin
 from .settings.yearly_text_section import YearlyTextSectionMixin
 from .settings.zoom_section import ZoomSectionMixin
@@ -149,6 +150,7 @@ class SettingsWidget(
         self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
 
     def _build_ui(self):
+        self._reset_theme_bindings()
         outer = self.layout()
         if outer is None:
             outer = QVBoxLayout(self)
@@ -244,16 +246,23 @@ class SettingsWidget(
         outer.addWidget(scroll)
 
     def apply_theme(self) -> None:
-        scroll_value = 0
-        if hasattr(self, "_settings_scroll"):
-            scroll_value = self._settings_scroll.verticalScrollBar().value()
-        self._build_ui()
-        self.retranslateUi()
-        if scroll_value:
-            QTimer.singleShot(
-                0,
-                lambda: self._settings_scroll.verticalScrollBar().setValue(scroll_value),
-            )
+        self._apply_settings_theme_bindings()
+        for section_refresh in (
+            "_apply_yearly_text_theme",
+            "_apply_obs_theme",
+            "_apply_auto_share_theme",
+            "_apply_auto_keys_theme",
+            "_apply_watched_folder_theme",
+            "_apply_about_theme",
+            "_apply_zoom_theme",
+            "_apply_meeting_schedule_theme",
+            "_apply_screens_theme",
+        ):
+            refresh = getattr(self, section_refresh, None)
+            if refresh is not None:
+                refresh()
+        for toggle in self.findChildren(SettingsToggleSwitch):
+            toggle.update()
         self.update()
 
     # ── i18n ───────────────────────────────────────────────────────────────
@@ -264,12 +273,19 @@ class SettingsWidget(
         self._theme_combo.blockSignals(True)
         self._theme_combo.clear()
         for theme in themes:
-            self._theme_combo.addItem(self.tr(theme.display_name), theme.id)
+            self._theme_combo.addItem(self._theme_display_name(theme), theme.id)
         selected_index = self._theme_combo.findData(current_id)
         if selected_index >= 0:
             self._theme_combo.setCurrentIndex(selected_index)
         self._theme_combo.setVisible(len(themes) > 1)
         self._theme_combo.blockSignals(False)
+
+    def _theme_display_name(self, theme) -> str:
+        if theme.id == "dark":
+            return self.tr("Dark")
+        if theme.id == "light":
+            return self.tr("Light")
+        return self.tr(theme.display_name)
 
     def _on_theme_selected(self, index: int) -> None:
         theme_id = self._theme_combo.itemData(index)

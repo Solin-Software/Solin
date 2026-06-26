@@ -46,6 +46,7 @@ class YearlyTextSectionMixin:
         self._yt_service.fetch_started.connect(self._on_fetch_started)
         self._manual_expanded = False
         self._manual_anim: QPropertyAnimation | None = None
+        self._yt_status_kind = "loading"
 
     def _build_yearly_text_card(self):
         card, lay = self._card()
@@ -187,6 +188,84 @@ class YearlyTextSectionMixin:
         lay.addWidget(inner)
         return card
 
+    @staticmethod
+    def _yearly_status_style(color) -> str:
+        return (
+            f"font-size: 13px; font-weight: 500; color: {color};"
+            " background: transparent;"
+        )
+
+    @staticmethod
+    def _yearly_text_field_style(widget: str) -> str:
+        return (
+            f"{widget} {{ background: {SETTINGS_SURFACE};"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG};"
+            " border-radius: 6px;"
+            f" color: {SETTINGS_TEXT}; font-size: 12px; padding: 6px; }}"
+            f"{widget}:focus {{ border-color: {SETTINGS_ACCENT}; }}"
+        )
+
+    def _apply_yearly_text_theme(self) -> None:
+        self._yearly_hint_lbl.setStyleSheet(
+            f"font-size: 12px; color: {SETTINGS_MUTED}; background: transparent;"
+        )
+        self._yt_preview_lbl.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_MUTED}; background: transparent;"
+        )
+        self._yt_refresh_btn.setIcon(
+            make_icon(ICON_CLOUD_DOWNLOAD, size=14, color=SETTINGS_MUTED)
+        )
+        self._yt_refresh_btn.setStyleSheet(settings_compact_secondary_button_stylesheet())
+        self._manual_toggle_btn.setStyleSheet(
+            f"QPushButton {{ text-align: left; padding: 0 4px; color: {SETTINGS_DIM};"
+            f" font-size: 11px; background: transparent; border: none; }}"
+            f"QPushButton:hover {{ color: {SETTINGS_TEXT}; }}"
+        )
+        self._manual_container.setStyleSheet(
+            f"background: {SETTINGS_BG}; border: 1px solid {SETTINGS_BORDER};"
+            " border-radius: 8px;"
+        )
+        for label in (self._yearly_quote_lbl, self._yearly_ref_lbl):
+            label.setStyleSheet(
+                f"font-size: 12px; font-weight: 500; color: {SETTINGS_TEXT};"
+                " background: transparent; border: none;"
+            )
+        self._yearly_quote_edit.setStyleSheet(
+            self._yearly_text_field_style("QPlainTextEdit")
+        )
+        self._yearly_ref_edit.setStyleSheet(
+            self._yearly_text_field_style("QLineEdit").replace("padding: 6px;", "padding: 0 8px;")
+        )
+        self._yearly_save_btn.setIcon(
+            make_icon(ICON_SAVE_PLAYLIST, size=14, color=SETTINGS_TEXT_SECONDARY)
+        )
+        self._yearly_save_btn.setStyleSheet(
+            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
+            f" background: {SETTINGS_BORDER}; color: {SETTINGS_TEXT_SECONDARY}; font-size: 12px; }}"
+            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+        )
+        if self._yt_status_kind == "success":
+            self._yt_icon_lbl.setPixmap(
+                make_icon(ICON_CLOUD_DONE, size=16, color=SETTINGS_SUCCESS).pixmap(16, 16)
+            )
+            self._yt_status_lbl.setStyleSheet(
+                self._yearly_status_style(SETTINGS_SUCCESS)
+            )
+        elif self._yt_status_kind == "error":
+            self._yt_icon_lbl.setPixmap(
+                make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_DANGER).pixmap(16, 16)
+            )
+            self._yt_status_lbl.setStyleSheet(
+                self._yearly_status_style(SETTINGS_DANGER)
+            )
+        else:
+            self._yt_icon_lbl.setPixmap(
+                make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
+            )
+            self._yt_status_lbl.setStyleSheet(
+                self._yearly_status_style(SETTINGS_TEXT)
+            )
+
     def _current_year(self):
         return datetime.now().year
 
@@ -215,10 +294,11 @@ class YearlyTextSectionMixin:
             self._yt_service.fetch_async(api_code, year)
 
     def _on_language_switched(self, _code):
+        self._yt_status_kind = "loading"
         self._yt_preview_lbl.hide()
         self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
+            self._yearly_status_style(SETTINGS_TEXT)
         )
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
@@ -260,6 +340,7 @@ class YearlyTextSectionMixin:
         self._set_status_error(message)
 
     def _apply_yeartext_to_ui(self, api_code, year, quote, ref):
+        self._yt_status_kind = "success"
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DONE, size=16, color=SETTINGS_SUCCESS).pixmap(16, 16)
         )
@@ -267,7 +348,7 @@ class YearlyTextSectionMixin:
             self.tr("Annual text updated for {year}").replace("{year}", str(year))
         )
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {SETTINGS_SUCCESS}; background: transparent;"
+            self._yearly_status_style(SETTINGS_SUCCESS)
         )
         preview_text = quote if not ref else f"{quote}  \u2014  {ref}"
         preview = preview_text[:120] + ("\u2026" if len(preview_text) > 120 else "")
@@ -285,25 +366,27 @@ class YearlyTextSectionMixin:
         self.yearly_text_changed.emit(quote, ref, api_code)
 
     def _set_status_loading(self):
+        self._yt_status_kind = "loading"
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
         )
         self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT}; background: transparent;"
+            self._yearly_status_style(SETTINGS_TEXT)
         )
         self._yt_preview_lbl.hide()
         self._yt_refresh_btn.setEnabled(False)
         self._yt_refresh_btn.setText(self.tr("Loading\u2026"))
 
     def _set_status_error(self, message):
+        self._yt_status_kind = "error"
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_DANGER).pixmap(16, 16)
         )
         short_msg = message[:80] + ("\u2026" if len(message) > 80 else "")
         self._yt_status_lbl.setText(self.tr("Could not fetch annual text"))
         self._yt_status_lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; color: {SETTINGS_DANGER}; background: transparent;"
+            self._yearly_status_style(SETTINGS_DANGER)
         )
         self._yt_preview_lbl.setText(short_msg)
         self._yt_preview_lbl.show()
