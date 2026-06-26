@@ -69,7 +69,7 @@ class ProjectableWebView(NativeWebView):
 
     def _on_ready(self) -> None:
         self._overlay_installed = True
-        self._push_overlay_labels()
+        self._push_overlay_runtime_config()
 
     def _on_navigation_started(self, url: str) -> None:
         if url:
@@ -83,7 +83,7 @@ class ProjectableWebView(NativeWebView):
             self.urlChanged.emit(UrlValue(url))
         self.loadProgress.emit(100)
         self.loadFinished.emit(True)
-        self._push_overlay_labels()
+        self._push_overlay_runtime_config()
 
     def _on_navigation_failed(self, _message: str) -> None:
         self.loadProgress.emit(100)
@@ -141,6 +141,20 @@ class ProjectableWebView(NativeWebView):
         )
         self.run_javascript(js)
 
+    def _push_overlay_enabled_state(self) -> None:
+        enabled = not self._projection_active
+        enabled_js = json.dumps(enabled)
+        js = (
+            f"window.__solinMediaHoverOverlaysEnabled = {enabled_js};"
+            "if (window.__solinSetMediaHoverOverlaysEnabled) "
+            f"window.__solinSetMediaHoverOverlaysEnabled({enabled_js});"
+        )
+        self.run_javascript(js)
+
+    def _push_overlay_runtime_config(self) -> None:
+        self._push_overlay_labels()
+        self._push_overlay_enabled_state()
+
     def run_javascript(self, script: str) -> None:
         try:
             self.eval_js(script)
@@ -173,8 +187,9 @@ class ProjectableWebView(NativeWebView):
     def title(self) -> str:
         return self._current_title
 
-    def set_projection_active(self, active: bool):
+    def set_projection_active(self, active: bool) -> None:
         self._projection_active = active
+        self._push_overlay_enabled_state()
 
     def ensure_active(self) -> None:
         try:
@@ -248,13 +263,13 @@ class BrowserTab(QWidget):
         self.view.titleChanged.connect(self.title_changed)
         self.view.loadProgress.connect(self.load_progress)
         self.view.loadFinished.connect(self.load_finished)
-        self.view.urlChanged.connect(lambda _: self.view._push_overlay_labels())
+        self.view.urlChanged.connect(lambda _: self.view._push_overlay_runtime_config())
 
     def _on_new_tab(self, url: str):
         self.new_tab_page.emit(url)
 
     def _push_labels(self):
-        self.view._push_overlay_labels()
+        self.view._push_overlay_runtime_config()
 
     def adopt_page(self, page):
         if isinstance(page, str):

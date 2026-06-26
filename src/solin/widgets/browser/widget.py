@@ -100,6 +100,9 @@ _OVERLAY_JS_RAW = r"""
     var _videoSrcMap   = new WeakMap();
     var _imgSaveUrlMap = new WeakMap();  // img/el → original HTTP URL for cache save
     var _barMap        = new WeakMap(); // anchor → btnBar (container flex dos botões)
+    var OVERLAY_BAR_CLASS = '__solin_media_hover_overlay_bar';
+    window.__solinMediaHoverOverlaysEnabled =
+        window.__solinMediaHoverOverlaysEnabled !== false;
 
     // ── Ícones SVG overlay ────────────────────────────────────────────────
     // Monitor com paisagem = "projetar imagem"
@@ -313,6 +316,27 @@ _OVERLAY_JS_RAW = r"""
         observeDOM();
     }
 
+    function mediaHoverOverlaysEnabled() {
+        return window.__solinMediaHoverOverlaysEnabled !== false;
+    }
+
+    function setOverlayBarVisible(bar, visible) {
+        var shouldShow = visible && mediaHoverOverlaysEnabled();
+        bar.style.opacity = shouldShow ? '1' : '0';
+        bar.style.pointerEvents = shouldShow ? 'auto' : 'none';
+    }
+
+    function hideAllOverlayBars() {
+        document.querySelectorAll('.' + OVERLAY_BAR_CLASS).forEach(function (bar) {
+            setOverlayBarVisible(bar, false);
+        });
+    }
+
+    window.__solinSetMediaHoverOverlaysEnabled = function (enabled) {
+        window.__solinMediaHoverOverlaysEnabled = enabled !== false;
+        if (!mediaHoverOverlaysEnabled()) hideAllOverlayBars();
+    };
+
     // ── Botão overlay genérico ────────────────────────────────────────────
     function makeBtn(svgContent, handler) {
         var btn = document.createElement('button');
@@ -328,6 +352,7 @@ _OVERLAY_JS_RAW = r"""
         btn.addEventListener('mouseout',  function () { btn.style.background = 'rgba(56,139,253,0.90)'; });
         btn.addEventListener('click', function (e) {
             e.preventDefault(); e.stopPropagation();
+            if (!mediaHoverOverlaysEnabled()) return;
             handler();
         });
         return btn;
@@ -337,6 +362,7 @@ _OVERLAY_JS_RAW = r"""
     function getOrCreateBtnBar(anchor) {
         if (_barMap.has(anchor)) return _barMap.get(anchor);
         var bar = document.createElement('div');
+        bar.className = OVERLAY_BAR_CLASS;
         bar.style.cssText = [
             'position:absolute', 'top:8px', 'right:8px', 'z-index:2147483647',
             'display:flex', 'flex-direction:row', 'gap:6px',
@@ -351,12 +377,10 @@ _OVERLAY_JS_RAW = r"""
 
     function wireHover(anchor, bar) {
         anchor.addEventListener('mouseenter', function () {
-            bar.style.opacity = '1';
-            bar.style.pointerEvents = 'auto';
+            setOverlayBarVisible(bar, true);
         });
         anchor.addEventListener('mouseleave', function () {
-            bar.style.opacity = '0';
-            bar.style.pointerEvents = 'none';
+            setOverlayBarVisible(bar, false);
         });
     }
 
@@ -384,10 +408,10 @@ _OVERLAY_JS_RAW = r"""
 
         var bar = getOrCreateBtnBar(posAnchor);
         hoverAnchor.addEventListener('mouseenter', function () {
-            bar.style.opacity = '1'; bar.style.pointerEvents = 'auto';
+            setOverlayBarVisible(bar, true);
         });
         hoverAnchor.addEventListener('mouseleave', function () {
-            bar.style.opacity = '0'; bar.style.pointerEvents = 'none';
+            setOverlayBarVisible(bar, false);
         });
         bar.insertBefore(btn, bar.firstChild);
     }
