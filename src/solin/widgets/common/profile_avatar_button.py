@@ -13,6 +13,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from solin.styles.theme import PALETTE
 from solin.ui.helpers import avatar_colors, initials
 
 
@@ -46,7 +47,7 @@ class ProfileAvatarButton(QWidget):
     def _colors(self) -> tuple[str, str]:
         avatar_key = self._profile_id or self._name
         if not avatar_key:
-            return "#30363d", "#484f58"
+            return PALETTE.border, PALETTE.text_dim
         return avatar_colors(avatar_key)
 
     def _initials(self) -> str:
@@ -73,7 +74,7 @@ class ProfileAvatarButton(QWidget):
         cy = self.height() / 2
 
         if self._hovered:
-            painter.setPen(QPen(QColor("#388bfd"), 2))
+            painter.setPen(QPen(QColor(PALETTE.accent), 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(
                 QRectF(
@@ -92,7 +93,7 @@ class ProfileAvatarButton(QWidget):
         painter.drawEllipse(QRectF(cx - radius, cy - radius, radius * 2, radius * 2))
 
         painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        painter.setPen(QColor("white"))
+        painter.setPen(QColor(PALETTE.white))
         painter.drawText(
             QRectF(cx - radius, cy - radius, radius * 2, radius * 2),
             Qt.AlignmentFlag.AlignCenter,

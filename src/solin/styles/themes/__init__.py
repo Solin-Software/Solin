@@ -1,0 +1,1 @@
+"""Theme definitions for Solin."""

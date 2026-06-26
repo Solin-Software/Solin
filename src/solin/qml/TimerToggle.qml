@@ -6,7 +6,7 @@ import QtQuick 2.15
 Item {
     id: ctl
     property bool checked: false
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     signal toggled(bool value)
 
     implicitWidth: 42
@@ -18,7 +18,7 @@ Item {
         id: track
         anchors.fill: parent
         radius: height / 2
-        color: ctl.checked ? ctl.accent : "#2a3040"
+        color: ctl.checked ? ctl.accent : appTheme.borderStrong
         Behavior on color { ColorAnimation { duration: 160 } }
 
         Rectangle {
@@ -28,7 +28,7 @@ Item {
             radius: 9
             y: 3
             x: ctl.checked ? parent.width - width - 3 : 3
-            color: "#ffffff"
+            color: appTheme.white
             Behavior on x { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
         }
     }

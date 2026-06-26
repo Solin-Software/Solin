@@ -13,6 +13,7 @@ from solin.core.projection.image_framing import (
     snap_zoom_to_frame_cover,
 )
 from solin.styles.icons import ICON_ASPECT_MATCH, ICON_BOUNDS, make_icon
+from solin.styles.theme import PALETTE, current_theme_scheme, qss_rgba
 
 
 class ImagePreviewWidget(QWidget):
@@ -43,23 +44,67 @@ class ImagePreviewWidget(QWidget):
         self._aspect_ratio: float = 16.0 / 9.0
         self._aspect_ratio_label: str = "16:9"
 
-        self.setStyleSheet("background: #0d1117;")
+        self.setStyleSheet(f"background: {PALETTE.bg0};")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._action_bar = self._build_action_bar()
         self._action_bar.setVisible(False)
         self._sync_tool_buttons()
 
-    def _build_action_bar(self) -> QWidget:
-        bar = QWidget(self)
-        bar.setObjectName("ImageToolPill")
-        bar.setStyleSheet(
+    @staticmethod
+    def _action_bar_stylesheet() -> str:
+        alpha = 0.94 if current_theme_scheme() == "dark" else 0.96
+        return (
             "QWidget#ImageToolPill{"
-            "background:rgba(13,17,23,0.94);"
-            "border:1px solid rgba(139,148,158,0.28);"
+            f"background:{qss_rgba(PALETTE.bg0, alpha)};"
+            f"border:1px solid {qss_rgba(PALETTE.border, 0.86)};"
             "border-radius:19px;"
             "}"
         )
+
+    @staticmethod
+    def _tool_button_stylesheet() -> str:
+        return (
+            "QPushButton{background:transparent;border:none;border-radius:13px;"
+            "padding:0;}"
+            f"QPushButton:hover{{background:{qss_rgba(PALETTE.text_primary, 0.08)};}}"
+            f"QPushButton:checked{{background:{qss_rgba(PALETTE.accent, 0.20)};}}"
+            f"QPushButton:checked:hover{{background:{qss_rgba(PALETTE.accent, 0.28)};}}"
+            "QPushButton:disabled{background:transparent;}"
+        )
+
+    @staticmethod
+    def _reset_button_stylesheet() -> str:
+        return (
+            f"QPushButton{{background:transparent;color:{PALETTE.text_muted};"
+            f"border:1px solid {qss_rgba(PALETTE.border, 0.95)};border-radius:13px;"
+            "font-size:11px;font-weight:500;padding:0 10px;}"
+            f"QPushButton:hover{{background:{PALETTE.surface_hover};color:{PALETTE.text_secondary};"
+            f"border-color:{PALETTE.border_strong};}}"
+            f"QPushButton:pressed{{background:{PALETTE.surface_hover_strong};}}"
+        )
+
+    @staticmethod
+    def _apply_button_stylesheet() -> str:
+        return (
+            f"QPushButton{{background:{PALETTE.accent_selection};color:{PALETTE.text_on_accent};"
+            "border:none;border-radius:13px;"
+            "font-size:11px;font-weight:600;padding:0 13px;}"
+            f"QPushButton:hover{{background:{PALETTE.accent_hover};}}"
+            f"QPushButton:pressed{{background:{PALETTE.accent_pressed};}}"
+        )
+
+    @staticmethod
+    def _zoom_label_stylesheet() -> str:
+        return (
+            f"background:transparent;color:{PALETTE.text_muted};"
+            "font-size:11px;font-weight:600;min-width:44px;"
+        )
+
+    def _build_action_bar(self) -> QWidget:
+        bar = QWidget(self)
+        bar.setObjectName("ImageToolPill")
+        bar.setStyleSheet(self._action_bar_stylesheet())
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(8)
@@ -83,35 +128,19 @@ class ImagePreviewWidget(QWidget):
         )
 
         self._zoom_lbl = QLabel("100%")
-        self._zoom_lbl.setStyleSheet(
-            "background:transparent;color:#8b949e;"
-            "font-size:11px;font-weight:600;min-width:44px;"
-        )
+        self._zoom_lbl.setStyleSheet(self._zoom_label_stylesheet())
         self._zoom_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._reset_btn = QPushButton(self.tr("Reset"))
         self._reset_btn.setFixedHeight(26)
         self._reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._reset_btn.setStyleSheet(
-            "QPushButton{background:transparent;color:#8b949e;"
-            "border:1px solid rgba(139,148,158,0.28);border-radius:13px;"
-            "font-size:11px;font-weight:500;padding:0 10px;}"
-            "QPushButton:hover{background:rgba(255,255,255,0.08);color:#c9d1d9;"
-            "border-color:rgba(139,148,158,0.42);}"
-            "QPushButton:pressed{background:rgba(255,255,255,0.12);}"
-        )
+        self._reset_btn.setStyleSheet(self._reset_button_stylesheet())
         self._reset_btn.clicked.connect(self._on_reset)
 
         self._apply_btn = QPushButton(self.tr("Apply to Projector"))
         self._apply_btn.setFixedHeight(26)
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._apply_btn.setStyleSheet(
-            "QPushButton{background:rgba(31,111,235,0.92);color:#ffffff;"
-            "border:none;border-radius:13px;"
-            "font-size:11px;font-weight:600;padding:0 13px;}"
-            "QPushButton:hover{background:#388bfd;}"
-            "QPushButton:pressed{background:#1158c7;}"
-        )
+        self._apply_btn.setStyleSheet(self._apply_button_stylesheet())
         self._apply_btn.clicked.connect(self._on_apply)
 
         lay.addWidget(self._aspect_btn)
@@ -128,15 +157,20 @@ class ImagePreviewWidget(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolTip(tooltip)
         button._solin_icon = icon  # type: ignore[attr-defined]
-        button.setStyleSheet(
-            "QPushButton{background:transparent;border:none;border-radius:13px;"
-            "padding:0;}"
-            "QPushButton:hover{background:rgba(255,255,255,0.08);}"
-            "QPushButton:checked{background:rgba(56,139,253,0.20);}"
-            "QPushButton:checked:hover{background:rgba(56,139,253,0.28);}"
-            "QPushButton:disabled{background:transparent;}"
-        )
+        button.setStyleSheet(self._tool_button_stylesheet())
         return button
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background: {PALETTE.bg0};")
+        self._action_bar.setStyleSheet(self._action_bar_stylesheet())
+        self._zoom_lbl.setStyleSheet(self._zoom_label_stylesheet())
+        self._reset_btn.setStyleSheet(self._reset_button_stylesheet())
+        self._apply_btn.setStyleSheet(self._apply_button_stylesheet())
+        self._aspect_btn.setStyleSheet(self._tool_button_stylesheet())
+        self._bounds_btn.setStyleSheet(self._tool_button_stylesheet())
+        self._sync_tool_buttons()
+        self._check_action_bar()
+        self.update()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -228,9 +262,9 @@ class ImagePreviewWidget(QWidget):
 
     def _sync_icon_button(self, button: QPushButton, active: bool) -> None:
         icon = getattr(button, "_solin_icon", "")
-        color = "#58a6ff" if active else "#8b949e"
+        color = PALETTE.accent_hover if active else PALETTE.text_muted
         if not button.isEnabled():
-            color = "#484f58"
+            color = PALETTE.text_dim
         button.setIcon(make_icon(icon, 15, color))
 
     def _position_action_bar(self):
@@ -423,7 +457,7 @@ class ImagePreviewWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(), QColor("#0d1117"))
+        painter.fillRect(self.rect(), QColor(PALETTE.bg0))
 
         pix = self._pixmap
         if pix is None or pix.isNull():

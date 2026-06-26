@@ -17,6 +17,7 @@ from ...core.projection.aspect_ratio import (
     ProjectionAspectRatio,
 )
 from ...styles.icons import ICON_ASPECT_MATCH, ICON_CAST, ICON_CROP, make_icon
+from ...styles.theme import PALETTE
 from ...ui.browser.scripts import CURSOR_SPOTLIGHT_JS, CURSOR_SPOTLIGHT_REMOVE_JS
 from .crop_overlay import CropOverlay
 from .downloads import BrowserDownloadsMixin
@@ -75,6 +76,15 @@ def _build_overlay_js(body: str) -> str:
         body,
         flags=re.DOTALL,
     )
+    for old, new in {
+        "__SOLIN_CTX_BG__": PALETTE.surface_overlay,
+        "__SOLIN_CTX_BORDER__": PALETTE.border,
+        "__SOLIN_CTX_SEPARATOR__": PALETTE.border_muted,
+        "__SOLIN_CTX_TEXT__": PALETTE.text_secondary,
+        "__SOLIN_CTX_MUTED__": PALETTE.text_muted,
+        "__SOLIN_CTX_HOVER__": PALETTE.bg3,
+    }.items():
+        body = body.replace(old, new)
     return body
 
 
@@ -153,8 +163,8 @@ _OVERLAY_JS_RAW = r"""
             'position:fixed',
             'left:' + clientX + 'px',
             'top:' + clientY + 'px',
-            'background:#1c2128',
-            'border:1px solid #30363d',
+            'background:__SOLIN_CTX_BG__',
+            'border:1px solid __SOLIN_CTX_BORDER__',
             'border-radius:8px',
             'padding:4px 0',
             'z-index:2147483647',
@@ -168,7 +178,7 @@ _OVERLAY_JS_RAW = r"""
         items.forEach(function(item) {
             if (item === null) {
                 var sep = document.createElement('div');
-                sep.style.cssText = 'height:1px;background:#21262d;margin:3px 0;';
+                sep.style.cssText = 'height:1px;background:__SOLIN_CTX_SEPARATOR__;margin:3px 0;';
                 menu.appendChild(sep);
                 return;
             }
@@ -176,13 +186,13 @@ _OVERLAY_JS_RAW = r"""
             row.setAttribute('role', 'menuitem');
             row.style.cssText = [
                 'display:flex', 'align-items:center', 'gap:10px',
-                'padding:8px 14px', 'color:#c9d1d9', 'font-size:13px',
+                'padding:8px 14px', 'color:__SOLIN_CTX_TEXT__', 'font-size:13px',
                 'cursor:pointer', 'line-height:1.2',
             ].join(';');
 
             var iconEl = document.createElement('span');
             iconEl.innerHTML = item.icon;
-            iconEl.style.cssText = 'display:flex;align-items:center;flex-shrink:0;color:#8b949e;line-height:0;';
+            iconEl.style.cssText = 'display:flex;align-items:center;flex-shrink:0;color:__SOLIN_CTX_MUTED__;line-height:0;';
 
             var labelEl = document.createElement('span');
             labelEl.textContent = item.label;
@@ -191,12 +201,12 @@ _OVERLAY_JS_RAW = r"""
             row.appendChild(labelEl);
 
             row.addEventListener('mouseenter', function() {
-                row.style.background = '#2d333b';
-                iconEl.style.color = '#c9d1d9';
+                row.style.background = '__SOLIN_CTX_HOVER__';
+                iconEl.style.color = '__SOLIN_CTX_TEXT__';
             });
             row.addEventListener('mouseleave', function() {
                 row.style.background = 'transparent';
-                iconEl.style.color = '#8b949e';
+                iconEl.style.color = '__SOLIN_CTX_MUTED__';
             });
             // preventDefault evita que o browser perca o foco da página
             row.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -690,7 +700,7 @@ OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 # O botão "+" é um widget IRMÃO do QTabBar no HBoxLayout — nunca filho.
 # Isso elimina para sempre o problema de posicionamento sobre as abas.
 #
-#  tab_row (QFrame, fundo #161b22):
+#  tab_row (QFrame, fundo do tema):
 #    QHBoxLayout:
 #      [BrowserTabBar — setExpanding(False), scroll buttons]
 #      [QPushButton "+"]
@@ -742,6 +752,7 @@ class BrowserWidget(
 
         self._browser_aspect_locked = False
         self._browser_aspect_ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        self._OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 
         self._build_ui()
         self.setAcceptDrops(True)
@@ -867,7 +878,7 @@ class BrowserWidget(
         self._pinned_tab = tab
         idx = self._tab_bar.currentIndex()
         # Destaque azul no título da aba pinada
-        self._tab_bar.setTabTextColor(idx, QColor("#388bfd"))
+        self._tab_bar.setTabTextColor(idx, QColor(PALETTE.accent))
         self._update_cast_btn_visual(True)
         # Mantém o Chromium renderizando mesmo quando BrowserWidget for ocultado
         tab.view.set_projection_active(True)
@@ -976,13 +987,13 @@ class BrowserWidget(
     def _update_cast_btn_visual(self, active: bool):
         if active:
             self.cast_btn.setIcon(
-                make_icon(cast(str, ICON_CAST), 16, "#388bfd")
+                make_icon(cast(str, ICON_CAST), 16, PALETTE.accent)
             )
             self.cast_btn.setStyleSheet(self._cast_btn_style_on)
             self.cast_btn.setToolTip(self.tr("Stop tab projection"))
         else:
             self.cast_btn.setIcon(
-                make_icon(cast(str, ICON_CAST), 16, "#8b949e")
+                make_icon(cast(str, ICON_CAST), 16, PALETTE.text_muted)
             )
             self.cast_btn.setStyleSheet(self._cast_btn_style_off)
             self.cast_btn.setToolTip(self.tr("Project this tab live"))
@@ -1031,7 +1042,7 @@ class BrowserWidget(
 
     def _update_aspect_lock_btn_visual(self, active: bool):
         if active:
-            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#a371f7"))
+            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, PALETTE.accent_alt))
             self.aspect_btn.setStyleSheet(self._aspect_btn_style_on)
             self.aspect_btn.setToolTip(
                 self.tr("Return browser to normal size ({ratio} active)").format(
@@ -1040,7 +1051,7 @@ class BrowserWidget(
             )
         else:
             ratio = self._resolve_browser_aspect_ratio()
-            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, "#8b949e"))
+            self.aspect_btn.setIcon(make_icon(ICON_ASPECT_MATCH, 16, PALETTE.text_muted))
             self.aspect_btn.setStyleSheet(self._aspect_btn_style_off)
             self.aspect_btn.setToolTip(self._aspect_lock_tooltip(ratio))
 
@@ -1090,11 +1101,11 @@ class BrowserWidget(
 
     def _update_cursor_btn_visual(self, active: bool):
         if active:
-            self.cursor_btn.setIcon(self._make_spotlight_icon("#2dd4bf"))
+            self.cursor_btn.setIcon(self._make_spotlight_icon(PALETTE.projection))
             self.cursor_btn.setStyleSheet(self._cursor_btn_style_on)
             self.cursor_btn.setToolTip(self.tr("Disable cursor spotlight"))
         else:
-            self.cursor_btn.setIcon(self._make_spotlight_icon("#8b949e"))
+            self.cursor_btn.setIcon(self._make_spotlight_icon(PALETTE.text_muted))
             self.cursor_btn.setStyleSheet(self._cursor_btn_style_off)
             self.cursor_btn.setToolTip(self.tr("Cursor spotlight (presentation mode)"))
 
@@ -1332,12 +1343,12 @@ class BrowserWidget(
     def _update_crop_btn_visual(self, active: bool):
         if active:
             self.crop_btn.setIcon(
-                make_icon(cast(str, ICON_CROP), 16, "#f0883e")
+                make_icon(cast(str, ICON_CROP), 16, PALETTE.warning)
             )
             self.crop_btn.setStyleSheet(self._crop_btn_style_on)
         else:
             self.crop_btn.setIcon(
-                make_icon(cast(str, ICON_CROP), 16, "#8b949e")
+                make_icon(cast(str, ICON_CROP), 16, PALETTE.text_muted)
             )
             self.crop_btn.setStyleSheet(self._crop_btn_style_off)
 
@@ -1376,6 +1387,21 @@ class BrowserWidget(
         self.stop_projection_signal.emit()
 
     # ── i18n ────────────────────────────────────────────────────────────────────
+
+    def apply_theme(self) -> None:
+        self._OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
+        self._apply_browser_theme_styles()
+        for i in range(self._tab_bar.count()):
+            tab = self._stack.widget(i)
+            self._tab_bar.setTabTextColor(
+                i,
+                QColor(PALETTE.accent) if tab is self._pinned_tab else QColor(),
+            )
+        self._update_cast_btn_visual(self.cast_btn.isChecked())
+        self._update_crop_btn_visual(self.crop_btn.isChecked())
+        self._update_cursor_btn_visual(self._cursor_spotlight_active)
+        self._update_aspect_lock_btn_visual(self.aspect_btn.isChecked())
+        self.update()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:

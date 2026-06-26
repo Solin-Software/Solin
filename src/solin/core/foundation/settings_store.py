@@ -131,3 +131,9 @@ class ProfileAppSettingsStore:
 
     def set_app_language(self, language: str) -> None:
         self.settings.set_value(SettingsKey.APP_LANGUAGE, language)
+
+    def app_theme_id(self) -> str:
+        return self.settings.string(SettingsKey.APP_THEME, "dark")
+
+    def set_app_theme_id(self, theme_id: str) -> None:
+        self.settings.set_value(SettingsKey.APP_THEME, str(theme_id or "").strip())

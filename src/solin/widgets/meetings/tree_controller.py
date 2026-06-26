@@ -100,6 +100,7 @@ from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.tree_delta import incremental_tree_changes
 from ...core.meetings.colors import generate_section_hue, section_colors
+from ...styles.theme import current_theme_scheme
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
 from ...ui.thumbnail_images import save_thumbnail
@@ -283,6 +284,10 @@ class MeetingTreeController(QObject):
 
     def _emit_state_changed(self) -> None:
         _emit_controller_state_changed(self)
+
+    def refresh_theme(self) -> None:
+        _emit_controller_state_changed(self)
+        self._emit_section_counts()
 
     def _reset_media_request_queue(self) -> None:
         _reset_media_request_queue(self)
@@ -1927,7 +1932,7 @@ class MeetingTreeController(QObject):
         if not node or node.get("type") not in ("section", "subsection"):
             return {}
         hue = int(node.get("color_hue", 215))
-        colors = section_colors(hue)
+        colors = section_colors(hue, current_theme_scheme())
         return {
             "id": str(node.get("id", "")),
             "title": str(node.get("title", "")),
@@ -1962,7 +1967,7 @@ class MeetingTreeController(QObject):
         node_type = node.get("type", "")
         if node_type in ("section", "subsection"):
             hue = int(node.get("color_hue", 215))
-            colors = section_colors(hue)
+            colors = section_colors(hue, current_theme_scheme())
             children = [self._qml_node(child) for child in node.get("children", [])]
             return {
                 "id": node.get("id", ""),

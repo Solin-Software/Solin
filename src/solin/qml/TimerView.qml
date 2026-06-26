@@ -8,25 +8,29 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: "#0d1117"
+    color: appTheme.bg
 
-    // ── Shared palette (mirrors MeetingDetailView for one cohesive design) ────
-    readonly property color bg: "#0d1117"
-    readonly property color surface: "#13161c"
-    readonly property color surfaceAlt: "#0f131a"
-    readonly property color hover: "#1a1f2a"
-    readonly property color border_: "#1e2430"
-    readonly property color borderStrong: "#2a3040"
-    readonly property color textPrimary: "#e6edf3"
-    readonly property color textSecondary: "#c9d1d9"
-    readonly property color textMuted: "#8b949e"
-    readonly property color textDim: "#484f58"
-    readonly property color accent: "#388bfd"
-    readonly property color danger: "#f85149"
+    readonly property color bg: appTheme.bg
+    readonly property color surface: appTheme.surface
+    readonly property color surfaceAlt: appTheme.surfaceAlt
+    readonly property color hover: appTheme.hover
+    readonly property color border_: appTheme.border_
+    readonly property color borderStrong: appTheme.borderStrong
+    readonly property color textPrimary: appTheme.textPrimary
+    readonly property color textSecondary: appTheme.textSecondary
+    readonly property color textMuted: appTheme.textMuted
+    readonly property color textDim: appTheme.textDim
+    readonly property color accent: appTheme.accent
+    readonly property color accentText: appTheme.accentText
+    readonly property color danger: appTheme.danger
 
     readonly property int sideMargin: 20
 
     property int mode: 0  // 0 = advanced, 1 = media countdown
+
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -48,14 +52,14 @@ Rectangle {
                     Layout.preferredHeight: 40
                     Layout.alignment: Qt.AlignVCenter
                     radius: 11
-                    color: Qt.rgba(0.22, 0.55, 0.99, 0.10)
-                    border.color: Qt.rgba(0.22, 0.55, 0.99, 0.28)
+                    color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.10)
+                    border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.28)
                     border.width: 1
                     Image {
                         anchors.centerIn: parent
                         width: 20; height: 20
                         sourceSize.width: 40; sourceSize.height: 40
-                        source: "image://timericons/clock/40/79c0ff"
+                        source: "image://timericons/clock/40/" + root.iconHex(root.accentText)
                     }
                 }
 

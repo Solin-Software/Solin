@@ -9,7 +9,7 @@ Item {
     property real to: 100
     property real value: 50
     property real step: 1
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     signal moved(real value)
 
     implicitHeight: 22
@@ -21,7 +21,7 @@ Item {
         width: parent.width
         height: 5
         radius: 2.5
-        color: "#2a3040"
+        color: appTheme.border_
 
         Rectangle {
             width: handle.x + handle.width / 2
@@ -38,7 +38,7 @@ Item {
         radius: 8
         anchors.verticalCenter: parent.verticalCenter
         x: ctl._frac * (ctl.width - width)
-        color: "#ffffff"
+        color: appTheme.surfaceChrome
         border.color: ctl.accent
         border.width: 2
         scale: ma.pressed ? 1.18 : 1.0

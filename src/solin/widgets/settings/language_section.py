@@ -36,7 +36,10 @@ class LanguageSectionMixin:
         lay.addWidget(row2)
         self._refresh_media_lang_row()
         svc = self.lang.jw_lang_service
-        svc.languages_ready.connect(self._on_jw_languages_ready)
+        key = "language:jw_languages_ready"
+        if key not in self._theme_persistent_connections:
+            svc.languages_ready.connect(self._on_jw_languages_ready)
+            self._theme_persistent_connections.add(key)
         svc.fetch_if_needed()
         self._lang_card = card
         return card

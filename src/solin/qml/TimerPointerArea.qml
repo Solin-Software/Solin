@@ -35,6 +35,16 @@ MouseArea {
 
     onEntered: _beginPointer()
     onExited: _endPointer()
+    onContainsMouseChanged: {
+        if (containsMouse)
+            _beginPointer()
+        else
+            _endPointer()
+    }
+    onPositionChanged: {
+        if (containsMouse)
+            _beginPointer()
+    }
     onPointerActiveChanged: {
         if (pointerActive && containsMouse)
             _beginPointer()

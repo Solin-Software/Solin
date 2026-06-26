@@ -51,6 +51,25 @@ def _wait_until(predicate, timeout: float = 3.0) -> bool:
     return bool(predicate())
 
 
+_WIFI_UPLOAD_THEME = {
+    "bg": "#000000",
+    "surface": "#111111",
+    "surface2": "#222222",
+    "border": "#333333",
+    "border2": "#444444",
+    "accent": "#555555",
+    "accent_hover": "#666666",
+    "accent_soft": "rgba(85,85,85,.12)",
+    "accent_subtle": "rgba(85,85,85,.03)",
+    "accent_subtle_hover": "rgba(85,85,85,.09)",
+    "text": "#eeeeee",
+    "text_on_accent": "#ffffff",
+    "muted": "#999999",
+    "ok": "#00aa00",
+    "err": "#cc0000",
+}
+
+
 def test_downloader_ignores_results_from_replaced_job(monkeypatch, tmp_path):
     _app()
     jobs = []
@@ -365,7 +384,7 @@ def test_wifi_server_reports_stopped_after_threads_exit(tmp_path):
     stopped: list[bool] = []
     service.server_stopped.connect(lambda: stopped.append(True))
 
-    assert service.start({})
+    assert service.start({}, _WIFI_UPLOAD_THEME)
     server_thread = service._thread
     assert server_thread is not None and server_thread.is_alive()
 
@@ -381,12 +400,12 @@ def test_wifi_explicit_stop_cancels_queued_restart(monkeypatch, tmp_path):
     service = WifiReceiveServer(embedded_dir=tmp_path)
     service._generation = 1
     service._stopping = True
-    service._pending_start = {"title": "restart"}
-    restarted: list[dict[str, str]] = []
+    service._pending_start = ({"title": "restart"}, _WIFI_UPLOAD_THEME)
+    restarted: list[tuple[dict[str, str], dict[str, str]]] = []
     monkeypatch.setattr(
         service,
         "start",
-        lambda labels: restarted.append(labels) or True,
+        lambda labels, theme: restarted.append((labels, theme)) or True,
     )
 
     service.stop()

@@ -18,56 +18,58 @@ from PySide6.QtWidgets import (
 
 from solin.core.i18n.manager import LanguageManager
 from solin.core.jw.languages import JWLanguageService
-from solin.styles.theme import SCROLLBAR_STYLESHEET
+from solin.styles.theme import PALETTE, palette_token, scrollbar_stylesheet
 
-_BG = "#0d1117"
-_SURFACE = "#161b22"
-_BORDER = "#21262d"
-_BORDER_STRONG = "#30363d"
-_MUTED = "#8b949e"
-_TEXT = "#e6edf3"
-_ACCENT = "#388bfd"
+_BG = palette_token("bg0")
+_SURFACE = palette_token("surface")
+_BORDER = palette_token("border_muted")
+_BORDER_STRONG = palette_token("border")
+_MUTED = palette_token("text_muted")
+_TEXT = palette_token("text_primary")
+_ACCENT = palette_token("accent")
 
-PICKER_PRIMARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {_ACCENT}; color: white;"
-    " border: none; border-radius: 8px; font-weight: 600; }"
-    "QPushButton:hover { background: #58a6ff; }"
-    "QPushButton:pressed { background: #2f7be0; }"
-)
 
-PICKER_SECONDARY_BUTTON_STYLESHEET = (
-    f"QPushButton {{ background: {_BORDER}; color: #c9d1d9;"
-    f" border: 1px solid {_BORDER_STRONG}; border-radius: 8px; }}"
-    f"QPushButton:hover {{ background: {_BORDER_STRONG}; color: {_TEXT}; }}"
-)
+def picker_primary_button_stylesheet() -> str:
+    return (
+        f"QPushButton {{ background: {_ACCENT}; color: {PALETTE.white};"
+        " border: none; border-radius: 8px; font-weight: 600; }"
+        f"QPushButton:hover {{ background: {PALETTE.accent_hover}; }}"
+        f"QPushButton:pressed {{ background: {PALETTE.accent_pressed}; }}"
+    )
 
-_PICKER_SEARCH_STYLESHEET = (
-    "QLineEdit {"
-    f"  background: {_SURFACE};"
-    f"  color: {_TEXT};"
-    f"  border: 1px solid {_BORDER_STRONG};"
-    "  border-radius: 8px;"
-    "  padding: 0 12px;"
-    "}"
-    f"QLineEdit:focus {{ border-color: {_ACCENT}; }}"
-)
 
-_PICKER_LIST_STYLESHEET = (
-    f"QListWidget {{ background: {_BG}; border: 1px solid {_BORDER_STRONG};"
-    f" border-radius: 10px; }}"
-    f"QListWidget::item {{ padding: 0; border-radius: 6px; color: {_TEXT}; }}"
-    "QListWidget::item:selected { background: transparent; }"
-    "QListWidget::item:hover:!selected { background: transparent; }"
-) + SCROLLBAR_STYLESHEET
+def picker_secondary_button_stylesheet() -> str:
+    return (
+        f"QPushButton {{ background: {_BORDER}; color: {PALETTE.text_secondary};"
+        f" border: 1px solid {_BORDER_STRONG}; border-radius: 8px; }}"
+        f"QPushButton:hover {{ background: {_BORDER_STRONG}; color: {_TEXT}; }}"
+    )
+
+
+def picker_search_stylesheet() -> str:
+    return (
+        "QLineEdit {"
+        f"  background: {_SURFACE};"
+        f"  color: {_TEXT};"
+        f"  border: 1px solid {_BORDER_STRONG};"
+        "  border-radius: 8px;"
+        "  padding: 0 12px;"
+        "}"
+        f"QLineEdit:focus {{ border-color: {_ACCENT}; }}"
+    )
+
+
+def picker_list_stylesheet() -> str:
+    return (
+        f"QListWidget {{ background: {_BG}; border: 1px solid {_BORDER_STRONG};"
+        f" border-radius: 10px; }}"
+        f"QListWidget::item {{ padding: 0; border-radius: 6px; color: {_TEXT}; }}"
+        "QListWidget::item:selected { background: transparent; }"
+        "QListWidget::item:hover:!selected { background: transparent; }"
+    ) + scrollbar_stylesheet()
 
 
 class _LangItemDelegate(QStyledItemDelegate):
-    _SELECTED_BG = QColor("#1f3a6e")
-    _HOVER_BG = QColor(_BORDER)
-    _TEXT_PRIMARY = QColor(_TEXT)
-    _TEXT_SECONDARY = QColor(_MUTED)
-    _CHECK_COLOR = QColor(_ACCENT)
-
     def sizeHint(self, option, index):
         return QSize(option.rect.width(), 52)
 
@@ -78,11 +80,11 @@ class _LangItemDelegate(QStyledItemDelegate):
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
         is_hover = bool(option.state & QStyle.StateFlag.State_MouseOver) and not is_selected
         if is_selected:
-            painter.setBrush(self._SELECTED_BG)
+            painter.setBrush(QColor(PALETTE.accent_muted))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(rect, 6, 6)
         elif is_hover:
-            painter.setBrush(self._HOVER_BG)
+            painter.setBrush(QColor(str(_BORDER)))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(rect, 6, 6)
         x = rect.x() + 14
@@ -90,7 +92,7 @@ class _LangItemDelegate(QStyledItemDelegate):
         h = rect.height()
         is_current = index.data(Qt.ItemDataRole.UserRole + 10)
         if is_current:
-            painter.setPen(QPen(self._CHECK_COLOR, 2))
+            painter.setPen(QPen(QColor(str(_ACCENT)), 2))
             font = painter.font()
             font.setPixelSize(14)
             font.setBold(True)
@@ -104,7 +106,7 @@ class _LangItemDelegate(QStyledItemDelegate):
         font.setPixelSize(13)
         font.setBold(is_selected)
         painter.setFont(font)
-        painter.setPen(self._TEXT_PRIMARY)
+        painter.setPen(QColor(str(_TEXT)))
         painter.drawText(
             QRect(x, y_top + 6, rect.width() - x - 10, 20),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
@@ -114,7 +116,7 @@ class _LangItemDelegate(QStyledItemDelegate):
         font.setPixelSize(11)
         font.setBold(False)
         painter.setFont(font)
-        painter.setPen(self._TEXT_SECONDARY)
+        painter.setPen(QColor(str(_MUTED)))
         painter.drawText(
             QRect(x, y_top + 26, rect.width() - x - 10, 18),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
@@ -128,12 +130,12 @@ def _make_picker_btn_row(dialog, ok_label: str):
     row.setSpacing(8)
     cancel = QPushButton(dialog.tr("Cancel"))
     cancel.setMinimumHeight(36)
-    cancel.setStyleSheet(PICKER_SECONDARY_BUTTON_STYLESHEET)
+    cancel.setStyleSheet(picker_secondary_button_stylesheet())
     cancel.clicked.connect(dialog.reject)
     ok = QPushButton(ok_label)
     ok.setMinimumHeight(36)
     ok.setDefault(True)
-    ok.setStyleSheet(PICKER_PRIMARY_BUTTON_STYLESHEET)
+    ok.setStyleSheet(picker_primary_button_stylesheet())
     row.addWidget(cancel)
     row.addWidget(ok)
     return row, ok
@@ -178,7 +180,7 @@ class _LanguagePicker(QDialog):
         self._search.setPlaceholderText(self.tr("Search\u2026"))
         self._search.setMinimumHeight(36)
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(_PICKER_SEARCH_STYLESHEET)
+        self._search.setStyleSheet(picker_search_stylesheet())
         self._search.textChanged.connect(self._filter)
         lay.addWidget(self._search)
         self._list = QListWidget()
@@ -186,7 +188,7 @@ class _LanguagePicker(QDialog):
         self._list.setSpacing(0)
         self._list.setMinimumHeight(300)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setStyleSheet(_PICKER_LIST_STYLESHEET)
+        self._list.setStyleSheet(picker_list_stylesheet())
         self._list.setItemDelegate(_LangItemDelegate(self._list))
         self._list.itemActivated.connect(self._accept_item)
         lay.addWidget(self._list)
@@ -273,7 +275,7 @@ class _JWLanguagePicker(QDialog):
         self._search.setPlaceholderText(self.tr("Search\u2026"))
         self._search.setMinimumHeight(36)
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(_PICKER_SEARCH_STYLESHEET)
+        self._search.setStyleSheet(picker_search_stylesheet())
         self._search.textChanged.connect(self._filter)
         lay.addWidget(self._search)
         self._list = QListWidget()
@@ -281,7 +283,7 @@ class _JWLanguagePicker(QDialog):
         self._list.setSpacing(0)
         self._list.setMinimumHeight(320)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.setStyleSheet(_PICKER_LIST_STYLESHEET)
+        self._list.setStyleSheet(picker_list_stylesheet())
         self._list.setItemDelegate(_LangItemDelegate(self._list))
         self._list.itemActivated.connect(self._accept_item)
         lay.addWidget(self._list)

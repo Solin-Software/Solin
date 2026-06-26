@@ -10,7 +10,6 @@ from ...styles.icons import ICON_CROSSHAIR, ICON_EDIT, ICON_SHARE_SCREEN, make_i
 from .shared import (
     SETTINGS_BG,
     SETTINGS_BORDER,
-    SETTINGS_BORDER_STRONG,
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
@@ -18,6 +17,7 @@ from .shared import (
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_compact_secondary_button_stylesheet,
 )
 from .auto_key_dialog import AutoKeyEditorDialog
 
@@ -42,7 +42,10 @@ class AutoShareSectionMixin:
         header_lay.setContentsMargins(14, 10, 14, 10)
         header_lay.setSpacing(12)
         share_icon = QLabel()
-        share_icon.setPixmap(make_icon(ICON_SHARE_SCREEN, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
+        self._autoshare_icon_lbl = share_icon
+        share_icon.setPixmap(
+            make_icon(ICON_SHARE_SCREEN, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
         share_icon.setFixedSize(20, 20)
         share_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         share_icon.setStyleSheet("background: transparent; border: none;")
@@ -148,10 +151,7 @@ class AutoShareSectionMixin:
             self._autoshare_access_btn.setFixedHeight(28)
             self._autoshare_access_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._autoshare_access_btn.setStyleSheet(
-                f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-                f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-                f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
-                f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+                settings_compact_secondary_button_stylesheet()
             )
             self._autoshare_access_btn.clicked.connect(self._open_macos_accessibility_settings)
             access_lay.addWidget(self._autoshare_access_btn)
@@ -161,6 +161,7 @@ class AutoShareSectionMixin:
         sep = QFrame()
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background: {SETTINGS_BORDER}; border: none;")
+        self._autoshare_separator = sep
         as_lay.addWidget(sep)
 
         qc_row = QFrame()
@@ -170,7 +171,10 @@ class AutoShareSectionMixin:
         qc_row_lay.setSpacing(12)
 
         qc_icon = QLabel()
-        qc_icon.setPixmap(make_icon(ICON_CROSSHAIR, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
+        self._autoshare_crosshair_icon_lbl = qc_icon
+        qc_icon.setPixmap(
+            make_icon(ICON_CROSSHAIR, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
         qc_icon.setFixedSize(20, 20)
         qc_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         qc_icon.setStyleSheet("background: transparent; border: none;")
@@ -219,12 +223,7 @@ class AutoShareSectionMixin:
             make_icon(ICON_CROSSHAIR, size=14, color=SETTINGS_MUTED)
         )
         self._autoshare_config_btn.setStyleSheet(
-            f"QPushButton {{ padding: 0 10px; font-size: 11px;"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
-            f"QPushButton:disabled {{ color: {SETTINGS_DIM};"
-            f" border-color: {SETTINGS_BORDER}; background: transparent; }}"
+            settings_compact_secondary_button_stylesheet(include_disabled=True)
         )
         self._autoshare_config_btn.clicked.connect(self._on_autoshare_configure)
         qc_cfg_lay.addWidget(self._autoshare_config_btn)
@@ -239,6 +238,68 @@ class AutoShareSectionMixin:
             self._autoshare_container.setMaximumHeight(16777215)
 
         return card
+
+    def _apply_auto_share_theme(self) -> None:
+        self._autoshare_icon_lbl.setPixmap(
+            make_icon(ICON_SHARE_SCREEN, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._autoshare_label.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._autoshare_desc.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._autoshare_container.setStyleSheet(
+            f"background: {SETTINGS_BG}; border: none;"
+            f" border-top: 1px solid {SETTINGS_BORDER};"
+        )
+        self._autoshare_hotkey_lbl.setStyleSheet(
+            f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._autoshare_hotkey_hint.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._refresh_autoshare_hotkey_label()
+        if hasattr(self, "_apply_auto_key_icon_button_theme"):
+            self._apply_auto_key_icon_button_theme(self._autoshare_hotkey_btn, ICON_EDIT)
+        self._autoshare_separator.setStyleSheet(
+            f"background: {SETTINGS_BORDER}; border: none;"
+        )
+        self._autoshare_crosshair_icon_lbl.setPixmap(
+            make_icon(ICON_CROSSHAIR, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._autoshare_pos_title.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._autoshare_pos_desc.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._refresh_autoshare_position_label()
+        self._autoshare_config_btn.setIcon(
+            make_icon(ICON_CROSSHAIR, size=14, color=SETTINGS_MUTED)
+        )
+        self._autoshare_config_btn.setStyleSheet(
+            settings_compact_secondary_button_stylesheet(include_disabled=True)
+        )
+        if sys.platform == "darwin" and hasattr(self, "_autoshare_access_row"):
+            self._autoshare_access_row.setStyleSheet(
+                f"background: {SETTINGS_SURFACE};"
+                f" border: 1px solid {SETTINGS_BORDER}; border-radius: 8px;"
+            )
+            self._autoshare_access_title.setStyleSheet(
+                f"font-size: 12px; font-weight: 600; color: {SETTINGS_TEXT};"
+                " background: transparent; border: none;"
+            )
+            self._autoshare_access_btn.setStyleSheet(
+                settings_compact_secondary_button_stylesheet()
+            )
+            self._refresh_autoshare_accessibility_status()
 
     def _on_autoshare_toggled(self, checked):
         self._auto_share_settings.set_enabled(checked)

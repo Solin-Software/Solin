@@ -19,7 +19,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
 
-from solin.ui.qml.host import configure_qml_host
+from solin.styles.theme import PALETTE, QML_THEME
+from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.model import PlaylistEditModel
 from solin.ui.qml.playlist.visuals import (
@@ -262,7 +263,7 @@ class PlaylistEditView(
         configure_qml_host(
             self.qml_widget,
             type_name="PlaylistEditView",
-            clear_color="#0a0e14",
+            clear_color=QML_THEME["mediaPlaceholder"],
             image_providers={
                 "playlistthumbs": PlaylistThumbnailProvider(
                     self._id_to_thumb,
@@ -989,6 +990,14 @@ class PlaylistEditView(
         if self._pl:
             self._rebuild_list()
 
+    def apply_theme(self) -> None:
+        apply_qml_theme(self.qml_widget, clear_color=PALETTE.media_placeholder)
+        if self._pl:
+            self.model.rebuild(self._pl)
+            self._sync_playlist_chrome()
+        else:
+            self.bridge.stateChanged.emit()
+
     def begin_qml_pointer_cursor(self) -> None:
         self._qml_pointer_depth += 1
         begin_qml_pointer_cursor(self.qml_widget)
@@ -1311,6 +1320,10 @@ class PlaylistWidget(QWidget):
     def retranslateUi(self) -> None:
         self._list_view.retranslateUi()
         self._edit_view.retranslateUi()
+
+    def apply_theme(self) -> None:
+        self._list_view.apply_theme()
+        self._edit_view.apply_theme()
 
     def cleanup(self) -> None:
         """Stop background work owned by child views."""

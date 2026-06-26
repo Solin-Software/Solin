@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QScrollArea,
 )
 from PySide6.QtCore import (
@@ -27,6 +27,9 @@ from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
+from ..core.foundation.settings_store import ProfileAppSettingsStore
+from ..styles.theme import available_themes, current_theme, normalize_theme_id
+from ..ui.controls import NoScrollComboBox
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin
@@ -37,6 +40,7 @@ from .settings.media_section import MediaSectionMixin
 from .settings.meeting_schedule_section import MeetingScheduleSectionMixin
 from .settings.obs_section import ObsSectionMixin
 from .settings.screens_section import ScreensSectionMixin
+from .settings.shared import SettingsToggleSwitch
 from .settings.watched_folder_section import WatchedFolderSectionMixin
 from .settings.yearly_text_section import YearlyTextSectionMixin
 from .settings.zoom_section import ZoomSectionMixin
@@ -75,10 +79,12 @@ class SettingsWidget(
     camera_enabled_toggled = Signal(bool)
     background_song_toggled = Signal(bool)
     meeting_schedule_changed = Signal()
+    theme_changed = Signal(str)
 
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
                  ndi_service: NDIReceiverService | None = None, *,
+                 app_settings: ProfileAppSettingsStore,
                  obs_settings: OBSSettingsStore,
                  zoom_settings: ZoomSettingsStore,
                  auto_share_settings: AutoShareSettingsStore,
@@ -97,6 +103,7 @@ class SettingsWidget(
         self.screen_mgr = screen_manager
         self._obs       = obs_service
         self._ndi       = ndi_service
+        self._app_settings = app_settings
         self._yeartext_service_factory = yeartext_service_factory
         self._obs_settings = obs_settings
         self._zoom_settings = zoom_settings
@@ -109,6 +116,7 @@ class SettingsWidget(
         self._yeartext_settings = yeartext_settings
         self._background_song_settings = background_song_settings
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
+        self._theme_persistent_connections: set[str] = set()
         self._init_yearly_text_section()
         self._build_ui()
         screen_manager.screens_changed.connect(self._refresh_screens)
@@ -122,13 +130,44 @@ class SettingsWidget(
 
     # ── build UI ───────────────────────────────────────────────────────────
 
+    def _clear_layout(self, layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            child_layout = item.layout()
+            child_widget = item.widget()
+            if child_layout is not None:
+                self._clear_layout(child_layout)
+            if child_widget is not None:
+                child_widget.hide()
+                child_widget.deleteLater()
+
+    def _build_theme_selector(self, header: QHBoxLayout) -> None:
+        self._theme_combo = NoScrollComboBox(self)
+        self._theme_combo.setFixedHeight(34)
+        self._theme_combo.setMinimumWidth(120)
+        header.addWidget(self._theme_combo)
+        self._populate_theme_selector()
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
+
     def _build_ui(self):
-        outer = QVBoxLayout(self)
+        self._reset_theme_bindings()
+        outer = self.layout()
+        if outer is None:
+            outer = QVBoxLayout(self)
+        else:
+            self._clear_layout(outer)
         outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(0)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(12)
         self._main_title = QLabel(self.tr("Settings"))
         self._main_title.setObjectName("SectionTitle")
-        outer.addWidget(self._main_title)
+        header.addWidget(self._main_title)
+        header.addStretch()
+        self._build_theme_selector(header)
+        outer.addLayout(header)
         outer.addSpacing(20)
 
         scroll = QScrollArea()
@@ -203,9 +242,63 @@ class SettingsWidget(
         lay.addStretch()
 
         scroll.setWidget(content)
+        self._settings_scroll = scroll
         outer.addWidget(scroll)
 
+    def apply_theme(self) -> None:
+        self._apply_settings_theme_bindings()
+        for section_refresh in (
+            "_apply_yearly_text_theme",
+            "_apply_obs_theme",
+            "_apply_auto_share_theme",
+            "_apply_auto_keys_theme",
+            "_apply_watched_folder_theme",
+            "_apply_about_theme",
+            "_apply_zoom_theme",
+            "_apply_meeting_schedule_theme",
+            "_apply_screens_theme",
+        ):
+            refresh = getattr(self, section_refresh, None)
+            if refresh is not None:
+                refresh()
+        for toggle in self.findChildren(SettingsToggleSwitch):
+            toggle.update()
+        self.update()
+
     # ── i18n ───────────────────────────────────────────────────────────────
+
+    def _populate_theme_selector(self) -> None:
+        themes = available_themes()
+        current_id = normalize_theme_id(self._app_settings.app_theme_id())
+        self._theme_combo.blockSignals(True)
+        self._theme_combo.clear()
+        for theme in themes:
+            self._theme_combo.addItem(self._theme_display_name(theme), theme.id)
+        selected_index = self._theme_combo.findData(current_id)
+        if selected_index >= 0:
+            self._theme_combo.setCurrentIndex(selected_index)
+        self._theme_combo.setVisible(len(themes) > 1)
+        self._theme_combo.blockSignals(False)
+
+    def _theme_display_name(self, theme) -> str:
+        if theme.id == "dark":
+            return self.tr("Dark")
+        if theme.id == "light":
+            return self.tr("Light")
+        return self.tr(theme.display_name)
+
+    def _on_theme_selected(self, index: int) -> None:
+        theme_id = self._theme_combo.itemData(index)
+        if theme_id is None:
+            return
+        normalized = normalize_theme_id(str(theme_id))
+        previous_setting = normalize_theme_id(self._app_settings.app_theme_id())
+        if normalized == previous_setting and normalized == current_theme().id:
+            return
+        self._app_settings.set_app_theme_id(normalized)
+        signal = getattr(self, "theme_changed", None)
+        if signal is not None and normalized != current_theme().id:
+            signal.emit(normalized)
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
@@ -214,6 +307,7 @@ class SettingsWidget(
 
     def retranslateUi(self):
         self._main_title.setText(self.tr("Settings"))
+        self._populate_theme_selector()
         self._lang_section_title.setText(self.tr("Language").upper())
         self._media_section_title.setText(self.tr("Media").upper())
         self._meetings_section_title.setText(self.tr("Meetings").upper())

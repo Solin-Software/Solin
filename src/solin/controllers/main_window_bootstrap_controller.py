@@ -7,7 +7,7 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication
 
-from ..styles.theme import STYLESHEET
+from ..styles.theme import app_stylesheet
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +47,7 @@ class MainWindowBootstrapController:
         *,
         app_getter: Callable[[], object | None] | None = None,
         platform: str | None = None,
-        stylesheet: str = STYLESHEET,
+        stylesheet: str | None = None,
     ) -> None:
         self._dependencies = dependencies
         self._app_getter = app_getter or QCoreApplication.instance
@@ -137,4 +137,4 @@ class MainWindowBootstrapController:
         return remote_services
 
     def apply_stylesheet(self) -> None:
-        self._dependencies.apply_stylesheet(self._stylesheet)
+        self._dependencies.apply_stylesheet(self._stylesheet or app_stylesheet())

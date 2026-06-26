@@ -14,12 +14,11 @@ from PySide6.QtWidgets import (
 
 from ...styles.icons import ICON_FOLDER_LINK, make_icon
 from .shared import (
-    SETTINGS_BORDER,
-    SETTINGS_BORDER_STRONG,
     SETTINGS_DANGER,
     SETTINGS_DIM,
     SETTINGS_MUTED,
     SETTINGS_TEXT,
+    settings_compact_secondary_button_stylesheet,
 )
 
 
@@ -35,7 +34,10 @@ class WatchedFolderSectionMixin:
         row_lay.setSpacing(10)
 
         icon_lbl = QLabel()
-        icon_lbl.setPixmap(make_icon(ICON_FOLDER_LINK, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
+        self._watched_folder_icon_lbl = icon_lbl
+        icon_lbl.setPixmap(
+            make_icon(ICON_FOLDER_LINK, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
         icon_lbl.setFixedSize(20, 20)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_lbl.setStyleSheet("background: transparent; border: none;")
@@ -73,9 +75,7 @@ class WatchedFolderSectionMixin:
         self._watched_folder_pick_btn.setFixedHeight(28)
         self._watched_folder_pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._watched_folder_pick_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: #c9d1d9; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; }}"
+            settings_compact_secondary_button_stylesheet()
         )
         self._watched_folder_pick_btn.clicked.connect(self._pick_watched_folder)
         btn_col.addWidget(self._watched_folder_pick_btn)
@@ -84,10 +84,11 @@ class WatchedFolderSectionMixin:
         self._watched_folder_clear_btn.setFixedHeight(28)
         self._watched_folder_clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._watched_folder_clear_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {SETTINGS_BORDER_STRONG}; border-radius: 6px;"
-            f" background: {SETTINGS_BORDER}; color: {SETTINGS_MUTED}; font-size: 11px; padding: 0 10px; }}"
-            f"QPushButton:hover {{ background: {SETTINGS_BORDER_STRONG}; color: {SETTINGS_DANGER};"
-            f" border-color: {SETTINGS_DANGER}; }}"
+            settings_compact_secondary_button_stylesheet(
+                text_color=SETTINGS_MUTED,
+                hover_text_color=SETTINGS_DANGER,
+                hover_border_color=SETTINGS_DANGER,
+            )
         )
         self._watched_folder_clear_btn.clicked.connect(self._clear_watched_folder)
         btn_col.addWidget(self._watched_folder_clear_btn)
@@ -96,6 +97,33 @@ class WatchedFolderSectionMixin:
         lay.addWidget(row)
         self._watched_folder_clear_btn.setVisible(bool(saved))
         return card
+
+    def _apply_watched_folder_theme(self) -> None:
+        self._watched_folder_icon_lbl.setPixmap(
+            make_icon(ICON_FOLDER_LINK, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._watched_folder_title_lbl.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._watched_folder_desc_lbl.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._watched_folder_path_lbl.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_MUTED};"
+            " background: transparent; border: none;"
+        )
+        self._watched_folder_pick_btn.setStyleSheet(
+            settings_compact_secondary_button_stylesheet()
+        )
+        self._watched_folder_clear_btn.setStyleSheet(
+            settings_compact_secondary_button_stylesheet(
+                text_color=SETTINGS_MUTED,
+                hover_text_color=SETTINGS_DANGER,
+                hover_border_color=SETTINGS_DANGER,
+            )
+        )
 
     def _sync_watched_folder_path_label(self, path: str | None = None) -> None:
         if path is None:

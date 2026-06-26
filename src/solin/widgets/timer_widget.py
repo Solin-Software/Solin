@@ -18,9 +18,10 @@ from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.i18n.manager import LanguageManager
 from ..ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ..ui.fonts import timer_digit_font_family
-from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.timer_bridge import TimerBridge
 from solin.ui.qml.timer_icons import TimerIconProvider
+from solin.styles.theme import PALETTE
 
 
 class TimerWidget(QWidget):
@@ -57,7 +58,7 @@ class TimerWidget(QWidget):
         configure_qml_host(
             self._qml,
             type_name="TimerView",
-            clear_color="#0d1117",
+            clear_color=PALETTE.bg0,
             image_providers={"timericons": TimerIconProvider()},
             context_properties={
                 "timerDigitFontFamily": timer_digit_font_family(),
@@ -103,6 +104,10 @@ class TimerWidget(QWidget):
         except Exception:  # noqa: BLE001 - QML engine lifecycle boundary
             log_ignored_exception(__name__, "Could not refresh timer language")
         self.bridge.refresh_language()
+
+    def apply_theme(self) -> None:
+        apply_qml_theme(self._qml, clear_color=PALETTE.bg0)
+        self.bridge.refresh_theme()
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
 

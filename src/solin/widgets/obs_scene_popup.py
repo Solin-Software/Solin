@@ -31,6 +31,8 @@ from solin.styles.icons import (
     ICON_REC_STOP,
     make_icon,
 )
+from solin.styles.theme import PALETTE, qss_rgba
+from solin.ui.themed_tooltip import install_themed_tooltip
 
 
 class _FlowContainer(QWidget):
@@ -140,6 +142,9 @@ class OBSScenePopup(QWidget):
         self._camera_stream_active = False
         self._stream_kind = "obs"
         self._obs_service = None
+        self._scenes: list[str] = []
+        self._idle_scene = ""
+        self._media_scene = ""
         self._return_scene_override_enabled = False
         self._chip_feedback_anims: list[QVariantAnimation] = []
         self._chip_feedback_by_id: dict[int, tuple[QVariantAnimation, str]] = {}
@@ -152,13 +157,7 @@ class OBSScenePopup(QWidget):
 
         self._card = QFrame()
         self._card.setObjectName("OBSSceneCard")
-        self._card.setStyleSheet(
-            "QFrame#OBSSceneCard {"
-            "  background: #161b22;"
-            "  border: 1px solid rgba(48,54,61,0.85);"
-            "  border-radius: 16px;"
-            "}"
-        )
+        self._card.setStyleSheet(self._card_style())
         card_lay = QVBoxLayout(self._card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
@@ -169,25 +168,18 @@ class OBSScenePopup(QWidget):
         h_lay.setContentsMargins(18, 14, 18, 6)
         h_lay.setSpacing(8)
 
-        obs_px = QLabel()
-        obs_px.setPixmap(make_icon(ICON_OBS, 14, "#6e7681").pixmap(14, 14))
-        obs_px.setFixedSize(14, 14)
-        obs_px.setStyleSheet("background: transparent;")
+        self._obs_icon = QLabel()
+        self._obs_icon.setPixmap(make_icon(ICON_OBS, 14, PALETTE.text_faint).pixmap(14, 14))
+        self._obs_icon.setFixedSize(14, 14)
+        self._obs_icon.setStyleSheet("background: transparent;")
 
         self._title_lbl = QLabel(self.tr("OBS Scenes"))
-        self._title_lbl.setStyleSheet(
-            "color: #6e7681; font-size: 10px; font-weight: 700;"
-            " letter-spacing: 0.6px; background: transparent;"
-        )
+        self._title_lbl.setStyleSheet(self._title_style())
 
         self._active_lbl = QLabel()
-        self._active_lbl.setStyleSheet(
-            "color: #58a6ff; font-size: 10px; font-weight: 600;"
-            " background: rgba(56,139,253,0.08); border-radius: 4px;"
-            " padding: 2px 8px; border: none;"
-        )
+        self._active_lbl.setStyleSheet(self._active_label_style())
 
-        h_lay.addWidget(obs_px)
+        h_lay.addWidget(self._obs_icon)
         h_lay.addWidget(self._title_lbl)
         h_lay.addStretch()
         h_lay.addWidget(self._active_lbl)
@@ -197,17 +189,7 @@ class OBSScenePopup(QWidget):
         self._scroll.setWidgetResizable(False)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._scroll.setStyleSheet(
-            "QScrollArea { border: none; background: transparent; }"
-            "QScrollBar:vertical {"
-            "  width: 3px; background: transparent; margin: 4px 3px 4px 0;"
-            "}"
-            "QScrollBar::handle:vertical {"
-            "  background: rgba(110,118,129,0.3); border-radius: 1px; min-height: 20px;"
-            "}"
-            "QScrollBar::handle:vertical:hover { background: rgba(110,118,129,0.5); }"
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
-        )
+        self._scroll.setStyleSheet(self._scroll_style())
 
         self._content = QWidget()
         self._content.setStyleSheet("background: transparent;")
@@ -224,9 +206,9 @@ class OBSScenePopup(QWidget):
         f_lay.setContentsMargins(14, 6, 14, 12)
         f_lay.setSpacing(8)
 
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background: rgba(48,54,61,0.6); border: none;")
+        self._footer_sep = QFrame()
+        self._footer_sep.setFixedHeight(1)
+        self._footer_sep.setStyleSheet(self._divider_style())
 
         self._rec_btn = QPushButton()
         self._rec_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -244,14 +226,89 @@ class OBSScenePopup(QWidget):
         self._stream_btn.setObjectName("OBSStreamBtn")
         self._stream_btn.setVisible(False)
         self._stream_btn.clicked.connect(self._on_stream_clicked)
+        install_themed_tooltip(self._stream_btn)
         self._update_stream_button()
         f_lay.addWidget(self._stream_btn)
         f_lay.addStretch()
 
-        card_lay.addWidget(sep)
+        card_lay.addWidget(self._footer_sep)
         card_lay.addWidget(self._footer)
 
         root.addWidget(self._card)
+
+    @staticmethod
+    def _card_style() -> str:
+        return (
+            "QFrame#OBSSceneCard {"
+            f"  background: {PALETTE.surface};"
+            f"  border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
+            "  border-radius: 16px;"
+            "}"
+        )
+
+    @staticmethod
+    def _title_style() -> str:
+        return (
+            f"color: {PALETTE.text_faint}; font-size: 10px; font-weight: 700;"
+            " letter-spacing: 0.6px; background: transparent;"
+        )
+
+    @staticmethod
+    def _active_label_style() -> str:
+        return (
+            f"color: {PALETTE.accent_hover}; font-size: 10px; font-weight: 600;"
+            f" background: {qss_rgba(PALETTE.accent, 0.08)}; border-radius: 4px;"
+            " padding: 2px 8px; border: none;"
+        )
+
+    @staticmethod
+    def _scroll_style() -> str:
+        return (
+            "QScrollArea { border: none; background: transparent; }"
+            "QScrollBar:vertical {"
+            "  width: 3px; background: transparent; margin: 4px 3px 4px 0;"
+            "}"
+            "QScrollBar::handle:vertical {"
+            f"  background: {qss_rgba(PALETTE.text_faint, 0.30)};"
+            "  border-radius: 1px; min-height: 20px;"
+            "}"
+            f"QScrollBar::handle:vertical:hover {{ background: {qss_rgba(PALETTE.text_faint, 0.50)}; }}"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        )
+
+    @staticmethod
+    def _divider_style() -> str:
+        return f"background: {qss_rgba(PALETTE.border, 0.6)}; border: none;"
+
+    @staticmethod
+    def _section_label_style() -> str:
+        return (
+            f"color: {PALETTE.text_dim}; font-size: 9px; font-weight: 700;"
+            " letter-spacing: 0.5px; background: transparent; padding: 0 4px;"
+        )
+
+    @staticmethod
+    def _empty_label_style() -> str:
+        return (
+            f"color: {PALETTE.text_dim}; font-size: 12px; padding: 20px;"
+            " background: transparent;"
+        )
+
+    def apply_theme(self) -> None:
+        self._card.setStyleSheet(self._card_style())
+        self._obs_icon.setPixmap(make_icon(ICON_OBS, 14, PALETTE.text_faint).pixmap(14, 14))
+        self._title_lbl.setStyleSheet(self._title_style())
+        self._active_lbl.setStyleSheet(self._active_label_style())
+        self._scroll.setStyleSheet(self._scroll_style())
+        self._footer_sep.setStyleSheet(self._divider_style())
+        self._update_rec_button()
+        self._update_stream_button()
+        self.populate(
+            list(self._scenes),
+            self._current_scene,
+            self._idle_scene,
+            self._media_scene,
+        )
 
     def populate(
         self,
@@ -260,7 +317,10 @@ class OBSScenePopup(QWidget):
         idle_scene: str,
         media_scene: str,
     ) -> None:
+        self._scenes = list(scenes)
         self._current_scene = current_scene
+        self._idle_scene = idle_scene
+        self._media_scene = media_scene
         self._return_scene_override_enabled = bool(
             media_scene
             and current_scene == media_scene
@@ -278,9 +338,7 @@ class OBSScenePopup(QWidget):
         if not scenes:
             empty = QLabel(self.tr("No scenes available"))
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setStyleSheet(
-                "color: #484f58; font-size: 12px; padding: 20px; background: transparent;"
-            )
+            empty.setStyleSheet(self._empty_label_style())
             self._content_lay.addWidget(empty)
             self._finalize_size(scenes)
             return
@@ -300,10 +358,7 @@ class OBSScenePopup(QWidget):
 
         if pinned:
             sec_lbl = QLabel(self.tr("Configured"))
-            sec_lbl.setStyleSheet(
-                "color: #484f58; font-size: 9px; font-weight: 700;"
-                " letter-spacing: 0.5px; background: transparent; padding: 0 4px;"
-            )
+            sec_lbl.setStyleSheet(self._section_label_style())
             self._content_lay.addWidget(sec_lbl)
 
             flow_p = _FlowContainer(h_spacing=6, v_spacing=6)
@@ -315,10 +370,7 @@ class OBSScenePopup(QWidget):
         if rest:
             if pinned:
                 sec_lbl2 = QLabel(self.tr("All scenes"))
-                sec_lbl2.setStyleSheet(
-                    "color: #484f58; font-size: 9px; font-weight: 700;"
-                    " letter-spacing: 0.5px; background: transparent; padding: 0 4px;"
-                )
+                sec_lbl2.setStyleSheet(self._section_label_style())
                 self._content_lay.addWidget(sec_lbl2)
 
             flow_r = _FlowContainer(h_spacing=6, v_spacing=6)
@@ -393,39 +445,39 @@ class OBSScenePopup(QWidget):
         if active:
             chip.setStyleSheet(
                 f"QPushButton#{uid} {{"
-                "  background: rgba(56,139,253,0.12);"
-                "  border: 1px solid rgba(56,139,253,0.40);"
+                f"  background: {qss_rgba(PALETTE.accent, 0.12)};"
+                f"  border: 1px solid {qss_rgba(PALETTE.accent, 0.40)};"
                 "  border-radius: 8px;"
-                "  color: #58a6ff;"
+                f"  color: {PALETTE.accent_hover};"
                 "  font-size: 12px; font-weight: 600;"
                 "  padding: 0 10px;"
                 "  text-align: center;"
                 "}"
                 f"QPushButton#{uid}:hover {{"
-                "  background: rgba(56,139,253,0.20);"
-                "  border-color: rgba(56,139,253,0.55);"
+                f"  background: {qss_rgba(PALETTE.accent, 0.20)};"
+                f"  border-color: {qss_rgba(PALETTE.accent, 0.55)};"
                 "}"
                 f"QPushButton#{uid}:pressed {{"
-                "  background: rgba(56,139,253,0.28);"
+                f"  background: {qss_rgba(PALETTE.accent, 0.28)};"
                 "}"
             )
         else:
             if badge == self.tr("idle"):
-                border_c = "rgba(63,185,80,0.25)"
-                bg_hover = "rgba(63,185,80,0.08)"
-                text_c = "#b1bac4"
+                border_c = qss_rgba(PALETTE.success, 0.25)
+                bg_hover = qss_rgba(PALETTE.success, 0.08)
+                text_c = PALETTE.text_secondary
             elif badge == self.tr("media"):
-                border_c = "rgba(56,139,253,0.20)"
-                bg_hover = "rgba(56,139,253,0.06)"
-                text_c = "#b1bac4"
+                border_c = qss_rgba(PALETTE.accent, 0.20)
+                bg_hover = qss_rgba(PALETTE.accent, 0.06)
+                text_c = PALETTE.text_secondary
             else:
-                border_c = "rgba(48,54,61,0.6)"
-                bg_hover = "rgba(255,255,255,0.04)"
-                text_c = "#8b949e"
+                border_c = qss_rgba(PALETTE.border, 0.60)
+                bg_hover = PALETTE.surface_hover
+                text_c = PALETTE.text_muted
 
             chip.setStyleSheet(
                 f"QPushButton#{uid} {{"
-                "  background: rgba(22,27,34,0.6);"
+                f"  background: {qss_rgba(PALETTE.surface, 0.60)};"
                 f"  border: 1px solid {border_c};"
                 "  border-radius: 8px;"
                 f"  color: {text_c};"
@@ -435,11 +487,11 @@ class OBSScenePopup(QWidget):
                 "}"
                 f"QPushButton#{uid}:hover {{"
                 f"  background: {bg_hover};"
-                "  border-color: rgba(56,139,253,0.35);"
-                "  color: #c9d1d9;"
+                f"  border-color: {qss_rgba(PALETTE.accent, 0.35)};"
+                f"  color: {PALETTE.text_secondary};"
                 "}"
                 f"QPushButton#{uid}:pressed {{"
-                "  background: rgba(56,139,253,0.10);"
+                f"  background: {qss_rgba(PALETTE.accent, 0.10)};"
                 "}"
             )
 
@@ -479,33 +531,30 @@ class OBSScenePopup(QWidget):
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._chip_feedback_anims.append(anim)
 
-        def _rgba(r: int, g: int, b: int, alpha: int) -> str:
-            return f"rgba({r},{g},{b},{max(0, min(alpha, 255))})"
-
         def _apply(value) -> None:
             t = float(value)
             bg_alpha = int(18 + (56 * t))
             border_alpha = int(70 + (120 * t))
             hover_bg_alpha = int(30 + (70 * t))
             pressed_bg_alpha = int(42 + (82 * t))
-            border = _rgba(63, 185, 80, border_alpha)
+            border = qss_rgba(PALETTE.success, border_alpha / 255)
             try:
                 chip.setStyleSheet(
                     original_style
                     + f"QPushButton#{uid} {{"
-                    f"  background: {_rgba(63, 185, 80, bg_alpha)};"
+                    f"  background: {qss_rgba(PALETTE.success, bg_alpha / 255)};"
                     f"  border-color: {border};"
-                    "  color: #3fb950;"
+                    f"  color: {PALETTE.success};"
                     "}"
                     + f"QPushButton#{uid}:hover {{"
-                    f"  background: {_rgba(63, 185, 80, hover_bg_alpha)};"
+                    f"  background: {qss_rgba(PALETTE.success, hover_bg_alpha / 255)};"
                     f"  border-color: {border};"
-                    "  color: #3fb950;"
+                    f"  color: {PALETTE.success};"
                     "}"
                     + f"QPushButton#{uid}:pressed {{"
-                    f"  background: {_rgba(63, 185, 80, pressed_bg_alpha)};"
+                    f"  background: {qss_rgba(PALETTE.success, pressed_bg_alpha / 255)};"
                     f"  border-color: {border};"
-                    "  color: #c9d1d9;"
+                    f"  color: {PALETTE.text_secondary};"
                     "}"
                 )
             except RuntimeError:
@@ -576,50 +625,50 @@ class OBSScenePopup(QWidget):
     def _update_rec_button(self) -> None:
         btn = self._rec_btn
         if self._is_recording:
-            btn.setIcon(make_icon(ICON_REC_STOP, 14, "#f85149"))
+            btn.setIcon(make_icon(ICON_REC_STOP, 14, PALETTE.danger))
             btn.setText(self.tr("Stop Recording"))
             text_w = btn.fontMetrics().horizontalAdvance(self.tr("Stop Recording"))
             btn.setFixedWidth(text_w + 48)
             btn.setStyleSheet(
                 "QPushButton#OBSRecBtn {"
-                "  background: rgba(248,81,73,0.10);"
-                "  border: 1px solid rgba(248,81,73,0.35);"
+                f"  background: {qss_rgba(PALETTE.danger, 0.10)};"
+                f"  border: 1px solid {qss_rgba(PALETTE.danger, 0.35)};"
                 "  border-radius: 8px;"
-                "  color: #f85149;"
+                f"  color: {PALETTE.danger};"
                 "  font-size: 12px; font-weight: 600;"
                 "  padding: 0 14px;"
                 "  text-align: center;"
                 "}"
                 "QPushButton#OBSRecBtn:hover {"
-                "  background: rgba(248,81,73,0.18);"
-                "  border-color: rgba(248,81,73,0.50);"
+                f"  background: {qss_rgba(PALETTE.danger, 0.18)};"
+                f"  border-color: {qss_rgba(PALETTE.danger, 0.50)};"
                 "}"
                 "QPushButton#OBSRecBtn:pressed {"
-                "  background: rgba(248,81,73,0.26);"
+                f"  background: {qss_rgba(PALETTE.danger, 0.26)};"
                 "}"
             )
         else:
-            btn.setIcon(make_icon(ICON_REC_CIRCLE, 14, "#f85149"))
+            btn.setIcon(make_icon(ICON_REC_CIRCLE, 14, PALETTE.danger))
             btn.setText(self.tr("Record"))
             text_w = btn.fontMetrics().horizontalAdvance(self.tr("Record"))
             btn.setFixedWidth(text_w + 48)
             btn.setStyleSheet(
                 "QPushButton#OBSRecBtn {"
-                "  background: rgba(248,81,73,0.06);"
-                "  border: 1px solid rgba(48,54,61,0.6);"
+                f"  background: {qss_rgba(PALETTE.danger, 0.06)};"
+                f"  border: 1px solid {qss_rgba(PALETTE.border, 0.60)};"
                 "  border-radius: 8px;"
-                "  color: #b1bac4;"
+                f"  color: {PALETTE.text_secondary};"
                 "  font-size: 12px; font-weight: 500;"
                 "  padding: 0 14px;"
                 "  text-align: center;"
                 "}"
                 "QPushButton#OBSRecBtn:hover {"
-                "  background: rgba(248,81,73,0.12);"
-                "  border-color: rgba(248,81,73,0.35);"
-                "  color: #f85149;"
+                f"  background: {qss_rgba(PALETTE.danger, 0.12)};"
+                f"  border-color: {qss_rgba(PALETTE.danger, 0.35)};"
+                f"  color: {PALETTE.danger};"
                 "}"
                 "QPushButton#OBSRecBtn:pressed {"
-                "  background: rgba(248,81,73,0.20);"
+                f"  background: {qss_rgba(PALETTE.danger, 0.20)};"
                 "}"
             )
         btn.setIconSize(QSize(14, 14))
@@ -671,45 +720,45 @@ class OBSScenePopup(QWidget):
         if self._stream_kind == "camera":
             camera_active = getattr(self, "_camera_stream_active", False)
             if camera_active:
-                icon_color = "#f85149"
+                icon_color = PALETTE.danger
                 text = self.tr("Stop Stream")
                 tooltip = self.tr("Stop OBS virtual camera")
-                bg = "rgba(248,81,73,0.08)"
-                border = "rgba(248,81,73,0.30)"
-                hover_bg = "rgba(248,81,73,0.15)"
-                hover_border = "rgba(248,81,73,0.45)"
-                hover_color = "#f85149"
-                press_bg = "rgba(248,81,73,0.24)"
+                bg = qss_rgba(PALETTE.danger, 0.08)
+                border = qss_rgba(PALETTE.danger, 0.30)
+                hover_bg = qss_rgba(PALETTE.danger, 0.15)
+                hover_border = qss_rgba(PALETTE.danger, 0.45)
+                hover_color = PALETTE.danger
+                press_bg = qss_rgba(PALETTE.danger, 0.24)
             else:
-                icon_color = "#58a6ff"
+                icon_color = PALETTE.accent_hover
                 text = self.tr("Show Stream")
                 tooltip = self.tr("Project OBS virtual camera")
-                bg = "rgba(56,139,253,0.08)"
-                border = "rgba(56,139,253,0.28)"
-                hover_bg = "rgba(56,139,253,0.15)"
-                hover_border = "rgba(56,139,253,0.45)"
-                hover_color = "#58a6ff"
-                press_bg = "rgba(56,139,253,0.24)"
+                bg = qss_rgba(PALETTE.accent, 0.08)
+                border = qss_rgba(PALETTE.accent, 0.28)
+                hover_bg = qss_rgba(PALETTE.accent, 0.15)
+                hover_border = qss_rgba(PALETTE.accent, 0.45)
+                hover_color = PALETTE.accent_hover
+                press_bg = qss_rgba(PALETTE.accent, 0.24)
         elif self._stream_active:
-            icon_color = "#f85149"
+            icon_color = PALETTE.danger
             text = self.tr("Stop Stream")
             tooltip = self.tr("Stop OBS program stream")
-            bg = "rgba(248,81,73,0.08)"
-            border = "rgba(248,81,73,0.30)"
-            hover_bg = "rgba(248,81,73,0.15)"
-            hover_border = "rgba(248,81,73,0.45)"
-            hover_color = "#f85149"
-            press_bg = "rgba(248,81,73,0.24)"
+            bg = qss_rgba(PALETTE.danger, 0.08)
+            border = qss_rgba(PALETTE.danger, 0.30)
+            hover_bg = qss_rgba(PALETTE.danger, 0.15)
+            hover_border = qss_rgba(PALETTE.danger, 0.45)
+            hover_color = PALETTE.danger
+            press_bg = qss_rgba(PALETTE.danger, 0.24)
         else:
-            icon_color = "#58a6ff"
+            icon_color = PALETTE.accent_hover
             text = self.tr("Show Stream")
             tooltip = self.tr("Project OBS program stream")
-            bg = "rgba(56,139,253,0.08)"
-            border = "rgba(56,139,253,0.28)"
-            hover_bg = "rgba(56,139,253,0.15)"
-            hover_border = "rgba(56,139,253,0.45)"
-            hover_color = "#58a6ff"
-            press_bg = "rgba(56,139,253,0.24)"
+            bg = qss_rgba(PALETTE.accent, 0.08)
+            border = qss_rgba(PALETTE.accent, 0.28)
+            hover_bg = qss_rgba(PALETTE.accent, 0.15)
+            hover_border = qss_rgba(PALETTE.accent, 0.45)
+            hover_color = PALETTE.accent_hover
+            press_bg = qss_rgba(PALETTE.accent, 0.24)
 
         btn.setIcon(make_icon(ICON_CAST, 14, icon_color))
         btn.setText(text)
@@ -720,7 +769,7 @@ class OBSScenePopup(QWidget):
             f"  background: {bg};"
             f"  border: 1px solid {border};"
             "  border-radius: 8px;"
-            "  color: #c9d1d9;"
+            f"  color: {PALETTE.text_secondary};"
             "  font-size: 12px; font-weight: 500;"
             "  padding: 0 14px;"
             "  text-align: center;"

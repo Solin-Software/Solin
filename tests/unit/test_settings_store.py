@@ -105,6 +105,20 @@ def test_profile_app_settings_store_reads_language(monkeypatch) -> None:
     assert store.app_language() == "fr_FR"
 
 
+def test_profile_app_settings_store_persists_theme_id(monkeypatch) -> None:
+    _install_fake_settings(monkeypatch)
+    store = settings_store.ProfileAppSettingsStore.for_organization("SolinDev_main_hall")
+
+    assert store.app_theme_id() == "dark"
+
+    store.set_app_theme_id("light")
+
+    assert store.app_theme_id() == "light"
+    assert _FakeSettings.buckets[("SolinDev_main_hall", QSETTINGS_APP_APP)] == {
+        SettingsKey.APP_THEME: "light",
+    }
+
+
 def test_settings_store_clears_removes_and_lists_keys(monkeypatch) -> None:
     _install_fake_settings(monkeypatch)
     store = settings_store.SettingsStore.for_namespace("Org", "App")

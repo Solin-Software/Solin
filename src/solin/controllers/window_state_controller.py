@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtGui import QGuiApplication, QIcon
 
 from ..core.foundation.resources import application_asset_path
+from ..styles.theme import PALETTE
 from ..ui.titlebar import apply_titlebar_color
 from ..core.windowing.settings import WindowGeometrySettingsStore
 
@@ -41,7 +42,6 @@ class WindowStateController:
 
     _DEFAULT_WIDTH = 1200
     _DEFAULT_HEIGHT = 760
-    _TITLEBAR_COLOR = "#1A231F"
 
     def __init__(
         self,
@@ -86,7 +86,7 @@ class WindowStateController:
         )
 
     def apply_titlebar_color(self) -> None:
-        apply_titlebar_color(self._context.titlebar_window, self._TITLEBAR_COLOR)
+        apply_titlebar_color(self._context.titlebar_window, PALETTE.titlebar)
 
     def bring_to_front(self) -> None:
         """

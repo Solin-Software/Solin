@@ -11,6 +11,7 @@ class SettingsKey:
     LAST_ACTIVE_PROFILE: Final = "last_active_profile"
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"
+    APP_THEME: Final = "theme"
     MEDIA_LANGUAGE_CODE: Final = "media_language_code"
     LEGACY_JW_LANGUAGE: Final = "jw_language"
 

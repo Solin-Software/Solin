@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..styles.theme import PALETTE
 from ..core.media.formats import AUDIO_EXTS, IMAGE_EXTS, media_type_from_path
 from ..core.playlists.items import create_playlist_item
 
@@ -111,8 +112,8 @@ class WifiPlaylistController:
         short_title = (title[:52] + "…") if len(title) > 52 else title
         media_lbl = QLabel(f"🎬  {short_title}")
         media_lbl.setStyleSheet(
-            "color:#8b949e;font-size:11px;background:#13161c;"
-            "border:1px solid #21262d;border-radius:5px;padding:5px 10px;"
+            f"color:{PALETTE.text_muted};font-size:11px;background:{PALETTE.surface_card};"
+            f"border:1px solid {PALETTE.border_muted};border-radius:5px;padding:5px 10px;"
         )
         media_lbl.setWordWrap(True)
         root.addWidget(media_lbl)
@@ -143,7 +144,7 @@ class WifiPlaylistController:
             info = QLabel(context.translate("No playlists found.\nCreate a new one:"))
             info.setAlignment(Qt.AlignmentFlag.AlignCenter)
             info.setStyleSheet(
-                "color:#484f58;font-size:11px;background:transparent;padding:6px;"
+                f"color:{PALETTE.text_dim};font-size:11px;background:transparent;padding:6px;"
             )
             root.addWidget(info)
 
@@ -185,8 +186,8 @@ class WifiPlaylistController:
             context.translate("📲  %n file(s) received via Wi-Fi", "", len(items))
         )
         summary.setStyleSheet(
-            "color:#8b949e;font-size:11px;background:#13161c;"
-            "border:1px solid #21262d;border-radius:5px;padding:5px 10px;"
+            f"color:{PALETTE.text_muted};font-size:11px;background:{PALETTE.surface_card};"
+            f"border:1px solid {PALETTE.border_muted};border-radius:5px;padding:5px 10px;"
         )
         root.addWidget(summary)
 
@@ -212,7 +213,7 @@ class WifiPlaylistController:
             info = QLabel(context.translate("No playlists found.\nCreate a new one:"))
             info.setAlignment(Qt.AlignmentFlag.AlignCenter)
             info.setStyleSheet(
-                "color:#484f58;font-size:11px;background:transparent;padding:6px;"
+                f"color:{PALETTE.text_dim};font-size:11px;background:transparent;padding:6px;"
             )
             root.addWidget(info)
 
@@ -374,16 +375,16 @@ class WifiPlaylistController:
 
     def _style_dialog(self, dlg: QDialog) -> None:
         dlg.setStyleSheet(
-            "QDialog{background:#161b22;border:1px solid #30363d;border-radius:8px;}"
-            "QLabel{color:#c9d1d9;font-size:12px;background:transparent;}"
-            "QLineEdit{background:#0d1117;border:1px solid #30363d;border-radius:6px;"
-            "color:#e6edf3;font-size:12px;padding:5px 8px;}"
-            "QLineEdit:focus{border-color:#388bfd;}"
+            f"QDialog{{background:{PALETTE.surface};border:1px solid {PALETTE.border};border-radius:8px;}}"
+            f"QLabel{{color:{PALETTE.text_secondary};font-size:12px;background:transparent;}}"
+            f"QLineEdit{{background:{PALETTE.bg0};border:1px solid {PALETTE.border};border-radius:6px;"
+            f"color:{PALETTE.text_primary};font-size:12px;padding:5px 8px;}}"
+            f"QLineEdit:focus{{border-color:{PALETTE.accent};}}"
         )
 
     def _add_playlist_picker(self, root: QVBoxLayout, playlists: list, callback) -> None:
         label = QLabel(self._context.translate("Select a playlist:"))
-        label.setStyleSheet("color:#8b949e;font-size:10px;background:transparent;")
+        label.setStyleSheet(f"color:{PALETTE.text_muted};font-size:10px;background:transparent;")
         root.addWidget(label)
 
         scroll = QScrollArea()
@@ -391,9 +392,9 @@ class WifiPlaylistController:
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setMaximumHeight(200)
         scroll.setStyleSheet(
-            "QScrollArea{background:#0d1117;border:1px solid #21262d;border-radius:6px;}"
-            "QScrollBar:vertical{background:#0d1117;width:5px;border-radius:2px;}"
-            "QScrollBar::handle:vertical{background:#30363d;border-radius:2px;}"
+            f"QScrollArea{{background:{PALETTE.bg0};border:1px solid {PALETTE.border_muted};border-radius:6px;}}"
+            f"QScrollBar:vertical{{background:{PALETTE.bg0};width:5px;border-radius:2px;}}"
+            f"QScrollBar::handle:vertical{{background:{PALETTE.border};border-radius:2px;}}"
             "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
         )
         container = QWidget()
@@ -407,9 +408,9 @@ class WifiPlaylistController:
             btn.setFixedHeight(34)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(
-                "QPushButton{border:none;background:transparent;color:#c9d1d9;"
-                "font-size:11px;text-align:left;border-radius:5px;padding:0 10px;}"
-                "QPushButton:hover{background:#1f3a5f;color:#79c0ff;border:none;}"
+                f"QPushButton{{border:none;background:transparent;color:{PALETTE.text_secondary};"
+                f"font-size:11px;text-align:left;border-radius:5px;padding:0 10px;}}"
+                f"QPushButton:hover{{background:{PALETTE.accent_muted};color:{PALETTE.accent_text};border:none;}}"
             )
             btn.clicked.connect(
                 lambda _checked=False, pid=playlist_id, pname=playlist_name: callback(
@@ -425,7 +426,7 @@ class WifiPlaylistController:
 
         sep = QLabel(self._context.translate("── or create a new one ──"))
         sep.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        sep.setStyleSheet("color:#30363d;font-size:10px;background:transparent;")
+        sep.setStyleSheet(f"color:{PALETTE.border};font-size:10px;background:transparent;")
         root.addWidget(sep)
 
     def _add_create_row(self, root: QVBoxLayout, button_text: str, callback) -> QLineEdit:
@@ -439,9 +440,9 @@ class WifiPlaylistController:
         create_btn.setFixedHeight(30)
         create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         create_btn.setStyleSheet(
-            "QPushButton{border:1px solid #388bfd;border-radius:6px;"
-            "background:#1f3a5f;padding:0 10px;color:#79c0ff;font-size:11px;font-weight:600;}"
-            "QPushButton:hover{background:#2a4f7f;}"
+            f"QPushButton{{border:1px solid {PALETTE.accent};border-radius:6px;"
+            f"background:{PALETTE.accent_muted};padding:0 10px;color:{PALETTE.accent_text};font-size:11px;font-weight:600;}}"
+            f"QPushButton:hover{{background:{PALETTE.accent_muted_hover};}}"
         )
 
         def _create():
@@ -462,9 +463,9 @@ class WifiPlaylistController:
         close_btn.setFixedHeight(28)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
-            "QPushButton{border:1px solid #30363d;border-radius:6px;"
-            "background:#21262d;color:#8b949e;font-size:11px;}"
-            "QPushButton:hover{background:#2d333b;color:#c9d1d9;}"
+            f"QPushButton{{border:1px solid {PALETTE.border};border-radius:6px;"
+            f"background:{PALETTE.bg2};color:{PALETTE.text_muted};font-size:11px;}}"
+            f"QPushButton:hover{{background:{PALETTE.bg3};color:{PALETTE.text_secondary};}}"
         )
         close_btn.clicked.connect(dlg.reject)
         root.addWidget(close_btn)

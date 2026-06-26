@@ -1,3 +1,10 @@
+import inspect
+
+from PySide6.QtCore import QEvent, QObject
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
+
+from solin.styles.theme import get_theme
+from solin.ui.controls import NoScrollComboBox
 from solin.widgets.settings.about_section import AboutSectionMixin
 from solin.widgets.settings.auto_keys_section import AutoKeysSectionMixin
 from solin.widgets.settings.auto_share_section import AutoShareSectionMixin
@@ -10,7 +17,11 @@ from solin.widgets.settings.screens_section import ScreensSectionMixin
 from solin.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
 from solin.widgets.settings.yearly_text_section import YearlyTextSectionMixin
 from solin.widgets.settings.zoom_section import ZoomSectionMixin
+from solin.widgets import settings_widget as settings_widget_module
 from solin.widgets.settings_widget import SettingsWidget
+
+
+_APP = QApplication.instance() or QApplication([])
 
 
 def test_settings_shared_visual_contracts_are_public():
@@ -33,6 +44,234 @@ def test_settings_widget_uses_shared_layout_helpers():
     assert SettingsWidget._divider is SettingsLayoutMixin._divider
     assert SettingsWidget._toggle_row is SettingsLayoutMixin._toggle_row
     assert SettingsWidget._clickable_row is SettingsLayoutMixin._clickable_row
+
+
+class _ThemeSelectorComboStub:
+    def __init__(self):
+        self.items = []
+        self.current_index = -1
+        self.visible = None
+        self.signals_blocked = False
+
+    def blockSignals(self, blocked):
+        self.signals_blocked = blocked
+
+    def clear(self):
+        self.items.clear()
+
+    def addItem(self, text, data):
+        self.items.append((text, data))
+
+    def findData(self, data):
+        for index, (_text, item_data) in enumerate(self.items):
+            if item_data == data:
+                return index
+        return -1
+
+    def itemData(self, index):
+        return self.items[index][1]
+
+    def setCurrentIndex(self, index):
+        self.current_index = index
+
+    def setVisible(self, visible):
+        self.visible = visible
+
+
+class _AppSettingsStub:
+    def __init__(self, theme_id="dark"):
+        self._theme_id = theme_id
+        self.saved = []
+
+    def app_theme_id(self):
+        return self._theme_id
+
+    def set_app_theme_id(self, theme_id):
+        self.saved.append(theme_id)
+        self._theme_id = theme_id
+
+
+class _ThemeSelectorWidgetStub:
+    def __init__(self, theme_id="dark"):
+        self._theme_combo = _ThemeSelectorComboStub()
+        self._app_settings = _AppSettingsStub(theme_id)
+        self.translated: list[str] = []
+
+    def tr(self, text):
+        self.translated.append(text)
+        return text
+
+    def _theme_display_name(self, theme):
+        return SettingsWidget._theme_display_name(self, theme)
+
+
+class _ThemeSelectorBuildHarness(QWidget):
+    def __init__(self, theme_id="dark"):
+        super().__init__()
+        self._app_settings = _AppSettingsStub(theme_id)
+
+    def tr(self, text):
+        return text
+
+    def _populate_theme_selector(self):
+        SettingsWidget._populate_theme_selector(self)
+
+    def _on_theme_selected(self, index):
+        SettingsWidget._on_theme_selected(self, index)
+
+    def _theme_display_name(self, theme):
+        return SettingsWidget._theme_display_name(self, theme)
+
+
+class _ApplyThemeHarness(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.calls: list[str] = []
+        self._yt_status_kind = "success"
+        self._yt_status_text = "Annual text updated for 2026"
+
+    def _apply_settings_theme_bindings(self):
+        self.calls.append("bindings")
+
+    def _build_ui(self):
+        raise AssertionError("apply_theme must not rebuild Settings UI")
+
+    def retranslateUi(self):
+        raise AssertionError("apply_theme must not retranslate Settings UI")
+
+    def _apply_yearly_text_theme(self):
+        assert self._yt_status_kind == "success"
+        assert self._yt_status_text == "Annual text updated for 2026"
+        self.calls.append("yearly")
+
+    def _apply_obs_theme(self):
+        self.calls.append("obs")
+
+    def _apply_auto_share_theme(self):
+        self.calls.append("auto_share")
+
+    def _apply_auto_keys_theme(self):
+        self.calls.append("auto_keys")
+
+    def _apply_watched_folder_theme(self):
+        self.calls.append("watched_folder")
+
+    def _apply_about_theme(self):
+        self.calls.append("about")
+
+    def _apply_zoom_theme(self):
+        self.calls.append("zoom")
+
+    def _apply_meeting_schedule_theme(self):
+        self.calls.append("meeting_schedule")
+
+    def _apply_screens_theme(self):
+        self.calls.append("screens")
+
+
+class _TopLevelShowRecorder(QObject):
+    def __init__(self):
+        super().__init__()
+        self.shown_top_levels: list[str] = []
+
+    def eventFilter(self, obj, event):
+        if (
+            event.type() == QEvent.Type.Show
+            and isinstance(obj, QWidget)
+            and obj.isWindow()
+        ):
+            self.shown_top_levels.append(type(obj).__name__)
+        return False
+
+
+def test_settings_theme_selector_hides_when_only_one_theme(monkeypatch):
+    monkeypatch.setattr(
+        settings_widget_module,
+        "available_themes",
+        lambda: (get_theme("dark"),),
+    )
+    widget = _ThemeSelectorWidgetStub()
+
+    SettingsWidget._populate_theme_selector(widget)
+
+    assert widget._theme_combo.items == [("Dark", "dark")]
+    assert widget._theme_combo.visible is False
+
+
+def test_settings_theme_selector_lists_available_themes_and_saves_choice():
+    widget = _ThemeSelectorWidgetStub("light")
+
+    SettingsWidget._populate_theme_selector(widget)
+
+    assert widget._theme_combo.items == [("Dark", "dark"), ("Light", "light")]
+    assert widget._theme_combo.current_index == 1
+    assert widget._theme_combo.visible is True
+
+    SettingsWidget._on_theme_selected(widget, 0)
+
+    assert widget._app_settings.saved == ["dark"]
+
+
+def test_settings_builtin_theme_names_are_lupdate_visible_literals():
+    source = inspect.getsource(SettingsWidget._theme_display_name)
+
+    assert 'self.tr("Dark")' in source
+    assert 'self.tr("Light")' in source
+
+
+def test_settings_apply_theme_hooks_are_implemented():
+    hook_names = (
+        "_apply_yearly_text_theme",
+        "_apply_obs_theme",
+        "_apply_auto_share_theme",
+        "_apply_auto_keys_theme",
+        "_apply_watched_folder_theme",
+        "_apply_about_theme",
+        "_apply_zoom_theme",
+        "_apply_meeting_schedule_theme",
+        "_apply_screens_theme",
+    )
+
+    for hook_name in hook_names:
+        assert hasattr(SettingsWidget, hook_name)
+
+
+def test_settings_apply_theme_preserves_state_instead_of_rebuilding():
+    widget = _ApplyThemeHarness()
+
+    SettingsWidget.apply_theme(widget)
+
+    assert widget.calls == [
+        "bindings",
+        "yearly",
+        "obs",
+        "auto_share",
+        "auto_keys",
+        "watched_folder",
+        "about",
+        "zoom",
+        "meeting_schedule",
+        "screens",
+    ]
+    assert widget._yt_status_kind == "success"
+    assert widget._yt_status_text == "Annual text updated for 2026"
+
+
+def test_settings_theme_selector_is_parented_before_visibility_changes():
+    recorder = _TopLevelShowRecorder()
+    _APP.installEventFilter(recorder)
+    try:
+        widget = _ThemeSelectorBuildHarness()
+        header = QHBoxLayout(widget)
+
+        SettingsWidget._build_theme_selector(widget, header)
+        _APP.processEvents()
+    finally:
+        _APP.removeEventFilter(recorder)
+
+    assert widget._theme_combo.parent() is widget
+    assert isinstance(widget._theme_combo, NoScrollComboBox)
+    assert recorder.shown_top_levels == []
 
 
 def test_settings_widget_uses_language_section_mixin():

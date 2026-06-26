@@ -17,7 +17,8 @@ from ..core.foundation.qt_threads import stop_owned_qthread
 from ..core.media.cache import MediaCacheManager
 from ..core.i18n.manager import LanguageManager
 from ..ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
-from solin.ui.qml.host import configure_qml_host
+from solin.styles.theme import PALETTE
+from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.media_library import (
     MediaLibraryBridge,
     MediaLibraryIconProvider,
@@ -97,7 +98,7 @@ class MediaLibraryWidget(QWidget):
         configure_qml_host(
             self.qml_widget,
             type_name="MediaLibraryView",
-            clear_color="#0d1117",
+            clear_color=PALETTE.bg0,
             image_providers={"mediaicons": MediaLibraryIconProvider()},
             context_properties={
                 "libraryModel": self.model,
@@ -596,6 +597,10 @@ class MediaLibraryWidget(QWidget):
     def retranslateUi(self) -> None:
         self._sync_static_text()
         self._load_items()
+
+    def apply_theme(self) -> None:
+        apply_qml_theme(self.qml_widget, clear_color=PALETTE.bg0)
+        self.model.layoutChanged.emit()
 
     def cleanup(self) -> None:
         if self._disposed:

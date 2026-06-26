@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGraphicsOpacityEffect, QToolTip,
+    QFrame, QGraphicsOpacityEffect,
 )
 from PySide6.QtCore import (
-    Qt, QSize, QPropertyAnimation, QEasingCurve, QEvent, Signal, QPoint,
+    Qt, QSize, QPropertyAnimation, QEasingCurve, QEvent, Signal,
 )
 from PySide6.QtGui import QGuiApplication
 
@@ -20,19 +20,8 @@ from ..styles.icons import (
     make_icon, ICON_ZOOM, ICON_PEOPLE,
     ICON_INFO_CIRCLE, ICON_SPEAKER_PHONE,
 )
-
-
-# ── Color palette (same as settings_widget / OBSScenePopup) ───────────────────
-_BG      = "#0d1117"
-_SURF    = "#161b22"
-_BORDER  = "#21262d"
-_BORDER2 = "#30363d"
-_TEXT    = "#e6edf3"
-_MUTED   = "#8b949e"
-_DIM     = "#6e7681"
-_ACCENT  = "#388bfd"
-_GREEN   = "#3fb950"
-_RED     = "#f85149"
+from solin.ui.themed_tooltip import install_themed_tooltip
+from ..styles.theme import PALETTE, qss_rgba
 
 
 class ZoomPanel(QWidget):
@@ -82,13 +71,7 @@ class ZoomPanel(QWidget):
 
         self._card = QFrame()
         self._card.setObjectName("ZoomPanelCard")
-        self._card.setStyleSheet(
-            "QFrame#ZoomPanelCard {"
-            "  background: rgba(22,27,34,0.96);"
-            "  border: 1px solid rgba(48,54,61,0.85);"
-            "  border-radius: 16px;"
-            "}"
-        )
+        self._card.setStyleSheet(self._card_style())
         card_lay = QVBoxLayout(self._card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
@@ -100,18 +83,15 @@ class ZoomPanel(QWidget):
         h_lay.setContentsMargins(16, 14, 16, 6)
         h_lay.setSpacing(8)
 
-        zoom_px = QLabel()
-        zoom_px.setPixmap(make_icon(ICON_ZOOM, 15, _ACCENT).pixmap(15, 15))
-        zoom_px.setFixedSize(15, 15)
-        zoom_px.setStyleSheet("background: transparent;")
+        self._zoom_icon = QLabel()
+        self._zoom_icon.setPixmap(make_icon(ICON_ZOOM, 15, PALETTE.accent).pixmap(15, 15))
+        self._zoom_icon.setFixedSize(15, 15)
+        self._zoom_icon.setStyleSheet("background: transparent;")
 
         self._title_lbl = QLabel(self.tr("Zoom Meeting"))
-        self._title_lbl.setStyleSheet(
-            f"color: {_TEXT}; font-size: 13px; font-weight: 600;"
-            " letter-spacing: 0.2px; background: transparent;"
-        )
+        self._title_lbl.setStyleSheet(self._title_style())
 
-        h_lay.addWidget(zoom_px)
+        h_lay.addWidget(self._zoom_icon)
         h_lay.addWidget(self._title_lbl)
         h_lay.addStretch()
         card_lay.addWidget(hdr)
@@ -125,24 +105,20 @@ class ZoomPanel(QWidget):
 
         self._status_dot = QLabel("●")
         self._status_dot.setFixedWidth(12)
-        self._status_dot.setStyleSheet(
-            f"color: {_DIM}; font-size: 8px; background: transparent;"
-        )
+        self._status_dot.setStyleSheet(self._dot_style(PALETTE.text_faint))
 
         self._status_lbl = QLabel(self.tr("Disconnected"))
-        self._status_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_MUTED}; background: transparent;"
-        )
+        self._status_lbl.setStyleSheet(self._status_label_style(PALETTE.text_muted))
 
         s_lay.addWidget(self._status_dot)
         s_lay.addWidget(self._status_lbl, stretch=1)
         card_lay.addWidget(status_w)
 
         # ── Separator thin ────────────────────────────────────────────────
-        sep1 = QFrame()
-        sep1.setFixedHeight(1)
-        sep1.setStyleSheet("background: rgba(48,54,61,0.5); border: none;")
-        card_lay.addWidget(sep1)
+        self._sep1 = QFrame()
+        self._sep1.setFixedHeight(1)
+        self._sep1.setStyleSheet(self._divider_style())
+        card_lay.addWidget(self._sep1)
 
         # ── Content area (participants + sharing) ─────────────────────────
         self._content_w = QWidget()
@@ -160,33 +136,23 @@ class ZoomPanel(QWidget):
 
         self._part_icon = QLabel()
         self._part_icon.setPixmap(
-            make_icon(ICON_PEOPLE, 16, _MUTED).pixmap(16, 16)
+            make_icon(ICON_PEOPLE, 16, PALETTE.text_muted).pixmap(16, 16)
         )
         self._part_icon.setFixedSize(16, 16)
         self._part_icon.setStyleSheet("background: transparent;")
 
         self._part_lbl = QLabel(self.tr("%n attendee(s)", "", 0))
-        self._part_lbl.setStyleSheet(
-            f"font-size: 14px; color: {_TEXT}; font-weight: 600;"
-            " background: transparent;"
-        )
+        self._part_lbl.setStyleSheet(self._participant_label_style())
 
         # Info button (ℹ️  → shows tooltip on hover)
         self._info_btn = QPushButton()
         self._info_btn.setFixedSize(18, 18)
-        self._info_btn.setIcon(make_icon(ICON_INFO_CIRCLE, 14, _DIM))
+        self._info_btn.setIcon(make_icon(ICON_INFO_CIRCLE, 14, PALETTE.text_faint))
         self._info_btn.setIconSize(QSize(14, 14))
         self._info_btn.setCursor(Qt.CursorShape.WhatsThisCursor)
-        self._info_btn.setStyleSheet(
-            "QPushButton {"
-            "  border: none; background: transparent; padding: 0;"
-            "}"
-            "QPushButton:hover {"
-            "  background: rgba(255,255,255,0.06); border-radius: 9px;"
-            "}"
-        )
-        self._info_btn.setToolTip("")  # set dynamically
-        self._info_btn.enterEvent = self._show_info_tooltip
+        self._info_btn.setStyleSheet(self._info_button_style())
+        self._info_btn.setToolTip(self._info_tooltip_text())
+        install_themed_tooltip(self._info_btn)
 
         p_lay.addWidget(self._part_icon)
         p_lay.addWidget(self._part_lbl, stretch=1)
@@ -202,18 +168,13 @@ class ZoomPanel(QWidget):
         sh_lay.setContentsMargins(0, 0, 0, 0)
         sh_lay.setSpacing(6)
 
-        share_dot = QLabel("●")
-        share_dot.setFixedWidth(12)
-        share_dot.setStyleSheet(
-            f"font-size: 8px; color: {_GREEN}; background: transparent;"
-        )
+        self._share_dot = QLabel("●")
+        self._share_dot.setFixedWidth(12)
+        self._share_dot.setStyleSheet(self._dot_style(PALETTE.success))
         self._share_lbl = QLabel(self.tr("Screen sharing active"))
-        self._share_lbl.setStyleSheet(
-            f"font-size: 11px; color: {_GREEN}; font-weight: 500;"
-            " background: transparent;"
-        )
+        self._share_lbl.setStyleSheet(self._share_label_style())
 
-        sh_lay.addWidget(share_dot)
+        sh_lay.addWidget(self._share_dot)
         sh_lay.addWidget(self._share_lbl, stretch=1)
         self._share_w.setVisible(False)
         c_lay.addWidget(self._share_w)
@@ -223,7 +184,7 @@ class ZoomPanel(QWidget):
         # ── Separator ─────────────────────────────────────────────────────
         self._sep2 = QFrame()
         self._sep2.setFixedHeight(1)
-        self._sep2.setStyleSheet("background: rgba(48,54,61,0.5); border: none;")
+        self._sep2.setStyleSheet(self._divider_style())
         card_lay.addWidget(self._sep2)
 
         # ── Action button ─────────────────────────────────────────────────
@@ -237,36 +198,112 @@ class ZoomPanel(QWidget):
         self._audio_btn.setObjectName("ZoomAudioBtn")
         self._audio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._audio_btn.setFixedHeight(36)
-        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, "#e6edf3"))
+        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, PALETTE.text_primary))
         self._audio_btn.setIconSize(QSize(14, 14))
         self._audio_btn.setText(self.tr("Open audio for all"))
-        self._audio_btn.setStyleSheet(
-            "QPushButton#ZoomAudioBtn {"
-            f"  background: rgba(56,139,253,0.10);"
-            f"  border: 1px solid rgba(56,139,253,0.25);"
-            "  border-radius: 10px;"
-            f"  color: {_ACCENT};"
-            "  font-size: 12px; font-weight: 600;"
-            "  padding: 0 16px;"
-            "  text-align: center;"
-            "}"
-            "QPushButton#ZoomAudioBtn:hover {"
-            "  background: rgba(56,139,253,0.18);"
-            "  border-color: rgba(56,139,253,0.45);"
-            "}"
-            "QPushButton#ZoomAudioBtn:pressed {"
-            "  background: rgba(56,139,253,0.28);"
-            "}"
-            "QPushButton#ZoomAudioBtn:disabled {"
-            f"  color: {_DIM}; border-color: rgba(48,54,61,0.5);"
-            "  background: transparent;"
-            "}"
-        )
+        self._audio_btn.setStyleSheet(self._audio_button_style())
         self._audio_btn.clicked.connect(self._on_audio_clicked)
         a_lay.addWidget(self._audio_btn)
 
         card_lay.addWidget(actions_w)
         root.addWidget(self._card)
+
+    @staticmethod
+    def _card_style() -> str:
+        return (
+            "QFrame#ZoomPanelCard {"
+            f"  background: {qss_rgba(PALETTE.surface, 0.96)};"
+            f"  border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
+            "  border-radius: 16px;"
+            "}"
+        )
+
+    @staticmethod
+    def _title_style() -> str:
+        return (
+            f"color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
+            " letter-spacing: 0.2px; background: transparent;"
+        )
+
+    @staticmethod
+    def _dot_style(color: str) -> str:
+        return f"color: {color}; font-size: 8px; background: transparent;"
+
+    @staticmethod
+    def _status_label_style(color: str) -> str:
+        return f"font-size: 11px; color: {color}; background: transparent;"
+
+    @staticmethod
+    def _divider_style() -> str:
+        return f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;"
+
+    @staticmethod
+    def _participant_label_style() -> str:
+        return (
+            f"font-size: 14px; color: {PALETTE.text_primary}; font-weight: 600;"
+            " background: transparent;"
+        )
+
+    @staticmethod
+    def _info_button_style() -> str:
+        return (
+            "QPushButton {"
+            "  border: none; background: transparent; padding: 0;"
+            "}"
+            "QPushButton:hover {"
+            f"  background: {qss_rgba(PALETTE.white, 0.06)}; border-radius: 9px;"
+            "}"
+        )
+
+    @staticmethod
+    def _share_label_style() -> str:
+        return (
+            f"font-size: 11px; color: {PALETTE.success}; font-weight: 500;"
+            " background: transparent;"
+        )
+
+    @staticmethod
+    def _audio_button_style() -> str:
+        return (
+            "QPushButton#ZoomAudioBtn {"
+            f"  background: {qss_rgba(PALETTE.accent, 0.10)};"
+            f"  border: 1px solid {qss_rgba(PALETTE.accent, 0.25)};"
+            "  border-radius: 10px;"
+            f"  color: {PALETTE.accent};"
+            "  font-size: 12px; font-weight: 600;"
+            "  padding: 0 16px;"
+            "  text-align: center;"
+            "}"
+            "QPushButton#ZoomAudioBtn:hover {"
+            f"  background: {qss_rgba(PALETTE.accent, 0.18)};"
+            f"  border-color: {qss_rgba(PALETTE.accent, 0.45)};"
+            "}"
+            "QPushButton#ZoomAudioBtn:pressed {"
+            f"  background: {qss_rgba(PALETTE.accent, 0.28)};"
+            "}"
+            "QPushButton#ZoomAudioBtn:disabled {"
+            f"  color: {PALETTE.text_faint}; border-color: {qss_rgba(PALETTE.border, 0.5)};"
+            "  background: transparent;"
+            "}"
+        )
+
+    def apply_theme(self) -> None:
+        self._card.setStyleSheet(self._card_style())
+        self._zoom_icon.setPixmap(make_icon(ICON_ZOOM, 15, PALETTE.accent).pixmap(15, 15))
+        self._title_lbl.setStyleSheet(self._title_style())
+        self._sep1.setStyleSheet(self._divider_style())
+        self._sep2.setStyleSheet(self._divider_style())
+        self._part_icon.setPixmap(make_icon(ICON_PEOPLE, 16, PALETTE.text_muted).pixmap(16, 16))
+        self._part_lbl.setStyleSheet(self._participant_label_style())
+        self._info_btn.setIcon(make_icon(ICON_INFO_CIRCLE, 14, PALETTE.text_faint))
+        self._info_btn.setStyleSheet(self._info_button_style())
+        self._info_btn.setToolTip(self._info_tooltip_text())
+        self._share_dot.setStyleSheet(self._dot_style(PALETTE.success))
+        self._share_lbl.setStyleSheet(self._share_label_style())
+        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, PALETTE.text_primary))
+        self._audio_btn.setStyleSheet(self._audio_button_style())
+        self.set_connected(self._connected)
+        self.set_sharing(self._sharing)
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -274,19 +311,19 @@ class ZoomPanel(QWidget):
         self._connected = connected
         if connected:
             self._status_dot.setStyleSheet(
-                f"color: {_GREEN}; font-size: 8px; background: transparent;"
+                self._dot_style(PALETTE.success)
             )
             self._status_lbl.setText(self.tr("Connected to meeting"))
             self._status_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_TEXT}; background: transparent;"
+                self._status_label_style(PALETTE.text_primary)
             )
         else:
             self._status_dot.setStyleSheet(
-                f"color: {_DIM}; font-size: 8px; background: transparent;"
+                self._dot_style(PALETTE.text_faint)
             )
             self._status_lbl.setText(self.tr("Disconnected"))
             self._status_lbl.setStyleSheet(
-                f"font-size: 11px; color: {_MUTED}; background: transparent;"
+                self._status_label_style(PALETTE.text_muted)
             )
             self._part_row.setVisible(False)
             self._share_w.setVisible(False)
@@ -351,18 +388,13 @@ class ZoomPanel(QWidget):
         self.open_audio_requested.emit()
         self.close()
 
-    def _show_info_tooltip(self, event):
-        """Show an elegant tooltip near the info button."""
-        tip_text = self.tr(
+    def _info_tooltip_text(self) -> str:
+        return self.tr(
             "Attendance can be counted in two ways:\n"
             "use &, |, or + between names, like 'Felipe & Julia' = 2;\n"
             "or put a number at the end, like 'Family Alves 7' = 7.\n"
             "A number at the end has priority."
         )
-        pos = self._info_btn.mapToGlobal(
-            QPoint(self._info_btn.width() // 2, -4)
-        )
-        QToolTip.showText(pos, tip_text, self._info_btn)
 
     # ── i18n ──────────────────────────────────────────────────────────────
 
@@ -370,6 +402,7 @@ class ZoomPanel(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self._title_lbl.setText(self.tr("Zoom Meeting"))
             self._audio_btn.setText(self.tr("Open audio for all"))
+            self._info_btn.setToolTip(self._info_tooltip_text())
             if self._sharing:
                 self._share_lbl.setText(self.tr("Screen sharing active"))
             # Refresh status text

@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QSizePolicy,
-    QSlider,
     QWidget,
 )
 
@@ -47,9 +46,12 @@ from solin.styles.icons import (
     ICON_VOLUME_MUTE,
     make_icon,
 )
+from solin.styles.theme import PALETTE, qss_rgba
+from solin.ui.themed_tooltip import install_themed_tooltip
+from solin.widgets.common.themed_slider import ThemedHorizontalSlider
 from solin.widgets.songs_widget import BufferedSlider
 
-from .controls import PROJECTION_MENU_STYLE, SPEED_CHOICES, icon_button
+from .controls import SPEED_CHOICES, icon_button, projection_menu_style
 
 
 class FullscreenVideoSurface(QWidget):
@@ -57,7 +59,7 @@ class FullscreenVideoSurface(QWidget):
         super().__init__(parent)
         self._pixmap: QPixmap | None = None
         self.setMouseTracking(True)
-        self.setStyleSheet("background: #000000;")
+        self.setStyleSheet(f"background: {PALETTE.black};")
 
     def set_frame(self, frame) -> None:
         image = frame.toImage()
@@ -70,10 +72,14 @@ class FullscreenVideoSurface(QWidget):
         self._pixmap = None
         self.update()
 
+    def apply_theme(self) -> None:
+        self.setStyleSheet(f"background: {PALETTE.black};")
+        self.update()
+
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.fillRect(self.rect(), QColor("#000000"))
+        painter.fillRect(self.rect(), QColor(PALETTE.black))
 
         pixmap = self._pixmap
         if pixmap is None or pixmap.isNull():
@@ -129,11 +135,15 @@ class FullscreenVideoOverlay(QWidget):
         self._playback_order = ORDER_OFF
         self._muted = False
         self._pre_mute_volume = 0.8
+        self._playback_state = QMediaPlayer.PlaybackState.StoppedState
+        self._navigation_state = (False, False, False)
 
         self.setObjectName("AppFullscreenVideoOverlay")
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setStyleSheet("QWidget#AppFullscreenVideoOverlay { background: #000000; }")
+        self.setStyleSheet(
+            f"QWidget#AppFullscreenVideoOverlay {{ background: {PALETTE.black}; }}"
+        )
 
         self._surface = FullscreenVideoSurface(self)
         self._title_bar = self._build_title_bar()
@@ -146,38 +156,80 @@ class FullscreenVideoOverlay(QWidget):
 
         self._install_activity_filters()
 
-    def _build_title_bar(self) -> QFrame:
-        bar = QFrame(self)
-        bar.setObjectName("FullscreenTitleBar")
-        bar.setStyleSheet(
+    def _title_bar_stylesheet(self) -> str:
+        return (
             "QFrame#FullscreenTitleBar {"
-            " background: rgba(13, 17, 23, 0.62);"
-            " border: 1px solid rgba(255, 255, 255, 0.08);"
+            f" background: {qss_rgba(PALETTE.bg0, 0.62)};"
+            f" border: 1px solid {qss_rgba(PALETTE.border, 0.72)};"
             " border-radius: 8px;"
             "}"
         )
+
+    def _controls_stylesheet(self) -> str:
+        return (
+            "QFrame#FullscreenPlaybackControls {"
+            f" background: {qss_rgba(PALETTE.bg0, 0.72)};"
+            f" border: 1px solid {qss_rgba(PALETTE.border, 0.78)};"
+            " border-radius: 8px;"
+            "}"
+        )
+
+    def _stop_button_stylesheet(self) -> str:
+        return (
+            "QPushButton{border:none;border-radius:17px;background:transparent;padding:0;}"
+            f"QPushButton:hover{{background:{qss_rgba(PALETTE.danger, 0.20)};}}"
+            f"QPushButton:pressed{{background:{qss_rgba(PALETTE.danger, 0.32)};}}"
+        )
+
+    def _icon_button_stylesheet(self, button: QWidget) -> str:
+        radius = max(1, button.width() // 2)
+        return (
+            f"QPushButton{{border:none;border-radius:{radius}px;"
+            "background:transparent;padding:0;}"
+            f"QPushButton:hover{{background:{PALETTE.surface_hover};"
+            f"border-radius:{radius}px;}}"
+            f"QPushButton:pressed{{background:{PALETTE.surface_hover_strong};}}"
+        )
+
+    def _apply_icon_button_styles(self) -> None:
+        for button in (
+            self.exit_btn,
+            self.play_btn,
+            self.prev_btn,
+            self.next_btn,
+            self.vol_btn,
+            self.more_btn,
+        ):
+            button.setStyleSheet(self._icon_button_stylesheet(button))
+
+    def _build_title_bar(self) -> QFrame:
+        bar = QFrame(self)
+        bar.setObjectName("FullscreenTitleBar")
+        bar.setStyleSheet(self._title_bar_stylesheet())
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(14, 0, 8, 0)
         layout.setSpacing(8)
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet(
-            "background: transparent; color: #e6edf3;"
+            f"background: transparent; color: {PALETTE.text_primary};"
             " font-size: 13px; font-weight: 600;"
         )
         self.title_label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
+        install_themed_tooltip(self.title_label)
 
         self.exit_btn = icon_button(
             ICON_FULLSCREEN_EXIT,
             32,
             15,
-            "#c9d1d9",
+            PALETTE.text_secondary,
             self._tr("Exit fullscreen"),
         )
         self.exit_btn.clicked.connect(lambda _checked=False: self.exit_requested.emit())
+        self.exit_btn.setStyleSheet(self._icon_button_stylesheet(self.exit_btn))
 
         layout.addWidget(self.title_label, stretch=1)
         layout.addWidget(self.exit_btn)
@@ -186,13 +238,7 @@ class FullscreenVideoOverlay(QWidget):
     def _build_controls(self) -> QFrame:
         controls = QFrame(self)
         controls.setObjectName("FullscreenPlaybackControls")
-        controls.setStyleSheet(
-            "QFrame#FullscreenPlaybackControls {"
-            " background: rgba(13, 17, 23, 0.72);"
-            " border: 1px solid rgba(255, 255, 255, 0.10);"
-            " border-radius: 8px;"
-            "}"
-        )
+        controls.setStyleSheet(self._controls_stylesheet())
         layout = QHBoxLayout(controls)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(10)
@@ -201,29 +247,32 @@ class FullscreenVideoOverlay(QWidget):
             ICON_PAUSE,
             34,
             16,
-            "#e6edf3",
+            PALETTE.text_primary,
             self._tr("Pause/Resume"),
         )
         self.play_btn.clicked.connect(lambda _checked=False: self.toggle_requested.emit())
+        self.play_btn.setStyleSheet(self._icon_button_stylesheet(self.play_btn))
 
         self.prev_btn = icon_button(
             ICON_SKIP_PREV,
             34,
             16,
-            "#6e7681",
+            PALETTE.text_faint,
             self._tr("Previous"),
         )
         self.prev_btn.clicked.connect(lambda _checked=False: self.previous_requested.emit())
+        self.prev_btn.setStyleSheet(self._icon_button_stylesheet(self.prev_btn))
         self.prev_btn.setVisible(False)
 
         self.next_btn = icon_button(
             ICON_SKIP_NEXT,
             34,
             16,
-            "#6e7681",
+            PALETTE.text_faint,
             self._tr("Next"),
         )
         self.next_btn.clicked.connect(lambda _checked=False: self.next_requested.emit())
+        self.next_btn.setStyleSheet(self._icon_button_stylesheet(self.next_btn))
         self.next_btn.setVisible(False)
 
         self.seek_slider = BufferedSlider()
@@ -236,7 +285,7 @@ class FullscreenVideoOverlay(QWidget):
 
         self.time_label = QLabel("0:00 / 0:00")
         self.time_label.setStyleSheet(
-            "background: transparent; color: #c9d1d9;"
+            f"background: transparent; color: {PALETTE.text_secondary};"
             " font-size: 12px; font-weight: 500;"
         )
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -249,45 +298,41 @@ class FullscreenVideoOverlay(QWidget):
             ICON_VOLUME_HIGH,
             34,
             16,
-            "#c9d1d9",
+            PALETTE.text_secondary,
             self._tr("Volume"),
         )
         self.vol_btn.clicked.connect(self._toggle_mute)
+        self.vol_btn.setStyleSheet(self._icon_button_stylesheet(self.vol_btn))
 
-        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider = ThemedHorizontalSlider(
+            track_height=3,
+            handle_diameter=12,
+            dark_track=QColor(255, 255, 255, 61),
+            dark_handle=QColor("#e6edf3"),
+        )
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(82)
         self.vol_slider.setFixedHeight(22)
-        self.vol_slider.setStyleSheet(
-            "QSlider{background:transparent;border:none;}"
-            "QSlider::groove:horizontal{height:3px;background:rgba(255,255,255,0.24);border-radius:2px;}"
-            "QSlider::handle:horizontal{width:12px;height:12px;margin:-5px 0;"
-            "background:#e6edf3;border-radius:6px;}"
-            "QSlider::sub-page:horizontal{background:#58a6ff;border-radius:2px;}"
-        )
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
         self.more_btn = icon_button(
             ICON_MORE_VERT,
             34,
             16,
-            "#c9d1d9",
+            PALETTE.text_secondary,
             self._tr("Playback options"),
         )
         self.more_btn.clicked.connect(self._show_more_menu)
+        self.more_btn.setStyleSheet(self._icon_button_stylesheet(self.more_btn))
 
         self.stop_btn = icon_button(
             ICON_CLOSE,
             34,
             14,
-            "#c9d1d9",
+            PALETTE.text_secondary,
             self._tr("Stop projection"),
         )
-        self.stop_btn.setStyleSheet(
-            "QPushButton{border:none;border-radius:17px;background:transparent;padding:0;}"
-            "QPushButton:hover{background:rgba(248,81,73,0.20);}"
-            "QPushButton:pressed{background:rgba(248,81,73,0.32);}"
-        )
+        self.stop_btn.setStyleSheet(self._stop_button_stylesheet())
         self.stop_btn.clicked.connect(lambda _checked=False: self.stop_requested.emit())
 
         layout.addWidget(self.play_btn)
@@ -346,9 +391,10 @@ class FullscreenVideoOverlay(QWidget):
         self._surface.clear()
 
     def set_playback_state(self, state) -> None:
+        self._playback_state = state
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         icon = ICON_PAUSE if playing else ICON_PLAY
-        self.play_btn.setIcon(make_icon(icon, 16, "#e6edf3"))
+        self.play_btn.setIcon(make_icon(icon, 16, PALETTE.text_primary))
 
     def set_duration(self, duration: int) -> None:
         self.seek_slider.setRange(0, max(0, int(duration)))
@@ -394,16 +440,55 @@ class FullscreenVideoOverlay(QWidget):
         self._playback_order = order
 
     def set_navigation(self, *, show: bool, can_previous: bool, can_next: bool) -> None:
+        self._navigation_state = (show, can_previous, can_next)
         self.prev_btn.setVisible(show)
         self.next_btn.setVisible(show)
         self.prev_btn.setEnabled(can_previous)
         self.next_btn.setEnabled(can_next)
         self.prev_btn.setIcon(
-            make_icon(ICON_SKIP_PREV, 16, "#e6edf3" if can_previous else "#484f58")
+            make_icon(
+                ICON_SKIP_PREV,
+                16,
+                PALETTE.text_primary if can_previous else PALETTE.text_dim,
+            )
         )
         self.next_btn.setIcon(
-            make_icon(ICON_SKIP_NEXT, 16, "#e6edf3" if can_next else "#484f58")
+            make_icon(
+                ICON_SKIP_NEXT,
+                16,
+                PALETTE.text_primary if can_next else PALETTE.text_dim,
+            )
         )
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(
+            f"QWidget#AppFullscreenVideoOverlay {{ background: {PALETTE.black}; }}"
+        )
+        self._surface.apply_theme()
+        self._title_bar.setStyleSheet(self._title_bar_stylesheet())
+        self._controls.setStyleSheet(self._controls_stylesheet())
+        self.title_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_primary};"
+            " font-size: 13px; font-weight: 600;"
+        )
+        self.time_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_secondary};"
+            " font-size: 12px; font-weight: 500;"
+        )
+        self.vol_slider.apply_theme()
+        self.stop_btn.setStyleSheet(self._stop_button_stylesheet())
+        self._apply_icon_button_styles()
+        self.exit_btn.setIcon(make_icon(ICON_FULLSCREEN_EXIT, 15, PALETTE.text_secondary))
+        self.more_btn.setIcon(make_icon(ICON_MORE_VERT, 16, PALETTE.text_secondary))
+        self.set_playback_state(self._playback_state)
+        show, can_previous, can_next = self._navigation_state
+        self.set_navigation(
+            show=show,
+            can_previous=can_previous,
+            can_next=can_next,
+        )
+        self._refresh_volume_icon()
+        self.seek_slider.update()
 
     def retranslateUi(self) -> None:
         self.exit_btn.setToolTip(self._tr("Exit fullscreen"))
@@ -523,10 +608,10 @@ class FullscreenVideoOverlay(QWidget):
     def _show_more_menu(self) -> None:
         self._hide_timer.stop()
         menu = QMenu(self)
-        menu.setStyleSheet(PROJECTION_MENU_STYLE)
+        menu.setStyleSheet(projection_menu_style())
 
         speed_menu = menu.addMenu("  " + self._tr("Speed"))
-        speed_menu.setStyleSheet(PROJECTION_MENU_STYLE)
+        speed_menu.setStyleSheet(projection_menu_style())
         speed_group = QActionGroup(speed_menu)
         speed_group.setExclusive(True)
         for label, value in SPEED_CHOICES:
@@ -549,7 +634,7 @@ class FullscreenVideoOverlay(QWidget):
         menu.addSeparator()
 
         order_menu = menu.addMenu("  " + self._tr("Playback Order"))
-        order_menu.setStyleSheet(PROJECTION_MENU_STYLE)
+        order_menu.setStyleSheet(projection_menu_style())
         order_group = QActionGroup(order_menu)
         order_group.setExclusive(True)
         for label, value in (
@@ -594,7 +679,7 @@ class FullscreenVideoOverlay(QWidget):
             icon = ICON_VOLUME_LOW
         else:
             icon = ICON_VOLUME_HIGH
-        self.vol_btn.setIcon(make_icon(icon, 16, "#c9d1d9"))
+        self.vol_btn.setIcon(make_icon(icon, 16, PALETTE.text_secondary))
 
     def _update_time_label(self, position: int, duration: int) -> None:
         self.time_label.setText(

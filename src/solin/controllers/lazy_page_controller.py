@@ -107,6 +107,21 @@ class LazyPageController:
         elif index == self.WIFI_INDEX:
             self.ensure_wifi_receive_widget()
 
+    def apply_theme(self) -> None:
+        """Refresh already-materialized lazy pages without creating new ones."""
+
+        for widget in (
+            self._browser_widget,
+            self._cache_manager_widget,
+            self._wifi_receive_widget,
+        ):
+            if widget is None:
+                continue
+            if hasattr(widget, "apply_theme"):
+                widget.apply_theme()
+            if hasattr(widget, "update"):
+                widget.update()
+
     def ensure_browser_widget(self):
         if self._browser_widget is not None:
             return self._browser_widget

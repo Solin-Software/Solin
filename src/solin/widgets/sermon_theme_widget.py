@@ -15,6 +15,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 from ..core.i18n.manager import LanguageManager
 from ..styles.icons import ICON_NAV_SETTINGS, make_icon
+from ..styles.theme import PALETTE
 
 # ── SVG background — faithful copy of the reference design ──────────────────
 _BG_SVG = """\
@@ -216,42 +217,37 @@ class SermonThemeWidget(QWidget):
         self.subtitle_label = QLabel()
         self.subtitle_label.setObjectName("SectionSubtitle")
         self.subtitle_label.setStyleSheet(
-            "padding-bottom: 20px; color: #8b949e; font-size: 12px; background: transparent;"
+            f"padding-bottom: 20px; color: {PALETTE.text_muted}; font-size: 12px; background: transparent;"
         )
         outer.addWidget(self.subtitle_label)
 
-        card = QFrame()
-        card.setObjectName("ThemeCard")
-        card.setStyleSheet("""
-            #ThemeCard { background: #161b22; border: 1px solid #30363d; border-radius: 16px; }
-        """)
-        card_lay = QVBoxLayout(card)
+        self.theme_card = QFrame()
+        self.theme_card.setObjectName("ThemeCard")
+        card_lay = QVBoxLayout(self.theme_card)
         card_lay.setContentsMargins(24, 24, 24, 24)
         card_lay.setSpacing(16)
 
         self.preview_label = QLabel()
         self.preview_label.setStyleSheet(
-            "background: transparent; color: #8b949e; font-size: 11px; font-weight: 600;"
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
         )
         card_lay.addWidget(self.preview_label)
 
         self.preview = SermonThemePreview()
         self.preview.setStyleSheet("border-radius: 10px")
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(14)
-        shadow.setOffset(0, 3)
-        shadow.setColor(QColor(0, 0, 0, 70))
-        self.preview.setGraphicsEffect(shadow)
+        self._preview_shadow = QGraphicsDropShadowEffect()
+        self._preview_shadow.setBlurRadius(14)
+        self._preview_shadow.setOffset(0, 3)
+        self.preview.setGraphicsEffect(self._preview_shadow)
         card_lay.addWidget(self.preview)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #30363d; margin: 4px 0;")
-        card_lay.addWidget(sep)
+        self.separator = QFrame()
+        self.separator.setFrameShape(QFrame.Shape.HLine)
+        card_lay.addWidget(self.separator)
 
         self.input_label = QLabel()
         self.input_label.setStyleSheet(
-            "background: transparent; color: #8b949e; font-size: 11px; font-weight: 600;"
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
         )
         card_lay.addWidget(self.input_label)
 
@@ -259,13 +255,13 @@ class SermonThemeWidget(QWidget):
         self.theme_input.setObjectName("ThemeInput")
         self.theme_input.setMaximumHeight(90)
         self.theme_input.setMinimumHeight(60)
-        self.theme_input.setStyleSheet("""
-            QTextEdit#ThemeInput {
-                background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
-                color: #e6edf3; font-size: 14px; padding: 10px 12px;
-                selection-background-color: #264f78;
-            }
-            QTextEdit#ThemeInput:focus { border-color: #388bfd; }
+        self.theme_input.setStyleSheet(f"""
+            QTextEdit#ThemeInput {{
+                background: {PALETTE.bg0}; border: 1px solid {PALETTE.border}; border-radius: 8px;
+                color: {PALETTE.text_primary}; font-size: 14px; padding: 10px 12px;
+                selection-background-color: {PALETTE.accent_selection};
+            }}
+            QTextEdit#ThemeInput:focus {{ border-color: {PALETTE.accent}; }}
         """)
         self.theme_input.textChanged.connect(self._on_text_changed)
         card_lay.addWidget(self.theme_input)
@@ -274,16 +270,16 @@ class SermonThemeWidget(QWidget):
         self.project_btn.setObjectName("ProjectThemeBtn")
         self.project_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.project_btn.setMinimumHeight(40)
-        self.project_btn.setStyleSheet("""
-            QPushButton#ProjectThemeBtn {
-                background: #238636; border: 1px solid #2ea043; border-radius: 8px;
-                color: #ffffff; font-size: 13px; font-weight: 600; padding: 0 20px;
-            }
-            QPushButton#ProjectThemeBtn:hover   { background: #2ea043; }
-            QPushButton#ProjectThemeBtn:pressed  { background: #1a6e2a; }
-            QPushButton#ProjectThemeBtn:disabled {
-                background: #21262d; border-color: #30363d; color: #484f58;
-            }
+        self.project_btn.setStyleSheet(f"""
+            QPushButton#ProjectThemeBtn {{
+                background: {PALETTE.projection}; border: 1px solid {PALETTE.success}; border-radius: 8px;
+                color: {PALETTE.text_on_accent}; font-size: 13px; font-weight: 600; padding: 0 20px;
+            }}
+            QPushButton#ProjectThemeBtn:hover   {{ background: {PALETTE.success}; }}
+            QPushButton#ProjectThemeBtn:pressed  {{ background: {PALETTE.success_pressed}; }}
+            QPushButton#ProjectThemeBtn:disabled {{
+                background: {PALETTE.bg2}; border-color: {PALETTE.border}; color: {PALETTE.text_dim};
+            }}
         """)
         self.project_btn.clicked.connect(self._on_project)
 
@@ -296,20 +292,20 @@ class SermonThemeWidget(QWidget):
         self.settings_toggle_btn.setObjectName("SettingsToggleBtn")
         self.settings_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_toggle_btn.setFixedSize(36, 36)
-        self.settings_toggle_btn.setIcon(make_icon(ICON_NAV_SETTINGS, size=16, color="#8b949e"))
+        self.settings_toggle_btn.setIcon(make_icon(ICON_NAV_SETTINGS, size=16, color=PALETTE.text_muted))
         from PySide6.QtCore import QSize
         self.settings_toggle_btn.setIconSize(QSize(16, 16))
         self.settings_toggle_btn.setToolTip("Configurações de projeção")
         self.settings_toggle_btn.setCheckable(True)
-        self.settings_toggle_btn.setStyleSheet("""
-            QPushButton#SettingsToggleBtn {
+        self.settings_toggle_btn.setStyleSheet(f"""
+            QPushButton#SettingsToggleBtn {{
                 background: transparent;
-                border: 1px solid #30363d;
+                border: 1px solid {PALETTE.border};
                 border-radius: 8px;
                 padding: 0;
-            }
-            QPushButton#SettingsToggleBtn:hover   { background: #21262d; border-color: #484f58; }
-            QPushButton#SettingsToggleBtn:checked  { background: #21262d; border-color: #388bfd; }
+            }}
+            QPushButton#SettingsToggleBtn:hover   {{ background: {PALETTE.bg2}; border-color: {PALETTE.text_dim}; }}
+            QPushButton#SettingsToggleBtn:checked  {{ background: {PALETTE.bg2}; border-color: {PALETTE.accent}; }}
         """)
         self.settings_toggle_btn.clicked.connect(self._toggle_subtitle_panel)
         btn_row.addWidget(self.settings_toggle_btn)
@@ -320,12 +316,12 @@ class SermonThemeWidget(QWidget):
         self._subtitle_panel_expanded = False
         self.subtitle_panel = QFrame()
         self.subtitle_panel.setObjectName("SubtitlePanel")
-        self.subtitle_panel.setStyleSheet("""
-            QFrame#SubtitlePanel {
-                background: #0d1117;
-                border: 1px solid #30363d;
+        self.subtitle_panel.setStyleSheet(f"""
+            QFrame#SubtitlePanel {{
+                background: {PALETTE.bg0};
+                border: 1px solid {PALETTE.border};
                 border-radius: 8px;
-            }
+            }}
         """)
         self.subtitle_panel.setMaximumHeight(0)
         self.subtitle_panel.setMinimumHeight(0)
@@ -339,24 +335,24 @@ class SermonThemeWidget(QWidget):
 
         self.sub_prefix_label = QLabel()
         self.sub_prefix_label.setStyleSheet(
-            "background: transparent; color: #8b949e; font-size: 11px; font-weight: 600;"
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
         )
         panel_lay.addWidget(self.sub_prefix_label)
 
         self.subtitle_input = QLineEdit()
         self.subtitle_input.setObjectName("SubtitleInput")
-        self.subtitle_input.setStyleSheet("""
-            QLineEdit#SubtitleInput {
-                background: #161b22;
-                border: 1px solid #30363d;
+        self.subtitle_input.setStyleSheet(f"""
+            QLineEdit#SubtitleInput {{
+                background: {PALETTE.surface};
+                border: 1px solid {PALETTE.border};
                 border-radius: 6px;
-                color: #e6edf3;
+                color: {PALETTE.text_primary};
                 font-size: 13px;
                 font-weight: 600;
                 letter-spacing: 1px;
                 padding: 6px 10px;
-            }
-            QLineEdit#SubtitleInput:focus { border-color: #388bfd; }
+            }}
+            QLineEdit#SubtitleInput:focus {{ border-color: {PALETTE.accent}; }}
         """)
         self.subtitle_input.textChanged.connect(self._on_subtitle_changed)
         panel_lay.addWidget(self.subtitle_input)
@@ -369,9 +365,10 @@ class SermonThemeWidget(QWidget):
         self._panel_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
         self._panel_expanded_height = 90  # approximate
 
-        outer.addWidget(card)
+        outer.addWidget(self.theme_card)
         outer.addStretch()
 
+        self.apply_theme()
         self.retranslateUi()
         self._update_project_btn()
 
@@ -401,6 +398,79 @@ class SermonThemeWidget(QWidget):
         if text:
             subtitle = self.subtitle_input.text().strip() or self.tr("PUBLIC TALK")
             self.project_theme_signal.emit(text, subtitle)
+
+    def apply_theme(self) -> None:
+        self.subtitle_label.setStyleSheet(
+            f"padding-bottom: 20px; color: {PALETTE.text_muted}; font-size: 12px; background: transparent;"
+        )
+        self.theme_card.setStyleSheet(
+            f"#ThemeCard {{ background: {PALETTE.surface}; border: 1px solid {PALETTE.border}; border-radius: 16px; }}"
+        )
+        self.preview_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self._preview_shadow.setColor(QColor(0, 0, 0, 70))
+        self.separator.setStyleSheet(
+            f"color: {PALETTE.border}; background: {PALETTE.border}; margin: 4px 0;"
+        )
+        self.input_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self.theme_input.setStyleSheet(f"""
+            QTextEdit#ThemeInput {{
+                background: {PALETTE.bg0}; border: 1px solid {PALETTE.border}; border-radius: 8px;
+                color: {PALETTE.text_primary}; font-size: 14px; padding: 10px 12px;
+                selection-background-color: {PALETTE.accent_selection};
+            }}
+            QTextEdit#ThemeInput:focus {{ border-color: {PALETTE.accent}; }}
+        """)
+        self.project_btn.setStyleSheet(f"""
+            QPushButton#ProjectThemeBtn {{
+                background: {PALETTE.projection}; border: 1px solid {PALETTE.success}; border-radius: 8px;
+                color: {PALETTE.text_on_accent}; font-size: 13px; font-weight: 600; padding: 0 20px;
+            }}
+            QPushButton#ProjectThemeBtn:hover   {{ background: {PALETTE.success}; }}
+            QPushButton#ProjectThemeBtn:pressed  {{ background: {PALETTE.success_pressed}; }}
+            QPushButton#ProjectThemeBtn:disabled {{
+                background: {PALETTE.bg2}; border-color: {PALETTE.border}; color: {PALETTE.text_dim};
+            }}
+        """)
+        self.settings_toggle_btn.setIcon(
+            make_icon(ICON_NAV_SETTINGS, size=16, color=PALETTE.text_muted)
+        )
+        self.settings_toggle_btn.setStyleSheet(f"""
+            QPushButton#SettingsToggleBtn {{
+                background: transparent;
+                border: 1px solid {PALETTE.border};
+                border-radius: 8px;
+                padding: 0;
+            }}
+            QPushButton#SettingsToggleBtn:hover   {{ background: {PALETTE.bg2}; border-color: {PALETTE.text_dim}; }}
+            QPushButton#SettingsToggleBtn:checked  {{ background: {PALETTE.bg2}; border-color: {PALETTE.accent}; }}
+        """)
+        self.subtitle_panel.setStyleSheet(f"""
+            QFrame#SubtitlePanel {{
+                background: {PALETTE.bg0};
+                border: 1px solid {PALETTE.border};
+                border-radius: 8px;
+            }}
+        """)
+        self.sub_prefix_label.setStyleSheet(
+            f"background: transparent; color: {PALETTE.text_muted}; font-size: 11px; font-weight: 600;"
+        )
+        self.subtitle_input.setStyleSheet(f"""
+            QLineEdit#SubtitleInput {{
+                background: {PALETTE.surface};
+                border: 1px solid {PALETTE.border};
+                border-radius: 6px;
+                color: {PALETTE.text_primary};
+                font-size: 13px;
+                font-weight: 600;
+                letter-spacing: 1px;
+                padding: 6px 10px;
+            }}
+            QLineEdit#SubtitleInput:focus {{ border-color: {PALETTE.accent}; }}
+        """)
 
     # ── i18n ──────────────────────────────────────────────────────────────
 

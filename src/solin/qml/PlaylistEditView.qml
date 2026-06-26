@@ -6,27 +6,28 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: "#0d1117"
+    color: appTheme.bg
 
     readonly property int contentLeftInset: 16
     readonly property int contentRightInset: 12
     readonly property int scrollbarGutter: 12
     readonly property int scrollbarContentGap: 8
-    readonly property color bg: "#0d1117"
-    readonly property color surface: "#13161c"
-    readonly property color hover: "#1a1f2a"
-    readonly property color border_: "#1e2430"
-    readonly property color borderStrong: "#2a3040"
-    readonly property color textPrimary: "#e6edf3"
-    readonly property color textSecondary: "#c9d1d9"
-    readonly property color textMuted: "#8b949e"
-    readonly property color textDim: "#484f58"
-    readonly property color accent: "#388bfd"
-    readonly property color accentTint: "#132a46"
-    readonly property color previewBg: Qt.rgba(0.22, 0.55, 0.99, 0.12)
-    readonly property color previewBorder: "#388bfd"
-    readonly property color danger: "#f85149"
-    readonly property color dangerSubtle: "#3d1214"
+    readonly property color bg: appTheme.bg
+    readonly property color surface: appTheme.surface
+    readonly property color hover: appTheme.hover
+    readonly property color hoverStrong: appTheme.hoverStrong
+    readonly property color border_: appTheme.border_
+    readonly property color borderStrong: appTheme.borderStrong
+    readonly property color textPrimary: appTheme.textPrimary
+    readonly property color textSecondary: appTheme.textSecondary
+    readonly property color textMuted: appTheme.textMuted
+    readonly property color textDim: appTheme.textDim
+    readonly property color accent: appTheme.accent
+    readonly property color accentTint: appTheme.accentTint
+    readonly property color previewBg: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
+    readonly property color previewBorder: appTheme.accent
+    readonly property color danger: appTheme.danger
+    readonly property color dangerSubtle: appTheme.dangerSubtle
 
     readonly property bool hasController: typeof controller !== "undefined" && controller !== null
     readonly property string playlistName: hasController ? controller.playlistName : ""
@@ -46,6 +47,10 @@ Rectangle {
 
     function commonTr(context, source) {
         return qsTranslate(context, source)
+    }
+
+    function iconHex(colorValue) {
+        return String(colorValue).replace("#", "")
     }
 
     function pointerEntered() {
@@ -92,7 +97,7 @@ Rectangle {
                 HeaderButton {
                     iconName: "back"
                     iconSize: 15
-                    colorHex: "8b949e"
+                    colorHex: root.iconHex(root.textMuted)
                     toolTipText: qsTranslate("_PlaylistEditView", "Back")
                     onClicked: if (root.hasController) controller.backClicked()
                 }
@@ -119,7 +124,7 @@ Rectangle {
                     visible: !root.isWatched
                     iconName: "export"
                     iconSize: 14
-                    colorHex: "8b949e"
+                    colorHex: root.iconHex(root.textMuted)
                     toolTipText: qsTranslate("_PlaylistEditView", "Export .jwlplaylist")
                     onClicked: if (root.hasController) controller.exportClicked()
                 }
@@ -128,7 +133,7 @@ Rectangle {
                     id: plusBtn
                     iconName: "plus"
                     iconSize: 14
-                    colorHex: "79c0ff"
+                    colorHex: root.iconHex(root.accent)
                     accentButton: true
                     toolTipText: qsTranslate("_PlaylistEditView", "Add Media")
                     onClicked: addMenu.open()
@@ -141,7 +146,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Local File...")
-                            icon.source: root.picon("plus", 13, "8b949e")
+                            icon.source: root.picon("plus", 13, root.iconHex(root.textMuted))
                             onTriggered: if (root.hasController) controller.addClicked()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -149,7 +154,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Search JW.org...")
-                            icon.source: root.picon("media_video", 13, "8b949e")
+                            icon.source: root.picon("media_video", 13, root.iconHex(root.textMuted))
                             onTriggered: jwCatalogModal.open()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -157,7 +162,7 @@ Rectangle {
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Add Song...")
-                            icon.source: root.picon("media_audio", 13, "8b949e")
+                            icon.source: root.picon("media_audio", 13, root.iconHex(root.textMuted))
                             onTriggered: jwSongsModal.open()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
@@ -253,7 +258,7 @@ Rectangle {
         id: hdrBtn
         property string iconName: ""
         property int iconSize: 14
-        property string colorHex: "8b949e"
+        property string colorHex: root.iconHex(root.textMuted)
         property string toolTipText: ""
         property bool accentButton: false
         signal clicked()
@@ -262,12 +267,12 @@ Rectangle {
         implicitHeight: 32
         radius: 8
         color: enabled && hdrMa.containsMouse
-               ? (accentButton ? "#1a3d6d" : root.hover)
+               ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26) : root.hover)
                : (accentButton ? root.accentTint : "transparent")
         border.width: 1
         border.color: enabled && hdrMa.containsMouse
-                      ? (accentButton ? "#2d5fa6" : root.borderStrong)
-                      : (accentButton ? "#1f4470" : root.border_)
+                      ? (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55) : root.borderStrong)
+                      : (accentButton ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35) : root.border_)
         opacity: enabled ? 1.0 : 0.38
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -277,7 +282,7 @@ Rectangle {
             width: hdrBtn.iconSize
             height: hdrBtn.iconSize
             source: root.picon(hdrBtn.iconName, hdrBtn.iconSize,
-                               hdrMa.containsMouse ? "c9d1d9" : hdrBtn.colorHex)
+                               hdrMa.containsMouse ? root.iconHex(root.textSecondary) : hdrBtn.colorHex)
         }
 
         MouseArea {
@@ -290,9 +295,10 @@ Rectangle {
             onClicked: hdrBtn.clicked()
         }
 
-        ToolTip.visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
-        ToolTip.text: hdrBtn.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
+            text: hdrBtn.toolTipText
+        }
     }
 
     component ActionButton: Rectangle {
@@ -303,14 +309,18 @@ Rectangle {
         implicitWidth: actionLabel.implicitWidth + 20
         implicitHeight: 30
         radius: 7
-        color: actionMouse.containsMouse ? "#1a3d6d" : root.accentTint
+        color: actionMouse.containsMouse
+               ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.26)
+               : root.accentTint
         border.width: 1
-        border.color: actionMouse.containsMouse ? "#2d5fa6" : "#1f4470"
+        border.color: actionMouse.containsMouse
+                      ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55)
+                      : Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.35)
         Text {
             id: actionLabel
             anchors.centerIn: parent
             text: actionBtn.label
-            color: "#79c0ff"
+            color: appTheme.accentText
             font.pixelSize: 11
             font.weight: Font.DemiBold
         }
@@ -323,9 +333,10 @@ Rectangle {
             onClicked: actionBtn.clicked()
         }
 
-        ToolTip.visible: actionBtn.enabled && actionMouse.containsMouse && actionBtn.toolTipText !== ""
-        ToolTip.text: actionBtn.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: actionBtn.enabled && actionMouse.containsMouse && actionBtn.toolTipText !== ""
+            text: actionBtn.toolTipText
+        }
     }
 
     component SmallToolButton: Rectangle {
@@ -351,7 +362,11 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 13
                 height: 13
-                source: root.picon(stb.iconName, 13, stbMa.containsMouse ? "c9d1d9" : "8b949e")
+                source: root.picon(
+                    stb.iconName,
+                    13,
+                    root.iconHex(stbMa.containsMouse ? root.textSecondary : root.textMuted)
+                )
             }
             Text {
                 visible: stb.label !== ""
@@ -371,9 +386,27 @@ Rectangle {
             onClicked: stb.clicked()
         }
 
-        ToolTip.visible: stb.enabled && stbMa.containsMouse && stb.toolTipText !== ""
-        ToolTip.text: stb.toolTipText
-        ToolTip.delay: 400
+        ThemedToolTip {
+            visible: stb.enabled && stbMa.containsMouse && stb.toolTipText !== ""
+            text: stb.toolTipText
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: root.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: root.surface
+            radius: 6
+            border.width: 1
+            border.color: root.border_
+        }
     }
 
     JWMediaCatalogModal {
@@ -389,7 +422,7 @@ Rectangle {
     }
 
     component MenuPanel: Rectangle {
-        color: "#1c2128"
+        color: root.hoverStrong
         radius: 8
         border.width: 1
         border.color: root.borderStrong
@@ -417,7 +450,7 @@ Rectangle {
     component MenuBg: Rectangle {
         property bool hovered: false
         property bool danger: false
-        color: hovered ? (danger ? root.dangerSubtle : "#262c36") : "transparent"
+        color: hovered ? (danger ? root.dangerSubtle : root.hoverStrong) : "transparent"
         radius: 6
     }
 }

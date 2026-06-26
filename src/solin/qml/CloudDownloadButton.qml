@@ -18,9 +18,17 @@ Rectangle {
     implicitWidth: 26
     implicitHeight: 26
     radius: 7
-    color: active && hitArea.containsMouse ? "#182640" : "transparent"
+    color: active && hitArea.containsMouse ? appTheme.accentTint : "transparent"
 
     readonly property real normalizedProgress: Math.max(0, Math.min(1, progress))
+    readonly property color trackColor: appTheme.textMuted
+    readonly property color accentColor: appTheme.accentHover
+    readonly property color successColor: appTheme.success
+    readonly property color warningColor: appTheme.warning
+
+    function withAlpha(c, a) {
+        return Qt.rgba(c.r, c.g, c.b, a)
+    }
 
     Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -79,12 +87,12 @@ Rectangle {
                 ctx.lineCap = "round"
 
                 ctx.beginPath()
-                ctx.strokeStyle = "rgba(139, 148, 158, 0.24)"
+                ctx.strokeStyle = root.withAlpha(root.trackColor, 0.24)
                 ctx.arc(cx, cy, radius, 0, Math.PI * 2)
                 ctx.stroke()
 
                 ctx.beginPath()
-                ctx.strokeStyle = root.progress >= 1 ? "#3fb950" : "#58a6ff"
+                ctx.strokeStyle = root.progress >= 1 ? root.successColor : root.accentColor
                 ctx.arc(cx, cy, radius, start, start + Math.PI * 2 * amount)
                 ctx.stroke()
             }
@@ -123,12 +131,12 @@ Rectangle {
             ctx.lineCap = "round"
 
             ctx.beginPath()
-            ctx.strokeStyle = "rgba(139, 148, 158, 0.24)"
+            ctx.strokeStyle = root.withAlpha(root.trackColor, 0.24)
             ctx.arc(cx, cy, radius, 0, Math.PI * 2)
             ctx.stroke()
 
             ctx.beginPath()
-            ctx.strokeStyle = "#d29922"
+            ctx.strokeStyle = root.warningColor
             ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 0.72)
             ctx.stroke()
         }
@@ -155,9 +163,25 @@ Rectangle {
         onClicked: root.clicked()
     }
 
-    ToolTip {
+    ThemedToolTip {
         visible: root.active && hitArea.containsMouse && root.toolTipText !== ""
         text: root.toolTipText
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
         delay: 400
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
+        }
     }
 }

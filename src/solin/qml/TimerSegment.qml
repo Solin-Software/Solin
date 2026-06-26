@@ -9,7 +9,7 @@ Rectangle {
     id: seg
     property var options: []
     property int current: 0
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     property int segWidth: 92
     property int segHeight: 32
     property int labelPadding: 10
@@ -37,8 +37,8 @@ Rectangle {
     implicitHeight: segHeight
     implicitWidth: _count * _minSegW + 6
     radius: 9
-    color: "#0f131a"
-    border.color: "#1e2430"
+    color: appTheme.surfaceAlt
+    border.color: appTheme.border_
     border.width: 1
     opacity: enabled ? 1.0 : 0.72
     Behavior on opacity { NumberAnimation { duration: 140 } }
@@ -102,7 +102,7 @@ Rectangle {
                     anchors.leftMargin: seg.labelPadding
                     anchors.rightMargin: seg.labelPadding
                     text: modelData
-                    color: index === seg.current ? "#ffffff" : "#8b949e"
+                    color: index === seg.current ? appTheme.white : appTheme.textMuted
                     font.pixelSize: seg.labelPixelSize
                     font.weight: seg.labelWeight
                     horizontalAlignment: Text.AlignHCenter
@@ -119,10 +119,28 @@ Rectangle {
                     onClicked: seg.picked(index)
                 }
 
-                ToolTip.visible: label.truncated && mouse.containsMouse
-                ToolTip.text: modelData
-                ToolTip.delay: 450
+                ThemedToolTip {
+                    visible: label.truncated && mouse.containsMouse
+                    text: modelData
+                }
             }
+        }
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 450
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
         }
     }
 }

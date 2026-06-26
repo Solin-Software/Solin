@@ -77,6 +77,18 @@ class _BrowserStub:
         self.cleaned = True
 
 
+class _ThemeAwareWidgetStub:
+    def __init__(self):
+        self.theme_applied = False
+        self.updated = False
+
+    def apply_theme(self):
+        self.theme_applied = True
+
+    def update(self):
+        self.updated = True
+
+
 class _SignalStub:
     def __init__(self):
         self.connected = []
@@ -231,6 +243,33 @@ def test_lazy_page_controller_routes_known_stack_indices(monkeypatch):
     controller.ensure_page(999)
 
     assert calls == ["browser", "cache", "wifi"]
+
+
+def test_lazy_page_controller_applies_theme_to_materialized_pages_only(monkeypatch):
+    window = _WindowStub()
+    controller = _controller(window)
+    browser = _ThemeAwareWidgetStub()
+    cache = _ThemeAwareWidgetStub()
+    controller._browser_widget = browser
+    controller._cache_manager_widget = cache
+
+    def fail_if_materialized():
+        raise AssertionError("apply_theme should not materialize lazy pages")
+
+    for name in (
+        "ensure_browser_widget",
+        "ensure_cache_manager_widget",
+        "ensure_wifi_receive_widget",
+    ):
+        monkeypatch.setattr(controller, name, fail_if_materialized)
+
+    controller.apply_theme()
+
+    assert browser.theme_applied is True
+    assert browser.updated is True
+    assert cache.theme_applied is True
+    assert cache.updated is True
+    assert controller.wifi_receive_widget is None
 
 
 def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):

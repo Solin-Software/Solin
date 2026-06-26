@@ -14,18 +14,20 @@ from ...ui.auto_key_labels import auto_key_event_label
 from ...ui.controls import NoScrollComboBox
 from .shared import (
     SETTINGS_ACCENT,
+    SETTINGS_ACCENT_MUTED,
     SETTINGS_BG,
     SETTINGS_BORDER_STRONG,
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
-    SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET,
-    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_picker_primary_button_stylesheet,
+    settings_picker_secondary_button_stylesheet,
 )
+from solin.styles.theme import PALETTE
 
 
 class _ShortcutSequenceEdit(QPushButton):
@@ -149,7 +151,8 @@ class AutoKeyEditorDialog(QDialog):
             f"QPushButton#AutoKeyShortcut:hover {{ border-color: {SETTINGS_MUTED}; }}"
             f"QPushButton#AutoKeyShortcut:focus {{ border-color: {SETTINGS_ACCENT}; }}"
             f"QPushButton#AutoKeyShortcut[recording=\"true\"] {{"
-            f" background-color: #0f1a2a; border-color: {SETTINGS_ACCENT}; color: #ffffff; }}"
+            f" background-color: {PALETTE.accent_tint}; border-color: {SETTINGS_ACCENT};"
+            f" color: {PALETTE.white}; }}"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 20, 20, 16)
@@ -222,12 +225,12 @@ class AutoKeyEditorDialog(QDialog):
         cancel = QPushButton(self.tr("Cancel"))
         cancel.setMinimumHeight(34)
         cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel.setStyleSheet(SETTINGS_PICKER_SECONDARY_BUTTON_STYLESHEET)
+        cancel.setStyleSheet(settings_picker_secondary_button_stylesheet())
         cancel.clicked.connect(self.reject)
         self._save_btn = QPushButton(self.tr("Save"))
         self._save_btn.setMinimumHeight(34)
         self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._save_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
+        self._save_btn.setStyleSheet(settings_picker_primary_button_stylesheet())
         self._save_btn.clicked.connect(self._accept)
         btn_row.addWidget(cancel)
         btn_row.addWidget(self._save_btn)
@@ -265,7 +268,7 @@ class AutoKeyEditorDialog(QDialog):
             f" border-left: 4px solid transparent; border-right: 4px solid transparent;"
             f" border-top: 5px solid {SETTINGS_MUTED}; margin-right: 12px; }}"
             f"QComboBox QAbstractItemView {{ background-color: {SETTINGS_BG}; color: {SETTINGS_TEXT};"
-            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: #1f3a6e;"
+            f" border: 1px solid {SETTINGS_BORDER_STRONG}; selection-background-color: {SETTINGS_ACCENT_MUTED};"
             f" outline: none; }}"
         )
 

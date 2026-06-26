@@ -34,6 +34,7 @@ from solin.styles.icons import (
     ICON_PLAY_SHUFFLE,
     ICON_VIDEO,
 )
+from solin.styles.theme import PALETTE
 
 
 def java_to_py_fmt(fmt: str) -> str:
@@ -83,7 +84,7 @@ class MediaLibraryIconProvider(QQuickImageProvider):
         parts = id_str.split("/")
         name = parts[0] if parts else ""
         px = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 16
-        color = f"#{parts[2]}" if len(parts) > 2 else "#8b949e"
+        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_muted
         icons = {
             "cloud_download": ICON_CLOUD_DOWNLOAD,
             "music": ICON_MUSIC,

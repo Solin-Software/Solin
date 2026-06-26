@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

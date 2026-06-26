@@ -6,7 +6,26 @@ from typing import Any
 from PySide6.QtGui import QColor, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.styles.theme import PALETTE, QML_THEME
 from solin.ui.qml.loader import load_qml_type
+
+
+def current_qml_theme() -> dict[str, Any]:
+    return dict(QML_THEME)
+
+
+def apply_qml_theme(
+    widget: QQuickWidget,
+    *,
+    clear_color: QColor | str | None = None,
+) -> None:
+    widget.rootContext().setContextProperty("appTheme", current_qml_theme())
+    if clear_color is not None:
+        widget.setClearColor(
+            clear_color if isinstance(clear_color, QColor) else QColor(clear_color)
+        )
+    elif widget.clearColor().isValid():
+        widget.setClearColor(QColor(PALETTE.bg0))
 
 
 def configure_qml_host(
@@ -34,7 +53,9 @@ def configure_qml_host(
         engine.addImageProvider(name, provider)
 
     context = widget.rootContext()
-    for name, value in (context_properties or {}).items():
+    merged_context: dict[str, Any] = {"appTheme": current_qml_theme()}
+    merged_context.update(context_properties or {})
+    for name, value in merged_context.items():
         context.setContextProperty(name, value)
 
     if resize_to_root:

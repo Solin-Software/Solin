@@ -22,13 +22,15 @@ Linux / outros
 Uso
 ───
     from solin.ui.titlebar import apply_titlebar_color
-    apply_titlebar_color(window, "#1A231F")   # após window.show()
+    apply_titlebar_color(window)   # após window.show()
 """
 
 from __future__ import annotations
 
 import sys
 import logging
+
+from solin.styles.theme import PALETTE
 
 log = logging.getLogger(__name__)
 
@@ -121,7 +123,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def apply_titlebar_color(window, hex_color: str = "#1A231F") -> bool:
+def apply_titlebar_color(window, hex_color: str | None = None) -> bool:
     """
     Aplica `hex_color` à barra de título nativa da `window` (QMainWindow ou similar).
 
@@ -130,6 +132,7 @@ def apply_titlebar_color(window, hex_color: str = "#1A231F") -> bool:
 
     Retorna True se algum nível de personalização foi aplicado.
     """
+    hex_color = hex_color or PALETTE.titlebar
     if not hex_color:
         return False
 

@@ -4,11 +4,28 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ...ui.screens import ScreenManager
 from ...styles.icons import ICON_MONITOR, ICON_TV, make_icon
-from .shared import SETTINGS_DIM, SETTINGS_MUTED, SETTINGS_TEXT
+from .shared import (
+    SETTINGS_BORDER,
+    SETTINGS_DIM,
+    SETTINGS_MUTED,
+    SETTINGS_SUCCESS,
+    SETTINGS_TEXT,
+    SETTINGS_TEXT_ON_ACCENT,
+)
 
 
 class ScreensSectionMixin:
     """Builds and refreshes the screen topology settings section."""
+
+    @staticmethod
+    def _screen_divider() -> QFrame:
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet(
+            f"background: {SETTINGS_BORDER}; border: none;"
+            " margin-left: 14px; margin-right: 14px;"
+        )
+        return divider
 
     def _populate_screens(self):
         lay = self._screens_card_lay
@@ -52,7 +69,7 @@ class ScreensSectionMixin:
         lay.addWidget(p_row)
 
         if not secondary:
-            lay.addWidget(self._divider())
+            lay.addWidget(self._screen_divider())
             no_lbl = QLabel(
                 self.tr("No secondary screen detected. Connect an external monitor.")
             )
@@ -65,7 +82,7 @@ class ScreensSectionMixin:
             return
 
         for i, screen in enumerate(secondary, 1):
-            lay.addWidget(self._divider())
+            lay.addWidget(self._screen_divider())
             s_row = QFrame()
             s_row.setStyleSheet("background: transparent; border: none;")
             s_lay_h = QHBoxLayout(s_row)
@@ -101,8 +118,8 @@ class ScreensSectionMixin:
             s_lay_h.addLayout(s_col, stretch=1)
             badge = QLabel(self.tr("PROJECTION"))
             badge.setStyleSheet(
-                "background: #2ea043; border-radius: 4px;"
-                " padding: 2px 6px; color: white;"
+                f"background: {SETTINGS_SUCCESS}; border-radius: 4px;"
+                f" padding: 2px 6px; color: {SETTINGS_TEXT_ON_ACCENT};"
                 " font-size: 10px; font-weight: 700;"
             )
             s_lay_h.addWidget(badge)
@@ -110,3 +127,6 @@ class ScreensSectionMixin:
 
     def _refresh_screens(self):
         self._populate_screens()
+
+    def _apply_screens_theme(self):
+        self._refresh_screens()

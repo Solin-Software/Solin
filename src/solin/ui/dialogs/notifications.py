@@ -41,50 +41,51 @@ if TYPE_CHECKING:
     from solin.core.i18n.manager import LanguageManager
     from solin.core.remote.notification_policy import Notification
 
-# ── Paleta interna (espelha theme.py sem import circular) ──────────────────────
+from solin.styles.theme import PALETTE
+
 _C = {
-    "bg0": "#0d1117",
-    "bg1": "#161b22",
-    "bg2": "#21262d",
-    "bg3": "#2d333b",
-    "border": "#30363d",
-    "text": "#e6edf3",
-    "muted": "#8b949e",
-    "accent": "#388bfd",
-    "info": "#388bfd",
-    "warning": "#d29922",
-    "error": "#f85149",
-    "success": "#3fb950",
+    "bg0": PALETTE.bg0,
+    "bg1": PALETTE.bg1,
+    "bg2": PALETTE.bg2,
+    "bg3": PALETTE.bg3,
+    "border": PALETTE.border,
+    "text": PALETTE.text_primary,
+    "muted": PALETTE.text_muted,
+    "accent": PALETTE.accent,
+    "info": PALETTE.accent,
+    "warning": PALETTE.warning,
+    "error": PALETTE.danger,
+    "success": PALETTE.success,
 }
 
 # Ícone SVG inline para cada tipo de notificação
 _ICONS: dict[str, str] = {
-    "info": """
+    "info": f"""
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
              xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" stroke="#388bfd" stroke-width="2"/>
-          <line x1="12" y1="8" x2="12" y2="8" stroke="#388bfd"
+          <circle cx="12" cy="12" r="10" stroke="{PALETTE.accent}" stroke-width="2"/>
+          <line x1="12" y1="8" x2="12" y2="8" stroke="{PALETTE.accent}"
                 stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="12" y1="11" x2="12" y2="16" stroke="#388bfd"
+          <line x1="12" y1="11" x2="12" y2="16" stroke="{PALETTE.accent}"
                 stroke-width="2" stroke-linecap="round"/>
         </svg>""",
-    "warning": """
+    "warning": f"""
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
              xmlns="http://www.w3.org/2000/svg">
           <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                stroke="#d29922" stroke-width="2" fill="none"/>
-          <line x1="12" y1="9" x2="12" y2="13" stroke="#d29922"
+                stroke="{PALETTE.warning}" stroke-width="2" fill="none"/>
+          <line x1="12" y1="9" x2="12" y2="13" stroke="{PALETTE.warning}"
                 stroke-width="2" stroke-linecap="round"/>
-          <line x1="12" y1="17" x2="12" y2="17" stroke="#d29922"
+          <line x1="12" y1="17" x2="12" y2="17" stroke="{PALETTE.warning}"
                 stroke-width="2.5" stroke-linecap="round"/>
         </svg>""",
-    "error": """
+    "error": f"""
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
              xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" stroke="#f85149" stroke-width="2"/>
-          <line x1="15" y1="9" x2="9" y2="15" stroke="#f85149"
+          <circle cx="12" cy="12" r="10" stroke="{PALETTE.danger}" stroke-width="2"/>
+          <line x1="15" y1="9" x2="9" y2="15" stroke="{PALETTE.danger}"
                 stroke-width="2" stroke-linecap="round"/>
-          <line x1="9" y1="9" x2="15" y2="15" stroke="#f85149"
+          <line x1="9" y1="9" x2="15" y2="15" stroke="{PALETTE.danger}"
                 stroke-width="2" stroke-linecap="round"/>
         </svg>""",
 }
@@ -158,7 +159,7 @@ def _make_stylesheet(accent: str) -> str:
         }}
         QPushButton#action_btn {{
             background-color: {accent};
-            color: #ffffff;
+            color: {PALETTE.white};
             border: none;
         }}
         QPushButton#action_btn:hover {{

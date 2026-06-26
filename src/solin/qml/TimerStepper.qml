@@ -8,7 +8,7 @@ import QtQuick.Controls 2.15
 Row {
     id: ctl
     property string text: "0"
-    property color accent: "#388bfd"
+    property color accent: appTheme.accent
     property real fieldWidth: 64
     property bool editable: false
     property bool buttonsVisible: true
@@ -27,9 +27,9 @@ Row {
         property string tip: ""
         signal pressed_()
         width: 28; height: 28; radius: 7
-        color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.18) : "#0f131a"
+        color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.18) : appTheme.surfaceAlt
         border.width: 1
-        border.color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.55) : "#2a3040"
+        border.color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.55) : appTheme.borderStrong
         scale: sbMa.pressed ? 0.9 : 1.0
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -37,7 +37,7 @@ Row {
         Text {
             anchors.centerIn: parent
             text: sb.glyph
-            color: sbMa.containsMouse ? ctl.accent : "#c9d1d9"
+            color: sbMa.containsMouse ? ctl.accent : appTheme.textSecondary
             font.pixelSize: 16
             font.weight: Font.Medium
             Behavior on color { ColorAnimation { duration: 120 } }
@@ -47,9 +47,10 @@ Row {
             anchors.fill: parent
             onClicked: sb.pressed_()
         }
-        ToolTip.visible: sb.tip !== "" && sbMa.containsMouse
-        ToolTip.text: sb.tip
-        ToolTip.delay: 450
+        ThemedToolTip {
+            visible: sb.tip !== "" && sbMa.containsMouse
+            text: sb.tip
+        }
     }
 
     StepBtn {
@@ -69,11 +70,12 @@ Row {
             visible: !ctl.editing
             anchors.centerIn: parent
             text: ctl.text
-            color: "#e6edf3"
+            color: appTheme.textPrimary
             font.pixelSize: 16
             font.weight: Font.Bold
 
             TimerPointerArea {
+                id: valueMa
                 anchors.fill: parent
                 enabled: ctl.editable
                 onDoubleClicked: {
@@ -82,9 +84,11 @@ Row {
                     editField.forceActiveFocus()
                     editField.selectAll()
                 }
-                ToolTip.visible: ctl.editable && containsMouse
-                ToolTip.text: qsTr("Double-click to edit")
-                ToolTip.delay: 600
+                ThemedToolTip {
+                    visible: ctl.editable && valueMa.containsMouse
+                    text: qsTr("Double-click to edit")
+                    delay: 600
+                }
             }
         }
 
@@ -94,7 +98,7 @@ Row {
             visible: ctl.editing
             anchors.fill: parent
             radius: 7
-            color: "#0d1117"
+            color: appTheme.bg
             border.color: ctl.accent
             border.width: 1
             TextInput {
@@ -104,9 +108,9 @@ Row {
                 anchors.rightMargin: 6
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                color: "#e6edf3"
+                color: appTheme.textPrimary
                 selectionColor: ctl.accent
-                selectedTextColor: "#ffffff"
+                selectedTextColor: appTheme.white
                 font.pixelSize: 15
                 font.weight: Font.Bold
                 clip: true
@@ -123,5 +127,22 @@ Row {
         glyph: "+"
         tip: ctl.incTip
         onPressed_: ctl.incremented()
+    }
+
+    component ThemedToolTip: ToolTip {
+        id: tip
+        delay: 450
+        padding: 6
+        contentItem: Text {
+            text: tip.text
+            color: appTheme.textPrimary
+            font.pixelSize: 12
+        }
+        background: Rectangle {
+            color: appTheme.surface
+            radius: 6
+            border.width: 1
+            border.color: appTheme.border_
+        }
     }
 }

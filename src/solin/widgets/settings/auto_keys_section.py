@@ -21,14 +21,15 @@ from .shared import (
     SETTINGS_DIM,
     SETTINGS_SUCCESS,
     SETTINGS_MUTED,
-    SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET,
     SETTINGS_DANGER,
     SETTINGS_SURFACE,
     SETTINGS_TEXT,
     SettingsToggleSwitch,
+    settings_picker_primary_button_stylesheet,
 )
 from ...ui.auto_key_labels import auto_key_event_label
 from .auto_key_dialog import AutoKeyEditorDialog
+from solin.styles.theme import PALETTE
 
 
 class AutoKeysSectionMixin:
@@ -44,7 +45,10 @@ class AutoKeysSectionMixin:
         header_layout.setSpacing(12)
 
         icon = QLabel()
-        icon.setPixmap(make_icon(ICON_KEYBOARD, size=18, color=SETTINGS_MUTED).pixmap(18, 18))
+        self._auto_keys_icon_lbl = icon
+        icon.setPixmap(
+            make_icon(ICON_KEYBOARD, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
         icon.setFixedSize(20, 20)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet("background: transparent; border: none;")
@@ -104,10 +108,10 @@ class AutoKeysSectionMixin:
         add_row = QHBoxLayout()
         add_row.addStretch()
         self._auto_keys_add_btn = QPushButton(self.tr("Add shortcut"))
-        self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, "#ffffff"))
+        self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.white))
         self._auto_keys_add_btn.setMinimumHeight(34)
         self._auto_keys_add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._auto_keys_add_btn.setStyleSheet(SETTINGS_PICKER_PRIMARY_BUTTON_STYLESHEET)
+        self._auto_keys_add_btn.setStyleSheet(settings_picker_primary_button_stylesheet())
         self._auto_keys_add_btn.clicked.connect(self._add_auto_key_action)
         add_row.addWidget(self._auto_keys_add_btn)
         container_layout.addLayout(add_row)
@@ -121,6 +125,34 @@ class AutoKeysSectionMixin:
 
         self._refresh_auto_keys_list()
         return card
+
+    def _apply_auto_keys_theme(self) -> None:
+        self._auto_keys_icon_lbl.setPixmap(
+            make_icon(ICON_KEYBOARD, size=18, color=SETTINGS_MUTED).pixmap(18, 18)
+        )
+        self._auto_keys_header_lbl.setStyleSheet(
+            f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
+            " background: transparent; border: none;"
+        )
+        self._auto_keys_header_desc.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._auto_keys_container.setStyleSheet(
+            f"background: {SETTINGS_BG}; border: none;"
+            f" border-top: 1px solid {SETTINGS_BORDER};"
+        )
+        self._auto_keys_hint_lbl.setStyleSheet(
+            f"font-size: 11px; color: {SETTINGS_MUTED};"
+            " background: transparent; border: none;"
+        )
+        self._auto_keys_empty_lbl.setStyleSheet(
+            f"font-size: 12px; color: {SETTINGS_DIM};"
+            " background: transparent; border: none;"
+        )
+        self._auto_keys_add_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.white))
+        self._auto_keys_add_btn.setStyleSheet(settings_picker_primary_button_stylesheet())
+        self._refresh_auto_keys_list()
 
     def _on_auto_keys_toggled(self, checked: bool):
         self._auto_key_settings.set_enabled(checked)
@@ -229,15 +261,26 @@ class AutoKeysSectionMixin:
     def _auto_key_icon_button(self, icon_svg, tooltip: str, danger: bool = False) -> QPushButton:
         button = QPushButton()
         button.setFixedSize(28, 28)
-        button.setIcon(make_icon(icon_svg, 14, SETTINGS_DANGER if danger else SETTINGS_MUTED))
         button.setToolTip(tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_auto_key_icon_button_theme(button, icon_svg, danger=danger)
+        return button
+
+    def _apply_auto_key_icon_button_theme(
+        self,
+        button: QPushButton,
+        icon_svg,
+        *,
+        danger: bool = False,
+    ) -> None:
+        button.setIcon(
+            make_icon(icon_svg, 14, SETTINGS_DANGER if danger else SETTINGS_MUTED)
+        )
         button.setStyleSheet(
             f"QPushButton {{ background-color: {SETTINGS_BG}; border: 1px solid {SETTINGS_BORDER_STRONG};"
             " border-radius: 6px; padding: 0px; }"
             f" QPushButton:hover {{ border-color: {SETTINGS_DANGER if danger else SETTINGS_ACCENT}; }}"
         )
-        return button
 
     def _add_auto_key_action(self):
         dialog = AutoKeyEditorDialog(self)
