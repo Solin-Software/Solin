@@ -12,6 +12,7 @@ from PySide6.QtGui import QIcon, QPainter, QPen, QColor, QImage
 
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
+from ...core.network.browser_settings import normalize_browser_zoom_factor
 from ...core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
@@ -30,6 +31,7 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ...core.media.browser_downloads import BrowserDownloadService
     from ...core.network.browser_images import BrowserImageFetchService
+    from ...core.network.browser_settings import BrowserZoomSettings
 
 # ── Overlay JavaScript ─────────────────────────────────────────────────────────
 #
@@ -757,6 +759,7 @@ class BrowserWidget(
         lang_manager: LanguageManager,
         *,
         profile_paths: ProfilePaths,
+        zoom_settings: BrowserZoomSettings,
         download_service: BrowserDownloadService,
         image_fetch_service: BrowserImageFetchService,
         parent=None,
@@ -766,6 +769,8 @@ class BrowserWidget(
         super().__init__(parent)
         self.lang = lang_manager
         self._download_service = download_service
+        self._zoom_settings = zoom_settings
+        self._browser_zoom_factor = zoom_settings.zoom_factor()
         self._aspect_ratio_provider = (
             aspect_ratio_provider or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
@@ -871,6 +876,22 @@ class BrowserWidget(
         if deferred_url:
             tab._deferred_url = ""
             QTimer.singleShot(0, lambda t=tab, u=deferred_url: t.load(u))
+
+    def _on_browser_zoom_factor_changed(
+        self,
+        source_tab: "BrowserTab",
+        factor: float,
+    ) -> None:
+        factor = normalize_browser_zoom_factor(factor)
+        if abs(self._browser_zoom_factor - factor) <= 1e-6:
+            return
+
+        self._browser_zoom_factor = factor
+        self._zoom_settings.set_zoom_factor(factor)
+        for index in range(self._stack.count()):
+            tab = self._stack.widget(index)
+            if isinstance(tab, BrowserTab) and tab is not source_tab:
+                tab.view.set_zoom_factor(factor)
 
     def _on_cast_clicked(self, checked: bool):
         tab = self._current_tab()

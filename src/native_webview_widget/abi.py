@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ABI_VERSION = 1
+ABI_VERSION = 2
 
 WINDOWS_LIBRARY_NAME = "native_webview_widget.dll"
 MACOS_LIBRARY_NAMES = (
@@ -34,7 +34,20 @@ REQUIRED_EXPORTS = (
     "nwv_clear_cookies",
     "nwv_can_go_back",
     "nwv_can_go_forward",
+    "nwv_set_zoom_factor",
+    "nwv_get_zoom_factor",
 )
+
+ZOOM_EXPORTS = (
+    "nwv_set_zoom_factor",
+    "nwv_get_zoom_factor",
+)
+
+
+def required_exports_for_system(system: str) -> tuple[str, ...]:
+    if system == "Darwin":
+        return tuple(name for name in REQUIRED_EXPORTS if name not in ZOOM_EXPORTS)
+    return REQUIRED_EXPORTS
 
 EVENT_READY = 1
 EVENT_NAVIGATION_STARTED = 2
@@ -44,6 +57,7 @@ EVENT_TITLE_CHANGED = 5
 EVENT_DOWNLOAD_REQUESTED = 6
 EVENT_NEW_WINDOW_REQUESTED = 7
 EVENT_SCRIPT_MESSAGE = 8
+EVENT_ZOOM_FACTOR_CHANGED = 9
 
 EVENTS = {
     "ready": EVENT_READY,
@@ -54,6 +68,7 @@ EVENTS = {
     "download_requested": EVENT_DOWNLOAD_REQUESTED,
     "new_window_requested": EVENT_NEW_WINDOW_REQUESTED,
     "script_message": EVENT_SCRIPT_MESSAGE,
+    "zoom_factor_changed": EVENT_ZOOM_FACTOR_CHANGED,
 }
 
 

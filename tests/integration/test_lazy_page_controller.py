@@ -52,6 +52,7 @@ class _WindowStub:
             lambda: self.browser_image_fetch_service
         )
         self.projection_aspect_ratio_provider = lambda: object()
+        self.browser_settings = object()
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
         self.document_conversion_service = object()
@@ -120,6 +121,7 @@ def _controller(window, *, project_video=None):
             lang_manager=window.lang,
             notifications=window.notifications,
             profile_paths=window.profile_paths,
+            browser_settings=window.browser_settings,
             media_cache_manager=window.media_cache_manager,
             profile_media_store=window.profile_media_store,
             jwpub_import_thread_factory=window.jwpub_import_thread_factory,
@@ -281,6 +283,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             lang_manager,
             *,
             profile_paths,
+            zoom_settings,
             download_service,
             image_fetch_service,
             aspect_ratio_provider,
@@ -288,6 +291,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
         ):
             self.lang_manager = lang_manager
             self.profile_paths = profile_paths
+            self.zoom_settings = zoom_settings
             self.download_service = download_service
             self.image_fetch_service = image_fetch_service
             self.aspect_ratio_provider = aspect_ratio_provider
@@ -303,6 +307,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser is controller.browser_widget
     assert browser.lang_manager is window.lang
     assert browser.profile_paths is window.profile_paths
+    assert browser.zoom_settings is window.browser_settings
     assert browser.download_service is window.browser_download_service
     assert browser.image_fetch_service is window.browser_image_fetch_service
     assert browser.aspect_ratio_provider is window.projection_aspect_ratio_provider

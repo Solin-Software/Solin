@@ -50,6 +50,7 @@ def _build_main_window_profile_settings(profile_settings):
         ProjectionPlaybackSettingsStore,
     )
     from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
+    from solin.core.network.browser_settings import BrowserSettingsStore
     from solin.core.projection.monitor_allocation import MonitorAllocationStore
     from solin.core.remote.notification_settings import NotificationSettingsStore
     from solin.core.windowing.settings import WindowGeometrySettingsStore
@@ -57,6 +58,7 @@ def _build_main_window_profile_settings(profile_settings):
     return MainWindowProfileSettings(
         app=profile_settings.app_settings(),
         media=MediaSettingsStore.for_profile_settings(profile_settings),
+        browser=BrowserSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),

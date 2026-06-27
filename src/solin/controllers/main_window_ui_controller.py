@@ -103,6 +103,7 @@ class MainWindowUiContext:
     camera_settings: Any
     auto_key_settings: Any
     media_settings: Any
+    browser_settings: Any
     meeting_schedule_settings: Any
     watched_folder_settings: Any
     yeartext_settings: Any
@@ -345,6 +346,7 @@ class MainWindowUiController:
                 lang_manager=context.lang_manager,
                 notifications=context.notifications,
                 profile_paths=context.profile_paths,
+                browser_settings=context.browser_settings,
                 media_cache_manager=context.media_cache_manager,
                 profile_media_store=context.profile_media_store,
                 jwpub_import_thread_factory=context.jwpub_import_thread_factory,
