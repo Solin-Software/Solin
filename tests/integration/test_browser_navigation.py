@@ -54,15 +54,24 @@ def test_browser_zoom_change_persists_once_and_updates_other_tabs(monkeypatch):
         def set_zoom_factor(self, factor):
             self.saved.append(factor)
 
+    class UrlBarDouble:
+        def __init__(self):
+            self.applied = []
+
+        def set_zoom_factor(self, factor):
+            self.applied.append(factor)
+
     source = TabDouble()
     sibling = TabDouble()
     settings = SettingsDouble()
+    url_bar = UrlBarDouble()
     widget = type(
         "WidgetDouble",
         (),
         {
             "_browser_zoom_factor": 1.0,
             "_zoom_settings": settings,
+            "_url_bar": url_bar,
             "_stack": StackDouble([source, sibling]),
         },
     )()
@@ -81,5 +90,6 @@ def test_browser_zoom_change_persists_once_and_updates_other_tabs(monkeypatch):
 
     assert widget._browser_zoom_factor == 1.5
     assert settings.saved == [1.5]
+    assert url_bar.applied == [1.5]
     assert source.view.applied == []
     assert sibling.view.applied == [1.5]

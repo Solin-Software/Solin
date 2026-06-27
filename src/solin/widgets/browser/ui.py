@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSizePolicy,
@@ -20,6 +21,77 @@ from .tab_bar import BrowserTabBar
 
 
 __all__ = ("BrowserUiMixin",)
+
+
+class BrowserUrlBar(QFrame):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("UrlBarFrame")
+        self.setFixedHeight(34)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setProperty("focused", False)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 6, 0)
+        layout.setSpacing(6)
+
+        self.line_edit = QLineEdit(self)
+        self.line_edit.setObjectName("UrlBar")
+        self.line_edit.setFrame(False)
+        self.line_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        self.line_edit.installEventFilter(self)
+        layout.addWidget(self.line_edit)
+
+        self.zoom_indicator = QLabel(self)
+        self.zoom_indicator.setObjectName("ZoomIndicator")
+        self.zoom_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zoom_indicator.setFixedWidth(52)
+        self.zoom_indicator.hide()
+        layout.addWidget(self.zoom_indicator)
+
+        self.apply_theme()
+
+    def eventFilter(self, watched, event):
+        if watched is self.line_edit and event.type() in {
+            QEvent.Type.FocusIn,
+            QEvent.Type.FocusOut,
+        }:
+            self.setProperty("focused", event.type() == QEvent.Type.FocusIn)
+            self.style().unpolish(self)
+            self.style().polish(self)
+            self.update()
+        return super().eventFilter(watched, event)
+
+    def set_zoom_factor(self, factor: float) -> None:
+        factor = float(factor)
+        percent = factor * 100
+        nearest_integer = round(percent)
+        if abs(percent - nearest_integer) <= 1e-6:
+            text = f"{nearest_integer}%"
+        else:
+            text = f"{percent:.1f}%"
+        self.zoom_indicator.setText(text)
+        self.zoom_indicator.setVisible(abs(factor - 1.0) > 1e-6)
+
+    def apply_theme(self) -> None:
+        self.setStyleSheet(
+            "QFrame#UrlBarFrame {"
+            f"  border:1px solid {PALETTE.border}; border-radius:6px;"
+            f"  background:{PALETTE.bg0}; }}"
+            "QFrame#UrlBarFrame[focused=\"true\"] {"
+            f"  border-color:{PALETTE.accent}; }}"
+            "QLineEdit#UrlBar {"
+            "  border:none; padding:0; font-size:12px; background:transparent;"
+            f"  color:{PALETTE.text_secondary};"
+            f"  selection-background-color:{PALETTE.accent}; }}"
+            "QLabel#ZoomIndicator {"
+            f"  border:none; border-left:1px solid {PALETTE.border_muted};"
+            "  padding:0 4px 0 8px; font-size:11px; font-weight:600;"
+            f"  background:transparent; color:{PALETTE.text_secondary}; }}"
+        )
 
 
 class BrowserUiMixin:
@@ -53,17 +125,6 @@ class BrowserUiMixin:
             f"QPushButton:hover:enabled  {{ background:{hover_bg};"
             f" border-color:{color}; }}"
             f"QPushButton:pressed:enabled{{ background:{pressed_bg}; }}"
-        )
-
-    @staticmethod
-    def _browser_url_style() -> str:
-        return (
-            "QLineEdit#UrlBar {"
-            f"  border:1px solid {PALETTE.border}; border-radius:6px;"
-            "  padding:0 10px; font-size:12px;"
-            f"  background:{PALETTE.bg0}; color:{PALETTE.text_secondary};"
-            f"  selection-background-color:{PALETTE.accent}; }}"
-            f"QLineEdit#UrlBar:focus {{ border-color:{PALETTE.accent}; }}"
         )
 
     @staticmethod
@@ -115,8 +176,8 @@ class BrowserUiMixin:
         for button_name in ("back_btn", "fwd_btn", "reload_btn"):
             if hasattr(self, button_name):
                 getattr(self, button_name).setStyleSheet(btn_style)
-        if hasattr(self, "url_edit"):
-            self.url_edit.setStyleSheet(self._browser_url_style())
+        if hasattr(self, "_url_bar"):
+            self._url_bar.apply_theme()
         if hasattr(self, "_browser_tab_row"):
             self._browser_tab_row.setStyleSheet(
                 f"QFrame {{ background:{PALETTE.surface}; border:none; }}"
@@ -180,15 +241,12 @@ class BrowserUiMixin:
 
         nav.addSpacing(4)
 
-        self.url_edit = QLineEdit()
-        self.url_edit.setObjectName("UrlBar")
+        self._url_bar = BrowserUrlBar()
+        self.url_edit = self._url_bar.line_edit
         self.url_edit.setPlaceholderText(self.tr("Paste or type a URL…"))
         self.url_edit.setCursor(Qt.CursorShape.IBeamCursor)
-        self.url_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.url_edit.setFixedHeight(34)
-        self.url_edit.setStyleSheet(self._browser_url_style())
         self.url_edit.returnPressed.connect(self._navigate_from_bar)
-        nav.addWidget(self.url_edit)
+        nav.addWidget(self._url_bar)
         nav.addSpacing(4)
 
         self.cast_btn = QPushButton()

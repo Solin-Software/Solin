@@ -784,6 +784,7 @@ class BrowserWidget(
         self._OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 
         self._build_ui()
+        self._url_bar.set_zoom_factor(self._browser_zoom_factor)
         self.setAcceptDrops(True)
         self._image_fetched_signal.connect(self._deliver_image)
 
@@ -887,6 +888,7 @@ class BrowserWidget(
             return
 
         self._browser_zoom_factor = factor
+        self._url_bar.set_zoom_factor(factor)
         self._zoom_settings.set_zoom_factor(factor)
         for index in range(self._stack.count()):
             tab = self._stack.widget(index)
