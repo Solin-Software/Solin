@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from solin.core.media.profile_store import ProfileMediaStore
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.network.browser_images import BrowserImageFetchService
+    from solin.core.network.browser_settings import BrowserZoomSettings
     from solin.core.rendering.document_conversion import DocumentConversionService
     from solin.ui.media_info import MediaInfoService
 
@@ -30,6 +31,7 @@ class LazyPageContext:
     lang_manager: Any
     notifications: Any
     profile_paths: ProfilePaths
+    browser_settings: BrowserZoomSettings
     media_cache_manager: MediaCacheManager
     profile_media_store: ProfileMediaStore
     jwpub_import_thread_factory: JwpubImportThreadFactory
@@ -132,6 +134,7 @@ class LazyPageController:
         self._browser_widget = BrowserWidget(
             context.lang_manager,
             profile_paths=context.profile_paths,
+            zoom_settings=context.browser_settings,
             download_service=context.browser_download_service_factory(),
             image_fetch_service=context.browser_image_fetch_service_factory(),
             aspect_ratio_provider=context.projection_aspect_ratio_provider,

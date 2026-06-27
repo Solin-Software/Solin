@@ -4,7 +4,12 @@ import ast
 import platform
 import tomllib
 
-from native_webview_widget.abi import EVENTS, REQUIRED_EXPORTS
+from native_webview_widget.abi import (
+    EVENTS,
+    REQUIRED_EXPORTS,
+    ZOOM_EXPORTS,
+    required_exports_for_system,
+)
 from scripts import validate_native_webview
 from tests._paths import REPO_ROOT
 
@@ -58,7 +63,13 @@ def test_native_webview_event_ids_are_stable():
         "download_requested": 6,
         "new_window_requested": 7,
         "script_message": 8,
+        "zoom_factor_changed": 9,
     }
+
+
+def test_zoom_exports_are_required_for_windows_and_optional_for_vendored_macos():
+    assert set(ZOOM_EXPORTS) <= set(required_exports_for_system("Windows"))
+    assert set(ZOOM_EXPORTS).isdisjoint(required_exports_for_system("Darwin"))
 
 
 def test_native_webview_binaries_have_expected_container_headers():

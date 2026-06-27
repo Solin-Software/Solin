@@ -14,6 +14,7 @@ from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
+from ..core.network.browser_settings import BrowserSettingsStore
 from ..core.projection.monitor_allocation import MonitorAllocationStore
 from ..core.remote.notification_settings import NotificationSettingsStore
 from ..core.foundation.settings_store import ProfileAppSettingsStore
@@ -24,6 +25,7 @@ from ..core.windowing.settings import WindowGeometrySettingsStore
 class MainWindowProfileSettings:
     app: ProfileAppSettingsStore
     media: MediaSettingsStore
+    browser: BrowserSettingsStore
     obs: OBSSettingsStore
     zoom: ZoomSettingsStore
     auto_share: AutoShareSettingsStore

@@ -2,8 +2,9 @@ import threading
 from pathlib import Path
 
 import solin.widgets.browser.widget as browser_widget
+from PySide6.QtWidgets import QApplication
 from solin.core.network.browser_images import BrowserImageFetchService
-from solin.widgets.browser.ui import BrowserUiMixin
+from solin.widgets.browser.ui import BrowserUiMixin, BrowserUrlBar
 
 
 def test_browser_widget_uses_ui_mixin():
@@ -20,6 +21,28 @@ def test_browser_widget_does_not_resolve_the_active_profile_globally():
 
     assert "core.profiles.manager" not in text
     assert "_get_pm" not in text
+
+
+def test_browser_url_bar_shows_only_non_default_zoom():
+    app = QApplication.instance() or QApplication([])
+    bar = BrowserUrlBar()
+
+    bar.set_zoom_factor(1.0)
+    assert bar.zoom_indicator.isHidden()
+
+    bar.set_zoom_factor(1.25)
+    assert not bar.zoom_indicator.isHidden()
+    assert bar.zoom_indicator.text() == "125%"
+
+    bar.set_zoom_factor(1.004)
+    assert not bar.zoom_indicator.isHidden()
+    assert bar.zoom_indicator.text() == "100.4%"
+
+    bar.set_zoom_factor(1.0)
+    assert bar.zoom_indicator.isHidden()
+
+    bar.deleteLater()
+    app.processEvents()
 
 
 def test_image_fetch_coordinator_drops_replaced_worker_result():

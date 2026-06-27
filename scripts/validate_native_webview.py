@@ -15,9 +15,9 @@ if str(SRC_ROOT) not in sys.path:
 from native_webview_widget.abi import (
     ABI_VERSION,
     MACOS_LIBRARY_NAMES,
-    REQUIRED_EXPORTS,
     WINDOWS_LIBRARY_NAME,
     native_library_candidates,
+    required_exports_for_system,
 )
 
 PACKAGE_DIR = SRC_ROOT / "native_webview_widget"
@@ -85,7 +85,8 @@ def validate_current_platform_exports(package_dir: Path, system: str | None = No
     except OSError as exc:
         return [f"Could not load current-platform native webview binary {library_path}: {exc}"]
 
-    missing_exports = [name for name in REQUIRED_EXPORTS if not hasattr(library, name)]
+    required_exports = required_exports_for_system(current_system)
+    missing_exports = [name for name in required_exports if not hasattr(library, name)]
     if missing_exports:
         return [
             f"{library_path} is missing native webview ABI export(s): "
@@ -137,7 +138,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(
         "native_webview_widget ABI "
-        f"v{ABI_VERSION} validated with {len(REQUIRED_EXPORTS)} required export(s)."
+        f"v{ABI_VERSION} validated with "
+        f"{len(required_exports_for_system(platform.system()))} required export(s)."
     )
     return 0
 

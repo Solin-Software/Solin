@@ -73,4 +73,4 @@ class NativePageAdapter:
         self._view.run_javascript(script)
 
     def zoomFactor(self) -> float:
-        return 1.0
+        return self._view.zoom_factor()

@@ -1,5 +1,7 @@
 import inspect
 
+from native_webview_widget import NativeWebView
+from native_webview_widget._backend import NativeBackend
 from solin.widgets.browser.tab import BrowserTab, ProjectableWebView
 import native_webview_widget.widget as native_widget
 
@@ -31,6 +33,51 @@ def test_projectable_webview_disables_hover_overlays_while_projecting():
     assert "window.__solinSetMediaHoverOverlaysEnabled(false);" in scripts[0]
     assert "window.__solinMediaHoverOverlaysEnabled = true;" in scripts[1]
     assert "window.__solinSetMediaHoverOverlaysEnabled(true);" in scripts[1]
+
+
+def test_projectable_webview_accepts_initial_shared_zoom_factor():
+    params = inspect.signature(ProjectableWebView).parameters
+
+    assert params["zoom_factor"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params["zoom_factor"].default == 1.0
+
+
+def test_projectable_webview_rejects_site_zoom_during_navigation():
+    source = inspect.getsource(ProjectableWebView._on_native_zoom_factor_changed)
+
+    assert "if self._navigation_in_progress:" in source
+    assert "super().set_zoom_factor(self._shared_zoom_factor)" in source
+    assert "self.user_zoom_factor_changed.emit(factor)" in source
+
+
+def test_native_webview_emits_only_effective_native_zoom_changes():
+    emitted = []
+
+    class SignalDouble:
+        def emit(self, factor):
+            emitted.append(factor)
+
+    class ViewDouble:
+        _zoom_factor = 1.0
+        zoomFactorChanged = SignalDouble()
+
+        def _validated_zoom_factor(self, factor):
+            return NativeWebView._validated_zoom_factor(factor)
+
+    view = ViewDouble()
+
+    NativeWebView._handle_native_event(
+        view,
+        NativeBackend.EVENT_ZOOM_FACTOR_CHANGED,
+        "1.000000",
+    )
+    NativeWebView._handle_native_event(
+        view,
+        NativeBackend.EVENT_ZOOM_FACTOR_CHANGED,
+        "1.250000",
+    )
+
+    assert emitted == [1.25]
 
 
 def test_native_webview_allows_native_ancestors_for_webview_z_order():

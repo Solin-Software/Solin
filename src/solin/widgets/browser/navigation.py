@@ -21,6 +21,7 @@ class BrowserNavigationMixin:
             self._session_data_root,
             self.lang,
             self,
+            zoom_factor=self._browser_zoom_factor,
             overlay_js=self._OVERLAY_JS,
         )
 
@@ -57,6 +58,9 @@ class BrowserNavigationMixin:
         )
         tab.view.frameStreamFailed.connect(
             lambda error, t=tab: self._on_native_frame_stream_failed(t, error)
+        )
+        tab.view.user_zoom_factor_changed.connect(
+            lambda factor, t=tab: self._on_browser_zoom_factor_changed(t, factor)
         )
         self._apply_browser_aspect_to_tab(tab)
 

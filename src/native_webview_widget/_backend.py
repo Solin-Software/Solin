@@ -16,6 +16,7 @@ from .abi import (
     EVENT_READY,
     EVENT_SCRIPT_MESSAGE,
     EVENT_TITLE_CHANGED,
+    EVENT_ZOOM_FACTOR_CHANGED,
     native_library_candidates,
 )
 
@@ -104,6 +105,7 @@ class NativeBackend:
     EVENT_DOWNLOAD_REQUESTED = EVENT_DOWNLOAD_REQUESTED
     EVENT_NEW_WINDOW_REQUESTED = EVENT_NEW_WINDOW_REQUESTED
     EVENT_SCRIPT_MESSAGE = EVENT_SCRIPT_MESSAGE
+    EVENT_ZOOM_FACTOR_CHANGED = EVENT_ZOOM_FACTOR_CHANGED
 
     def __init__(self) -> None:
         self._system = platform.system()
@@ -122,7 +124,15 @@ class NativeBackend:
         self._callbacks: dict[int, Any] = {}
         self._policy_callbacks: dict[int, Any] = {}
         self._capture_callbacks: dict[int, Any] = {}
+        self._zoom_supported = all(
+            hasattr(self._lib, name)
+            for name in ("nwv_set_zoom_factor", "nwv_get_zoom_factor")
+        )
         self._configure_signatures()
+
+    @property
+    def zoom_supported(self) -> bool:
+        return self._zoom_supported
 
     def create(self, parent_handle: int, options: NativeOptions, callback: EventCallback) -> int:
         native_options, keepalive = self._build_options(options)
@@ -281,6 +291,21 @@ class NativeBackend:
     def can_go_forward(self, handle: int) -> bool:
         return bool(self._lib.nwv_can_go_forward(ctypes.c_void_p(handle)))
 
+    def set_zoom_factor(self, handle: int, factor: float) -> bool:
+        if not self._zoom_supported:
+            return False
+        return bool(
+            self._lib.nwv_set_zoom_factor(
+                ctypes.c_void_p(handle),
+                ctypes.c_double(factor),
+            )
+        )
+
+    def get_zoom_factor(self, handle: int) -> float:
+        if not self._zoom_supported:
+            return 0.0
+        return float(self._lib.nwv_get_zoom_factor(ctypes.c_void_p(handle)))
+
     def _configure_signatures(self) -> None:
         self._lib.nwv_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         self._lib.nwv_create.restype = ctypes.c_void_p
@@ -317,6 +342,11 @@ class NativeBackend:
         ]
         self._lib.nwv_stop_frame_stream.argtypes = [ctypes.c_void_p]
         self._lib.nwv_set_cookie.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        if self._zoom_supported:
+            self._lib.nwv_set_zoom_factor.argtypes = [ctypes.c_void_p, ctypes.c_double]
+            self._lib.nwv_set_zoom_factor.restype = ctypes.c_int
+            self._lib.nwv_get_zoom_factor.argtypes = [ctypes.c_void_p]
+            self._lib.nwv_get_zoom_factor.restype = ctypes.c_double
 
         for name in (
             "nwv_navigate",

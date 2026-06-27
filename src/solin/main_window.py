@@ -204,6 +204,7 @@ class MainWindow(QMainWindow):
         self._auto_key_settings = profile_settings_bundle.auto_key
         self._camera_settings = profile_settings_bundle.camera
         self._media_settings = profile_settings_bundle.media
+        self._browser_settings = profile_settings_bundle.browser
         self._projection_playback_settings = profile_settings_bundle.projection_playback
         self._meeting_schedule_settings = profile_settings_bundle.meeting_schedule
         self._watched_folder_settings = profile_settings_bundle.watched_folder
@@ -367,6 +368,7 @@ class MainWindow(QMainWindow):
                 camera_settings=self._camera_settings,
                 auto_key_settings=self._auto_key_settings,
                 media_settings=self._media_settings,
+                browser_settings=self._browser_settings,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
                 yeartext_settings=self._yeartext_settings,

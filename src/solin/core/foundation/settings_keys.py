@@ -25,6 +25,7 @@ class SettingsKey:
     PLAYBACK_VOLUME: Final = "volume"
     IMAGE_MATCH_PROJECTION_ASPECT: Final = "image_projection/match_projection_aspect"
     IMAGE_CONSTRAIN_TO_FRAME: Final = "image_projection/constrain_to_frame"
+    BROWSER_ZOOM_FACTOR: Final = "browser/zoom_factor"
 
     AUTO_DOWNLOAD_ON_PLAY: Final = "auto_download_on_play"
     MEETINGS_AUTO_DOWNLOAD: Final = "meetings_auto_download"

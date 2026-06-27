@@ -61,6 +61,9 @@ def test_native_adapters_preserve_old_browser_surface():
         def run_javascript(self, script):
             self.scripts.append(script)
 
+        def zoom_factor(self):
+            return 1.25
+
     view = _View()
 
     assert UrlValue("https://example.test").toString() == "https://example.test"
@@ -68,7 +71,7 @@ def test_native_adapters_preserve_old_browser_surface():
     assert HistoryAdapter(view).canGoForward() is False
     NativePageAdapter(view).runJavaScript("1 + 1")
     assert view.scripts == ["1 + 1"]
-    assert NativePageAdapter(view).zoomFactor() == 1.0
+    assert NativePageAdapter(view).zoomFactor() == 1.25
 
 
 def test_browser_widget_uses_shared_cursor_spotlight_scripts():

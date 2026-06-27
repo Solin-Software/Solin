@@ -28,12 +28,14 @@ class ProjectableWebView(NativeWebView):
     loadFinished = Signal(bool)
     new_tab_requested = Signal(str)
     download_requested = Signal(str)
+    user_zoom_factor_changed = Signal(float)
 
     def __init__(
         self,
         *,
         session_id: str,
         session_data_root: Path,
+        zoom_factor: float = 1.0,
         overlay_js: str = "",
         parent=None,
     ):
@@ -49,6 +51,9 @@ class ProjectableWebView(NativeWebView):
         self._current_title = ""
         self._projection_active = False
         self._overlay_installed = False
+        self._navigation_in_progress = False
+        self._shared_zoom_factor = zoom_factor
+        self.set_zoom_factor(zoom_factor)
 
         self.set_download_policy(lambda _url: False)
         self.set_devtools_enabled(False)
@@ -61,6 +66,7 @@ class ProjectableWebView(NativeWebView):
         self.navigationFinished.connect(self._on_navigation_finished)
         self.navigationFailed.connect(self._on_navigation_failed)
         self.titleChanged.connect(self._on_title_changed)
+        self.zoomFactorChanged.connect(self._on_native_zoom_factor_changed)
         self.newWindowRequested.connect(
             lambda url: self.new_tab_requested.emit(url or "https://www.google.com")
         )
@@ -72,12 +78,14 @@ class ProjectableWebView(NativeWebView):
         self._push_overlay_runtime_config()
 
     def _on_navigation_started(self, url: str) -> None:
+        self._navigation_in_progress = True
         if url:
             self._current_url = url
             self.urlChanged.emit(UrlValue(url))
         self.loadProgress.emit(10)
 
     def _on_navigation_finished(self, url: str) -> None:
+        self._navigation_in_progress = False
         if url:
             self._current_url = url
             self.urlChanged.emit(UrlValue(url))
@@ -86,11 +94,23 @@ class ProjectableWebView(NativeWebView):
         self._push_overlay_runtime_config()
 
     def _on_navigation_failed(self, _message: str) -> None:
+        self._navigation_in_progress = False
         self.loadProgress.emit(100)
         self.loadFinished.emit(False)
 
     def _on_title_changed(self, title: str) -> None:
         self._current_title = title or ""
+
+    def _on_native_zoom_factor_changed(self, factor: float) -> None:
+        if self._navigation_in_progress:
+            super().set_zoom_factor(self._shared_zoom_factor)
+            return
+        self._shared_zoom_factor = factor
+        self.user_zoom_factor_changed.emit(factor)
+
+    def set_zoom_factor(self, factor: float) -> None:
+        super().set_zoom_factor(factor)
+        self._shared_zoom_factor = self._zoom_factor
 
     def _on_script_message(self, message: str) -> None:
         try:
@@ -225,6 +245,7 @@ class BrowserTab(QWidget):
         lang_manager,
         parent=None,
         *,
+        zoom_factor: float = 1.0,
         overlay_js: str = "",
     ):
         super().__init__(parent)
@@ -235,6 +256,7 @@ class BrowserTab(QWidget):
         self.view = ProjectableWebView(
             session_id=session_id,
             session_data_root=session_data_root,
+            zoom_factor=zoom_factor,
             overlay_js=overlay_js,
             parent=self._view_frame,
         )

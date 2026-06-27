@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Callable
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
@@ -11,6 +12,8 @@ from ._backend import NativeBackend, NativeCookie, NativeOptions, NativeWebViewE
 
 
 DownloadPolicy = Callable[[str], bool]
+MIN_ZOOM_FACTOR = 0.25
+MAX_ZOOM_FACTOR = 5.0
 
 
 class _EventBridge(QtCore.QObject):
@@ -32,6 +35,7 @@ class NativeWebView(QtWidgets.QWidget):
     captureFailed = QtCore.Signal(int, str)
     frameStreamFrame = QtCore.Signal(bytes)
     frameStreamFailed = QtCore.Signal(str)
+    zoomFactorChanged = QtCore.Signal(float)
 
     def __init__(
         self,
@@ -63,6 +67,8 @@ class NativeWebView(QtWidgets.QWidget):
         self._pending_document_scripts: list[str] = []
         self._pending_default_context_menu_enabled: bool | None = None
         self._pending_devtools_enabled: bool | None = None
+        self._pending_zoom_factor: float | None = None
+        self._zoom_factor = 1.0
         self._next_capture_request_id = 1
         self._download_policy: DownloadPolicy | None = None
         resolved_session_id = session_id or "default"
@@ -177,6 +183,27 @@ document.addEventListener("contextmenu", function(event) {
             return
         if not self._backend.set_devtools_enabled(self._handle, enabled):
             raise NativeWebViewError("Failed to update devtools setting.")
+
+    def set_zoom_factor(self, factor: float) -> None:
+        factor = self._validated_zoom_factor(factor)
+        if not self._backend.zoom_supported:
+            self._pending_zoom_factor = None
+            self._zoom_factor = factor
+            return
+        if not self._created or not self._native_ready:
+            self._pending_zoom_factor = factor
+            self._zoom_factor = factor
+            return
+        if not self._backend.set_zoom_factor(self._handle, factor):
+            raise NativeWebViewError("Failed to update native zoom factor.")
+        self._zoom_factor = factor
+
+    def zoom_factor(self) -> float:
+        if self._backend.zoom_supported and self._created and self._native_ready:
+            factor = self._backend.get_zoom_factor(self._handle)
+            if MIN_ZOOM_FACTOR <= factor <= MAX_ZOOM_FACTOR:
+                self._zoom_factor = factor
+        return self._zoom_factor
 
     def capture_frame(self) -> int:
         """Capture the visible webview viewport as PNG bytes.
@@ -381,6 +408,20 @@ document.addEventListener("contextmenu", function(event) {
         elif event_type == NativeBackend.EVENT_SCRIPT_MESSAGE:
             self.scriptMessageReceived.emit(message)
             self._handle_script_message(message)
+        elif event_type == NativeBackend.EVENT_ZOOM_FACTOR_CHANGED:
+            try:
+                factor = self._validated_zoom_factor(float(message))
+            except (TypeError, ValueError):
+                return
+            changed = not math.isclose(
+                self._zoom_factor,
+                factor,
+                rel_tol=0.0,
+                abs_tol=1e-6,
+            )
+            self._zoom_factor = factor
+            if changed:
+                self.zoomFactorChanged.emit(factor)
 
     def _handle_policy_request(self, event_type: int, message: str) -> bool:
         if event_type == NativeBackend.EVENT_DOWNLOAD_REQUESTED:
@@ -433,6 +474,14 @@ document.addEventListener("contextmenu", function(event) {
             self._pending_devtools_enabled = None
             if not self._backend.set_devtools_enabled(self._handle, enabled):
                 self.navigationFailed.emit("Failed to apply devtools setting.")
+        if self._pending_zoom_factor is not None:
+            factor = self._pending_zoom_factor
+            self._pending_zoom_factor = None
+            if self._backend.zoom_supported and not self._backend.set_zoom_factor(
+                self._handle,
+                factor,
+            ):
+                self.navigationFailed.emit("Failed to apply native zoom factor.")
 
     def _handle_script_message(self, message: str) -> None:
         try:
@@ -441,6 +490,15 @@ document.addEventListener("contextmenu", function(event) {
             return
         if isinstance(payload, dict) and payload.get("type") == "contextmenu":
             self.contextMenuRequested.emit(payload)
+
+    @staticmethod
+    def _validated_zoom_factor(factor: float) -> float:
+        factor = float(factor)
+        if not math.isfinite(factor) or not MIN_ZOOM_FACTOR <= factor <= MAX_ZOOM_FACTOR:
+            raise ValueError(
+                f"Zoom factor must be between {MIN_ZOOM_FACTOR} and {MAX_ZOOM_FACTOR}."
+            )
+        return factor
 
     def _capture_png(self, x: int, y: int, width: int, height: int) -> int:
         self._require_created()
