@@ -6,6 +6,7 @@ from solin.controllers.projection_window_controller import (
     ProjectionWindowController,
 )
 from solin.core.projection.application import ProjectionSession
+from solin.core.timer.models import MediaCountdownPresentation
 
 
 class _ProjectionIntegrationsStub:
@@ -154,8 +155,8 @@ class _ProjectionWindowStub:
     def show_sermon_theme(self, text, subtitle):
         self.sermon_themes.append((text, subtitle))
 
-    def show_timer(self, remaining, total):
-        self.timers.append((remaining, total))
+    def show_timer(self, remaining, total, presentation):
+        self.timers.append((remaining, total, presentation))
 
 
 def _patch_projection_window(monkeypatch):
@@ -422,13 +423,17 @@ def test_restore_state_to_window_applies_visual_states():
         "type": "timer",
         "target_dt": QDateTime.currentDateTime().addSecs(60),
         "total": 120,
+        "presentation": MediaCountdownPresentation.YEARLY_TEXT.value,
     })
     controller.restore_state_to_window(win)
 
     assert win.video_started is True
     assert win.images == [b"image"]
     assert win.sermon_themes == [("Theme", "Sub")]
-    assert win.timers and win.timers[0][1] == 120
+    assert win.timers and win.timers[0][1:] == (
+        120,
+        MediaCountdownPresentation.YEARLY_TEXT,
+    )
 
 
 def test_on_monitor_manager_requested_populates_active_screens(monkeypatch):

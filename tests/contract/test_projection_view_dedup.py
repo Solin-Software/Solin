@@ -25,6 +25,7 @@ SHARED_METHODS = [
     "show_timer",
     "update_timer",
     "set_timer_blink",
+    "_clear_timer_presentation",
     "show_sermon_theme",
     "update_sermon_theme",
     "set_image_transform",

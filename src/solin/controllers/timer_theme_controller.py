@@ -7,6 +7,7 @@ from typing import Any, cast
 from PySide6.QtCore import QDateTime
 
 from ..core.foundation.time_utils import ceil_remaining_seconds
+from ..core.timer.models import MediaCountdownPresentation
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,8 +43,9 @@ class TimerThemeController:
         self._handlers = handlers
         self._session = context.projection_session
 
-    def start_timer(self, target_dt: QDateTime) -> None:
+    def start_timer(self, target_dt: QDateTime, presentation_value: str) -> None:
         context = self._context
+        presentation = MediaCountdownPresentation(presentation_value)
         self._session.set_tab_projection_active(False)
         self._stop_active_sources()
         context.projection_bar.set_playlist([])
@@ -52,14 +54,19 @@ class TimerThemeController:
         remaining = self._remaining_seconds(target_dt)
         total = max(1, remaining)
         for projection_window in context.projection_windows():
-            projection_window.show_timer(remaining, total)
+            projection_window.show_timer(remaining, total, presentation)
 
         self._handlers.update_projection_status(
             True,
             f"Cronômetro → {target_dt.time().toString('HH:mm')}",
             auto_keys_media=False,
         )
-        self._session.set_state({"type": "timer", "target_dt": target_dt, "total": total})
+        self._session.set_state({
+            "type": "timer",
+            "target_dt": target_dt,
+            "total": total,
+            "presentation": presentation.value,
+        })
 
     def on_timer_update_proj(self, remaining: int, total: int) -> None:
         for projection_window in self._context.projection_windows():

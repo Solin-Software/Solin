@@ -6,6 +6,7 @@ from solin.controllers.timer_theme_controller import (
     TimerThemeHandlers,
 )
 from solin.core.projection.application import ProjectionSession
+from solin.core.timer.models import MediaCountdownPresentation
 
 
 class _NavigationStub:
@@ -55,8 +56,8 @@ class _ProjectionWindowStub:
         self.blinks = []
         self.themes = []
 
-    def show_timer(self, remaining, total):
-        self.timers.append((remaining, total))
+    def show_timer(self, remaining, total, presentation):
+        self.timers.append((remaining, total, presentation))
 
     def update_timer(self, remaining, total):
         self.timer_updates.append((remaining, total))
@@ -116,7 +117,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     controller._remaining_seconds = lambda _target_dt: 42
     target_dt = QDateTime.currentDateTime().addSecs(60)
 
-    controller.start_timer(target_dt)
+    controller.start_timer(target_dt, MediaCountdownPresentation.YEARLY_TEXT.value)
 
     assert window.projection_session.tab_projection_active is False
     assert window._navigation.stopped == 1
@@ -126,13 +127,14 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     assert window.proj_bar.playlists == [[]]
     assert window.proj_bar.timers == [target_dt]
     assert [projection_window.timers for projection_window in window.windows] == [
-        [(42, 42)],
-        [(42, 42)],
+        [(42, 42, MediaCountdownPresentation.YEARLY_TEXT)],
+        [(42, 42, MediaCountdownPresentation.YEARLY_TEXT)],
     ]
     assert window.projection_session.state == {
         "type": "timer",
         "target_dt": target_dt,
         "total": 42,
+        "presentation": MediaCountdownPresentation.YEARLY_TEXT.value,
     }
     args, kwargs = window._projection_integrations.statuses[0]
     assert args[0] is True

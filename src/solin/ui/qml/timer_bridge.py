@@ -24,6 +24,7 @@ from solin.core.timer.application import TimerSession
 from solin.core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
     CLOCK_MODE_OPTIONS,
+    MEDIA_COUNTDOWN_PRESENTATION_OPTIONS,
     PART_TIMER_DISPLAY_OPTIONS,
     ClockConfig,
     MeetingType,
@@ -173,7 +174,7 @@ class TimerBridge(QObject):
     weekShift = Signal(int)
 
     # Relayed to TimerWidget.project_timer_signal for the media-countdown mode.
-    mediaCountdownRequested = Signal(QDateTime)
+    mediaCountdownRequested = Signal(QDateTime, str)
     pointerEntered = Signal()
     pointerExited = Signal()
 
@@ -452,8 +453,14 @@ class TimerBridge(QObject):
 
     # ── Exposed: media countdown mode ──────────────────────────────────────
 
-    @Slot(int, int)
-    def startCountdownToTime(self, hour: int, minute: int) -> None:
+    @staticmethod
+    def _media_countdown_presentation(index: int) -> str:
+        if 0 <= index < len(MEDIA_COUNTDOWN_PRESENTATION_OPTIONS):
+            return MEDIA_COUNTDOWN_PRESENTATION_OPTIONS[index].value
+        return MEDIA_COUNTDOWN_PRESENTATION_OPTIONS[0].value
+
+    @Slot(int, int, int)
+    def startCountdownToTime(self, hour: int, minute: int, presentation_index: int) -> None:
         from PySide6.QtCore import QDate, QTime
         selected = QTime(int(hour), int(minute), 0)
         now = QTime.currentTime()
@@ -462,12 +469,18 @@ class TimerBridge(QObject):
         else:
             target = QDateTime.currentDateTime()
             target.setTime(selected)
-        self.mediaCountdownRequested.emit(target)
+        self.mediaCountdownRequested.emit(
+            target,
+            self._media_countdown_presentation(int(presentation_index)),
+        )
 
-    @Slot(int)
-    def startCountdownMinutes(self, minutes: int) -> None:
+    @Slot(int, int)
+    def startCountdownMinutes(self, minutes: int, presentation_index: int) -> None:
         target = QDateTime.currentDateTime().addSecs(int(minutes) * 60)
-        self.mediaCountdownRequested.emit(target)
+        self.mediaCountdownRequested.emit(
+            target,
+            self._media_countdown_presentation(int(presentation_index)),
+        )
 
     # ── Exposed: QML cursor bridge ─────────────────────────────────────────
 

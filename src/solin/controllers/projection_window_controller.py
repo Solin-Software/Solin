@@ -9,6 +9,7 @@ from PySide6.QtCore import QDateTime, QTimer
 
 from ..ui.screens import ScreenManager
 from ..core.projection.application import ProjectionSession
+from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
 
@@ -450,7 +451,8 @@ class ProjectionWindowController:
             remaining = now.secsTo(state["target_dt"])
             total = state.get("total", max(1, remaining))
             if remaining > 0:
-                win.show_timer(remaining, total)
+                presentation = MediaCountdownPresentation(state["presentation"])
+                win.show_timer(remaining, total, presentation)
 
     @staticmethod
     def _replay_transform(win, state) -> None:

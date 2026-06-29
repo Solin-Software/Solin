@@ -27,9 +27,8 @@ from solin.styles.theme import PALETTE
 class TimerWidget(QWidget):
     """QML host for the advanced timer / media-countdown tab."""
 
-    # Media-window countdown mode emits a target QDateTime that MainWindow
-    # projects through the timer-theme controller.
-    project_timer_signal = Signal(QDateTime)
+    # Media-window countdown mode emits the target and selected presentation.
+    project_timer_signal = Signal(QDateTime, str)
 
     def __init__(
         self,

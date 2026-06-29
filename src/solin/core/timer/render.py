@@ -20,6 +20,26 @@ from .models import ClockConfig, ClockMode, PartState, PartTimerDisplay, TimerSn
 _SECONDS_PER_ANALOG_LAP = 3600.0
 
 
+def format_fixed_countdown(remaining_seconds: int, total_seconds: int) -> str:
+    """Format a media countdown without changing its field shape while it runs.
+
+    A countdown that starts below one hour always remains ``MM:SS``. A longer
+    countdown always keeps its hour field, including leading zeroes after it
+    drops below one hour.
+    """
+    remaining = max(0, int(remaining_seconds))
+    total = max(1, int(total_seconds))
+    hours, remainder = divmod(remaining, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if total < 3600:
+        return f"{minutes:02d}:{seconds:02d}"
+
+    initial_hours = total // 3600
+    hour_width = max(2, len(str(initial_hours)))
+    return f"{hours:0{hour_width}d}:{minutes:02d}:{seconds:02d}"
+
+
 def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str, str]:
     """Return (primary_text, seconds_text, ampm_text) for the wall clock."""
     lt = time.localtime(epoch)

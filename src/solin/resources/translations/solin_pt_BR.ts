@@ -1443,6 +1443,21 @@ com %2 arquivo(s)!</translation>
         <translation>+1 min</translation>
     </message>
     <message>
+        <location filename="../src/solin/qml/MediaCountdownPage.qml" line="120"/>
+        <source>Display on media window</source>
+        <translation>Exibir na janela de mídia</translation>
+    </message>
+    <message>
+        <location filename="../src/solin/qml/MediaCountdownPage.qml" line="131"/>
+        <source>Circular timer</source>
+        <translation>Cronômetro circular</translation>
+    </message>
+    <message>
+        <location filename="../src/solin/qml/MediaCountdownPage.qml" line="131"/>
+        <source>Annual text</source>
+        <translation>Texto do ano</translation>
+    </message>
+    <message>
         <location filename="../src/solin/qml/MediaCountdownPage.qml" line="116"/>
         <source>Start countdown to this time</source>
         <translation>Iniciar contagem regressiva até este horário</translation>

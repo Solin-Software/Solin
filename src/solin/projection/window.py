@@ -1,11 +1,14 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QStackedWidget, QGraphicsOpacityEffect
 from PySide6.QtCore import Qt, Slot, Signal, QSize, QRect, QRectF, QByteArray, QPropertyAnimation, QEasingCurve, QTimer, QPoint, QEvent
-from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QFontMetrics, QGuiApplication, QMouseEvent, QKeyEvent
+from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QFontMetrics, QFontMetricsF, QGuiApplication, QMouseEvent, QKeyEvent
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtMultimedia import QVideoFrame
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.rendering.fonts import FontManager
+from ..core.timer.models import MediaCountdownPresentation
+from ..core.timer.render import format_fixed_countdown
+from ..ui.fonts import timer_digit_font_family
 
 _WT_CLEAR_TEXT = "Wt-ClearText-Bold"
 
@@ -57,6 +60,9 @@ class YearlyTextWidget(QWidget):
         self._quote = ""
         self._reference = ""
         self._api_code = ""
+        self._countdown_remaining: int | None = None
+        self._countdown_total = 1
+        self._countdown_blink = False
 
         # Kick off the font download/registration in background.
         self._font_manager.font_ready.connect(self._on_font_ready)
@@ -73,11 +79,28 @@ class YearlyTextWidget(QWidget):
         self._api_code = api_code
         self.update()
 
+    def set_countdown(self, remaining: int, total: int) -> None:
+        self._countdown_remaining = max(0, int(remaining))
+        self._countdown_total = max(1, int(total))
+        self.update()
+
+    def clear_countdown(self) -> None:
+        if self._countdown_remaining is None:
+            return
+        self._countdown_remaining = None
+        self._countdown_blink = False
+        self.update()
+
+    def set_countdown_blink(self, on: bool) -> None:
+        self._countdown_blink = bool(on)
+        if self._countdown_remaining is not None:
+            self.update()
+
     def paintEvent(self, event):
         if not self._quote and not self._reference:
-            # Nothing set: just paint black
             painter = QPainter(self)
             painter.fillRect(self.rect(), QColor(0, 0, 0))
+            self._paint_countdown(painter)
             painter.end()
             return
 
@@ -111,7 +134,7 @@ class YearlyTextWidget(QWidget):
         # Proporções
         max_base_size = max(12, int(w * 0.040))
         max_text_w = int(w * 0.70) 
-        max_text_h = int(h * 0.80)
+        max_text_h = int(h * (0.60 if self._countdown_remaining is not None else 0.80))
 
         # Laço para encontrar o tamanho perfeito
         best_size = 8
@@ -139,7 +162,8 @@ class YearlyTextWidget(QWidget):
         ref_spacing = int(best_size * 0.45)  
         block_h = total_lines * line_height + ref_spacing
 
-        start_y = (h - block_h) // 2
+        text_region_h = int(h * 0.70) if self._countdown_remaining is not None else h
+        start_y = (text_region_h - block_h) // 2
 
         # Desenhar o texto (Branco)
         painter.setPen(QColor(255, 255, 255))
@@ -180,7 +204,54 @@ class YearlyTextWidget(QWidget):
         pix_painter.end()
         painter.drawPixmap(badge_x, badge_y, jw_pixmap)
 
+        self._paint_countdown(painter)
         painter.end()
+
+    def _paint_countdown(self, painter: QPainter) -> None:
+        if self._countdown_remaining is None:
+            return
+
+        width = self.width()
+        height = self.height()
+        font_size = max(18, int(min(width, height) * 0.075))
+        font = QFont()
+        font.setFamilies([timer_digit_font_family(), "Consolas", "monospace"])
+        font.setPixelSize(font_size)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setKerning(False)
+
+        text = format_fixed_countdown(
+            self._countdown_remaining,
+            self._countdown_total,
+        )
+        metrics = QFontMetricsF(font)
+        text_width = max(1.0, metrics.horizontalAdvance(text))
+        text_height = metrics.height()
+        bar_height = max(2, int(font_size * 0.06))
+        gap = max(4, int(font_size * 0.16))
+        bottom_margin = max(10, int(height * 0.065))
+        bar_y = height - bottom_margin - bar_height
+        text_rect = QRectF(
+            (width - text_width) / 2.0,
+            bar_y - gap - text_height,
+            text_width,
+            text_height,
+        )
+
+        active_color = QColor("#ef4444") if self._countdown_blink else QColor("#f8fafc")
+        painter.save()
+        painter.setFont(font)
+        painter.setPen(active_color)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, text)
+
+        bar_x = (width - text_width) / 2.0
+        painter.fillRect(QRectF(bar_x, bar_y, text_width, bar_height), QColor("#3f3f46"))
+        progress = min(1.0, max(0.0, self._countdown_remaining / self._countdown_total))
+        painter.fillRect(
+            QRectF(bar_x, bar_y, text_width * progress, bar_height),
+            active_color,
+        )
+        painter.restore()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IdleMediaWidget — replaces the yeartext when a custom idle media is set
@@ -695,6 +766,7 @@ class BaseProjectionView(QWidget):
         # Explicit state flag — never rely on currentIndex for logic
         self._is_showing_media: bool = False
         self._has_idle_media: bool = False   # True when custom idle is loaded
+        self._timer_presentation: MediaCountdownPresentation | None = None
 
         # Guard: only True while a *video* (not audio) is expected.
         # Set to True only by begin_video() / update_frame() explicitly called
@@ -711,6 +783,7 @@ class BaseProjectionView(QWidget):
     def show_sermon_theme(self, text: str, subtitle: str = "") -> None:
         """Switch to sermon-theme slide with a fade-in."""
         self._stop_all_anims()
+        self._clear_timer_presentation()
         self._accept_video_frames = False
         self._is_showing_media = False
         self._theme_widget.set_theme(text, subtitle)
@@ -733,26 +806,63 @@ class BaseProjectionView(QWidget):
 
     # ── Timer API ─────────────────────────────────────────────────────────
 
-    def show_timer(self, remaining: int, total: int) -> None:
-        """Switch to timer page and display the countdown with fade-in."""
+    def show_timer(
+        self,
+        remaining: int,
+        total: int,
+        presentation: MediaCountdownPresentation,
+    ) -> None:
+        """Display the countdown using the selected media-window presentation."""
         self._stop_all_anims()
+        self._clear_timer_presentation()
+        self._timer_presentation = presentation
         self._accept_video_frames = False
         self._is_showing_media = False
-        self._proj_timer.update_data(remaining, total)
-        self._timer_opacity.setOpacity(0.0)
-        self._stack.setCurrentIndex(self._PAGE_TIMER)
-        self._timer_anim.setStartValue(0.0)
-        self._timer_anim.setEndValue(1.0)
-        self._timer_anim.start()
+
+        if presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            self._yearly_widget.set_countdown(remaining, total)
+            self._yearly_opacity.setOpacity(0.0)
+            self._stack.setCurrentIndex(self._PAGE_YEARLY)
+            self._yearly_anim.setStartValue(0.0)
+            self._yearly_anim.setEndValue(1.0)
+            self._yearly_anim.start()
+        else:
+            self._proj_timer.update_data(remaining, total)
+            self._timer_opacity.setOpacity(0.0)
+            self._stack.setCurrentIndex(self._PAGE_TIMER)
+            self._timer_anim.setStartValue(0.0)
+            self._timer_anim.setEndValue(1.0)
+            self._timer_anim.start()
 
     def update_timer(self, remaining: int, total: int) -> None:
         """Update countdown (called every second while timer mode is active)."""
-        if self._stack.currentIndex() == self._PAGE_TIMER:
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._yearly_widget.set_countdown(remaining, total)
+        elif (
+            self._timer_presentation is MediaCountdownPresentation.CIRCULAR
+            and self._stack.currentIndex() == self._PAGE_TIMER
+        ):
             self._proj_timer.update_data(remaining, total)
 
     def set_timer_blink(self, on: bool) -> None:
-        if self._stack.currentIndex() == self._PAGE_TIMER:
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._yearly_widget.set_countdown_blink(on)
+        elif (
+            self._timer_presentation is MediaCountdownPresentation.CIRCULAR
+            and self._stack.currentIndex() == self._PAGE_TIMER
+        ):
             self._proj_timer.set_blink(on)
+
+    def _clear_timer_presentation(self) -> None:
+        self._timer_presentation = None
+        self._yearly_widget.clear_countdown()
+        self._proj_timer.set_blink(False)
 
     # ── Media / image API ─────────────────────────────────────────────────
 
@@ -764,6 +874,7 @@ class BaseProjectionView(QWidget):
         single authoritative place that re-enables update_frame(); every other
         path (clear, show_image*, show_timer, show_sermon_theme) disables it.
         """
+        self._clear_timer_presentation()
         self._accept_video_frames = True
 
     @Slot(QVideoFrame)
@@ -804,6 +915,7 @@ class BaseProjectionView(QWidget):
     def _show_image(self, image: QImage, *, cache_pixmap: bool = True) -> None:
         """Route a static QImage to the display widget."""
         # Static image — video pipeline must not overwrite it.
+        self._clear_timer_presentation()
         self._accept_video_frames = False
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
         self.display_label.set_image(image)
@@ -851,6 +963,7 @@ class BaseProjectionView(QWidget):
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
+        self._clear_timer_presentation()
 
         # Already on the correct idle page and nothing animating — do nothing
         # (avoids flicker on audio-only clips).
@@ -918,7 +1031,11 @@ class BaseProjectionView(QWidget):
         if currently on the plain yeartext idle page, fades over to it.
         """
         self._has_idle_media = True
-        if self._stack.currentIndex() == self._PAGE_YEARLY and not self._is_showing_media:
+        if (
+            self._timer_presentation is None
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+            and not self._is_showing_media
+        ):
             self._stop_all_anims()
             self._switch_to_idle_with_fade()
 

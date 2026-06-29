@@ -40,6 +40,13 @@ class PartTimerDisplay(str, Enum):
     CLOCK_TIMER = "clock_timer"
 
 
+class MediaCountdownPresentation(str, Enum):
+    """Visual used for the countdown projected through the media windows."""
+
+    CIRCULAR = "circular"
+    YEARLY_TEXT = "yearly_text"
+
+
 class MeetingType(str, Enum):
     MIDWEEK = "midweek"
     WEEKEND = "weekend"
@@ -81,6 +88,11 @@ PART_TIMER_DISPLAY_OPTIONS: tuple[PartTimerDisplay, ...] = (
     PartTimerDisplay.TIMER,
     PartTimerDisplay.CLOCK,
     PartTimerDisplay.CLOCK_TIMER,
+)
+
+MEDIA_COUNTDOWN_PRESENTATION_OPTIONS: tuple[MediaCountdownPresentation, ...] = (
+    MediaCountdownPresentation.CIRCULAR,
+    MediaCountdownPresentation.YEARLY_TEXT,
 )
 
 # Sections whose parts must keep a fixed section total (redistribution applies).
