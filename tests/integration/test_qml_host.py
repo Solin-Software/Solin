@@ -203,3 +203,48 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False
+
+
+def test_image_framing_thumbnail_preserves_pan_until_geometry_is_ready() -> None:
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+        image_providers={
+            "playlistthumbs": PlaylistThumbnailProvider({"portrait": portrait}),
+        },
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("projectionAspectRatio", 16 / 9)
+    root.setProperty("framing", {
+        "version": 1,
+        "zoom": 4.0,
+        "norm_x": 0.15,
+        "norm_y": -0.2,
+    })
+
+    assert root.property("imageReady") is False
+    assert root.property("framingNormX") == pytest.approx(0.15)
+    assert root.property("framingNormY") == pytest.approx(-0.2)
+
+    root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
+    widget.show()
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+    assert root.property("imageReady") is True
+    QTest.qWait(20)
+    assert root.property("framingNormX") < 0.15
+    assert root.property("requestedNormX") == pytest.approx(0.15)
+
+    root.setProperty("sourceAspectRatio", 0.65)
+    QTest.qWait(20)
+
+    assert root.property("framingNormX") == pytest.approx(0.15)
+    assert root.property("framingNormY") == pytest.approx(-0.2)

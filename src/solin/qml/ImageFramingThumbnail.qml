@@ -29,6 +29,10 @@ Item {
     property real framingZoom: 1.0
     property real framingNormX: 0.0
     property real framingNormY: 0.0
+    property real requestedZoom: 1.0
+    property real requestedNormX: 0.0
+    property real requestedNormY: 0.0
+    property bool geometrySyncQueued: false
     property bool panning: false
     property bool pressedForPan: false
     property bool gestureMoved: false
@@ -77,18 +81,17 @@ Item {
                 && validNumber(record.zoom)
                 && validNumber(record.norm_x)
                 && validNumber(record.norm_y)) {
-            framingActive = true
-            framingZoom = Math.max(0.1, Math.min(10.0, record.zoom))
-            framingNormX = record.norm_x
-            framingNormY = record.norm_y
-            clampPan()
-            framingActive = !isDefaultTransform()
+            requestedZoom = Math.max(0.1, Math.min(10.0, record.zoom))
+            requestedNormX = record.norm_x
+            requestedNormY = record.norm_y
+            syncFramingToGeometry()
             return
         }
         framingActive = false
-        framingZoom = 1.0
-        framingNormX = 0.0
-        framingNormY = 0.0
+        requestedZoom = 1.0
+        requestedNormX = 0.0
+        requestedNormY = 0.0
+        syncFramingToGeometry()
     }
 
     function maxPanX() {
@@ -104,10 +107,31 @@ Item {
     }
 
     function clampPan() {
+        if (!imageReady || frameWidth <= 0 || frameHeight <= 0)
+            return false
         var maxX = maxPanX()
         var maxY = maxPanY()
         framingNormX = Math.max(-maxX, Math.min(maxX, framingNormX))
         framingNormY = Math.max(-maxY, Math.min(maxY, framingNormY))
+        return true
+    }
+
+    function syncFramingToGeometry() {
+        framingZoom = requestedZoom
+        framingNormX = requestedNormX
+        framingNormY = requestedNormY
+        clampPan()
+        framingActive = !isDefaultTransform()
+    }
+
+    function scheduleGeometrySync() {
+        if (geometrySyncQueued)
+            return
+        geometrySyncQueued = true
+        Qt.callLater(function() {
+            geometrySyncQueued = false
+            syncFramingToGeometry()
+        })
     }
 
     function isDefaultTransform() {
@@ -127,6 +151,9 @@ Item {
     function publishFraming() {
         if (!imageReady)
             return
+        requestedZoom = framingZoom
+        requestedNormX = framingNormX
+        requestedNormY = framingNormY
         framingActive = !isDefaultTransform()
         framingEdited(
             framingZoom,
@@ -152,9 +179,14 @@ Item {
     }
 
     onFramingChanged: applyFraming(framing)
-    onProjectionAspectRatioChanged: clampPan()
-    onWidthChanged: clampPan()
-    onHeightChanged: clampPan()
+    onImageReadyChanged: {
+        if (imageReady)
+            scheduleGeometrySync()
+    }
+    onSourceAspectRatioChanged: scheduleGeometrySync()
+    onProjectionAspectRatioChanged: scheduleGeometrySync()
+    onWidthChanged: scheduleGeometrySync()
+    onHeightChanged: scheduleGeometrySync()
     Component.onCompleted: applyFraming(framing)
 
     Rectangle {
@@ -183,6 +215,10 @@ Item {
             x: (projectionFrame.width - width) / 2 + root.framingNormX * projectionFrame.width
             y: (projectionFrame.height - height) / 2 + root.framingNormY * projectionFrame.height
             visible: root.imageReady
+            onStatusChanged: {
+                if (status === Image.Ready)
+                    root.scheduleGeometrySync()
+            }
         }
 
         Image {
