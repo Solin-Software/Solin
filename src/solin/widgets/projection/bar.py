@@ -50,7 +50,7 @@ from solin.core.projection.image_framing import (
 from solin.core.rendering.fonts import FontManager
 from solin.core.timer.models import MediaCountdownPresentation
 from solin.core.timer.render import format_fixed_countdown
-from solin.projection.window import YearlyTextWidget
+from solin.projection.yearly_text import YearlyTextWidget
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
     ICON_CAST,

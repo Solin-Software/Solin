@@ -5,7 +5,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
 from solin.core.timer.models import MediaCountdownPresentation
-from solin.projection.window import BaseProjectionView, YearlyTextWidget
+from solin.projection.window import BaseProjectionView
+from solin.projection.yearly_text import YearlyTextWidget
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -61,7 +62,7 @@ def test_countdown_does_not_move_or_resize_non_colliding_yearly_text():
     with_countdown = widget.grab().toImage()
     countdown_layout = widget._countdown_layout()
     assert countdown_layout is not None
-    safe_bottom = int(countdown_layout[2].top()) - max(
+    safe_bottom = int(countdown_layout.text_rect.top()) - max(
         8,
         int(widget.height() * 0.025),
     )
@@ -83,7 +84,7 @@ def test_countdown_reserves_a_clean_gap_when_yearly_text_would_collide():
     image = widget.grab().toImage()
     countdown_layout = widget._countdown_layout()
     assert countdown_layout is not None
-    countdown_top = int(countdown_layout[2].top())
+    countdown_top = int(countdown_layout.text_rect.top())
     safe_bottom = countdown_top - max(8, int(widget.height() * 0.025))
 
     for y in range(safe_bottom, countdown_top):
@@ -99,7 +100,7 @@ def test_countdown_digits_align_vertically_with_the_jw_badge():
     assert countdown_layout is not None
     _, badge_y, badge_size = widget._jw_badge_geometry()
 
-    assert countdown_layout[2].center().y() == badge_y + (badge_size / 2.0)
+    assert countdown_layout.text_rect.center().y() == badge_y + (badge_size / 2.0)
 
 
 def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
