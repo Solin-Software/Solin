@@ -926,6 +926,39 @@ def test_render_active_countdown_and_overrun():
     assert model["timer"]["overrun"]
 
 
+@pytest.mark.parametrize(
+    ("remaining", "total", "expected"),
+    [
+        (90, 90, "01:30"),
+        (55, 90, "00:55"),
+        (3599, 5400, "00:59:59"),
+        (3600, 5400, "01:00:00"),
+        (359_999, 360_000, "099:59:59"),
+        (0, 90, "00:00"),
+    ],
+)
+def test_fixed_media_countdown_keeps_its_initial_field_shape(
+    remaining,
+    total,
+    expected,
+):
+    from solin.core.timer.render import format_fixed_countdown
+
+    assert format_fixed_countdown(remaining, total) == expected
+
+
+def test_media_countdown_presentation_order_matches_the_qml_selector():
+    from solin.core.timer.models import (
+        MEDIA_COUNTDOWN_PRESENTATION_OPTIONS,
+        MediaCountdownPresentation,
+    )
+
+    assert MEDIA_COUNTDOWN_PRESENTATION_OPTIONS == (
+        MediaCountdownPresentation.CIRCULAR,
+        MediaCountdownPresentation.YEARLY_TEXT,
+    )
+
+
 def test_render_active_can_show_clock_only_with_configured_clock_face():
     import time
     from solin.core.timer.render import build_render_model

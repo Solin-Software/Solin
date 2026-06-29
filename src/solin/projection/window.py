@@ -1,16 +1,43 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QStackedWidget, QGraphicsOpacityEffect
-from PySide6.QtCore import Qt, Slot, Signal, QSize, QRect, QRectF, QByteArray, QPropertyAnimation, QEasingCurve, QTimer, QPoint, QEvent
-from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QFontMetrics, QGuiApplication, QMouseEvent, QKeyEvent
-from PySide6.QtSvg import QSvgRenderer
+import ctypes
+import sys
+
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    Signal,
+    QSize,
+    Slot,
+    Qt,
+    QTimer,
+)
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QImage,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtMultimedia import QVideoFrame
+from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.rendering.fonts import FontManager
+from ..core.timer.models import MediaCountdownPresentation
+from ..widgets.circular_timer import CircularTimerWidget
+from .sermon_theme import SermonThemeProjectionWidget
+from .yearly_text import YearlyTextWidget
 
-_WT_CLEAR_TEXT = "Wt-ClearText-Bold"
-
-import sys
-import ctypes
 
 def exclude_from_aero_peek(hwnd: int) -> None:
     """
@@ -37,150 +64,6 @@ def exclude_from_aero_peek(hwnd: int) -> None:
         )
     except Exception:  # noqa: BLE001 - Win32 window-manager API boundary
         log_ignored_exception(__name__, "Could not exclude projection window from Aero Peek")
-
-from ..widgets.circular_timer import CircularTimerWidget
-
-from .sermon_theme import SermonThemeProjectionWidget
-
-
-class YearlyTextWidget(QWidget):
-    """Widget that displays the yearly Bible text with responsive font sizing."""
-
-    def __init__(
-        self,
-        font_manager: FontManager,
-        parent=None,
-    ) -> None:
-        super().__init__(parent)
-        self._font_manager = font_manager
-        self.setStyleSheet("background-color: black;")
-        self._quote = ""
-        self._reference = ""
-        self._api_code = ""
-
-        # Kick off the font download/registration in background.
-        self._font_manager.font_ready.connect(self._on_font_ready)
-        self._font_manager.ensure(_WT_CLEAR_TEXT)
-
-    def _on_font_ready(self, font_name: str) -> None:
-        """Triggered once Wt-ClearText-Bold is registered; repaint if visible."""
-        if font_name == _WT_CLEAR_TEXT:
-            self.update()
-
-    def set_text(self, quote: str, reference: str, api_code: str = ""):
-        self._quote = quote
-        self._reference = reference
-        self._api_code = api_code
-        self.update()
-
-    def paintEvent(self, event):
-        if not self._quote and not self._reference:
-            # Nothing set: just paint black
-            painter = QPainter(self)
-            painter.fillRect(self.rect(), QColor(0, 0, 0))
-            painter.end()
-            return
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-
-        w = self.width()
-        h = self.height()
-
-        # Black background
-        painter.fillRect(self.rect(), QColor(0, 0, 0))
-
-        # ── Typography & Auto-Scaling ─────────────────────────────────────
-        font = QFont()
-        font.setFamilies(
-            [self._font_manager.family(_WT_CLEAR_TEXT), "Georgia", "Noto Serif"]
-        )
-        font.setWeight(QFont.Weight.Normal)
-
-        if self._api_code == "J":
-            font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 115)
-        else:
-            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
-
-        # Extrai as linhas originais
-        quote_lines = [line for line in self._quote.split("\n") if line.strip()]
-        ref_text = self._reference if self._reference else ""
-        all_lines = quote_lines + ([ref_text] if ref_text else [])
-
-        # Proporções
-        max_base_size = max(12, int(w * 0.040))
-        max_text_w = int(w * 0.70) 
-        max_text_h = int(h * 0.80)
-
-        # Laço para encontrar o tamanho perfeito
-        best_size = 8
-        for size in range(max_base_size, 7, -1):  
-            font.setPixelSize(size)
-            fm = QFontMetrics(font)
-
-            max_line_width = max([fm.horizontalAdvance(line) for line in all_lines], default=0)
-
-            total_lines = len(quote_lines) + (1 if ref_text else 0)
-            line_height = int(size * 1.45)
-            ref_spacing = int(size * 0.45) 
-            total_h = total_lines * line_height + ref_spacing
-
-            if max_line_width <= max_text_w and total_h <= max_text_h:
-                best_size = size
-                break
-
-        # ── Aplicação do Tamanho Calculado (Matemática Original) ──────────
-        font.setPixelSize(best_size)
-        fm = QFontMetrics(font)
-        
-        total_lines = len(quote_lines) + (1 if ref_text else 0)
-        line_height = int(best_size * 1.45)
-        ref_spacing = int(best_size * 0.45)  
-        block_h = total_lines * line_height + ref_spacing
-
-        start_y = (h - block_h) // 2
-
-        # Desenhar o texto (Branco)
-        painter.setPen(QColor(255, 255, 255))
-        painter.setFont(font)
-
-        for i, line in enumerate(quote_lines):
-            lw = fm.horizontalAdvance(line)
-            lx = (w - lw) // 2
-            ly = start_y + i * line_height + best_size
-            painter.drawText(lx, ly, line)
-
-        # Desenhar a referência (Agora alinhado na próxima linha normal, sem pulo extra)
-        if ref_text:
-            ref_y = start_y + len(quote_lines) * line_height + best_size
-            rw = fm.horizontalAdvance(ref_text)
-            rx = (w - rw) // 2
-            painter.drawText(rx, ref_y, ref_text)
-
-        # ── JW Badge (bottom-right) ───────────────────────────────────────
-        badge_size = int(min(w, h) * 0.15)
-        margin_x = int(w * 0.08)
-        margin_y = int(h * 0.12)
-        badge_x = w - badge_size - margin_x
-        badge_y = h - badge_size - margin_y
-
-        painter.fillRect(badge_x, badge_y, badge_size, badge_size, QColor(51, 51, 51))
-
-        jw_svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 151 153">
-  <path fill="black" d="M47.34 87c.22-13.47-.15-26.95.16-40.43 2.33 0 4.66 0 6.99-.01.25 13.48.1 26.97.08 40.46.09 6.42-3.16 13.91-9.88 15.63-6.87 1.58-14.59.65-20.24-3.8 1.03-1.94 2.09-3.86 3.14-5.78 3.76 2.25 7.87 4.83 12.46 4.07 4.68-.73 7.34-5.74 7.29-10.14m14.14-40.42c2.57.01 5.15.01 7.72.05 1.74 9.51 4.19 18.88 5.95 28.39.93 4.65 1.7 9.36 3.24 13.86 4.04-13.41 8.11-26.81 12.45-40.12 1.83-.06 3.66-.11 5.5-.15 3.19 7.38 4.6 15.36 7.14 22.97 1.89 5.54 3.1 11.28 4.95 16.84 1.12-1.86 1.63-3.97 2.02-6.09 2.35-11.94 5.51-23.7 7.76-35.66 2.51-.08 5.02-.08 7.53-.11-4.7 18.69-9.12 37.44-13.86 56.11-2.11.01-4.22 0-6.33 0-4.19-13.92-7.88-27.99-11.96-41.95-4.46 13.96-8.67 28.01-13.2 41.94-1.99.02-3.97.04-5.95.05-4.6-18.64-8.58-37.43-12.96-56.13"/>
-</svg>"""
-        renderer = QSvgRenderer(QByteArray(jw_svg))
-        jw_pixmap = QPixmap(badge_size, badge_size)
-        jw_pixmap.fill(QColor(51, 51, 51))
-        pix_painter = QPainter(jw_pixmap)
-        pix_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pad = int(badge_size * -0.08)
-        renderer.render(pix_painter, QRectF(pad, pad, badge_size - 2 * pad, badge_size - 2 * pad))
-        pix_painter.end()
-        painter.drawPixmap(badge_x, badge_y, jw_pixmap)
-
-        painter.end()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IdleMediaWidget — replaces the yeartext when a custom idle media is set
@@ -622,6 +505,9 @@ class BaseProjectionView(QWidget):
     _PAGE_THEME      = 3
     _PAGE_IDLE_MEDIA = 4
 
+    _MEDIA_FADE_DURATION_MS = 200
+    _YEARLY_FADE_IN_DURATION_MS = 500
+
     def _build_projection_stack(self, layout) -> None:
         """Create the page stack, opacity effects, animations and state flags.
 
@@ -643,8 +529,9 @@ class BaseProjectionView(QWidget):
         self._media_opacity.setOpacity(1.0)
         self.display_label.setGraphicsEffect(self._media_opacity)
         self._media_anim = QPropertyAnimation(self._media_opacity, b"opacity")
-        self._media_anim.setDuration(200)
+        self._media_anim.setDuration(self._MEDIA_FADE_DURATION_MS)
         self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._media_fade_out_connected = False
 
         # Page 1 — live circular timer
         self._proj_timer = CircularTimerWidget()
@@ -667,8 +554,10 @@ class BaseProjectionView(QWidget):
         self._yearly_opacity.setOpacity(1.0)
         self._yearly_widget.setGraphicsEffect(self._yearly_opacity)
         self._yearly_anim = QPropertyAnimation(self._yearly_opacity, b"opacity")
-        self._yearly_anim.setDuration(500)
+        self._yearly_anim.setDuration(self._YEARLY_FADE_IN_DURATION_MS)
         self._yearly_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._yearly_timer_exit_pending = False
+        self._yearly_anim.finished.connect(self._on_yearly_animation_finished)
 
         # Page 3 — sermon theme slide
         self._theme_widget = SermonThemeProjectionWidget()
@@ -695,6 +584,7 @@ class BaseProjectionView(QWidget):
         # Explicit state flag — never rely on currentIndex for logic
         self._is_showing_media: bool = False
         self._has_idle_media: bool = False   # True when custom idle is loaded
+        self._timer_presentation: MediaCountdownPresentation | None = None
 
         # Guard: only True while a *video* (not audio) is expected.
         # Set to True only by begin_video() / update_frame() explicitly called
@@ -710,7 +600,9 @@ class BaseProjectionView(QWidget):
 
     def show_sermon_theme(self, text: str, subtitle: str = "") -> None:
         """Switch to sermon-theme slide with a fade-in."""
+        self._cancel_pending_timer_exit()
         self._stop_all_anims()
+        self._clear_timer_presentation()
         self._accept_video_frames = False
         self._is_showing_media = False
         self._theme_widget.set_theme(text, subtitle)
@@ -733,26 +625,68 @@ class BaseProjectionView(QWidget):
 
     # ── Timer API ─────────────────────────────────────────────────────────
 
-    def show_timer(self, remaining: int, total: int) -> None:
-        """Switch to timer page and display the countdown with fade-in."""
+    def show_timer(
+        self,
+        remaining: int,
+        total: int,
+        presentation: MediaCountdownPresentation,
+    ) -> None:
+        """Display the countdown using the selected media-window presentation."""
+        self._cancel_pending_timer_exit()
         self._stop_all_anims()
+        self._clear_timer_presentation()
+        self._timer_presentation = presentation
         self._accept_video_frames = False
         self._is_showing_media = False
-        self._proj_timer.update_data(remaining, total)
-        self._timer_opacity.setOpacity(0.0)
-        self._stack.setCurrentIndex(self._PAGE_TIMER)
-        self._timer_anim.setStartValue(0.0)
-        self._timer_anim.setEndValue(1.0)
-        self._timer_anim.start()
+
+        if presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            self._yearly_widget.set_countdown(remaining, total)
+            self._yearly_opacity.setOpacity(0.0)
+            self._stack.setCurrentIndex(self._PAGE_YEARLY)
+            self._start_yearly_fade(
+                start=0.0,
+                end=1.0,
+                duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
+            )
+        else:
+            self._proj_timer.update_data(remaining, total)
+            self._timer_opacity.setOpacity(0.0)
+            self._stack.setCurrentIndex(self._PAGE_TIMER)
+            self._timer_anim.setStartValue(0.0)
+            self._timer_anim.setEndValue(1.0)
+            self._timer_anim.start()
 
     def update_timer(self, remaining: int, total: int) -> None:
         """Update countdown (called every second while timer mode is active)."""
-        if self._stack.currentIndex() == self._PAGE_TIMER:
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._yearly_widget.set_countdown(remaining, total)
+        elif (
+            self._timer_presentation is MediaCountdownPresentation.CIRCULAR
+            and self._stack.currentIndex() == self._PAGE_TIMER
+        ):
             self._proj_timer.update_data(remaining, total)
 
     def set_timer_blink(self, on: bool) -> None:
-        if self._stack.currentIndex() == self._PAGE_TIMER:
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._yearly_widget.set_countdown_blink(on)
+        elif (
+            self._timer_presentation is MediaCountdownPresentation.CIRCULAR
+            and self._stack.currentIndex() == self._PAGE_TIMER
+        ):
             self._proj_timer.set_blink(on)
+
+    def _clear_timer_presentation(self) -> None:
+        if self._timer_presentation is None:
+            return
+        self._timer_presentation = None
+        self._yearly_widget.clear_countdown()
+        self._proj_timer.set_blink(False)
 
     # ── Media / image API ─────────────────────────────────────────────────
 
@@ -764,6 +698,8 @@ class BaseProjectionView(QWidget):
         single authoritative place that re-enables update_frame(); every other
         path (clear, show_image*, show_timer, show_sermon_theme) disables it.
         """
+        self._cancel_pending_timer_exit()
+        self._clear_timer_presentation()
         self._accept_video_frames = True
 
     @Slot(QVideoFrame)
@@ -804,6 +740,8 @@ class BaseProjectionView(QWidget):
     def _show_image(self, image: QImage, *, cache_pixmap: bool = True) -> None:
         """Route a static QImage to the display widget."""
         # Static image — video pipeline must not overwrite it.
+        self._cancel_pending_timer_exit()
+        self._clear_timer_presentation()
         self._accept_video_frames = False
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
         self.display_label.set_image(image)
@@ -851,6 +789,23 @@ class BaseProjectionView(QWidget):
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
+        if self._yearly_timer_exit_pending:
+            return
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._stop_all_anims()
+            self._current_pixmap = None
+            self._yearly_timer_exit_pending = True
+            self._start_yearly_fade(
+                start=self._yearly_opacity.opacity(),
+                end=0.0,
+                duration_ms=self._MEDIA_FADE_DURATION_MS,
+            )
+            return
+
+        self._clear_timer_presentation()
 
         # Already on the correct idle page and nothing animating — do nothing
         # (avoids flicker on audio-only clips).
@@ -868,17 +823,37 @@ class BaseProjectionView(QWidget):
             self._media_anim.setStartValue(self._media_opacity.opacity())
             self._media_anim.setEndValue(0.0)
             self._media_anim.finished.connect(self._on_media_fade_out_done)
+            self._media_fade_out_connected = True
             self._media_anim.start()
         else:
             # Coming from timer or theme slide — switch to idle with fade-in
             self._switch_to_idle_with_fade()
 
+    def _cancel_pending_timer_exit(self) -> None:
+        if not self._yearly_timer_exit_pending:
+            return
+        self._yearly_anim.stop()
+        self._yearly_timer_exit_pending = False
+        self._yearly_opacity.setOpacity(1.0)
+
+    def _start_yearly_fade(self, *, start: float, end: float, duration_ms: int) -> None:
+        self._yearly_anim.setDuration(duration_ms)
+        self._yearly_anim.setStartValue(start)
+        self._yearly_anim.setEndValue(end)
+        self._yearly_anim.start()
+
+    def _on_yearly_animation_finished(self) -> None:
+        if not self._yearly_timer_exit_pending:
+            return
+        self._yearly_timer_exit_pending = False
+        self._clear_timer_presentation()
+        self._switch_to_idle_with_fade()
+
     def _on_media_fade_out_done(self) -> None:
         """Media faded out — now switch to the idle page and fade it in."""
-        try:
+        if self._media_fade_out_connected:
             self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-        except RuntimeError:
-            pass
+            self._media_fade_out_connected = False
         self.display_label.clear()   # VideoDisplayWidget.clear() → go black
         self._media_opacity.setOpacity(1.0)
         self._switch_to_idle_with_fade()
@@ -894,19 +869,20 @@ class BaseProjectionView(QWidget):
         else:
             self._yearly_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_YEARLY)
-            self._yearly_anim.setStartValue(0.0)
-            self._yearly_anim.setEndValue(1.0)
-            self._yearly_anim.start()
+            self._start_yearly_fade(
+                start=0.0,
+                end=1.0,
+                duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
+            )
 
     def _stop_all_anims(self) -> None:
         """Stop all animations and disconnect callbacks safely."""
         for anim in (self._media_anim, self._yearly_anim, self._timer_anim,
                      self._theme_anim, self._idle_media_anim):
             anim.stop()
-            try:
-                anim.finished.disconnect()
-            except RuntimeError:
-                pass
+        if self._media_fade_out_connected:
+            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
+            self._media_fade_out_connected = False
 
     # ── Custom idle media API ─────────────────────────────────────────────
 
@@ -918,7 +894,11 @@ class BaseProjectionView(QWidget):
         if currently on the plain yeartext idle page, fades over to it.
         """
         self._has_idle_media = True
-        if self._stack.currentIndex() == self._PAGE_YEARLY and not self._is_showing_media:
+        if (
+            self._timer_presentation is None
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+            and not self._is_showing_media
+        ):
             self._stop_all_anims()
             self._switch_to_idle_with_fade()
 

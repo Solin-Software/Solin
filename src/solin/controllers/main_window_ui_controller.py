@@ -108,6 +108,8 @@ class MainWindowUiContext:
     watched_folder_settings: Any
     yeartext_settings: Any
     yeartext_service_factory: Callable[[QObject], Any]
+    font_manager: Any
+    yearly_projection_text: Callable[[], tuple[str, str, str]]
     auto_share_accessibility_trusted: Callable[[], bool]
     background_song_settings: Any
     projection_playback_settings: Any
@@ -601,6 +603,8 @@ class MainWindowUiController:
             media_cache_dir=context.media_cache_manager.media_cache_dir,
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=context.projection_aspect_ratio_provider,
+            font_manager=context.font_manager,
+            yearly_text_provider=context.yearly_projection_text,
             lang_manager=context.lang_manager,
             container=right_col,
         )

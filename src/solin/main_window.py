@@ -373,6 +373,8 @@ class MainWindow(QMainWindow):
                 watched_folder_settings=self._watched_folder_settings,
                 yeartext_settings=self._yeartext_settings,
                 yeartext_service_factory=service_factories.yeartext,
+                font_manager=self.font_manager,
+                yearly_projection_text=self._current_yearly_projection_text,
                 auto_share_accessibility_trusted=lambda: bool(
                     macos_accessibility_trusted()
                 ),

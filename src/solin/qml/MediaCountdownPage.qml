@@ -20,6 +20,7 @@ Item {
     property string nowText: "--:--:--"
     property int hourValue: (new Date().getHours() + 1) % 24
     property int minValue: 0
+    property int presentation: 0  // 0 = circular, 1 = annual-text overlay
 
     function pad(n) { return ("0" + n).slice(-2) }
 
@@ -110,6 +111,32 @@ Item {
                 }
             }
 
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Display on media window")
+                    color: page.pal_textMuted
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 1.2
+                    font.capitalization: Font.AllUppercase
+                }
+
+                TimerSegment {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    options: [qsTr("Circular timer"), qsTr("Annual text")]
+                    current: page.presentation
+                    accent: page.pal_accent
+                    stretch: true
+                    segHeight: 36
+                    onPicked: function(index) { page.presentation = index }
+                }
+            }
+
             TimerButton {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 44
@@ -117,7 +144,11 @@ Item {
                 variant: "primary"
                 accent: page.pal_accent
                 iconName: "play"; iconSize: 13
-                onClicked: timer.startCountdownToTime(page.hourValue, page.minValue)
+                onClicked: timer.startCountdownToTime(
+                    page.hourValue,
+                    page.minValue,
+                    page.presentation
+                )
             }
 
             Rectangle { Layout.fillWidth: true; height: 1; color: page.pal_border; opacity: 0.7 }
@@ -174,7 +205,7 @@ Item {
                         TimerPointerArea {
                             id: chipMa
                             anchors.fill: parent
-                            onClicked: timer.startCountdownMinutes(modelData)
+                            onClicked: timer.startCountdownMinutes(modelData, page.presentation)
                         }
                     }
                 }

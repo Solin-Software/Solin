@@ -142,6 +142,7 @@ class SignalConnectionController:
         settings.yearly_text_changed.connect(
             handlers.projection_targets.apply_yearly_text
         )
+        settings.yearly_text_changed.connect(projection_bar.set_yearly_text)
         settings.watched_folder_changed.connect(
             sources.playlist_widget.set_watched_folder
         )
