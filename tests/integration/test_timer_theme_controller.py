@@ -34,8 +34,8 @@ class _ProjectionBarStub:
     def set_playlist(self, playlist):
         self.playlists.append(playlist)
 
-    def activate_timer(self, target_dt):
-        self.timers.append(target_dt)
+    def activate_timer(self, target_dt, presentation):
+        self.timers.append((target_dt, presentation))
 
     def activate_image(self, title, image_data=None):
         self.images.append((title, image_data))
@@ -125,7 +125,9 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     assert window._ndi_service.stopped == 1
     assert window._camera_service.stopped == 1
     assert window.proj_bar.playlists == [[]]
-    assert window.proj_bar.timers == [target_dt]
+    assert window.proj_bar.timers == [
+        (target_dt, MediaCountdownPresentation.YEARLY_TEXT)
+    ]
     assert [projection_window.timers for projection_window in window.windows] == [
         [(42, 42, MediaCountdownPresentation.YEARLY_TEXT)],
         [(42, 42, MediaCountdownPresentation.YEARLY_TEXT)],

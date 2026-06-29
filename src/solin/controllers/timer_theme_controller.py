@@ -49,7 +49,7 @@ class TimerThemeController:
         self._session.set_tab_projection_active(False)
         self._stop_active_sources()
         context.projection_bar.set_playlist([])
-        context.projection_bar.activate_timer(target_dt)
+        context.projection_bar.activate_timer(target_dt, presentation)
 
         remaining = self._remaining_seconds(target_dt)
         total = max(1, remaining)

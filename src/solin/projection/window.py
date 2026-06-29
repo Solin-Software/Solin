@@ -97,10 +97,11 @@ class YearlyTextWidget(QWidget):
             self.update()
 
     def paintEvent(self, event):
+        countdown_layout = self._countdown_layout()
         if not self._quote and not self._reference:
             painter = QPainter(self)
             painter.fillRect(self.rect(), QColor(0, 0, 0))
-            self._paint_countdown(painter)
+            self._paint_countdown(painter, countdown_layout)
             painter.end()
             return
 
@@ -133,37 +134,55 @@ class YearlyTextWidget(QWidget):
 
         # Proporções
         max_base_size = max(12, int(w * 0.040))
-        max_text_w = int(w * 0.70) 
-        max_text_h = int(h * (0.60 if self._countdown_remaining is not None else 0.80))
+        max_text_w = int(w * 0.70)
+        max_text_h = int(h * 0.80)
+        total_lines = len(quote_lines) + (1 if ref_text else 0)
 
-        # Laço para encontrar o tamanho perfeito
-        best_size = 8
-        for size in range(max_base_size, 7, -1):  
+        def measure_text_block(size: int) -> tuple[int, int]:
             font.setPixelSize(size)
-            fm = QFontMetrics(font)
-
-            max_line_width = max([fm.horizontalAdvance(line) for line in all_lines], default=0)
-
-            total_lines = len(quote_lines) + (1 if ref_text else 0)
+            metrics = QFontMetrics(font)
+            max_line_width = max(
+                (metrics.horizontalAdvance(line) for line in all_lines),
+                default=0,
+            )
             line_height = int(size * 1.45)
-            ref_spacing = int(size * 0.45) 
-            total_h = total_lines * line_height + ref_spacing
+            ref_spacing = int(size * 0.45)
+            return max_line_width, total_lines * line_height + ref_spacing
 
+        # Preserve the original annual-text layout. The countdown only imposes
+        # an extra bottom boundary when the unchanged text would collide with it.
+        best_size = 8
+        for size in range(max_base_size, 7, -1):
+            max_line_width, total_h = measure_text_block(size)
             if max_line_width <= max_text_w and total_h <= max_text_h:
                 best_size = size
                 break
+
+        if countdown_layout is not None:
+            countdown_top = countdown_layout[2].top()
+            bottom_limit = countdown_top - max(8, int(h * 0.025))
+            collision_safe_size = 1
+            for size in range(best_size, 0, -1):
+                max_line_width, total_h = measure_text_block(size)
+                start_y = (h - total_h) // 2
+                if (
+                    max_line_width <= max_text_w
+                    and total_h <= max_text_h
+                    and start_y + total_h <= bottom_limit
+                ):
+                    collision_safe_size = size
+                    break
+            best_size = collision_safe_size
 
         # ── Aplicação do Tamanho Calculado (Matemática Original) ──────────
         font.setPixelSize(best_size)
         fm = QFontMetrics(font)
         
-        total_lines = len(quote_lines) + (1 if ref_text else 0)
         line_height = int(best_size * 1.45)
-        ref_spacing = int(best_size * 0.45)  
+        ref_spacing = int(best_size * 0.45)
         block_h = total_lines * line_height + ref_spacing
 
-        text_region_h = int(h * 0.70) if self._countdown_remaining is not None else h
-        start_y = (text_region_h - block_h) // 2
+        start_y = (h - block_h) // 2
 
         # Desenhar o texto (Branco)
         painter.setPen(QColor(255, 255, 255))
@@ -204,12 +223,12 @@ class YearlyTextWidget(QWidget):
         pix_painter.end()
         painter.drawPixmap(badge_x, badge_y, jw_pixmap)
 
-        self._paint_countdown(painter)
+        self._paint_countdown(painter, countdown_layout)
         painter.end()
 
-    def _paint_countdown(self, painter: QPainter) -> None:
+    def _countdown_layout(self) -> tuple[QFont, str, QRectF, QRectF] | None:
         if self._countdown_remaining is None:
-            return
+            return None
 
         width = self.width()
         height = self.height()
@@ -237,6 +256,18 @@ class YearlyTextWidget(QWidget):
             text_width,
             text_height,
         )
+        bar_rect = QRectF((width - text_width) / 2.0, bar_y, text_width, bar_height)
+        return font, text, text_rect, bar_rect
+
+    def _paint_countdown(
+        self,
+        painter: QPainter,
+        layout: tuple[QFont, str, QRectF, QRectF] | None,
+    ) -> None:
+        if layout is None or self._countdown_remaining is None:
+            return
+
+        font, text, text_rect, bar_rect = layout
 
         active_color = QColor("#ef4444") if self._countdown_blink else QColor("#f8fafc")
         painter.save()
@@ -244,11 +275,15 @@ class YearlyTextWidget(QWidget):
         painter.setPen(active_color)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, text)
 
-        bar_x = (width - text_width) / 2.0
-        painter.fillRect(QRectF(bar_x, bar_y, text_width, bar_height), QColor("#3f3f46"))
+        painter.fillRect(bar_rect, QColor("#3f3f46"))
         progress = min(1.0, max(0.0, self._countdown_remaining / self._countdown_total))
         painter.fillRect(
-            QRectF(bar_x, bar_y, text_width * progress, bar_height),
+            QRectF(
+                bar_rect.left(),
+                bar_rect.top(),
+                bar_rect.width() * progress,
+                bar_rect.height(),
+            ),
             active_color,
         )
         painter.restore()

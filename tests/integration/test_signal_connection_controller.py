@@ -66,6 +66,7 @@ class _WindowStub:
             "set_as_idle_requested",
         )
         self.proj_bar.set_cover_art = _slot("set_cover_art")
+        self.proj_bar.set_yearly_text = _slot("set_yearly_text")
 
         self.media_ctrl = _signal_namespace(
             "media_ctrl",
@@ -214,13 +215,17 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 48
+    assert total_connections == 49
     assert window.songs_widget.project_video_signal.connected == [
         window._media_projection.on_sjjm_project
     ]
     assert window.settings_widget.watched_folder_changed.connected == [
         window.playlist_widget.set_watched_folder,
         window.meetings_widget.set_watched_folder,
+    ]
+    assert window.settings_widget.yearly_text_changed.connected == [
+        window._projection_targets.apply_yearly_text,
+        window.proj_bar.set_yearly_text,
     ]
     assert window.proj_bar.stop_requested.connected == [
         window._projection_stop.stop_any

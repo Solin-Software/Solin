@@ -47,6 +47,10 @@ from solin.core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     ImageTransform,
 )
+from solin.core.rendering.fonts import FontManager
+from solin.core.timer.models import MediaCountdownPresentation
+from solin.core.timer.render import format_fixed_countdown
+from solin.projection.window import YearlyTextWidget
 from solin.styles.icons import (
     ICON_ADD_TO_PLAYLIST,
     ICON_CAST,
@@ -131,6 +135,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         profile_media_store: ProfileMediaStore,
         media_cache_dir: str | os.PathLike[str],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        font_manager: FontManager,
+        yearly_text_provider: Callable[[], tuple[str, str, str]],
         projection_aspect_ratio_provider: Callable[[], ProjectionAspectRatio] | None = None,
         lang_manager=None,
         container: QWidget = None,
@@ -146,6 +152,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             projection_aspect_ratio_provider
             or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
+        self._font_manager = font_manager
+        self._yearly_text_provider = yearly_text_provider
         self.lang       = lang_manager
         self._container = container
         self._expanded  = False
@@ -162,6 +170,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # ── Timer state ──────────────────────────────────────────────────
         self._timer_target: QDateTime | None = None
         self._timer_total_secs: int = 0
+        self._timer_presentation: MediaCountdownPresentation | None = None
+        self._yearly_timer_text: tuple[str, str, str] = ("", "", "")
+        self.yearly_timer: YearlyTextWidget | None = None
         self._timer_tick = QTimer(self)
         # Sub-second cadence so the displayed countdown always reflects the
         # current second within ~200 ms of its boundary — a 1 s timer drifts
@@ -1066,9 +1077,29 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             else:
                 self._collapse()
 
-    def activate_timer(self, target_dt: QDateTime):
+    def set_yearly_text(self, quote: str, reference: str, api_code: str = "") -> None:
+        self._yearly_timer_text = (quote, reference, api_code)
+        if self.yearly_timer is not None:
+            self.yearly_timer.set_text(quote, reference, api_code)
+
+    def _ensure_yearly_timer(self) -> YearlyTextWidget:
+        if self.yearly_timer is None:
+            self.yearly_timer = YearlyTextWidget(self._font_manager)
+            self.yearly_timer.set_text(*self._yearly_timer_text)
+            self.overlay_stack.addWidget(self.yearly_timer)
+        return self.yearly_timer
+
+    def _refresh_yearly_timer_text(self) -> None:
+        self.set_yearly_text(*self._yearly_text_provider())
+
+    def activate_timer(
+        self,
+        target_dt: QDateTime,
+        presentation: MediaCountdownPresentation,
+    ) -> None:
         self._stop_timer_internals()
         self._mode = 'timer'
+        self._timer_presentation = presentation
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
         self._sync_app_fullscreen_availability()
@@ -1076,8 +1107,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         remaining = ceil_remaining_seconds(target_dt)
         self._timer_total_secs = max(1, remaining)
 
-        self.circular_timer.update_data(remaining, self._timer_total_secs)
-        self.overlay_stack.setCurrentIndex(1)
+        if presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            self._refresh_yearly_timer_text()
+        self._update_timer_preview(remaining)
         self.timer_updated.emit(remaining, self._timer_total_secs)
 
         self.thumb_label.setPixmap(make_icon(ICON_NAV_TIMER, 18, PALETTE.accent).pixmap(18, 18))
@@ -1531,12 +1563,34 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Timer mode ────────────────────────────────────────────────────────
 
+    def _update_timer_preview(self, remaining: int) -> None:
+        if self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            preview = self._ensure_yearly_timer()
+            preview.set_countdown(remaining, self._timer_total_secs)
+            self.overlay_stack.setCurrentWidget(preview)
+            return
+
+        self.circular_timer.update_data(remaining, self._timer_total_secs)
+        self.overlay_stack.setCurrentWidget(self.circular_timer)
+
+    def _set_timer_preview_blink(self, on: bool) -> None:
+        if self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            self._ensure_yearly_timer().set_countdown_blink(on)
+        else:
+            self.circular_timer.set_blink(on)
+
     def _update_timer_bar_label(self, remaining: int):
-        rem = max(0, remaining)
-        h_p = rem // 3600
-        m_p = (rem % 3600) // 60
-        s_p = rem % 60
-        text = f"{h_p:02d}:{m_p:02d}:{s_p:02d}" if h_p else f"{m_p:02d}:{s_p:02d}"
+        if self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT:
+            text = format_fixed_countdown(remaining, self._timer_total_secs)
+        else:
+            remaining = max(0, remaining)
+            hours, remainder = divmod(remaining, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            text = (
+                f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                if hours
+                else f"{minutes:02d}:{seconds:02d}"
+            )
         self.timer_countdown_label.setText(text)
 
     def _on_timer_tick(self):
@@ -1545,7 +1599,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         remaining = ceil_remaining_seconds(self._timer_target)
         window = self.window()
         if window is None or not window.isMinimized():
-            self.circular_timer.update_data(remaining, self._timer_total_secs)
+            self._update_timer_preview(remaining)
             self._update_timer_bar_label(remaining)
         self.timer_updated.emit(remaining, self._timer_total_secs)
         if remaining <= 0:
@@ -1560,7 +1614,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _on_blink_tick(self):
         self._blink_on = not self._blink_on
-        self.circular_timer.set_blink(self._blink_on)
+        self._set_timer_preview_blink(self._blink_on)
         self.timer_blink.emit(self._blink_on)
         color = PALETTE.danger if self._blink_on else PALETTE.accent
         self.timer_countdown_label.setStyleSheet(
@@ -1570,15 +1624,19 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _auto_close_timer(self):
         self._timer_blink_timer.stop()
-        self.circular_timer.set_blink(False)
+        self._set_timer_preview_blink(False)
         self.stop_requested.emit()
 
     def _stop_timer_internals(self):
         self._timer_tick.stop()
         self._timer_blink_timer.stop()
         self._timer_target = None
+        self._timer_presentation = None
         self._blink_on = False
         self._blink_count = 0
+        self.circular_timer.set_blink(False)
+        if self.yearly_timer is not None:
+            self.yearly_timer.clear_countdown()
 
     # ── Callbacks de mídia ────────────────────────────────────────────────
 
