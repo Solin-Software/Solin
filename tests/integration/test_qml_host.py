@@ -189,6 +189,13 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert edited.count() > 1
     assert root.property("panning") is False
 
-    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 12))
+    cover_zoom = float(root.coverZoom())
+    for _step in range(20):
+        if float(root.property("framingZoom")) >= cover_zoom:
+            break
+        _send_thumbnail_wheel(widget, Qt.KeyboardModifier.ControlModifier)
+    assert root.property("framingZoom") == pytest.approx(cover_zoom)
+
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False

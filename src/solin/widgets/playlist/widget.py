@@ -45,9 +45,9 @@ from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
 from ...core.projection.image_framing import (
     ImageTransform,
-    constrain_image_transform_for_aspect,
     image_transform_from_record,
     image_transform_to_record,
+    prepare_image_transform_for_aspect,
 )
 from ...core.tree_delta import incremental_tree_changes
 from ...ui.media_info import MediaInfoQueue
@@ -367,16 +367,16 @@ class PlaylistEditView(
         )
         if not item or item.get("type") != "image":
             return
-        transform = constrain_image_transform_for_aspect(
+        current_transform = image_transform_from_record(item.get("image_framing"))
+        transform = prepare_image_transform_for_aspect(
             source_width,
             source_height,
             self.bridge.imageFramingAspectRatio(),
+            current_transform,
             ImageTransform(zoom, norm_x, norm_y),
         )
         record = image_transform_to_record(transform)
-        current = image_transform_to_record(
-            image_transform_from_record(item.get("image_framing"))
-        )
+        current = image_transform_to_record(current_transform)
         if record == current:
             return
         if record is None:

@@ -132,6 +132,39 @@ def constrain_image_transform_for_aspect(
     )
 
 
+def prepare_image_transform_for_aspect(
+    image_width: float,
+    image_height: float,
+    aspect_ratio: float,
+    previous_transform: ImageTransform | None,
+    requested_transform: ImageTransform,
+) -> ImageTransform:
+    """Snap a zoom crossing to frame coverage, then clamp the full transform."""
+
+    ratio = _finite_float(aspect_ratio)
+    if ratio is None or ratio <= 0.0:
+        ratio = 16.0 / 9.0
+    previous = normalize_image_transform(
+        previous_transform or IDENTITY_IMAGE_TRANSFORM
+    )
+    requested = normalize_image_transform(requested_transform)
+    snapped_zoom = snap_zoom_to_frame_cover(
+        previous.zoom,
+        requested.zoom,
+        image_width,
+        image_height,
+        ratio,
+        1.0,
+    )
+    return constrain_image_transform(
+        image_width,
+        image_height,
+        ratio,
+        1.0,
+        ImageTransform(snapped_zoom, requested.norm_x, requested.norm_y),
+    )
+
+
 def frame_for_aspect(
     container_width: float,
     container_height: float,

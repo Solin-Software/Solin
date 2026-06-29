@@ -288,12 +288,12 @@ Item {
     Rectangle {
         id: resetButton
         visible: root.framingActive
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.right: parent.right
         anchors.margins: 4
-        width: 20
-        height: 20
-        radius: 10
+        width: 22
+        height: 22
+        radius: 11
         color: resetMouse.containsMouse
                ? Qt.lighter(root.resetBackgroundColor, 1.25)
                : root.resetBackgroundColor
@@ -302,7 +302,7 @@ Item {
             anchors.centerIn: parent
             text: "↺"
             color: root.resetForegroundColor
-            font.pixelSize: 13
+            font.pixelSize: 14
             font.weight: Font.DemiBold
         }
 

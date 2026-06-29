@@ -12,6 +12,7 @@ from solin.core.projection.image_framing import (
     image_transform_to_record,
     initial_transform_for_frame,
     pan_bounds_for_frame,
+    prepare_image_transform_for_aspect,
     snap_zoom_to_frame_cover,
 )
 
@@ -95,6 +96,20 @@ def test_prepared_transform_is_reclamped_when_projection_aspect_changes() -> Non
     assert on_four_three.norm_y == -0.25
     assert on_vertical.norm_x == 0.0
     assert on_vertical.norm_y == 0.0
+
+
+def test_prepared_edit_snaps_to_the_exact_frame_cover_threshold() -> None:
+    prepared = prepare_image_transform_for_aspect(
+        100,
+        200,
+        16 / 9,
+        ImageTransform(3.0, 0.0, 0.0),
+        ImageTransform(4.0, 1.0, -1.0),
+    )
+
+    assert prepared.zoom == cover_zoom_for_frame(100, 200, 16 / 9, 1.0)
+    assert prepared.norm_x == 0.0
+    assert prepared.norm_y < 0.0
 
 
 def test_frame_for_aspect_centers_wide_projection_inside_tall_container() -> None:

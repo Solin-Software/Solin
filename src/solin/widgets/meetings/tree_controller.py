@@ -102,9 +102,9 @@ from ...core.projection.aspect_ratio import (
 )
 from ...core.projection.image_framing import (
     ImageTransform,
-    constrain_image_transform_for_aspect,
     image_transform_from_record,
     image_transform_to_record,
+    prepare_image_transform_for_aspect,
 )
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
@@ -1604,16 +1604,16 @@ class MeetingTreeController(QObject):
         media_type = node.get("media_type") or self._media_type_from_ref(ref)
         if media_type != "image":
             return
-        transform = constrain_image_transform_for_aspect(
+        current_transform = image_transform_from_record(node.get("image_framing"))
+        transform = prepare_image_transform_for_aspect(
             source_width,
             source_height,
             self.imageFramingAspectRatio(),
+            current_transform,
             ImageTransform(zoom, norm_x, norm_y),
         )
         record = image_transform_to_record(transform)
-        current = image_transform_to_record(
-            image_transform_from_record(node.get("image_framing"))
-        )
+        current = image_transform_to_record(current_transform)
         if record == current:
             return
         if record is None:
