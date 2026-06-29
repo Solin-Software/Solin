@@ -6,6 +6,9 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QWidget
 
+from ..core.projection.image_framing import ImageTransform
+from ..core.projection.transform_animation import ProjectionTransformAnimation
+
 # ── SVG background for the sermon-theme slide ────────────────────────────────
 # Pixel-perfect recreation of the reference design.
 # Stored as a plain str (not bytes) to allow any character; encoded on use.
@@ -65,13 +68,7 @@ class SermonThemeProjectionWidget(QWidget):
         self._renderer = QSvgRenderer(QByteArray(SERMON_THEME_BACKGROUND_SVG.encode("utf-8")))
 
         # ── Zoom/pan transform ─────────────────────────────────────────────
-        self._zoom:   float = 1.0
-        self._norm_x: float = 0.0   # offset as fraction of widget width
-        self._norm_y: float = 0.0
-        # Current (animated) values
-        self._cur_zoom:   float = 1.0
-        self._cur_norm_x: float = 0.0
-        self._cur_norm_y: float = 0.0
+        self._image_transform = ProjectionTransformAnimation()
         self._transform_timer = QTimer(self)
         self._transform_timer.setInterval(16)
         self._transform_timer.timeout.connect(self._on_transform_tick)
@@ -88,46 +85,30 @@ class SermonThemeProjectionWidget(QWidget):
 
         Animated by default; pass ``animate=False`` to snap instantly (used when
         replaying the transform onto a freshly created surface)."""
-        self._zoom   = zoom
-        self._norm_x = norm_x
-        self._norm_y = norm_y
-        if animate:
-            if not self._transform_timer.isActive():
-                self._transform_timer.start()
+        active = self._image_transform.set_target(
+            ImageTransform(zoom, norm_x, norm_y),
+            animate=animate,
+        )
+        if active:
+            self._transform_timer.start()
         else:
-            self._cur_zoom   = zoom
-            self._cur_norm_x = norm_x
-            self._cur_norm_y = norm_y
             self._transform_timer.stop()
             self.update()
 
     def reset_transform(self) -> None:
-        self._zoom   = self._cur_zoom   = 1.0
-        self._norm_x = self._cur_norm_x = 0.0
-        self._norm_y = self._cur_norm_y = 0.0
+        self._image_transform.reset()
         self._transform_timer.stop()
         self.update()
 
     def reset_transform_instant(self) -> None:
         """Snap transform to identity immediately — no lerp animation."""
-        self._zoom   = self._cur_zoom   = 1.0
-        self._norm_x = self._cur_norm_x = 0.0
-        self._norm_y = self._cur_norm_y = 0.0
+        self._image_transform.reset()
         self._transform_timer.stop()
         self.update()
 
     def _on_transform_tick(self):
-        speed = 0.13
-        dz = self._zoom   - self._cur_zoom
-        dx = self._norm_x - self._cur_norm_x
-        dy = self._norm_y - self._cur_norm_y
-        self._cur_zoom   += dz * speed
-        self._cur_norm_x += dx * speed
-        self._cur_norm_y += dy * speed
-        if abs(dz) < 0.0005 and abs(dx) < 0.00005 and abs(dy) < 0.00005:
-            self._cur_zoom   = self._zoom
-            self._cur_norm_x = self._norm_x
-            self._cur_norm_y = self._norm_y
+        self._image_transform.sample()
+        if not self._image_transform.is_active:
             self._transform_timer.stop()
         self.update()
 
@@ -141,13 +122,18 @@ class SermonThemeProjectionWidget(QWidget):
         h = self.height()
 
         # ── Apply zoom/pan transform centred on the widget ─────────────────
-        if abs(self._cur_zoom - 1.0) > 0.001 or abs(self._cur_norm_x) > 0.0001 or abs(self._cur_norm_y) > 0.0001:
+        transform = self._image_transform.current
+        if (
+            abs(transform.zoom - 1.0) > 0.001
+            or abs(transform.norm_x) > 0.0001
+            or abs(transform.norm_y) > 0.0001
+        ):
             from PySide6.QtGui import QTransform
-            cx = w / 2.0 + self._cur_norm_x * w
-            cy = h / 2.0 + self._cur_norm_y * h
+            cx = w / 2.0 + transform.norm_x * w
+            cy = h / 2.0 + transform.norm_y * h
             t = QTransform()
             t.translate(cx, cy)
-            t.scale(self._cur_zoom, self._cur_zoom)
+            t.scale(transform.zoom, transform.zoom)
             t.translate(-w / 2.0, -h / 2.0)
             p.setTransform(t)
 

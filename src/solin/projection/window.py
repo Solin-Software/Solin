@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.projection.image_framing import ImageTransform
+from ..core.projection.transform_animation import ProjectionTransformAnimation
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
 from ..widgets.circular_timer import CircularTimerWidget
@@ -229,7 +230,7 @@ class VideoDisplayWidget(QWidget):
     Zoom/pan transform (images only):
       • set_image_transform(zoom, norm_x, norm_y) applies an offset on top
         of the centred fit-to-widget base rect.
-      • Uses a smoothstep lerp so the projector pans/zooms smoothly.
+      • Uses a time-based premium easing curve so projector motion stays smooth.
     """
 
     # ── Smoothstep helper ─────────────────────────────────────────────────
@@ -263,13 +264,7 @@ class VideoDisplayWidget(QWidget):
         self._fade_timer.timeout.connect(self._on_fade_tick)
 
         # ── Zoom/pan transform (images only) ─────────────────────────────
-        self._img_zoom: float = 1.0
-        self._img_norm_x: float = 0.0    # normalised offset (×widget_width)
-        self._img_norm_y: float = 0.0
-        # Current (displayed) values — lerped towards target
-        self._cur_zoom: float = 1.0
-        self._cur_norm_x: float = 0.0
-        self._cur_norm_y: float = 0.0
+        self._image_transform = ProjectionTransformAnimation()
         self._transform_timer = QTimer(self)
         self._transform_timer.setInterval(16)
         self._transform_timer.timeout.connect(self._on_transform_tick)
@@ -324,9 +319,7 @@ class VideoDisplayWidget(QWidget):
         self._fade_timer.stop()
         self._fade_t = 1.0
         # Reset transform without animation
-        self._img_zoom = self._cur_zoom = 1.0
-        self._img_norm_x = self._cur_norm_x = 0.0
-        self._img_norm_y = self._cur_norm_y = 0.0
+        self._image_transform.reset()
         self._transform_timer.stop()
         self._paint_pending = True
         self.update()
@@ -334,8 +327,8 @@ class VideoDisplayWidget(QWidget):
     def set_image_transform(self, zoom: float, norm_x: float, norm_y: float,
                             *, animate: bool = True) -> None:
         """
-        Set a new zoom/pan target.  By default the change is animated via a
-        smoothstep lerp so the projector pans/zooms with a cinematic ease.
+        Set a new zoom/pan target. By default the change uses the shared,
+        time-based projection animation with interruption-safe retargeting.
 
         Pass ``animate=False`` to snap to the target instantly — used when
         replaying the current transform onto a freshly created surface (a
@@ -344,16 +337,13 @@ class VideoDisplayWidget(QWidget):
 
         norm_x / norm_y are offsets expressed as a fraction of the widget size.
         """
-        self._img_zoom   = zoom
-        self._img_norm_x = norm_x
-        self._img_norm_y = norm_y
-        if animate:
-            if not self._transform_timer.isActive():
-                self._transform_timer.start()
+        active = self._image_transform.set_target(
+            ImageTransform(zoom, norm_x, norm_y),
+            animate=animate,
+        )
+        if active:
+            self._transform_timer.start()
         else:
-            self._cur_zoom   = zoom
-            self._cur_norm_x = norm_x
-            self._cur_norm_y = norm_y
             self._transform_timer.stop()
             self._paint_pending = True
             self.update()
@@ -362,9 +352,7 @@ class VideoDisplayWidget(QWidget):
         """Snap transform to identity immediately — no lerp animation.
         Used when switching to a new image so the old zoom/pan never bleeds through.
         """
-        self._img_zoom   = self._cur_zoom   = 1.0
-        self._img_norm_x = self._cur_norm_x = 0.0
-        self._img_norm_y = self._cur_norm_y = 0.0
+        self._image_transform.reset()
         self._transform_timer.stop()
 
     # ── Fade-in tick ─────────────────────────────────────────────────────
@@ -378,23 +366,11 @@ class VideoDisplayWidget(QWidget):
             self._paint_pending = True
             self.update()
 
-    # ── Transform lerp tick ───────────────────────────────────────────────
+    # ── Transform animation tick ──────────────────────────────────────────
 
     def _on_transform_tick(self):
-        speed = 0.13   # smoothstep lerp factor per frame
-        dz  = self._img_zoom   - self._cur_zoom
-        dx  = self._img_norm_x - self._cur_norm_x
-        dy  = self._img_norm_y - self._cur_norm_y
-
-        self._cur_zoom   += dz  * speed
-        self._cur_norm_x += dx  * speed
-        self._cur_norm_y += dy  * speed
-
-        # Stop when close enough
-        if abs(dz) < 0.0005 and abs(dx) < 0.00005 and abs(dy) < 0.00005:
-            self._cur_zoom   = self._img_zoom
-            self._cur_norm_x = self._img_norm_x
-            self._cur_norm_y = self._img_norm_y
+        self._image_transform.sample()
+        if not self._image_transform.is_active:
             self._transform_timer.stop()
 
         if not self._paint_pending:
@@ -463,19 +439,20 @@ class VideoDisplayWidget(QWidget):
         base = self._ensure_dst_rect(img_to_draw.width(), img_to_draw.height())
 
         # ── Apply zoom/pan transform (image mode only) ────────────────────
+        transform = self._image_transform.current
         if self._mode == "image" and (
-            abs(self._cur_zoom - 1.0) > 0.001
-            or abs(self._cur_norm_x) > 0.0001
-            or abs(self._cur_norm_y) > 0.0001
+            abs(transform.zoom - 1.0) > 0.001
+            or abs(transform.norm_x) > 0.0001
+            or abs(transform.norm_y) > 0.0001
         ):
             ww = self.width()
             wh = self.height()
             cx = base.x() + base.width()  / 2.0
             cy = base.y() + base.height() / 2.0
-            nw = base.width()  * self._cur_zoom
-            nh = base.height() * self._cur_zoom
-            ox = self._cur_norm_x * ww
-            oy = self._cur_norm_y * wh
+            nw = base.width()  * transform.zoom
+            nh = base.height() * transform.zoom
+            ox = transform.norm_x * ww
+            oy = transform.norm_y * wh
             dst = QRectF(cx - nw / 2.0 + ox, cy - nh / 2.0 + oy, nw, nh)
         else:
             dst = base
