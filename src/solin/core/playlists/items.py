@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 from ..media.formats import MediaKind, media_kind_from_path, media_type_from_path
 from .media_reference import parse_jw_media_reference
@@ -21,6 +21,7 @@ class PlaylistMediaItem(TypedDict):
     issue_tag: int | None
     doc_id: int | None
     meps_language: int
+    image_framing: NotRequired[dict[str, Any]]
 
 
 def looks_like_filename_title(title: str) -> bool:

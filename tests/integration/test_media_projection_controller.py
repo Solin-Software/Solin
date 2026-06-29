@@ -1,9 +1,12 @@
+from PySide6.QtGui import QColor, QImage
+
 from solin.controllers.media_projection_controller import (
     MediaProjectionContext,
     MediaProjectionController,
     MediaProjectionHandlers,
 )
 from solin.core.projection.application import ProjectionSession
+from solin.core.projection.image_framing import ImageTransform
 
 
 class _NavigationStub:
@@ -74,6 +77,7 @@ class _ProjectionBarStub:
         self.hidden_add_to_playlist = 0
         self.live_tab_modes = []
         self.tab_previews = []
+        self.initial_transforms = []
         self.preview_content = _PreviewContentStub()
         self._playlist_items = []
 
@@ -93,8 +97,15 @@ class _ProjectionBarStub:
         if self.events is not None:
             self.events.append(("proj_bar", "activate_video", title, is_audio))
 
-    def activate_image(self, title, image_data=None, keep_expanded=False):
+    def activate_image(
+        self,
+        title,
+        image_data=None,
+        keep_expanded=False,
+        initial_transform=None,
+    ):
         self.images.append((title, image_data, keep_expanded))
+        self.initial_transforms.append(initial_transform)
         self.video_mode = False
         self.audio_mode = False
 
@@ -159,6 +170,7 @@ class _ProjectionWindowStub:
         self.pixmaps = []
         self.frames = []
         self.transforms = []
+        self.image_initial_transforms = []
         self.instant_resets = 0
 
     def clear(self):
@@ -171,8 +183,9 @@ class _ProjectionWindowStub:
         if self.events is not None:
             self.events.append(("projection_window", "begin_video"))
 
-    def show_image_from_url_data(self, data):
+    def show_image_from_url_data(self, data, *, initial_transform=None):
         self.images.append(data)
+        self.image_initial_transforms.append(initial_transform)
 
     def show_image_from_pixmap(self, frame):
         self.pixmaps.append(frame)
@@ -410,6 +423,61 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
         "data": b"image-data",
         "transform": (1.0, 0.0, 0.0),
     }
+
+
+def test_prepared_image_framing_is_applied_instantly_and_saved_in_session(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "prepared.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+    framing = {
+        "version": 1,
+        "zoom": 1.5,
+        "norm_x": 0.2,
+        "norm_y": 0.0,
+    }
+    playlist = [{
+        "url": str(image_path),
+        "title": "Prepared",
+        "type": "image",
+        "image_framing": framing,
+    }]
+
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    expected = ImageTransform(1.5, 0.2, 0.0)
+    assert window.projection_session.state["transform"] == (1.5, 0.2, 0.0)
+    assert window.proj_bar.initial_transforms[-1] == expected
+    assert [surface.image_initial_transforms[-1] for surface in window.windows] == [
+        expected,
+        expected,
+    ]
+    assert all(surface.transforms == [] for surface in window.windows)
+
+
+def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "next.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+
+    controller.project_next_auto({
+        "url": str(image_path),
+        "title": "Next",
+        "type": "image",
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.5,
+            "norm_x": -0.2,
+            "norm_y": 0.0,
+        },
+    })
+
+    assert window.projection_session.state["transform"] == (1.5, -0.2, 0.0)
 
 
 def test_project_tab_frame_initializes_live_tab_once():

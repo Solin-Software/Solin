@@ -601,6 +601,11 @@ class MainWindow(QMainWindow):
                 translate=self.tr,
                 sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
                 start_videos_paused=self.settings_widget.get_start_videos_paused,
+                projection_aspect_ratio_provider=(
+                    lambda: projection_aspect_ratio_from_windows(
+                        tuple(self.projection_session.projection_windows)
+                    )
+                ),
             ),
             MediaProjectionHandlers(
                 stop_browser_tab_projection=(

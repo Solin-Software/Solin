@@ -1112,7 +1112,17 @@ class MeetingTreeStoreTests(unittest.TestCase):
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
-            nodes = [{"id": "n1", "type": "section", "children": []}]
+            nodes = [{
+                "id": "n1",
+                "type": "media",
+                "children": [],
+                "image_framing": {
+                    "version": 1,
+                    "zoom": 1.4,
+                    "norm_x": 0.12,
+                    "norm_y": -0.08,
+                },
+            }]
             store.save("mwb:2026-05-25:T:20260500", nodes, "hash")
             loaded, digest = store.load("mwb:2026-05-25:T:20260500")
             self.assertEqual(loaded, nodes)

@@ -18,6 +18,7 @@ _DURABLE_MEDIA_FIELDS = (
     "thumbnail_local_path",
     "thumbnail_cache_key",
     "base_duration_ticks",
+    "image_framing",
 )
 _MEDIA_IDENTITY_FIELDS = (
     "multimedia_id",

@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from solin.core.projection.image_framing import cover_zoom_for_frame
+from solin.core.projection.image_framing import ImageTransform
 from solin.widgets.projection.preview import ImagePreviewWidget
 
 
@@ -102,6 +103,25 @@ def test_preview_apply_emits_current_normalized_transform() -> None:
     widget._apply_btn.click()
 
     assert emitted == [(1.4, 0.15, -0.2)]
+
+
+def test_loading_prepared_transform_does_not_change_framing_pill_state() -> None:
+    widget = ImagePreviewWidget()
+    widget.resize(1000, 800)
+    widget.set_image_mode(True)
+    widget.set_image_pixmap_fresh(_pixmap())
+    widget.configure_framing(
+        match_projection_aspect=False,
+        constrain_to_frame=False,
+        aspect_ratio=16 / 9,
+        aspect_ratio_label="16:9",
+    )
+
+    applied = widget.set_current_transform(ImageTransform(1.4, 0.15, -0.2))
+
+    assert applied == ImageTransform(1.4, 0.15, -0.2)
+    assert not widget._aspect_btn.isChecked()
+    assert not widget._bounds_btn.isChecked()
 
 
 def test_preview_reset_keeps_original_image_fitted_when_constrained() -> None:

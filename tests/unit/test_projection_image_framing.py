@@ -1,15 +1,115 @@
 from __future__ import annotations
 
 from solin.core.projection.image_framing import (
+    IMAGE_FRAMING_VERSION,
     IDENTITY_IMAGE_TRANSFORM,
     ImageTransform,
     clamp_transform_to_frame,
+    constrain_image_transform_for_aspect,
     cover_zoom_for_frame,
     frame_for_aspect,
+    image_transform_from_record,
+    image_transform_to_record,
     initial_transform_for_frame,
     pan_bounds_for_frame,
+    prepare_image_transform_for_aspect,
     snap_zoom_to_frame_cover,
 )
+
+
+def test_image_framing_record_round_trips_non_identity_transform() -> None:
+    transform = ImageTransform(1.4567894, 0.1234567, -0.2345678)
+
+    record = image_transform_to_record(transform)
+
+    assert record == {
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": 1.456789,
+        "norm_x": 0.123457,
+        "norm_y": -0.234568,
+    }
+    assert image_transform_from_record(record) == ImageTransform(
+        1.456789,
+        0.123457,
+        -0.234568,
+    )
+
+
+def test_image_framing_record_omits_identity_and_rejects_invalid_values() -> None:
+    assert image_transform_to_record(IDENTITY_IMAGE_TRANSFORM) is None
+    assert image_transform_from_record(None) is None
+    assert image_transform_from_record({"version": 99}) is None
+    assert image_transform_from_record({
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": float("nan"),
+        "norm_x": 0.0,
+        "norm_y": 0.0,
+    }) is None
+    assert image_transform_from_record({
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": 2.0,
+        "norm_x": float("inf"),
+        "norm_y": 0.0,
+    }) is None
+
+
+def test_image_framing_record_clamps_zoom_to_renderer_limits() -> None:
+    low = image_transform_from_record({
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": -10.0,
+        "norm_x": 0.1,
+        "norm_y": 0.0,
+    })
+    high = image_transform_from_record({
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": 100.0,
+        "norm_x": 0.1,
+        "norm_y": 0.0,
+    })
+
+    assert low is not None and low.zoom == 0.1
+    assert high is not None and high.zoom == 10.0
+
+
+def test_prepared_transform_is_reclamped_when_projection_aspect_changes() -> None:
+    authored = constrain_image_transform_for_aspect(
+        1000,
+        1000,
+        16 / 9,
+        ImageTransform(1.5, 0.5, -0.5),
+    )
+    on_four_three = constrain_image_transform_for_aspect(
+        1000,
+        1000,
+        4 / 3,
+        authored,
+    )
+    on_vertical = constrain_image_transform_for_aspect(
+        1000,
+        1000,
+        9 / 16,
+        authored,
+    )
+
+    assert authored == ImageTransform(1.5, 0.0, -0.25)
+    assert on_four_three.norm_x == 0.0
+    assert on_four_three.norm_y == -0.25
+    assert on_vertical.norm_x == 0.0
+    assert on_vertical.norm_y == 0.0
+
+
+def test_prepared_edit_snaps_to_the_exact_frame_cover_threshold() -> None:
+    prepared = prepare_image_transform_for_aspect(
+        100,
+        200,
+        16 / 9,
+        ImageTransform(3.0, 0.0, 0.0),
+        ImageTransform(4.0, 1.0, -1.0),
+    )
+
+    assert prepared.zoom == cover_zoom_for_frame(100, 200, 16 / 9, 1.0)
+    assert prepared.norm_x == 0.0
+    assert prepared.norm_y < 0.0
 
 
 def test_frame_for_aspect_centers_wide_projection_inside_tall_container() -> None:

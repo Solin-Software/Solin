@@ -269,6 +269,7 @@ class PlaylistEditActionsMixin:
             self._import_jwlplaylists_drop(jwl_files)
 
     def _project_by_id(self, item_id: str) -> None:
+        self._flush_image_framing_save()
         if not self._pl:
             return
         items = self._pl.get("items", [])
@@ -288,6 +289,7 @@ class PlaylistEditActionsMixin:
         return os.path.exists(url)
 
     def _do_play_all(self) -> None:
+        self._flush_image_framing_save()
         if not self._pl:
             return
         items = [it for it in self._pl.get("items", []) if self._is_playable(it)]
@@ -295,6 +297,7 @@ class PlaylistEditActionsMixin:
             self.project_items.emit(items, 0, "next")
 
     def _do_shuffle(self) -> None:
+        self._flush_image_framing_save()
         if not self._pl:
             return
         items = [it for it in self._pl.get("items", []) if self._is_playable(it)]

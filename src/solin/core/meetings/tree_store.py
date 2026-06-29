@@ -259,6 +259,8 @@ def _stored_file_name(value: str) -> str:
 
 
 def _int_or_default(value: object, default: int = 0) -> int:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
     try:
         return int(value)
     except (TypeError, ValueError):

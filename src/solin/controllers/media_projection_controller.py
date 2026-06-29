@@ -14,6 +14,16 @@ from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
 )
 from ..core.media.formats import AUDIO_EXTS
+from ..core.projection.aspect_ratio import (
+    DEFAULT_PROJECTION_ASPECT_RATIO,
+    ProjectionAspectRatio,
+)
+from ..core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    ImageTransform,
+    constrain_image_transform_for_aspect,
+    image_transform_from_record,
+)
 
 #: Projection states that carry a zoom/pan transform (so it is persisted in the
 #: projection session and replayed onto surfaces created later).  Both render
@@ -23,6 +33,10 @@ _TRANSFORMABLE_STATES = frozenset({"image", "sermon_theme"})
 
 #: Identity transform (no zoom, no pan).
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
+
+
+def _default_projection_aspect_ratio() -> ProjectionAspectRatio:
+    return DEFAULT_PROJECTION_ASPECT_RATIO
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +55,9 @@ class MediaProjectionContext:
     translate: Callable[[str], str]
     sjjm_announce_mode: Callable[[], bool]
     start_videos_paused: Callable[[], bool]
+    projection_aspect_ratio_provider: Callable[[], Any] = (
+        _default_projection_aspect_ratio
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +122,12 @@ class MediaProjectionController:
             title = item.get("title") or item.get("label") or "Media"
             media_type = item.get("type") or item.get("media_type") or "video"
             if media_type == "image" and url and os.path.exists(url):
-                self._project_image_path(title, url, playlist=[])
+                self._project_image_path(
+                    title,
+                    url,
+                    playlist=[],
+                    image_framing=item.get("image_framing"),
+                )
             elif url:
                 playlist_item = {"url": url, "title": title, "type": media_type}
                 self.project_video(url, title, [playlist_item], None)
@@ -115,7 +137,12 @@ class MediaProjectionController:
         title = re.sub(r"<[^>]+>", "", item.label or item.caption or "Media").strip()
 
         if "image" in mime and item.file_path and os.path.exists(item.file_path):
-            self._project_image_path(title, item.file_path, playlist=[])
+            self._project_image_path(
+                title,
+                item.file_path,
+                playlist=[],
+                image_framing=getattr(item, "image_framing", None),
+            )
             return
 
         if "video" not in mime and "image" in mime:
@@ -151,6 +178,7 @@ class MediaProjectionController:
     ) -> None:
         mtype = playlist[0].get("type", "video") if playlist else "video"
         if mtype == "image":
+            selected_item = playlist[0] if playlist else {}
             self._project_image_path(
                 title,
                 url,
@@ -158,6 +186,7 @@ class MediaProjectionController:
                 playback_order=order if order else None,
                 from_saved_playlist=True,
                 keep_expanded=self._context.projection_bar.is_expanded(),
+                image_framing=selected_item.get("image_framing"),
             )
             return
 
@@ -189,8 +218,11 @@ class MediaProjectionController:
         ext = os.path.splitext(url.split("?")[0])[1].lower()
         self.project_video_core(url, title, is_audio=ext in AUDIO_EXTS)
 
-    def project_next_auto(self, url: str, title: str, media_type: str) -> None:
+    def project_next_auto(self, item: dict[str, Any]) -> None:
         context = self._context
+        url = str(item.get("url") or "")
+        title = str(item.get("title") or "")
+        media_type = str(item.get("type") or "video")
         if url == "__replay__":
             context.media_controller.stop()
             context.ndi_service.stop()
@@ -210,6 +242,7 @@ class MediaProjectionController:
                 title,
                 url,
                 keep_expanded=context.projection_bar.is_expanded(),
+                image_framing=item.get("image_framing"),
             )
             return
 
@@ -412,6 +445,7 @@ class MediaProjectionController:
                 playback_order=playback_order,
                 index=index,
                 keep_expanded=keep_expanded,
+                image_framing=item.get("image_framing"),
             )
             return
 
@@ -438,6 +472,7 @@ class MediaProjectionController:
                 item["title"],
                 item["url"],
                 keep_expanded=projection_bar.is_expanded(),
+                image_framing=item.get("image_framing"),
             )
             return
 
@@ -476,6 +511,7 @@ class MediaProjectionController:
         from_saved_playlist: bool = False,
         index: int | None = None,
         keep_expanded: bool = False,
+        image_framing: object = None,
     ) -> None:
         try:
             with open(path, "rb") as handle:
@@ -490,6 +526,7 @@ class MediaProjectionController:
             from_saved_playlist=from_saved_playlist,
             index=index,
             keep_expanded=keep_expanded,
+            image_framing=image_framing,
         )
 
     def _project_image_data(
@@ -502,8 +539,10 @@ class MediaProjectionController:
         from_saved_playlist: bool = False,
         index: int | None = None,
         keep_expanded: bool = False,
+        image_framing: object = None,
     ) -> None:
         context = self._context
+        initial_transform = self._prepared_image_transform(data, image_framing)
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
@@ -527,18 +566,57 @@ class MediaProjectionController:
 
         for projection_window in context.projection_windows():
             projection_window.clear()
-            projection_window.show_image_from_url_data(data)
+            projection_window.show_image_from_url_data(
+                data,
+                initial_transform=initial_transform,
+            )
 
         self._session.set_state(
-            {"type": "image", "data": data, "transform": _IDENTITY_TRANSFORM}
+            {
+                "type": "image",
+                "data": data,
+                "transform": (
+                    initial_transform.zoom,
+                    initial_transform.norm_x,
+                    initial_transform.norm_y,
+                ),
+            }
         )
         context.projection_bar.activate_image(
             title,
             image_data=data,
             keep_expanded=keep_expanded,
+            initial_transform=initial_transform,
         )
         self._handlers.update_projection_status(
             True,
             title,
             auto_keys_media=True,
+        )
+
+    def _prepared_image_transform(
+        self,
+        data: bytes,
+        record: object,
+    ) -> ImageTransform:
+        transform = image_transform_from_record(record)
+        if transform is None:
+            return IDENTITY_IMAGE_TRANSFORM
+
+        image = QImage()
+        image.loadFromData(data)
+        if image.isNull():
+            return IDENTITY_IMAGE_TRANSFORM
+
+        try:
+            ratio = self._context.projection_aspect_ratio_provider()
+        except Exception:  # noqa: BLE001 - defensive projection provider boundary
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        if not isinstance(ratio, ProjectionAspectRatio):
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        return constrain_image_transform_for_aspect(
+            image.width(),
+            image.height(),
+            ratio.value,
+            transform,
         )

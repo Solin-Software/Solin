@@ -42,7 +42,11 @@ def int_or_zero(value: Any) -> int:
         return 0
 
 
-def meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
+def meeting_media_from_ref(
+    ref: dict[str, Any],
+    *,
+    image_framing: dict[str, Any] | None = None,
+) -> MeetingMedia:
     return MeetingMedia(
         multimedia_id=int_or_zero(ref.get("multimedia_id")),
         mime_type=str(ref.get("mime_type") or ""),
@@ -57,6 +61,7 @@ def meeting_media_from_ref(ref: dict[str, Any]) -> MeetingMedia:
         section=str(ref.get("section") or ""),
         is_song=bool(ref.get("is_song", False)),
         cbs_article_title=str(ref.get("cbs_article_title") or ""),
+        image_framing=image_framing,
     )
 
 

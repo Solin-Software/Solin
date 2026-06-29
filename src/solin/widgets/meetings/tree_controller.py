@@ -96,6 +96,16 @@ from ...core.meetings.tree_store import (
     MeetingTreeStore,
 )
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
+from ...core.projection.aspect_ratio import (
+    DEFAULT_PROJECTION_ASPECT_RATIO,
+    ProjectionAspectRatio,
+)
+from ...core.projection.image_framing import (
+    ImageTransform,
+    image_transform_from_record,
+    image_transform_to_record,
+    prepare_image_transform_for_aspect,
+)
 from ...core.playlists.items import looks_like_filename_title
 from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.tree_delta import incremental_tree_changes
@@ -103,7 +113,11 @@ from ...core.meetings.colors import generate_section_hue, section_colors
 from ...styles.theme import current_theme_scheme
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
-from ...ui.thumbnail_images import save_thumbnail
+from ...ui.thumbnail_images import (
+    image_source_aspect_ratio,
+    load_thumbnail,
+    save_thumbnail,
+)
 
 if TYPE_CHECKING:
     from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -190,6 +204,7 @@ class MeetingTreeController(QObject):
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)
     cloudChanged = Signal(str, bool, bool, float, str)
+    imageFramingChanged = Signal(str, "QVariant")
     syncStateChanged = Signal()
     storageSaved = Signal(str)  # tree_key
     storageSaveFailed = Signal(str, str)  # tree_key, error message
@@ -211,6 +226,7 @@ class MeetingTreeController(QObject):
         cache_manager: MediaCacheManager,
         linked_folder_sync: MeetingLinkedFolderSync,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        projection_aspect_ratio_provider: Callable[[], object] | None = None,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -228,6 +244,10 @@ class MeetingTreeController(QObject):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._media_cache_manager = cache_manager
+        self._projection_aspect_ratio_provider = (
+            projection_aspect_ratio_provider
+            or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
+        )
         self._builder = MeetingTreeBuilder(
             section_title=_translate_section_title,
             media_fallback_title=lambda: _tr("_MediaRow", "Media"),
@@ -268,6 +288,13 @@ class MeetingTreeController(QObject):
         self._local_image_thumb_retry_timer.setSingleShot(True)
         self._local_image_thumb_retry_timer.timeout.connect(
             self._drain_local_image_thumb_retries
+        )
+        self._image_framing_save_pending = False
+        self._image_framing_save_timer = QTimer(self)
+        self._image_framing_save_timer.setSingleShot(True)
+        self._image_framing_save_timer.setInterval(200)
+        self._image_framing_save_timer.timeout.connect(
+            self._flush_image_framing_save
         )
         self._pdf_threads: list[Any] = []
         self._jwpub_threads: list[Any] = []
@@ -343,12 +370,14 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def set_sync_root(self, watched_folder_path: str) -> None:
+        self._flush_image_framing_save()
         self._sync_root = watched_folder_path or ""
         self._refresh_sync_availability()
         if self._tree_key:
             self._refresh_sync_from_manifest()
 
     def load_week(self, pub_type: str, wd: WeekData) -> None:
+        self._flush_image_framing_save()
         self._meeting_type = pub_type
         if pub_type == "mwb":
             canonical = self._builder.build_midweek(wd)
@@ -513,6 +542,7 @@ class MeetingTreeController(QObject):
             return None
 
     def _refresh_sync_from_manifest(self) -> bool:
+        self._flush_image_framing_save()
         record = self._load_sync_record()
         if record is None:
             if self._sync_enabled:
@@ -978,6 +1008,7 @@ class MeetingTreeController(QObject):
         return self._tree_data_cache
 
     def cleanup(self) -> None:
+        self._flush_image_framing_save()
         _reset_media_request_queue(self)
         for threads in (
             self._pdf_threads,
@@ -1292,6 +1323,7 @@ class MeetingTreeController(QObject):
 
     @Slot()
     def backClicked(self):
+        self._flush_image_framing_save()
         self.backRequested.emit()
 
     @Slot()
@@ -1531,6 +1563,7 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def projectItem(self, item_id: str):
+        self._flush_image_framing_save()
         node = self._find_node(item_id)
         if not node or node.get("type") != "media":
             return
@@ -1541,7 +1574,96 @@ class MeetingTreeController(QObject):
         resolved = self._resolved_urls.get(item_id) or node.get("resolved_url", "")
         if resolved:
             ref["file_path"] = resolved
-        self.projectRequested.emit(meeting_media_from_ref(ref))
+        framing = image_transform_to_record(
+            image_transform_from_record(node.get("image_framing"))
+        )
+        self.projectRequested.emit(
+            meeting_media_from_ref(ref, image_framing=framing)
+        )
+
+    @Slot(result=float)
+    def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API
+        try:
+            ratio = self._projection_aspect_ratio_provider()
+        except Exception:  # noqa: BLE001 - defensive UI provider boundary
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        if not isinstance(ratio, ProjectionAspectRatio):
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        return ratio.value
+
+    @Slot(str, result=float)
+    def imageFramingSourceAspectRatio(self, item_id: str) -> float:  # noqa: N802
+        node = self._find_node(item_id)
+        ratio = image_source_aspect_ratio(
+            path=self._url_for_node(node) if node else ""
+        )
+        if ratio > 0.0:
+            return ratio
+        pixmap = self._thumb_cache.get(item_id)
+        if pixmap is None or pixmap.isNull():
+            pixmap = load_thumbnail(self._meeting_thumbnail_store, item_id)
+        return image_source_aspect_ratio(pixmap=pixmap)
+
+    @Slot(str, float, float, float, float, float)
+    def setImageFraming(  # noqa: N802 - QML API
+        self,
+        item_id: str,
+        zoom: float,
+        norm_x: float,
+        norm_y: float,
+        source_width: float,
+        source_height: float,
+    ) -> None:
+        node = self._find_node(item_id)
+        if not node or node.get("type") != "media":
+            return
+        ref = node.get("media_ref") or {}
+        media_type = node.get("media_type") or self._media_type_from_ref(ref)
+        if media_type != "image":
+            return
+        source_aspect_ratio = self.imageFramingSourceAspectRatio(item_id)
+        if source_aspect_ratio > 0.0:
+            source_width = source_aspect_ratio
+            source_height = 1.0
+        current_transform = image_transform_from_record(node.get("image_framing"))
+        transform = prepare_image_transform_for_aspect(
+            source_width,
+            source_height,
+            self.imageFramingAspectRatio(),
+            current_transform,
+            ImageTransform(zoom, norm_x, norm_y),
+        )
+        record = image_transform_to_record(transform)
+        current = image_transform_to_record(current_transform)
+        if record == current:
+            return
+        if record is None:
+            node.pop("image_framing", None)
+        else:
+            node["image_framing"] = record
+        self._tree_data_cache = None
+        self.imageFramingChanged.emit(item_id, record)
+        self._schedule_image_framing_save()
+
+    @Slot(str)
+    def resetImageFraming(self, item_id: str) -> None:  # noqa: N802 - QML API
+        node = self._find_node(item_id)
+        if not node or "image_framing" not in node:
+            return
+        node.pop("image_framing", None)
+        self._tree_data_cache = None
+        self.imageFramingChanged.emit(item_id, None)
+        self._schedule_image_framing_save()
+
+    def _schedule_image_framing_save(self) -> None:
+        self._image_framing_save_pending = True
+        self._image_framing_save_timer.start()
+
+    def _flush_image_framing_save(self) -> None:
+        if not self._image_framing_save_pending:
+            return
+        self._image_framing_save_timer.stop()
+        self._save()
 
     @Slot(str)
     def removeItem(self, item_id: str):
@@ -1751,6 +1873,8 @@ class MeetingTreeController(QObject):
         mgr.prefetch_error.connect(self._on_prefetch_error)
 
     def _save(self) -> None:
+        self._image_framing_save_timer.stop()
+        self._image_framing_save_pending = False
         if not self._tree_key:
             return
         if self._sync_enabled:
@@ -2011,6 +2135,9 @@ class MeetingTreeController(QObject):
             "cloudProgress": cloud_progress,
             "cloudTooltip": cloud_tooltip,
             "isMissing": is_missing,
+            "imageFraming": image_transform_to_record(
+                image_transform_from_record(node.get("image_framing"))
+            ),
             "children": [],
         }
 

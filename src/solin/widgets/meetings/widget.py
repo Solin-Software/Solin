@@ -159,7 +159,9 @@ class StudyDetailView(QWidget):
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  meeting_tree_saved_handler: Callable[[str], None] | None = None,
                  saved_snapshot: MeetingTreeSnapshot | None = None,
-                 watched_folder: str = "", parent=None):
+                 watched_folder: str = "",
+                 projection_aspect_ratio_provider: Callable[[], object] | None = None,
+                 parent=None):
         super().__init__(parent)
         self._pub   = pub_type
         self._wd    = wd
@@ -183,6 +185,7 @@ class StudyDetailView(QWidget):
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
+        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._meeting_tree_saved_handler = meeting_tree_saved_handler
         self._saved_snapshot = saved_snapshot
         self._watched_folder = watched_folder
@@ -216,6 +219,9 @@ class StudyDetailView(QWidget):
             cache_manager=self._cache_manager,
             linked_folder_sync=self._meeting_linked_folder_sync,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=(
+                self._projection_aspect_ratio_provider
+            ),
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -452,6 +458,7 @@ class _MemorialDetailView(QWidget):
                  meeting_linked_folder_sync: MeetingLinkedFolderSync,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+                 projection_aspect_ratio_provider: Callable[[], object] | None = None,
                  parent=None):
         super().__init__(parent)
         self._md  = md
@@ -475,6 +482,7 @@ class _MemorialDetailView(QWidget):
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
+        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -504,6 +512,9 @@ class _MemorialDetailView(QWidget):
             cache_manager=self._cache_manager,
             linked_folder_sync=self._meeting_linked_folder_sync,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=(
+                self._projection_aspect_ratio_provider
+            ),
             fallback_language_code=self._language_context.fallback_code,
             parent=self,
         )
@@ -715,6 +726,7 @@ class MeetingsWidget(QWidget):
         jwpub_service_factory: Callable[[QObject], JwpubService],
         memorial_service_factory: Callable[[QObject], MemorialService],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        projection_aspect_ratio_provider: Callable[[], object] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -745,6 +757,7 @@ class MeetingsWidget(QWidget):
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
         self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
+        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
 
         self._service = jwpub_service_factory(self)
         self._set_lang_from_mgr()
@@ -1035,6 +1048,9 @@ class MeetingsWidget(QWidget):
             ),
             meeting_schedule_settings=self._meeting_schedule_settings,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=(
+                self._projection_aspect_ratio_provider
+            ),
             meeting_tree_saved_handler=self._on_detail_tree_saved,
             saved_snapshot=saved_snapshot,
             watched_folder=self._watched_folder,
@@ -1095,6 +1111,9 @@ class MeetingsWidget(QWidget):
                 meeting_linked_folder_sync=self._meeting_linked_folder_sync,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 media_info_queue_factory=self._media_info_queue_factory,
+                projection_aspect_ratio_provider=(
+                    self._projection_aspect_ratio_provider
+                ),
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)

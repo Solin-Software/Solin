@@ -5,14 +5,16 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QObject, QPoint, QTimer, Slot
+from PySide6.QtCore import QObject, QPoint, QPointF, QTimer, Slot, Qt
+from PySide6.QtGui import QColor, QPixmap, QWheelEvent
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtTest import QTest
+from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
 
 from solin.controllers.timer_engine import TimerEngine
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.playlist.visuals import PlaylistThumbnailProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
 
 
@@ -109,3 +111,140 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
 
     assert probe.entered == 1
     assert probe.exited == 1
+
+
+def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:
+    position = QPointF(widget.width() / 2, widget.height() / 2)
+    event = QWheelEvent(
+        position,
+        widget.mapToGlobal(position.toPoint()).toPointF(),
+        QPoint(),
+        QPoint(0, 120),
+        Qt.MouseButton.NoButton,
+        modifiers,
+        Qt.ScrollPhase.ScrollUpdate,
+        False,
+    )
+    QApplication.sendEvent(widget.quickWindow(), event)
+
+
+def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+        image_providers={
+            "playlistthumbs": PlaylistThumbnailProvider({"portrait": portrait}),
+        },
+        mouse_tracking=True,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
+    root.setProperty("projectionAspectRatio", 16 / 9)
+    root.setProperty("sourceAspectRatio", 9 / 16)
+    widget.show()
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+    assert root.property("imageReady") is True
+    assert root.property("sourceWidth") == pytest.approx(9 / 16)
+    assert root.property("sourceHeight") == 1.0
+
+    clicked = QSignalSpy(root.clicked)
+    edited = QSignalSpy(root.framingEdited)
+    reset = QSignalSpy(root.framingReset)
+
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
+    QTest.mouseMove(widget, QPoint(53, 28), delay=5)
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(53, 28))
+    assert clicked.count() == 1
+    assert edited.count() == 0
+
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
+    QTest.mouseMove(widget, QPoint(50, 44), delay=5)
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 44))
+    assert clicked.count() == 1
+    assert edited.count() == 0
+    assert root.property("framingActive") is False
+    assert root.property("panAvailable") is False
+
+    _send_thumbnail_wheel(widget, Qt.KeyboardModifier.NoModifier)
+    assert root.property("framingZoom") == 1.0
+    assert edited.count() == 0
+
+    _send_thumbnail_wheel(widget, Qt.KeyboardModifier.ControlModifier)
+    assert root.property("framingZoom") > 1.0
+    assert edited.count() == 1
+    assert root.property("framingActive") is True
+    assert root.property("panAvailable") is True
+
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
+    QTest.mouseMove(widget, QPoint(50, 80), delay=5)
+    assert root.property("panning") is True
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 80))
+    assert clicked.count() == 1
+    assert edited.count() > 1
+    assert root.property("panning") is False
+
+    cover_zoom = float(root.coverZoom())
+    for _step in range(20):
+        if float(root.property("framingZoom")) >= cover_zoom:
+            break
+        _send_thumbnail_wheel(widget, Qt.KeyboardModifier.ControlModifier)
+    assert root.property("framingZoom") == pytest.approx(cover_zoom)
+    assert root.maxPanX() == pytest.approx(0.0, abs=1e-9)
+
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
+    assert reset.count() == 1
+    assert root.property("framingActive") is False
+
+
+def test_image_framing_thumbnail_preserves_pan_until_geometry_is_ready() -> None:
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+        image_providers={
+            "playlistthumbs": PlaylistThumbnailProvider({"portrait": portrait}),
+        },
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("projectionAspectRatio", 16 / 9)
+    root.setProperty("framing", {
+        "version": 1,
+        "zoom": 4.0,
+        "norm_x": 0.15,
+        "norm_y": -0.2,
+    })
+
+    assert root.property("imageReady") is False
+    assert root.property("framingNormX") == pytest.approx(0.15)
+    assert root.property("framingNormY") == pytest.approx(-0.2)
+
+    root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
+    widget.show()
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+    assert root.property("imageReady") is True
+    QTest.qWait(20)
+    assert root.property("framingNormX") < 0.15
+    assert root.property("requestedNormX") == pytest.approx(0.15)
+
+    root.setProperty("sourceAspectRatio", 0.65)
+    QTest.qWait(20)
+
+    assert root.property("framingNormX") == pytest.approx(0.15)
+    assert root.property("framingNormY") == pytest.approx(-0.2)

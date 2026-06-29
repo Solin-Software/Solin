@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+from typing import Any
+
+
+IMAGE_FRAMING_VERSION = 1
+MIN_IMAGE_ZOOM = 0.1
+MAX_IMAGE_ZOOM = 10.0
+_IDENTITY_EPSILON = 1e-6
+_SERIALIZED_PRECISION = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +32,137 @@ class ImageTransform:
 
 
 IDENTITY_IMAGE_TRANSFORM = ImageTransform(1.0, 0.0, 0.0)
+
+
+def image_transform_from_record(value: object) -> ImageTransform | None:
+    """Parse a persisted prepared-image framing record.
+
+    Invalid or identity records are treated as absent so legacy items and
+    corrupted optional metadata always retain the original fit-to-frame path.
+    """
+
+    if not isinstance(value, dict):
+        return None
+    if value.get("version") != IMAGE_FRAMING_VERSION:
+        return None
+    zoom = _finite_float(value.get("zoom"))
+    norm_x = _finite_float(value.get("norm_x"))
+    norm_y = _finite_float(value.get("norm_y"))
+    if zoom is None or norm_x is None or norm_y is None:
+        return None
+    transform = normalize_image_transform(ImageTransform(zoom, norm_x, norm_y))
+    return None if is_identity_image_transform(transform) else transform
+
+
+def image_transform_to_record(transform: ImageTransform | None) -> dict[str, Any] | None:
+    """Return the stable JSON record for a non-identity image transform."""
+
+    if transform is None:
+        return None
+    normalized = normalize_image_transform(transform)
+    if is_identity_image_transform(normalized):
+        return None
+    return {
+        "version": IMAGE_FRAMING_VERSION,
+        "zoom": round(normalized.zoom, _SERIALIZED_PRECISION),
+        "norm_x": round(normalized.norm_x, _SERIALIZED_PRECISION),
+        "norm_y": round(normalized.norm_y, _SERIALIZED_PRECISION),
+    }
+
+
+def normalize_image_transform(transform: ImageTransform) -> ImageTransform:
+    """Clamp finite transform values to renderer-supported zoom limits."""
+
+    zoom = _finite_float(transform.zoom)
+    norm_x = _finite_float(transform.norm_x)
+    norm_y = _finite_float(transform.norm_y)
+    if zoom is None or norm_x is None or norm_y is None:
+        return IDENTITY_IMAGE_TRANSFORM
+    return ImageTransform(
+        _clamp(zoom, MIN_IMAGE_ZOOM, MAX_IMAGE_ZOOM),
+        norm_x,
+        norm_y,
+    )
+
+
+def is_identity_image_transform(transform: ImageTransform) -> bool:
+    normalized = normalize_image_transform(transform)
+    return (
+        abs(normalized.zoom - 1.0) <= _IDENTITY_EPSILON
+        and abs(normalized.norm_x) <= _IDENTITY_EPSILON
+        and abs(normalized.norm_y) <= _IDENTITY_EPSILON
+    )
+
+
+def constrain_image_transform(
+    image_width: float,
+    image_height: float,
+    frame_width: float,
+    frame_height: float,
+    transform: ImageTransform,
+) -> ImageTransform:
+    """Validate and clamp a prepared transform using the strict thumb policy."""
+
+    return clamp_transform_to_frame(
+        image_width,
+        image_height,
+        frame_width,
+        frame_height,
+        normalize_image_transform(transform),
+    )
+
+
+def constrain_image_transform_for_aspect(
+    image_width: float,
+    image_height: float,
+    aspect_ratio: float,
+    transform: ImageTransform,
+) -> ImageTransform:
+    """Clamp a transform against a normalized frame with *aspect_ratio*."""
+
+    ratio = _finite_float(aspect_ratio)
+    if ratio is None or ratio <= 0.0:
+        ratio = 16.0 / 9.0
+    return constrain_image_transform(
+        image_width,
+        image_height,
+        ratio,
+        1.0,
+        transform,
+    )
+
+
+def prepare_image_transform_for_aspect(
+    image_width: float,
+    image_height: float,
+    aspect_ratio: float,
+    previous_transform: ImageTransform | None,
+    requested_transform: ImageTransform,
+) -> ImageTransform:
+    """Snap a zoom crossing to frame coverage, then clamp the full transform."""
+
+    ratio = _finite_float(aspect_ratio)
+    if ratio is None or ratio <= 0.0:
+        ratio = 16.0 / 9.0
+    previous = normalize_image_transform(
+        previous_transform or IDENTITY_IMAGE_TRANSFORM
+    )
+    requested = normalize_image_transform(requested_transform)
+    snapped_zoom = snap_zoom_to_frame_cover(
+        previous.zoom,
+        requested.zoom,
+        image_width,
+        image_height,
+        ratio,
+        1.0,
+    )
+    return constrain_image_transform(
+        image_width,
+        image_height,
+        ratio,
+        1.0,
+        ImageTransform(snapped_zoom, requested.norm_x, requested.norm_y),
+    )
 
 
 def frame_for_aspect(
@@ -66,7 +206,7 @@ def pan_bounds_for_frame(
     image_height = float(image_height)
     frame_width = float(frame_width)
     frame_height = float(frame_height)
-    zoom = max(0.1, float(zoom))
+    zoom = max(MIN_IMAGE_ZOOM, float(zoom))
     if (
         image_width <= 0.0
         or image_height <= 0.0
@@ -122,8 +262,8 @@ def snap_zoom_to_frame_cover(
 ) -> float:
     """Snap a zoom-in step to the exact frame-cover threshold when it crosses it."""
 
-    previous_zoom = max(0.1, float(previous_zoom))
-    requested_zoom = max(0.1, float(requested_zoom))
+    previous_zoom = max(MIN_IMAGE_ZOOM, float(previous_zoom))
+    requested_zoom = max(MIN_IMAGE_ZOOM, float(requested_zoom))
     if requested_zoom <= previous_zoom:
         return requested_zoom
 
@@ -159,7 +299,7 @@ def clamp_transform_to_frame(
     ):
         return IDENTITY_IMAGE_TRANSFORM
 
-    zoom = max(0.1, float(transform.zoom))
+    zoom = _clamp(float(transform.zoom), MIN_IMAGE_ZOOM, MAX_IMAGE_ZOOM)
     max_x, max_y = pan_bounds_for_frame(
         image_width,
         image_height,
@@ -187,3 +327,13 @@ def initial_transform_for_frame(
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
+
+
+def _finite_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None

@@ -10,6 +10,7 @@ from solin.core.projection.image_framing import (
     clamp_transform_to_frame,
     frame_for_aspect,
     initial_transform_for_frame,
+    normalize_image_transform,
     snap_zoom_to_frame_cover,
 )
 from solin.styles.icons import ICON_ASPECT_MATCH, ICON_BOUNDS, make_icon
@@ -204,6 +205,17 @@ class ImagePreviewWidget(QWidget):
 
     def current_transform(self) -> ImageTransform:
         return ImageTransform(self._zoom, self._norm_x, self._norm_y)
+
+    def set_current_transform(self, transform: ImageTransform) -> ImageTransform:
+        normalized = normalize_image_transform(transform)
+        self._zoom = normalized.zoom
+        self._norm_x = normalized.norm_x
+        self._norm_y = normalized.norm_y
+        self._clamp_current_transform()
+        self._update_zoom_label()
+        self._check_action_bar()
+        self.update()
+        return self.current_transform()
 
     def set_image_mode(self, active: bool):
         self._image_mode = active

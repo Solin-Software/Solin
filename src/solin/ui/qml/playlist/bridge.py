@@ -8,9 +8,15 @@ Architecture
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import Any, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
+
+from solin.core.projection.aspect_ratio import (
+    DEFAULT_PROJECTION_ASPECT_RATIO,
+    ProjectionAspectRatio,
+)
 
 if TYPE_CHECKING:
     from solin.ui.qml.playlist.model import PlaylistEditModel
@@ -41,6 +47,8 @@ class PlaylistEditBridge(QObject):
     removeItemSignal     = Signal(str)          # item_id
     renameItemSignal     = Signal(str)          # item_id
     downloadItemSignal   = Signal(str)          # item_id
+    imageFramingSetRequested = Signal(str, float, float, float, float, float)
+    imageFramingResetRequested = Signal(str)
     renameMarkerSignal   = Signal(str, str)     # marker_id, text
     deleteMarkerSignal   = Signal(str)          # marker_id
 
@@ -67,11 +75,24 @@ class PlaylistEditBridge(QObject):
     sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)           # marker_id
     cloudChanged = Signal(str, bool, bool, float, str)
+    imageFramingChanged = Signal(str, "QVariant")
     pointerEntered = Signal()
     pointerExited = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        projection_aspect_ratio_provider: Callable[[], Any] | None = None,
+        image_source_aspect_ratio_provider: Callable[[str], float] | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
+        self._projection_aspect_ratio_provider = (
+            projection_aspect_ratio_provider
+            or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
+        )
+        self._image_source_aspect_ratio_provider = (
+            image_source_aspect_ratio_provider or (lambda _item_id: 0.0)
+        )
         self._playlist_name = ""
         self._is_temp = False
         self._is_watched = False
@@ -107,6 +128,9 @@ class PlaylistEditBridge(QObject):
                 float(patch.get("cloudProgress", -1.0)),
                 patch.get("cloudTooltip", ""),
             )
+
+    def emit_image_framing_changed(self, item_id: str, record: dict | None) -> None:
+        self.imageFramingChanged.emit(item_id, record)
 
     # ── Properties ─────────────────────────────────────────────────────────
 
@@ -272,6 +296,47 @@ class PlaylistEditBridge(QObject):
     @Slot(str)
     def downloadItem(self, item_id: str):
         self.downloadItemSignal.emit(item_id)
+
+    @Slot(str, float, float, float, float, float)
+    def setImageFraming(  # noqa: N802 - QML API
+        self,
+        item_id: str,
+        zoom: float,
+        norm_x: float,
+        norm_y: float,
+        source_width: float,
+        source_height: float,
+    ) -> None:
+        self.imageFramingSetRequested.emit(
+            item_id,
+            zoom,
+            norm_x,
+            norm_y,
+            source_width,
+            source_height,
+        )
+
+    @Slot(str)
+    def resetImageFraming(self, item_id: str) -> None:  # noqa: N802 - QML API
+        self.imageFramingResetRequested.emit(item_id)
+
+    @Slot(result=float)
+    def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API
+        try:
+            ratio = self._projection_aspect_ratio_provider()
+        except Exception:  # noqa: BLE001 - defensive UI provider boundary
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        if not isinstance(ratio, ProjectionAspectRatio):
+            ratio = DEFAULT_PROJECTION_ASPECT_RATIO
+        return ratio.value
+
+    @Slot(str, result=float)
+    def imageFramingSourceAspectRatio(self, item_id: str) -> float:  # noqa: N802
+        try:
+            ratio = float(self._image_source_aspect_ratio_provider(item_id))
+        except Exception:  # noqa: BLE001 - defensive UI provider boundary
+            return 0.0
+        return ratio if ratio > 0.0 else 0.0
 
     @Slot(str, str)
     def renameMarker(self, marker_id: str, text: str):

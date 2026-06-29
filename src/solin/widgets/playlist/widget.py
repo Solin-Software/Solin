@@ -43,6 +43,12 @@ from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.playlists.items import looks_like_filename_title
+from ...core.projection.image_framing import (
+    ImageTransform,
+    image_transform_from_record,
+    image_transform_to_record,
+    prepare_image_transform_for_aspect,
+)
 from ...core.tree_delta import incremental_tree_changes
 from ...ui.media_info import MediaInfoQueue
 from .drag_drop import PlaylistDragDropMixin
@@ -54,7 +60,11 @@ from .dialogs import HuePickerDialog, NameDialog
 from ...core.playlists.storage import (
     PlaylistStoragePaths,
 )
-from ...ui.thumbnail_images import load_thumbnail, save_thumbnail
+from ...ui.thumbnail_images import (
+    image_source_aspect_ratio,
+    load_thumbnail,
+    save_thumbnail,
+)
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
 _PLAYLIST_REORDER_LOCATION_KEYS = frozenset({
@@ -119,6 +129,7 @@ class PlaylistEditView(
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         all_playlists: list[dict],
         schedule_cleanup: Callable[[list[dict]], None],
+        projection_aspect_ratio_provider: Callable[[], object] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -157,6 +168,13 @@ class PlaylistEditView(
         self._thumb_scan_timer.setSingleShot(True)
         self._thumb_scan_timer.setInterval(0)
         self._thumb_scan_timer.timeout.connect(self._scan_missing_thumbnails_batch)
+        self._image_framing_save_pending = False
+        self._image_framing_save_timer = QTimer(self)
+        self._image_framing_save_timer.setSingleShot(True)
+        self._image_framing_save_timer.setInterval(200)
+        self._image_framing_save_timer.timeout.connect(
+            self._flush_image_framing_save
+        )
         self._pdf_threads:  list[object] = []
         self._lo_threads:   list[object] = []
         self._wf_refresh_pending: bool = False      # deferred refresh flag
@@ -168,7 +186,11 @@ class PlaylistEditView(
             self._playlist_thumbnail_store,
             self,
         )
-        self.bridge = PlaylistEditBridge(self)
+        self.bridge = PlaylistEditBridge(
+            projection_aspect_ratio_provider,
+            self._image_source_aspect_ratio,
+            parent=self,
+        )
         self.bridge.attach_model(self.model)
         self.catalog_bridge = JWMediaCatalogBridge(
             jw_catalog_service_factory,
@@ -212,6 +234,7 @@ class PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self._flush_image_framing_save()
         self._thumb_queue.shutdown()
         self._thumb_scan_timer.stop()
         self._thumb_scan_items.clear()
@@ -243,6 +266,8 @@ class PlaylistEditView(
     # ── Centralized save dispatch ──────────────────────────────────────────
     def _save(self) -> None:
         """Save playlist state: to playlists.json for normal, to manifest for watched folders."""
+        self._image_framing_save_timer.stop()
+        self._image_framing_save_pending = False
         if self._is_temp:
             return
         if self._is_watched:
@@ -304,6 +329,8 @@ class PlaylistEditView(
         self.bridge.removeItemSignal.connect(self._remove_item)
         self.bridge.renameItemSignal.connect(self._rename_item)
         self.bridge.downloadItemSignal.connect(self._download_item)
+        self.bridge.imageFramingSetRequested.connect(self._set_image_framing)
+        self.bridge.imageFramingResetRequested.connect(self._reset_image_framing)
         self.bridge.renameMarkerSignal.connect(self._rename_marker)
         self.bridge.deleteMarkerSignal.connect(self._delete_marker)
 
@@ -325,6 +352,91 @@ class PlaylistEditView(
         self.catalog_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
         self.songs_bridge.itemAddedSuccessfully.connect(self._notifications.success)
         self.songs_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
+
+    @Slot(str, float, float, float, float, float)
+    def _set_image_framing(
+        self,
+        item_id: str,
+        zoom: float,
+        norm_x: float,
+        norm_y: float,
+        source_width: float,
+        source_height: float,
+    ) -> None:
+        if not self._pl:
+            return
+        item = next(
+            (candidate for candidate in self._pl.get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        if not item or item.get("type") != "image":
+            return
+        source_aspect_ratio = self._image_source_aspect_ratio(item_id)
+        if source_aspect_ratio > 0.0:
+            source_width = source_aspect_ratio
+            source_height = 1.0
+        current_transform = image_transform_from_record(item.get("image_framing"))
+        transform = prepare_image_transform_for_aspect(
+            source_width,
+            source_height,
+            self.bridge.imageFramingAspectRatio(),
+            current_transform,
+            ImageTransform(zoom, norm_x, norm_y),
+        )
+        record = image_transform_to_record(transform)
+        current = image_transform_to_record(current_transform)
+        if record == current:
+            return
+        if record is None:
+            item.pop("image_framing", None)
+        else:
+            item["image_framing"] = record
+        self.model.invalidate_tree_data_cache()
+        self.bridge.emit_image_framing_changed(item_id, record)
+        self._schedule_image_framing_save()
+
+    def _image_source_aspect_ratio(self, item_id: str) -> float:
+        item = next(
+            (candidate for candidate in (self._pl or {}).get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        ratio = image_source_aspect_ratio(
+            path=str((item or {}).get("url") or "")
+        )
+        if ratio > 0.0:
+            return ratio
+        pixmap = self._id_to_thumb.get(item_id)
+        if pixmap is None or pixmap.isNull():
+            pixmap = load_thumbnail(self._playlist_thumbnail_store, item_id)
+        return image_source_aspect_ratio(pixmap=pixmap)
+
+    @Slot(str)
+    def _reset_image_framing(self, item_id: str) -> None:
+        if not self._pl:
+            return
+        item = next(
+            (candidate for candidate in self._pl.get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        if not item or "image_framing" not in item:
+            return
+        item.pop("image_framing", None)
+        self.model.invalidate_tree_data_cache()
+        self.bridge.emit_image_framing_changed(item_id, None)
+        self._schedule_image_framing_save()
+
+    def _schedule_image_framing_save(self) -> None:
+        self._image_framing_save_pending = True
+        self._image_framing_save_timer.start()
+
+    def _flush_image_framing_save(self) -> None:
+        if not self._image_framing_save_pending:
+            return
+        self._image_framing_save_timer.stop()
+        self._save()
 
     def _toggle_section_collapse(self, section_id: str) -> None:
         self.model.toggle_collapse(section_id)
@@ -378,6 +490,7 @@ class PlaylistEditView(
     # ── Carga ──────────────────────────────────────────────────────────────
 
     def load_playlist(self, pl: dict):
+        self._flush_image_framing_save()
         self._is_watched = False
         self._watched_path = ""
         self._pl = pl
@@ -391,6 +504,7 @@ class PlaylistEditView(
 
     def load_watched_folder(self, folder_path: str):
         """Load a linked folder as a full playlist with drag-reorder + sections."""
+        self._flush_image_framing_save()
         self._is_watched = True
         self._watched_path = folder_path
         self._is_temp = False
@@ -481,6 +595,7 @@ class PlaylistEditView(
 
     def refresh_watched_folder(self):
         """Re-scan and reconcile linked folder (called by watcher)."""
+        self._flush_image_framing_save()
         if not self._is_watched or not self._watched_path:
             return
         if self._wf_sync_thread is not None:
@@ -1040,6 +1155,7 @@ class PlaylistWidget(QWidget):
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
+        projection_aspect_ratio_provider: Callable[[], object] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -1063,6 +1179,7 @@ class PlaylistWidget(QWidget):
         )
         self._jw_songs_store = jw_songs_store
         self._media_info_queue_factory = media_info_queue_factory
+        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._cleanup_queue = playlist_cleanup_queue_factory(
             storage_paths,
             self._playlist_thumbnail_store,
@@ -1121,6 +1238,7 @@ class PlaylistWidget(QWidget):
             ),
             jw_songs_store=self._jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=self._projection_aspect_ratio_provider,
             all_playlists=self._playlists,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
@@ -1246,10 +1364,7 @@ class PlaylistWidget(QWidget):
         item  = items[start_idx]
         url   = item.get("url", "")
         title = item.get("title", "")
-        pl    = [
-            {"url": it.get("url", ""), "title": it.get("title", ""), "type": it.get("type", "video")}
-            for it in items
-        ]
+        pl = [dict(playlist_item) for playlist_item in items]
         self.project_video_signal.emit(url, title, pl, order)
 
     # ── API pública ────────────────────────────────────────────────────────
