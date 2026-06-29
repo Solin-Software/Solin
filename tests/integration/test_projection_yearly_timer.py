@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QVBoxLayout
 
-from solin.projection.window import YearlyTextWidget
+from solin.core.timer.models import MediaCountdownPresentation
+from solin.projection.window import BaseProjectionView, YearlyTextWidget
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -26,6 +28,25 @@ def _render_widget(quote: str, reference: str) -> YearlyTextWidget:
     widget.show()
     _APP.processEvents()
     return widget
+
+
+class _ProjectionViewHarness(BaseProjectionView):
+    def __init__(self) -> None:
+        super().__init__()
+        self._font_manager = _FontManagerStub()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._build_projection_stack(layout)
+
+
+class _UpdateTrackingYearlyTextWidget(YearlyTextWidget):
+    def __init__(self) -> None:
+        self.update_requests = 0
+        super().__init__(_FontManagerStub())
+
+    def update(self, *args) -> None:
+        self.update_requests += 1
+        super().update(*args)
 
 
 def test_countdown_does_not_move_or_resize_non_colliding_yearly_text():
@@ -68,3 +89,77 @@ def test_countdown_reserves_a_clean_gap_when_yearly_text_would_collide():
     for y in range(safe_bottom, countdown_top):
         for x in range(int(widget.width() * 0.2), int(widget.width() * 0.8)):
             assert image.pixelColor(x, y).lightness() <= 8
+
+
+def test_countdown_digits_align_vertically_with_the_jw_badge():
+    widget = _render_widget("Annual text", "Reference")
+    widget.set_countdown(55, 90)
+
+    countdown_layout = widget._countdown_layout()
+    assert countdown_layout is not None
+    _, badge_y, badge_size = widget._jw_badge_geometry()
+
+    assert countdown_layout[2].center().y() == badge_y + (badge_size / 2.0)
+
+
+def test_clearing_yearly_timer_fades_whole_page_before_restoring_idle():
+    view = _ProjectionViewHarness()
+    view.resize(1280, 720)
+    view.set_yearly_text("Annual text", "Reference")
+    view.show()
+    view._timer_presentation = MediaCountdownPresentation.YEARLY_TEXT
+    view._yearly_widget.set_countdown(55, 90)
+    view._stack.setCurrentIndex(view._PAGE_YEARLY)
+
+    view.clear()
+
+    assert view._stack.currentIndex() == view._PAGE_YEARLY
+    assert view._yearly_widget._countdown_remaining == 55
+    assert view._yearly_timer_exit_pending is True
+    assert view._yearly_anim.duration() == view._media_anim.duration()
+
+    QTest.qWait((view._yearly_anim.duration() // 2) + 20)
+    assert 0.0 < view._yearly_opacity.opacity() < 1.0
+    assert view._yearly_widget._countdown_remaining == 55
+
+    QTest.qWait((view._yearly_anim.duration() // 2) + 40)
+    assert view._yearly_timer_exit_pending is False
+    assert view._yearly_widget._countdown_remaining is None
+    assert view._stack.currentIndex() == view._PAGE_YEARLY
+    assert 0.0 <= view._yearly_opacity.opacity() < 1.0
+    assert view._yearly_anim.duration() == view._YEARLY_FADE_IN_DURATION_MS
+
+    QTest.qWait(view._yearly_anim.duration() + 40)
+    assert view._yearly_opacity.opacity() == 1.0
+
+
+def test_immediate_countdown_clear_always_requests_a_repaint():
+    widget = _UpdateTrackingYearlyTextWidget()
+    widget.set_countdown(55, 90)
+    widget.update_requests = 0
+
+    widget.clear_countdown()
+
+    assert widget._countdown_remaining is None
+    assert widget.update_requests >= 1
+
+
+def test_new_projection_cancels_pending_yearly_page_fade_out():
+    view = _ProjectionViewHarness()
+    view.resize(1280, 720)
+    view.set_yearly_text("Annual text", "Reference")
+    view._has_idle_media = True
+    view._timer_presentation = MediaCountdownPresentation.YEARLY_TEXT
+    view._yearly_widget.set_countdown(55, 90)
+    view._stack.setCurrentIndex(view._PAGE_YEARLY)
+
+    view.clear()
+    assert view._yearly_timer_exit_pending is True
+    view.begin_video()
+    QTest.qWait(view._yearly_anim.duration() + 40)
+
+    assert view._yearly_timer_exit_pending is False
+    assert view._accept_video_frames is True
+    assert view._yearly_widget._countdown_remaining is None
+    assert view._yearly_opacity.opacity() == 1.0
+    assert view._stack.currentIndex() != view._PAGE_IDLE_MEDIA

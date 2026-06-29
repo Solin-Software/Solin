@@ -202,11 +202,7 @@ class YearlyTextWidget(QWidget):
             painter.drawText(rx, ref_y, ref_text)
 
         # ── JW Badge (bottom-right) ───────────────────────────────────────
-        badge_size = int(min(w, h) * 0.15)
-        margin_x = int(w * 0.08)
-        margin_y = int(h * 0.12)
-        badge_x = w - badge_size - margin_x
-        badge_y = h - badge_size - margin_y
+        badge_x, badge_y, badge_size = self._jw_badge_geometry()
 
         painter.fillRect(badge_x, badge_y, badge_size, badge_size, QColor(51, 51, 51))
 
@@ -225,6 +221,14 @@ class YearlyTextWidget(QWidget):
 
         self._paint_countdown(painter, countdown_layout)
         painter.end()
+
+    def _jw_badge_geometry(self) -> tuple[int, int, int]:
+        width = self.width()
+        height = self.height()
+        badge_size = int(min(width, height) * 0.15)
+        badge_x = width - badge_size - int(width * 0.08)
+        badge_y = height - badge_size - int(height * 0.12)
+        return badge_x, badge_y, badge_size
 
     def _countdown_layout(self) -> tuple[QFont, str, QRectF, QRectF] | None:
         if self._countdown_remaining is None:
@@ -248,14 +252,15 @@ class YearlyTextWidget(QWidget):
         text_height = metrics.height()
         bar_height = max(2, int(font_size * 0.06))
         gap = max(4, int(font_size * 0.16))
-        bottom_margin = max(10, int(height * 0.065))
-        bar_y = height - bottom_margin - bar_height
+        _, badge_y, badge_size = self._jw_badge_geometry()
+        badge_center_y = badge_y + (badge_size / 2.0)
         text_rect = QRectF(
             (width - text_width) / 2.0,
-            bar_y - gap - text_height,
+            badge_center_y - (text_height / 2.0),
             text_width,
             text_height,
         )
+        bar_y = text_rect.bottom() + gap
         bar_rect = QRectF((width - text_width) / 2.0, bar_y, text_width, bar_height)
         return font, text, text_rect, bar_rect
 
@@ -728,6 +733,9 @@ class BaseProjectionView(QWidget):
     _PAGE_THEME      = 3
     _PAGE_IDLE_MEDIA = 4
 
+    _MEDIA_FADE_DURATION_MS = 200
+    _YEARLY_FADE_IN_DURATION_MS = 500
+
     def _build_projection_stack(self, layout) -> None:
         """Create the page stack, opacity effects, animations and state flags.
 
@@ -749,8 +757,9 @@ class BaseProjectionView(QWidget):
         self._media_opacity.setOpacity(1.0)
         self.display_label.setGraphicsEffect(self._media_opacity)
         self._media_anim = QPropertyAnimation(self._media_opacity, b"opacity")
-        self._media_anim.setDuration(200)
+        self._media_anim.setDuration(self._MEDIA_FADE_DURATION_MS)
         self._media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._media_fade_out_connected = False
 
         # Page 1 — live circular timer
         self._proj_timer = CircularTimerWidget()
@@ -773,8 +782,10 @@ class BaseProjectionView(QWidget):
         self._yearly_opacity.setOpacity(1.0)
         self._yearly_widget.setGraphicsEffect(self._yearly_opacity)
         self._yearly_anim = QPropertyAnimation(self._yearly_opacity, b"opacity")
-        self._yearly_anim.setDuration(500)
+        self._yearly_anim.setDuration(self._YEARLY_FADE_IN_DURATION_MS)
         self._yearly_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._yearly_timer_exit_pending = False
+        self._yearly_anim.finished.connect(self._on_yearly_animation_finished)
 
         # Page 3 — sermon theme slide
         self._theme_widget = SermonThemeProjectionWidget()
@@ -817,6 +828,7 @@ class BaseProjectionView(QWidget):
 
     def show_sermon_theme(self, text: str, subtitle: str = "") -> None:
         """Switch to sermon-theme slide with a fade-in."""
+        self._cancel_pending_timer_exit()
         self._stop_all_anims()
         self._clear_timer_presentation()
         self._accept_video_frames = False
@@ -848,6 +860,7 @@ class BaseProjectionView(QWidget):
         presentation: MediaCountdownPresentation,
     ) -> None:
         """Display the countdown using the selected media-window presentation."""
+        self._cancel_pending_timer_exit()
         self._stop_all_anims()
         self._clear_timer_presentation()
         self._timer_presentation = presentation
@@ -858,9 +871,11 @@ class BaseProjectionView(QWidget):
             self._yearly_widget.set_countdown(remaining, total)
             self._yearly_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_YEARLY)
-            self._yearly_anim.setStartValue(0.0)
-            self._yearly_anim.setEndValue(1.0)
-            self._yearly_anim.start()
+            self._start_yearly_fade(
+                start=0.0,
+                end=1.0,
+                duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
+            )
         else:
             self._proj_timer.update_data(remaining, total)
             self._timer_opacity.setOpacity(0.0)
@@ -895,6 +910,8 @@ class BaseProjectionView(QWidget):
             self._proj_timer.set_blink(on)
 
     def _clear_timer_presentation(self) -> None:
+        if self._timer_presentation is None:
+            return
         self._timer_presentation = None
         self._yearly_widget.clear_countdown()
         self._proj_timer.set_blink(False)
@@ -909,6 +926,7 @@ class BaseProjectionView(QWidget):
         single authoritative place that re-enables update_frame(); every other
         path (clear, show_image*, show_timer, show_sermon_theme) disables it.
         """
+        self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = True
 
@@ -950,6 +968,7 @@ class BaseProjectionView(QWidget):
     def _show_image(self, image: QImage, *, cache_pixmap: bool = True) -> None:
         """Route a static QImage to the display widget."""
         # Static image — video pipeline must not overwrite it.
+        self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = False
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
@@ -998,6 +1017,22 @@ class BaseProjectionView(QWidget):
         # point to cut off the pipeline, before any async frames already queued
         # in the Qt event loop can reach update_frame().
         self._accept_video_frames = False
+        if self._yearly_timer_exit_pending:
+            return
+        if (
+            self._timer_presentation is MediaCountdownPresentation.YEARLY_TEXT
+            and self._stack.currentIndex() == self._PAGE_YEARLY
+        ):
+            self._stop_all_anims()
+            self._current_pixmap = None
+            self._yearly_timer_exit_pending = True
+            self._start_yearly_fade(
+                start=self._yearly_opacity.opacity(),
+                end=0.0,
+                duration_ms=self._MEDIA_FADE_DURATION_MS,
+            )
+            return
+
         self._clear_timer_presentation()
 
         # Already on the correct idle page and nothing animating — do nothing
@@ -1016,17 +1051,37 @@ class BaseProjectionView(QWidget):
             self._media_anim.setStartValue(self._media_opacity.opacity())
             self._media_anim.setEndValue(0.0)
             self._media_anim.finished.connect(self._on_media_fade_out_done)
+            self._media_fade_out_connected = True
             self._media_anim.start()
         else:
             # Coming from timer or theme slide — switch to idle with fade-in
             self._switch_to_idle_with_fade()
 
+    def _cancel_pending_timer_exit(self) -> None:
+        if not self._yearly_timer_exit_pending:
+            return
+        self._yearly_anim.stop()
+        self._yearly_timer_exit_pending = False
+        self._yearly_opacity.setOpacity(1.0)
+
+    def _start_yearly_fade(self, *, start: float, end: float, duration_ms: int) -> None:
+        self._yearly_anim.setDuration(duration_ms)
+        self._yearly_anim.setStartValue(start)
+        self._yearly_anim.setEndValue(end)
+        self._yearly_anim.start()
+
+    def _on_yearly_animation_finished(self) -> None:
+        if not self._yearly_timer_exit_pending:
+            return
+        self._yearly_timer_exit_pending = False
+        self._clear_timer_presentation()
+        self._switch_to_idle_with_fade()
+
     def _on_media_fade_out_done(self) -> None:
         """Media faded out — now switch to the idle page and fade it in."""
-        try:
+        if self._media_fade_out_connected:
             self._media_anim.finished.disconnect(self._on_media_fade_out_done)
-        except RuntimeError:
-            pass
+            self._media_fade_out_connected = False
         self.display_label.clear()   # VideoDisplayWidget.clear() → go black
         self._media_opacity.setOpacity(1.0)
         self._switch_to_idle_with_fade()
@@ -1042,19 +1097,20 @@ class BaseProjectionView(QWidget):
         else:
             self._yearly_opacity.setOpacity(0.0)
             self._stack.setCurrentIndex(self._PAGE_YEARLY)
-            self._yearly_anim.setStartValue(0.0)
-            self._yearly_anim.setEndValue(1.0)
-            self._yearly_anim.start()
+            self._start_yearly_fade(
+                start=0.0,
+                end=1.0,
+                duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
+            )
 
     def _stop_all_anims(self) -> None:
         """Stop all animations and disconnect callbacks safely."""
         for anim in (self._media_anim, self._yearly_anim, self._timer_anim,
                      self._theme_anim, self._idle_media_anim):
             anim.stop()
-            try:
-                anim.finished.disconnect()
-            except RuntimeError:
-                pass
+        if self._media_fade_out_connected:
+            self._media_anim.finished.disconnect(self._on_media_fade_out_done)
+            self._media_fade_out_connected = False
 
     # ── Custom idle media API ─────────────────────────────────────────────
 
