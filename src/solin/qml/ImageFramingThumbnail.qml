@@ -6,6 +6,7 @@ Item {
 
     property string imageSource: ""
     property string placeholderSource: ""
+    property real sourceAspectRatio: 0.0
     property real projectionAspectRatio: 16 / 9
     property var framing: null
     property color backgroundColor: "#000000"
@@ -49,8 +50,12 @@ Item {
         sourceImage.status === Image.Ready
         && sourceImage.implicitWidth > 0
         && sourceImage.implicitHeight > 0
-    readonly property real sourceWidth: Math.max(1, sourceImage.implicitWidth)
-    readonly property real sourceHeight: Math.max(1, sourceImage.implicitHeight)
+    readonly property bool hasSourceAspectRatio:
+        isFinite(sourceAspectRatio) && sourceAspectRatio > 0
+    readonly property real sourceWidth: hasSourceAspectRatio
+        ? sourceAspectRatio : Math.max(1, sourceImage.implicitWidth)
+    readonly property real sourceHeight: hasSourceAspectRatio
+        ? 1.0 : Math.max(1, sourceImage.implicitHeight)
     readonly property real baseScale: imageReady
         ? Math.min(frameWidth / sourceWidth, frameHeight / sourceHeight) : 1
     readonly property real drawnWidth: sourceWidth * baseScale * framingZoom

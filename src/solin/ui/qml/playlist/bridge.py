@@ -82,12 +82,16 @@ class PlaylistEditBridge(QObject):
     def __init__(
         self,
         projection_aspect_ratio_provider: Callable[[], Any] | None = None,
+        image_source_aspect_ratio_provider: Callable[[str], float] | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self._projection_aspect_ratio_provider = (
             projection_aspect_ratio_provider
             or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
+        )
+        self._image_source_aspect_ratio_provider = (
+            image_source_aspect_ratio_provider or (lambda _item_id: 0.0)
         )
         self._playlist_name = ""
         self._is_temp = False
@@ -325,6 +329,14 @@ class PlaylistEditBridge(QObject):
         if not isinstance(ratio, ProjectionAspectRatio):
             ratio = DEFAULT_PROJECTION_ASPECT_RATIO
         return ratio.value
+
+    @Slot(str, result=float)
+    def imageFramingSourceAspectRatio(self, item_id: str) -> float:  # noqa: N802
+        try:
+            ratio = float(self._image_source_aspect_ratio_provider(item_id))
+        except Exception:  # noqa: BLE001 - defensive UI provider boundary
+            return 0.0
+        return ratio if ratio > 0.0 else 0.0
 
     @Slot(str, str)
     def renameMarker(self, marker_id: str, text: str):

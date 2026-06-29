@@ -113,7 +113,11 @@ from ...core.meetings.colors import generate_section_hue, section_colors
 from ...styles.theme import current_theme_scheme
 from ..playlist.dialogs import HuePickerDialog, NameDialog
 from ...ui.media_info import MediaInfoQueue
-from ...ui.thumbnail_images import save_thumbnail
+from ...ui.thumbnail_images import (
+    image_source_aspect_ratio,
+    load_thumbnail,
+    save_thumbnail,
+)
 
 if TYPE_CHECKING:
     from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -1587,6 +1591,19 @@ class MeetingTreeController(QObject):
             ratio = DEFAULT_PROJECTION_ASPECT_RATIO
         return ratio.value
 
+    @Slot(str, result=float)
+    def imageFramingSourceAspectRatio(self, item_id: str) -> float:  # noqa: N802
+        node = self._find_node(item_id)
+        ratio = image_source_aspect_ratio(
+            path=self._url_for_node(node) if node else ""
+        )
+        if ratio > 0.0:
+            return ratio
+        pixmap = self._thumb_cache.get(item_id)
+        if pixmap is None or pixmap.isNull():
+            pixmap = load_thumbnail(self._meeting_thumbnail_store, item_id)
+        return image_source_aspect_ratio(pixmap=pixmap)
+
     @Slot(str, float, float, float, float, float)
     def setImageFraming(  # noqa: N802 - QML API
         self,
@@ -1604,6 +1621,10 @@ class MeetingTreeController(QObject):
         media_type = node.get("media_type") or self._media_type_from_ref(ref)
         if media_type != "image":
             return
+        source_aspect_ratio = self.imageFramingSourceAspectRatio(item_id)
+        if source_aspect_ratio > 0.0:
+            source_width = source_aspect_ratio
+            source_height = 1.0
         current_transform = image_transform_from_record(node.get("image_framing"))
         transform = prepare_image_transform_for_aspect(
             source_width,

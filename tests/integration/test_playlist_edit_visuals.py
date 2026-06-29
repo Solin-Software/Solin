@@ -11,6 +11,7 @@ from solin.ui.qml.playlist.visuals import (
     playlist_media_badge,
     round_playlist_pixmap,
 )
+from solin.ui.thumbnail_images import image_source_aspect_ratio
 
 _APP = QApplication.instance() or QApplication([])
 
@@ -67,3 +68,20 @@ def test_thumbnail_provider_can_return_uncropped_image_for_framing_editor():
 
     assert fitted.size() == QSize(50, 100)
     assert cropped.size() == QSize(200, 100)
+
+
+def test_framing_uses_original_aspect_instead_of_scaled_thumbnail_rounding(
+    tmp_path,
+):
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    provider = PlaylistThumbnailProvider({"portrait": portrait})
+    source_path = tmp_path / "portrait.png"
+    assert portrait.save(str(source_path), "PNG")
+
+    fitted = provider.requestPixmap("portrait/0/fit", None, QSize(200, 113))
+
+    assert fitted.size() == QSize(63, 113)
+    assert fitted.width() / fitted.height() < 9 / 16
+    assert image_source_aspect_ratio(pixmap=portrait) == 9 / 16
+    assert image_source_aspect_ratio(path=str(source_path)) == 9 / 16

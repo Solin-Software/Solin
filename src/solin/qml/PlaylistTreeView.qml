@@ -1520,6 +1520,7 @@ Item {
         property bool isMissing: node ? (node.isMissing === true) : false
         property var imageFraming: node ? node.imageFraming : null
         property real framingAspectRatio: 16 / 9
+        property real framingSourceAspectRatio: 0
 
         Component.onCompleted: {
             dragArea.parent = mediaDragZone
@@ -1572,6 +1573,9 @@ Item {
             framingAspectRatio = root.hasController
                     ? root.playlistController.imageFramingAspectRatio()
                     : 16 / 9
+            framingSourceAspectRatio = root.hasController
+                    ? root.playlistController.imageFramingSourceAspectRatio(nodeId)
+                    : 0
         }
 
         Rectangle {
@@ -1659,6 +1663,7 @@ Item {
                             22,
                             root.iconHex(root.mediaToneColor("image", false)))
                         projectionAspectRatio: mediaRoot.framingAspectRatio
+                        sourceAspectRatio: mediaRoot.framingSourceAspectRatio
                         framing: mediaRoot.imageFraming
                         backgroundColor: root.bg
                         frameBorderColor: root.borderStrong

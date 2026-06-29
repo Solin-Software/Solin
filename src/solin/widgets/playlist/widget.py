@@ -60,7 +60,11 @@ from .dialogs import HuePickerDialog, NameDialog
 from ...core.playlists.storage import (
     PlaylistStoragePaths,
 )
-from ...ui.thumbnail_images import load_thumbnail, save_thumbnail
+from ...ui.thumbnail_images import (
+    image_source_aspect_ratio,
+    load_thumbnail,
+    save_thumbnail,
+)
 _THUMB_W, _THUMB_H = 70, 46
 _ITEM_H            = 77   # altura fixa de cada item
 _PLAYLIST_REORDER_LOCATION_KEYS = frozenset({
@@ -184,7 +188,8 @@ class PlaylistEditView(
         )
         self.bridge = PlaylistEditBridge(
             projection_aspect_ratio_provider,
-            self,
+            self._image_source_aspect_ratio,
+            parent=self,
         )
         self.bridge.attach_model(self.model)
         self.catalog_bridge = JWMediaCatalogBridge(
@@ -367,6 +372,10 @@ class PlaylistEditView(
         )
         if not item or item.get("type") != "image":
             return
+        source_aspect_ratio = self._image_source_aspect_ratio(item_id)
+        if source_aspect_ratio > 0.0:
+            source_width = source_aspect_ratio
+            source_height = 1.0
         current_transform = image_transform_from_record(item.get("image_framing"))
         transform = prepare_image_transform_for_aspect(
             source_width,
@@ -386,6 +395,22 @@ class PlaylistEditView(
         self.model.invalidate_tree_data_cache()
         self.bridge.emit_image_framing_changed(item_id, record)
         self._schedule_image_framing_save()
+
+    def _image_source_aspect_ratio(self, item_id: str) -> float:
+        item = next(
+            (candidate for candidate in (self._pl or {}).get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        ratio = image_source_aspect_ratio(
+            path=str((item or {}).get("url") or "")
+        )
+        if ratio > 0.0:
+            return ratio
+        pixmap = self._id_to_thumb.get(item_id)
+        if pixmap is None or pixmap.isNull():
+            pixmap = load_thumbnail(self._playlist_thumbnail_store, item_id)
+        return image_source_aspect_ratio(pixmap=pixmap)
 
     @Slot(str)
     def _reset_image_framing(self, item_id: str) -> None:
