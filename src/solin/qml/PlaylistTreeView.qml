@@ -48,6 +48,7 @@ Item {
     property int pendingMarkerEditAttempts: 0
     property var pendingMediaPatches: ({})
     property var pendingCloudPatches: ({})
+    property var pendingImageFramingPatches: ({})
 
     function picon(name, size, colorHex) {
         return "image://playlisticons/" + name + "/" + size + "/" + colorHex
@@ -186,6 +187,18 @@ Item {
             patch.tooltip
         )
         delete pendingCloudPatches[mediaItem.nodeId]
+    }
+
+    function rememberImageFramingPatch(itemId, framing) {
+        pendingImageFramingPatches[itemId] = framing
+    }
+
+    function applyPendingImageFramingPatch(mediaItem) {
+        if (!pendingImageFramingPatches.hasOwnProperty(mediaItem.nodeId))
+            return
+        mediaItem.applyImageFramingPatch(
+            pendingImageFramingPatches[mediaItem.nodeId])
+        delete pendingImageFramingPatches[mediaItem.nodeId]
     }
 
     Timer {
@@ -375,6 +388,11 @@ Item {
         function onMediaChanged(itemId, title, duration, thumbSource) {
             if (!rootPlaylist.updateMediaNode(itemId, title, duration, thumbSource))
                 root.rememberMediaPatch(itemId, title, duration, thumbSource)
+        }
+
+        function onImageFramingChanged(itemId, framing) {
+            if (!rootPlaylist.updateImageFramingNode(itemId, framing))
+                root.rememberImageFramingPatch(itemId, framing)
         }
 
         function onMediaInserted(listId, insertIndex, nodes) {
@@ -1211,6 +1229,23 @@ Item {
             return false
         }
 
+        function updateImageFramingNode(itemId, framing) {
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (!child)
+                    continue
+                if (child.nodeType === "media" && child.nodeId === itemId) {
+                    child.applyImageFramingPatch(framing)
+                    return true
+                }
+                if (child.bodyList && child.bodyList.updateImageFramingNode(
+                            itemId, framing)) {
+                    return true
+                }
+            }
+            return false
+        }
+
         function editMarkerNode(markerId) {
             for (var i = 0; i < items.length; i++) {
                 var child = items[i]
@@ -1483,12 +1518,16 @@ Item {
         property real cloudProgress: node ? node.cloudProgress : -1
         property string cloudTooltip: node ? node.cloudTooltip : ""
         property bool isMissing: node ? (node.isMissing === true) : false
+        property var imageFraming: node ? node.imageFraming : null
+        property real framingAspectRatio: 16 / 9
 
         Component.onCompleted: {
             dragArea.parent = mediaDragZone
             dragArea.anchors.fill = mediaDragZone
             root.applyPendingMediaPatch(mediaRoot)
             root.applyPendingCloudPatch(mediaRoot)
+            root.applyPendingImageFramingPatch(mediaRoot)
+            refreshFramingAspectRatio()
         }
 
         onClicked: {
@@ -1520,6 +1559,19 @@ Item {
                 node.cloudProgress = progress
                 node.cloudTooltip = tooltip
             }
+        }
+
+        function applyImageFramingPatch(record) {
+            imageFraming = record
+            if (node)
+                node.imageFraming = record
+            framingThumb.applyFraming(record)
+        }
+
+        function refreshFramingAspectRatio() {
+            framingAspectRatio = root.hasController
+                    ? root.playlistController.imageFramingAspectRatio()
+                    : 16 / 9
         }
 
         Rectangle {
@@ -1573,7 +1625,7 @@ Item {
                 // Thumbnail — 16:9 ratio
                 Rectangle {
                     Layout.preferredWidth: 100
-                    Layout.preferredHeight: 58
+                    Layout.preferredHeight: 56.25
                     Layout.alignment: Qt.AlignVCenter
                     radius: 6
                     color: root.bg
@@ -1588,17 +1640,71 @@ Item {
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: false
-                        visible: mediaRoot.thumbSource !== "" && status === Image.Ready
+                        visible: node && node.mediaType !== "image"
+                                 && mediaRoot.thumbSource !== ""
+                                 && status === Image.Ready
                         opacity: visible ? 1.0 : 0.0
                         Behavior on opacity {
                             NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                         }
                     }
 
+                    ImageFramingThumbnail {
+                        id: framingThumb
+                        anchors.fill: parent
+                        visible: node && node.mediaType === "image"
+                        imageSource: mediaRoot.thumbSource
+                        placeholderSource: root.picon(
+                            "media_image",
+                            22,
+                            root.iconHex(root.mediaToneColor("image", false)))
+                        projectionAspectRatio: mediaRoot.framingAspectRatio
+                        framing: mediaRoot.imageFraming
+                        backgroundColor: root.bg
+                        frameBorderColor: root.borderStrong
+                        resetBackgroundColor: root.alphaColor(root.bg, 0.86)
+                        resetForegroundColor: root.textPrimary
+                        editable: !mediaRoot.isMissing
+                        interactionHint: qsTranslate(
+                            "ImageFramingThumbnail",
+                            "Ctrl + scroll to zoom · Drag to pan")
+                        zoomHint: qsTranslate(
+                            "ImageFramingThumbnail",
+                            "Ctrl + scroll to zoom")
+                        resetToolTip: qsTranslate(
+                            "ImageFramingThumbnail",
+                            "Reset framing")
+
+                        onClicked: {
+                            if (mediaRoot.isMissing)
+                                return
+                            if (root.hasController)
+                                root.playlistController.projectItem(mediaRoot.nodeId)
+                        }
+                        onPointerEntered: mediaRoot.refreshFramingAspectRatio()
+                        onFramingEdited: function(zoom, normX, normY,
+                                                   sourceWidth, sourceHeight) {
+                            if (!root.hasController)
+                                return
+                            root.playlistController.setImageFraming(
+                                mediaRoot.nodeId,
+                                zoom,
+                                normX,
+                                normY,
+                                sourceWidth,
+                                sourceHeight)
+                        }
+                        onFramingReset: {
+                            if (root.hasController)
+                                root.playlistController.resetImageFraming(mediaRoot.nodeId)
+                        }
+                    }
+
                     // Placeholder icon
                     Image {
                         anchors.centerIn: parent
-                        visible: !mediaThumbImage.visible
+                        visible: (!node || node.mediaType !== "image")
+                                 && !mediaThumbImage.visible
                         width: 22
                         height: 22
                         opacity: 0.88

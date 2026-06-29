@@ -115,7 +115,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     volume_changed      = Signal(float)
     timer_updated       = Signal(int, int)
     timer_blink         = Signal(bool)
-    play_next_requested = Signal(str, str, str)  # url, title, media_type — avanço automático
+    play_next_requested = Signal(object)  # complete media item for automatic advance
     playlist_navigate   = Signal(int)        # índice absoluto — navegação manual prev/next
     add_to_playlist_requested = Signal(str, str, object)  # url, title, jw_metadata_dict
     send_to_temp_playlist_requested = Signal(list)  # lista de itens da playlist atual
@@ -932,7 +932,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._live_thumb_timer.stop()
         self._schedule_live_thumb()
 
-    def activate_image(self, title: str = "", image_data: bytes = b"", keep_expanded: bool = False):
+    def activate_image(
+        self,
+        title: str = "",
+        image_data: bytes = b"",
+        keep_expanded: bool = False,
+        initial_transform: ImageTransform | None = None,
+    ):
         self._mode = 'image'
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
@@ -976,8 +982,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.thumb_label.setPixmap(make_icon(ICON_IMAGE, 18, PALETTE.success).pixmap(18, 18))
             self.preview_content.set_image_pixmap_fresh(QPixmap())
 
-        transform = self._configure_image_preview_framing(reset=True)
-        self._emit_image_transform(transform, instant=True)
+        self._configure_image_preview_framing(reset=True)
+        if initial_transform is not None:
+            self.preview_content.set_current_transform(initial_transform)
 
         self.seek_slider.setVisible(False)
         self.time_label.setVisible(False)
@@ -1691,7 +1698,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if n == 0:
             # Sem playlist — comportamento legado
             if self._loop:
-                self.play_next_requested.emit("__replay__", "", "video")
+                self.play_next_requested.emit(
+                    {"url": "__replay__", "title": "", "type": "video"}
+                )
             else:
                 self.stop_requested.emit()
             return
@@ -1718,8 +1727,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._played_indices.add(next_idx)
             self._update_nav_buttons()
             item = self._playlist[next_idx]
-            self.play_next_requested.emit(item["url"], item["title"],
-                                          item.get("type", "video"))
+            self.play_next_requested.emit(dict(item))
 
         elif order == ORDER_RANDOM:
             self._played_indices.add(self._playlist_index)
@@ -1739,8 +1747,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._played_indices.add(next_idx)
             self._update_nav_buttons()
             item = self._playlist[next_idx]
-            self.play_next_requested.emit(item["url"], item["title"],
-                                          item.get("type", "video"))
+            self.play_next_requested.emit(dict(item))
 
     @Slot(int, int)
     def _on_buffer_progress(self, downloaded: int, total: int):

@@ -9,6 +9,11 @@ from PySide6.QtCore import QDateTime, QTimer
 
 from ..ui.screens import ScreenManager
 from ..core.projection.application import ProjectionSession
+from ..core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    ImageTransform,
+    normalize_image_transform,
+)
 from ..core.timer.models import MediaCountdownPresentation
 from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
@@ -441,8 +446,10 @@ class ProjectionWindowController:
             if not state.get("is_audio", False):
                 win.begin_video()
         elif kind == "image":
-            win.show_image_from_url_data(state["data"])
-            self._replay_transform(win, state)
+            win.show_image_from_url_data(
+                state["data"],
+                initial_transform=self._image_transform_from_state(state),
+            )
         elif kind == "sermon_theme":
             win.show_sermon_theme(state["text"], state["subtitle"])
             self._replay_transform(win, state)
@@ -465,6 +472,17 @@ class ProjectionWindowController:
         transform = state.get("transform")
         if transform and tuple(transform) != (1.0, 0.0, 0.0):
             win.set_image_transform(*transform, animate=False)
+
+    @staticmethod
+    def _image_transform_from_state(state) -> ImageTransform:
+        transform = state.get("transform")
+        if not isinstance(transform, (list, tuple)) or len(transform) != 3:
+            return IDENTITY_IMAGE_TRANSFORM
+        try:
+            value = ImageTransform(*transform)
+        except (TypeError, ValueError):
+            return IDENTITY_IMAGE_TRANSFORM
+        return normalize_image_transform(value)
 
     def _yearly_text(self) -> tuple[str, str, str]:
         return self._context.yearly_text()

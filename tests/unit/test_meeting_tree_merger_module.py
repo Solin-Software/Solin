@@ -53,3 +53,54 @@ def testmedia_identity_signature_keeps_file_path_for_local_media():
     second = {"media_ref": {"mime_type": "video/mp4", "file_path": r"C:\media\two.mp4"}}
 
     assert media_identity_signature(first) != media_identity_signature(second)
+
+
+def test_merger_preserves_prepared_framing_for_same_generated_media() -> None:
+    canonical = [{
+        "id": "canonical-id",
+        "type": "media",
+        "meeting_generated": True,
+        "meeting_source_key": "media:1",
+        "media_ref": {"mime_type": "image/png", "file_path": "slide.png"},
+        "children": [],
+    }]
+    saved = [{
+        **canonical[0],
+        "id": "saved-id",
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.4,
+            "norm_x": 0.12,
+            "norm_y": -0.08,
+        },
+    }]
+
+    merged = MeetingTreeMerger(canonical).merge(saved)
+
+    assert merged[0]["id"] == "saved-id"
+    assert merged[0]["image_framing"] == saved[0]["image_framing"]
+
+
+def test_merger_drops_prepared_framing_when_media_identity_changes() -> None:
+    canonical = [{
+        "id": "canonical-id",
+        "type": "media",
+        "meeting_generated": True,
+        "meeting_source_key": "media:1",
+        "media_ref": {"mime_type": "image/png", "file_path": "new-slide.png"},
+        "children": [],
+    }]
+    saved = [{
+        **canonical[0],
+        "media_ref": {"mime_type": "image/png", "file_path": "old-slide.png"},
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.4,
+            "norm_x": 0.12,
+            "norm_y": -0.08,
+        },
+    }]
+
+    merged = MeetingTreeMerger(canonical).merge(saved)
+
+    assert "image_framing" not in merged[0]

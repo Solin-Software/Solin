@@ -1,3 +1,7 @@
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtWidgets import QApplication
+
 from solin.core.meetings.colors import hsl_to_hex
 from solin.ui.qml.playlist.visuals import (
     PLAYLIST_ICON_SVGS,
@@ -7,6 +11,8 @@ from solin.ui.qml.playlist.visuals import (
     playlist_media_badge,
     round_playlist_pixmap,
 )
+
+_APP = QApplication.instance() or QApplication([])
 
 
 def test_playlist_edit_visual_providers_are_available():
@@ -49,3 +55,15 @@ def test_playlist_icons_stay_embedded_in_python():
 
     assert set(PLAYLIST_ICON_SVGS) == expected
     assert all(svg.startswith("<svg") for svg in PLAYLIST_ICON_SVGS.values())
+
+
+def test_thumbnail_provider_can_return_uncropped_image_for_framing_editor():
+    portrait = QPixmap(100, 200)
+    portrait.fill(QColor("red"))
+    provider = PlaylistThumbnailProvider({"portrait": portrait})
+
+    fitted = provider.requestPixmap("portrait/0/fit", None, QSize(200, 100))
+    cropped = provider.requestPixmap("portrait/0", None, QSize(200, 100))
+
+    assert fitted.size() == QSize(50, 100)
+    assert cropped.size() == QSize(200, 100)

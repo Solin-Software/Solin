@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.foundation.exception_logging import log_ignored_exception
+from ..core.projection.image_framing import ImageTransform
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
 from ..widgets.circular_timer import CircularTimerWidget
@@ -285,7 +286,12 @@ class VideoDisplayWidget(QWidget):
             self._paint_pending = True
             self.update()
 
-    def set_image(self, image: QImage) -> None:
+    def set_image(
+        self,
+        image: QImage,
+        *,
+        initial_transform: ImageTransform | None = None,
+    ) -> None:
         """Display a static QImage (replaces any active video)."""
         coming_from_black = (self._mode == "black")
         self._video_frame = None
@@ -293,6 +299,13 @@ class VideoDisplayWidget(QWidget):
         self._static_image = image
         self._mode = "image"
         self._cached_src_size = QSize()
+        if initial_transform is not None:
+            self.set_image_transform(
+                initial_transform.zoom,
+                initial_transform.norm_x,
+                initial_transform.norm_y,
+                animate=False,
+            )
         # Only trigger smoothstep fade-in on the very first frame (from black).
         # Live-tab projections can update very frequently — restarting the fade every
         # call would keep _fade_t perpetually near 0 and the screen stays black.
@@ -724,27 +737,53 @@ class BaseProjectionView(QWidget):
             self._media_anim.setEndValue(1.0)
             self._media_anim.start()
 
-    def show_image_from_url_data(self, data: bytes) -> None:
+    def show_image_from_url_data(
+        self,
+        data: bytes,
+        *,
+        initial_transform: ImageTransform | None = None,
+    ) -> None:
         """Display an image from raw bytes."""
         image = QImage()
         image.loadFromData(data)
         if not image.isNull():
-            self._show_image(image)
+            self._show_image(image, initial_transform=initial_transform)
 
-    def show_image_from_pixmap(self, pixmap: QPixmap) -> None:
-        self._show_image(pixmap.toImage())
+    def show_image_from_pixmap(
+        self,
+        pixmap: QPixmap,
+        *,
+        initial_transform: ImageTransform | None = None,
+    ) -> None:
+        self._show_image(pixmap.toImage(), initial_transform=initial_transform)
 
-    def show_image_from_qimage(self, image: QImage, *, cache_pixmap: bool = True) -> None:
-        self._show_image(image, cache_pixmap=cache_pixmap)
+    def show_image_from_qimage(
+        self,
+        image: QImage,
+        *,
+        cache_pixmap: bool = True,
+        initial_transform: ImageTransform | None = None,
+    ) -> None:
+        self._show_image(
+            image,
+            cache_pixmap=cache_pixmap,
+            initial_transform=initial_transform,
+        )
 
-    def _show_image(self, image: QImage, *, cache_pixmap: bool = True) -> None:
+    def _show_image(
+        self,
+        image: QImage,
+        *,
+        cache_pixmap: bool = True,
+        initial_transform: ImageTransform | None = None,
+    ) -> None:
         """Route a static QImage to the display widget."""
         # Static image — video pipeline must not overwrite it.
         self._cancel_pending_timer_exit()
         self._clear_timer_presentation()
         self._accept_video_frames = False
         self._current_pixmap = QPixmap.fromImage(image) if cache_pixmap else None
-        self.display_label.set_image(image)
+        self.display_label.set_image(image, initial_transform=initial_transform)
 
         if not self._is_showing_media:
             self._stop_all_anims()

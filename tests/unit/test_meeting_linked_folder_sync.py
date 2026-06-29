@@ -138,6 +138,12 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 "media_ref": {"file_path": str(media), "mime_type": "video/mp4"},
                 "thumbnail_local_path": str(outside_thumb),
                 "thumbnail_cache_key": "thumb.jpg",
+                "image_framing": {
+                    "version": 1,
+                    "zoom": 1.4,
+                    "norm_x": 0.12,
+                    "norm_y": -0.08,
+                },
             }]
 
             record = service.save_tree(
@@ -155,12 +161,17 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(record.revision, 1)
             self.assertEqual(saved_node["media_ref"]["file_path"], "talk.mp4")
             self.assertNotIn("thumbnail_local_path", saved_node)
+            self.assertEqual(saved_node["image_framing"], nodes[0]["image_framing"])
             loaded = service.load_tree(str(root), _identity("mwb"))
             self.assertIsNotNone(loaded)
             assert loaded is not None
             self.assertEqual(
                 loaded.nodes[0]["media_ref"]["file_path"],
                 str(media),
+            )
+            self.assertEqual(
+                loaded.nodes[0]["image_framing"],
+                nodes[0]["image_framing"],
             )
             self.assertEqual(loaded.deleted_source_keys, {"official"})
 
@@ -690,6 +701,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._meeting_folder_imports = {}
             controller._meeting_folder_pending_sources = set()
             controller._load_sync_record = lambda: record
+            controller._flush_image_framing_save = lambda: None
             controller._apply_sync_record = (
                 lambda sync_record: MeetingTreeController._apply_sync_record(
                     controller,
@@ -768,6 +780,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._meeting_folder_pending_sources = set()
         controller._linked_folder_availability = ()
         controller._load_sync_record = lambda: record
+        controller._flush_image_framing_save = lambda: None
         controller._apply_sync_record = (
             lambda sync_record: MeetingTreeController._apply_sync_record(
                 controller,
@@ -1014,6 +1027,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller.set_sync_root = (
                 lambda path: MeetingTreeController.set_sync_root(controller, path)
             )
+            controller._flush_image_framing_save = lambda: None
             controller._refresh_sync_availability = (
                 lambda: MeetingTreeController._refresh_sync_availability(controller)
             )

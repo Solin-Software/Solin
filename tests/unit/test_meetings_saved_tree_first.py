@@ -264,6 +264,7 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
         _meeting_linked_folder_sync=object(),
         _meeting_schedule_settings=object(),
         _media_info_queue_factory=object(),
+        _projection_aspect_ratio_provider=lambda: None,
         _watched_folder="",
         _saved_snapshots={cache_key: {"mwb": old_snapshot}},
         _saved_snapshot_cache_key_for=lambda monday_arg, language: (

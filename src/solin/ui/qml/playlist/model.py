@@ -24,6 +24,10 @@ from solin.core.meetings.colors import (
     card_border_from_hue as core_card_border_from_hue,
     section_text_from_hue as core_section_text_from_hue,
 )
+from solin.core.projection.image_framing import (
+    image_transform_from_record,
+    image_transform_to_record,
+)
 from solin.styles.theme import PALETTE, current_theme_scheme
 from solin.ui.qml.playlist.visuals import (
     UNSECTIONED_CARD_BACKGROUND,
@@ -523,6 +527,9 @@ class PlaylistEditModel(QAbstractListModel):
         # machine's disk right now.  Remote URLs are never missing here
         # (they have their own cloud download state above).
         is_missing = bool(url and not is_remote and not os.path.exists(url))
+        image_framing = image_transform_to_record(
+            image_transform_from_record(item.get("image_framing"))
+        )
 
         return {
             "id": item["id"],
@@ -538,6 +545,7 @@ class PlaylistEditModel(QAbstractListModel):
             "cloudProgress": cloud_progress,
             "cloudTooltip": cloud_tooltip,
             "isMissing": is_missing,
+            "imageFraming": image_framing,
             "children": [],
         }
 

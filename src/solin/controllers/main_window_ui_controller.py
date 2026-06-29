@@ -460,6 +460,9 @@ class MainWindowUiController:
             ),
             jw_songs_store=context.jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=(
+                context.projection_aspect_ratio_provider
+            ),
             parent=context.parent,
         )
         meetings_widget = MeetingsWidget(
@@ -486,6 +489,9 @@ class MainWindowUiController:
             jwpub_service_factory=context.jwpub_service_factory,
             memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,
+            projection_aspect_ratio_provider=(
+                context.projection_aspect_ratio_provider
+            ),
             parent=context.parent,
         )
         meetings_widget.set_watched_folder(watched_folder)

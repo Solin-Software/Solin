@@ -361,6 +361,35 @@ def test_watched_playlist_adopts_external_generated_files_into_cache(tmp_path):
         external.unlink(missing_ok=True)
 
 
+def test_watched_playlist_round_trips_prepared_image_framing(tmp_path):
+    image = tmp_path / "slide.png"
+    image.write_bytes(b"image")
+    framing = {
+        "version": 1,
+        "zoom": 1.4,
+        "norm_x": 0.12,
+        "norm_y": -0.08,
+    }
+    playlist = {
+        "items": [{
+            "id": "slide-id",
+            "title": "Slide",
+            "url": str(image),
+            "type": "image",
+            "image_framing": framing,
+        }],
+        "sections": [],
+        "markers": [],
+    }
+
+    watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
+    loaded = watched_folder_module.load_manifest_playlist(str(tmp_path))
+    manifest = watched_folder_module._load_manifest(tmp_path)
+
+    assert loaded["items"][0]["image_framing"] == framing
+    assert manifest["playlist"]["items"][0]["image_framing"] == framing
+
+
 def test_loading_watched_playlist_heals_existing_external_cache_url(tmp_path):
     external = tmp_path.parent / f"legacy-page-{uuid.uuid4().hex}.jpg"
     external.write_bytes(b"legacy")

@@ -172,6 +172,7 @@ class ProjectionPlaylistMixin:
                     "major_multimedia_type",
                     "type",
                     "base_duration_ticks",
+                    "image_framing",
                 )
                 if item.get(k) is not None
             }

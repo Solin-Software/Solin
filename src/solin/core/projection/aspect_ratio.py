@@ -126,6 +126,12 @@ def _dimension(geometry: Any, name: str) -> int | None:
     except Exception:  # noqa: BLE001 - defensive object capability boundary
         return None
     try:
-        return int(value() if callable(value) else value)
+        raw_value = value() if callable(value) else value
+    except Exception:  # noqa: BLE001 - defensive geometry accessor boundary
+        return None
+    if not isinstance(raw_value, (int, float, str, bytes, bytearray)):
+        return None
+    try:
+        return int(raw_value)
     except Exception:  # noqa: BLE001 - defensive object capability boundary
         return None

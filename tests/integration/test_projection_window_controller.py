@@ -6,6 +6,10 @@ from solin.controllers.projection_window_controller import (
     ProjectionWindowController,
 )
 from solin.core.projection.application import ProjectionSession
+from solin.core.projection.image_framing import (
+    IDENTITY_IMAGE_TRANSFORM,
+    ImageTransform,
+)
 from solin.core.timer.models import MediaCountdownPresentation
 
 
@@ -111,6 +115,7 @@ class _ProjectionWindowStub:
         self.faded = False
         self.video_started = False
         self.images = []
+        self.image_initial_transforms = []
         self.sermon_themes = []
         self.timers = []
         self.yearly = []
@@ -149,8 +154,9 @@ class _ProjectionWindowStub:
     def begin_video(self):
         self.video_started = True
 
-    def show_image_from_url_data(self, data):
+    def show_image_from_url_data(self, data, *, initial_transform=None):
         self.images.append(data)
+        self.image_initial_transforms.append(initial_transform)
 
     def show_sermon_theme(self, text, subtitle):
         self.sermon_themes.append((text, subtitle))
@@ -370,7 +376,8 @@ def test_image_transform_replayed_to_new_surface_instantly():
 
     assert win.images == [b"img"]
     # Replayed without animation so the new surface matches the others at once.
-    assert win.transforms == [(1.5, 0.2, -0.1, False)]
+    assert win.image_initial_transforms == [ImageTransform(1.5, 0.2, -0.1)]
+    assert win.transforms == []
 
 
 def test_identity_image_transform_is_not_replayed():
@@ -386,6 +393,7 @@ def test_identity_image_transform_is_not_replayed():
     controller.apply_full_state_to_window(win)
 
     assert win.images == [b"img"]
+    assert win.image_initial_transforms == [IDENTITY_IMAGE_TRANSFORM]
     assert win.transforms == []
 
 

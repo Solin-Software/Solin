@@ -80,7 +80,9 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
         self._disk_loader_cb = disk_loader_cb
 
     def requestPixmap(self, id_str: str, size, requestedSize):
-        item_id = id_str.split("/")[0]
+        parts = id_str.split("/")
+        item_id = parts[0]
+        preserve_full_aspect = "fit" in parts[1:]
         w = (
             requestedSize.width()
             if requestedSize.width() > 0
@@ -98,6 +100,13 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
                 self._cache[item_id] = pixmap
 
         if pixmap and not pixmap.isNull():
+            if preserve_full_aspect:
+                return pixmap.scaled(
+                    w,
+                    h,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             scaled = pixmap.scaled(
                 w, h,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,

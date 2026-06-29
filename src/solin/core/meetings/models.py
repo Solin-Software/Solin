@@ -23,6 +23,7 @@ class MeetingMedia:
     section: str = ""
     is_song: bool = False
     cbs_article_title: str = ""
+    image_framing: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
