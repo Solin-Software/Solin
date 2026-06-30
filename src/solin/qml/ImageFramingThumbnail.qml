@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 
 Item {
     id: root
+    clip: true
 
     property string imageSource: ""
     property string placeholderSource: ""
@@ -20,7 +21,8 @@ Item {
 
     signal clicked()
     signal framingEdited(real zoom, real normX, real normY,
-                         real sourceWidth, real sourceHeight)
+                         real sourceWidth, real sourceHeight,
+                         bool snapZoomToCover)
     signal framingReset()
     signal pointerEntered()
     signal pointerExited()
@@ -44,10 +46,13 @@ Item {
         isFinite(projectionAspectRatio) && projectionAspectRatio > 0
         ? projectionAspectRatio : 16 / 9
     readonly property real containerAspectRatio: width > 0 && height > 0 ? width / height : 16 / 9
+    // The projection frame is virtual: it covers the fixed 16:9 thumbnail.
+    // This keeps the media occupying its historical thumbnail viewport while
+    // preserving transform coordinates for the actual projection aspect.
     readonly property real frameWidth:
-        containerAspectRatio > safeAspectRatio ? height * safeAspectRatio : width
+        containerAspectRatio > safeAspectRatio ? width : height * safeAspectRatio
     readonly property real frameHeight:
-        containerAspectRatio > safeAspectRatio ? height : width / safeAspectRatio
+        containerAspectRatio > safeAspectRatio ? width / safeAspectRatio : height
     readonly property real frameX: (width - frameWidth) / 2
     readonly property real frameY: (height - frameHeight) / 2
     readonly property bool imageReady:
@@ -148,7 +153,7 @@ Item {
         return Math.max(frameWidth / fittedWidth, frameHeight / fittedHeight)
     }
 
-    function publishFraming() {
+    function publishFraming(snapZoomToCover) {
         if (!imageReady)
             return
         requestedZoom = framingZoom
@@ -160,7 +165,8 @@ Item {
             framingNormX,
             framingNormY,
             sourceWidth,
-            sourceHeight)
+            sourceHeight,
+            snapZoomToCover)
     }
 
     function applyZoomFactor(factor) {
@@ -175,7 +181,7 @@ Item {
             requested = cover
         framingZoom = requested
         clampPan()
-        publishFraming()
+        publishFraming(true)
     }
 
     onFramingChanged: applyFraming(framing)
@@ -295,7 +301,7 @@ Item {
             root.framingNormX = root.pressNormX + dx / Math.max(1, root.frameWidth)
             root.framingNormY = root.pressNormY + dy / Math.max(1, root.frameHeight)
             root.clampPan()
-            root.publishFraming()
+            root.publishFraming(false)
         }
 
         onReleased: function(mouse) {

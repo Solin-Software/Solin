@@ -112,6 +112,21 @@ def test_prepared_edit_snaps_to_the_exact_frame_cover_threshold() -> None:
     assert prepared.norm_y < 0.0
 
 
+def test_pan_edit_preserves_zoom_above_frame_cover_threshold() -> None:
+    prepared = prepare_image_transform_for_aspect(
+        100,
+        200,
+        16 / 9,
+        ImageTransform(3.0, 0.0, 0.0),
+        ImageTransform(4.0, 1.0, -1.0),
+        snap_zoom_to_cover=False,
+    )
+
+    assert prepared.zoom == 4.0
+    assert prepared.norm_x > 0.0
+    assert prepared.norm_y == -1.0
+
+
 def test_frame_for_aspect_centers_wide_projection_inside_tall_container() -> None:
     frame = frame_for_aspect(1000, 800, 16 / 9)
 

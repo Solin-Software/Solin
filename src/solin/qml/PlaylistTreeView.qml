@@ -1688,7 +1688,8 @@ Item {
                         }
                         onPointerEntered: mediaRoot.refreshFramingAspectRatio()
                         onFramingEdited: function(zoom, normX, normY,
-                                                   sourceWidth, sourceHeight) {
+                                                   sourceWidth, sourceHeight,
+                                                   snapZoomToCover) {
                             if (!root.hasController)
                                 return
                             root.playlistController.setImageFraming(
@@ -1697,7 +1698,8 @@ Item {
                                 normX,
                                 normY,
                                 sourceWidth,
-                                sourceHeight)
+                                sourceHeight,
+                                snapZoomToCover)
                         }
                         onFramingReset: {
                             if (root.hasController)

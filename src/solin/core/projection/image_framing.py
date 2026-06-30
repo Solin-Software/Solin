@@ -138,8 +138,14 @@ def prepare_image_transform_for_aspect(
     aspect_ratio: float,
     previous_transform: ImageTransform | None,
     requested_transform: ImageTransform,
+    *,
+    snap_zoom_to_cover: bool = True,
 ) -> ImageTransform:
-    """Snap a zoom crossing to frame coverage, then clamp the full transform."""
+    """Normalize an authored transform and optionally snap a zoom crossing.
+
+    The caller must only request snapping for an actual zoom edit. Pan edits
+    still need bounds enforcement, but must never change the authored zoom.
+    """
 
     ratio = _finite_float(aspect_ratio)
     if ratio is None or ratio <= 0.0:
@@ -148,14 +154,16 @@ def prepare_image_transform_for_aspect(
         previous_transform or IDENTITY_IMAGE_TRANSFORM
     )
     requested = normalize_image_transform(requested_transform)
-    snapped_zoom = snap_zoom_to_frame_cover(
-        previous.zoom,
-        requested.zoom,
-        image_width,
-        image_height,
-        ratio,
-        1.0,
-    )
+    snapped_zoom = requested.zoom
+    if snap_zoom_to_cover:
+        snapped_zoom = snap_zoom_to_frame_cover(
+            previous.zoom,
+            requested.zoom,
+            image_width,
+            image_height,
+            ratio,
+            1.0,
+        )
     return constrain_image_transform(
         image_width,
         image_height,

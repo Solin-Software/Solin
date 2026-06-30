@@ -353,7 +353,7 @@ class PlaylistEditView(
         self.songs_bridge.itemAddedSuccessfully.connect(self._notifications.success)
         self.songs_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
 
-    @Slot(str, float, float, float, float, float)
+    @Slot(str, float, float, float, float, float, bool)
     def _set_image_framing(
         self,
         item_id: str,
@@ -362,6 +362,7 @@ class PlaylistEditView(
         norm_y: float,
         source_width: float,
         source_height: float,
+        snap_zoom_to_cover: bool,
     ) -> None:
         if not self._pl:
             return
@@ -383,6 +384,7 @@ class PlaylistEditView(
             self.bridge.imageFramingAspectRatio(),
             current_transform,
             ImageTransform(zoom, norm_x, norm_y),
+            snap_zoom_to_cover=snap_zoom_to_cover,
         )
         record = image_transform_to_record(transform)
         current = image_transform_to_record(current_transform)

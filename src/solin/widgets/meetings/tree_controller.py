@@ -1604,7 +1604,7 @@ class MeetingTreeController(QObject):
             pixmap = load_thumbnail(self._meeting_thumbnail_store, item_id)
         return image_source_aspect_ratio(pixmap=pixmap)
 
-    @Slot(str, float, float, float, float, float)
+    @Slot(str, float, float, float, float, float, bool)
     def setImageFraming(  # noqa: N802 - QML API
         self,
         item_id: str,
@@ -1613,6 +1613,7 @@ class MeetingTreeController(QObject):
         norm_y: float,
         source_width: float,
         source_height: float,
+        snap_zoom_to_cover: bool,
     ) -> None:
         node = self._find_node(item_id)
         if not node or node.get("type") != "media":
@@ -1632,6 +1633,7 @@ class MeetingTreeController(QObject):
             self.imageFramingAspectRatio(),
             current_transform,
             ImageTransform(zoom, norm_x, norm_y),
+            snap_zoom_to_cover=snap_zoom_to_cover,
         )
         record = image_transform_to_record(transform)
         current = image_transform_to_record(current_transform)

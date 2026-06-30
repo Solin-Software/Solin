@@ -181,15 +181,19 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     _send_thumbnail_wheel(widget, Qt.KeyboardModifier.ControlModifier)
     assert root.property("framingZoom") > 1.0
     assert edited.count() == 1
+    assert edited.at(0)[5] is True
     assert root.property("framingActive") is True
     assert root.property("panAvailable") is True
 
+    zoom_before_pan = float(root.property("framingZoom"))
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     QTest.mouseMove(widget, QPoint(50, 80), delay=5)
     assert root.property("panning") is True
     QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 80))
     assert clicked.count() == 1
     assert edited.count() > 1
+    assert edited.at(edited.count() - 1)[5] is False
+    assert root.property("framingZoom") == pytest.approx(zoom_before_pan)
     assert root.property("panning") is False
 
     cover_zoom = float(root.coverZoom())
@@ -203,6 +207,51 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False
+
+
+def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> None:
+    landscape = QPixmap(160, 90)
+    landscape.fill(QColor("red"))
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+        image_providers={
+            "playlistthumbs": PlaylistThumbnailProvider({
+                "landscape": landscape,
+            }),
+        },
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("imageSource", "image://playlistthumbs/landscape/0")
+    root.setProperty("sourceAspectRatio", 16 / 9)
+    widget.show()
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+    assert root.property("imageReady") is True
+
+    root.setProperty("projectionAspectRatio", 5 / 4)
+    _APP.processEvents()
+
+    assert root.property("frameWidth") == pytest.approx(100.0)
+    assert root.property("frameHeight") == pytest.approx(80.0)
+    assert root.property("frameX") == pytest.approx(0.0)
+    assert root.property("frameY") == pytest.approx(-12.0)
+    assert root.property("drawnWidth") == pytest.approx(100.0)
+    assert root.property("drawnHeight") == pytest.approx(56.25)
+
+    root.setProperty("projectionAspectRatio", 21 / 9)
+    _APP.processEvents()
+
+    assert root.property("frameWidth") == pytest.approx(56 * 21 / 9)
+    assert root.property("frameHeight") == pytest.approx(56.0)
+    assert root.property("frameX") < 0.0
+    assert root.property("frameY") == pytest.approx(0.0)
 
 
 def test_image_framing_thumbnail_preserves_pan_until_geometry_is_ready() -> None:

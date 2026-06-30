@@ -47,7 +47,9 @@ class PlaylistEditBridge(QObject):
     removeItemSignal     = Signal(str)          # item_id
     renameItemSignal     = Signal(str)          # item_id
     downloadItemSignal   = Signal(str)          # item_id
-    imageFramingSetRequested = Signal(str, float, float, float, float, float)
+    imageFramingSetRequested = Signal(
+        str, float, float, float, float, float, bool
+    )
     imageFramingResetRequested = Signal(str)
     renameMarkerSignal   = Signal(str, str)     # marker_id, text
     deleteMarkerSignal   = Signal(str)          # marker_id
@@ -297,7 +299,7 @@ class PlaylistEditBridge(QObject):
     def downloadItem(self, item_id: str):
         self.downloadItemSignal.emit(item_id)
 
-    @Slot(str, float, float, float, float, float)
+    @Slot(str, float, float, float, float, float, bool)
     def setImageFraming(  # noqa: N802 - QML API
         self,
         item_id: str,
@@ -306,6 +308,7 @@ class PlaylistEditBridge(QObject):
         norm_y: float,
         source_width: float,
         source_height: float,
+        snap_zoom_to_cover: bool,
     ) -> None:
         self.imageFramingSetRequested.emit(
             item_id,
@@ -314,6 +317,7 @@ class PlaylistEditBridge(QObject):
             norm_y,
             source_width,
             source_height,
+            snap_zoom_to_cover,
         )
 
     @Slot(str)
