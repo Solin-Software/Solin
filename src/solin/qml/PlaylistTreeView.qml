@@ -1666,7 +1666,6 @@ Item {
                         sourceAspectRatio: mediaRoot.framingSourceAspectRatio
                         framing: mediaRoot.imageFraming
                         backgroundColor: root.bg
-                        frameBorderColor: root.borderStrong
                         resetBackgroundColor: root.alphaColor(root.bg, 0.86)
                         resetForegroundColor: root.textPrimary
                         editable: !mediaRoot.isMissing

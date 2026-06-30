@@ -11,7 +11,6 @@ Item {
     property real projectionAspectRatio: 16 / 9
     property var framing: null
     property color backgroundColor: "#000000"
-    property color frameBorderColor: "#5f6b7a"
     property color resetBackgroundColor: "#cc11151b"
     property color resetForegroundColor: "#ffffff"
     property string interactionHint: ""
@@ -257,16 +256,6 @@ Item {
             opacity: 0.88
             source: root.placeholderSource
         }
-    }
-
-    Rectangle {
-        x: root.frameX
-        y: root.frameY
-        width: root.frameWidth
-        height: root.frameHeight
-        color: "transparent"
-        border.width: Math.abs(root.safeAspectRatio - 16 / 9) < 0.0001 ? 0 : 1
-        border.color: root.frameBorderColor
     }
 
     MouseArea {
