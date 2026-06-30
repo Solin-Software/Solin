@@ -242,8 +242,8 @@ def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> Non
     assert root.property("frameHeight") == pytest.approx(80.0)
     assert root.property("frameX") == pytest.approx(0.0)
     assert root.property("frameY") == pytest.approx(-12.0)
-    assert root.property("drawnWidth") == pytest.approx(100.0)
-    assert root.property("drawnHeight") == pytest.approx(56.25)
+    assert root.property("drawnWidth") == pytest.approx(56 * 16 / 9)
+    assert root.property("drawnHeight") == pytest.approx(56.0)
 
     root.setProperty("projectionAspectRatio", 21 / 9)
     _APP.processEvents()
@@ -252,6 +252,43 @@ def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> Non
     assert root.property("frameHeight") == pytest.approx(56.0)
     assert root.property("frameX") < 0.0
     assert root.property("frameY") == pytest.approx(0.0)
+
+
+def test_image_framing_thumbnail_fits_portrait_in_fixed_viewport() -> None:
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+        image_providers={
+            "playlistthumbs": PlaylistThumbnailProvider({
+                "portrait": portrait,
+            }),
+        },
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("projectionAspectRatio", 5 / 4)
+    root.setProperty("sourceAspectRatio", 9 / 16)
+    root.setProperty("imageSource", "image://playlistthumbs/portrait/0")
+    widget.show()
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+    assert root.property("imageReady") is True
+
+    # Projection calculations still use the virtual 5:4 frame.
+    assert root.property("frameWidth") == pytest.approx(100.0)
+    assert root.property("frameHeight") == pytest.approx(80.0)
+    assert root.property("projectionDrawnHeight") == pytest.approx(80.0)
+
+    # The fixed 16:9 thumbnail shows the complete portrait at identity.
+    assert root.property("drawnWidth") == pytest.approx(56 * 9 / 16)
+    assert root.property("drawnHeight") == pytest.approx(56.0)
 
 
 def test_image_framing_thumbnail_preserves_pan_until_geometry_is_ready() -> None:

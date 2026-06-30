@@ -65,10 +65,26 @@ Item {
         ? sourceAspectRatio : Math.max(1, sourceImage.implicitWidth)
     readonly property real sourceHeight: hasSourceAspectRatio
         ? 1.0 : Math.max(1, sourceImage.implicitHeight)
-    readonly property real baseScale: imageReady
+    // Projection geometry remains authoritative for bounds and snap.
+    readonly property real projectionBaseScale: imageReady
         ? Math.min(frameWidth / sourceWidth, frameHeight / sourceHeight) : 1
-    readonly property real drawnWidth: sourceWidth * baseScale * framingZoom
-    readonly property real drawnHeight: sourceHeight * baseScale * framingZoom
+    readonly property real projectionDrawnWidth:
+        sourceWidth * projectionBaseScale * framingZoom
+    readonly property real projectionDrawnHeight:
+        sourceHeight * projectionBaseScale * framingZoom
+
+    // Display geometry keeps the complete source visible at identity inside
+    // the fixed thumbnail viewport, independently of projection aspect.
+    readonly property real displayBaseScale: imageReady
+        ? Math.min(width / sourceWidth, height / sourceHeight) : 1
+    readonly property real projectionToDisplayScale:
+        projectionBaseScale > 0 ? displayBaseScale / projectionBaseScale : 1
+    readonly property real displayPanWidth:
+        frameWidth * projectionToDisplayScale
+    readonly property real displayPanHeight:
+        frameHeight * projectionToDisplayScale
+    readonly property real drawnWidth: sourceWidth * displayBaseScale * framingZoom
+    readonly property real drawnHeight: sourceHeight * displayBaseScale * framingZoom
     readonly property bool panAvailable:
         editable
         && imageReady
@@ -102,13 +118,17 @@ Item {
     function maxPanX() {
         if (!imageReady || frameWidth <= 0)
             return 0
-        return Math.max(0, (drawnWidth - frameWidth) / (2 * frameWidth))
+        return Math.max(
+            0,
+            (projectionDrawnWidth - frameWidth) / (2 * frameWidth))
     }
 
     function maxPanY() {
         if (!imageReady || frameHeight <= 0)
             return 0
-        return Math.max(0, (drawnHeight - frameHeight) / (2 * frameHeight))
+        return Math.max(
+            0,
+            (projectionDrawnHeight - frameHeight) / (2 * frameHeight))
     }
 
     function clampPan() {
@@ -146,10 +166,10 @@ Item {
     }
 
     function coverZoom() {
-        if (!imageReady || baseScale <= 0)
+        if (!imageReady || projectionBaseScale <= 0)
             return 1.0
-        var fittedWidth = sourceWidth * baseScale
-        var fittedHeight = sourceHeight * baseScale
+        var fittedWidth = sourceWidth * projectionBaseScale
+        var fittedHeight = sourceHeight * projectionBaseScale
         return Math.max(frameWidth / fittedWidth, frameHeight / fittedHeight)
     }
 
@@ -218,8 +238,10 @@ Item {
             fillMode: Image.Stretch
             width: root.drawnWidth
             height: root.drawnHeight
-            x: (projectionFrame.width - width) / 2 + root.framingNormX * projectionFrame.width
-            y: (projectionFrame.height - height) / 2 + root.framingNormY * projectionFrame.height
+            x: (root.width - width) / 2 - root.frameX
+               + root.framingNormX * root.displayPanWidth
+            y: (root.height - height) / 2 - root.frameY
+               + root.framingNormY * root.displayPanHeight
             visible: root.imageReady
             onStatusChanged: {
                 if (status === Image.Ready)
@@ -298,8 +320,10 @@ Item {
             if (!root.pressedForPan || !root.gestureMoved)
                 return
             root.panning = true
-            root.framingNormX = root.pressNormX + dx / Math.max(1, root.frameWidth)
-            root.framingNormY = root.pressNormY + dy / Math.max(1, root.frameHeight)
+            root.framingNormX = root.pressNormX
+                    + dx / Math.max(1, root.displayPanWidth)
+            root.framingNormY = root.pressNormY
+                    + dy / Math.max(1, root.displayPanHeight)
             root.clampPan()
             root.publishFraming(false)
         }
