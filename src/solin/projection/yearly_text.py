@@ -227,7 +227,7 @@ class YearlyTextWidget(QWidget):
 
         width = self.width()
         height = self.height()
-        font_size = max(18, int(min(width, height) * 0.075))
+        font_size = max(18, int(min(width, height) * 0.099))
         font = QFont()
         font.setFamilies([timer_digit_font_family(), "Consolas", "monospace"])
         font.setPixelSize(font_size)
