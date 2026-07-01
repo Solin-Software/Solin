@@ -1020,6 +1020,15 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._is_live_tab = False
         self.ov_set_idle_btn.setVisible(True)
 
+    def set_projected_image_transform(
+        self,
+        transform: ImageTransform,
+    ) -> ImageTransform:
+        """Synchronize the active preview without reloading its image."""
+
+        self._configure_image_preview_framing(reset=False)
+        return self.preview_content.set_current_transform(transform)
+
     def update_tab_live_preview(self, frame):
         """Atualiza o overlay com o frame ao vivo da aba projetada (bug 2).
 

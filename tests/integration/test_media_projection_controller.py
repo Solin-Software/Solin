@@ -78,6 +78,7 @@ class _ProjectionBarStub:
         self.live_tab_modes = []
         self.tab_previews = []
         self.initial_transforms = []
+        self.projected_image_transforms = []
         self.preview_content = _PreviewContentStub()
         self._playlist_items = []
 
@@ -108,6 +109,10 @@ class _ProjectionBarStub:
         self.initial_transforms.append(initial_transform)
         self.video_mode = False
         self.audio_mode = False
+
+    def set_projected_image_transform(self, transform):
+        self.projected_image_transforms.append(transform)
+        return transform
 
     def begin_announcement_mode(self):
         self.announcement_count += 1
@@ -455,6 +460,155 @@ def test_prepared_image_framing_is_applied_instantly_and_saved_in_session(tmp_pa
         expected,
     ]
     assert all(surface.transforms == [] for surface in window.windows)
+
+
+def test_reprojecting_same_image_animates_only_changed_prepared_framing(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "prepared.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+    playlist = [{
+        "url": str(image_path),
+        "title": "Prepared",
+        "type": "image",
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.5,
+            "norm_x": 0.2,
+            "norm_y": 0.0,
+        },
+    }]
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    playlist[0]["image_framing"] = {
+        "version": 1,
+        "zoom": 2.0,
+        "norm_x": -0.25,
+        "norm_y": 0.1,
+    }
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    expected = ImageTransform(2.0, -0.25, 0.1)
+    assert window.projection_session.state["transform"] == (2.0, -0.25, 0.1)
+    assert window.proj_bar.projected_image_transforms == [expected]
+    assert len(window.proj_bar.images) == 1
+    assert len(window.proj_bar.playlists) == 1
+    assert window._navigation.stopped == 1
+    assert window.media_ctrl.stopped == 1
+    assert window._ndi_service.stopped == 1
+    assert window._camera_service.stopped == 1
+    assert len(window._projection_integrations.statuses) == 1
+    for surface in window.windows:
+        assert surface.cleared == 1
+        assert len(surface.images) == 1
+        assert surface.transforms == [(2.0, -0.25, 0.1, True)]
+
+
+def test_reprojecting_same_image_with_same_framing_reloads_normally(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "prepared.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+    framing = {
+        "version": 1,
+        "zoom": 1.5,
+        "norm_x": 0.2,
+        "norm_y": 0.0,
+    }
+    playlist = [{
+        "url": str(image_path),
+        "title": "Prepared",
+        "type": "image",
+        "image_framing": framing,
+    }]
+
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    assert window.proj_bar.projected_image_transforms == []
+    assert len(window.proj_bar.images) == 2
+    assert len(window.proj_bar.playlists) == 2
+    assert window._navigation.stopped == 2
+    assert len(window._projection_integrations.statuses) == 2
+    for surface in window.windows:
+        assert surface.cleared == 2
+        assert len(surface.images) == 2
+        assert surface.transforms == []
+
+
+def test_reprojecting_changed_image_content_reloads_normally(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "prepared.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+    playlist = [{
+        "url": str(image_path),
+        "title": "Prepared",
+        "type": "image",
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.5,
+            "norm_x": 0.2,
+            "norm_y": 0.0,
+        },
+    }]
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    image.fill(QColor("#000000"))
+    assert image.save(str(image_path))
+    playlist[0]["image_framing"] = {
+        "version": 1,
+        "zoom": 2.0,
+        "norm_x": -0.25,
+        "norm_y": 0.1,
+    }
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    assert window.proj_bar.projected_image_transforms == []
+    assert len(window.proj_bar.images) == 2
+    for surface in window.windows:
+        assert surface.cleared == 2
+        assert len(surface.images) == 2
+        assert surface.transforms == []
+
+
+def test_reprojecting_same_image_without_framing_animates_back_to_identity(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image_path = tmp_path / "prepared.png"
+    image = QImage(1600, 900, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#ffffff"))
+    assert image.save(str(image_path))
+    playlist = [{
+        "url": str(image_path),
+        "title": "Prepared",
+        "type": "image",
+        "image_framing": {
+            "version": 1,
+            "zoom": 1.5,
+            "norm_x": 0.2,
+            "norm_y": 0.0,
+        },
+    }]
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    playlist[0].pop("image_framing")
+    controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
+
+    expected = ImageTransform(1.0, 0.0, 0.0)
+    assert window.projection_session.state["transform"] == (1.0, 0.0, 0.0)
+    assert window.proj_bar.projected_image_transforms == [expected]
+    assert len(window.proj_bar.images) == 1
+    for surface in window.windows:
+        assert surface.cleared == 1
+        assert len(surface.images) == 1
+        assert surface.transforms == [(1.0, 0.0, 0.0, True)]
 
 
 def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):

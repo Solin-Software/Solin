@@ -10,11 +10,42 @@ from solin.core.projection.image_framing import (
     frame_for_aspect,
     image_transform_from_record,
     image_transform_to_record,
+    image_transform_from_values,
+    image_transforms_equal,
     initial_transform_for_frame,
     pan_bounds_for_frame,
     prepare_image_transform_for_aspect,
     snap_zoom_to_frame_cover,
 )
+
+
+def test_in_memory_transform_values_are_validated_and_normalized() -> None:
+    assert image_transform_from_values((1.5, 0.2, -0.1)) == ImageTransform(
+        1.5,
+        0.2,
+        -0.1,
+    )
+    assert image_transform_from_values([100.0, 0.2, -0.1]) == ImageTransform(
+        10.0,
+        0.2,
+        -0.1,
+    )
+    assert image_transform_from_values(None) is None
+    assert image_transform_from_values((1.0, 0.0)) is None
+    assert image_transform_from_values((float("nan"), 0.0, 0.0)) is None
+
+
+def test_transform_equality_ignores_only_insignificant_float_noise() -> None:
+    transform = ImageTransform(1.5, 0.2, -0.1)
+
+    assert image_transforms_equal(
+        transform,
+        ImageTransform(1.5 + 0.5e-6, 0.2 - 0.5e-6, -0.1),
+    )
+    assert not image_transforms_equal(
+        transform,
+        ImageTransform(1.5 + 2e-6, 0.2, -0.1),
+    )
 
 
 def test_image_framing_record_round_trips_non_identity_transform() -> None:
