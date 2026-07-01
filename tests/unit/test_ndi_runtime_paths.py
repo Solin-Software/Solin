@@ -33,3 +33,4 @@ def test_candidate_ndi_library_paths_includes_configured_runtime_dirs():
         str(r"C:\Apps32\NDI\NDI 5 Runtime\v5\Processing.NDI.Lib.x86.dll")
         in paths
     )
+    assert all("/" not in path for path in paths)

@@ -23,6 +23,8 @@ from ..core.projection.image_framing import (
     ImageTransform,
     constrain_image_transform_for_aspect,
     image_transform_from_record,
+    image_transform_from_values,
+    image_transforms_equal,
 )
 
 #: Projection states that carry a zoom/pan transform (so it is persisted in the
@@ -365,6 +367,7 @@ class MediaProjectionController:
         norm_y: float,
         *,
         animate: bool,
+        sync_preview: bool = False,
     ) -> None:
         # Persist the transform as part of the projection state so a surface
         # created later (hot-plugged monitor / respawned preview) is replayed
@@ -373,6 +376,10 @@ class MediaProjectionController:
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
             state["transform"] = (zoom, norm_x, norm_y)
+        if sync_preview:
+            self._context.projection_bar.set_projected_image_transform(
+                ImageTransform(zoom, norm_x, norm_y)
+            )
         for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(
                 zoom,
@@ -543,6 +550,9 @@ class MediaProjectionController:
     ) -> None:
         context = self._context
         initial_transform = self._prepared_image_transform(data, image_framing)
+        if self._update_active_image_framing(data, initial_transform):
+            return
+
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
@@ -593,6 +603,33 @@ class MediaProjectionController:
             title,
             auto_keys_media=True,
         )
+
+    def _update_active_image_framing(
+        self,
+        data: bytes,
+        target_transform: ImageTransform,
+    ) -> bool:
+        """Animate framing only when the exact projected image is already active."""
+
+        state = self._session.state
+        if state.get("type") != "image" or state.get("data") != data:
+            return False
+
+        current_transform = (
+            image_transform_from_values(state.get("transform"))
+            or IDENTITY_IMAGE_TRANSFORM
+        )
+        if image_transforms_equal(current_transform, target_transform):
+            return False
+
+        self._apply_image_transform(
+            target_transform.zoom,
+            target_transform.norm_x,
+            target_transform.norm_y,
+            animate=True,
+            sync_preview=True,
+        )
+        return True
 
     def _prepared_image_transform(
         self,

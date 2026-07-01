@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 NDI_RUNTIME_LIBRARY_NAMES = (
     "Processing.NDI.Lib.x64.dll",
@@ -22,14 +22,14 @@ PROGRAM_FILES_ENV_KEYS = (
 )
 
 NDI_RUNTIME_RELATIVE_DIRS = (
-    Path("obs-studio") / "obs-plugins" / "64bit",
-    Path("obs-studio") / "bin" / "64bit",
-    Path("NDI") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
-    Path("NDI") / "NDI 6 Runtime" / "v6",
-    Path("NDI") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
-    Path("NDI") / "NDI 5 Runtime" / "v5",
-    Path("NewTek") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
-    Path("NewTek") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
+    PureWindowsPath("obs-studio") / "obs-plugins" / "64bit",
+    PureWindowsPath("obs-studio") / "bin" / "64bit",
+    PureWindowsPath("NDI") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
+    PureWindowsPath("NDI") / "NDI 6 Runtime" / "v6",
+    PureWindowsPath("NDI") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
+    PureWindowsPath("NDI") / "NDI 5 Runtime" / "v5",
+    PureWindowsPath("NewTek") / "NDI 6 Runtime" / "v6" / "Bin" / "x64",
+    PureWindowsPath("NewTek") / "NDI 5 Runtime" / "v5" / "Bin" / "x64",
 )
 
 
@@ -37,14 +37,16 @@ def candidate_ndi_library_paths(environ: Mapping[str, str]) -> list[str]:
     candidates: list[str] = list(NDI_RUNTIME_LIBRARY_NAMES)
 
     for base in _present_values(environ, NDI_RUNTIME_ENV_KEYS):
+        base_path = PureWindowsPath(base)
         for name in NDI_RUNTIME_LIBRARY_NAMES:
-            candidates.append(str(Path(base) / name))
-            candidates.append(str(Path(base) / "Bin" / "x64" / name))
+            candidates.append(str(base_path / name))
+            candidates.append(str(base_path / "Bin" / "x64" / name))
 
     for root in _program_files_roots(environ):
+        root_path = PureWindowsPath(root)
         for relative_dir in NDI_RUNTIME_RELATIVE_DIRS:
             for name in NDI_RUNTIME_LIBRARY_NAMES:
-                candidates.append(str(Path(root) / relative_dir / name))
+                candidates.append(str(root_path / relative_dir / name))
 
     return candidates
 

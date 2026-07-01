@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ntpath
 import os
 from collections.abc import Mapping
 from typing import Any
@@ -127,4 +128,11 @@ def upsert_meeting_folder_import_record(
 
 
 def _normalized_local_path(path: str) -> str:
-    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+    drive, _ = ntpath.splitdrive(path)
+    if os.name == "nt" or drive:
+        absolute_path = ntpath.abspath(path) if os.name == "nt" else path
+        normalized = ntpath.normcase(ntpath.normpath(absolute_path))
+        return f"windows:{normalized}"
+
+    normalized = os.path.normcase(os.path.normpath(os.path.abspath(path)))
+    return f"native:{normalized}"

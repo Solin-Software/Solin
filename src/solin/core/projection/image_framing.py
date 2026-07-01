@@ -34,6 +34,19 @@ class ImageTransform:
 IDENTITY_IMAGE_TRANSFORM = ImageTransform(1.0, 0.0, 0.0)
 
 
+def image_transform_from_values(value: object) -> ImageTransform | None:
+    """Parse an in-memory ``(zoom, norm_x, norm_y)`` transform value."""
+
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    zoom = _finite_float(value[0])
+    norm_x = _finite_float(value[1])
+    norm_y = _finite_float(value[2])
+    if zoom is None or norm_x is None or norm_y is None:
+        return None
+    return normalize_image_transform(ImageTransform(zoom, norm_x, norm_y))
+
+
 def image_transform_from_record(value: object) -> ImageTransform | None:
     """Parse a persisted prepared-image framing record.
 
@@ -86,11 +99,23 @@ def normalize_image_transform(transform: ImageTransform) -> ImageTransform:
 
 
 def is_identity_image_transform(transform: ImageTransform) -> bool:
-    normalized = normalize_image_transform(transform)
+    return image_transforms_equal(transform, IDENTITY_IMAGE_TRANSFORM)
+
+
+def image_transforms_equal(
+    first: ImageTransform,
+    second: ImageTransform,
+) -> bool:
+    """Compare normalized transforms while ignoring insignificant float noise."""
+
+    normalized_first = normalize_image_transform(first)
+    normalized_second = normalize_image_transform(second)
     return (
-        abs(normalized.zoom - 1.0) <= _IDENTITY_EPSILON
-        and abs(normalized.norm_x) <= _IDENTITY_EPSILON
-        and abs(normalized.norm_y) <= _IDENTITY_EPSILON
+        abs(normalized_first.zoom - normalized_second.zoom) <= _IDENTITY_EPSILON
+        and abs(normalized_first.norm_x - normalized_second.norm_x)
+        <= _IDENTITY_EPSILON
+        and abs(normalized_first.norm_y - normalized_second.norm_y)
+        <= _IDENTITY_EPSILON
     )
 
 
