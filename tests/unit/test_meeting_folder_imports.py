@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from solin.core.meetings.meeting_folder_imports import (
     find_meeting_folder_import_record,
     is_meeting_folder_source_supported,
@@ -71,6 +73,33 @@ def test_same_local_source_normalizes_local_paths(tmp_path: Path):
 
     assert same_local_source(str(source), str(equivalent))
     assert not same_local_source("https://example.test/a.mp4", str(source))
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        (
+            r"C:\Meeting\Manual.mp4",
+            r"c:/meeting/section/../manual.mp4",
+        ),
+        (
+            r"\\MediaServer\Shared\Meeting\manual.mp4",
+            r"\\mediaserver\shared\Meeting\.\manual.mp4",
+        ),
+    ],
+)
+def test_same_local_source_uses_windows_semantics_independent_of_host(
+    left: str,
+    right: str,
+):
+    assert same_local_source(left, right)
+
+
+def test_same_local_source_keeps_windows_drives_distinct():
+    assert not same_local_source(
+        r"C:\Meeting\manual.mp4",
+        r"D:\Meeting\manual.mp4",
+    )
 
 
 def test_upsert_record_replaces_same_path_records_and_truncates_errors():
