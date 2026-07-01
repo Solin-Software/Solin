@@ -152,7 +152,7 @@ class ProjectionPlaylistMixin:
         self._update_nav_buttons()
         self.playlist_navigate.emit(index)
 
-    def _on_add_to_playlist_clicked(self):
+    def _on_add_to_destination_clicked(self):
         url = ""
         title = ""
         meta = {}
@@ -191,7 +191,7 @@ class ProjectionPlaylistMixin:
         if not title and not url:
             return
 
-        self.add_to_playlist_requested.emit(url, title, meta)
+        self.add_to_destination_requested.emit(url, title, meta)
 
     def _on_send_to_temp_playlist(self):
         if not self._playlist or self._is_from_saved_playlist:

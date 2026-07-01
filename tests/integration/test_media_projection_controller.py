@@ -82,7 +82,7 @@ class _ProjectionBarStub:
         self.video_mode = False
         self.audio_mode = False
         self.projected_titles = []
-        self.hidden_add_to_playlist = 0
+        self.hidden_add_to_destination = 0
         self.live_tab_modes = []
         self.tab_previews = []
         self.initial_transforms = []
@@ -142,8 +142,8 @@ class _ProjectionBarStub:
     def set_projected_title(self, title):
         self.projected_titles.append(title)
 
-    def hide_add_to_playlist_action(self):
-        self.hidden_add_to_playlist += 1
+    def hide_add_to_destination_action(self):
+        self.hidden_add_to_destination += 1
 
     def set_live_tab_mode(self, enabled):
         self.live_tab_modes.append(enabled)
@@ -670,7 +670,7 @@ def test_project_tab_frame_initializes_live_tab_once():
     assert window.projection_session.tab_projection_active is True
     assert window.proj_bar.playlists == [([], None, False)]
     assert window.proj_bar.images[0][0] == "Browser — Live Tab"
-    assert window.proj_bar.hidden_add_to_playlist == 1
+    assert window.proj_bar.hidden_add_to_destination == 1
     assert window.proj_bar.live_tab_modes == [True]
     assert window.proj_bar.tab_previews == [frame, frame]
     assert [projection_window.pixmaps for projection_window in window.windows] == [

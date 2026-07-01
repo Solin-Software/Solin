@@ -32,6 +32,7 @@ class MainWindowSignalHandlers:
     media_projection: Any
     timer_theme: Any
     playlist_imports: Any
+    media_destinations: Any
     auto_key_projection: Any
     projection_stop: Any
     projection_targets: Any
@@ -90,8 +91,8 @@ class SignalConnectionController:
             media_projection.project_image_bytes
         )
 
-        projection_bar.add_to_playlist_requested.connect(
-            handlers.playlist_imports.add_current_to_playlist
+        projection_bar.add_to_destination_requested.connect(
+            handlers.media_destinations.route_projected_media
         )
         projection_bar.send_to_temp_playlist_requested.connect(
             handlers.playlist_imports.send_to_temp_playlist

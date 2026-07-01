@@ -264,7 +264,7 @@ _OVERLAY_JS_RAW = r"""
         var saveLabel = mediaType === 'video'
             ? (window._jwSaveVideoLabel   || 'Save video')
             : (window._jwSaveImageLabel   || 'Save image');
-        var addLabel  = window._jwAddPlaylistLabel || 'Add to playlist';
+        var addLabel  = window._jwAddDestinationLabel || 'Add to…';
 
         return [
             {
@@ -283,7 +283,7 @@ _OVERLAY_JS_RAW = r"""
                     var title = document.title
                         || saveUrl.split('/').pop().split('?')[0]
                         || '';
-                    _bridge.addToPlaylist(saveUrl, title, mediaType);
+                    _bridge.addToDestination(saveUrl, title, mediaType);
                 }
             }
         ];
@@ -309,8 +309,8 @@ _OVERLAY_JS_RAW = r"""
             cropSelected: function(x, y, w, h) { post('cropSelected', { x: x, y: y, w: w, h: h }); },
             cancelCrop: function() { post('cancelCrop'); },
             saveMedia: function(url, mediaType) { post('saveMedia', { url: url || '', mediaType: mediaType || '' }); },
-            addToPlaylist: function(url, title, mediaType) {
-                post('addToPlaylist', { url: url || '', title: title || '', mediaType: mediaType || '' });
+            addToDestination: function(url, title, mediaType) {
+                post('addToDestination', { url: url || '', title: title || '', mediaType: mediaType || '' });
             }
         };
         window.__solinBridge = _bridge;
@@ -747,9 +747,7 @@ class BrowserWidget(
     project_tab_pixmap_signal  = Signal(object)   # QImage — frame ao vivo da aba pinada
     stop_tab_projection_signal = Signal()
     crop_image_signal          = Signal(bytes)     # PNG bytes da região recortada
-    add_to_playlist_signal     = Signal(str, str, str)  # url, title, media_type
-    add_downloaded_file_to_playlist_signal = Signal(str, str, str)  # path, title, kind
-    download_failed_signal     = Signal(str, str)  # title, error
+    media_destination_signal = Signal(str, str, str, bool)
 
     _image_fetched_signal = Signal(int, bytes)
     _OVERLAY_JS = OVERLAY_JS

@@ -1,0 +1,97 @@
+"""Typed contracts for routing media to playlists and meeting trees."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from collections.abc import Mapping
+from typing import Any
+
+
+class MediaRouteAction(str, Enum):
+    PLAY = "play"
+    ADD = "add"
+
+
+class MediaDestinationKind(str, Enum):
+    PLAYLIST = "playlist"
+    MEETING = "meeting"
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDestinationAsset:
+    """One ordered source in a destination request."""
+
+    title: str
+    source_id: str
+    item: Mapping[str, Any] | None = None
+    import_path: str = ""
+    import_kind: str = ""
+
+    def __post_init__(self) -> None:
+        has_item = self.item is not None
+        has_import = bool(self.import_path)
+        if has_item == has_import:
+            raise ValueError("An asset must contain exactly one item or import path")
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDestinationRequest:
+    title: str
+    assets: tuple[MediaDestinationAsset, ...] = field(default_factory=tuple)
+    can_play: bool = False
+
+    @property
+    def item_count(self) -> int:
+        return len(self.assets) or 1
+
+
+@dataclass(frozen=True, slots=True)
+class PlaylistDestinationTarget:
+    playlist_id: str
+    playlist_name: str
+    create_new: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingDestinationTarget:
+    monday: str
+    pub_type: str
+    list_id: str
+    insert_index: int
+
+
+MediaDestinationTarget = PlaylistDestinationTarget | MeetingDestinationTarget
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedMediaBatch:
+    items: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    handled_sources: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDestinationSelection:
+    action: MediaRouteAction
+    destination: MediaDestinationKind | None = None
+    target: MediaDestinationTarget | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDestinationOutcome:
+    added_count: int
+    referenced_urls: tuple[str, ...] = field(default_factory=tuple)
+    handled_sources: tuple[str, ...] = field(default_factory=tuple)
+
+
+__all__ = [
+    "MediaDestinationKind",
+    "MediaDestinationAsset",
+    "MediaDestinationOutcome",
+    "MediaDestinationRequest",
+    "MediaDestinationSelection",
+    "MediaRouteAction",
+    "MeetingDestinationTarget",
+    "PlaylistDestinationTarget",
+    "PreparedMediaBatch",
+]

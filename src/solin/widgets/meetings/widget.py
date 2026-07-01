@@ -30,7 +30,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget,
 )
 
-from ...core.meetings.meeting_weeks import current_monday
+from ...core.meetings.meeting_weeks import (
+    current_monday,
+    is_selectable_meeting_week,
+)
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
@@ -49,7 +52,6 @@ from ...core.jw.language_context import (
 )
 from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
-from ...core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ...core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
@@ -61,7 +63,11 @@ from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
 from solin.ui.qml.meeting_detail import MeetingDetailQmlHost
 from ...styles.theme import PALETTE
-from .tree_controller import MeetingTreeController
+from .controller_factory import (
+    MeetingTreeControllerDependencies,
+    MeetingTreeControllerFactory,
+)
+from .destinations import MeetingDestinationSession
 from .overview import Overview
 from .visuals import (
     MEETING_PURPLE,
@@ -138,54 +144,30 @@ class StudyDetailView(QWidget):
     play_requested = Signal(object)
     meeting_tree_saved = Signal(str)
 
-    def __init__(self, pub_type: str, wd: "WeekData",
-                 service: "JwpubService", *,
+    def __init__(self, pub_type: str, wd: "WeekData", *,
                  notifications=None,
                  language_context: JWMediaLanguageContext,
-                 meeting_tree_store: MeetingTreeStore,
-                 profile_media_store: ProfileMediaStore,
-                 meeting_thumbnail_store: ThumbnailStore,
-                 watched_folder_file_store: WatchedFolderFileStore,
-                 jwpub_import_thread_factory: JwpubImportThreadFactory,
+                 controller_factory: MeetingTreeControllerFactory,
                  document_conversion_service: DocumentConversionService,
-                 profile_paths: ProfilePaths,
-                 runtime_paths: RuntimePaths,
-                 cache_manager: MediaCacheManager,
                  jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
                  jw_songs_store: JWSongsStore,
-                 meeting_linked_folder_sync: MeetingLinkedFolderSync,
-                 meeting_schedule_settings: MeetingScheduleSettingsStore,
-                 media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
                  meeting_tree_saved_handler: Callable[[str], None] | None = None,
                  saved_snapshot: MeetingTreeSnapshot | None = None,
                  watched_folder: str = "",
-                 projection_aspect_ratio_provider: Callable[[], object] | None = None,
                  parent=None):
         super().__init__(parent)
         self._pub   = pub_type
         self._wd    = wd
-        self._svc   = service
         self._notifications = notifications
         self._language_context = language_context
-        self._meeting_tree_store = meeting_tree_store
-        self._profile_media_store = profile_media_store
-        self._meeting_thumbnail_store = meeting_thumbnail_store
-        self._watched_folder_file_store = watched_folder_file_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
-        self._profile_paths = profile_paths
-        self._runtime_paths = runtime_paths
-        self._cache_manager = cache_manager
         self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_catalog_thumbnail_session_factory = (
             jw_catalog_thumbnail_session_factory
         )
         self._jw_songs_store = jw_songs_store
-        self._meeting_linked_folder_sync = meeting_linked_folder_sync
-        self._meeting_schedule_settings = meeting_schedule_settings
-        self._media_info_queue_factory = media_info_queue_factory
-        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._meeting_tree_saved_handler = meeting_tree_saved_handler
         self._saved_snapshot = saved_snapshot
         self._watched_folder = watched_folder
@@ -204,25 +186,9 @@ class StudyDetailView(QWidget):
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
-        self.controller = MeetingTreeController(
-            self._svc,
-            meeting_type=self._pub,
-            language_code=lang_code,
-            store=self._meeting_tree_store,
-            profile_media_store=self._profile_media_store,
-            meeting_thumbnail_store=self._meeting_thumbnail_store,
-            watched_folder_file_store=self._watched_folder_file_store,
-            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
-            document_conversion_service=self._document_conversion_service,
-            profile_paths=self._profile_paths,
-            runtime_paths=self._runtime_paths,
-            cache_manager=self._cache_manager,
-            linked_folder_sync=self._meeting_linked_folder_sync,
-            media_info_queue_factory=self._media_info_queue_factory,
-            projection_aspect_ratio_provider=(
-                self._projection_aspect_ratio_provider
-            ),
-            fallback_language_code=self._language_context.fallback_code,
+        self.controller = self._controller_factory.create(
+            self._pub,
+            self._language_context,
             parent=self,
         )
         self.controller.backRequested.connect(self.back_requested.emit)
@@ -440,49 +406,26 @@ class _MemorialDetailView(QWidget):
     back_requested = Signal()
     play_requested = Signal(object)
 
-    def __init__(self, md: "MemorialData", service: "JwpubService", *,
+    def __init__(self, md: "MemorialData", *,
                  notifications=None,
                  language_context: JWMediaLanguageContext,
-                 meeting_tree_store: MeetingTreeStore,
-                 profile_media_store: ProfileMediaStore,
-                 meeting_thumbnail_store: ThumbnailStore,
-                 watched_folder_file_store: WatchedFolderFileStore,
-                 jwpub_import_thread_factory: JwpubImportThreadFactory,
+                 controller_factory: MeetingTreeControllerFactory,
                  document_conversion_service: DocumentConversionService,
-                 profile_paths: ProfilePaths,
-                 runtime_paths: RuntimePaths,
-                 cache_manager: MediaCacheManager,
                  jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
                  jw_songs_store: JWSongsStore,
-                 meeting_linked_folder_sync: MeetingLinkedFolderSync,
-                 meeting_schedule_settings: MeetingScheduleSettingsStore,
-                 media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
-                 projection_aspect_ratio_provider: Callable[[], object] | None = None,
                  parent=None):
         super().__init__(parent)
         self._md  = md
-        self._svc = service
         self._notifications = notifications
         self._language_context = language_context
-        self._meeting_tree_store = meeting_tree_store
-        self._profile_media_store = profile_media_store
-        self._meeting_thumbnail_store = meeting_thumbnail_store
-        self._watched_folder_file_store = watched_folder_file_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
-        self._profile_paths = profile_paths
-        self._runtime_paths = runtime_paths
-        self._cache_manager = cache_manager
         self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_catalog_thumbnail_session_factory = (
             jw_catalog_thumbnail_session_factory
         )
         self._jw_songs_store = jw_songs_store
-        self._meeting_linked_folder_sync = meeting_linked_folder_sync
-        self._meeting_schedule_settings = meeting_schedule_settings
-        self._media_info_queue_factory = media_info_queue_factory
-        self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
         self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
@@ -497,25 +440,9 @@ class _MemorialDetailView(QWidget):
         self._refresh_shell_texts(update_context=False)
 
         lang_code = self._language_context.api_code
-        self.controller = MeetingTreeController(
-            self._svc,
-            meeting_type="memorial",
-            language_code=lang_code,
-            store=self._meeting_tree_store,
-            profile_media_store=self._profile_media_store,
-            meeting_thumbnail_store=self._meeting_thumbnail_store,
-            watched_folder_file_store=self._watched_folder_file_store,
-            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
-            document_conversion_service=self._document_conversion_service,
-            profile_paths=self._profile_paths,
-            runtime_paths=self._runtime_paths,
-            cache_manager=self._cache_manager,
-            linked_folder_sync=self._meeting_linked_folder_sync,
-            media_info_queue_factory=self._media_info_queue_factory,
-            projection_aspect_ratio_provider=(
-                self._projection_aspect_ratio_provider
-            ),
-            fallback_language_code=self._language_context.fallback_code,
+        self.controller = self._controller_factory.create(
+            "memorial",
+            self._language_context,
             parent=self,
         )
         self.controller.backRequested.connect(self.back_requested.emit)
@@ -701,6 +628,7 @@ class MeetingsWidget(QWidget):
     Stack index 1+ = detail views (navbar hidden)
     """
     project_media = Signal(object)  # MeetingMedia
+    destinationTargetsChanged = Signal(str)
 
     def __init__(
         self,
@@ -722,7 +650,6 @@ class MeetingsWidget(QWidget):
         jw_songs_store: JWSongsStore,
         media_settings: MediaSettingsStore,
         meeting_linked_folder_sync: MeetingLinkedFolderSync,
-        meeting_schedule_settings: MeetingScheduleSettingsStore,
         jwpub_service_factory: Callable[[QObject], JwpubService],
         memorial_service_factory: Callable[[QObject], MemorialService],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
@@ -736,6 +663,7 @@ class MeetingsWidget(QWidget):
         self._cache:   dict[str, WeekData]       = {}
         self._saved_snapshots: dict[str, dict[str, MeetingTreeSnapshot]] = {}
         self._details: dict[str, StudyDetailView | _MemorialDetailView] = {}
+        self._destination_sessions: set[MeetingDestinationSession] = set()
         self._clear_details_pending = False
         self._watched_folder: str = ""
         self._meeting_tree_store = meeting_tree_store
@@ -755,11 +683,29 @@ class MeetingsWidget(QWidget):
         self._jw_songs_store = jw_songs_store
         self._media_settings = media_settings
         self._meeting_linked_folder_sync = meeting_linked_folder_sync
-        self._meeting_schedule_settings = meeting_schedule_settings
         self._media_info_queue_factory = media_info_queue_factory
         self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
 
         self._service = jwpub_service_factory(self)
+        self._tree_controller_factory = MeetingTreeControllerFactory(
+            MeetingTreeControllerDependencies(
+                service=self._service,
+                store=self._meeting_tree_store,
+                profile_media_store=self._profile_media_store,
+                meeting_thumbnail_store=self._meeting_thumbnail_store,
+                watched_folder_file_store=self._watched_folder_file_store,
+                jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+                document_conversion_service=self._document_conversion_service,
+                profile_paths=self._profile_paths,
+                runtime_paths=self._runtime_paths,
+                cache_manager=self._cache_manager,
+                linked_folder_sync=self._meeting_linked_folder_sync,
+                media_info_queue_factory=self._media_info_queue_factory,
+                projection_aspect_ratio_provider=(
+                    self._projection_aspect_ratio_provider
+                ),
+            )
+        )
         self._set_lang_from_mgr()
 
         self._service.mwb_ready.connect(self._on_mwb_ready)
@@ -1026,31 +972,15 @@ class MeetingsWidget(QWidget):
         d = StudyDetailView(
             pub_type,
             wd,
-            self._service,
             notifications=self._notifications,
             language_context=self._current_media_context(),
-            meeting_tree_store=self._meeting_tree_store,
-            profile_media_store=self._profile_media_store,
-            meeting_thumbnail_store=self._meeting_thumbnail_store,
-            watched_folder_file_store=self._watched_folder_file_store,
-            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+            controller_factory=self._tree_controller_factory,
             document_conversion_service=self._document_conversion_service,
-            profile_paths=self._profile_paths,
-            runtime_paths=self._runtime_paths,
-            cache_manager=self._cache_manager,
             jw_catalog_service_factory=self._jw_catalog_service_factory,
             jw_catalog_thumbnail_session_factory=(
                 self._jw_catalog_thumbnail_session_factory
             ),
             jw_songs_store=self._jw_songs_store,
-            meeting_linked_folder_sync=(
-                self._meeting_linked_folder_sync
-            ),
-            meeting_schedule_settings=self._meeting_schedule_settings,
-            media_info_queue_factory=self._media_info_queue_factory,
-            projection_aspect_ratio_provider=(
-                self._projection_aspect_ratio_provider
-            ),
             meeting_tree_saved_handler=self._on_detail_tree_saved,
             saved_snapshot=saved_snapshot,
             watched_folder=self._watched_folder,
@@ -1091,29 +1021,15 @@ class MeetingsWidget(QWidget):
         if detail_key not in self._details:
             d = _MemorialDetailView(
                 md,
-                self._service,
                 notifications=self._notifications,
                 language_context=self._current_media_context(),
-                meeting_tree_store=self._meeting_tree_store,
-                profile_media_store=self._profile_media_store,
-                meeting_thumbnail_store=self._meeting_thumbnail_store,
-                watched_folder_file_store=self._watched_folder_file_store,
-                jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+                controller_factory=self._tree_controller_factory,
                 document_conversion_service=self._document_conversion_service,
-                profile_paths=self._profile_paths,
-                runtime_paths=self._runtime_paths,
-                cache_manager=self._cache_manager,
                 jw_catalog_service_factory=self._jw_catalog_service_factory,
                 jw_catalog_thumbnail_session_factory=(
                     self._jw_catalog_thumbnail_session_factory
                 ),
                 jw_songs_store=self._jw_songs_store,
-                meeting_linked_folder_sync=self._meeting_linked_folder_sync,
-                meeting_schedule_settings=self._meeting_schedule_settings,
-                media_info_queue_factory=self._media_info_queue_factory,
-                projection_aspect_ratio_provider=(
-                    self._projection_aspect_ratio_provider
-                ),
             )
             d.back_requested.connect(self._on_detail_back)
             d.play_requested.connect(self.project_media)
@@ -1128,6 +1044,7 @@ class MeetingsWidget(QWidget):
     @Slot(str, object)
     def _on_mwb_ready(self, key: str, wd: "WeekData"):
         self._cache[key] = wd
+        self.destinationTargetsChanged.emit(key)
         # If a detail is open, refresh it in place (merging the user's edits)
         # instead of discarding it — so a background update never yanks the user
         # back to the overview. On the first (cache) emit no detail exists yet.
@@ -1144,6 +1061,7 @@ class MeetingsWidget(QWidget):
     @Slot(str, object)
     def _on_wt_ready(self, key: str, wd: "WeekData"):
         self._cache[key] = wd
+        self.destinationTargetsChanged.emit(key)
         detail = self._details.get(f"wt:{key}")
         if isinstance(detail, StudyDetailView):
             detail.update_week(wd)
@@ -1175,6 +1093,7 @@ class MeetingsWidget(QWidget):
 
     @Slot(str, str, str)
     def _on_error(self, key: str, pub: str, _msg: str):
+        self.destinationTargetsChanged.emit(key)
         if key != self._monday.isoformat():
             return
         if self._saved_snapshot_for_key(pub, key) is not None:
@@ -1290,6 +1209,147 @@ class MeetingsWidget(QWidget):
     def get_service(self) -> "JwpubService":
         return self._service
 
+    def request_destination_week(self, monday: date, *, force: bool = False) -> None:
+        """Load destination availability without changing the meetings page."""
+
+        if not is_selectable_meeting_week(monday):
+            return
+        if force:
+            self._cache.pop(monday.isoformat(), None)
+        self._refresh_saved_snapshots(monday)
+        self.destinationTargetsChanged.emit(monday.isoformat())
+        self._service.load_week(monday, force=force)
+
+    def destination_targets(self, monday: date) -> list[dict[str, object]]:
+        if not is_selectable_meeting_week(monday):
+            return []
+        key = monday.isoformat()
+        snapshots = self._saved_snapshots_for(monday)
+        week_data = self._cache.get(key) or self._service.get_week_data(monday)
+        return [
+            self._destination_target(
+                pub_type,
+                monday,
+                week_data,
+                snapshots.get(pub_type),
+            )
+            for pub_type in ("mwb", "wt")
+        ]
+
+    def open_destination_session(
+        self,
+        monday: date,
+        pub_type: str,
+    ) -> MeetingDestinationSession | None:
+        """Open a stable controller session for one external insertion."""
+
+        if pub_type not in {"mwb", "wt"} or not is_selectable_meeting_week(monday):
+            return None
+        key = monday.isoformat()
+        detail = self._details.get(f"{pub_type}:{key}")
+        if isinstance(detail, StudyDetailView):
+            session = MeetingDestinationSession(
+                detail.controller,
+                owned_controller=False,
+                parent=self,
+            )
+            return self._track_destination_session(session)
+
+        snapshots = self._saved_snapshots_for(monday)
+        snapshot = snapshots.get(pub_type)
+        week_data = self._cache.get(key) or self._service.get_week_data(monday)
+        status = self._meeting_week_status(week_data, pub_type)
+        if snapshot is None and status != "ready":
+            return None
+        if week_data is None:
+            week_data = WeekData(monday=monday)
+
+        context = self._current_media_context()
+        controller = self._tree_controller_factory.create(
+            pub_type,
+            context,
+            parent=self,
+        )
+        controller.storageSaved.connect(self._on_detail_tree_saved)
+        controller.storageSaveFailed.connect(self._on_destination_storage_failed)
+        controller.set_sync_root(self._watched_folder)
+        if snapshot is not None and status != "ready":
+            controller.load_saved_tree(snapshot)
+        else:
+            controller.load_week(pub_type, week_data)
+        if self._watched_folder:
+            controller.inject_linked_folder_media(self._watched_folder)
+
+        session = MeetingDestinationSession(
+            controller,
+            owned_controller=True,
+            parent=self,
+        )
+        return self._track_destination_session(session)
+
+    def _track_destination_session(
+        self,
+        session: MeetingDestinationSession,
+    ) -> MeetingDestinationSession:
+        self._destination_sessions.add(session)
+        session.closed.connect(self._destination_sessions.discard)
+        return session
+
+    def _destination_target(
+        self,
+        pub_type: str,
+        monday: date,
+        week_data: WeekData | None,
+        snapshot: MeetingTreeSnapshot | None,
+    ) -> dict[str, object]:
+        status = self._meeting_week_status(week_data, pub_type)
+        available = snapshot is not None or status == "ready"
+        if available:
+            display_status = "ready"
+        elif status in {"error", "not_found", "empty"}:
+            display_status = "error"
+        else:
+            display_status = "loading"
+
+        if pub_type == "mwb":
+            title = _tr_ctx("_PubCard", "LIFE & MINISTRY")
+            detail = (
+                str(getattr(week_data, "mwb_date_label", "") or "")
+                or str(getattr(week_data, "mwb_week_title", "") or "")
+            )
+            color = str(PALETTE.accent)
+        else:
+            title = _tr_ctx("_PubCard", "WATCHTOWER STUDY")
+            detail = str(getattr(week_data, "wt_study_title", "") or "")
+            color = str(MEETING_PURPLE)
+
+        if snapshot is not None:
+            detail = snapshot.overview.title or detail
+        if not detail:
+            detail = week_label(monday)
+        if display_status == "error" and snapshot is None:
+            detail = _tr_ctx("MediaDestinationDialog", "Unavailable — try again")
+
+        return {
+            "pub_type": pub_type,
+            "title": title,
+            "subtitle": detail,
+            "status": display_status,
+            "available": available,
+            "color": color,
+        }
+
+    @staticmethod
+    def _meeting_week_status(week_data: WeekData | None, pub_type: str) -> str:
+        if week_data is None:
+            return "loading"
+        return str(
+            week_data.mwb_status if pub_type == "mwb" else week_data.wt_status
+        )
+
+    def _on_destination_storage_failed(self, tree_key: str, error: str) -> None:
+        _notify_meeting_tree_save_failed(self._notifications, tree_key, error)
+
     def _saved_snapshot_cache_key(self, monday: date) -> str:
         return self._saved_snapshot_cache_key_for(
             monday,
@@ -1346,6 +1406,9 @@ class MeetingsWidget(QWidget):
         timer = getattr(self, "_auto_download_timer", None)
         if timer:
             timer.stop()
+        for session in list(self._destination_sessions):
+            session.close()
+        self._destination_sessions.clear()
         self._clear_details()
         try:
             self._service.shutdown(wait_ms=100, delete_when_stopped=True)

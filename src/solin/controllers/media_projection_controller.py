@@ -332,7 +332,7 @@ class MediaProjectionController:
                 projection_window.clear()
             live_tab_title = context.translate("Browser — Live Tab")
             context.projection_bar.activate_image(live_tab_title)
-            context.projection_bar.hide_add_to_playlist_action()
+            context.projection_bar.hide_add_to_destination_action()
             context.projection_bar.set_live_tab_mode(True)
             if not ALLOW_ZOOM_PAN_ON_LIVE_TAB:
                 context.projection_bar.preview_content.set_image_mode(False)

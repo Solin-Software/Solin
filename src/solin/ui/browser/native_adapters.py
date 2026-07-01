@@ -17,7 +17,7 @@ class BrowserBridge(QObject):
     crop_selected_signal = Signal(float, float, float, float)
     crop_cancelled_signal = Signal()
     save_media_signal = Signal(str, str)
-    add_to_playlist_signal = Signal(str, str, str)
+    add_to_destination_signal = Signal(str, str, str)
 
     @Slot(str)
     def projectImage(self, data: str):
@@ -40,8 +40,8 @@ class BrowserBridge(QObject):
         self.save_media_signal.emit(url, media_type)
 
     @Slot(str, str, str)
-    def addToPlaylist(self, url: str, title: str, media_type: str):
-        self.add_to_playlist_signal.emit(url, title, media_type)
+    def addToDestination(self, url: str, title: str, media_type: str):
+        self.add_to_destination_signal.emit(url, title, media_type)
 
 
 class UrlValue:

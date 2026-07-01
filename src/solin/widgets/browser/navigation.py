@@ -41,7 +41,7 @@ class BrowserNavigationMixin:
         tab.crop_cancelled.connect(self._on_crop_cancelled)
         tab.new_tab_page.connect(lambda u: self._new_tab(url=u))
         tab.save_media.connect(self._on_save_media)
-        tab.add_to_playlist.connect(self._on_add_to_playlist)
+        tab.add_to_destination.connect(self._on_add_to_destination)
         tab.download_requested.connect(self._on_download_requested)
         tab.view.captureCompleted.connect(
             lambda request_id, data, t=tab: self._on_native_capture_completed(

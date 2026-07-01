@@ -1,4 +1,4 @@
-// JWMediaPlacementOverlay.qml — shared placement picker for JW media inserts.
+// MediaPlacementOverlay.qml — shared placement picker for structured media inserts.
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 

@@ -5,6 +5,10 @@ from solin.controllers.playlist_import_controller import (
     PlaylistImportController,
     PlaylistImportHandlers,
 )
+from solin.core.media.destinations import (
+    MediaDestinationAsset,
+    PlaylistDestinationTarget,
+)
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
 
 
@@ -133,7 +137,7 @@ class _DocumentConversionServiceStub:
 
 
 def _target(create_new=False):
-    return SimpleNamespace(
+    return PlaylistDestinationTarget(
         create_new=create_new,
         playlist_name="Target",
         playlist_id="playlist-id",
@@ -170,15 +174,21 @@ def _controller(
     )
 
 
-def test_add_current_to_playlist_creates_new_playlist(monkeypatch):
+def test_add_items_to_new_playlist_preserves_complete_media_item():
     window = _WindowStub()
     controller = _controller(window)
-    monkeypatch.setattr(controller, "_choose_target", lambda title: _target(create_new=True))
 
-    controller.add_current_to_playlist(
+    outcome = controller.add_items_to_playlist_target(
+        _target(create_new=True),
+        [
+            {
+                "title": "Song",
+                "url": "song.mp3",
+                "type": "audio",
+                "track": 3,
+            }
+        ],
         "song.mp3",
-        "Song",
-        {"type": "audio", "track": 3},
     )
 
     assert window.playlist_widget.created[0][0] == "Target"
@@ -187,20 +197,26 @@ def test_add_current_to_playlist_creates_new_playlist(monkeypatch):
     assert item["url"] == "song.mp3"
     assert item["type"] == "audio"
     assert item["track"] == 3
+    assert outcome.added_count == 1
+    assert outcome.referenced_urls == ("song.mp3",)
     assert window.notifications.events == [
         ("success", 'Playlist "Target"\ncreated successfully!', {})
     ]
 
 
-def test_add_current_to_playlist_reports_duplicate_when_existing_add_fails(monkeypatch):
+def test_add_items_to_existing_playlist_reports_duplicate_when_add_fails():
     window = _WindowStub()
     window.playlist_widget.add_results = [False]
     controller = _controller(window)
-    monkeypatch.setattr(controller, "_choose_target", lambda title: _target())
-
-    controller.add_current_to_playlist("video.mp4", "Video", {})
+    outcome = controller.add_items_to_playlist_target(
+        _target(),
+        [{"title": "Video", "url": "video.mp4", "type": "video"}],
+        "video.mp4",
+    )
 
     assert window.playlist_widget.added[0][0] == "playlist-id"
+    assert outcome.added_count == 0
+    assert outcome.referenced_urls == ()
     assert window.notifications.events == [
         ("warning", 'This media is already in\nplaylist "Target"', {})
     ]
@@ -211,57 +227,81 @@ def test_add_items_to_playlist_target_counts_added_items():
     window.playlist_widget.add_results = [True, False, True]
     controller = _controller(window)
 
-    controller.add_items_to_playlist_target(
+    outcome = controller.add_items_to_playlist_target(
         _target(),
-        [{"title": "A"}, {"title": "B"}, {"title": "C"}],
+        [
+            {"title": "A", "url": "a.mp4"},
+            {"title": "B", "url": "b.mp4"},
+            {"title": "C", "url": "c.mp4"},
+        ],
         "source",
     )
 
     assert len(window.playlist_widget.added) == 3
+    assert outcome.added_count == 2
+    assert outcome.referenced_urls == ("a.mp4", "c.mp4")
     assert window.notifications.events == [
         ("success", '2 file(s) added\nto playlist "Target"', {})
     ]
 
 
-def test_add_browser_downloaded_file_routes_by_kind(monkeypatch):
+def test_prepare_destination_assets_preserves_direct_and_import_order(monkeypatch):
     window = _WindowStub()
     controller = _controller(window)
-    calls = []
+    results = []
     monkeypatch.setattr(
         "solin.controllers.playlist_import_controller.os.path.isfile",
         lambda path: True,
     )
-    monkeypatch.setattr(controller, "_choose_target", lambda title: _target())
     monkeypatch.setattr(
         controller,
         "items_from_jwlplaylist_for_playlist",
-        lambda path: [{"title": "Item"}],
-    )
-    monkeypatch.setattr(
-        controller,
-        "add_items_to_playlist_target",
-        lambda target, items, source_name: calls.append(("items", items, source_name)),
-    )
-    monkeypatch.setattr(
-        controller,
-        "add_pdf_file_to_playlist_target",
-        lambda path, target: calls.append(("pdf", path)),
-    )
-    monkeypatch.setattr(
-        controller,
-        "add_jwpub_file_to_playlist_target",
-        lambda path, target: calls.append(("jwpub", path)),
+        lambda path: [{"title": "Imported", "url": "imported.mp4"}],
     )
 
-    controller.add_browser_downloaded_file("playlist.jwlplaylist", "Playlist", "jwlplaylist")
-    controller.add_browser_downloaded_file("doc.pdf", "PDF", "pdf")
-    controller.add_browser_downloaded_file("pub.jwpub", "JWPUB", "jwpub")
+    controller.prepare_destination_assets(
+        [
+            MediaDestinationAsset(
+                title="Direct",
+                source_id="direct.mp4",
+                item={"title": "Direct", "url": "direct.mp4"},
+            ),
+            MediaDestinationAsset(
+                title="Playlist",
+                source_id="playlist.jwlplaylist",
+                import_path="playlist.jwlplaylist",
+                import_kind="jwlplaylist",
+            ),
+        ],
+        results.append,
+    )
 
-    assert calls == [
-        ("items", [{"title": "Item"}], "playlist.jwlplaylist"),
-        ("pdf", "doc.pdf"),
-        ("jwpub", "pub.jwpub"),
+    assert [item["title"] for item in results[0].items] == [
+        "Direct",
+        "Imported",
     ]
+    assert results[0].handled_sources == (
+        "direct.mp4",
+        "playlist.jwlplaylist",
+    )
+
+
+def test_large_direct_batch_is_prepared_without_recursive_dispatch():
+    controller = _controller(_WindowStub())
+    assets = [
+        MediaDestinationAsset(
+            title=f"Item {index}",
+            source_id=f"{index}.mp4",
+            item={"title": f"Item {index}", "url": f"{index}.mp4"},
+        )
+        for index in range(1500)
+    ]
+    results = []
+
+    controller.prepare_destination_assets(assets, results.append)
+
+    assert len(results[0].items) == 1500
+    assert results[0].items[-1]["url"] == "1499.mp4"
 
 
 def test_items_from_jwlplaylist_persists_embedded_media_via_profile_store(
@@ -305,7 +345,7 @@ def test_send_to_temp_playlist_switches_to_playlist_page():
     assert window.playlist_widget.temp_opened == (items, window.lang)
 
 
-def test_pdf_import_uses_injected_document_conversion_service():
+def test_pdf_preparation_uses_injected_document_conversion_service(monkeypatch):
     window = _WindowStub()
     service = _DocumentConversionServiceStub()
     controller = _controller(
@@ -313,14 +353,32 @@ def test_pdf_import_uses_injected_document_conversion_service():
         document_conversion_service=service,
     )
 
-    controller.add_pdf_file_to_playlist_target("document.pdf", _target())
+    monkeypatch.setattr(
+        "solin.controllers.playlist_import_controller.os.path.isfile",
+        lambda path: True,
+    )
+    results = []
+    controller.prepare_destination_assets(
+        [
+            MediaDestinationAsset(
+                title="Document",
+                source_id="document.pdf",
+                import_path="document.pdf",
+                import_kind="pdf",
+            )
+        ],
+        results.append,
+    )
 
     assert service.pdf_calls == [("document.pdf", {"parent": window})]
     assert service.threads[0].started is True
     assert controller._context.thread_registry.active_count == 1
+    service.threads[0].pages_ready.callbacks[0](["page-1.png"], "Document")
+    assert results[0].items[0]["url"] == "page-1.png"
+    assert results[0].handled_sources == ("document.pdf",)
 
 
-def test_jwpub_import_uses_injected_worker_factory(monkeypatch):
+def test_jwpub_preparation_uses_injected_worker_factory(monkeypatch):
     window = _WindowStub()
     factory = _JwpubImportThreadFactoryStub()
     controller = _controller(
@@ -333,9 +391,21 @@ def test_jwpub_import_uses_injected_worker_factory(monkeypatch):
         lambda: SimpleNamespace(api_code="T"),
     )
 
-    controller.add_jwpub_file_to_playlist_target(
-        "publication.jwpub",
-        _target(),
+    monkeypatch.setattr(
+        "solin.controllers.playlist_import_controller.os.path.isfile",
+        lambda path: True,
+    )
+    results = []
+    controller.prepare_destination_assets(
+        [
+            MediaDestinationAsset(
+                title="Publication",
+                source_id="publication.jwpub",
+                import_path="publication.jwpub",
+                import_kind="jwpub",
+            )
+        ],
+        results.append,
     )
 
     assert factory.calls == [
@@ -346,6 +416,12 @@ def test_jwpub_import_uses_injected_worker_factory(monkeypatch):
     ]
     assert factory.threads[0].started is True
     assert controller._context.thread_registry.active_count == 1
+    factory.threads[0].items_ready.callbacks[0](
+        [{"title": "Video", "url": "video.mp4", "type": "video"}],
+        "Publication",
+    )
+    assert results[0].items[0]["url"] == "video.mp4"
+    assert results[0].handled_sources == ("publication.jwpub",)
 
 
 def test_playlist_import_controller_uses_explicit_dependencies():

@@ -37,6 +37,10 @@ from .controllers.media_projection_controller import (
     MediaProjectionController,
     MediaProjectionHandlers,
 )
+from .controllers.media_destination_controller import (
+    MediaDestinationContext,
+    MediaDestinationController,
+)
 from .controllers.open_media_controller import (
     OpenMediaContext,
     OpenMediaController,
@@ -80,10 +84,10 @@ from .controllers.timer_theme_controller import (
     TimerThemeController,
     TimerThemeHandlers,
 )
-from .controllers.wifi_playlist_controller import (
-    WifiPlaylistContext,
-    WifiPlaylistController,
-    WifiPlaylistHandlers,
+from .controllers.wifi_media_controller import (
+    WifiMediaContext,
+    WifiMediaController,
+    WifiMediaHandlers,
 )
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
@@ -100,6 +104,8 @@ from .core.media.playback import MediaController
 from .core.media.cache import MediaCacheManager
 from .core.media.profile_store import ProfileMediaStore
 from .core.media.thumbnail_store import ThumbnailStore
+from .core.media.destinations import MediaDestinationAsset, MediaDestinationRequest
+from .core.playlists.items import create_playlist_item
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.screens import ScreenManager
@@ -429,18 +435,13 @@ class MainWindow(QMainWindow):
                 project_tab_frame=lambda frame: (
                     self._media_projection.project_tab_frame(frame)
                 ),
-                add_current_to_playlist=lambda url, title, meta: (
-                    self._playlist_imports.add_current_to_playlist(url, title, meta)
-                ),
-                add_downloaded_file_to_playlist=lambda path, title, kind: (
-                    self._playlist_imports.add_browser_downloaded_file(
-                        path,
+                browser_media_destination=lambda url, title, kind, can_play: (
+                    self._route_browser_destination(
+                        url,
                         title,
                         kind,
+                        can_play,
                     )
-                ),
-                report_download_failure=lambda title, error: (
-                    self._playlist_imports.browser_download_failed(title, error)
                 ),
                 play_cached_media=lambda path, media_type, original_url="", display_title="": (
                     self._media_projection.on_cache_play(
@@ -451,23 +452,23 @@ class MainWindow(QMainWindow):
                     )
                 ),
                 wifi_media_received=lambda path, original_name: (
-                    self._wifi_playlist_controller.on_wifi_media_received(
+                    self._wifi_media_controller.on_wifi_media_received(
                         path,
                         original_name,
                     )
                 ),
                 wifi_add_single=lambda path, title, original_name: (
-                    self._wifi_playlist_controller.on_wifi_request_add_single(
+                    self._wifi_media_controller.on_wifi_request_add_single(
                         path,
                         title,
                         original_name,
                     )
                 ),
                 wifi_add_all=lambda items: (
-                    self._wifi_playlist_controller.on_wifi_send_all_to_playlist(items)
+                    self._wifi_media_controller.on_wifi_add_all(items)
                 ),
                 wifi_play=lambda path, title: (
-                    self._wifi_playlist_controller.on_wifi_request_play(path, title)
+                    self._wifi_media_controller.on_wifi_request_play(path, title)
                 ),
                 monitor_manager_requested=(
                     self._projection_targets.on_monitor_manager_requested
@@ -513,17 +514,26 @@ class MainWindow(QMainWindow):
                 switch_to_playlist=lambda: self._navigation.switch_page(7),
             ),
         )
-        self._wifi_playlist_controller = WifiPlaylistController(
-            WifiPlaylistContext(
+        self._media_destinations = MediaDestinationController(
+            MediaDestinationContext(
                 dialog_parent=self,
                 playlist_widget=self.playlist_widget,
+                meetings_widget=self.meetings_widget,
+                playlist_imports=self._playlist_imports,
                 notifications=self.notifications,
                 translate=self.tr,
+            ),
+            parent=self,
+        )
+        self._wifi_media_controller = WifiMediaController(
+            WifiMediaContext(
+                destination_controller=self._media_destinations,
                 wifi_receive_widget=lambda: (
                     self._lazy_pages.wifi_receive_widget
                 ),
+                translate=self.tr,
             ),
-            WifiPlaylistHandlers(
+            WifiMediaHandlers(
                 play_cached_media=lambda *args, **kwargs: (
                     self._media_projection.on_cache_play(*args, **kwargs)
                 ),
@@ -532,6 +542,7 @@ class MainWindow(QMainWindow):
                 ),
             ),
         )
+
         self._open_media_controller = OpenMediaController(
             OpenMediaContext(
                 dialog_parent=self,
@@ -732,6 +743,7 @@ class MainWindow(QMainWindow):
                 media_projection=self._media_projection,
                 timer_theme=self._timer_theme_controller,
                 playlist_imports=self._playlist_imports,
+                media_destinations=self._media_destinations,
                 auto_key_projection=self._auto_key_projection,
                 projection_stop=self._projection_stop,
                 projection_targets=self._projection_targets,
@@ -807,6 +819,88 @@ class MainWindow(QMainWindow):
         # Show the clock window on any monitor reserved for the timer once the
         # screens have settled (mirrors the media projection startup timing).
         QTimer.singleShot(900, self.timer_output.reconcile)
+
+    def _route_browser_destination(
+        self,
+        url: str,
+        title: str,
+        kind: str,
+        can_play: bool,
+    ) -> None:
+        browser = self._lazy_pages.browser_widget
+        if browser is None or not url:
+            return
+
+        request = self._browser_destination_request(
+            url=url,
+            title=title,
+            kind=kind,
+            can_play=can_play,
+        )
+        needs_preparation = (
+            kind in {"pdf", "jwpub", "jwlplaylist"}
+            or (kind == "image" and url.startswith(("http://", "https://")))
+        )
+
+        def prepare(ready, failed) -> None:
+            browser.prepare_destination_media(
+                url,
+                title,
+                kind,
+                on_ready=lambda path, prepared_title, prepared_kind: ready(
+                    self._browser_destination_request(
+                        url=path,
+                        title=prepared_title,
+                        kind=prepared_kind,
+                        can_play=can_play,
+                        prepared=True,
+                    )
+                ),
+                on_failed=lambda _failed_title, error: failed(str(error)),
+            )
+
+        self._media_destinations.route(
+            request,
+            play=lambda: browser.play_destination_media(url, kind),
+            prepare=prepare if needs_preparation else None,
+        )
+
+    @staticmethod
+    def _browser_destination_request(
+        *,
+        url: str,
+        title: str,
+        kind: str,
+        can_play: bool,
+        prepared: bool = False,
+    ) -> MediaDestinationRequest:
+        if kind in {"image", "audio", "video"}:
+            item = create_playlist_item(title=title, url=url, type=kind)
+            return MediaDestinationRequest(
+                title=title,
+                assets=(
+                    MediaDestinationAsset(
+                        title=title,
+                        source_id=url,
+                        item=item,
+                    ),
+                ),
+                can_play=can_play,
+            )
+        if not prepared:
+            return MediaDestinationRequest(title=title, can_play=can_play)
+        return MediaDestinationRequest(
+            title=title,
+            assets=(
+                MediaDestinationAsset(
+                    title=title,
+                    source_id=url,
+                    import_path=url,
+                    import_kind=kind,
+                ),
+            ),
+            can_play=can_play,
+        )
 
     # ── UI Build ──────────────────────────────────────────────────────────
 

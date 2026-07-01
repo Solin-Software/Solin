@@ -1830,7 +1830,7 @@ Item {
                                 width: 150
                                 background: MenuPanel {}
                                 MenuItem {
-                                    text: root.commonTr("MediaDownloadActionDialog", "Play")
+                                    text: root.commonTr("MediaDestinationDialog", "Play")
                                     icon.source: root.picon("play_all", 13, root.iconHex(root.textMuted))
                                     enabled: !mediaRoot.isMissing
                                     onTriggered: if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
