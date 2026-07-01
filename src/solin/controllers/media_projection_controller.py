@@ -612,7 +612,7 @@ class MediaProjectionController:
         """Animate framing only when the exact projected image is already active."""
 
         state = self._session.state
-        if state.get("type") != "image" or state.get("data") != data:
+        if state.get("type") != "image":
             return False
 
         current_transform = (
@@ -620,6 +620,8 @@ class MediaProjectionController:
             or IDENTITY_IMAGE_TRANSFORM
         )
         if image_transforms_equal(current_transform, target_transform):
+            return False
+        if state.get("data") != data:
             return False
 
         self._apply_image_transform(

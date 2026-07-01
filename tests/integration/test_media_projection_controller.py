@@ -9,6 +9,14 @@ from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
 
 
+class _UncomparableBytes(bytes):
+    def __eq__(self, other: object) -> bool:
+        raise AssertionError("image bytes must not be compared")
+
+    def __ne__(self, other: object) -> bool:
+        raise AssertionError("image bytes must not be compared")
+
+
 class _NavigationStub:
     def __init__(self):
         self.stopped = 0
@@ -538,6 +546,22 @@ def test_reprojecting_same_image_with_same_framing_reloads_normally(tmp_path):
         assert surface.cleared == 2
         assert len(surface.images) == 2
         assert surface.transforms == []
+
+
+def test_unchanged_framing_skips_image_content_comparison():
+    window = _WindowStub()
+    controller = _controller(window)
+    transform = ImageTransform(1.5, 0.2, 0.0)
+    window.projection_session.set_state({
+        "type": "image",
+        "data": _UncomparableBytes(b"active-image"),
+        "transform": (transform.zoom, transform.norm_x, transform.norm_y),
+    })
+
+    assert not controller._update_active_image_framing(
+        b"different-image",
+        transform,
+    )
 
 
 def test_reprojecting_changed_image_content_reloads_normally(tmp_path):
