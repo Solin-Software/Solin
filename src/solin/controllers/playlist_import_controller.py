@@ -256,6 +256,12 @@ class PlaylistImportController:
                 .replace("%1", str(added))
                 .replace("%2", target.playlist_name)
             )
+            if result.duplicate_count:
+                context.notifications.warning(
+                    context.translate(
+                        "{count} media item(s) were already added"
+                    ).replace("{count}", str(result.duplicate_count))
+                )
         elif not result.target_valid:
             context.notifications.error(
                 context.translate(

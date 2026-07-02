@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Optional
 
 from PySide6.QtCore import (
@@ -25,6 +25,8 @@ from solin.core.media.placement import (
     build_media_placement_options,
     resolve_media_placement,
 )
+from solin.core.media.identity import contains_media, media_identity
+from solin.core.media.insertion import MediaInsertResult
 
 _BIG_INDEX = 2**31 - 1
 
@@ -157,16 +159,20 @@ class JWSongsBridge(QObject):
     placementOptionsChanged = Signal()
     pendingItemChanged = Signal()
 
-    itemAddedSuccessfully = Signal(str)
+    mediaAdded = Signal(str)
+    mediaAlreadyAdded = Signal(str, str)
+    mediaInsertionFailed = Signal(str)
     modalShouldClose = Signal()
-    jwMediaConfirmed = Signal(dict, str, int)
 
     def __init__(
         self,
         store: JWSongsStore,
+        *,
+        insertion_handler: Callable[[dict[str, Any], str, int], MediaInsertResult],
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
+        self._insertion_handler = insertion_handler
         self._store = store
         self._store.songs_ready.connect(self._on_songs_ready)
         self._store.songs_failed.connect(self._on_songs_failed)
@@ -269,6 +275,9 @@ class JWSongsBridge(QObject):
         item = self._model.item_at(index)
         if not item:
             return
+        if contains_media((self._pl or {}).get("items", []), item):
+            self._emit_duplicate(item)
+            return
 
         self._pending_item = dict(item)
         self.pendingItemChanged.emit()
@@ -281,7 +290,7 @@ class JWSongsBridge(QObject):
             ),
         )
         if not options:
-            self._emit_confirmed("root", _BIG_INDEX)
+            self._submit_pending("root", _BIG_INDEX)
             return
 
         self._placement_options = options
@@ -296,8 +305,8 @@ class JWSongsBridge(QObject):
 
         target_list_id, target_index = resolve_media_placement(placement_id)
 
-        self._emit_confirmed(target_list_id, target_index)
-        self.modalShouldClose.emit()
+        if self._submit_pending(target_list_id, target_index):
+            self.modalShouldClose.emit()
 
     @Slot()
     def cancelSelection(self) -> None:
@@ -431,9 +440,9 @@ class JWSongsBridge(QObject):
         haystack = f"{number} {title}"
         return all(term in haystack for term in terms)
 
-    def _emit_confirmed(self, target_list_id: str, target_index: int) -> None:
+    def _submit_pending(self, target_list_id: str, target_index: int) -> bool:
         if not self._pending_item:
-            return
+            return False
 
         url = str(self._pending_item.get("url") or "")
         parsed = parse_jworg_url(url) or {}
@@ -455,13 +464,24 @@ class JWSongsBridge(QObject):
             "language": language,
             "meps_language": meps_language,
         }
-        self.jwMediaConfirmed.emit(item_data, target_list_id, target_index)
-        self.itemAddedSuccessfully.emit(
-            QCoreApplication.translate("JWSongsBridge", "{title} added").format(
-                title=item_data["title"]
-            )
-        )
+        result = self._insertion_handler(item_data, target_list_id, target_index)
+        if result.added_count:
+            self.mediaAdded.emit(str(item_data["title"]))
+            self.cancelSelection()
+            return True
+        if result.duplicate_count:
+            self._emit_duplicate(item_data)
+        else:
+            self.mediaInsertionFailed.emit(str(item_data["title"]))
         self.cancelSelection()
+        return False
+
+    def _emit_duplicate(self, item: Mapping[str, Any]) -> None:
+        identity = media_identity(item)
+        self.mediaAlreadyAdded.emit(
+            _display_title(dict(item)),
+            identity.dedupe_token if identity is not None else "unknown",
+        )
 
 
 __all__ = ["JWSongsBridge", "JWSongsModel"]

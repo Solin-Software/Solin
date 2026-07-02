@@ -12,7 +12,7 @@ from solin.core.meetings.catalog_placement import MeetingCatalogPlaylistRef
 class MeetingDestinationSession(QObject):
     """Keep a live or headless meeting controller stable through one insertion."""
 
-    completed = Signal(int)
+    completed = Signal(object)
     failed = Signal(str)
     closed = Signal(object)
 
@@ -34,13 +34,13 @@ class MeetingDestinationSession(QObject):
     ) -> None:
         if self._closed:
             return
-        added = self.controller.add_external_media_items(
+        result = self.controller.add_external_media_items(
             items,
             list_id=list_id,
             insert_index=insert_index,
         )
-        if added:
-            self.completed.emit(added)
+        if result.added_count or result.duplicate_count:
+            self.completed.emit(result)
         else:
             self.failed.emit(self.tr("No media could be added."))
 

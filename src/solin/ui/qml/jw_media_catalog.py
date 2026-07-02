@@ -39,6 +39,8 @@ from solin.core.media.placement import (
     build_media_placement_options,
     resolve_media_placement,
 )
+from solin.core.media.identity import contains_media, media_identity
+from solin.core.media.insertion import MediaInsertResult
 
 if TYPE_CHECKING:
     from solin.core.jw.catalog_service import JWMediaCatalogService
@@ -261,17 +263,21 @@ class JWMediaCatalogBridge(QObject):
 
     # ── Action signals ────────────────────────────────────────────────────
 
-    itemAddedSuccessfully = Signal(str)            # toast message
-    modalShouldClose      = Signal()               # hide modal
-    jwMediaConfirmed      = Signal(dict, str, int)  # item_data, list_id, index
+    mediaAdded = Signal(str)
+    mediaAlreadyAdded = Signal(str, str)
+    mediaInsertionFailed = Signal(str)
+    modalShouldClose = Signal()
 
     def __init__(
         self,
         catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
+        *,
+        insertion_handler: Callable[[dict[str, Any], str, int], MediaInsertResult],
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
+        self._insertion_handler = insertion_handler
 
         # Catalog service (async fetch backend)
         self._catalog_service = catalog_service_factory(self)
@@ -500,6 +506,9 @@ class JWMediaCatalogBridge(QObject):
         item = self._model.item_at(index)
         if not item:
             return
+        if contains_media((self._pl or {}).get("items", []), item):
+            self._emit_duplicate(item)
+            return
 
         self._pending_item = dict(item)
         self.pendingItemChanged.emit()
@@ -507,7 +516,7 @@ class JWMediaCatalogBridge(QObject):
         options = self._compute_placement_options()
         if not options:
             # No placement needed — add directly to end of playlist.
-            self._emit_confirmed("root", 2**31 - 1)
+            self._submit_pending("root", 2**31 - 1)
             return
 
         self._placement_options = options
@@ -523,8 +532,8 @@ class JWMediaCatalogBridge(QObject):
 
         target_list_id, target_index = resolve_media_placement(placement_id)
 
-        self._emit_confirmed(target_list_id, target_index)
-        self.modalShouldClose.emit()
+        if self._submit_pending(target_list_id, target_index):
+            self.modalShouldClose.emit()
 
     @Slot()
     def cancelSelection(self) -> None:
@@ -764,35 +773,43 @@ class JWMediaCatalogBridge(QObject):
             self._is_loading = value
             self.isLoadingChanged.emit()
 
-    def _emit_confirmed(self, target_list_id: str, target_index: int) -> None:
-        """Emit ``jwMediaConfirmed``, clean up pending state, and notify."""
+    def _submit_pending(self, target_list_id: str, target_index: int) -> bool:
+        """Insert the pending item and publish feedback from the real outcome."""
         if not self._pending_item:
-            return
+            return False
 
         # Build a clean item-data dict for consumers.
         item_data: dict[str, Any] = {
             k: v for k, v in self._pending_item.items()
             if not k.startswith("_")
         }
-
-        self.jwMediaConfirmed.emit(item_data, target_list_id, target_index)
-
         title = item_data.get("title", "")
-        self.itemAddedSuccessfully.emit(
-            QCoreApplication.translate(
-                "JWMediaCatalogBridge", "{title} added"
-            ).format(title=title)
+        source_id = str(
+            item_data.get("natural_key")
+            or item_data.get("guid")
+            or item_data.get("id")
+            or ""
         )
+        if source_id:
+            item_data["jw_media_id"] = source_id
+        result = self._insertion_handler(item_data, target_list_id, target_index)
+        if result.added_count:
+            self.mediaAdded.emit(str(title))
+            self.cancelSelection()
+            return True
+        if result.duplicate_count:
+            self._emit_duplicate(item_data)
+        else:
+            self.mediaInsertionFailed.emit(str(title))
+        self.cancelSelection()
+        return False
 
-        # Reset pending state.
-        self._pending_item = None
-        self.pendingItemChanged.emit()
-
-        self._show_placement = False
-        self.showPlacementChanged.emit()
-
-        self._placement_options = []
-        self.placementOptionsChanged.emit()
+    def _emit_duplicate(self, item: Mapping[str, Any]) -> None:
+        identity = media_identity(item)
+        self.mediaAlreadyAdded.emit(
+            str(item.get("title") or item.get("label") or ""),
+            identity.dedupe_token if identity is not None else "unknown",
+        )
 
 
 __all__ = [

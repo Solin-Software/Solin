@@ -1054,13 +1054,10 @@ def test_media_and_playlist_item_domains_have_no_framework_dependencies():
     domain_files = (
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "duration.py",
         PROJECT_ROOT / "src" / "solin" / "core" / "media" / "formats.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "media" / "identity.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "media" / "insertion.py",
+        PROJECT_ROOT / "src" / "solin" / "core" / "media" / "jw_reference.py",
         PROJECT_ROOT / "src" / "solin" / "core" / "playlists" / "items.py",
-        PROJECT_ROOT
-        / "src"
-        / "solin"
-        / "core"
-        / "playlists"
-        / "media_reference.py",
     )
     violations: list[str] = []
 

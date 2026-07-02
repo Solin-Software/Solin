@@ -38,11 +38,24 @@ def test_catalog_placement_preserves_depth_first_order_and_section_parents():
 
     result = build_meeting_catalog_playlist_ref(nodes)
 
+    def placement_item(item_id: str) -> dict:
+        return {
+            "id": item_id,
+            "url": "",
+            "key_symbol": "",
+            "track": 0,
+            "issue_tag": 0,
+            "doc_id": 0,
+            "meps_language": 0,
+            "language": "",
+            "jw_media_id": "",
+        }
+
     assert result == {
         "items": [
-            {"id": "media-1"},
-            {"id": "media-2"},
-            {"id": "media-3"},
+            placement_item("media-1"),
+            placement_item("media-2"),
+            placement_item("media-3"),
         ],
         "sections": [
             {

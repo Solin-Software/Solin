@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 from ..media.formats import MediaKind, media_kind_from_path, media_type_from_path
-from .media_reference import parse_jw_media_reference
+from solin.core.media.jw_reference import parse_jw_media_reference
 
 
 class PlaylistMediaItem(TypedDict):
@@ -23,14 +21,9 @@ class PlaylistMediaItem(TypedDict):
     issue_tag: int | None
     doc_id: int | None
     meps_language: int
+    language: NotRequired[str]
+    jw_media_id: NotRequired[str]
     image_framing: NotRequired[dict[str, Any]]
-
-
-@dataclass(frozen=True, slots=True)
-class PlaylistInsertResult:
-    added_items: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
-    duplicate_count: int = 0
-    target_valid: bool = True
 
 
 def looks_like_filename_title(title: str) -> bool:

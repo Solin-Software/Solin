@@ -16,6 +16,7 @@ from solin.core.media.destinations import (
     PlaylistDestinationTarget,
     PreparedMediaBatch,
 )
+from solin.core.media.insertion import MediaInsertResult
 
 
 class _MeetingsStub(QObject):
@@ -50,7 +51,7 @@ class _MeetingsStub(QObject):
 
 
 class _MeetingSession(QObject):
-    completed = Signal(int)
+    completed = Signal(object)
     failed = Signal(str)
 
     def __init__(self) -> None:
@@ -63,7 +64,7 @@ class _MeetingSession(QObject):
 
     def add_items(self, items, *, list_id, insert_index):
         self.added.append((items, list_id, insert_index))
-        self.completed.emit(len(items))
+        self.completed.emit(MediaInsertResult(added_items=tuple(items)))
 
     def close(self):
         self.closed = True
@@ -98,6 +99,9 @@ class _NotificationsStub:
 
     def error(self, message, **_kwargs):
         self.events.append(("error", message))
+
+    def warning(self, message, **_kwargs):
+        self.events.append(("warning", message))
 
 
 class _DialogStub:
@@ -240,3 +244,24 @@ def test_meeting_route_loads_week_and_inserts_through_session() -> None:
     assert meetings.session.closed is True
     assert outcomes == [MediaDestinationOutcome(1, ("clip.mp4",), ("clip.mp4",))]
     assert notifications.events[0][0] == "success"
+
+
+def test_meeting_duplicate_is_reported_as_warning_not_failure() -> None:
+    def drive(bridge):
+        bridge.showMeetings()
+        bridge.chooseMeeting("mwb")
+
+    controller, meetings, _playlist_imports, notifications = _controller(drive)
+    outcomes = []
+
+    def reject_duplicate(items, **_kwargs):
+        meetings.session.completed.emit(
+            MediaInsertResult(duplicate_items=tuple(items))
+        )
+
+    meetings.session.add_items = reject_duplicate
+    controller.route(_request(), completed=outcomes.append)
+
+    assert meetings.session.closed is True
+    assert outcomes == [MediaDestinationOutcome(0, (), ("clip.mp4",))]
+    assert notifications.events == [("warning", "“Clip” is already added.")]

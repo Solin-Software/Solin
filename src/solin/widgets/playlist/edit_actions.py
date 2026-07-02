@@ -15,6 +15,8 @@ from ...core.foundation.constants import (
     PLAYLIST_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
+from ...core.media.identity import contains_media, partition_media_items
+from ...core.media.insertion import MediaInsertResult
 from ...core.jw.identifiers import lang_to_meps
 from ...core.jw.language_context import jw_media_language_context
 from ...core.playlists.jwl_export import (
@@ -96,17 +98,18 @@ class PlaylistEditActionsMixin:
                             e,
                         )
 
-            if self._url_in_playlist(actual_path):
+            candidate = create_playlist_item(
+                title=Path(actual_path).stem,
+                url=actual_path,
+                **({"section_id": section_id} if section_id else {}),
+            )
+            if contains_media(
+                [*self._pl.get("items", []), *new_items],
+                candidate,
+            ):
                 skipped += 1
                 continue
-            kw = {"section_id": section_id} if section_id else {}
-            new_items.append(
-                create_playlist_item(
-                    title=Path(actual_path).stem,
-                    url=actual_path,
-                    **kw,
-                )
-            )
+            new_items.append(candidate)
             added += 1
         if added:
             items = self._pl.setdefault("items", [])
@@ -161,9 +164,14 @@ class PlaylistEditActionsMixin:
             else:
                 self._notifications.warning(self.tr("Files already in playlist"))
 
-    def _on_jw_media_confirmed(self, item_data: dict, target_list_id: str, target_index: int) -> None:
+    def _on_jw_media_confirmed(
+        self,
+        item_data: dict,
+        target_list_id: str,
+        target_index: int,
+    ) -> MediaInsertResult:
         if not self._pl:
-            return
+            return MediaInsertResult(target_valid=False)
 
         pl_item_id = str(uuid.uuid4())
 
@@ -196,7 +204,13 @@ class PlaylistEditActionsMixin:
             "issue_tag": item_data.get("issue") or None,
             "doc_id": item_data.get("docid") or None,
             "meps_language": meps_lang,
+            "language": lang_str,
+            "jw_media_id": item_data.get("jw_media_id") or None,
         }
+
+        partition = partition_media_items(self._pl.get("items", []), [pl_item])
+        if partition.duplicate_items:
+            return MediaInsertResult(duplicate_items=partition.duplicate_items)
 
         thumb_path = item_data.get("thumbnail_path", "")
         if thumb_path and os.path.exists(thumb_path):
@@ -220,6 +234,8 @@ class PlaylistEditActionsMixin:
             )
 
         if not inserted:
+            if target_list_id and target_index >= 0:
+                return MediaInsertResult(target_valid=False)
             items.append(pl_item)
             self.model.rebuild(self._pl)
 
@@ -235,6 +251,7 @@ class PlaylistEditActionsMixin:
         )
         self.bridge.emit_section_counts_changed()
         QTimer.singleShot(0, self._request_missing_thumbnails)
+        return MediaInsertResult(added_items=(pl_item,))
 
     def _add_dialog(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(

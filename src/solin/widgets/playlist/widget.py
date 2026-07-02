@@ -40,9 +40,12 @@ from ...core.jw.language_context import (
 from ...core.jw.identifiers import is_jw_url
 from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
-from ...core.playlists.items import PlaylistInsertResult, looks_like_filename_title
+from ...core.media.identity import partition_media_items
+from ...core.media.insertion import MediaInsertResult
+from ...core.playlists.items import looks_like_filename_title
 from ...core.projection.image_framing import (
     ImageTransform,
     image_transform_from_record,
@@ -197,9 +200,14 @@ class PlaylistEditView(
         self.catalog_bridge = JWMediaCatalogBridge(
             jw_catalog_service_factory,
             jw_catalog_thumbnail_session_factory,
-            self,
+            insertion_handler=self._on_jw_media_confirmed,
+            parent=self,
         )
-        self.songs_bridge = JWSongsBridge(jw_songs_store, self)
+        self.songs_bridge = JWSongsBridge(
+            jw_songs_store,
+            insertion_handler=self._on_jw_media_confirmed,
+            parent=self,
+        )
 
         self._apply_media_language_context()
         self._connect_media_language_signal()
@@ -351,10 +359,8 @@ class PlaylistEditView(
         self.model.orderSynced.connect(self._save)
 
         # Catalog bridge connections
-        self.catalog_bridge.itemAddedSuccessfully.connect(self._notifications.success)
-        self.catalog_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
-        self.songs_bridge.itemAddedSuccessfully.connect(self._notifications.success)
-        self.songs_bridge.jwMediaConfirmed.connect(self._on_jw_media_confirmed)
+        connect_media_picker_feedback(self.catalog_bridge, self._notifications)
+        connect_media_picker_feedback(self.songs_bridge, self._notifications)
 
     @Slot(str, float, float, float, float, float, bool)
     def _set_image_framing(
@@ -1042,10 +1048,6 @@ class PlaylistEditView(
         self.model.update_section(sec_id)
         self.bridge.emit_section_changed(sec_id)
 
-    def _url_in_playlist(self, url: str) -> bool:
-        if not self._pl or not url: return False
-        return any(it.get("url","") == url for it in self._pl.get("items",[]))
-
     def _remove_item(self, item_id: str):
         if not self._pl: return
         item = next((it for it in self._pl.get("items", []) if it["id"] == item_id), None)
@@ -1418,38 +1420,24 @@ class PlaylistWidget(QWidget):
         *,
         list_id: str,
         insert_index: int,
-    ) -> PlaylistInsertResult:
+    ) -> MediaInsertResult:
         pl = next((p for p in self._playlists if p["id"] == pl_id), None)
         if pl is None:
-            return PlaylistInsertResult(target_valid=False)
+            return MediaInsertResult(target_valid=False)
 
-        existing_urls = {
-            str(item.get("url") or "")
-            for item in pl.get("items", [])
-            if item.get("url")
-        }
-        added_items: list[dict] = []
-        duplicate_count = 0
-        for item in items:
-            candidate = copy.deepcopy(item)
-            url = str(candidate.get("url") or "")
-            if url and url in existing_urls:
-                duplicate_count += 1
-                continue
-            if url:
-                existing_urls.add(url)
-            added_items.append(candidate)
+        partition = partition_media_items(pl.get("items", []), items)
+        added_items = [copy.deepcopy(item) for item in partition.unique_items]
 
         if not added_items:
-            return PlaylistInsertResult(duplicate_count=duplicate_count)
+            return MediaInsertResult(duplicate_items=partition.duplicate_items)
         if not self._edit_view.model.insert_media_refs_into_playlist(
             pl,
             list_id,
             insert_index,
             added_items,
         ):
-            return PlaylistInsertResult(
-                duplicate_count=duplicate_count,
+            return MediaInsertResult(
+                duplicate_items=partition.duplicate_items,
                 target_valid=False,
             )
 
@@ -1458,21 +1446,17 @@ class PlaylistWidget(QWidget):
                 and self._edit_view._pl
                 and self._edit_view._pl["id"] == pl_id):
             self._edit_view._rebuild_list()
-        return PlaylistInsertResult(
+        return MediaInsertResult(
             added_items=tuple(added_items),
-            duplicate_count=duplicate_count,
+            duplicate_items=partition.duplicate_items,
         )
 
-    def item_exists_in_playlist(self, pl_id: str, url: str) -> bool:
-        pl = next((p for p in self._playlists if p["id"] == pl_id), None)
-        if not pl or not url: return False
-        return any(it.get("url", "") == url for it in pl.get("items", []))
-
     def create_playlist_with_items(self, name: str, items: list[dict]) -> str:
+        partition = partition_media_items([], items)
         pl = {
             "id": str(uuid.uuid4()),
             "name": name,
-            "items": copy.deepcopy(items),
+            "items": [copy.deepcopy(item) for item in partition.unique_items],
         }
         self._playlists.append(pl)
         self._playlist_repository.save(self._playlists)

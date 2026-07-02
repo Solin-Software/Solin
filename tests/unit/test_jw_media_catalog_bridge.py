@@ -8,6 +8,7 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.jw.catalog import JWMediaCatalogCachePaths
 from solin.core.jw.catalog_service import JWMediaCatalogService
+from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.placement import build_media_placement_options
 from solin.ui.qml.jw_media_catalog import (
     JWMediaCatalogBridge,
@@ -164,10 +165,15 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
     def _catalog_service(self, parent):
         return JWMediaCatalogService(self.cache_paths, parent)
 
+    @staticmethod
+    def _insert(item, _list_id, _index):
+        return MediaInsertResult(added_items=(item,))
+
     def test_first_progress_applies_immediately(self):
         self.bridge = JWMediaCatalogBridge(
             self._catalog_service,
             self.thumbnail_factory,
+            insertion_handler=self._insert,
         )
         self.bridge._active_catalog_request_id = "request"
 
@@ -180,6 +186,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.bridge = JWMediaCatalogBridge(
             self._catalog_service,
             self.thumbnail_factory,
+            insertion_handler=self._insert,
         )
         self.bridge._active_catalog_request_id = "request"
         self.bridge._model.set_items([item("visible")])
@@ -198,6 +205,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.bridge = JWMediaCatalogBridge(
             self._catalog_service,
             self.thumbnail_factory,
+            insertion_handler=self._insert,
         )
 
         self.bridge._queue_thumbnails([item("a"), item("b")])
@@ -215,6 +223,7 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
         self.bridge = JWMediaCatalogBridge(
             self._catalog_service,
             self.thumbnail_factory,
+            insertion_handler=self._insert,
         )
 
         self.bridge.reset()
@@ -222,6 +231,49 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
 
         self.assertEqual(self.thumbnail_factory.session.reset_count, 1)
         self.assertTrue(self.thumbnail_factory.session.closed)
+
+    def test_duplicate_selection_is_rejected_before_placement(self):
+        insertions = []
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=lambda *args: insertions.append(args),
+        )
+        candidate = item("duplicate")
+        self.bridge._model.set_items([candidate])
+        self.bridge.set_playlist_ref(
+            {"items": [{"url": candidate["download_url"]}], "sections": []}
+        )
+        rejected = []
+        self.bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        self.bridge.selectItem(0)
+
+        self.assertEqual(insertions, [])
+        self.assertEqual(rejected[0][0], "Video duplicate")
+        self.assertIsNone(self.bridge._pending_item)
+        self.assertFalse(self.bridge.showPlacement)
+
+    def test_authoritative_duplicate_does_not_close_modal(self):
+        candidate = item("race")
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=lambda *_args: MediaInsertResult(
+                duplicate_items=(candidate,)
+            ),
+        )
+        self.bridge._pending_item = candidate
+        closed = []
+        rejected = []
+        self.bridge.modalShouldClose.connect(lambda: closed.append(True))
+        self.bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        self.bridge.confirmPlacement("bottom")
+
+        self.assertEqual(closed, [])
+        self.assertEqual(rejected[0][0], "Video race")
+        self.assertIsNone(self.bridge._pending_item)
 
 
 if __name__ == "__main__":

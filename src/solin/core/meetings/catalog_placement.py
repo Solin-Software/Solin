@@ -10,6 +10,14 @@ from .tree_types import Node
 
 class MeetingPlacementItem(TypedDict):
     id: Any
+    url: str
+    key_symbol: str
+    track: int
+    issue_tag: int
+    doc_id: int
+    meps_language: int
+    language: str
+    jw_media_id: str
 
 
 class MeetingPlacementSection(TypedDict):
@@ -35,7 +43,20 @@ def build_meeting_catalog_playlist_ref(
         for node in children:
             node_type = node.get("type", "")
             if node_type == "media":
-                items.append({"id": node.get("id", "")})
+                ref = node.get("media_ref") or {}
+                items.append(
+                    {
+                        "id": node.get("id", ""),
+                        "url": str(ref.get("file_path") or ""),
+                        "key_symbol": str(ref.get("key_symbol") or ""),
+                        "track": int(ref.get("track") or 0),
+                        "issue_tag": int(ref.get("issue_tag") or 0),
+                        "doc_id": int(ref.get("meps_doc_id") or 0),
+                        "meps_language": int(ref.get("meps_language") or 0),
+                        "language": str(ref.get("language") or ""),
+                        "jw_media_id": str(ref.get("jw_media_id") or ""),
+                    }
+                )
                 continue
             if node_type in ("section", "subsection"):
                 node_id = str(node.get("id", ""))
