@@ -39,7 +39,7 @@ from solin.core.jw.identifiers import is_jw_url
 from solin.core.jw.metadata import resolve_jworg_meta
 from solin.core.media.download_storage import completed_cached_path
 
-from .media_reference import parse_jw_media_reference
+from solin.core.media.jw_reference import parse_jw_media_reference
 from .schema import create_jwlplaylist_schema
 
 

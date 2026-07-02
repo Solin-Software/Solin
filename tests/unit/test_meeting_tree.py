@@ -10,6 +10,7 @@ import zipfile
 from collections import deque
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import solin.core.meetings.tree_store as tree_store_module
@@ -907,7 +908,25 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
 
         result = MeetingTreeController.placement_playlist_ref(controller)
 
-        self.assertEqual(result, {"items": [{"id": "media"}], "sections": []})
+        self.assertEqual(
+            result,
+            {
+                "items": [
+                    {
+                        "id": "media",
+                        "url": "",
+                        "key_symbol": "",
+                        "track": 0,
+                        "issue_tag": 0,
+                        "doc_id": 0,
+                        "meps_language": 0,
+                        "language": "",
+                        "jw_media_id": "",
+                    }
+                ],
+                "sections": [],
+            },
+        )
 
     def test_move_node_reparents_media_and_emits_persistence_updates(self):
         nodes = [
@@ -1501,6 +1520,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         class FakeController:
             _parse_list_id = staticmethod(lambda list_id: (list_id, ""))
             _children_for_target = staticmethod(lambda *_target: [])
+            _media_identity_records = staticmethod(lambda: [])
             _node_from_playlist_item = staticmethod(
                 lambda item, title: {"title": title, "url": item["url"]}
             )
@@ -1521,8 +1541,97 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             insert_index=3,
         )
 
-        self.assertEqual(added, 2)
+        self.assertEqual(added.added_count, 2)
         self.assertEqual(captured[0][0:2], ("section:talk", 3))
+        self.assertEqual(
+            [node["title"] for node in captured[0][2]],
+            ["First", "Second"],
+        )
+
+    def test_jw_duplicate_is_blocked_across_nested_meeting_tree(self):
+        class FakeController:
+            pass
+
+        existing_ref = {
+            "file_path": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r480P.mp4",
+            "key_symbol": "sjjm",
+            "track": 2,
+            "meps_language": 5,
+        }
+        controller = FakeController()
+        controller._nodes = [
+            {
+                "id": "section",
+                "type": "section",
+                "children": [
+                    {
+                        "id": "existing",
+                        "type": "media",
+                        "media_ref": existing_ref,
+                        "children": [],
+                    }
+                ],
+            }
+        ]
+        controller._media_identity_records = lambda: (
+            MeetingTreeController._media_identity_records(controller)
+        )
+        controller._meeting_thumbnail_store = SimpleNamespace(
+            copy_from=lambda *_args: self.fail("duplicate must not copy thumbnail")
+        )
+        controller._insert_nodes = lambda *_args: self.fail(
+            "duplicate must not mutate the tree"
+        )
+
+        result = MeetingTreeController.add_from_jw_catalog(
+            controller,
+            {
+                "title": "2. Song",
+                "download_url": "https://akamd1.jw-cdn.org/y/sjjm_T_002_r720P.mp4",
+                "pub": "sjjm",
+                "track": 2,
+                "meps_language": 5,
+            },
+            "section:other",
+            0,
+        )
+
+        self.assertEqual(result.added_count, 0)
+        self.assertEqual(result.duplicate_count, 1)
+        self.assertEqual(controller._nodes[0]["children"][0]["media_ref"], existing_ref)
+
+    def test_external_batch_adds_only_unique_items_in_order(self):
+        captured = []
+
+        class FakeController:
+            _parse_list_id = staticmethod(lambda list_id: (list_id, ""))
+            _children_for_target = staticmethod(lambda *_target: [])
+            _media_identity_records = staticmethod(
+                lambda: [{"file_path": "existing.mp4"}]
+            )
+            _node_from_playlist_item = staticmethod(
+                lambda item, title: {"title": title, "url": item["url"]}
+            )
+            _insert_nodes = staticmethod(
+                lambda list_id, index, nodes: (
+                    captured.append((list_id, index, nodes)) or True
+                )
+            )
+
+        result = MeetingTreeController.add_external_media_items(
+            FakeController(),
+            [
+                {"id": "old", "title": "Old", "url": "existing.mp4"},
+                {"id": "first", "title": "First", "url": "first.mp4"},
+                {"id": "repeat", "title": "Repeat", "url": "first.mp4"},
+                {"id": "second", "title": "Second", "url": "second.mp4"},
+            ],
+            list_id="root",
+            insert_index=0,
+        )
+
+        self.assertEqual(result.added_count, 2)
+        self.assertEqual(result.duplicate_count, 2)
         self.assertEqual(
             [node["title"] for node in captured[0][2]],
             ["First", "Second"],

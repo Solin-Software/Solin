@@ -135,3 +135,64 @@ def test_playlist_destination_duplicate_does_not_save_again(tmp_path):
     assert result.duplicate_count == 1
     assert result.added_items == ()
     assert saves == []
+
+
+def test_playlist_destination_uses_canonical_jw_identity(tmp_path):
+    playlist = _playlist()
+    playlist["items"][0].update(
+        {
+            "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r480P.mp4",
+            "key_symbol": "sjjm",
+            "track": 2,
+            "meps_language": 5,
+        }
+    )
+    widget, saves = _widget(tmp_path, playlist)
+
+    result = PlaylistWidget.add_items_to_playlist(
+        widget,
+        "saved",
+        [
+            {
+                "id": "duplicate",
+                "title": "Same song",
+                "url": "https://akamd1.jw-cdn.org/y/sjjm_T_002_r720P.mp4",
+                "key_symbol": "sjjm",
+                "track": 2,
+                "meps_language": 5,
+            }
+        ],
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert result.duplicate_count == 1
+    assert [item["id"] for item in playlist["items"]] == ["existing"]
+    assert saves == []
+
+
+def test_playlist_destination_partitions_partial_duplicate_batch(tmp_path):
+    playlist = _playlist()
+    widget, saves = _widget(tmp_path, playlist)
+
+    result = PlaylistWidget.add_items_to_playlist(
+        widget,
+        "saved",
+        [
+            {"id": "old", "title": "Old", "url": "existing.mp4"},
+            {"id": "first", "title": "First", "url": "first.mp4"},
+            {"id": "repeat", "title": "Repeat", "url": "first.mp4"},
+            {"id": "second", "title": "Second", "url": "second.mp4"},
+        ],
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert result.added_count == 2
+    assert result.duplicate_count == 2
+    assert [item["id"] for item in playlist["items"]] == [
+        "first",
+        "second",
+        "existing",
+    ]
+    assert len(saves) == 1

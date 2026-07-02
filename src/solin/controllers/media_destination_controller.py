@@ -22,6 +22,7 @@ from solin.core.media.destinations import (
     PreparedMediaBatch,
 )
 from solin.core.media.placement import build_media_placement_options
+from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.formats import media_type_from_path
 from solin.core.playlists.items import create_playlist_item
 from solin.ui.qml.media_destination import (
@@ -363,7 +364,7 @@ class MediaDestinationController(QObject):
                         )
                     )
                 return
-            session.completed.connect(lambda count: finish(count, batch))
+            session.completed.connect(lambda result: finish(result, batch))
             session.failed.connect(fail)
             session.add_items(
                 [dict(item) for item in batch.items],
@@ -371,11 +372,24 @@ class MediaDestinationController(QObject):
                 insert_index=raw_target.insert_index,
             )
 
-        def finish(count: int, batch: PreparedMediaBatch) -> None:
-            urls = tuple(str(item.get("url") or "") for item in batch.items if item.get("url"))
+        def finish(result: MediaInsertResult, batch: PreparedMediaBatch) -> None:
+            count = result.added_count
+            urls = tuple(
+                str(item.get("url") or "")
+                for item in result.added_items
+                if item.get("url")
+            )
             self._context.notifications.success(
                 self._context.translate("%n item(s) added to the meeting", "", count)
             )
+            if result.duplicate_count:
+                self._context.notifications.warning(
+                    self._context.translate(
+                        "%n media item(s) were already added",
+                        "",
+                        result.duplicate_count,
+                    )
+                )
             if completed is not None:
                 completed(
                     MediaDestinationOutcome(

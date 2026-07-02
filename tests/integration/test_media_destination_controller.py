@@ -16,6 +16,7 @@ from solin.core.media.destinations import (
     PlaylistDestinationTarget,
     PreparedMediaBatch,
 )
+from solin.core.media.insertion import MediaInsertResult
 
 
 class _MeetingsStub(QObject):
@@ -50,7 +51,7 @@ class _MeetingsStub(QObject):
 
 
 class _MeetingSession(QObject):
-    completed = Signal(int)
+    completed = Signal(object)
     failed = Signal(str)
 
     def __init__(self) -> None:
@@ -63,7 +64,7 @@ class _MeetingSession(QObject):
 
     def add_items(self, items, *, list_id, insert_index):
         self.added.append((items, list_id, insert_index))
-        self.completed.emit(len(items))
+        self.completed.emit(MediaInsertResult(added_items=tuple(items)))
 
     def close(self):
         self.closed = True

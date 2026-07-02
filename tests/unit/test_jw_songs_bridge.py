@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.jw.songs import JWSongsStore
+from solin.core.media.insertion import MediaInsertResult
 from solin.ui.qml.jw_songs import JWSongsBridge
 
 
@@ -12,7 +13,12 @@ def _app():
 
 def test_songs_bridge_filters_by_number_prefix_and_title(tmp_path):
     _app()
-    bridge = JWSongsBridge(JWSongsStore(tmp_path))
+    bridge = JWSongsBridge(
+        JWSongsStore(tmp_path),
+        insertion_handler=lambda item, _list, _index: MediaInsertResult(
+            added_items=(item,)
+        ),
+    )
     try:
         bridge._all_items = [
             {"number": 2, "title": "Good Song", "url": "https://example.test/2.mp4"},
@@ -36,16 +42,18 @@ def test_songs_bridge_filters_by_number_prefix_and_title(tmp_path):
 
 def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
     _app()
-    bridge = JWSongsBridge(JWSongsStore(tmp_path))
+    emitted: list[tuple[dict, str, int]] = []
+
+    def insert(item, list_id, index):
+        emitted.append((item, list_id, index))
+        return MediaInsertResult(added_items=(item,))
+
+    bridge = JWSongsBridge(JWSongsStore(tmp_path), insertion_handler=insert)
     try:
         bridge.set_language_context(
             api_code="T",
             fallback_code="T",
             is_sign_language=False,
-        )
-        emitted: list[tuple[dict, str, int]] = []
-        bridge.jwMediaConfirmed.connect(
-            lambda item, list_id, index: emitted.append((item, list_id, index))
         )
         bridge._pending_item = {
             "number": 2,
@@ -54,7 +62,7 @@ def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
             "duration": 123,
         }
 
-        bridge._emit_confirmed("root", 0)
+        bridge._submit_pending("root", 0)
 
         item, list_id, index = emitted[0]
         assert list_id == "root"
@@ -66,6 +74,43 @@ def test_songs_bridge_emits_playlist_ready_song_metadata(tmp_path):
         assert item["track"] == 2
         assert item["language"] == "T"
         assert item["meps_language"] > 0
+    finally:
+        bridge.cleanup()
+
+
+def test_songs_bridge_rejects_duplicate_before_placement(tmp_path):
+    _app()
+    insertions = []
+    bridge = JWSongsBridge(
+        JWSongsStore(tmp_path),
+        insertion_handler=lambda *args: insertions.append(args),
+    )
+    try:
+        song = {
+            "number": 2,
+            "title": "Good Song",
+            "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r720P.mp4",
+        }
+        bridge._model.set_items_if_changed([song])
+        bridge.set_playlist_ref(
+            {
+                "items": [
+                    {
+                        "url": "https://akamd1.jw-cdn.org/y/sjjm_T_002_r480P.mp4"
+                    }
+                ],
+                "sections": [],
+            }
+        )
+        rejected = []
+        bridge.mediaAlreadyAdded.connect(lambda *args: rejected.append(args))
+
+        bridge.selectItem(0)
+
+        assert insertions == []
+        assert rejected[0][0] == "2. Good Song"
+        assert bridge._pending_item is None
+        assert bridge.showPlacement is False
     finally:
         bridge.cleanup()
 

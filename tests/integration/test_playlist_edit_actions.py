@@ -71,6 +71,47 @@ def test_append_temp_playlist_items_updates_matching_session():
     assert rebuilds == [True]
 
 
+def test_jw_duplicate_is_rejected_before_thumbnail_or_playlist_mutation(tmp_path):
+    thumbnail = tmp_path / "thumb.jpg"
+    thumbnail.write_bytes(b"thumb")
+    thumbnail_copies = []
+    existing = {
+        "id": "existing",
+        "title": "Song",
+        "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r480P.mp4",
+        "key_symbol": "sjjm",
+        "track": 2,
+        "meps_language": 5,
+    }
+    view = SimpleNamespace(
+        _pl={"id": "playlist", "items": [existing]},
+        _playlist_thumbnail_store=SimpleNamespace(
+            copy_from=lambda *args: thumbnail_copies.append(args)
+        ),
+    )
+
+    result = PlaylistEditActionsMixin._on_jw_media_confirmed(
+        view,
+        {
+            "title": "2. Song",
+            "download_url": "https://akamd1.jw-cdn.org/y/sjjm_T_002_r720P.mp4",
+            "media_type": "video",
+            "pub": "sjjm",
+            "track": 2,
+            "language": "T",
+            "meps_language": 5,
+            "thumbnail_path": str(thumbnail),
+        },
+        "root",
+        0,
+    )
+
+    assert result.added_count == 0
+    assert result.duplicate_count == 1
+    assert view._pl["items"] == [existing]
+    assert thumbnail_copies == []
+
+
 class _Signal:
     def __init__(self):
         self.callbacks = []

@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from solin.core.playlists import writer
-from solin.core.playlists.media_reference import parse_jw_media_reference
+from solin.core.media.jw_reference import parse_jw_media_reference
 
 
 def test_parse_jw_media_reference_handles_standard_cdn_filename():

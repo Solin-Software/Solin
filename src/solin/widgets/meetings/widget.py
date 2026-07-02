@@ -52,6 +52,7 @@ from ...core.jw.language_context import (
 )
 from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
@@ -206,17 +207,18 @@ class StudyDetailView(QWidget):
         self.catalog_bridge = JWMediaCatalogBridge(
             self._jw_catalog_service_factory,
             self._jw_catalog_thumbnail_session_factory,
-            self,
+            insertion_handler=self.controller.add_from_jw_catalog,
+            parent=self,
         )
         self.catalog_bridge.set_language_code(lang_code)
-        self.catalog_bridge.jwMediaConfirmed.connect(
-            self.controller.add_from_jw_catalog
+        self.songs_bridge = JWSongsBridge(
+            self._jw_songs_store,
+            insertion_handler=self.controller.add_from_jw_catalog,
+            parent=self,
         )
-        self.songs_bridge = JWSongsBridge(self._jw_songs_store, self)
         self._sync_songs_bridge_language()
-        self.songs_bridge.jwMediaConfirmed.connect(
-            self.controller.add_from_jw_catalog
-        )
+        connect_media_picker_feedback(self.catalog_bridge, self._notifications)
+        connect_media_picker_feedback(self.songs_bridge, self._notifications)
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 
@@ -459,17 +461,18 @@ class _MemorialDetailView(QWidget):
         self.catalog_bridge = JWMediaCatalogBridge(
             self._jw_catalog_service_factory,
             self._jw_catalog_thumbnail_session_factory,
-            self,
+            insertion_handler=self.controller.add_from_jw_catalog,
+            parent=self,
         )
         self.catalog_bridge.set_language_code(lang_code)
-        self.catalog_bridge.jwMediaConfirmed.connect(
-            self.controller.add_from_jw_catalog
+        self.songs_bridge = JWSongsBridge(
+            self._jw_songs_store,
+            insertion_handler=self.controller.add_from_jw_catalog,
+            parent=self,
         )
-        self.songs_bridge = JWSongsBridge(self._jw_songs_store, self)
         self._sync_songs_bridge_language()
-        self.songs_bridge.jwMediaConfirmed.connect(
-            self.controller.add_from_jw_catalog
-        )
+        connect_media_picker_feedback(self.catalog_bridge, self._notifications)
+        connect_media_picker_feedback(self.songs_bridge, self._notifications)
         self.controller.chromeChanged.connect(self._sync_catalog_placement)
         self.controller.stateChanged.connect(self._sync_catalog_placement)
 

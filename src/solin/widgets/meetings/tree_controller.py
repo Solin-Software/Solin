@@ -43,6 +43,8 @@ from ...core.foundation.constants import (
     PPTX_EXTS,
 )
 from ...core.media.formats import MEDIA_EXTS
+from ...core.media.identity import partition_media_items
+from ...core.media.insertion import MediaInsertResult
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -374,24 +376,35 @@ class MeetingTreeController(QObject):
         *,
         list_id: str = "root",
         insert_index: int = _BIG_INDEX,
-    ) -> int:
+    ) -> MediaInsertResult:
         """Insert prepared playlist-shaped media through the meeting save path."""
 
         if self._children_for_target(*self._parse_list_id(list_id)) is None:
-            return 0
+            return MediaInsertResult(target_valid=False)
+        candidates = [
+            item
+            for item in items
+            if isinstance(item, dict) and playlist_item_media_url(item)
+        ]
+        partition = partition_media_items(self._media_identity_records(), candidates)
         nodes = [
             self._node_from_playlist_item(
                 item,
                 str(item.get("title") or _tr("_MediaRow", "Media")),
             )
-            for item in items
-            if isinstance(item, dict) and playlist_item_media_url(item)
+            for item in partition.unique_items
         ]
         if not nodes:
-            return 0
+            return MediaInsertResult(duplicate_items=partition.duplicate_items)
         if not self._insert_nodes(list_id, insert_index, nodes):
-            return 0
-        return len(nodes)
+            return MediaInsertResult(
+                duplicate_items=partition.duplicate_items,
+                target_valid=False,
+            )
+        return MediaInsertResult(
+            added_items=partition.unique_items,
+            duplicate_items=partition.duplicate_items,
+        )
 
     @Slot(str)
     def set_sync_root(self, watched_folder_path: str) -> None:
@@ -1119,7 +1132,7 @@ class MeetingTreeController(QObject):
         item_data: dict[str, Any],
         list_id: str = "root",
         insert_index: int = _BIG_INDEX,
-    ) -> None:
+    ) -> MediaInsertResult:
         node_id = new_node_id()
         track = int_or_zero(item_data.get("track"))
         issue = int_or_zero(item_data.get("issue"))
@@ -1135,10 +1148,16 @@ class MeetingTreeController(QObject):
             "track": track,
             "issue_tag": issue,
             "meps_doc_id": doc_id,
+            "meps_language": int_or_zero(item_data.get("meps_language")),
+            "language": str(item_data.get("language") or "").upper(),
+            "jw_media_id": str(item_data.get("jw_media_id") or ""),
             "section": "",
             "is_song": False,
             "cbs_article_title": "",
         }
+        partition = partition_media_items(self._media_identity_records(), [ref])
+        if partition.duplicate_items:
+            return MediaInsertResult(duplicate_items=partition.duplicate_items)
         node = {
             "id": node_id,
             "type": "media",
@@ -1160,7 +1179,16 @@ class MeetingTreeController(QObject):
                 node["thumbnail_local_path"] = target
             except OSError:
                 log_ignored_exception(__name__, "Could not copy meeting item thumbnail")
-        self._insert_nodes(list_id or "root", insert_index, [node])
+        if not self._insert_nodes(list_id or "root", insert_index, [node]):
+            return MediaInsertResult(target_valid=False)
+        return MediaInsertResult(added_items=(item_data,))
+
+    def _media_identity_records(self) -> list[dict[str, Any]]:
+        return [
+            node.get("media_ref") or {}
+            for node in iter_nodes(self._nodes)
+            if node.get("type") == "media"
+        ]
 
     def _import_pdfs(self, paths: list[str], list_id: str, insert_index: int) -> None:
         for path in paths:

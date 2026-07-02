@@ -10,7 +10,7 @@ from solin.core.media.destinations import (
     PlaylistDestinationTarget,
 )
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
-from solin.core.playlists.items import PlaylistInsertResult
+from solin.core.media.insertion import MediaInsertResult
 
 
 class _PlaylistWidgetStub:
@@ -37,17 +37,20 @@ class _PlaylistWidgetStub:
         insert_index,
     ):
         if not self.target_valid:
-            return PlaylistInsertResult(target_valid=False)
+            return MediaInsertResult(target_valid=False)
         added = []
-        duplicates = 0
+        duplicates = []
         for item in items:
             self.added.append((playlist_id, item, list_id, insert_index))
             was_added = self.add_results.pop(0) if self.add_results else True
             if was_added:
                 added.append(item)
             else:
-                duplicates += 1
-        return PlaylistInsertResult(tuple(added), duplicates)
+                duplicates.append(item)
+        return MediaInsertResult(
+            added_items=tuple(added),
+            duplicate_items=tuple(duplicates),
+        )
 
     def open_temp_playlist(self, items, lang):
         self.temp_opened = (items, lang)
@@ -270,7 +273,8 @@ def test_add_items_to_playlist_target_counts_added_items():
     assert outcome.added_count == 2
     assert outcome.referenced_urls == ("a.mp4", "c.mp4")
     assert window.notifications.events == [
-        ("success", '2 file(s) added\nto playlist "Target"', {})
+        ("success", '2 file(s) added\nto playlist "Target"', {}),
+        ("warning", "1 media item(s) were already added", {}),
     ]
 
 

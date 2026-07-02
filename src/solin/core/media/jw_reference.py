@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..jw.identifiers import (
+from solin.core.jw.identifiers import (
     JwMediaIdentifier,
     lang_to_meps,
     parse_jworg_url,
@@ -89,3 +89,6 @@ def parse_jw_media_reference(
             )
 
     return None
+
+
+__all__ = ["parse_jw_media_reference"]

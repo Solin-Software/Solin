@@ -1,5 +1,6 @@
 from PySide6.QtCore import QObject
 
+from solin.core.media.insertion import MediaInsertResult
 from solin.widgets.meetings.destinations import MeetingDestinationSession
 
 
@@ -15,7 +16,9 @@ class _ControllerStub(QObject):
 
     def add_external_media_items(self, items, *, list_id, insert_index):
         self.calls.append((items, list_id, insert_index))
-        return self.added
+        return MediaInsertResult(
+            added_items=tuple(items[: self.added]),
+        )
 
     def cleanup(self):
         self.cleaned = True
@@ -35,7 +38,8 @@ def test_session_reports_completion_only_after_controller_accepts_insert() -> No
         insert_index=0,
     )
 
-    assert completed == [1]
+    assert len(completed) == 1
+    assert completed[0].added_count == 1
     assert failed == []
 
 
@@ -55,6 +59,24 @@ def test_session_reports_failed_or_rejected_persistence() -> None:
 
     assert completed == []
     assert failed == ["No media could be added."]
+
+
+def test_session_reports_duplicate_separately() -> None:
+    controller = _ControllerStub(0)
+    controller.add_external_media_items = lambda items, **_kwargs: MediaInsertResult(
+        duplicate_items=tuple(items)
+    )
+    session = MeetingDestinationSession(controller, owned_controller=False)
+    failed = []
+    session.failed.connect(failed.append)
+
+    session.add_items(
+        [{"title": "Clip", "url": "clip.mp4"}],
+        list_id="root",
+        insert_index=0,
+    )
+
+    assert failed == ["This media is already added."]
 
 
 def test_owned_session_cleans_up_headless_controller_once() -> None:
