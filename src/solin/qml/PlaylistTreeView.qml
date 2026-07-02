@@ -1608,14 +1608,40 @@ Item {
             Behavior on border.color { ColorAnimation { duration: 120 } }
 
             MouseArea {
+                id: mediaCardHitArea
+                objectName: "mediaCardHitArea"
                 anchors.fill: parent
                 hoverEnabled: true
-                onEntered: root.pointerEntered()
-                onExited: root.pointerExited()
+                property bool nativePointerActive: false
+                cursorShape: root.playbackProtectionEnabled
+                             ? Qt.ArrowCursor
+                             : Qt.PointingHandCursor
+
+                function syncNativePointer() {
+                    var shouldBeActive = containsMouse
+                                         && !root.playbackProtectionEnabled
+                    if (shouldBeActive === nativePointerActive)
+                        return
+                    nativePointerActive = shouldBeActive
+                    if (shouldBeActive)
+                        root.pointerEntered()
+                    else
+                        root.pointerExited()
+                }
+
+                onEntered: syncNativePointer()
+                onExited: syncNativePointer()
                 onClicked: {
                     if (mediaRoot.isMissing) return
                     if (root.playbackProtectionEnabled) return
                     if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
+                }
+
+                Connections {
+                    target: root
+                    function onPlaybackProtectionEnabledChanged() {
+                        mediaCardHitArea.syncNativePointer()
+                    }
                 }
             }
 
@@ -1768,6 +1794,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.leftMargin: 10
+                    Layout.rightMargin: root.playbackProtectionEnabled ? 14 : 10
                     spacing: 3
 
                     Item { Layout.fillHeight: true }
@@ -1812,18 +1839,36 @@ Item {
                 // Right action cluster — fixed width keeps controls aligned and separated.
                 Item {
                     Layout.preferredWidth: root.playbackProtectionEnabled ? 96 : 62
-                    Layout.preferredHeight: 28
+                    Layout.preferredHeight: 30
                     Layout.alignment: Qt.AlignVCenter
 
                     RowLayout {
                         anchors.fill: parent
-                        spacing: 8
+                        spacing: 6
+
+                        CloudDownloadButton {
+                            objectName: "mediaDownloadButton"
+                            Layout.preferredWidth: 28
+                            Layout.preferredHeight: 28
+                            Layout.alignment: Qt.AlignVCenter
+                            iconSource: root.picon("cloud", 14, root.iconHex(root.textMuted))
+                            toolTipText: mediaRoot.cloudTooltip
+                            downloading: mediaRoot.cloudActive
+                            progress: mediaRoot.cloudProgress
+                            active: mediaRoot.cloudVisible
+                            enabled: mediaRoot.cloudVisible
+                            opacity: mediaRoot.cloudVisible ? 1.0 : 0.0
+                            onPointerEntered: root.pointerEntered()
+                            onPointerExited: root.pointerExited()
+                            onClicked: if (root.hasController) root.playlistController.downloadItem(mediaRoot.nodeId)
+                            Behavior on opacity { NumberAnimation { duration: 160 } }
+                        }
 
                         HeaderButton {
                             objectName: "protectedPlayButton"
                             visible: root.playbackProtectionEnabled
-                            Layout.preferredWidth: visible ? 26 : 0
-                            Layout.preferredHeight: 26
+                            Layout.preferredWidth: visible ? 28 : 0
+                            Layout.preferredHeight: 28
                             Layout.alignment: Qt.AlignVCenter
                             iconName: "play"
                             iconSize: 12
@@ -1842,29 +1887,13 @@ Item {
                                 root.playlistController.projectItem(mediaRoot.nodeId)
                         }
 
-                        CloudDownloadButton {
-                            Layout.preferredWidth: 26
-                            Layout.preferredHeight: 26
-                            Layout.alignment: Qt.AlignVCenter
-                            iconSource: root.picon("cloud", 13, root.iconHex(root.textMuted))
-                            toolTipText: mediaRoot.cloudTooltip
-                            downloading: mediaRoot.cloudActive
-                            progress: mediaRoot.cloudProgress
-                            active: mediaRoot.cloudVisible
-                            enabled: mediaRoot.cloudVisible
-                            opacity: mediaRoot.cloudVisible ? 1.0 : 0.0
-                            onPointerEntered: root.pointerEntered()
-                            onPointerExited: root.pointerExited()
-                            onClicked: if (root.hasController) root.playlistController.downloadItem(mediaRoot.nodeId)
-                            Behavior on opacity { NumberAnimation { duration: 160 } }
-                        }
-
                         HeaderButton {
+                            objectName: "mediaMoreButton"
                             iconName: "more"
-                            iconSize: 12
+                            iconSize: 13
                             colorHex: root.iconHex(root.textDim)
-                            implicitWidth: 26
-                            implicitHeight: 26
+                            Layout.preferredWidth: 28
+                            Layout.preferredHeight: 28
                             onClicked: itemMenu.open()
                             Menu {
                                 id: itemMenu
@@ -2361,11 +2390,26 @@ Item {
             id: hdrMa
             anchors.fill: parent
             hoverEnabled: true
+            property bool nativePointerActive: false
             cursorShape: hdrBtn.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onEntered: root.pointerEntered()
-            onExited: root.pointerExited()
+
+            function syncNativePointer() {
+                var shouldBeActive = containsMouse && hdrBtn.enabled
+                if (shouldBeActive === nativePointerActive)
+                    return
+                nativePointerActive = shouldBeActive
+                if (shouldBeActive)
+                    root.pointerEntered()
+                else
+                    root.pointerExited()
+            }
+
+            onEntered: syncNativePointer()
+            onExited: syncNativePointer()
             onClicked: if (hdrBtn.enabled) hdrBtn.clicked()
         }
+
+        onEnabledChanged: hdrMa.syncNativePointer()
 
         ThemedToolTip {
             visible: hdrMa.containsMouse && hdrBtn.toolTipText !== ""

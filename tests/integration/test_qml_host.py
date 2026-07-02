@@ -223,9 +223,18 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
         if item.property("nodeId") == "media-1"
     )
     play_button = media_card.findChild(QObject, "protectedPlayButton")
+    download_button = media_card.findChild(QObject, "mediaDownloadButton")
+    more_button = media_card.findChild(QObject, "mediaMoreButton")
+    card_hit_area = media_card.findChild(QObject, "mediaCardHitArea")
     assert play_button is not None
+    assert download_button is not None
+    assert more_button is not None
+    assert card_hit_area is not None
     assert play_button.property("visible") is True
     assert play_button.property("enabled") is True
+    assert download_button.property("x") < play_button.property("x")
+    assert play_button.property("x") < more_button.property("x")
+    assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
 
     media_card.clicked.emit()
     assert controller.projected == []
@@ -240,6 +249,7 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     protection.set_enabled(False)
     QTest.qWait(1)
     assert play_button.property("visible") is False
+    assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
     media_card.clicked.emit()
     assert controller.projected == ["media-1", "media-1"]
 
