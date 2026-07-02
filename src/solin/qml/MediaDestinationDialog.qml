@@ -6,7 +6,7 @@ import QtQuick.Layouts 1.15
 Rectangle {
     id: root
     anchors.fill: parent
-    color: appTheme.bg0
+    color: appTheme.bg
     focus: true
 
     readonly property color surface: appTheme.surface
@@ -65,8 +65,8 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 22
-        spacing: 16
+        anchors.margins: 18
+        spacing: 12
 
         RowLayout {
             Layout.fillWidth: true
@@ -87,14 +87,17 @@ Rectangle {
                     Layout.fillWidth: true
                     text: qsTranslate("MediaDestinationDialog", "Media destination")
                     color: root.textPrimary
-                    font.pixelSize: 18
+                    font.pixelSize: 17
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
 
                 Text {
                     Layout.fillWidth: true
-                    text: destinationBridge.itemSummary
+                    text: destinationBridge.mediaTitle !== ""
+                          ? destinationBridge.mediaTitle + "  ·  "
+                            + destinationBridge.itemSummary
+                          : destinationBridge.itemSummary
                     color: root.textMuted
                     font.pixelSize: 11
                     elide: Text.ElideRight
@@ -105,30 +108,6 @@ Rectangle {
                 iconName: "close"
                 accessibleName: qsTranslate("MediaDestinationDialog", "Cancel")
                 onClicked: destinationBridge.cancel()
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: mediaTitle.implicitHeight + 22
-            radius: 10
-            color: root.surfaceElevated
-            border.width: 1
-            border.color: root.border_
-
-            Text {
-                id: mediaTitle
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.margins: 12
-                text: destinationBridge.mediaTitle
-                color: root.textSecondary
-                font.pixelSize: 12
-                font.weight: Font.Medium
-                maximumLineCount: 2
-                wrapMode: Text.Wrap
-                elide: Text.ElideRight
             }
         }
 
@@ -325,7 +304,7 @@ Rectangle {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 58
+                    Layout.preferredHeight: 52
                     radius: 10
                     color: root.surfaceElevated
                     border.width: 1
@@ -458,7 +437,7 @@ Rectangle {
     component WizardPage: ColumnLayout {
         property string title: ""
         property string subtitle: ""
-        spacing: 12
+        spacing: 10
         opacity: StackLayout.isCurrentItem ? 1 : 0
 
         Behavior on opacity {
@@ -492,7 +471,7 @@ Rectangle {
         property bool emphasized: false
         signal clicked()
 
-        Layout.preferredHeight: 82
+        Layout.preferredHeight: 72
         radius: 12
         color: choiceMouse.containsMouse
                ? (emphasized ? root.accentTint : root.hover)
@@ -505,13 +484,13 @@ Rectangle {
 
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 14
+            anchors.margins: 12
+            spacing: 12
 
             Rectangle {
-                Layout.preferredWidth: 42
-                Layout.preferredHeight: 42
-                radius: 12
+                Layout.preferredWidth: 38
+                Layout.preferredHeight: 38
+                radius: 10
                 color: choice.emphasized ? root.accentTint : root.surfaceElevated
 
                 Image {
@@ -577,7 +556,7 @@ Rectangle {
         signal clicked()
         signal retry()
 
-        Layout.preferredHeight: 78
+        Layout.preferredHeight: 68
         radius: 12
         color: meetingMouse.containsMouse && enabled ? root.hover : root.surface
         border.width: 1

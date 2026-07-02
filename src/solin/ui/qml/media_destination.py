@@ -6,7 +6,8 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 from typing import Any
 
-from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtCore import QPoint, Property, QObject, QRect, QSize, QTimer, Signal, Slot
+from PySide6.QtGui import QGuiApplication, QShowEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QDialog, QVBoxLayout
 
@@ -164,6 +165,10 @@ class MediaDestinationBridge(QObject):
     @property
     def result(self) -> MediaDestinationSelection | None:
         return self._result
+
+    @property
+    def current_step(self) -> str:
+        return self._step
 
     @Slot()
     def choosePlay(self) -> None:  # noqa: N802 - QML API
@@ -402,13 +407,25 @@ class MediaDestinationBridge(QObject):
 class MediaDestinationDialog(QDialog):
     """Native modal shell hosting the reusable destination wizard QML."""
 
+    _DIALOG_WIDTH = 460
+    _STEP_HEIGHTS = {
+        "action": 390,
+        "preparing": 350,
+        "destination": 390,
+        "playlist": 500,
+        "meeting": 440,
+        "placement": 440,
+        "error": 350,
+    }
+
     def __init__(self, bridge: MediaDestinationBridge, parent=None) -> None:
         super().__init__(parent)
         self._bridge = bridge
+        self._initial_position_applied = False
+        self._sized_step = ""
         self.setWindowTitle(self.tr("Media destination"))
         self.setModal(True)
-        self.resize(520, 620)
-        self.setMinimumSize(440, 520)
+        self.setMinimumSize(410, 340)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -428,6 +445,8 @@ class MediaDestinationDialog(QDialog):
         )
         layout.addWidget(self.qml_widget)
         bridge.finished.connect(self._complete)
+        bridge.changed.connect(self._sync_size_for_step)
+        self._sync_size_for_step()
 
     @property
     def selection(self) -> MediaDestinationSelection | None:
@@ -439,6 +458,43 @@ class MediaDestinationDialog(QDialog):
         else:
             super().reject()
 
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        if self._initial_position_applied:
+            return
+        self._initial_position_applied = True
+        QTimer.singleShot(0, self._center_on_parent)
+
+    def _center_on_parent(self) -> None:
+        parent = self.parentWidget()
+        parent_window = parent.window() if parent is not None else None
+        if parent_window is not None and parent_window.isVisible():
+            anchor = parent_window.frameGeometry()
+            screen = parent_window.screen()
+        else:
+            screen = QGuiApplication.primaryScreen()
+            if screen is None:
+                return
+            anchor = screen.availableGeometry()
+
+        available = screen.availableGeometry() if screen is not None else anchor
+        frame_size = self.frameGeometry().size()
+        if frame_size.isEmpty():
+            frame_size = self.size()
+        self.move(centered_dialog_position(anchor, frame_size, available))
+
+    def _sync_size_for_step(self) -> None:
+        step = self._bridge.current_step
+        if step == self._sized_step:
+            return
+        self._sized_step = step
+        self.resize(
+            self._DIALOG_WIDTH,
+            self._STEP_HEIGHTS.get(step, self._STEP_HEIGHTS["destination"]),
+        )
+        if self.isVisible():
+            QTimer.singleShot(0, self._center_on_parent)
+
     @Slot()
     def _complete(self) -> None:
         if self._bridge.result is None:
@@ -447,4 +503,25 @@ class MediaDestinationDialog(QDialog):
             self.accept()
 
 
-__all__ = ["MediaDestinationBridge", "MediaDestinationDialog"]
+def centered_dialog_position(
+    anchor: QRect,
+    dialog_size: QSize,
+    available: QRect,
+) -> QPoint:
+    """Center a dialog on its owner while keeping it inside the owner screen."""
+
+    x = anchor.center().x() - dialog_size.width() // 2
+    y = anchor.center().y() - dialog_size.height() // 2
+    max_x = available.right() - dialog_size.width() + 1
+    max_y = available.bottom() - dialog_size.height() + 1
+    return QPoint(
+        max(available.left(), min(x, max_x)),
+        max(available.top(), min(y, max_y)),
+    )
+
+
+__all__ = [
+    "MediaDestinationBridge",
+    "MediaDestinationDialog",
+    "centered_dialog_position",
+]
