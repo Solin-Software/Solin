@@ -201,9 +201,8 @@ def _build_icon_svg(name: str) -> str:
             ' stroke="currentColor" stroke-width="1.9"/>'
             '<path d="M7.2 8.5H16.8" stroke="currentColor" stroke-width="1.9"'
             ' stroke-linecap="round"/>'
-            '<path d="M7.2 12.2H13.9" stroke="currentColor" stroke-width="1.9"'
+            '<path d="M8.6 12.2H15.4" stroke="currentColor" stroke-width="1.9"'
             ' stroke-linecap="round"/>'
-            '<path d="M15 13.2L18.2 15L15 16.8V13.2Z" fill="currentColor"/>'
             '</svg>'
         )
     elif name == 'ICON_VIDEO':
@@ -512,13 +511,13 @@ def _build_icon_svg(name: str) -> str:
     elif name == 'ICON_NAV_PLAYLIST':
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-            '<line x1="8" y1="6" x2="21" y2="6"/>'
-            '<line x1="8" y1="12" x2="21" y2="12"/>'
-            '<line x1="8" y1="18" x2="21" y2="18"/>'
-            '<polyline points="3,6 4,7 6,5"/>'
-            '<polyline points="3,12 4,13 6,11"/>'
-            '<polyline points="3,18 4,19 6,17"/>'
+            ' stroke="currentColor" stroke-width="2.4" stroke-linecap="round"'
+            ' stroke-linejoin="round">'
+            '<path d="M2.93 4.35C2.43 4.05 1.8 4.41 1.8 5V9C1.8 9.59 2.43 9.95 2.93 9.65L6.44 7.65C6.95 7.36 6.95 6.64 6.44 6.35L2.93 4.35Z"'
+            ' fill="currentColor" stroke="none"/>'
+            '<line x1="9.3" y1="7" x2="21" y2="7"/>'
+            '<line x1="3" y1="13" x2="21" y2="13"/>'
+            '<line x1="3" y1="19" x2="21" y2="19"/>'
             '</svg>'
         )
     elif name == 'ICON_ADD_TO_PLAYLIST':
