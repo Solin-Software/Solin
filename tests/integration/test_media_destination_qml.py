@@ -67,7 +67,10 @@ def test_media_destination_qml_loads_and_follows_bridge_steps() -> None:
     root = widget.rootObject()
     assert widget.errors() == []
     assert root is not None
-    assert "Play now" in _visible_texts(root)
+    action_texts = _visible_texts(root)
+    assert "Play now" in action_texts
+    assert "Open and play this media." in action_texts
+    assert "Play now or organize this media for later." not in action_texts
 
     bridge.showDestinations()
     bridge.showPlaylists()
@@ -77,9 +80,9 @@ def test_media_destination_qml_loads_and_follows_bridge_steps() -> None:
     assert "Choose a playlist" in visible
     assert "Sunday" in visible
 
-    bridge.prepare_meeting_selection(
-        monday=bridge.weekMonday,
-        pub_type="mwb",
+    bridge.prepare_playlist_selection(
+        playlist_id="one",
+        playlist_name="Sunday",
         placement_options=[{"id": "top", "label": "Top", "type": "position", "color": ""}],
     )
     _APP.processEvents()

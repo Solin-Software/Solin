@@ -104,11 +104,6 @@ Rectangle {
                 }
             }
 
-            GhostButton {
-                iconName: "close"
-                accessibleName: qsTranslate("MediaDestinationDialog", "Cancel")
-                onClicked: destinationBridge.cancel()
-            }
         }
 
         StackLayout {
@@ -119,12 +114,11 @@ Rectangle {
 
             WizardPage {
                 title: qsTranslate("MediaDestinationDialog", "What would you like to do?")
-                subtitle: qsTranslate("MediaDestinationDialog", "Play now or organize this media for later.")
 
                 ChoiceCard {
                     Layout.fillWidth: true
                     title: qsTranslate("MediaDestinationDialog", "Play now")
-                    subtitle: qsTranslate("MediaDestinationDialog", "Send it directly to the projection.")
+                    subtitle: qsTranslate("MediaDestinationDialog", "Open and play this media.")
                     iconName: "play"
                     emphasized: true
                     enabled: destinationBridge.canPlay && !destinationBridge.busy

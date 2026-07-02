@@ -90,12 +90,49 @@ def test_add_action_preserves_one_continuous_wizard_history() -> None:
 
 def test_playlist_selection_returns_a_typed_target() -> None:
     bridge = _bridge()
+    requested = []
+    bridge.playlistTargetRequested.connect(
+        lambda playlist_id, name: requested.append((playlist_id, name))
+    )
 
     bridge.choosePlaylist("two", "Two")
+    bridge.prepare_playlist_selection(
+        playlist_id="two",
+        playlist_name="Two",
+        placement_options=[],
+    )
 
+    assert requested == [("two", "Two")]
     assert bridge.result is not None
     assert bridge.result.destination is MediaDestinationKind.PLAYLIST
     assert bridge.result.target == PlaylistDestinationTarget("two", "Two")
+
+
+def test_playlist_selection_uses_shared_placement_choice() -> None:
+    bridge = _bridge()
+    bridge.prepare_playlist_selection(
+        playlist_id="two",
+        playlist_name="Two",
+        placement_options=[
+            {
+                "id": "section:talk",
+                "label": "Talk",
+                "type": "section",
+                "color": "#456789",
+            }
+        ],
+    )
+
+    assert bridge.step == "placement"
+    bridge.confirmPlacement("section:talk")
+
+    assert bridge.result is not None
+    assert bridge.result.target == PlaylistDestinationTarget(
+        "two",
+        "Two",
+        list_id="section:talk",
+        insert_index=0,
+    )
 
 
 def test_empty_playlist_name_cannot_finish_the_wizard() -> None:

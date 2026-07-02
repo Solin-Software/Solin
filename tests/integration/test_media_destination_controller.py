@@ -118,14 +118,21 @@ class _DialogStub:
         )
 
 
-def _controller(drive):
+def _controller(drive, *, playlist_ref=None):
     meetings = _MeetingsStub()
     playlist_imports = _PlaylistImportsStub()
     notifications = _NotificationsStub()
     controller = MediaDestinationController(
         MediaDestinationContext(
             dialog_parent=None,
-            playlist_widget=SimpleNamespace(get_playlist_names=lambda: [("saved", "Saved")]),
+            playlist_widget=SimpleNamespace(
+                get_playlist_names=lambda: [("saved", "Saved")],
+                playlist_placement_ref=lambda _playlist_id: (
+                    playlist_ref
+                    if playlist_ref is not None
+                    else {"items": [], "sections": []}
+                ),
+            ),
             meetings_widget=meetings,
             playlist_imports=playlist_imports,
             notifications=notifications,
@@ -174,6 +181,31 @@ def test_playlist_route_returns_durable_references_to_source() -> None:
 
     assert playlist_imports.calls[0][0] == PlaylistDestinationTarget("saved", "Saved")
     assert outcomes == [MediaDestinationOutcome(1, ("clip.mp4",), ("clip.mp4",))]
+
+
+def test_playlist_route_requests_placement_for_a_structured_playlist() -> None:
+    def drive(bridge):
+        bridge.showPlaylists()
+        bridge.choosePlaylist("saved", "Saved")
+        assert bridge.step == "placement"
+        bridge.confirmPlacement("top")
+
+    controller, _meetings, playlist_imports, _notifications = _controller(
+        drive,
+        playlist_ref={
+            "items": [{} for _ in range(14)],
+            "sections": [{"id": "talk", "name": "Talk"}],
+        },
+    )
+
+    controller.route(_request())
+
+    assert playlist_imports.calls[0][0] == PlaylistDestinationTarget(
+        "saved",
+        "Saved",
+        list_id="root",
+        insert_index=0,
+    )
 
 
 def test_preparation_stays_in_same_wizard_before_playlist_selection() -> None:

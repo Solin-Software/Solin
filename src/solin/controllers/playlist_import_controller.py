@@ -29,6 +29,7 @@ from ..core.media.destinations import (
     PlaylistDestinationTarget,
     PreparedMediaBatch,
 )
+from ..core.media.placement import END_OF_LIST_INDEX
 
 if TYPE_CHECKING:
     from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -209,16 +210,23 @@ class PlaylistImportController:
             return MediaDestinationOutcome(0)
 
         if target.create_new:
-            playlist_id = playlist_widget.create_playlist_with_item(
+            playlist_id = playlist_widget.create_playlist_with_items(
                 target.playlist_name,
-                items[0],
+                [items[0]],
             )
             referenced_urls = [str(items[0].get("url") or "")]
             added = 1
-            for item in items[1:]:
-                if playlist_widget.add_item_to_playlist(playlist_id, item):
-                    referenced_urls.append(str(item.get("url") or ""))
-                    added += 1
+            if len(items) > 1:
+                result = playlist_widget.add_items_to_playlist(
+                    playlist_id,
+                    items[1:],
+                    list_id="root",
+                    insert_index=END_OF_LIST_INDEX,
+                )
+                added += len(result.added_items)
+                referenced_urls.extend(
+                    str(item.get("url") or "") for item in result.added_items
+                )
             context.notifications.success(
                 context.translate('Playlist "%1"\ncreated successfully!').replace(
                     "%1",
@@ -230,20 +238,31 @@ class PlaylistImportController:
                 tuple(url for url in referenced_urls if url),
             )
 
-        referenced_urls: list[str] = []
-        added = 0
-        for item in items:
-            if playlist_widget.add_item_to_playlist(target.playlist_id, item):
-                added += 1
-                url = str(item.get("url") or "")
-                if url:
-                    referenced_urls.append(url)
+        result = playlist_widget.add_items_to_playlist(
+            target.playlist_id,
+            items,
+            list_id=target.list_id,
+            insert_index=target.insert_index,
+        )
+        referenced_urls = [
+            str(item.get("url") or "")
+            for item in result.added_items
+            if item.get("url")
+        ]
+        added = len(result.added_items)
         if added:
             context.notifications.success(
                 context.translate('%1 file(s) added\nto playlist "%2"')
                 .replace("%1", str(added))
                 .replace("%2", target.playlist_name)
             )
+        elif not result.target_valid:
+            context.notifications.error(
+                context.translate(
+                    'Could not add media to playlist "%1" because the selected location no longer exists.'
+                ).replace("%1", target.playlist_name)
+            )
+            return MediaDestinationOutcome(0, destination_accepted=False)
         else:
             context.notifications.warning(
                 context.translate(

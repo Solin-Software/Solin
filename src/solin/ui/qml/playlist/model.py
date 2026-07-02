@@ -645,12 +645,33 @@ class PlaylistEditModel(QAbstractListModel):
         media_items: list[dict],
     ) -> bool:
         """Insert new media refs into the storage tree at a visual list slot."""
-        if not self._pl or not media_items:
+        if self._pl is None:
+            return False
+        if not self.insert_media_refs_into_playlist(
+            self._pl,
+            target_list_id,
+            insert_index,
+            media_items,
+        ):
+            return False
+        self.rebuild(self._pl)
+        return True
+
+    def insert_media_refs_into_playlist(
+        self,
+        playlist: dict,
+        target_list_id: str,
+        insert_index: int,
+        media_items: list[dict],
+    ) -> bool:
+        """Insert refs into any persisted playlist without rebinding this model."""
+
+        if not playlist or not media_items:
             return False
         target_kind, target_id = self._parse_list_id(target_list_id)
         if not self.can_drop_node("", "media", target_list_id):
             return False
-        tree = self._storage_tree()
+        tree = self._storage_tree(playlist)
         media_nodes = [
             {
                 "id": item["id"],
@@ -662,10 +683,14 @@ class PlaylistEditModel(QAbstractListModel):
         ]
         for offset, node in enumerate(media_nodes):
             if not self._insert_tree_node(
-                    tree, target_kind, target_id, insert_index + offset, node):
+                tree,
+                target_kind,
+                target_id,
+                insert_index + offset,
+                node,
+            ):
                 return False
-        self._flatten_storage_tree(tree)
-        self.rebuild(self._pl)
+        self._flatten_storage_tree(tree, playlist=playlist)
         return True
 
     def _parse_list_id(self, list_id: str) -> tuple[str, str]:
@@ -817,7 +842,12 @@ class PlaylistEditModel(QAbstractListModel):
         return any(self._contains_tree_node(child, node_id)
                    for child in node.get("children", []))
 
-    def _flatten_storage_tree(self, nodes: list[dict]) -> None:
+    def _flatten_storage_tree(
+        self,
+        nodes: list[dict],
+        *,
+        playlist: dict | None = None,
+    ) -> None:
         items_out: list[dict] = []
         sections_out: list[dict] = []
         markers_out: list[dict] = []
@@ -861,9 +891,12 @@ class PlaylistEditModel(QAbstractListModel):
                     walk(node.get("children", []), ref["id"])
 
         walk(nodes, None)
-        self._pl["items"] = items_out
-        self._pl["sections"] = sections_out
-        self._pl["markers"] = markers_out
+        target = self._pl if playlist is None else playlist
+        if target is None:
+            return
+        target["items"] = items_out
+        target["sections"] = sections_out
+        target["markers"] = markers_out
 
     def _build_entries(self, pl: dict) -> list[dict]:
         """Build the visible flat rows from the playlist tree.

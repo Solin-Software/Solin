@@ -7,6 +7,8 @@ from enum import Enum
 from collections.abc import Mapping
 from typing import Any
 
+from solin.core.media.placement import END_OF_LIST_INDEX
+
 
 class MediaRouteAction(str, Enum):
     PLAY = "play"
@@ -51,6 +53,8 @@ class PlaylistDestinationTarget:
     playlist_id: str
     playlist_name: str
     create_new: bool = False
+    list_id: str = "root"
+    insert_index: int = END_OF_LIST_INDEX
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +86,7 @@ class MediaDestinationOutcome:
     added_count: int
     referenced_urls: tuple[str, ...] = field(default_factory=tuple)
     handled_sources: tuple[str, ...] = field(default_factory=tuple)
+    destination_accepted: bool = True
 
 
 __all__ = [

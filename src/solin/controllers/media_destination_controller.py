@@ -97,6 +97,7 @@ class MediaDestinationController(QObject):
 
         bridge.addRequested.connect(lambda: self._start_preparation(token))
         bridge.retryRequested.connect(lambda: self._start_preparation(token))
+        bridge.playlistTargetRequested.connect(self._request_playlist_target)
         bridge.weekRequested.connect(self._request_week)
         bridge.meetingTargetRequested.connect(self._request_meeting_target)
 
@@ -223,6 +224,35 @@ class MediaDestinationController(QObject):
         )
 
     @Slot(str, str)
+    def _request_playlist_target(
+        self,
+        playlist_id: str,
+        playlist_name: str,
+    ) -> None:
+        bridge = self._active_bridge
+        if bridge is None:
+            return
+        playlist_ref = self._context.playlist_widget.playlist_placement_ref(
+            playlist_id
+        )
+        if playlist_ref is None:
+            bridge.showError(
+                self._context.translate(
+                    "This playlist is no longer available. Choose another one."
+                )
+            )
+            return
+        options = build_media_placement_options(
+            playlist_ref,
+            translate=lambda text: self._context.translate(text),
+        )
+        bridge.prepare_playlist_selection(
+            playlist_id=playlist_id,
+            playlist_name=playlist_name,
+            placement_options=options,
+        )
+
+    @Slot(str, str)
     def _request_meeting_target(self, pub_type: str, monday_text: str) -> None:
         bridge = self._active_bridge
         if bridge is None:
@@ -276,7 +306,12 @@ class MediaDestinationController(QObject):
                 outcome = MediaDestinationOutcome(
                     outcome.added_count,
                     outcome.referenced_urls,
-                    batch.handled_sources,
+                    (
+                        batch.handled_sources
+                        if outcome.destination_accepted
+                        else ()
+                    ),
+                    outcome.destination_accepted,
                 )
             else:
                 outcome = MediaDestinationOutcome(

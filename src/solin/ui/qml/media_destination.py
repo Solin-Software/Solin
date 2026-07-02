@@ -28,7 +28,6 @@ from solin.styles.theme import PALETTE
 from solin.styles.icons import (
     ICON_CHEVRON_LEFT,
     ICON_CHEVRON_RIGHT,
-    ICON_CLOSE,
     ICON_NAV_MEETINGS,
     ICON_NAV_PLAYLIST,
     ICON_PLAY,
@@ -40,7 +39,6 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 DESTINATION_ICON_SVGS = {
     "chevron_left": ICON_CHEVRON_LEFT,
     "chevron_right": ICON_CHEVRON_RIGHT,
-    "close": ICON_CLOSE,
     "meeting": ICON_NAV_MEETINGS,
     "play": ICON_PLAY,
     "playlist": ICON_NAV_PLAYLIST,
@@ -56,6 +54,7 @@ class MediaDestinationBridge(QObject):
     addRequested = Signal()
     retryRequested = Signal()
     weekRequested = Signal(str, bool)
+    playlistTargetRequested = Signal(str, str)
     meetingTargetRequested = Signal(str, str)
 
     def __init__(
@@ -83,6 +82,9 @@ class MediaDestinationBridge(QObject):
         self._week_index = self._weeks.index(current_monday())
         self._meeting_targets: list[dict[str, Any]] = []
         self._placement_options: list[dict[str, Any]] = []
+        self._pending_destination_kind = ""
+        self._pending_playlist_id = ""
+        self._pending_playlist_name = ""
         self._pending_meeting_type = ""
         self._pending_meeting_monday = ""
         self._result: MediaDestinationSelection | None = None
@@ -245,13 +247,9 @@ class MediaDestinationBridge(QObject):
     def choosePlaylist(self, playlist_id: str, playlist_name: str) -> None:  # noqa: N802
         if self._busy or not playlist_id:
             return
-        self._finish(
-            MediaDestinationSelection(
-                action=MediaRouteAction.ADD,
-                destination=MediaDestinationKind.PLAYLIST,
-                target=PlaylistDestinationTarget(playlist_id, playlist_name),
-            )
-        )
+        self._busy = True
+        self.changed.emit()
+        self.playlistTargetRequested.emit(playlist_id, playlist_name)
 
     @Slot(str)
     def createPlaylist(self, playlist_name: str) -> None:  # noqa: N802 - QML API
@@ -315,6 +313,7 @@ class MediaDestinationBridge(QObject):
         placement_options: Iterable[Mapping[str, Any]],
     ) -> None:
         self._busy = False
+        self._pending_destination_kind = "meeting"
         self._pending_meeting_monday = monday
         self._pending_meeting_type = pub_type
         self._placement_options = [dict(option) for option in placement_options]
@@ -323,14 +322,34 @@ class MediaDestinationBridge(QObject):
             return
         self._push_step("placement")
 
+    def prepare_playlist_selection(
+        self,
+        *,
+        playlist_id: str,
+        playlist_name: str,
+        placement_options: Iterable[Mapping[str, Any]],
+    ) -> None:
+        self._busy = False
+        self._pending_destination_kind = "playlist"
+        self._pending_playlist_id = playlist_id
+        self._pending_playlist_name = playlist_name
+        self._placement_options = [dict(option) for option in placement_options]
+        if not self._placement_options:
+            self._finish_playlist("bottom")
+            return
+        self._push_step("placement")
+
     @Slot(str)
     def confirmPlacement(self, placement_id: str) -> None:  # noqa: N802 - QML API
-        if self._busy or not self._pending_meeting_type:
+        if self._busy or not self._pending_destination_kind:
             return
         valid_ids = {str(option.get("id") or "") for option in self._placement_options}
         if placement_id not in valid_ids:
             return
-        self._finish_meeting(placement_id)
+        if self._pending_destination_kind == "playlist":
+            self._finish_playlist(placement_id)
+        else:
+            self._finish_meeting(placement_id)
 
     @Slot()
     def cancelSelection(self) -> None:  # noqa: N802 - shared placement API
@@ -390,6 +409,21 @@ class MediaDestinationBridge(QObject):
                 target=MeetingDestinationTarget(
                     monday=self._pending_meeting_monday,
                     pub_type=self._pending_meeting_type,
+                    list_id=list_id,
+                    insert_index=insert_index,
+                ),
+            )
+        )
+
+    def _finish_playlist(self, placement_id: str) -> None:
+        list_id, insert_index = resolve_media_placement(placement_id)
+        self._finish(
+            MediaDestinationSelection(
+                action=MediaRouteAction.ADD,
+                destination=MediaDestinationKind.PLAYLIST,
+                target=PlaylistDestinationTarget(
+                    playlist_id=self._pending_playlist_id,
+                    playlist_name=self._pending_playlist_name,
                     list_id=list_id,
                     insert_index=insert_index,
                 ),

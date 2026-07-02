@@ -10,6 +10,7 @@ from solin.core.media.destinations import (
     PlaylistDestinationTarget,
 )
 from solin.core.foundation.qt_threads import OwnedQThreadRegistry
+from solin.core.playlists.items import PlaylistInsertResult
 
 
 class _PlaylistWidgetStub:
@@ -18,17 +19,35 @@ class _PlaylistWidgetStub:
         self.add_results = []
         self.added = []
         self.temp_opened = None
+        self.target_valid = True
 
     def get_playlist_names(self):
         return ["Existing"]
 
-    def create_playlist_with_item(self, name, item):
-        self.created.append((name, item))
+    def create_playlist_with_items(self, name, items):
+        self.created.append((name, list(items)))
         return "new-playlist-id"
 
-    def add_item_to_playlist(self, playlist_id, item):
-        self.added.append((playlist_id, item))
-        return self.add_results.pop(0) if self.add_results else True
+    def add_items_to_playlist(
+        self,
+        playlist_id,
+        items,
+        *,
+        list_id,
+        insert_index,
+    ):
+        if not self.target_valid:
+            return PlaylistInsertResult(target_valid=False)
+        added = []
+        duplicates = 0
+        for item in items:
+            self.added.append((playlist_id, item, list_id, insert_index))
+            was_added = self.add_results.pop(0) if self.add_results else True
+            if was_added:
+                added.append(item)
+            else:
+                duplicates += 1
+        return PlaylistInsertResult(tuple(added), duplicates)
 
     def open_temp_playlist(self, items, lang):
         self.temp_opened = (items, lang)
@@ -136,11 +155,18 @@ class _DocumentConversionServiceStub:
         return thread
 
 
-def _target(create_new=False):
+def _target(
+    create_new=False,
+    *,
+    list_id="root",
+    insert_index=2**31 - 1,
+):
     return PlaylistDestinationTarget(
         create_new=create_new,
         playlist_name="Target",
         playlist_id="playlist-id",
+        list_id=list_id,
+        insert_index=insert_index,
     )
 
 
@@ -192,7 +218,7 @@ def test_add_items_to_new_playlist_preserves_complete_media_item():
     )
 
     assert window.playlist_widget.created[0][0] == "Target"
-    item = window.playlist_widget.created[0][1]
+    item = window.playlist_widget.created[0][1][0]
     assert item["title"] == "Song"
     assert item["url"] == "song.mp3"
     assert item["type"] == "audio"
@@ -228,7 +254,7 @@ def test_add_items_to_playlist_target_counts_added_items():
     controller = _controller(window)
 
     outcome = controller.add_items_to_playlist_target(
-        _target(),
+        _target(list_id="section:talk", insert_index=0),
         [
             {"title": "A", "url": "a.mp4"},
             {"title": "B", "url": "b.mp4"},
@@ -238,11 +264,30 @@ def test_add_items_to_playlist_target_counts_added_items():
     )
 
     assert len(window.playlist_widget.added) == 3
+    assert {
+        (entry[2], entry[3]) for entry in window.playlist_widget.added
+    } == {("section:talk", 0)}
     assert outcome.added_count == 2
     assert outcome.referenced_urls == ("a.mp4", "c.mp4")
     assert window.notifications.events == [
         ("success", '2 file(s) added\nto playlist "Target"', {})
     ]
+
+
+def test_add_items_rejects_a_stale_playlist_placement():
+    window = _WindowStub()
+    window.playlist_widget.target_valid = False
+    controller = _controller(window)
+
+    outcome = controller.add_items_to_playlist_target(
+        _target(list_id="section:removed", insert_index=0),
+        [{"title": "A", "url": "a.mp4"}],
+        "source",
+    )
+
+    assert outcome.destination_accepted is False
+    assert outcome.added_count == 0
+    assert window.notifications.events[0][0] == "error"
 
 
 def test_prepare_destination_assets_preserves_direct_and_import_order(monkeypatch):
