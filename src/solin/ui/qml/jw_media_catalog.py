@@ -18,7 +18,7 @@ Architecture
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Optional, TYPE_CHECKING
 
 from PySide6.QtCore import (
@@ -34,7 +34,11 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from solin.core.meetings.colors import accent_from_hue
+from solin.core.media.placement import (
+    MediaPlacementOption,
+    build_media_placement_options,
+    resolve_media_placement,
+)
 
 if TYPE_CHECKING:
     from solin.core.jw.catalog_service import JWMediaCatalogService
@@ -64,49 +68,6 @@ def _file_url(path: str) -> str:
     if not path:
         return ""
     return QUrl.fromLocalFile(path).toString()
-
-
-def build_jw_media_placement_options(
-    pl: dict[str, Any] | None,
-    *,
-    translate_context: str = "JWMediaCatalogBridge",
-) -> list[dict[str, Any]]:
-    """Compute where a JW media item can be placed within a playlist/tree."""
-    if not pl:
-        return []
-
-    items = pl.get("items", [])
-    sections = [
-        s for s in pl.get("sections", [])
-        if not s.get("parent_id")
-    ]
-    total = len(items)
-    num_sections = len(sections)
-    has_many_items = total > 13
-    has_multiple_sections = num_sections >= 2
-    should_prompt = has_many_items or has_multiple_sections
-
-    _tr = lambda text: QCoreApplication.translate(translate_context, text)  # noqa: E731
-
-    if not should_prompt:
-        return []
-
-    options: list[dict[str, Any]] = [
-        {"id": "top", "label": _tr("Top of playlist"), "type": "position"},
-        {"id": "bottom", "label": _tr("End of playlist"), "type": "position"},
-    ]
-    for sec in sections:
-        section_id = sec.get("id")
-        if not section_id:
-            continue
-        hue = sec.get("color_hue", 215)
-        options.append({
-            "id": f"section:{section_id}",
-            "label": sec.get("name", "Section"),
-            "type": "section",
-            "color": accent_from_hue(hue),
-        })
-    return options
 
 
 # ── Catalog list model ────────────────────────────────────────────────────────
@@ -346,7 +307,7 @@ class JWMediaCatalogBridge(QObject):
 
         # Pending item / placement
         self._pending_item: dict[str, Any] | None = None
-        self._placement_options: list[dict[str, Any]] = []
+        self._placement_options: list[MediaPlacementOption] = []
         self._show_placement: bool = False
 
         # External references
@@ -429,8 +390,8 @@ class JWMediaCatalogBridge(QObject):
         """True when the placement options popup should be visible."""
         return self._show_placement
 
-    @Property("QVariant", notify=placementOptionsChanged)
-    def placementOptions(self) -> list[dict[str, Any]]:
+    @Property(list, notify=placementOptionsChanged)
+    def placementOptions(self) -> list[MediaPlacementOption]:
         """List of placement option dicts for the QML placement popup."""
         return self._placement_options
 
@@ -560,18 +521,7 @@ class JWMediaCatalogBridge(QObject):
         if not self._pending_item:
             return
 
-        if placement_id == "top":
-            target_list_id = "root"
-            target_index = 0
-        elif placement_id == "bottom":
-            target_list_id = "root"
-            target_index = 2**31 - 1
-        elif placement_id.startswith("section:"):
-            target_list_id = placement_id
-            target_index = 0
-        else:
-            target_list_id = "root"
-            target_index = 2**31 - 1
+        target_list_id, target_index = resolve_media_placement(placement_id)
 
         self._emit_confirmed(target_list_id, target_index)
         self.modalShouldClose.emit()
@@ -642,9 +592,9 @@ class JWMediaCatalogBridge(QObject):
 
     # ── Python-facing setters (called by host view) ───────────────────────
 
-    def set_playlist_ref(self, pl: dict[str, Any] | None) -> None:
+    def set_playlist_ref(self, pl: Mapping[str, Any] | None) -> None:
         """Set reference to the current playlist for placement logic."""
-        self._pl = pl
+        self._pl = dict(pl) if pl is not None else None
 
     def set_language_code(self, code: str) -> None:
         """Set the JW API language code (e.g. ``'T'`` for Portuguese)."""
@@ -797,9 +747,15 @@ class JWMediaCatalogBridge(QObject):
 
     # ── Placement logic ───────────────────────────────────────────────────
 
-    def _compute_placement_options(self) -> list[dict[str, Any]]:
+    def _compute_placement_options(self) -> list[MediaPlacementOption]:
         """Compute where the video can be placed within the playlist."""
-        return build_jw_media_placement_options(self._pl)
+        return build_media_placement_options(
+            self._pl,
+            translate=lambda text: QCoreApplication.translate(
+                "JWMediaCatalogBridge",
+                text,
+            ),
+        )
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
@@ -840,7 +796,6 @@ class JWMediaCatalogBridge(QObject):
 
 
 __all__ = [
-    "build_jw_media_placement_options",
     "JWMediaCatalogBridge",
     "JWMediaCatalogModel",
 ]

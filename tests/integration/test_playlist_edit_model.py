@@ -68,6 +68,78 @@ def _nested_playlist():
     }
 
 
+def test_model_inserts_into_an_unbound_playlist_section(tmp_path):
+    model = _model(tmp_path)
+    playlist = _nested_playlist()
+    new_item = {
+        "id": "new-media",
+        "title": "New",
+        "type": "video",
+        "url": "new.mp4",
+    }
+
+    inserted = model.insert_media_refs_into_playlist(
+        playlist,
+        "section:section-1",
+        0,
+        [new_item],
+    )
+
+    assert inserted is True
+    section_items = [
+        item["id"]
+        for item in playlist["items"]
+        if item.get("section_id") == "section-1"
+    ]
+    assert section_items == ["new-media", "section-media"]
+
+
+def test_model_inserts_at_visual_root_top_without_rebinding(tmp_path):
+    model = _model(tmp_path)
+    playlist = _nested_playlist()
+
+    inserted = model.insert_media_refs_into_playlist(
+        playlist,
+        "root",
+        0,
+        [
+            {
+                "id": "root-top",
+                "title": "Top",
+                "type": "image",
+                "url": "top.png",
+            }
+        ],
+    )
+
+    assert inserted is True
+    assert playlist["items"][0]["id"] == "root-top"
+    assert playlist["items"][0]["section_id"] is None
+
+
+def test_model_rejects_a_removed_placement_without_mutation(tmp_path):
+    model = _model(tmp_path)
+    playlist = _nested_playlist()
+    original = copy.deepcopy(playlist)
+
+    inserted = model.insert_media_refs_into_playlist(
+        playlist,
+        "section:missing",
+        0,
+        [
+            {
+                "id": "new-media",
+                "title": "New",
+                "type": "video",
+                "url": "new.mp4",
+            }
+        ],
+    )
+
+    assert inserted is False
+    assert playlist == original
+
+
 def test_playlist_edit_model_builds_flat_rows_and_tree_data(tmp_path):
     model = _model(tmp_path)
     model.rebuild(

@@ -49,7 +49,7 @@ class _WindowStub:
 
         self.proj_bar = _signal_namespace(
             "projection_bar",
-            "add_to_playlist_requested",
+            "add_to_destination_requested",
             "send_to_temp_playlist_requested",
             "stop_requested",
             "seek_requested",
@@ -114,8 +114,10 @@ class _WindowStub:
         self._auto_share_finished = _Signal("auto_share_finished")
 
         self._playlist_imports = SimpleNamespace(
-            add_current_to_playlist=_slot("add_current_to_playlist"),
             send_to_temp_playlist=_slot("send_to_temp_playlist"),
+        )
+        self._media_destinations = SimpleNamespace(
+            route_projected_media=_slot("route_projected_media"),
         )
         self._auto_key_projection = SimpleNamespace(on_media_state=_slot("on_media_state"))
         self._projection_targets = SimpleNamespace(
@@ -195,6 +197,7 @@ def _handlers(window, *, timer_output=None, timer_bridge=None):
         media_projection=window._media_projection,
         timer_theme=window._timer_theme,
         playlist_imports=window._playlist_imports,
+        media_destinations=window._media_destinations,
         auto_key_projection=window._auto_key_projection,
         projection_stop=window._projection_stop,
         projection_targets=window._projection_targets,

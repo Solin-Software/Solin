@@ -42,7 +42,7 @@ from ...core.jw.songs import JWSongsStore
 from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
-from ...core.playlists.items import looks_like_filename_title
+from ...core.playlists.items import PlaylistInsertResult, looks_like_filename_title
 from ...core.projection.image_framing import (
     ImageTransform,
     image_transform_from_record,
@@ -1401,27 +1401,73 @@ class PlaylistWidget(QWidget):
     def get_playlist_names(self) -> list[tuple[str, str]]:
         return [(p["id"], p["name"]) for p in self._playlists]
 
-    def add_item_to_playlist(self, pl_id: str, item: dict) -> bool:
+    def playlist_placement_ref(self, pl_id: str) -> dict | None:
+        playlist = next((p for p in self._playlists if p["id"] == pl_id), None)
+        return copy.deepcopy(playlist) if playlist is not None else None
+
+    def add_items_to_playlist(
+        self,
+        pl_id: str,
+        items: list[dict],
+        *,
+        list_id: str,
+        insert_index: int,
+    ) -> PlaylistInsertResult:
         pl = next((p for p in self._playlists if p["id"] == pl_id), None)
-        if not pl: return False
-        url = item.get("url", "")
-        if url and any(it.get("url", "") == url for it in pl.get("items", [])):
-            return False
-        pl.setdefault("items", []).append(item)
+        if pl is None:
+            return PlaylistInsertResult(target_valid=False)
+
+        existing_urls = {
+            str(item.get("url") or "")
+            for item in pl.get("items", [])
+            if item.get("url")
+        }
+        added_items: list[dict] = []
+        duplicate_count = 0
+        for item in items:
+            candidate = copy.deepcopy(item)
+            url = str(candidate.get("url") or "")
+            if url and url in existing_urls:
+                duplicate_count += 1
+                continue
+            if url:
+                existing_urls.add(url)
+            added_items.append(candidate)
+
+        if not added_items:
+            return PlaylistInsertResult(duplicate_count=duplicate_count)
+        if not self._edit_view.model.insert_media_refs_into_playlist(
+            pl,
+            list_id,
+            insert_index,
+            added_items,
+        ):
+            return PlaylistInsertResult(
+                duplicate_count=duplicate_count,
+                target_valid=False,
+            )
+
         self._playlist_repository.save(self._playlists)
         if (self._stack.currentIndex() == 1
                 and self._edit_view._pl
                 and self._edit_view._pl["id"] == pl_id):
             self._edit_view._rebuild_list()
-        return True
+        return PlaylistInsertResult(
+            added_items=tuple(added_items),
+            duplicate_count=duplicate_count,
+        )
 
     def item_exists_in_playlist(self, pl_id: str, url: str) -> bool:
         pl = next((p for p in self._playlists if p["id"] == pl_id), None)
         if not pl or not url: return False
         return any(it.get("url", "") == url for it in pl.get("items", []))
 
-    def create_playlist_with_item(self, name: str, item: dict) -> str:
-        pl = {"id": str(uuid.uuid4()), "name": name, "items": [item]}
+    def create_playlist_with_items(self, name: str, items: list[dict]) -> str:
+        pl = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "items": copy.deepcopy(items),
+        }
         self._playlists.append(pl)
         self._playlist_repository.save(self._playlists)
         self._list_view.refresh()

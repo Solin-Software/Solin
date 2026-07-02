@@ -37,18 +37,18 @@ def test_browser_download_cache_path_is_stable_and_sanitized(tmp_path):
     service = BrowserDownloadService(tmp_path, notify_cached=lambda _url: None)
     url = "https://example.test/files/bad%3Aname.pdf?download=1"
 
-    path = service.playlist_cache_path(url, "ignored title", "pdf")
+    path = service.destination_cache_path(url, "ignored title", "pdf")
 
     assert path.parent == tmp_path
     assert path.suffix == ".pdf"
     assert "bad_name-" in path.name
-    assert path == service.playlist_cache_path(url, "ignored title", "pdf")
+    assert path == service.destination_cache_path(url, "ignored title", "pdf")
 
 
 def test_browser_image_download_uses_renderable_extension(tmp_path):
     service = BrowserDownloadService(tmp_path, notify_cached=lambda _url: None)
 
-    path = service.playlist_cache_path(
+    path = service.destination_cache_path(
         "https://example.test/image-handler.php?id=42",
         "Illustration",
         "image",
@@ -68,7 +68,7 @@ def test_browser_download_service_persists_remote_playlist_file(tmp_path):
         stream_factory=lambda *_args, **_kwargs: _ByteStream((b"abc", b"def")),
     )
 
-    service.download_file_for_playlist(
+    service.download_file_for_destination(
         url,
         "Publication",
         "pdf",
@@ -95,12 +95,12 @@ def test_browser_download_service_reuses_only_matching_completed_file(tmp_path):
             AssertionError("cached file must not be downloaded")
         ),
     )
-    path = service.playlist_cache_path(url, "Publication", "jwpub")
+    path = service.destination_cache_path(url, "Publication", "jwpub")
     path.write_bytes(b"cached")
     Path(f"{path}.done").write_text(url, encoding="utf-8")
     ready = []
 
-    service.download_file_for_playlist(
+    service.download_file_for_destination(
         url,
         "Publication",
         "jwpub",
@@ -123,7 +123,7 @@ def test_browser_download_service_reports_failure_and_removes_temp_file(tmp_path
         notify_cached=lambda _url: None,
         stream_factory=fail,
     )
-    service.download_file_for_playlist(
+    service.download_file_for_destination(
         "https://example.test/publication.pdf",
         "Publication",
         "pdf",

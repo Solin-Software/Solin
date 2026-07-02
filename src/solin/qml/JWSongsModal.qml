@@ -590,7 +590,7 @@ Rectangle {
             }
         }
 
-        JWMediaPlacementOverlay {
+        MediaPlacementOverlay {
             anchors.fill: parent
             placementBridge: modalRoot.hasBridge ? songsBridge : null
             surface: modalRoot.surface

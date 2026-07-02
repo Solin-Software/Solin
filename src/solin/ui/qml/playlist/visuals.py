@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QCoreApplication, Qt
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtQuick import QQuickImageProvider
-from PySide6.QtSvg import QSvgRenderer
 
 from solin.styles.icons import (
     ICON_ARROW_LEFT,
@@ -27,7 +26,8 @@ from solin.styles.icons import (
     ICON_TRASH,
     ICON_VIDEO,
 )
-from solin.styles.theme import PALETTE, QML_THEME
+from solin.styles.theme import QML_THEME
+from solin.ui.qml.svg_icons import SvgIconProvider
 
 UNSECTIONED_CARD_BACKGROUND = "transparent"
 
@@ -148,7 +148,7 @@ PLAYLIST_ICON_SVGS = {
 }
 
 
-class PlaylistIconProvider(QQuickImageProvider):
+class PlaylistIconProvider(SvgIconProvider):
     """Renders SVG icons for QML.
 
     QML requests: ``image://playlisticons/<name>/<size>/<color_hex>``
@@ -156,22 +156,4 @@ class PlaylistIconProvider(QQuickImageProvider):
     """
 
     def __init__(self):
-        super().__init__(QQuickImageProvider.ImageType.Pixmap)
-
-    def requestPixmap(self, id_str: str, size, requestedSize):
-        parts = id_str.split("/")
-        name = parts[0] if len(parts) > 0 else "grip"
-        px_size = int(parts[1]) if len(parts) > 1 else 16
-        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_muted
-
-        svg_str = PLAYLIST_ICON_SVGS.get(name, ICON_GRIP)
-        svg = svg_str.replace("currentColor", color)
-        data = QByteArray(svg.encode("utf-8"))
-        renderer = QSvgRenderer(data)
-        pix = QPixmap(px_size, px_size)
-        pix.fill(Qt.GlobalColor.transparent)
-        if renderer.isValid():
-            p = QPainter(pix)
-            renderer.render(p)
-            p.end()
-        return pix
+        super().__init__(PLAYLIST_ICON_SVGS, default_icon="grip")

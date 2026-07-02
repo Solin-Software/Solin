@@ -13,8 +13,8 @@ Ciclo de vida do servidor:
 
 Sinais públicos:
   media_received(path, orig_name)
-  request_add_to_playlist(path, title)
-  request_add_all_to_playlist(items: list[received_media_entry])
+  request_add_to_destination(path, title)
+  request_add_all_to_destination(items: list[received_media_entry])
 """
 from __future__ import annotations
 
@@ -317,7 +317,7 @@ class _ThumbArea(QWidget):
 
 class _MediaCard(QFrame):
     """Card individual com thumbnail, nome, botão de playlist e play ao clicar."""
-    add_to_playlist = Signal(str, str, str)   # path, title, orig_name
+    add_to_destination = Signal(str, str, str)   # path, title, orig_name
     play_requested  = Signal(str, str)         # path, title
 
     def __init__(self, path: str, title: str, lang: LanguageManager,
@@ -381,7 +381,7 @@ class _MediaCard(QFrame):
         self._name_lbl.setWordWrap(False)
         name = self._name_lbl
 
-        tip = self.tr("Add to playlist")
+        tip = self.tr("Add to…")
         pl_btn = QPushButton()
         self._playlist_btn = pl_btn
         pl_btn.setIcon(make_icon(_I_PLUS, 11, _MUTED))
@@ -394,7 +394,11 @@ class _MediaCard(QFrame):
             "border-radius:5px;}"
             f"QPushButton:hover{{background:{PALETTE.accent_muted};border-color:{_ACCENT};}}"
         )
-        pl_btn.clicked.connect(lambda: self.add_to_playlist.emit(self._path, self._title, self._orig_name))
+        pl_btn.clicked.connect(lambda: self.add_to_destination.emit(
+            self._path,
+            self._title,
+            self._orig_name,
+        ))
 
         bot.addWidget(name, stretch=1)
         bot.addWidget(pl_btn)
@@ -435,7 +439,7 @@ class _MediaCard(QFrame):
         self._thumb_lbl.setPixmap(thumb)
 
     def update_title(self, title: str) -> None:
-        """Atualiza o titulo exibido e o titulo usado ao emitir add_to_playlist."""
+        """Atualiza o título exibido e o título usado ao escolher um destino."""
         if not title:
             return
         self._title = title
@@ -512,8 +516,8 @@ def _rounded_pixmap_top(src: QPixmap, w: int, h: int, radius: int = 12) -> QPixm
 
 class WifiReceiveWidget(QWidget):
     media_received              = Signal(str, str)
-    request_add_to_playlist     = Signal(str, str, str)   # path, title, orig_name
-    request_add_all_to_playlist = Signal(list)
+    request_add_to_destination = Signal(str, str, str)
+    request_add_all_to_destination = Signal(list)
     request_play                = Signal(str, str)         # path, title
 
     def __init__(
@@ -743,7 +747,7 @@ class WifiReceiveWidget(QWidget):
         self._send_all_btn = QPushButton()
         self._send_all_btn.setIcon(make_icon(_I_LIST, 12, _MUTED))
         self._send_all_btn.setIconSize(QSize(12, 12))
-        self._send_all_btn.setText(self.tr("  Send all to playlist"))
+        self._send_all_btn.setText(self.tr("  Add all to…"))
         self._send_all_btn.setFixedHeight(26)
         self._send_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._send_all_btn.setEnabled(False)
@@ -1233,7 +1237,7 @@ class WifiReceiveWidget(QWidget):
             self._content_stack.setCurrentIndex(1)  # mostra grid
 
         card = _MediaCard(path, title, self._lang, self._grid_container, orig_name=orig_name)
-        card.add_to_playlist.connect(self._on_card_add_to_playlist)
+        card.add_to_destination.connect(self._on_card_add_to_destination)
         card.play_requested.connect(self.request_play)
         self._cards.append(card)
 
@@ -1257,11 +1261,11 @@ class WifiReceiveWidget(QWidget):
     def _on_send_all(self) -> None:
         items = [dict(entry) for entry in self._received_files]
         if items:
-            self.request_add_all_to_playlist.emit(items)
+            self.request_add_all_to_destination.emit(items)
 
-    def _on_card_add_to_playlist(self, path: str, title: str, orig_name: str) -> None:
+    def _on_card_add_to_destination(self, path: str, title: str, orig_name: str) -> None:
         """Apenas emite o sinal — remoção do card ocorre só após confirmar no diálogo."""
-        self.request_add_to_playlist.emit(path, title, orig_name)
+        self.request_add_to_destination.emit(path, title, orig_name)
 
     def _rebuild_grid(self) -> None:
         """Reposiciona todos os cards no grid após remoção."""
@@ -1452,7 +1456,7 @@ class WifiReceiveWidget(QWidget):
         self._start_btn.setText(self.tr("  Start server"))
         self._copy_btn.setToolTip(self.tr("Copy link"))
         self._section_lbl.setText(self.tr("Received media"))
-        self._send_all_btn.setText(self.tr("  Send all to playlist"))
+        self._send_all_btn.setText(self.tr("  Add all to…"))
         self._placeholder.setText(self.tr("Files sent from your phone will appear here."))
 
     def cleanup(self) -> None:

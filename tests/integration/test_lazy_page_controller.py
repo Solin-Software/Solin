@@ -106,9 +106,7 @@ class _BrowserSignalStub(_BrowserStub):
         self.stop_projection_signal = _SignalStub()
         self.project_tab_pixmap_signal = _SignalStub()
         self.stop_tab_projection_signal = _SignalStub()
-        self.add_to_playlist_signal = _SignalStub()
-        self.add_downloaded_file_to_playlist_signal = _SignalStub()
-        self.download_failed_signal = _SignalStub()
+        self.media_destination_signal = _SignalStub()
 
 
 def _controller(window, *, project_video=None):
@@ -143,9 +141,7 @@ def _controller(window, *, project_video=None):
             project_video=project_video,
             stop_projection=lambda: None,
             project_tab_frame=lambda *_args: None,
-            add_current_to_playlist=lambda *_args: None,
-            add_downloaded_file_to_playlist=lambda *_args: None,
-            report_download_failure=lambda *_args: None,
+            browser_media_destination=lambda *_args: None,
             play_cached_media=lambda *_args: None,
             wifi_media_received=lambda *_args: None,
             wifi_add_single=lambda *_args: None,

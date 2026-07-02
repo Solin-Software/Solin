@@ -139,8 +139,8 @@ class ProjectableWebView(NativeWebView):
                 str(payload.get("url") or ""),
                 str(payload.get("mediaType") or payload.get("media_type") or ""),
             )
-        elif kind == "addToPlaylist":
-            self.bridge.add_to_playlist_signal.emit(
+        elif kind == "addToDestination":
+            self.bridge.add_to_destination_signal.emit(
                 str(payload.get("url") or ""),
                 str(payload.get("title") or ""),
                 str(payload.get("mediaType") or payload.get("media_type") or ""),
@@ -151,13 +151,13 @@ class ProjectableWebView(NativeWebView):
         lbl_proj_vid = self.tr("Project video")
         lbl_save_img = self.tr("Save image")
         lbl_save_vid = self.tr("Save video")
-        lbl_add_play = self.tr("Add to playlist")
+        lbl_add_play = self.tr("Add to…")
         js = (
             f"window._jwProjectLabel      = {json.dumps(lbl_proj_img)};"
             f"window._jwProjectVideoLabel = {json.dumps(lbl_proj_vid)};"
             f"window._jwSaveImageLabel    = {json.dumps(lbl_save_img)};"
             f"window._jwSaveVideoLabel    = {json.dumps(lbl_save_vid)};"
-            f"window._jwAddPlaylistLabel  = {json.dumps(lbl_add_play)};"
+            f"window._jwAddDestinationLabel = {json.dumps(lbl_add_play)};"
         )
         self.run_javascript(js)
 
@@ -235,7 +235,7 @@ class BrowserTab(QWidget):
     crop_cancelled = Signal()
     new_tab_page = Signal(object)
     save_media = Signal(str, str)
-    add_to_playlist = Signal(str, str, str)
+    add_to_destination = Signal(str, str, str)
     download_requested = Signal(str)
 
     def __init__(
@@ -277,7 +277,7 @@ class BrowserTab(QWidget):
         bridge.crop_selected_signal.connect(self.crop_selected)
         bridge.crop_cancelled_signal.connect(self.crop_cancelled)
         bridge.save_media_signal.connect(self.save_media)
-        bridge.add_to_playlist_signal.connect(self.add_to_playlist)
+        bridge.add_to_destination_signal.connect(self.add_to_destination)
 
         self.view.new_tab_requested.connect(self._on_new_tab)
         self.view.download_requested.connect(self.download_requested)

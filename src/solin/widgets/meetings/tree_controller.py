@@ -368,6 +368,31 @@ class MeetingTreeController(QObject):
     def placement_playlist_ref(self) -> MeetingCatalogPlaylistRef:
         return build_meeting_catalog_playlist_ref(self._nodes)
 
+    def add_external_media_items(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        list_id: str = "root",
+        insert_index: int = _BIG_INDEX,
+    ) -> int:
+        """Insert prepared playlist-shaped media through the meeting save path."""
+
+        if self._children_for_target(*self._parse_list_id(list_id)) is None:
+            return 0
+        nodes = [
+            self._node_from_playlist_item(
+                item,
+                str(item.get("title") or _tr("_MediaRow", "Media")),
+            )
+            for item in items
+            if isinstance(item, dict) and playlist_item_media_url(item)
+        ]
+        if not nodes:
+            return 0
+        if not self._insert_nodes(list_id, insert_index, nodes):
+            return 0
+        return len(nodes)
+
     @Slot(str)
     def set_sync_root(self, watched_folder_path: str) -> None:
         self._flush_image_framing_save()
@@ -1874,11 +1899,11 @@ class MeetingTreeController(QObject):
         mgr.prefetch_progress.connect(self._on_prefetch_progress)
         mgr.prefetch_error.connect(self._on_prefetch_error)
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         self._image_framing_save_timer.stop()
         self._image_framing_save_pending = False
         if not self._tree_key:
-            return
+            return True
         if self._sync_enabled:
             try:
                 self._materialize_current_nodes_for_sync()
@@ -1890,7 +1915,7 @@ class MeetingTreeController(QObject):
                 self._pause_sync_after_save_failure(str(exc))
             else:
                 self._save_sync_manifest()
-        self._save_local_cache()
+        return self._save_local_cache()
 
     def _save_local_cache(self) -> bool:
         if not self._tree_key:
@@ -2010,17 +2035,17 @@ class MeetingTreeController(QObject):
         nodes: list[Node],
         *,
         signal_name: str = "media",
-    ) -> None:
+    ) -> bool:
         kind, target_id = self._parse_list_id(list_id)
         target_children = self._children_for_target(kind, target_id)
         if target_children is None:
-            return
+            return False
         nodes = self._prepare_nodes_for_sync(nodes)
         index = max(0, min(insert_index, len(target_children)))
         for offset, node in enumerate(nodes):
             target_children.insert(index + offset, node)
         _clear_tree_data_cache(self)
-        self._save()
+        saved = self._save()
         self._start_media_requests(nodes)
         self.chromeChanged.emit()
         qml_nodes = [self._qml_node(node) for node in nodes]
@@ -2031,6 +2056,7 @@ class MeetingTreeController(QObject):
         else:
             self.mediaInserted.emit(list_id, index, qml_nodes)
         self._emit_section_counts()
+        return saved
 
     def _children_for_target(self, kind: str, node_id: str) -> list[Node] | None:
         return children_for_tree_target(self._nodes, kind, node_id)

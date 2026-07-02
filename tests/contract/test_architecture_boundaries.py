@@ -680,6 +680,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "live_integration_controller.py",
         "main_window_bootstrap_controller.py",
         "main_window_ui_controller.py",
+        "media_destination_controller.py",
         "media_projection_controller.py",
         "navigation_controller.py",
         "open_media_controller.py",
@@ -692,7 +693,7 @@ def test_shell_composition_controllers_do_not_store_main_window():
         "shutdown_controller.py",
         "signal_connection_controller.py",
         "timer_theme_controller.py",
-        "wifi_playlist_controller.py",
+        "wifi_media_controller.py",
         "window_state_controller.py",
     )
     violations: list[str] = []
@@ -2251,3 +2252,43 @@ def test_main_window_does_not_expose_media_factories_as_service_locator_state():
                 violations.append(_display(path, node))
 
     assert violations == []
+
+
+def test_media_destination_selection_stays_centralized() -> None:
+    source_root = PROJECT_ROOT / "src" / "solin"
+    assert not (source_root / "widgets" / "media_download_action_dialog.py").exists()
+    assert not (source_root / "widgets" / "playlist" / "target_dialog.py").exists()
+    assert not (source_root / "controllers" / "wifi_playlist_controller.py").exists()
+
+    coordinator = source_root / "controllers" / "media_destination_controller.py"
+    assert coordinator.exists()
+    for relative in (
+        "controllers/wifi_media_controller.py",
+        "widgets/browser/downloads.py",
+    ):
+        text = (source_root / relative).read_text(encoding="utf-8")
+        assert "PlaylistDestinationTarget" not in text
+        assert "MeetingDestinationTarget" not in text
+
+
+def test_live_and_headless_meeting_trees_share_one_controller_factory() -> None:
+    path = PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "widget.py"
+    source = path.read_text(encoding="utf-8")
+
+    assert "MeetingTreeController(" not in source
+    assert source.count("_controller_factory.create(") == 3
+    assert source.count("_tree_controller_factory.create(") == 1
+
+
+def test_main_window_wires_media_destination_to_the_signal_graph() -> None:
+    path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
+    calls = {
+        node.func.id: {keyword.arg for keyword in node.keywords}
+        for node in ast.walk(_tree(path))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"MediaDestinationContext", "MainWindowSignalHandlers"}
+    }
+
+    assert "media_destinations" not in calls["MediaDestinationContext"]
+    assert "media_destinations" in calls["MainWindowSignalHandlers"]

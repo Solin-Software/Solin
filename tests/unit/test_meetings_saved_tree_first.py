@@ -112,6 +112,7 @@ def test_saved_tree_prevents_progress_and_error_from_replacing_card() -> None:
     widget = SimpleNamespace(
         _monday=monday,
         _overview=overview,
+        destinationTargetsChanged=SimpleNamespace(emit=lambda _key: None),
         _saved_snapshot_for_key=lambda pub_type, _key: (
             _snapshot(pub_type) if pub_type == "mwb" else None
         ),
@@ -233,7 +234,7 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
     added = []
 
     class FakeStudyDetailView:
-        def __init__(self, pub_type, _wd, _service, **kwargs) -> None:
+        def __init__(self, pub_type, _wd, **kwargs) -> None:
             self.back_requested = _ConnectSignal()
             self.play_requested = _ConnectSignal()
             handler = kwargs["meeting_tree_saved_handler"]
@@ -246,25 +247,13 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
         FakeStudyDetailView,
     )
     widget = SimpleNamespace(
-        _service=object(),
         _notifications=None,
         _current_media_context=lambda: SimpleNamespace(api_code="T"),
-        _meeting_tree_store=object(),
-        _profile_media_store=object(),
-        _meeting_thumbnail_store=object(),
-        _watched_folder_file_store=object(),
-        _jwpub_import_thread_factory=object(),
+        _tree_controller_factory=object(),
         _document_conversion_service=object(),
-        _profile_paths=object(),
-        _runtime_paths=object(),
-        _cache_manager=object(),
         _jw_catalog_service_factory=object(),
         _jw_catalog_thumbnail_session_factory=object(),
         _jw_songs_store=object(),
-        _meeting_linked_folder_sync=object(),
-        _meeting_schedule_settings=object(),
-        _media_info_queue_factory=object(),
-        _projection_aspect_ratio_provider=lambda: None,
         _watched_folder="",
         _saved_snapshots={cache_key: {"mwb": old_snapshot}},
         _saved_snapshot_cache_key_for=lambda monday_arg, language: (

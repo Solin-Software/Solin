@@ -743,7 +743,7 @@ Rectangle {
             }
         }
 
-        JWMediaPlacementOverlay {
+        MediaPlacementOverlay {
             anchors.fill: parent
             placementBridge: modalRoot.hasBridge ? catalogBridge : null
             surface: modalRoot.surface

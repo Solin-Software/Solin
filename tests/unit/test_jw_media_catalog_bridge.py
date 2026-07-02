@@ -8,10 +8,10 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.jw.catalog import JWMediaCatalogCachePaths
 from solin.core.jw.catalog_service import JWMediaCatalogService
+from solin.core.media.placement import build_media_placement_options
 from solin.ui.qml.jw_media_catalog import (
     JWMediaCatalogBridge,
     JWMediaCatalogModel,
-    build_jw_media_placement_options,
 )
 
 
@@ -79,6 +79,10 @@ def option_ids(options: list[dict]) -> list[str]:
     return [option["id"] for option in options]
 
 
+def placement_options(playlist: dict) -> list[dict]:
+    return build_media_placement_options(playlist, translate=lambda text: text)
+
+
 class JWMediaCatalogModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -102,7 +106,7 @@ class JWMediaPlacementOptionsTests(unittest.TestCase):
         cls._app = QCoreApplication.instance() or QCoreApplication([])
 
     def test_many_items_include_single_section_when_prompting(self):
-        options = build_jw_media_placement_options(
+        options = placement_options(
             playlist_with(
                 14,
                 [{"id": "section-1", "name": "Opening", "color_hue": 170}],
@@ -112,7 +116,7 @@ class JWMediaPlacementOptionsTests(unittest.TestCase):
         self.assertEqual(option_ids(options), ["top", "bottom", "section:section-1"])
 
     def test_two_sections_prompt_even_with_short_playlist(self):
-        options = build_jw_media_placement_options(
+        options = placement_options(
             playlist_with(
                 1,
                 [
@@ -128,7 +132,7 @@ class JWMediaPlacementOptionsTests(unittest.TestCase):
         )
 
     def test_single_section_short_playlist_does_not_prompt(self):
-        options = build_jw_media_placement_options(
+        options = placement_options(
             playlist_with(
                 1,
                 [{"id": "section-1", "name": "Opening", "color_hue": 170}],

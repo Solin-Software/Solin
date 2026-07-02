@@ -147,9 +147,7 @@ class MainWindowUiHandlers:
     project_video: Callable[..., Any]
     stop_projection: Callable[..., Any]
     project_tab_frame: Callable[..., Any]
-    add_current_to_playlist: Callable[..., Any]
-    add_downloaded_file_to_playlist: Callable[..., Any]
-    report_download_failure: Callable[..., Any]
+    browser_media_destination: Callable[..., Any]
     play_cached_media: Callable[..., Any]
     wifi_media_received: Callable[..., Any]
     wifi_add_single: Callable[..., Any]
@@ -372,11 +370,7 @@ class MainWindowUiController:
                 project_video=handlers.project_video,
                 stop_projection=handlers.stop_projection,
                 project_tab_frame=handlers.project_tab_frame,
-                add_current_to_playlist=handlers.add_current_to_playlist,
-                add_downloaded_file_to_playlist=(
-                    handlers.add_downloaded_file_to_playlist
-                ),
-                report_download_failure=handlers.report_download_failure,
+                browser_media_destination=handlers.browser_media_destination,
                 play_cached_media=handlers.play_cached_media,
                 wifi_media_received=handlers.wifi_media_received,
                 wifi_add_single=handlers.wifi_add_single,
@@ -485,7 +479,6 @@ class MainWindowUiController:
             jw_songs_store=context.jw_songs_store,
             media_settings=context.media_settings,
             meeting_linked_folder_sync=context.meeting_linked_folder_sync,
-            meeting_schedule_settings=context.meeting_schedule_settings,
             jwpub_service_factory=context.jwpub_service_factory,
             memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,

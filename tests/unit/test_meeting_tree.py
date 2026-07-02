@@ -1494,6 +1494,40 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.assertEqual(captured["nodes"], [node])
             self.assertEqual(captured["record_node_ids"], ["auto-node"])
 
+
+    def test_external_items_use_normal_target_and_insert_path_in_order(self):
+        captured = []
+
+        class FakeController:
+            _parse_list_id = staticmethod(lambda list_id: (list_id, ""))
+            _children_for_target = staticmethod(lambda *_target: [])
+            _node_from_playlist_item = staticmethod(
+                lambda item, title: {"title": title, "url": item["url"]}
+            )
+            _insert_nodes = staticmethod(
+                lambda list_id, index, nodes: (
+                    captured.append((list_id, index, nodes)) or True
+                )
+            )
+
+        added = MeetingTreeController.add_external_media_items(
+            FakeController(),
+            [
+                {"title": "First", "url": "first.mp4"},
+                {"title": "Second", "url": "second.mp4"},
+                {"title": "Missing", "url": ""},
+            ],
+            list_id="section:talk",
+            insert_index=3,
+        )
+
+        self.assertEqual(added, 2)
+        self.assertEqual(captured[0][0:2], ("section:talk", 3))
+        self.assertEqual(
+            [node["title"] for node in captured[0][2]],
+            ["First", "Second"],
+        )
+
     def test_sync_active_scan_imports_new_root_file_into_midweek_target(self):
         class FakeController:
             pass

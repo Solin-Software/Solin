@@ -14,7 +14,12 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n.date import week_label, week_label_short
-from ...core.meetings.meeting_weeks import current_monday
+from ...core.meetings.meeting_weeks import (
+    MEETING_WEEK_FUTURE_LIMIT,
+    MEETING_WEEK_PAST_LIMIT,
+    current_monday,
+    selectable_meeting_weeks,
+)
 from ...styles.icons import (
     ICON_CHEVRON_LEFT,
     ICON_CHEVRON_RIGHT,
@@ -67,7 +72,7 @@ class WeekPicker(QWidget):
 
     def _build(self):
         today_mon = current_monday()
-        weeks = [today_mon + timedelta(weeks=i) for i in range(-2, 6)]
+        weeks = selectable_meeting_weeks()
 
         card = QFrame()
         card.setObjectName("WkCard")
@@ -235,9 +240,6 @@ class WeekNavBar(QWidget):
     home_requested = Signal()
     pick_requested = Signal()
 
-    _MAX_BACK = 2
-    _MAX_FORWARD = 5
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedHeight(68)
@@ -327,8 +329,12 @@ class WeekNavBar(QWidget):
         home_color = PALETTE.accent if not is_now else PALETTE.text_muted
         self.home_btn.setIcon(make_icon(ICON_HOME, 16, home_color))
 
-        self.prev_btn.setEnabled(monday > today_mon - timedelta(weeks=self._MAX_BACK))
-        self.next_btn.setEnabled(monday < today_mon + timedelta(weeks=self._MAX_FORWARD))
+        self.prev_btn.setEnabled(
+            monday > today_mon - timedelta(weeks=MEETING_WEEK_PAST_LIMIT)
+        )
+        self.next_btn.setEnabled(
+            monday < today_mon + timedelta(weeks=MEETING_WEEK_FUTURE_LIMIT)
+        )
 
         prev_col = PALETTE.text_secondary if self.prev_btn.isEnabled() else PALETTE.text_dim
         next_col = PALETTE.text_secondary if self.next_btn.isEnabled() else PALETTE.text_dim

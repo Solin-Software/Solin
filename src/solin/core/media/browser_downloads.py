@@ -51,7 +51,7 @@ class BrowserDownloadService:
         self._shutdown = False
         self._sequence = 0
 
-    def playlist_cache_path(self, url: str, title: str, kind: str) -> Path:
+    def destination_cache_path(self, url: str, title: str, kind: str) -> Path:
         ext_by_kind = {
             "pdf": ".pdf",
             "jwpub": ".jwpub",
@@ -72,7 +72,7 @@ class BrowserDownloadService:
         digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
         return self._cache_dir / f"{stem[:80]}-{digest}{suffix}"
 
-    def download_file_for_playlist(
+    def download_file_for_destination(
         self,
         url: str,
         title: str,
@@ -88,7 +88,7 @@ class BrowserDownloadService:
         if parsed.scheme not in {"http", "https"}:
             return
 
-        destination = self.playlist_cache_path(url, title, kind)
+        destination = self.destination_cache_path(url, title, kind)
         if self._is_completed(destination, url):
             on_ready(os.fspath(destination), title, kind)
             return
@@ -101,7 +101,7 @@ class BrowserDownloadService:
                 log.warning('Download for playlist failed "%s": %s', title, exc)
                 on_failed(title, str(exc))
 
-        self._start("browser-playlist-download", work)
+        self._start("browser-destination-download", work)
 
     def cache_media(self, url: str) -> None:
         if not self._is_remote(url):
@@ -120,7 +120,7 @@ class BrowserDownloadService:
 
         self._start("browser-cache-download", work)
 
-    def download_image_for_playlist(
+    def download_image_for_destination(
         self,
         url: str,
         title: str,
@@ -131,7 +131,7 @@ class BrowserDownloadService:
         if not self._is_remote(url):
             return
 
-        destination = self.playlist_cache_path(url, title, "image")
+        destination = self.destination_cache_path(url, title, "image")
         if self._is_completed(destination, url):
             on_ready(os.fspath(destination), title, "image")
             return

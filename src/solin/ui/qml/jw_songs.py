@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from typing import Any, Optional
 
 from PySide6.QtCore import (
@@ -19,7 +20,11 @@ from PySide6.QtCore import (
 from solin.core.jw.media_api import song_publication_symbol
 from solin.core.jw.identifiers import lang_to_meps, parse_jworg_url
 from solin.core.jw.songs import JWSongsStore
-from solin.ui.qml.jw_media_catalog import build_jw_media_placement_options
+from solin.core.media.placement import (
+    MediaPlacementOption,
+    build_media_placement_options,
+    resolve_media_placement,
+)
 
 _BIG_INDEX = 2**31 - 1
 
@@ -180,7 +185,7 @@ class JWSongsBridge(QObject):
         self._is_sign_language = False
         self._pl: dict[str, Any] | None = None
         self._pending_item: dict[str, Any] | None = None
-        self._placement_options: list[dict[str, Any]] = []
+        self._placement_options: list[MediaPlacementOption] = []
         self._show_placement = False
 
     @Property(QObject, notify=modelChanged)
@@ -211,8 +216,8 @@ class JWSongsBridge(QObject):
     def showPlacement(self) -> bool:
         return self._show_placement
 
-    @Property("QVariant", notify=placementOptionsChanged)
-    def placementOptions(self) -> list[dict[str, Any]]:
+    @Property(list, notify=placementOptionsChanged)
+    def placementOptions(self) -> list[MediaPlacementOption]:
         return self._placement_options
 
     @Property(str, notify=pendingItemChanged)
@@ -268,9 +273,12 @@ class JWSongsBridge(QObject):
         self._pending_item = dict(item)
         self.pendingItemChanged.emit()
 
-        options = build_jw_media_placement_options(
+        options = build_media_placement_options(
             self._pl,
-            translate_context="JWSongsBridge",
+            translate=lambda text: QCoreApplication.translate(
+                "JWSongsBridge",
+                text,
+            ),
         )
         if not options:
             self._emit_confirmed("root", _BIG_INDEX)
@@ -286,18 +294,7 @@ class JWSongsBridge(QObject):
         if not self._pending_item:
             return
 
-        if placement_id == "top":
-            target_list_id = "root"
-            target_index = 0
-        elif placement_id == "bottom":
-            target_list_id = "root"
-            target_index = _BIG_INDEX
-        elif placement_id.startswith("section:"):
-            target_list_id = placement_id
-            target_index = 0
-        else:
-            target_list_id = "root"
-            target_index = _BIG_INDEX
+        target_list_id, target_index = resolve_media_placement(placement_id)
 
         self._emit_confirmed(target_list_id, target_index)
         self.modalShouldClose.emit()
@@ -318,8 +315,8 @@ class JWSongsBridge(QObject):
         self.searchQueryChanged.emit()
         self._apply_filter()
 
-    def set_playlist_ref(self, pl: dict[str, Any] | None) -> None:
-        self._pl = pl
+    def set_playlist_ref(self, pl: Mapping[str, Any] | None) -> None:
+        self._pl = dict(pl) if pl is not None else None
 
     def set_language_context(
         self,

@@ -53,9 +53,7 @@ class LazyPageHandlers:
     project_video: Callable[..., None]
     stop_projection: Callable[[], None]
     project_tab_frame: Callable[..., None]
-    add_current_to_playlist: Callable[..., None]
-    add_downloaded_file_to_playlist: Callable[..., None]
-    report_download_failure: Callable[..., None]
+    browser_media_destination: Callable[..., None]
     play_cached_media: Callable[..., None]
     wifi_media_received: Callable[..., None]
     wifi_add_single: Callable[..., None]
@@ -210,17 +208,9 @@ class LazyPageController:
         browser.stop_projection_signal.connect(handlers.stop_projection)
         browser.project_tab_pixmap_signal.connect(handlers.project_tab_frame)
         browser.stop_tab_projection_signal.connect(handlers.stop_projection)
-        browser.add_to_playlist_signal.connect(
-            lambda url, title, media_type: handlers.add_current_to_playlist(
-                url,
-                title,
-                {"type": media_type},
-            )
+        browser.media_destination_signal.connect(
+            handlers.browser_media_destination
         )
-        browser.add_downloaded_file_to_playlist_signal.connect(
-            handlers.add_downloaded_file_to_playlist
-        )
-        browser.download_failed_signal.connect(handlers.report_download_failure)
         self._browser_signals_connected = True
 
     def _project_browser_video(self, url: str, title: str) -> None:
@@ -242,7 +232,7 @@ class LazyPageController:
 
         handlers = self._handlers
         wifi_receive.media_received.connect(handlers.wifi_media_received)
-        wifi_receive.request_add_to_playlist.connect(handlers.wifi_add_single)
-        wifi_receive.request_add_all_to_playlist.connect(handlers.wifi_add_all)
+        wifi_receive.request_add_to_destination.connect(handlers.wifi_add_single)
+        wifi_receive.request_add_all_to_destination.connect(handlers.wifi_add_all)
         wifi_receive.request_play.connect(handlers.wifi_play)
         self._wifi_signals_connected = True

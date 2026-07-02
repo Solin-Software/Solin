@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from zipfile import BadZipFile
 from collections.abc import Callable
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -16,13 +17,19 @@ from ..core.jw.language_context import (
     JWMediaLanguageContext,
     jw_media_language_context,
 )
-from ..core.media.formats import media_type_from_path
 from ..core.playlists.jwl_files import read_jwlplaylist_document
 from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..core.playlists.items import (
     create_playlist_item,
     playlist_items_from_jwpub,
 )
+from ..core.media.destinations import (
+    MediaDestinationAsset,
+    MediaDestinationOutcome,
+    PlaylistDestinationTarget,
+    PreparedMediaBatch,
+)
+from ..core.media.placement import END_OF_LIST_INDEX
 
 if TYPE_CHECKING:
     from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -62,95 +69,80 @@ class PlaylistImportController:
         self._context = context
         self._handlers = handlers
 
-    def add_current_to_playlist(self, url: str, title: str, meta: object) -> None:
-        if not url:
-            return
-        target = self._choose_target(title)
-        if target is None:
-            return
-
-        context = self._context
-        meta_dict = dict(meta) if isinstance(meta, dict) else {}
-        media_type = meta_dict.get("type") or media_type_from_path(
-            url,
-            default="video",
-        )
-        attributes = {
-            key: value
-            for key, value in meta_dict.items()
-            if key != "type"
-        }
-        item = create_playlist_item(
-            title=title,
-            url=url,
-            type=media_type,
-            **attributes,
-        )
-
-        if target.create_new:
-            context.playlist_widget.create_playlist_with_item(
-                target.playlist_name,
-                item,
-            )
-            context.notifications.success(
-                context.translate('Playlist "%1"\ncreated successfully!').replace(
-                    "%1",
-                    target.playlist_name,
-                )
-            )
-            return
-
-        added = context.playlist_widget.add_item_to_playlist(
-            target.playlist_id,
-            item,
-        )
-        if added:
-            context.notifications.success(
-                context.translate('Added to playlist\n"%1"').replace(
-                    "%1",
-                    target.playlist_name,
-                )
-            )
-        else:
-            context.notifications.warning(
-                context.translate(
-                    'This media is already in\nplaylist "%1"'
-                ).replace("%1", target.playlist_name)
-            )
-
-    @Slot(str, str)
-    def browser_download_failed(self, title: str, error: str) -> None:
-        context = self._context
-        context.notifications.error(
-            context.translate("Could not download %1:\n%2")
-            .replace("%1", title)
-            .replace("%2", error),
-            title=context.translate("Download failed"),
-            dedupe_key=f"browser-download:{title}:{error}",
-        )
-
-    @Slot(str, str, str)
-    def add_browser_downloaded_file(
+    def prepare_destination_assets(
         self,
-        path: str,
-        title: str,
-        kind: str,
+        assets: list[MediaDestinationAsset],
+        completed: Callable[[PreparedMediaBatch], None],
     ) -> None:
-        if not path or not os.path.isfile(path):
-            return
+        """Resolve ordered direct/import assets into canonical playlist items."""
 
-        target = self._choose_target(title or os.path.basename(path))
-        if target is None:
-            return
+        pending = deque(assets)
+        prepared: list[dict[str, Any]] = []
+        handled_sources: list[str] = []
 
-        ext = os.path.splitext(path)[1].lower()
-        if kind == "jwlplaylist" or ext in PLAYLIST_EXTS:
-            items = self.items_from_jwlplaylist_for_playlist(path)
-            self.add_items_to_playlist_target(target, items, os.path.basename(path))
-        elif kind == "pdf" or ext in PDF_EXTS:
-            self.add_pdf_file_to_playlist_target(path, target)
-        elif kind == "jwpub" or ext in JWPUB_EXTS:
-            self.add_jwpub_file_to_playlist_target(path, target)
+        def finish_asset(
+            asset: MediaDestinationAsset,
+            items: list[dict[str, Any]],
+        ) -> None:
+            if items:
+                prepared.extend(items)
+                handled_sources.append(asset.source_id)
+            prepare_next()
+
+        def prepare_next() -> None:
+            while pending:
+                asset = pending.popleft()
+                if asset.item is not None:
+                    prepared.append(dict(asset.item))
+                    handled_sources.append(asset.source_id)
+                    continue
+
+                path = asset.import_path
+                if not path or not os.path.isfile(path):
+                    self._notify_import_error(
+                        self._context.translate("File not found: {name}").replace(
+                            "{name}", asset.title
+                        )
+                    )
+                    continue
+
+                ext = os.path.splitext(path)[1].lower()
+                kind = asset.import_kind
+                if kind == "jwlplaylist" or ext in PLAYLIST_EXTS:
+                    items = [
+                        dict(item)
+                        for item in self.items_from_jwlplaylist_for_playlist(path)
+                    ]
+                    if items:
+                        prepared.extend(items)
+                        handled_sources.append(asset.source_id)
+                    continue
+                if kind == "pdf" or ext in PDF_EXTS:
+                    cached_items = self._prepare_pdf_asset(asset, finish_asset)
+                    if cached_items is None:
+                        return
+                    if cached_items:
+                        prepared.extend(cached_items)
+                        handled_sources.append(asset.source_id)
+                    continue
+                if kind == "jwpub" or ext in JWPUB_EXTS:
+                    self._prepare_jwpub_asset(asset, finish_asset)
+                    return
+
+                self._notify_import_error(
+                    self._context.translate("Unsupported file: {name}").replace(
+                        "{name}", asset.title
+                    )
+                )
+
+            completed(
+                PreparedMediaBatch(
+                    tuple(prepared),
+                    tuple(handled_sources),
+                )
+            )
+
+        prepare_next()
 
     def items_from_jwlplaylist_for_playlist(self, jwl_path: str) -> list:
         context = self._context
@@ -200,7 +192,12 @@ class PlaylistImportController:
             )
         return result.items
 
-    def add_items_to_playlist_target(self, target, items: list, source_name: str) -> None:
+    def add_items_to_playlist_target(
+        self,
+        target: PlaylistDestinationTarget,
+        items: list[dict[str, Any]],
+        source_name: str,
+    ) -> MediaDestinationOutcome:
         context = self._context
         playlist_widget = context.playlist_widget
         if not items:
@@ -210,51 +207,81 @@ class PlaylistImportController:
                     source_name,
                 )
             )
-            return
+            return MediaDestinationOutcome(0)
 
         if target.create_new:
-            playlist_id = playlist_widget.create_playlist_with_item(
+            playlist_id = playlist_widget.create_playlist_with_items(
                 target.playlist_name,
-                items[0],
+                [items[0]],
             )
-            for item in items[1:]:
-                playlist_widget.add_item_to_playlist(playlist_id, item)
+            referenced_urls = [str(items[0].get("url") or "")]
+            added = 1
+            if len(items) > 1:
+                result = playlist_widget.add_items_to_playlist(
+                    playlist_id,
+                    items[1:],
+                    list_id="root",
+                    insert_index=END_OF_LIST_INDEX,
+                )
+                added += len(result.added_items)
+                referenced_urls.extend(
+                    str(item.get("url") or "") for item in result.added_items
+                )
             context.notifications.success(
                 context.translate('Playlist "%1"\ncreated successfully!').replace(
                     "%1",
                     target.playlist_name,
                 )
             )
-            return
+            return MediaDestinationOutcome(
+                added,
+                tuple(url for url in referenced_urls if url),
+            )
 
-        added = sum(
-            bool(playlist_widget.add_item_to_playlist(target.playlist_id, item))
-            for item in items
+        result = playlist_widget.add_items_to_playlist(
+            target.playlist_id,
+            items,
+            list_id=target.list_id,
+            insert_index=target.insert_index,
         )
+        referenced_urls = [
+            str(item.get("url") or "")
+            for item in result.added_items
+            if item.get("url")
+        ]
+        added = len(result.added_items)
         if added:
             context.notifications.success(
                 context.translate('%1 file(s) added\nto playlist "%2"')
                 .replace("%1", str(added))
                 .replace("%2", target.playlist_name)
             )
+        elif not result.target_valid:
+            context.notifications.error(
+                context.translate(
+                    'Could not add media to playlist "%1" because the selected location no longer exists.'
+                ).replace("%1", target.playlist_name)
+            )
+            return MediaDestinationOutcome(0, destination_accepted=False)
         else:
             context.notifications.warning(
                 context.translate(
                     'This media is already in\nplaylist "%1"'
                 ).replace("%1", target.playlist_name)
             )
+        return MediaDestinationOutcome(added, tuple(referenced_urls))
 
-    def add_pdf_file_to_playlist_target(self, pdf_path: str, target) -> None:
+    def _prepare_pdf_asset(
+        self,
+        asset: MediaDestinationAsset,
+        completed: Callable[[MediaDestinationAsset, list[dict[str, Any]]], None],
+    ) -> list[dict[str, Any]] | None:
         context = self._context
+        pdf_path = asset.import_path
         pdf_stem = os.path.splitext(os.path.basename(pdf_path))[0]
         pages = context.document_conversion_service.cached_pdf_pages(pdf_path)
         if pages:
-            self.add_items_to_playlist_target(
-                target,
-                self._items_from_pages(pages, pdf_stem),
-                os.path.basename(pdf_path),
-            )
-            return
+            return self._items_from_pages(pages, pdf_stem)
 
         context.notifications.information(
             context.translate("Opening {name}...").replace("{name}", pdf_stem)
@@ -264,26 +291,51 @@ class PlaylistImportController:
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)
+        resolved = False
+
+        def finish(items: list[dict[str, Any]]) -> None:
+            nonlocal resolved
+            if resolved:
+                return
+            resolved = True
+            completed(asset, items)
+
         thread.pages_ready.connect(
-            lambda pages_ready, stem: self.add_items_to_playlist_target(
-                target,
-                self._items_from_pages(pages_ready, stem),
-                os.path.basename(pdf_path),
+            lambda pages_ready, stem: finish(
+                self._items_from_pages(pages_ready, stem)
             )
         )
-        thread.conversion_failed.connect(
-            lambda error: context.notifications.error(
+
+        @thread.conversion_failed.connect
+        def on_conversion_failed(error: str) -> None:
+            self._notify_import_error(
                 context.translate("Error converting PDF: {error}").replace(
-                    "{error}",
-                    str(error),
+                    "{error}", str(error)
                 ),
                 title=context.translate("Error opening PDF"),
             )
-        )
-        thread.start()
+            finish([])
 
-    def add_jwpub_file_to_playlist_target(self, jwpub_path: str, target) -> None:
+        @thread.finished.connect
+        def on_finished() -> None:
+            if resolved:
+                return
+            self._notify_import_error(
+                context.translate("PDF conversion finished without any pages."),
+                title=context.translate("Error opening PDF"),
+            )
+            finish([])
+
+        thread.start()
+        return None
+
+    def _prepare_jwpub_asset(
+        self,
+        asset: MediaDestinationAsset,
+        completed: Callable[[MediaDestinationAsset, list[dict[str, Any]]], None],
+    ) -> None:
         context = self._context
+        jwpub_path = asset.import_path
         stem = Path(jwpub_path).stem
         context.notifications.information(
             context.translate("Opening {name}...").replace("{name}", stem)
@@ -294,26 +346,50 @@ class PlaylistImportController:
             parent=context.dialog_parent,
         )
         context.thread_registry.track(thread)
+        resolved = False
+
+        def finish(items: list[dict[str, Any]]) -> None:
+            nonlocal resolved
+            if resolved:
+                return
+            resolved = True
+            completed(asset, items)
 
         @thread.items_ready.connect
         def _on_ready(items: list, file_stem: str) -> None:
-            self.add_items_to_playlist_target(
-                target,
-                playlist_items_from_jwpub(items, file_stem),
-                file_stem,
+            finish(
+                [
+                    dict(item)
+                    for item in playlist_items_from_jwpub(items, file_stem)
+                ]
             )
 
         @thread.failed.connect
         def _on_fail(error: str) -> None:
-            context.notifications.error(
+            self._notify_import_error(
                 context.translate("Could not open .jwpub: {err}").replace(
                     "{err}",
                     error[:120],
                 ),
                 title=context.translate("Error opening .jwpub"),
             )
+            finish([])
+
+        @thread.finished.connect
+        def _on_finished() -> None:
+            if resolved:
+                return
+            self._notify_import_error(
+                context.translate("The .jwpub file contained no usable media."),
+                title=context.translate("Error opening .jwpub"),
+            )
+            finish([])
 
         thread.start()
+
+    def _notify_import_error(self, message: str, *, title: str = "") -> None:
+        kwargs = {"title": title} if title else {}
+        self._context.notifications.error(message, **kwargs)
 
     @Slot(list)
     def send_to_temp_playlist(self, items: list) -> None:
@@ -323,17 +399,6 @@ class PlaylistImportController:
         self._context.playlist_widget.open_temp_playlist(
             items,
             self._context.language_manager,
-        )
-
-    def _choose_target(self, title: str):
-        from ..widgets.playlist.target_dialog import choose_playlist_target
-
-        context = self._context
-        return choose_playlist_target(
-            context.dialog_parent,
-            title,
-            context.playlist_widget.get_playlist_names(),
-            context.translate("Add to Playlist"),
         )
 
     def _media_language_context(self) -> JWMediaLanguageContext:

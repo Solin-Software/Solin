@@ -2,23 +2,19 @@
 Bridge between the QML QuickAccessToolbar and Python services.
 
 Exposes reactive state as Qt Properties and relays user actions as Signals.
-Includes an SVG image provider for toolbar icons with runtime colour substitution.
+Defines the toolbar bridge and its icon mapping for the shared SVG provider.
 """
 
-from PySide6.QtCore import QObject, Property, Signal, Slot, QByteArray, Qt
-from PySide6.QtGui import QPixmap, QPainter
-from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtQuick import QQuickImageProvider
+from PySide6.QtCore import QObject, Property, Signal, Slot
 
 from solin.styles.icons import (
     ICON_MONITOR, ICON_OBS, ICON_ZOOM, ICON_CAMERA, ICON_MUSIC,
     ICON_CHEVRON_DOWN, ICON_CHEVRON_LEFT,
 )
-from solin.styles.theme import PALETTE
 
 # ── Icon mapping ──────────────────────────────────────────────────────────────
 
-_ICON_MAP: dict[str, str] = {
+QUICK_TOOLBAR_ICON_SVGS: dict[str, object] = {
     "monitor":      ICON_MONITOR,
     "background_song": ICON_MUSIC,
     "obs":          ICON_OBS,
@@ -27,47 +23,6 @@ _ICON_MAP: dict[str, str] = {
     "chevron_down": ICON_CHEVRON_DOWN,
     "chevron_left": ICON_CHEVRON_LEFT,
 }
-
-
-# ── SVG Image Provider ───────────────────────────────────────────────────────
-
-class SvgIconProvider(QQuickImageProvider):
-    """
-    QML image provider for toolbar SVG icons.
-
-    URL format:  image://icons/<name>/<size>/<colorHex>
-    Example:     image://icons/monitor/14/8b949e
-
-    *colorHex* is the 6-digit hex colour **without** the leading ``#``.
-    The provider replaces ``currentColor`` in the SVG source with the
-    requested colour and renders it as a QPixmap.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(QQuickImageProvider.ImageType.Pixmap)
-
-    def requestPixmap(self, id_str: str, size, requestedSize):  # noqa: N802
-        parts = id_str.split("/")
-        name = parts[0] if parts else ""
-        px = int(parts[1]) if len(parts) > 1 else 14
-        color = f"#{parts[2]}" if len(parts) > 2 else PALETTE.text_secondary
-
-        svg_str = _ICON_MAP.get(name, "")
-        if not svg_str:
-            pix = QPixmap(px, px)
-            pix.fill(Qt.GlobalColor.transparent)
-            return pix
-
-        svg = svg_str.replace("currentColor", color)
-        data = QByteArray(svg.encode("utf-8"))
-        renderer = QSvgRenderer(data)
-
-        pix = QPixmap(px, px)
-        pix.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pix)
-        renderer.render(painter)
-        painter.end()
-        return pix
 
 
 # ── Bridge QObject ────────────────────────────────────────────────────────────

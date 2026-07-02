@@ -117,7 +117,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     timer_blink         = Signal(bool)
     play_next_requested = Signal(object)  # complete media item for automatic advance
     playlist_navigate   = Signal(int)        # índice absoluto — navegação manual prev/next
-    add_to_playlist_requested = Signal(str, str, object)  # url, title, jw_metadata_dict
+    add_to_destination_requested = Signal(str, str, object)  # url, title, metadata
     send_to_temp_playlist_requested = Signal(list)  # lista de itens da playlist atual
     monitor_manager_requested = Signal(object)   # QWidget (the button) for popup positioning
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
@@ -295,7 +295,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.obs_scene_btn,
             self.minimize_btn,
             self.ov_panel_btn,
-            self.ov_add_playlist_btn,
+            self.ov_add_destination_btn,
             self.ov_send_temp_btn,
             self.ov_set_idle_btn,
             self.ov_fullscreen_btn,
@@ -513,12 +513,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_panel_btn.clicked.connect(self._toggle_playlist_panel)
 
         # Botão "Adicionar à Playlist"
-        self.ov_add_playlist_btn = _icon_btn(
+        self.ov_add_destination_btn = _icon_btn(
             ICON_ADD_TO_PLAYLIST, 28, 13, PALETTE.text_muted,
-            self.tr("Add to Playlist"),
+            self.tr("Add to…"),
         )
-        self.ov_add_playlist_btn.setVisible(False)
-        self.ov_add_playlist_btn.clicked.connect(self._on_add_to_playlist_clicked)
+        self.ov_add_destination_btn.setVisible(False)
+        self.ov_add_destination_btn.clicked.connect(self._on_add_to_destination_clicked)
 
         # Botão "Enviar para playlist temporária" (só aparece se não for de playlist salva)
         self.ov_send_temp_btn = _icon_btn(
@@ -547,7 +547,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         ov_top_lay.addWidget(self.minimize_btn)
         ov_top_lay.addWidget(self.ov_title, stretch=1)
         ov_top_lay.addWidget(self.ov_send_temp_btn)
-        ov_top_lay.addWidget(self.ov_add_playlist_btn)
+        ov_top_lay.addWidget(self.ov_add_destination_btn)
         ov_top_lay.addWidget(self.ov_set_idle_btn)
         ov_top_lay.addWidget(self.ov_fullscreen_btn)
         ov_top_lay.addWidget(self.ov_panel_btn)
@@ -850,8 +850,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if overlay is not None:
             overlay.set_title(title)
 
-    def hide_add_to_playlist_action(self) -> None:
-        self.ov_add_playlist_btn.setVisible(False)
+    def hide_add_to_destination_action(self) -> None:
+        self.ov_add_destination_btn.setVisible(False)
 
     def is_obs_scene_media(self) -> bool:
         return self._obs_scene_is_media
@@ -920,7 +920,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 self._collapse()
 
         # Mostra botão de adicionar à playlist no overlay
-        self.ov_add_playlist_btn.setVisible(True)
+        self.ov_add_destination_btn.setVisible(True)
         # Idle btn: visível apenas para vídeo local (não para áudio nem URLs remotas)
         self._is_live_tab = False
         self._refresh_idle_btn_visibility()
@@ -1015,7 +1015,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._update_nav_buttons()
 
         # Mostra botão de adicionar à playlist no overlay (imagem)
-        self.ov_add_playlist_btn.setVisible(True)
+        self.ov_add_destination_btn.setVisible(True)
         # Mostra botão de idle screen para imagens (exceto aba ao vivo — tratado em set_live_tab_mode)
         self._is_live_tab = False
         self.ov_set_idle_btn.setVisible(True)
@@ -1078,7 +1078,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.prev_btn.setVisible(False)
         self.next_btn.setVisible(False)
         self.ov_panel_btn.setVisible(False)
-        self.ov_add_playlist_btn.setVisible(False)
+        self.ov_add_destination_btn.setVisible(False)
         self.ov_send_temp_btn.setVisible(False)
         self.ov_set_idle_btn.setVisible(False)
         self.inactive_widget.setVisible(False)
@@ -1144,7 +1144,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.more_btn.setVisible(False)
         self.obs_scene_btn.setVisible(False)
         self.timer_countdown_label.setVisible(True)
-        self.ov_add_playlist_btn.setVisible(False)   # cronômetro não pode ser adicionado à playlist
+        self.ov_add_destination_btn.setVisible(False)
         self.ov_set_idle_btn.setVisible(False)        # cronômetro não pode ser idle
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
@@ -1270,7 +1270,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.next_btn.setVisible(False)
         self.obs_scene_btn.setVisible(False)
         self.ov_panel_btn.setVisible(False)
-        self.ov_add_playlist_btn.setVisible(False)
+        self.ov_add_destination_btn.setVisible(False)
         self.ov_fullscreen_btn.setVisible(False)
         self.ov_set_idle_btn.setVisible(False)
         self._is_live_tab = False
@@ -1385,7 +1385,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.minimize_btn.setToolTip(self.tr("Minimize"))
         self.ov_panel_btn.setToolTip(self.tr("Show playlist"))
         self.ov_send_temp_btn.setToolTip(self.tr("Open as temporary playlist"))
-        self.ov_add_playlist_btn.setToolTip(self.tr("Add to Playlist"))
+        self.ov_add_destination_btn.setToolTip(self.tr("Add to…"))
         self.ov_set_idle_btn.setToolTip(self.tr("Set as idle screen"))
         self.ov_fullscreen_btn.setToolTip(self.tr("Fullscreen"))
         self.set_screen_count(self._screen_count)

@@ -29,7 +29,11 @@ from solin.ui.background_song_status import translate_background_song_status
 from solin.styles.theme import PALETTE
 from solin.ui.themed_tooltip import hide_themed_tooltip, show_themed_tooltip
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
-from solin.ui.qml.quick_toolbar import QuickToolbarBridge, SvgIconProvider
+from solin.ui.qml.quick_toolbar import (
+    QUICK_TOOLBAR_ICON_SVGS,
+    QuickToolbarBridge,
+)
+from solin.ui.qml.svg_icons import SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.camera_popup import CameraPopup
 from solin.widgets.obs_scene_popup import OBSScenePopup
@@ -159,7 +163,12 @@ class QuickAccessToolbar(QQuickWidget):
             self,
             type_name="QuickAccessToolbar",
             clear_color=QColor(0, 0, 0, 0),
-            image_providers={"icons": SvgIconProvider()},
+            image_providers={
+                "icons": SvgIconProvider(
+                    QUICK_TOOLBAR_ICON_SVGS,
+                    default_icon="monitor",
+                )
+            },
             context_properties={"bridge": self._bridge},
             mouse_tracking=True,
         )

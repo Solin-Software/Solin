@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
@@ -22,6 +24,13 @@ class PlaylistMediaItem(TypedDict):
     doc_id: int | None
     meps_language: int
     image_framing: NotRequired[dict[str, Any]]
+
+
+@dataclass(frozen=True, slots=True)
+class PlaylistInsertResult:
+    added_items: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    duplicate_count: int = 0
+    target_valid: bool = True
 
 
 def looks_like_filename_title(title: str) -> bool:
