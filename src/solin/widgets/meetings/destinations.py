@@ -39,10 +39,8 @@ class MeetingDestinationSession(QObject):
             list_id=list_id,
             insert_index=insert_index,
         )
-        if result.added_count:
+        if result.added_count or result.duplicate_count:
             self.completed.emit(result)
-        elif result.duplicate_count:
-            self.failed.emit(self.tr("This media is already added."))
         else:
             self.failed.emit(self.tr("No media could be added."))
 

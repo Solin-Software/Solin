@@ -35,7 +35,7 @@ def test_media_picker_feedback_reports_real_outcomes_and_deduplicates_warning():
     bridge.mediaInsertionFailed.emit("Song 3")
 
     assert notifications.events == [
-        ("success", "Song 2 added", {}),
+        ("success", "“Song 2” added", {}),
         (
             "warning",
             "“Song 2” is already added.",

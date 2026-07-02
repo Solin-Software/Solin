@@ -21,10 +21,12 @@ from solin.core.media.destinations import (
     PlaylistDestinationTarget,
     PreparedMediaBatch,
 )
-from solin.core.media.placement import build_media_placement_options
-from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.formats import media_type_from_path
+from solin.core.media.identity import media_identity
+from solin.core.media.insertion import MediaInsertResult
+from solin.core.media.placement import build_media_placement_options
 from solin.core.playlists.items import create_playlist_item
+from solin.ui.media_insertion_feedback import notify_media_duplicate
 from solin.ui.qml.media_destination import (
     MediaDestinationBridge,
     MediaDestinationDialog,
@@ -379,10 +381,19 @@ class MediaDestinationController(QObject):
                 for item in result.added_items
                 if item.get("url")
             )
-            self._context.notifications.success(
-                self._context.translate("%n item(s) added to the meeting", "", count)
-            )
-            if result.duplicate_count:
+            if count:
+                self._context.notifications.success(
+                    self._context.translate("%n item(s) added to the meeting", "", count)
+                )
+            if result.duplicate_count == 1:
+                duplicate = result.duplicate_items[0]
+                identity = media_identity(duplicate)
+                notify_media_duplicate(
+                    self._context.notifications,
+                    str(duplicate.get("title") or ""),
+                    identity.dedupe_token if identity is not None else "unknown",
+                )
+            elif result.duplicate_count > 1:
                 self._context.notifications.warning(
                     self._context.translate(
                         "%n media item(s) were already added",

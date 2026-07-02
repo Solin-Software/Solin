@@ -67,8 +67,8 @@ def test_session_reports_duplicate_separately() -> None:
         duplicate_items=tuple(items)
     )
     session = MeetingDestinationSession(controller, owned_controller=False)
-    failed = []
-    session.failed.connect(failed.append)
+    completed = []
+    session.completed.connect(completed.append)
 
     session.add_items(
         [{"title": "Clip", "url": "clip.mp4"}],
@@ -76,7 +76,8 @@ def test_session_reports_duplicate_separately() -> None:
         insert_index=0,
     )
 
-    assert failed == ["This media is already added."]
+    assert len(completed) == 1
+    assert completed[0].duplicate_count == 1
 
 
 def test_owned_session_cleans_up_headless_controller_once() -> None:

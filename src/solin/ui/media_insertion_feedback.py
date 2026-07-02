@@ -9,21 +9,26 @@ def _tr(source: str) -> str:
     return QCoreApplication.translate("MediaInsertionFeedback", source)
 
 
+def notify_media_duplicate(notifications, title: str, identity_token: str) -> None:
+    display_title = title or _tr("This media")
+    notifications.warning(
+        _tr("“{title}” is already added.").replace("{title}", display_title),
+        dedupe_key=f"media-duplicate:{identity_token}",
+    )
+
+
 def connect_media_picker_feedback(bridge, notifications) -> None:
     if notifications is None:
         return
 
     def added(title: str) -> None:
+        display_title = title or _tr("Media")
         notifications.success(
-            _tr("{title} added").replace("{title}", title or _tr("Media"))
+            _tr("{title} added").replace("{title}", f"“{display_title}”")
         )
 
     def duplicate(title: str, identity_token: str) -> None:
-        display_title = title or _tr("This media")
-        notifications.warning(
-            _tr("“{title}” is already added.").replace("{title}", display_title),
-            dedupe_key=f"media-duplicate:{identity_token}",
-        )
+        notify_media_duplicate(notifications, title, identity_token)
 
     def failed(title: str) -> None:
         display_title = title or _tr("This media")
@@ -36,4 +41,4 @@ def connect_media_picker_feedback(bridge, notifications) -> None:
     bridge.mediaInsertionFailed.connect(failed)
 
 
-__all__ = ["connect_media_picker_feedback"]
+__all__ = ["connect_media_picker_feedback", "notify_media_duplicate"]

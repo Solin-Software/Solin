@@ -100,6 +100,9 @@ class _NotificationsStub:
     def error(self, message, **_kwargs):
         self.events.append(("error", message))
 
+    def warning(self, message, **_kwargs):
+        self.events.append(("warning", message))
+
 
 class _DialogStub:
     def __init__(self, bridge, _parent, drive) -> None:
@@ -241,3 +244,24 @@ def test_meeting_route_loads_week_and_inserts_through_session() -> None:
     assert meetings.session.closed is True
     assert outcomes == [MediaDestinationOutcome(1, ("clip.mp4",), ("clip.mp4",))]
     assert notifications.events[0][0] == "success"
+
+
+def test_meeting_duplicate_is_reported_as_warning_not_failure() -> None:
+    def drive(bridge):
+        bridge.showMeetings()
+        bridge.chooseMeeting("mwb")
+
+    controller, meetings, _playlist_imports, notifications = _controller(drive)
+    outcomes = []
+
+    def reject_duplicate(items, **_kwargs):
+        meetings.session.completed.emit(
+            MediaInsertResult(duplicate_items=tuple(items))
+        )
+
+    meetings.session.add_items = reject_duplicate
+    controller.route(_request(), completed=outcomes.append)
+
+    assert meetings.session.closed is True
+    assert outcomes == [MediaDestinationOutcome(0, (), ("clip.mp4",))]
+    assert notifications.events == [("warning", "“Clip” is already added.")]

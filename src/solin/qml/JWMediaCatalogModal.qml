@@ -140,10 +140,6 @@ Rectangle {
             modalRoot.close()
         }
 
-        function onItemAddedSuccessfully(message) {
-            // Could show a toast; for now the modal just acknowledges
-        }
-
         function onCatalogPageRefreshAboutToStart() {
             modalRoot.preservedGridY = videoGrid.contentY
         }
