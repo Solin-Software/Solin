@@ -6,7 +6,17 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 from typing import Any
 
-from PySide6.QtCore import QPoint, Property, QObject, QRect, QSize, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QPoint,
+    Property,
+    QObject,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import QGuiApplication, QShowEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QDialog, QVBoxLayout
@@ -458,6 +468,7 @@ class MediaDestinationDialog(QDialog):
         self._initial_position_applied = False
         self._sized_step = ""
         self.setWindowTitle(self.tr("Media destination"))
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         self.setModal(True)
         self.setMinimumSize(410, 340)
 

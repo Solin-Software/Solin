@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
@@ -109,6 +110,22 @@ def test_native_dialog_uses_compact_step_specific_sizes() -> None:
     bridge.back()
     bridge.showMeetings()
     assert dialog.size().height() == 440
+
+    dialog.close()
+
+
+def test_native_dialog_cannot_be_maximized() -> None:
+    bridge = MediaDestinationBridge(
+        media_title="Sample",
+        item_count=1,
+        can_play=True,
+        playlists=(),
+    )
+    dialog = MediaDestinationDialog(bridge)
+
+    assert not (
+        dialog.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint
+    )
 
     dialog.close()
 
