@@ -203,16 +203,39 @@ Rectangle {
 
                     ListView {
                         id: playlistList
+                        objectName: "playlistList"
                         anchors.fill: parent
                         anchors.margins: 5
                         spacing: 3
                         model: root.filteredPlaylists(playlistSearch.text)
                         boundsBehavior: Flickable.StopAtBounds
-                        ScrollBar.vertical: ScrollBar { }
+                        ScrollBar.vertical: ScrollBar {
+                            id: playlistScrollBar
+                            objectName: "playlistScrollBar"
+                            policy: ScrollBar.AsNeeded
+                            width: 8
+                            contentItem: Rectangle {
+                                implicitWidth: 4
+                                radius: 2
+                                color: (playlistScrollBar.active || playlistScrollBar.hovered)
+                                       ? root.textMuted : root.borderStrong
+                                opacity: (playlistScrollBar.active
+                                          || playlistScrollBar.hovered
+                                          || playlistList.moving) ? 1.0 : 0.35
+                                anchors.horizontalCenter: parent.horizontalCenter
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Behavior on opacity { NumberAnimation { duration: 180 } }
+                            }
+                        }
 
                         delegate: Rectangle {
                             required property var modelData
-                            width: playlistList.width
+                            objectName: "playlistDelegate"
+                            width: Math.max(
+                                0,
+                                playlistList.width - playlistScrollBar.width - 4
+                            )
                             height: 40
                             radius: 8
                             color: playlistMouse.containsMouse ? root.hover : "transparent"

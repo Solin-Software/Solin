@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -39,6 +40,16 @@ def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
     for child in item.childItems():
         texts.extend(_visible_texts(child, parent_visible=visible))
     return texts
+
+
+def _find_visual_item(item, object_name: str):
+    if item.objectName() == object_name:
+        return item
+    for child in item.childItems():
+        match = _find_visual_item(child, object_name)
+        if match is not None:
+            return match
+    return None
 
 
 def test_media_destination_qml_loads_and_follows_bridge_steps() -> None:
@@ -80,6 +91,17 @@ def test_media_destination_qml_loads_and_follows_bridge_steps() -> None:
     visible = _visible_texts(root)
     assert "Choose a playlist" in visible
     assert "Sunday" in visible
+    playlist_list = _find_visual_item(root, "playlistList")
+    playlist_scrollbar = _find_visual_item(root, "playlistScrollBar")
+    playlist_delegate = _find_visual_item(root, "playlistDelegate")
+    assert playlist_list is not None
+    assert playlist_scrollbar is not None
+    assert playlist_delegate is not None
+    assert playlist_delegate.property("width") <= (
+        playlist_list.property("width")
+        - playlist_scrollbar.property("width")
+        - 4
+    )
 
     bridge.prepare_playlist_selection(
         playlist_id="one",
@@ -114,7 +136,7 @@ def test_native_dialog_uses_compact_step_specific_sizes() -> None:
     dialog.close()
 
 
-def test_native_dialog_cannot_be_maximized() -> None:
+def test_native_dialog_is_fixed_size_and_cannot_be_maximized() -> None:
     bridge = MediaDestinationBridge(
         media_title="Sample",
         item_count=1,
@@ -126,6 +148,15 @@ def test_native_dialog_cannot_be_maximized() -> None:
     assert not (
         dialog.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint
     )
+    if sys.platform.startswith("win"):
+        assert dialog.windowFlags() & Qt.WindowType.MSWindowsFixedSizeDialogHint
+    assert dialog.minimumSize() == dialog.size()
+    assert dialog.maximumSize() == dialog.size()
+
+    bridge.showPlaylists()
+    assert dialog.size().height() == 500
+    assert dialog.minimumSize() == dialog.size()
+    assert dialog.maximumSize() == dialog.size()
 
     dialog.close()
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping
 from datetime import date
 from typing import Any
@@ -469,8 +470,9 @@ class MediaDestinationDialog(QDialog):
         self._sized_step = ""
         self.setWindowTitle(self.tr("Media destination"))
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
+        if sys.platform.startswith("win"):
+            self.setWindowFlag(Qt.WindowType.MSWindowsFixedSizeDialogHint, True)
         self.setModal(True)
-        self.setMinimumSize(410, 340)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -533,7 +535,7 @@ class MediaDestinationDialog(QDialog):
         if step == self._sized_step:
             return
         self._sized_step = step
-        self.resize(
+        self.setFixedSize(
             self._DIALOG_WIDTH,
             self._STEP_HEIGHTS.get(step, self._STEP_HEIGHTS["destination"]),
         )
