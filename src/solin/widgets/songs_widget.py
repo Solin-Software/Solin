@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from solin.styles.theme import PALETTE, current_theme_scheme, slider_handle_border, slider_handle_fill
+from solin.ui.themed_tooltip import install_themed_tooltip
 from .media_library_widget import MediaLibraryWidget
 
 
@@ -26,6 +27,7 @@ class BufferedSlider(QWidget):
         self.setFixedHeight(20)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        install_themed_tooltip(self)
 
     def setRange(self, min_val, max_val):
         self._min = min_val

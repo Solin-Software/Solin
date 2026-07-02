@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 
 Item {
     id: root
+    objectName: "imageFramingThumbnail"
     clip: true
 
     property string imageSource: ""
@@ -17,6 +18,7 @@ Item {
     property string zoomHint: interactionHint
     property string resetToolTip: ""
     property bool editable: true
+    property bool clickActionEnabled: true
 
     signal clicked()
     signal framingEdited(real zoom, real normX, real normY,
@@ -260,13 +262,16 @@ Item {
 
     MouseArea {
         id: interactionArea
+        objectName: "imageFramingInteractionArea"
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton
         preventStealing: root.panAvailable
         cursorShape: root.panning ? Qt.ClosedHandCursor
                      : root.panAvailable ? Qt.OpenHandCursor
-                     : Qt.PointingHandCursor
+                     : root.clickActionEnabled
+                       ? Qt.PointingHandCursor
+                       : Qt.ArrowCursor
 
         onEntered: root.pointerEntered()
         onExited: root.pointerExited()
@@ -323,7 +328,7 @@ Item {
             root.pressedForPan = false
             root.panning = false
             root.gestureMoved = false
-            if (!wasPanning && !wasMoved)
+            if (!wasPanning && !wasMoved && root.clickActionEnabled)
                 root.clicked()
             mouse.accepted = true
         }

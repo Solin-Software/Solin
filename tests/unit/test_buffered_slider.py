@@ -16,6 +16,7 @@ _APP = QApplication.instance() or QApplication([])
 def test_disabled_buffered_slider_hides_handle_and_uses_arrow_cursor() -> None:
     slider = BufferedSlider()
 
+    assert slider._solin_themed_tooltip_filter is not None
     assert slider._should_draw_handle() is True
     assert slider.cursor().shape() == Qt.CursorShape.PointingHandCursor
 

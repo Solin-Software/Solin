@@ -226,15 +226,18 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     download_button = media_card.findChild(QObject, "mediaDownloadButton")
     more_button = media_card.findChild(QObject, "mediaMoreButton")
     card_hit_area = media_card.findChild(QObject, "mediaCardHitArea")
+    framing_thumbnail = media_card.findChild(QObject, "imageFramingThumbnail")
     assert play_button is not None
     assert download_button is not None
     assert more_button is not None
     assert card_hit_area is not None
+    assert framing_thumbnail is not None
     assert play_button.property("visible") is True
     assert play_button.property("enabled") is True
     assert download_button.property("x") < play_button.property("x")
     assert play_button.property("x") < more_button.property("x")
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+    assert framing_thumbnail.property("clickActionEnabled") is False
 
     media_card.clicked.emit()
     assert controller.projected == []
@@ -250,6 +253,7 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     QTest.qWait(1)
     assert play_button.property("visible") is False
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
+    assert framing_thumbnail.property("clickActionEnabled") is True
     media_card.clicked.emit()
     assert controller.projected == ["media-1", "media-1"]
 
@@ -296,6 +300,9 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert root.property("imageReady") is True
     assert root.property("sourceWidth") == pytest.approx(9 / 16)
     assert root.property("sourceHeight") == 1.0
+    interaction_area = root.findChild(QObject, "imageFramingInteractionArea")
+    assert interaction_area is not None
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
 
     clicked = QSignalSpy(root.clicked)
     edited = QSignalSpy(root.framingEdited)
@@ -306,6 +313,12 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(53, 28))
     assert clicked.count() == 1
     assert edited.count() == 0
+
+    root.setProperty("clickActionEnabled", False)
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
+    assert clicked.count() == 1
+    root.setProperty("clickActionEnabled", True)
 
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     QTest.mouseMove(widget, QPoint(50, 44), delay=5)

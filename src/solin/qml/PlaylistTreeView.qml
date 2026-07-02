@@ -1711,6 +1711,8 @@ Item {
                         resetBackgroundColor: root.alphaColor(root.bg, 0.86)
                         resetForegroundColor: root.textPrimary
                         editable: !mediaRoot.isMissing
+                        clickActionEnabled: !mediaRoot.isMissing
+                                            && !root.playbackProtectionEnabled
                         interactionHint: qsTranslate(
                             "ImageFramingThumbnail",
                             "Ctrl + scroll to zoom · Drag to pan")
