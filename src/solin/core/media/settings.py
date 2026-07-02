@@ -69,6 +69,21 @@ class MediaSettingsStore:
     def set_start_videos_paused(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.START_VIDEOS_PAUSED, bool(enabled))
 
+    def playback_protection_enabled(self) -> bool:
+        return bool(
+            self.settings.value(
+                SettingsKey.PLAYBACK_PROTECTION_ENABLED,
+                False,
+                bool,
+            )
+        )
+
+    def set_playback_protection_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(
+            SettingsKey.PLAYBACK_PROTECTION_ENABLED,
+            bool(enabled),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class ProjectionPlaybackSettingsStore:

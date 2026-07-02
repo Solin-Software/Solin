@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -70,6 +70,8 @@ class BufferedSlider(QWidget):
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if not self.isEnabled():
+            p.setOpacity(0.52)
         w, h = self.width(), self.height()
         track_h = 4
         y = (h - track_h) // 2
@@ -90,7 +92,7 @@ class BufferedSlider(QWidget):
         if self._reconnect_active:
             self._paint_reconnect_overlay(p, w, y, track_h)
 
-        if prog_w is not None:
+        if prog_w is not None and self._should_draw_handle():
             if dark:
                 p.setBrush(QColor(220, 230, 255))
                 p.setPen(QPen(QColor(100, 160, 255), 1))
@@ -98,6 +100,21 @@ class BufferedSlider(QWidget):
                 p.setBrush(QColor(slider_handle_fill()))
                 p.setPen(QPen(QColor(slider_handle_border()), 1))
             p.drawEllipse(prog_w - 6, h // 2 - 6, 12, 12)
+
+    def _should_draw_handle(self) -> bool:
+        return self.isEnabled()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.EnabledChange:
+            if not self.isEnabled():
+                self._dragging = False
+            self.setCursor(
+                Qt.CursorShape.PointingHandCursor
+                if self.isEnabled()
+                else Qt.CursorShape.ArrowCursor
+            )
+            self.update()
+        super().changeEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)

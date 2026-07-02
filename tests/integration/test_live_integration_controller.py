@@ -154,6 +154,13 @@ class _NotificationsStub:
         self.warnings.append(message)
 
 
+class _ProtectionStub:
+    locked = False
+
+    def allow_manual_projection_change(self, *, notify=True):
+        return not self.locked
+
+
 class _WindowStub:
     def __init__(self):
         self._obs_settings = _ObsSettingsStub()
@@ -171,6 +178,7 @@ class _WindowStub:
         self.browser_projection_stops = 0
         self.projection_statuses = []
         self.notifications = _NotificationsStub()
+        self.playback_protection = _ProtectionStub()
 
     def _stop_projection(self):
         self.stopped_projection = True
@@ -202,6 +210,7 @@ def _controller(window):
             quick_toolbar=lambda: window._quick_toolbar,
             projection_windows=lambda: [],
             translate=window.tr,
+            playback_protection=window.playback_protection,
         ),
         LiveIntegrationHandlers(
             stop_projection=window._stop_projection,
@@ -223,6 +232,21 @@ def test_refresh_obs_btn_availability_requires_connection_and_media_scene():
     controller.refresh_obs_btn_availability()
 
     assert window.proj_bar.obs_btn_available is False
+
+
+def test_live_stream_replacements_are_rejected_before_side_effects_when_locked():
+    window = _WindowStub()
+    window.playback_protection.locked = True
+    window._obs_settings.values["ndi_enabled"] = True
+    window._obs_settings.values["ndi_source"] = "Program"
+    controller = _controller(window)
+
+    controller.project_obs_ndi_stream()
+    controller.project_camera_stream()
+
+    assert window.browser_projection_stops == 0
+    assert window.projection_session.state == {"type": "idle"}
+    assert window.stopped_projection is False
 
 
 def test_refresh_obs_stream_availability_updates_stream_and_camera_availability():

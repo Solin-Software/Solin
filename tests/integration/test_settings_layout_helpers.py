@@ -14,6 +14,7 @@ from solin.widgets.settings.layout_helpers import SettingsLayoutMixin
 from solin.widgets.settings.media_section import MediaSectionMixin
 from solin.widgets.settings.obs_section import ObsSectionMixin
 from solin.widgets.settings.screens_section import ScreensSectionMixin
+from solin.widgets.settings.shared import SettingsToggleSwitch
 from solin.widgets.settings.watched_folder_section import WatchedFolderSectionMixin
 from solin.widgets.settings.yearly_text_section import YearlyTextSectionMixin
 from solin.widgets.settings.zoom_section import ZoomSectionMixin
@@ -298,6 +299,22 @@ def test_settings_widget_uses_media_section_mixin():
     )
     assert SettingsWidget.get_sjjm_announce_mode is MediaSectionMixin.get_sjjm_announce_mode
     assert SettingsWidget.get_start_videos_paused is MediaSectionMixin.get_start_videos_paused
+    assert (
+        SettingsWidget.get_playback_protection_enabled
+        is MediaSectionMixin.get_playback_protection_enabled
+    )
+
+
+def test_playback_protection_toggle_tracks_runtime_controller_changes():
+    toggle = SettingsToggleSwitch(checked=False)
+    host = type("_Host", (), {})()
+    host._playback_protection_toggle = toggle
+    host._playback_protection = type("_Protection", (), {"enabled": True})()
+
+    MediaSectionMixin._sync_playback_protection_toggle(host)
+
+    assert toggle.is_checked is True
+    assert toggle._anim_value == 1.0
 
 
 def test_settings_widget_uses_obs_section_mixin():

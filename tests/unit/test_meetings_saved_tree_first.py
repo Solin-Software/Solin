@@ -248,6 +248,7 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
     )
     widget = SimpleNamespace(
         _notifications=None,
+        _playback_protection=object(),
         _current_media_context=lambda: SimpleNamespace(api_code="T"),
         _tree_controller_factory=object(),
         _document_conversion_service=object(),

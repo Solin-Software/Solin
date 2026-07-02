@@ -21,6 +21,7 @@ class TimerThemeContext:
     camera_service: Any
     projection_windows: Callable[[], list[Any]]
     translate: Callable[[str], str]
+    playback_protection: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,8 @@ class TimerThemeController:
         self._session = context.projection_session
 
     def start_timer(self, target_dt: QDateTime, presentation_value: str) -> None:
+        if not self._context.playback_protection.allow_manual_projection_change():
+            return
         context = self._context
         presentation = MediaCountdownPresentation(presentation_value)
         self._session.set_tab_projection_active(False)
@@ -77,6 +80,8 @@ class TimerThemeController:
             projection_window.set_timer_blink(on)
 
     def project_sermon_theme(self, text: str, subtitle: str = "") -> None:
+        if not self._context.playback_protection.allow_manual_projection_change():
+            return
         context = self._context
         self._session.set_tab_projection_active(False)
         self._stop_active_sources()

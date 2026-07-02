@@ -33,6 +33,14 @@ Item {
     property bool hasItems: false
     property var playlistNodes: []
     readonly property bool hasController: playlistController !== null
+    readonly property bool playbackProtectionEnabled:
+        typeof playbackProtection !== "undefined"
+        && playbackProtection !== null
+        && playbackProtection.enabled
+    readonly property bool playbackProtectionLocked:
+        typeof playbackProtection !== "undefined"
+        && playbackProtection !== null
+        && playbackProtection.locked
     property int treeHydrationJobs: 0
     property int treeHydrationCreated: 0
     property int treeHydrationTotal: 0
@@ -473,7 +481,13 @@ Item {
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: qsTranslate("_PlaylistEditView", "Drag media files here or click  ＋  at the top\nClick an item to project it · Drag the grip ⠿ to reorder")
+                        text: root.playbackProtectionEnabled
+                              ? qsTranslate(
+                                    "_PlaylistEditView",
+                                    "Drag media files here or click  ＋  at the top\nUse the play button to project · Drag the grip ⠿ to reorder")
+                              : qsTranslate(
+                                    "_PlaylistEditView",
+                                    "Drag media files here or click  ＋  at the top\nClick an item to project it · Drag the grip ⠿ to reorder")
                         color: root.textMuted
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
@@ -1533,6 +1547,7 @@ Item {
 
         onClicked: {
             if (isMissing) return
+            if (root.playbackProtectionEnabled) return
             if (root.hasController) root.playlistController.projectItem(nodeId)
         }
 
@@ -1599,6 +1614,7 @@ Item {
                 onExited: root.pointerExited()
                 onClicked: {
                     if (mediaRoot.isMissing) return
+                    if (root.playbackProtectionEnabled) return
                     if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
                 }
             }
@@ -1681,6 +1697,8 @@ Item {
 
                         onClicked: {
                             if (mediaRoot.isMissing)
+                                return
+                            if (root.playbackProtectionEnabled)
                                 return
                             if (root.hasController)
                                 root.playlistController.projectItem(mediaRoot.nodeId)
@@ -1793,13 +1811,36 @@ Item {
 
                 // Right action cluster — fixed width keeps controls aligned and separated.
                 Item {
-                    Layout.preferredWidth: 62
+                    Layout.preferredWidth: root.playbackProtectionEnabled ? 96 : 62
                     Layout.preferredHeight: 28
                     Layout.alignment: Qt.AlignVCenter
 
                     RowLayout {
                         anchors.fill: parent
                         spacing: 8
+
+                        HeaderButton {
+                            objectName: "protectedPlayButton"
+                            visible: root.playbackProtectionEnabled
+                            Layout.preferredWidth: visible ? 26 : 0
+                            Layout.preferredHeight: 26
+                            Layout.alignment: Qt.AlignVCenter
+                            iconName: "play"
+                            iconSize: 12
+                            colorHex: root.iconHex(root.accent)
+                            accentButton: true
+                            enabled: !mediaRoot.isMissing
+                                     && !root.playbackProtectionLocked
+                            toolTipText: mediaRoot.isMissing
+                                         ? qsTranslate("_PlaylistEditView", "Media unavailable")
+                                         : root.playbackProtectionLocked
+                                           ? qsTranslate(
+                                                 "_PlaylistEditView",
+                                                 "Pause playback before changing media")
+                                           : qsTranslate("MediaDestinationDialog", "Play")
+                            onClicked: if (root.hasController)
+                                root.playlistController.projectItem(mediaRoot.nodeId)
+                        }
 
                         CloudDownloadButton {
                             Layout.preferredWidth: 26
@@ -1830,6 +1871,7 @@ Item {
                                 width: 150
                                 background: MenuPanel {}
                                 MenuItem {
+                                    visible: !root.playbackProtectionEnabled
                                     text: root.commonTr("MediaDestinationDialog", "Play")
                                     icon.source: root.picon("play_all", 13, root.iconHex(root.textMuted))
                                     enabled: !mediaRoot.isMissing
@@ -2318,15 +2360,15 @@ Item {
         MouseArea {
             id: hdrMa
             anchors.fill: parent
-            enabled: hdrBtn.enabled
             hoverEnabled: true
+            cursorShape: hdrBtn.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onEntered: root.pointerEntered()
             onExited: root.pointerExited()
-            onClicked: hdrBtn.clicked()
+            onClicked: if (hdrBtn.enabled) hdrBtn.clicked()
         }
 
         ThemedToolTip {
-            visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
+            visible: hdrMa.containsMouse && hdrBtn.toolTipText !== ""
             text: hdrBtn.toolTipText
         }
     }

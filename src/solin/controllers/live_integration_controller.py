@@ -33,6 +33,7 @@ class LiveIntegrationContext:
     quick_toolbar: Callable[[], Any | None]
     projection_windows: Callable[[], list[Any]]
     translate: Callable[[str], str]
+    playback_protection: Any
     platform: str = sys.platform
 
 
@@ -208,6 +209,8 @@ class LiveIntegrationController:
         if self._session.state_type == "obs_stream":
             self._handlers.stop_projection()
             return
+        if not context.playback_protection.allow_manual_projection_change():
+            return
 
         source = context.obs_settings.ndi_source()
         if not context.obs_settings.ndi_stream_configured():
@@ -246,6 +249,8 @@ class LiveIntegrationController:
         context = self._context
         if self._session.state_type == "camera_stream":
             self._handlers.stop_projection()
+            return
+        if not context.playback_protection.allow_manual_projection_change():
             return
 
         if not context.camera_settings.is_enabled():

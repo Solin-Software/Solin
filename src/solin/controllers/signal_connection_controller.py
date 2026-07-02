@@ -16,6 +16,7 @@ class MainWindowSignalSources:
     playlist_widget: Any
     projection_bar: Any
     media_controller: Any
+    playback_protection: Any
     screen_manager: Any
     language_manager: Any
     settings_widget: Any
@@ -108,7 +109,7 @@ class SignalConnectionController:
         )
 
         projection_bar.stop_requested.connect(handlers.projection_stop.stop_any)
-        projection_bar.seek_requested.connect(media_controller.seek)
+        projection_bar.seek_requested.connect(sources.playback_protection.request_seek)
         projection_bar.toggle_requested.connect(media_controller.toggle_play_pause)
         projection_bar.volume_changed.connect(media_controller.set_volume)
         projection_bar.timer_updated.connect(timer_theme.on_timer_update_proj)

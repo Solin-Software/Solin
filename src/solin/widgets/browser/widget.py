@@ -760,6 +760,7 @@ class BrowserWidget(
         zoom_settings: BrowserZoomSettings,
         download_service: BrowserDownloadService,
         image_fetch_service: BrowserImageFetchService,
+        playback_protection,
         parent=None,
         projection_fps: int | None = None,
         aspect_ratio_provider: Callable[[], ProjectionAspectRatio] | None = None,
@@ -776,6 +777,7 @@ class BrowserWidget(
         self._session_id = profile_paths.native_webview_data_dir.name
         self._session_data_root = profile_paths.native_webview_data_root
         self._image_fetches = image_fetch_service
+        self._playback_protection = playback_protection
 
         self._browser_aspect_locked = False
         self._browser_aspect_ratio = DEFAULT_PROJECTION_ASPECT_RATIO
@@ -900,6 +902,12 @@ class BrowserWidget(
             self.stop_tab_projection_signal.emit()
             return
         if checked:
+            if not self._playback_protection.allow_manual_projection_change():
+                self.cast_btn.blockSignals(True)
+                self.cast_btn.setChecked(False)
+                self.cast_btn.blockSignals(False)
+                self._update_cast_btn_visual(False)
+                return
             self._start_tab_projection()
         else:
             self._stop_tab_projection_internal()

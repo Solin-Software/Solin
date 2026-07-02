@@ -39,6 +39,10 @@ class _EnabledControl:
         return self.enabled
 
 
+class _Protection:
+    locked = False
+
+
 class _ValueSignal:
     def __init__(self):
         self.values = []
@@ -99,6 +103,7 @@ def _bar(*, mode="video", audio=False, overlay=None):
     bar._fullscreen_overlay = overlay
     bar.ov_fullscreen_btn = _Button()
     bar.seek_slider = _Slider()
+    bar._playback_protection = _Protection()
     return bar
 
 

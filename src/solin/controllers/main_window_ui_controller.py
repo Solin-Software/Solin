@@ -103,6 +103,7 @@ class MainWindowUiContext:
     camera_settings: Any
     auto_key_settings: Any
     media_settings: Any
+    playback_protection: Any
     browser_settings: Any
     meeting_schedule_settings: Any
     watched_folder_settings: Any
@@ -348,6 +349,7 @@ class MainWindowUiController:
                 profile_paths=context.profile_paths,
                 browser_settings=context.browser_settings,
                 media_cache_manager=context.media_cache_manager,
+                playback_protection=context.playback_protection,
                 profile_media_store=context.profile_media_store,
                 jwpub_import_thread_factory=context.jwpub_import_thread_factory,
                 document_conversion_service=context.document_conversion_service,
@@ -405,6 +407,7 @@ class MainWindowUiController:
             camera_settings=context.camera_settings,
             auto_key_settings=context.auto_key_settings,
             media_settings=context.media_settings,
+            playback_protection=context.playback_protection,
             meeting_schedule_settings=context.meeting_schedule_settings,
             watched_folder_settings=context.watched_folder_settings,
             yeartext_settings=context.yeartext_settings,
@@ -436,6 +439,7 @@ class MainWindowUiController:
             media_ctrl=context.media_controller,
             watched_folder=watched_folder,
             notifications=context.notifications,
+            playback_protection=context.playback_protection,
             profile_paths=context.profile_paths,
             document_conversion_service=context.document_conversion_service,
             storage_paths=context.playlist_storage_paths,
@@ -462,6 +466,7 @@ class MainWindowUiController:
         meetings_widget = MeetingsWidget(
             context.lang_manager,
             notifications=context.notifications,
+            playback_protection=context.playback_protection,
             meeting_tree_store=context.meeting_tree_store,
             profile_media_store=context.profile_media_store,
             jwpub_import_thread_factory=context.jwpub_import_thread_factory,
@@ -597,6 +602,7 @@ class MainWindowUiController:
         projection_bar = ProjectionBar(
             context.media_controller,
             playback_settings=context.projection_playback_settings,
+            playback_protection=context.playback_protection,
             profile_paths=context.profile_paths,
             profile_media_store=context.profile_media_store,
             media_cache_dir=context.media_cache_manager.media_cache_dir,

@@ -113,6 +113,7 @@ class PlaylistEditView(
         media_ctrl=None,
         *,
         notifications: NotificationCenter,
+        playback_protection,
         profile_paths: ProfilePaths,
         document_conversion_service: DocumentConversionService,
         storage_paths: PlaylistStoragePaths,
@@ -136,6 +137,7 @@ class PlaylistEditView(
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
+        self._playback_protection = playback_protection
         self._profile_paths = profile_paths
         self._document_conversion_service = document_conversion_service
         self._storage_paths = storage_paths
@@ -304,6 +306,7 @@ class PlaylistEditView(
                 "controller": self.bridge,
                 "catalogBridge": self.catalog_bridge,
                 "songsBridge": self.songs_bridge,
+                "playbackProtection": self._playback_protection,
             },
             mouse_tracking=True,
         )
@@ -1141,6 +1144,7 @@ class PlaylistWidget(QWidget):
         watched_folder: str = "",
         *,
         notifications: NotificationCenter,
+        playback_protection,
         profile_paths: ProfilePaths,
         document_conversion_service: DocumentConversionService,
         storage_paths: PlaylistStoragePaths,
@@ -1164,6 +1168,7 @@ class PlaylistWidget(QWidget):
         self.lang        = lang
         self._media_ctrl = media_ctrl
         self._notifications = notifications
+        self._playback_protection = playback_protection
         self._profile_paths = profile_paths
         self._document_conversion_service = document_conversion_service
         self._storage_paths = storage_paths
@@ -1224,6 +1229,7 @@ class PlaylistWidget(QWidget):
             self.lang,
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
+            playback_protection=self._playback_protection,
             profile_paths=self._profile_paths,
             document_conversion_service=self._document_conversion_service,
             storage_paths=self._storage_paths,
