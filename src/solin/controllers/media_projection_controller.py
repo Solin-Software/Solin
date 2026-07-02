@@ -57,6 +57,7 @@ class MediaProjectionContext:
     translate: Callable[[str], str]
     sjjm_announce_mode: Callable[[], bool]
     start_videos_paused: Callable[[], bool]
+    playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = (
         _default_projection_aspect_ratio
     )
@@ -118,6 +119,8 @@ class MediaProjectionController:
     def on_meeting_media_project(self, item) -> None:
         if not item:
             return
+        if not self._allow_manual_projection_change():
+            return
 
         if isinstance(item, dict):
             url = item.get("url") or item.get("file_path") or ""
@@ -129,6 +132,7 @@ class MediaProjectionController:
                     url,
                     playlist=[],
                     image_framing=item.get("image_framing"),
+                    user_initiated=False,
                 )
             elif url:
                 playlist_item = {"url": url, "title": title, "type": media_type}
@@ -144,6 +148,7 @@ class MediaProjectionController:
                 item.file_path,
                 playlist=[],
                 image_framing=getattr(item, "image_framing", None),
+                user_initiated=False,
             )
             return
 
@@ -162,7 +167,13 @@ class MediaProjectionController:
                 "title": title,
                 "type": media_type,
             }
-            self.project_video(item.file_path, title, [playlist_item], None)
+            self.project_video(
+                item.file_path,
+                title,
+                [playlist_item],
+                None,
+                user_initiated=False,
+            )
             return
 
         if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
@@ -210,7 +221,11 @@ class MediaProjectionController:
         playlist: list | None = None,
         playback_order: str | None = None,
         from_saved_playlist: bool = False,
-    ) -> None:
+        user_initiated: bool = True,
+    ) -> bool:
+        if user_initiated and not self._allow_manual_projection_change():
+            self._next_is_sjjm = False
+            return False
         items = playlist if playlist else [{"url": url, "title": title}]
         self._context.projection_bar.set_playlist(
             items,
@@ -218,7 +233,12 @@ class MediaProjectionController:
             from_saved_playlist=from_saved_playlist,
         )
         ext = os.path.splitext(url.split("?")[0])[1].lower()
-        self.project_video_core(url, title, is_audio=ext in AUDIO_EXTS)
+        return self.project_video_core(
+            url,
+            title,
+            is_audio=ext in AUDIO_EXTS,
+            user_initiated=False,
+        )
 
     def project_next_auto(self, item: dict[str, Any]) -> None:
         context = self._context
@@ -245,6 +265,7 @@ class MediaProjectionController:
                 url,
                 keep_expanded=context.projection_bar.is_expanded(),
                 image_framing=item.get("image_framing"),
+                user_initiated=False,
             )
             return
 
@@ -254,6 +275,7 @@ class MediaProjectionController:
             title,
             keep_expanded=context.projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
+            user_initiated=False,
         )
 
     def project_video_core(
@@ -262,7 +284,11 @@ class MediaProjectionController:
         title: str,
         keep_expanded: bool = False,
         is_audio: bool = False,
-    ) -> None:
+        user_initiated: bool = True,
+    ) -> bool:
+        if user_initiated and not self._allow_manual_projection_change():
+            self._next_is_sjjm = False
+            return False
         context = self._context
         is_sjjm = self._next_is_sjjm
         self._next_is_sjjm = False
@@ -315,6 +341,7 @@ class MediaProjectionController:
             visual=not is_audio,
             auto_keys_media=not is_audio,
         )
+        return True
 
     def project_image_bytes(self, data: bytes) -> None:
         title = self._context.translate("Showing image")
@@ -323,6 +350,8 @@ class MediaProjectionController:
     def project_tab_frame(self, frame) -> None:
         context = self._context
         if not self._session.tab_projection_active:
+            if not self._allow_manual_projection_change(notify=False):
+                return
             self._session.set_tab_projection_active(True)
             context.media_controller.stop()
             context.ndi_service.stop()
@@ -440,6 +469,8 @@ class MediaProjectionController:
         context = self._context
         if not playlist or index >= len(playlist):
             return
+        if not self._allow_manual_projection_change():
+            return
 
         item = playlist[index]
         media_type = item.get("type", "video")
@@ -453,6 +484,7 @@ class MediaProjectionController:
                 index=index,
                 keep_expanded=keep_expanded,
                 image_framing=item.get("image_framing"),
+                user_initiated=False,
             )
             return
 
@@ -464,12 +496,15 @@ class MediaProjectionController:
             item["title"],
             keep_expanded=keep_expanded,
             is_audio=ext in AUDIO_EXTS,
+            user_initiated=False,
         )
 
     def on_playlist_navigate(self, index: int) -> None:
         projection_bar = self._context.projection_bar
         playlist = projection_bar.playlist_items()
         if not playlist or index >= len(playlist):
+            return
+        if not self._allow_manual_projection_change():
             return
 
         item = playlist[index]
@@ -480,6 +515,7 @@ class MediaProjectionController:
                 item["url"],
                 keep_expanded=projection_bar.is_expanded(),
                 image_framing=item.get("image_framing"),
+                user_initiated=False,
             )
             return
 
@@ -489,6 +525,7 @@ class MediaProjectionController:
             item["title"],
             keep_expanded=projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
+            user_initiated=False,
         )
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:
@@ -519,7 +556,10 @@ class MediaProjectionController:
         index: int | None = None,
         keep_expanded: bool = False,
         image_framing: object = None,
+        user_initiated: bool = True,
     ) -> None:
+        if user_initiated and not self._allow_manual_projection_change():
+            return
         try:
             with open(path, "rb") as handle:
                 data = handle.read()
@@ -534,6 +574,7 @@ class MediaProjectionController:
             index=index,
             keep_expanded=keep_expanded,
             image_framing=image_framing,
+            user_initiated=False,
         )
 
     def _project_image_data(
@@ -547,7 +588,10 @@ class MediaProjectionController:
         index: int | None = None,
         keep_expanded: bool = False,
         image_framing: object = None,
+        user_initiated: bool = True,
     ) -> None:
+        if user_initiated and not self._allow_manual_projection_change():
+            return
         context = self._context
         initial_transform = self._prepared_image_transform(data, image_framing)
         if self._update_active_image_framing(data, initial_transform):
@@ -602,6 +646,11 @@ class MediaProjectionController:
             True,
             title,
             auto_keys_media=True,
+        )
+
+    def _allow_manual_projection_change(self, *, notify: bool = True) -> bool:
+        return self._context.playback_protection.allow_manual_projection_change(
+            notify=notify
         )
 
     def _update_active_image_framing(

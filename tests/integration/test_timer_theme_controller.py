@@ -69,6 +69,13 @@ class _ProjectionWindowStub:
         self.themes.append((text, subtitle))
 
 
+class _ProtectionStub:
+    locked = False
+
+    def allow_manual_projection_change(self, *, notify=True):
+        return not self.locked
+
+
 class _WindowStub:
     def __init__(self):
         self.projection_session = ProjectionSession()
@@ -81,6 +88,7 @@ class _WindowStub:
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.projection_session.set_state({"type": "video"})
         self.windows = [_ProjectionWindowStub(), _ProjectionWindowStub()]
+        self.playback_protection = _ProtectionStub()
 
     def _all_windows(self):
         return self.windows
@@ -99,6 +107,7 @@ def _controller(window):
             camera_service=window._camera_service,
             projection_windows=window._all_windows,
             translate=window.tr,
+            playback_protection=window.playback_protection,
         ),
         TimerThemeHandlers(
             stop_browser_tab_projection=(
@@ -142,6 +151,21 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     assert args[0] is True
     assert args[1].startswith("Cronômetro → ")
     assert kwargs == {"auto_keys_media": False}
+
+
+def test_timer_projection_is_rejected_without_side_effects_when_locked():
+    window = _WindowStub()
+    window.playback_protection.locked = True
+    controller = _controller(window)
+    target_dt = QDateTime.currentDateTime().addSecs(60)
+
+    controller.start_timer(target_dt, MediaCountdownPresentation.YEARLY_TEXT.value)
+
+    assert window.projection_session.tab_projection_active is True
+    assert window.projection_session.state == {"type": "video"}
+    assert window._navigation.stopped == 0
+    assert window.media_ctrl.stopped == 0
+    assert window.proj_bar.timers == []
 
 
 def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():

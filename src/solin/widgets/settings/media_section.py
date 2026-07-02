@@ -5,6 +5,7 @@ from ...styles.icons import (
     ICON_MUSIC,
     ICON_NAV_MEETINGS,
     ICON_PLAY_PAUSE,
+    ICON_SHIELD,
     ICON_SONG_ANNOUNCEMENT,
 )
 
@@ -77,6 +78,27 @@ class MediaSectionMixin:
             )
         self._start_paused_toggle.toggled.connect(self._on_start_paused_toggled)
         lay.addWidget(row5)
+
+        lay.addWidget(self._divider())
+
+        row6, self._playback_protection_toggle, \
+            self._playback_protection_label, self._playback_protection_desc = \
+            self._toggle_row(
+                ICON_SHIELD,
+                self.tr("Playback protection"),
+                self.tr(
+                    "Prevents media changes and seeking while audio or video is playing. "
+                    "Pause first to make changes."
+                ),
+                checked=self._playback_protection.enabled,
+            )
+        self._playback_protection_toggle.toggled.connect(
+            self._playback_protection.set_enabled
+        )
+        self._playback_protection.enabledChanged.connect(
+            self._sync_playback_protection_toggle
+        )
+        lay.addWidget(row6)
         return card
 
     def _on_auto_download_toggled(self, checked):
@@ -119,3 +141,12 @@ class MediaSectionMixin:
 
     def get_start_videos_paused(self):
         return self._media_settings.start_videos_paused()
+
+    def get_playback_protection_enabled(self):
+        return self._playback_protection.enabled
+
+    def _sync_playback_protection_toggle(self):
+        self._playback_protection_toggle.set_checked(
+            self._playback_protection.enabled,
+            animate=False,
+        )

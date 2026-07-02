@@ -31,6 +31,7 @@ class SettingsKey:
     MEETINGS_AUTO_DOWNLOAD: Final = "meetings_auto_download"
     SJJM_ANNOUNCE_MODE: Final = "sjjm_announce_mode"
     START_VIDEOS_PAUSED: Final = "start_videos_paused"
+    PLAYBACK_PROTECTION_ENABLED: Final = "playback_protection_enabled"
     WATCHED_FOLDER_PATH: Final = "watched_folder/path"
     YEARLY_QUOTE: Final = "yearly_quote"
     YEARLY_REFERENCE: Final = "yearly_ref"

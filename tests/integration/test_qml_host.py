@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QObject, QPoint, QPointF, QTimer, Slot, Qt
+from PySide6.QtCore import Property, QObject, QPoint, QPointF, QTimer, Signal, Slot, Qt
 from PySide6.QtGui import QColor, QPixmap, QWheelEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 from solin.controllers.timer_engine import TimerEngine
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
-from solin.ui.qml.playlist.visuals import PlaylistThumbnailProvider
+from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
 
 
@@ -41,6 +41,68 @@ class _CursorProbe(QObject):
     @Slot()
     def pointerExit(self) -> None:  # noqa: N802
         self.exited += 1
+
+
+class _PlaybackProtectionProbe(QObject):
+    enabledChanged = Signal()
+    lockedChanged = Signal()
+
+    def __init__(self, *, enabled: bool, locked: bool = False) -> None:
+        super().__init__()
+        self._enabled = enabled
+        self._locked = locked
+
+    @Property(bool, notify=enabledChanged)
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @Property(bool, notify=lockedChanged)
+    def locked(self) -> bool:
+        return self._locked
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled = enabled
+        self.enabledChanged.emit()
+
+    def set_locked(self, locked: bool) -> None:
+        self._locked = locked
+        self.lockedChanged.emit()
+
+
+class _PlaylistTreeControllerProbe(QObject):
+    stateChanged = Signal()
+    mediaChanged = Signal(str, str, str, str)
+    imageFramingChanged = Signal(str, object)
+    mediaInserted = Signal(str, int, object)
+    nodesInserted = Signal(str, int, object)
+    nodeReplaced = Signal(str, object)
+    nodeMoved = Signal(str, str, int)
+    sectionChanged = Signal(str, str, str, str, str, int)
+    sectionCollapseChanged = Signal(str, bool)
+    sectionCountsChanged = Signal(object)
+    markerEditRequested = Signal(str)
+    cloudChanged = Signal(str, bool, bool, float, str)
+
+    def __init__(self, nodes: list[dict]) -> None:
+        super().__init__()
+        self._nodes = nodes
+        self.projected: list[str] = []
+
+    @Property(object, notify=stateChanged)
+    def playlistData(self):  # noqa: N802 - QML API
+        return self._nodes
+
+    @Slot(str)
+    def projectItem(self, item_id: str) -> None:  # noqa: N802 - QML API
+        self.projected.append(item_id)
+
+    @Slot(result=float)
+    def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API
+        return 16 / 9
+
+    @Slot(str, result=float)
+    def imageFramingSourceAspectRatio(self, _item_id: str) -> float:  # noqa: N802
+        return 16 / 9
 
 
 def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
@@ -113,6 +175,89 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
     assert probe.exited == 1
 
 
+def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:
+    nodes = [{
+        "type": "media",
+        "id": "media-1",
+        "title": "Protected media",
+        "duration": "1:00",
+        "thumbSource": "",
+        "cloudVisible": False,
+        "cloudActive": False,
+        "cloudProgress": -1.0,
+        "cloudTooltip": "",
+        "isMissing": False,
+        "imageFraming": None,
+        "mediaType": "video",
+        "badge": "Video",
+    }]
+    protection = _PlaybackProtectionProbe(enabled=True)
+    controller = _PlaylistTreeControllerProbe(nodes)
+    widget = QQuickWidget()
+    widget.resize(520, 180)
+
+    configure_qml_host(
+        widget,
+        type_name="PlaylistTreeView",
+        clear_color="#000000",
+        image_providers={
+            "playlisticons": PlaylistIconProvider(),
+        },
+        context_properties={"playbackProtection": protection},
+        mouse_tracking=True,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("playlistController", controller)
+    root.setProperty("playlistNodes", nodes)
+    root.setProperty("hasItems", True)
+    root_playlist = root.findChild(QObject, "rootPlaylist")
+    assert root_playlist is not None
+    root_playlist.scheduleRebuild(nodes)
+    widget.show()
+    QTest.qWait(30)
+
+    media_card = next(
+        item
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId") == "media-1"
+    )
+    play_button = media_card.findChild(QObject, "protectedPlayButton")
+    download_button = media_card.findChild(QObject, "mediaDownloadButton")
+    more_button = media_card.findChild(QObject, "mediaMoreButton")
+    card_hit_area = media_card.findChild(QObject, "mediaCardHitArea")
+    framing_thumbnail = media_card.findChild(QObject, "imageFramingThumbnail")
+    assert play_button is not None
+    assert download_button is not None
+    assert more_button is not None
+    assert card_hit_area is not None
+    assert framing_thumbnail is not None
+    assert play_button.property("visible") is True
+    assert play_button.property("enabled") is True
+    assert download_button.property("x") < play_button.property("x")
+    assert play_button.property("x") < more_button.property("x")
+    assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+    assert framing_thumbnail.property("clickActionEnabled") is False
+
+    media_card.clicked.emit()
+    assert controller.projected == []
+
+    play_button.clicked.emit()
+    assert controller.projected == ["media-1"]
+
+    protection.set_locked(True)
+    QTest.qWait(1)
+    assert play_button.property("enabled") is False
+
+    protection.set_enabled(False)
+    QTest.qWait(1)
+    assert play_button.property("visible") is False
+    assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
+    assert framing_thumbnail.property("clickActionEnabled") is True
+    media_card.clicked.emit()
+    assert controller.projected == ["media-1", "media-1"]
+
+
 def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:
     position = QPointF(widget.width() / 2, widget.height() / 2)
     event = QWheelEvent(
@@ -155,6 +300,9 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert root.property("imageReady") is True
     assert root.property("sourceWidth") == pytest.approx(9 / 16)
     assert root.property("sourceHeight") == 1.0
+    interaction_area = root.findChild(QObject, "imageFramingInteractionArea")
+    assert interaction_area is not None
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
 
     clicked = QSignalSpy(root.clicked)
     edited = QSignalSpy(root.framingEdited)
@@ -165,6 +313,12 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(53, 28))
     assert clicked.count() == 1
     assert edited.count() == 0
+
+    root.setProperty("clickActionEnabled", False)
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
+    assert clicked.count() == 1
+    root.setProperty("clickActionEnabled", True)
 
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     QTest.mouseMove(widget, QPoint(50, 44), delay=5)

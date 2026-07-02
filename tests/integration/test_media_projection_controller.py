@@ -61,6 +61,19 @@ class _SettingsStub:
         return self.start_videos_paused
 
 
+class _ProtectionStub:
+    def __init__(self):
+        self.locked = False
+        self.blocked = 0
+
+    def allow_manual_projection_change(self, *, notify=True):
+        if not self.locked:
+            return True
+        if notify:
+            self.blocked += 1
+        return False
+
+
 class _PreviewContentStub:
     def __init__(self):
         self.image_modes = []
@@ -242,6 +255,7 @@ class _WindowStub:
         self._camera_service = _ServiceStub(self.events, "camera")
         self.proj_bar = _ProjectionBarStub(self.events)
         self.settings_widget = _SettingsStub()
+        self.playback_protection = _ProtectionStub()
         self._auto_key_projection = _AutoKeyProjectionStub(self.events)
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.playlist_widget = _PlaylistWidgetStub()
@@ -277,6 +291,7 @@ def _controller(window):
             translate=window.tr,
             sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
             start_videos_paused=window.settings_widget.get_start_videos_paused,
+            playback_protection=window.playback_protection,
         ),
         MediaProjectionHandlers(
             stop_browser_tab_projection=(
@@ -308,6 +323,36 @@ def test_project_video_classifies_audio_and_updates_status():
     assert window._projection_integrations.statuses == [
         ((True, "Song"), {"visual": False, "auto_keys_media": False})
     ]
+
+
+def test_manual_projection_is_rejected_before_any_state_changes_when_locked():
+    window = _WindowStub()
+    window.playback_protection.locked = True
+    controller = _controller(window)
+
+    result = controller.project_video("next.mp4", "Next")
+
+    assert result is False
+    assert window.playback_protection.blocked == 1
+    assert window.proj_bar.playlists == []
+    assert window.proj_bar.videos == []
+    assert window.media_ctrl.stopped == 0
+    assert window.media_ctrl.played == []
+    assert all(projection_window.cleared == 0 for projection_window in window.windows)
+
+
+def test_automatic_advance_bypasses_manual_playback_protection():
+    window = _WindowStub()
+    window.playback_protection.locked = True
+    controller = _controller(window)
+
+    controller.project_next_auto(
+        {"url": "automatic.mp4", "title": "Automatic", "type": "video"}
+    )
+
+    assert window.playback_protection.blocked == 0
+    assert window.media_ctrl.played == ["automatic.mp4"]
+    assert window.proj_bar.videos == [("Automatic", False, False)]
 
 
 def test_project_video_core_uses_announcement_mode_for_sjjm_video():

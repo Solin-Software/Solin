@@ -146,6 +146,7 @@ class StudyDetailView(QWidget):
 
     def __init__(self, pub_type: str, wd: "WeekData", *,
                  notifications=None,
+                 playback_protection,
                  language_context: JWMediaLanguageContext,
                  controller_factory: MeetingTreeControllerFactory,
                  document_conversion_service: DocumentConversionService,
@@ -160,6 +161,7 @@ class StudyDetailView(QWidget):
         self._pub   = pub_type
         self._wd    = wd
         self._notifications = notifications
+        self._playback_protection = playback_protection
         self._language_context = language_context
         self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
@@ -226,6 +228,7 @@ class StudyDetailView(QWidget):
             meeting_date=self.date_text,
             pill_color=self.pill_color,
             no_items_text=self.no_items_text,
+            playback_protection=self._playback_protection,
             parent=self,
         )
         self.qml_widget.installEventFilter(self)
@@ -408,6 +411,7 @@ class _MemorialDetailView(QWidget):
 
     def __init__(self, md: "MemorialData", *,
                  notifications=None,
+                 playback_protection,
                  language_context: JWMediaLanguageContext,
                  controller_factory: MeetingTreeControllerFactory,
                  document_conversion_service: DocumentConversionService,
@@ -418,6 +422,7 @@ class _MemorialDetailView(QWidget):
         super().__init__(parent)
         self._md  = md
         self._notifications = notifications
+        self._playback_protection = playback_protection
         self._language_context = language_context
         self._controller_factory = controller_factory
         self._document_conversion_service = document_conversion_service
@@ -476,6 +481,7 @@ class _MemorialDetailView(QWidget):
             meeting_date=self.date_text,
             pill_color=self.pill_color,
             no_items_text=self.no_items_text,
+            playback_protection=self._playback_protection,
             parent=self,
         )
         self.qml_widget.installEventFilter(self)
@@ -635,6 +641,7 @@ class MeetingsWidget(QWidget):
         lang_manager=None,
         *,
         notifications=None,
+        playback_protection,
         meeting_tree_store: MeetingTreeStore,
         profile_media_store: ProfileMediaStore,
         meeting_thumbnail_store: ThumbnailStore,
@@ -659,6 +666,7 @@ class MeetingsWidget(QWidget):
         super().__init__(parent)
         self._lang_mgr  = lang_manager
         self._notifications = notifications
+        self._playback_protection = playback_protection
         self._monday    = current_monday()
         self._cache:   dict[str, WeekData]       = {}
         self._saved_snapshots: dict[str, dict[str, MeetingTreeSnapshot]] = {}
@@ -973,6 +981,7 @@ class MeetingsWidget(QWidget):
             pub_type,
             wd,
             notifications=self._notifications,
+            playback_protection=self._playback_protection,
             language_context=self._current_media_context(),
             controller_factory=self._tree_controller_factory,
             document_conversion_service=self._document_conversion_service,
@@ -1022,6 +1031,7 @@ class MeetingsWidget(QWidget):
             d = _MemorialDetailView(
                 md,
                 notifications=self._notifications,
+                playback_protection=self._playback_protection,
                 language_context=self._current_media_context(),
                 controller_factory=self._tree_controller_factory,
                 document_conversion_service=self._document_conversion_service,

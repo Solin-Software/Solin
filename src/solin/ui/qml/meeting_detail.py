@@ -28,6 +28,7 @@ class MeetingDetailQmlHost(QQuickWidget):
         meeting_date: str,
         pill_color: str,
         no_items_text: str,
+        playback_protection,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -51,6 +52,7 @@ class MeetingDetailQmlHost(QQuickWidget):
                 "meetingPill": meeting_pill,
                 "meetingDate": meeting_date,
                 "noItemsText": no_items_text,
+                "playbackProtection": playback_protection,
             },
             mouse_tracking=True,
             accept_drops=False,

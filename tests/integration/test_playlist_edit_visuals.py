@@ -35,6 +35,7 @@ def test_playlist_icons_stay_embedded_in_python():
         "grip",
         "more",
         "play_all",
+        "play",
         "shuffle",
         "back",
         "plus",

@@ -58,6 +58,7 @@ class ProjectionPlaylistMixin:
     def _update_nav_buttons(self):
         n = len(self._playlist)
         show = n > 1
+        navigation_unlocked = not self._playback_protection.locked
 
         self.prev_btn.setVisible(show)
         self.next_btn.setVisible(show)
@@ -70,8 +71,10 @@ class ProjectionPlaylistMixin:
             prev_col = PALETTE.text_secondary if can_prev else PALETTE.text_dim
             next_col = PALETTE.text_secondary if can_next else PALETTE.text_dim
 
-            self.prev_btn.setEnabled(can_prev)
-            self.next_btn.setEnabled(can_next)
+            self.prev_btn.setEnabled(can_prev and navigation_unlocked)
+            self.next_btn.setEnabled(can_next and navigation_unlocked)
+            if not navigation_unlocked:
+                prev_col = next_col = PALETTE.text_dim
             self.prev_btn.setIcon(make_icon(ICON_SKIP_PREV, 15, prev_col))
             self.next_btn.setIcon(make_icon(ICON_SKIP_NEXT, 15, next_col))
 
@@ -92,6 +95,8 @@ class ProjectionPlaylistMixin:
             sync_fullscreen()
 
     def _on_prev_clicked(self):
+        if not self._playback_protection.allow_manual_projection_change():
+            return
         if self._playlist_index > 0:
             self._playlist_index -= 1
             self._played_indices.add(self._playlist_index)
@@ -99,6 +104,8 @@ class ProjectionPlaylistMixin:
             self.playlist_navigate.emit(self._playlist_index)
 
     def _on_next_clicked(self):
+        if not self._playback_protection.allow_manual_projection_change():
+            return
         if self._playlist_index < len(self._playlist) - 1:
             self._playlist_index += 1
             self._played_indices.add(self._playlist_index)
@@ -146,6 +153,8 @@ class ProjectionPlaylistMixin:
 
     def _on_panel_item_clicked(self, index: int):
         if index == self._playlist_index:
+            return
+        if not self._playback_protection.allow_manual_projection_change():
             return
         self._playlist_index = index
         self._played_indices.add(index)

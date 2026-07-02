@@ -24,6 +24,22 @@ class _Control:
         self.enabled = enabled
         self.history.append(enabled)
 
+    def isEnabled(self):
+        return self.enabled
+
+    def setToolTip(self, _text):
+        return None
+
+    def setVisible(self, _visible):
+        return None
+
+
+class _Protection:
+    locked = False
+
+    def allow_manual_projection_change(self, *, notify=True):
+        return not self.locked
+
 
 class _Signal:
     def __init__(self):
@@ -74,6 +90,14 @@ def _make_bar(*, muted=False, volume=0.8):
     bar.play_btn = _Control()
     bar.seek_slider = _Control()
     bar.toggle_requested = _Signal()
+    bar._playback_protection = _Protection()
+    bar._playlist = []
+    bar._playlist_index = 0
+    bar.prev_btn = _Control()
+    bar.next_btn = _Control()
+    bar.ov_panel_btn = _Control()
+    bar.ov_send_temp_btn = _Control()
+    bar._is_from_saved_playlist = False
     return bar
 
 

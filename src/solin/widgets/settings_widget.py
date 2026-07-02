@@ -91,6 +91,7 @@ class SettingsWidget(
                  camera_settings: CameraSettingsStore,
                  auto_key_settings: AutoKeySettingsStore,
                  media_settings: MediaSettingsStore,
+                 playback_protection,
                  meeting_schedule_settings: MeetingScheduleSettingsStore,
                  watched_folder_settings: WatchedFolderSettingsStore,
                  yeartext_settings: YeartextSettingsStore,
@@ -111,6 +112,7 @@ class SettingsWidget(
         self._camera_settings = camera_settings
         self._auto_key_settings = auto_key_settings
         self._media_settings = media_settings
+        self._playback_protection = playback_protection
         self._meeting_schedule_settings = meeting_schedule_settings
         self._watched_folder_settings = watched_folder_settings
         self._yeartext_settings = yeartext_settings
@@ -337,6 +339,13 @@ class SettingsWidget(
         self._start_paused_label.setText(self.tr("Start videos paused"))
         self._start_paused_desc.setText(
             self.tr("Videos open paused so you can start them manually.")
+        )
+        self._playback_protection_label.setText(self.tr("Playback protection"))
+        self._playback_protection_desc.setText(
+            self.tr(
+                "Prevents media changes and seeking while audio or video is playing. "
+                "Pause first to make changes."
+            )
         )
         self._watched_folder_title_lbl.setText(self.tr("Link Folder"))
         self._watched_folder_desc_lbl.setText(

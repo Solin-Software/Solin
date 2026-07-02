@@ -1,5 +1,6 @@
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import solin.widgets.browser.widget as browser_widget
 from PySide6.QtWidgets import QApplication
@@ -75,3 +76,35 @@ def test_image_fetch_coordinator_drops_replaced_worker_result():
     assert coordinator.shutdown(timeout=1) == []
 
     assert delivered == [(second_generation, b"new")]
+
+
+def test_live_tab_projection_resets_toggle_when_playback_is_protected():
+    class _Toggle:
+        def __init__(self):
+            self.checked = True
+            self.blocked = []
+
+        def blockSignals(self, blocked):
+            self.blocked.append(blocked)
+
+        def setChecked(self, checked):
+            self.checked = checked
+
+    widget = browser_widget.BrowserWidget.__new__(browser_widget.BrowserWidget)
+    widget._pinned_tab = None
+    widget._current_tab = lambda: object()
+    widget._playback_protection = SimpleNamespace(
+        allow_manual_projection_change=lambda: False
+    )
+    widget.cast_btn = _Toggle()
+    visual_states = []
+    starts = []
+    widget._update_cast_btn_visual = visual_states.append
+    widget._start_tab_projection = lambda: starts.append(True)
+
+    widget._on_cast_clicked(True)
+
+    assert starts == []
+    assert widget.cast_btn.checked is False
+    assert widget.cast_btn.blocked == [True, False]
+    assert visual_states == [False]

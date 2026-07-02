@@ -45,6 +45,7 @@ EXPECTED_SETTINGS_KEYS = {
     "MEETINGS_AUTO_DOWNLOAD": "meetings_auto_download",
     "SJJM_ANNOUNCE_MODE": "sjjm_announce_mode",
     "START_VIDEOS_PAUSED": "start_videos_paused",
+    "PLAYBACK_PROTECTION_ENABLED": "playback_protection_enabled",
     "WATCHED_FOLDER_PATH": "watched_folder/path",
     "YEARLY_QUOTE": "yearly_quote",
     "YEARLY_REFERENCE": "yearly_ref",

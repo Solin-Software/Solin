@@ -78,6 +78,7 @@ class _WindowStub:
         self.media_ctrl.seek = _slot("seek")
         self.media_ctrl.toggle_play_pause = _slot("toggle_play_pause")
         self.media_ctrl.set_volume = _slot("set_volume")
+        self.playback_protection = SimpleNamespace(request_seek=_slot("protected_seek"))
 
         self.screen_mgr = _signal_namespace("screen_mgr", "screens_changed")
         self.lang = _signal_namespace("lang", "language_changed")
@@ -182,6 +183,7 @@ def _sources(window):
         playlist_widget=window.playlist_widget,
         projection_bar=window.proj_bar,
         media_controller=window.media_ctrl,
+        playback_protection=window.playback_protection,
         screen_manager=window.screen_mgr,
         language_manager=window.lang,
         settings_widget=window.settings_widget,
@@ -232,6 +234,9 @@ def test_connect_signals_wires_expected_signal_graph():
     ]
     assert window.proj_bar.stop_requested.connected == [
         window._projection_stop.stop_any
+    ]
+    assert window.proj_bar.seek_requested.connected == [
+        window.playback_protection.request_seek
     ]
     assert window.settings_widget.background_song_toggled.connected == [
         window._background_song_service.set_enabled

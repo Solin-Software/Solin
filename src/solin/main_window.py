@@ -51,6 +51,9 @@ from .controllers.playlist_import_controller import (
     PlaylistImportController,
     PlaylistImportHandlers,
 )
+from .controllers.playback_protection_controller import (
+    PlaybackProtectionController,
+)
 from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
@@ -340,6 +343,14 @@ class MainWindow(QMainWindow):
         self._window_state.apply_icon()
 
         self.notifications = NotificationCenter(self)
+        self.playback_protection = PlaybackProtectionController(
+            self._media_settings,
+            self.media_ctrl,
+            self,
+        )
+        self.playback_protection.manualChangeBlocked.connect(
+            self._notify_playback_protection_blocked
+        )
         self._media_download_notifications = MediaDownloadNotificationController(
             self.notifications,
             media_cache_manager,
@@ -374,6 +385,7 @@ class MainWindow(QMainWindow):
                 camera_settings=self._camera_settings,
                 auto_key_settings=self._auto_key_settings,
                 media_settings=self._media_settings,
+                playback_protection=self.playback_protection,
                 browser_settings=self._browser_settings,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
@@ -612,6 +624,7 @@ class MainWindow(QMainWindow):
                 translate=self.tr,
                 sjjm_announce_mode=self.settings_widget.get_sjjm_announce_mode,
                 start_videos_paused=self.settings_widget.get_start_videos_paused,
+                playback_protection=self.playback_protection,
                 projection_aspect_ratio_provider=(
                     lambda: projection_aspect_ratio_from_windows(
                         tuple(self.projection_session.projection_windows)
@@ -681,6 +694,7 @@ class MainWindow(QMainWindow):
                 quick_toolbar=lambda: getattr(self, "_quick_toolbar", None),
                 projection_windows=self.projection_session.all_windows,
                 translate=self.tr,
+                playback_protection=self.playback_protection,
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
@@ -701,6 +715,7 @@ class MainWindow(QMainWindow):
                 camera_service=self._camera_service,
                 projection_windows=self.projection_session.all_windows,
                 translate=self.tr,
+                playback_protection=self.playback_protection,
             ),
             TimerThemeHandlers(
                 stop_browser_tab_projection=(
@@ -731,6 +746,7 @@ class MainWindow(QMainWindow):
                 playlist_widget=self.playlist_widget,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
+                playback_protection=self.playback_protection,
                 screen_manager=self.screen_mgr,
                 language_manager=self.lang,
                 settings_widget=self.settings_widget,
@@ -984,6 +1000,13 @@ class MainWindow(QMainWindow):
     def _current_yearly_projection_text(self) -> tuple[str, str, str]:
         quote, reference = self.settings_widget.get_yearly_text()
         return quote, reference, self.settings_widget._current_api_code()
+
+    def _notify_playback_protection_blocked(self) -> None:
+        self.notifications.warning(
+            self.tr("Pause playback before changing the projected content."),
+            title=self.tr("Playback protection"),
+            dedupe_key="playback-protection:manual-change",
+        )
 
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()

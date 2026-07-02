@@ -53,6 +53,7 @@ class _WindowStub:
         )
         self.projection_aspect_ratio_provider = lambda: object()
         self.browser_settings = object()
+        self.playback_protection = object()
         self.profile_media_store = object()
         self.jwpub_import_thread_factory = object()
         self.document_conversion_service = object()
@@ -135,6 +136,7 @@ def _controller(window, *, project_video=None):
             ),
             projection_aspect_ratio_provider=window.projection_aspect_ratio_provider,
             media_info_service_factory=window.media_info_service_factory,
+            playback_protection=window.playback_protection,
         ),
         LazyPageHandlers(
             project_image=lambda *_args: None,
@@ -283,6 +285,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             download_service,
             image_fetch_service,
             aspect_ratio_provider,
+            playback_protection,
             parent=None,
         ):
             self.lang_manager = lang_manager
@@ -291,6 +294,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             self.download_service = download_service
             self.image_fetch_service = image_fetch_service
             self.aspect_ratio_provider = aspect_ratio_provider
+            self.playback_protection = playback_protection
             self.parent = parent
 
     window = _WindowStub()
@@ -307,6 +311,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser.download_service is window.browser_download_service
     assert browser.image_fetch_service is window.browser_image_fetch_service
     assert browser.aspect_ratio_provider is window.projection_aspect_ratio_provider
+    assert browser.playback_protection is window.playback_protection
     assert browser.parent is None
 
 
