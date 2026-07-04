@@ -122,14 +122,19 @@ Rectangle {
                 HeaderButton {
                     id: syncBtn
                     visible: root.hasController && controller.syncAvailable
-                    enabled: root.hasController && controller.syncAvailable && !controller.syncBusy
+                    enabled: root.hasController
+                             && controller.syncAvailable
+                             && !controller.syncBusy
+                             && !controller.syncPending
                     iconName: "folder_link"
                     iconSize: 14
                     colorHex: root.iconHex(controller.syncEnabled ? root.success : root.textMuted)
                     accentButton: controller.syncEnabled
-                    toolTipText: controller.syncEnabled
-                                 ? qsTranslate("MeetingSync", "Turn off meeting sync")
-                                 : qsTranslate("MeetingSync", "Sync meeting to linked folder")
+                    toolTipText: controller.syncPending
+                                 ? qsTranslate("_PlaylistEditView", "Offline / Syncing")
+                                 : controller.syncEnabled
+                                   ? qsTranslate("MeetingSync", "Turn off meeting sync")
+                                   : qsTranslate("MeetingSync", "Sync meeting to linked folder")
                     onClicked: if (root.hasController) controller.toggleSync()
                 }
 

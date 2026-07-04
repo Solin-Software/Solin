@@ -56,13 +56,11 @@ from solin.core.media.formats import (
 )
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
-    MANIFEST_LOCK as _MANIFEST_LOCK,
+    MANIFEST_REPOSITORY,
     absolute_local_url_tail as _absolute_local_url_tail,
     cache_dir as _cache_dir,
     from_manifest_url as _from_manifest_url,
     is_absolute_local_url as _is_absolute_local_url,
-    load_manifest as _load_manifest,
-    save_manifest as _save_manifest,
     to_manifest_url as _to_manifest_url,
 )
 
@@ -100,8 +98,10 @@ def _commit_processed_entry(
     entry: dict,
 ) -> dict | None:
     """Merge and persist one processed entry without overwriting newer fields."""
-    with _MANIFEST_LOCK:
-        manifest = _load_manifest(subfolder)
+    previous: dict | None = None
+
+    def update_manifest(manifest: dict) -> None:
+        nonlocal previous
         processed = manifest.setdefault("processed", {})
         previous = processed.get(source_name)
         if previous and entry.get("type") in WATCHED_DOC_TYPES:
@@ -122,9 +122,9 @@ def _commit_processed_entry(
                 if replacement:
                     item["url"] = url[:separator_index + 1] + replacement
         processed[source_name] = entry
-        if not _save_manifest(subfolder, manifest):
-            raise OSError(f"Could not persist manifest entry for '{source_name}'")
-        return previous
+
+    MANIFEST_REPOSITORY.update(subfolder, update_manifest, strict=True)
+    return previous
 
 
 def _file_fingerprint(path: Path) -> dict:
@@ -307,7 +307,7 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
 
     items: list[dict] = []
 
-    manifest = _load_manifest(sub)
+    manifest = MANIFEST_REPOSITORY.load(sub)
 
     # Coleta todos os arquivos permitidos no cache (gerados pelo Solin)
     allowed_cache_files = set()
@@ -379,7 +379,7 @@ def get_pending_files(subfolder_path: str) -> list[str]:
     sub = Path(subfolder_path)
     if not sub.is_dir():
         return []
-    manifest = _load_manifest(sub)
+    manifest = MANIFEST_REPOSITORY.load(sub)
     processed = manifest.get("processed", {})
     pending = []
     for f in sub.iterdir():
@@ -422,32 +422,34 @@ def reconcile_manifest(subfolder_path: str) -> list[str]:
     sub = Path(subfolder_path)
     if not sub.is_dir():
         return []
-    manifest = _load_manifest(sub)
-    processed = manifest.get("processed", {})
-    removed = []
+    removed: list[str] = []
+    orphan_outputs: list[tuple[str, str]] = []
     cache = sub / CACHE_DIR_NAME
 
-    for src_name in list(processed.keys()):
-        src_path = sub / src_name
-        if src_path.exists():
-            continue
-        # Source file gone — clean up outputs
-        entry = processed.pop(src_name)
-        for out_name in entry.get("outputs", []):
-            out_path = cache / out_name
-            try:
-                if out_path.exists():
-                    os.remove(out_path)
-            except OSError as exc:
-                log.warning("Cannot remove orphan %s: %s", out_path, exc)
-        removed.append(src_name)
-        log.info("Reconciled: removed %s and %d outputs", src_name, len(entry.get("outputs", [])))
+    def update_manifest(manifest: dict) -> bool:
+        processed = manifest.get("processed", {})
+        for src_name in list(processed):
+            if (sub / src_name).exists():
+                continue
+            entry = processed.pop(src_name)
+            outputs = [str(name) for name in entry.get("outputs", [])]
+            removed.append(src_name)
+            orphan_outputs.extend((src_name, name) for name in outputs)
+        return bool(removed)
+
+    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
+
+    for src_name, out_name in orphan_outputs:
+        out_path = cache / out_name
+        try:
+            out_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("Cannot remove orphan %s: %s", out_path, exc)
+        log.info("Reconciled output for removed source %s: %s", src_name, out_name)
 
     # Playlist items are NOT removed here — missing files are shown as
     # "Offline / Syncing" in the UI so their position is preserved.
 
-    if removed:
-        _save_manifest(sub, manifest)
     return removed
 
 
@@ -469,7 +471,7 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
     reconcile_manifest(subfolder_path)
 
     # Saved playlist from manifest
-    manifest = _load_manifest(sub)
+    manifest = MANIFEST_REPOSITORY.load(sub)
     saved_pl = manifest.get("playlist", {})
     saved_manifest_items = saved_pl.get("items", [])
 
@@ -496,7 +498,13 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
         saved_items.append(runtime_item)
 
     if manifest_changed:
-        _save_manifest(sub, manifest)
+        healed_items = [dict(item) for item in saved_manifest_items]
+
+        def heal_manifest(latest: dict) -> None:
+            playlist = latest.setdefault("playlist", {})
+            playlist["items"] = healed_items
+
+        MANIFEST_REPOSITORY.update(sub, heal_manifest, strict=True)
 
     # Current items from disk scan, after any load-time adoption above.
     current_items = scan_subfolder(subfolder_path)
@@ -566,14 +574,16 @@ def save_manifest_playlist(subfolder_path: str, pl: dict) -> None:
             item["url"] = runtime_url
         portable_items.append(pi)
 
-    manifest = _load_manifest(sub)
-
-    manifest["playlist"] = {
-        "items":    portable_items,
+    playlist = {
+        "items": portable_items,
         "sections": pl.get("sections", []),
-        "markers":  pl.get("markers", []),
+        "markers": pl.get("markers", []),
     }
-    _save_manifest(sub, manifest)
+
+    def update_manifest(manifest: dict) -> None:
+        manifest["playlist"] = playlist
+
+    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
 
 
 def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
@@ -595,57 +605,50 @@ def remove_item_from_manifest(subfolder_path: str, item: dict) -> bool:
     item_url = item.get("url", "")
     url_path = Path(item_url) if item_url else None
     changed = False
-
-    # 1. Delete the physical file if it lives inside the watched folder
-    # This covers both cache outputs (e.g. .solin_cache/page_1.jpg) AND
-    # root media files (e.g. video.mp4 copied into the folder).
+    delete_physical = False
     if url_path and url_path.is_file():
-        try:
-            norm_sub = os.path.normpath(str(sub))
-            norm_url = os.path.normpath(str(url_path))
-            if norm_url.startswith(norm_sub + os.sep):
-                os.remove(str(url_path))
+        norm_sub = os.path.normpath(str(sub))
+        norm_url = os.path.normpath(str(url_path))
+        delete_physical = norm_url.startswith(norm_sub + os.sep)
+
+    def update_manifest(manifest: dict) -> bool:
+        nonlocal changed
+        processed = manifest.get("processed", {})
+        if item.get("_virtual") and item.get("_source"):
+            src_name = item["_source"]
+            if src_name in processed:
+                entry = processed[src_name]
+                virtual_items = entry.get("virtual_items", [])
+                filtered = [vi for vi in virtual_items if vi.get("url") != item_url]
+                if len(filtered) != len(virtual_items):
+                    entry["virtual_items"] = filtered
+                    changed = True
+        elif url_path:
+            target_basename = url_path.name
+            for entry in processed.values():
+                outputs = entry.get("outputs", [])
+                if target_basename in outputs:
+                    outputs.remove(target_basename)
+                    changed = True
+                    break
+
+        playlist = manifest.get("playlist", {})
+        items = playlist.get("items", [])
+        if items and item_url:
+            filtered = [candidate for candidate in items if candidate.get("url", "") != item_url]
+            if len(filtered) != len(items):
+                playlist["items"] = filtered
                 changed = True
-                log.info("Removed physical file from watched folder: %s", url_path.name)
+        return changed
+
+    MANIFEST_REPOSITORY.update(sub, update_manifest, strict=True)
+    if delete_physical and url_path is not None:
+        try:
+            url_path.unlink(missing_ok=True)
+            changed = True
+            log.info("Removed physical file from watched folder: %s", url_path.name)
         except OSError as exc:
             log.warning("Cannot remove physical file %s: %s", url_path, exc)
-
-    # 2. Update manifest → remove the output from its "processed" entry
-    manifest = _load_manifest(sub)
-    processed = manifest.get("processed", {})
-    
-    # a) If it's a virtual item, remove it from its source's virtual_items list
-    if item.get("_virtual") and item.get("_source"):
-        src_name = item["_source"]
-        if src_name in processed:
-            entry = processed[src_name]
-            v_items = entry.get("virtual_items", [])
-            original_len = len(v_items)
-            entry["virtual_items"] = [vi for vi in v_items if vi.get("url") != item_url]
-            if len(entry["virtual_items"]) != original_len:
-                changed = True
-
-    # b) If it's a physical output file, remove it from all outputs lists
-    elif url_path:
-        target_basename = url_path.name
-        for _src_name, entry in processed.items():
-            outputs = entry.get("outputs", [])
-            if target_basename in outputs:
-                outputs.remove(target_basename)
-                changed = True
-                break
-
-    # 3. Remove from manifest playlist items (just in case it's still there)
-    pl_data = manifest.get("playlist", {})
-    pl_items = pl_data.get("items", [])
-    if pl_items and item_url:
-        new_items = [it for it in pl_items if it.get("url", "") != item_url]
-        if len(new_items) != len(pl_items):
-            pl_data["items"] = new_items
-            changed = True
-
-    if changed:
-        _save_manifest(sub, manifest)
     return changed
 
 
@@ -1198,7 +1201,7 @@ class WatchedFolderSyncThread(QThread):
         source_path: Path,
         outputs: list[str],
     ) -> None:
-        manifest = _load_manifest(cache.parent)
+        manifest = MANIFEST_REPOSITORY.load(cache.parent)
         referenced = {
             output_name
             for entry in manifest.get("processed", {}).values()
