@@ -13,13 +13,11 @@ from typing import Any
 
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
+    MANIFEST_REPOSITORY,
     MANIFEST_FILE,
-    MANIFEST_LOCK,
     ManifestError,
     cache_dir,
     from_manifest_url,
-    load_manifest,
-    save_manifest,
     to_manifest_url,
 )
 
@@ -144,7 +142,7 @@ class MeetingLinkedFolderSync:
 
     def manifest_matches(self, folder: Path, identity: MeetingSyncIdentity) -> bool:
         try:
-            block = load_manifest(folder, strict=True).get(MEETING_TREE_KEY)
+            block = MANIFEST_REPOSITORY.load(folder, strict=True).get(MEETING_TREE_KEY)
         except ManifestError:
             return False
         return self._block_matches(block, identity)
@@ -157,7 +155,7 @@ class MeetingLinkedFolderSync:
         folder = self.locate_folder(watched_root, identity, create=False)
         if folder is None:
             return None
-        manifest = load_manifest(folder, strict=True)
+        manifest = MANIFEST_REPOSITORY.load(folder, strict=True)
         block = manifest.get(MEETING_TREE_KEY)
         if not self._block_matches(block, identity):
             return None
@@ -175,8 +173,10 @@ class MeetingLinkedFolderSync:
         meeting_folder_imports: dict[str, dict[str, Any]],
         expected_revision: int,
     ) -> MeetingSyncRecord:
-        with MANIFEST_LOCK:
-            manifest = load_manifest(folder, strict=True)
+        saved_record: MeetingSyncRecord | None = None
+
+        def update_manifest(manifest: dict[str, Any]) -> bool:
+            nonlocal saved_record
             existing = manifest.get(MEETING_TREE_KEY)
             existing_revision = self._revision(existing)
             save_nodes = clone_nodes(nodes)
@@ -214,26 +214,30 @@ class MeetingLinkedFolderSync:
                 and self._block_matches(existing, identity)
                 and self._same_tree_content(existing, saved_block)
             ):
-                return self._record_from_block(folder, existing, identity)
+                saved_record = self._record_from_block(folder, existing, identity)
+                return False
             manifest[MEETING_TREE_KEY] = saved_block
-            if not save_manifest(folder, manifest):
-                raise MeetingSyncError(f"Could not write {MANIFEST_FILE}.")
-            return self._record_from_block(folder, saved_block, identity)
+            saved_record = self._record_from_block(folder, saved_block, identity)
+            return True
+
+        MANIFEST_REPOSITORY.update(folder, update_manifest, strict=True)
+        assert saved_record is not None
+        return saved_record
 
     def delete_sync_metadata(self, folder: Path) -> None:
-        with MANIFEST_LOCK:
-            manifest_path = folder / MANIFEST_FILE
-            try:
-                manifest_path.unlink(missing_ok=True)
-            except OSError as exc:
-                raise MeetingSyncError(f"Could not remove {MANIFEST_FILE}.") from exc
+        # MW/WE folders are meeting-exclusive (scan_root filters them out), so
+        # disabling meeting sync intentionally removes their whole Solin state.
+        try:
+            MANIFEST_REPOSITORY.delete(folder)
+        except ManifestError as exc:
+            raise MeetingSyncError(f"Could not remove {MANIFEST_FILE}.") from exc
 
-            cache_path = folder / CACHE_DIR_NAME
-            if cache_path.exists():
-                try:
-                    shutil.rmtree(cache_path)
-                except OSError:
-                    log.warning("Could not remove meeting sync cache %s", cache_path, exc_info=True)
+        cache_path = folder / CACHE_DIR_NAME
+        if cache_path.exists():
+            try:
+                shutil.rmtree(cache_path)
+            except OSError:
+                log.warning("Could not remove meeting sync cache %s", cache_path, exc_info=True)
 
     def materialize_tree_files(
         self,

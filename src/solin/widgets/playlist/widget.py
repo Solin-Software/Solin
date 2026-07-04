@@ -5,8 +5,10 @@ Thumbnails persistem através de reordenações; botões com SVG real.
 """
 from __future__ import annotations
 
-import copy, logging, os, uuid
+import copy, logging, os, random, time, uuid
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtWidgets import (
@@ -14,9 +16,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     QObject, Signal, QTimer,
-    QEvent, Slot,
+    QEvent, QUrl, Slot,
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE, QML_THEME
@@ -30,6 +32,11 @@ from solin.ui.qml.playlist.visuals import (
 from solin.ui.qml.jw_media_catalog import JWMediaCatalogBridge
 from solin.ui.qml.jw_songs import JWSongsBridge
 from ...core.foundation.exception_logging import log_ignored_exception
+from ...core.ingest.manifest import (
+    ManifestError,
+    ManifestWriteError,
+    retry_manifest_write,
+)
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths
 from ...core.i18n.manager import LanguageManager
@@ -76,6 +83,19 @@ _PLAYLIST_REORDER_LOCATION_KEYS = frozenset({
     "section_id",
     "slot_order",
 })
+_MANIFEST_SAVE_DEBOUNCE_MS = 180
+_MANIFEST_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
+_MANIFEST_SAVE_RETRY_BUDGET_SECONDS = 60.0
+
+
+@dataclass(slots=True)
+class _PendingPlaylistManifestSave:
+    folder_path: str
+    playlist: dict
+    generation: int
+    next_attempt_at: float
+    first_attempt_at: float | None = None
+    retry_index: int = 0
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +129,7 @@ class PlaylistEditView(
     back_requested = Signal()
     project_items  = Signal(list, int, str)
     save_temp_as_permanent = Signal(str, dict)  # name, playlist data
+    _manifestSaveCompleted = Signal(str, int, object)
 
     def __init__(
         self,
@@ -180,6 +201,17 @@ class PlaylistEditView(
         self._image_framing_save_timer.timeout.connect(
             self._flush_image_framing_save
         )
+        self._pending_manifest_saves: dict[str, _PendingPlaylistManifestSave] = {}
+        self._manifest_save_inflight: tuple[str, int] | None = None
+        self._manifest_save_future: Future[None] | None = None
+        self._manifest_save_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="playlist-manifest",
+        )
+        self._manifestSaveCompleted.connect(self._on_manifest_save_completed)
+        self._manifest_save_timer = QTimer(self)
+        self._manifest_save_timer.setSingleShot(True)
+        self._manifest_save_timer.timeout.connect(self._drain_manifest_saves)
         self._pdf_threads:  list[object] = []
         self._lo_threads:   list[object] = []
         self._wf_refresh_pending: bool = False      # deferred refresh flag
@@ -245,6 +277,27 @@ class PlaylistEditView(
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
         self._flush_image_framing_save()
+        self._manifest_save_timer.stop()
+        final_saves: list[Future[None]] = []
+        for request in self._pending_manifest_saves.values():
+            final_saves.append(
+                self._manifest_save_executor.submit(
+                    retry_manifest_write,
+                    lambda pending=request: (
+                        self._watched_folder_playlist_store.save_playlist(
+                            pending.folder_path,
+                            pending.playlist,
+                        )
+                    ),
+                )
+            )
+        self._manifest_save_executor.shutdown(wait=True, cancel_futures=False)
+        for future in final_saves:
+            try:
+                future.result()
+            except ManifestError:
+                log.warning("Could not flush playlist manifest during cleanup", exc_info=True)
+        self._pending_manifest_saves.clear()
         self._thumb_queue.shutdown()
         self._thumb_scan_timer.stop()
         self._thumb_scan_items.clear()
@@ -280,13 +333,170 @@ class PlaylistEditView(
         self._image_framing_save_pending = False
         if self._is_temp:
             return
-        if self._is_watched:
-            self._watched_folder_playlist_store.save_playlist(
-                self._watched_path,
-                self._pl,
-            )
+        if self._is_watched and self._pl is not None and self._watched_path:
+            self._schedule_manifest_save(self._watched_path, self._pl)
         else:
             self._playlist_repository.save(self._all_playlists)
+
+    def _schedule_manifest_save(self, folder_path: str, playlist: dict) -> None:
+        key = os.path.normcase(os.path.abspath(folder_path))
+        previous = self._pending_manifest_saves.get(key)
+        self._pending_manifest_saves[key] = _PendingPlaylistManifestSave(
+            folder_path=folder_path,
+            playlist=copy.deepcopy(playlist),
+            generation=(previous.generation + 1) if previous else 1,
+            next_attempt_at=time.monotonic() + _MANIFEST_SAVE_DEBOUNCE_MS / 1000,
+            first_attempt_at=previous.first_attempt_at if previous else None,
+            retry_index=previous.retry_index if previous else 0,
+        )
+        self._arm_manifest_save_timer()
+
+    def _arm_manifest_save_timer(self) -> None:
+        if self._manifest_save_inflight is not None:
+            self._manifest_save_timer.stop()
+            return
+        if not self._pending_manifest_saves:
+            self._manifest_save_timer.stop()
+            return
+        next_attempt = min(
+            request.next_attempt_at for request in self._pending_manifest_saves.values()
+        )
+        delay_ms = max(0, int((next_attempt - time.monotonic()) * 1000))
+        self._manifest_save_timer.start(delay_ms)
+
+    def _drain_manifest_saves(self) -> None:
+        if self._manifest_save_inflight is not None:
+            return
+        if not self._pending_manifest_saves:
+            return
+        now = time.monotonic()
+        key, request = min(
+            self._pending_manifest_saves.items(),
+            key=lambda item: item[1].next_attempt_at,
+        )
+        if request.next_attempt_at > now:
+            self._arm_manifest_save_timer()
+            return
+        if request.first_attempt_at is None:
+            request.first_attempt_at = now
+        generation = request.generation
+        self._manifest_save_inflight = (key, generation)
+        self._manifest_save_timer.stop()
+        future = self._manifest_save_executor.submit(
+            self._watched_folder_playlist_store.save_playlist,
+            request.folder_path,
+            request.playlist,
+        )
+        self._manifest_save_future = future
+        future.add_done_callback(
+            lambda completed, save_key=key, save_generation=generation: (
+                self._emit_manifest_save_completed(
+                    save_key,
+                    save_generation,
+                    completed,
+                )
+            )
+        )
+
+    def _emit_manifest_save_completed(
+        self,
+        key: str,
+        generation: int,
+        future: Future[None],
+    ) -> None:
+        try:
+            future.result()
+        except BaseException as exc:  # noqa: BLE001 - worker-to-Qt exception boundary
+            self._manifestSaveCompleted.emit(key, generation, exc)
+        else:
+            self._manifestSaveCompleted.emit(key, generation, None)
+
+    @Slot(str, int, object)
+    def _on_manifest_save_completed(
+        self,
+        key: str,
+        generation: int,
+        error: BaseException | None,
+    ) -> None:
+        self._manifest_save_inflight = None
+        self._manifest_save_future = None
+        request = self._pending_manifest_saves.get(key)
+        if request is None:
+            self._arm_manifest_save_timer()
+            return
+        now = time.monotonic()
+        is_latest = request.generation == generation
+
+        if error is None:
+            if is_latest:
+                self._pending_manifest_saves.pop(key, None)
+            else:
+                request.next_attempt_at = now
+            current_key = (
+                os.path.normcase(os.path.abspath(self._watched_path))
+                if self._watched_path
+                else ""
+            )
+            if is_latest and key == current_key and self._wf_refresh_pending:
+                self._wf_refresh_pending = False
+                QTimer.singleShot(0, self.refresh_watched_folder)
+        elif not is_latest:
+            request.next_attempt_at = now
+        elif isinstance(error, ManifestWriteError):
+            elapsed = now - (request.first_attempt_at or now)
+            if error.retryable and elapsed < _MANIFEST_SAVE_RETRY_BUDGET_SECONDS:
+                delay = _MANIFEST_SAVE_RETRY_DELAYS_MS[
+                    min(
+                        request.retry_index,
+                        len(_MANIFEST_SAVE_RETRY_DELAYS_MS) - 1,
+                    )
+                ]
+                request.retry_index += 1
+                retry_delay = int(delay * random.uniform(0.8, 1.2))
+                request.next_attempt_at = now + retry_delay / 1000
+                log.warning(
+                    "Playlist manifest publish is busy; retry %d in %d ms: %s",
+                    request.retry_index,
+                    retry_delay,
+                    error.path,
+                )
+            elif self._warn_manifest_save_failed(request.folder_path, str(error)):
+                request.first_attempt_at = None
+                request.retry_index = 0
+                request.next_attempt_at = now
+            else:
+                self._pending_manifest_saves.pop(key, None)
+        else:
+            if self._warn_manifest_save_failed(request.folder_path, str(error)):
+                request.first_attempt_at = None
+                request.retry_index = 0
+                request.next_attempt_at = now
+            else:
+                self._pending_manifest_saves.pop(key, None)
+
+        self._arm_manifest_save_timer()
+
+    def _warn_manifest_save_failed(self, folder_path: str, message: str) -> bool:
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle(self.tr("Linked folder"))
+        dialog.setText(self.tr("Could not update the linked folder."))
+        dialog.setInformativeText(
+            self.tr("Try again or open the linked folder to check its sync status.")
+        )
+        if message:
+            dialog.setDetailedText(message[:2_000])
+        dialog.setStandardButtons(
+            QMessageBox.StandardButton.Retry
+            | QMessageBox.StandardButton.Open
+            | QMessageBox.StandardButton.Close
+        )
+        result = dialog.exec()
+        if result == QMessageBox.StandardButton.Retry:
+            return True
+        if result == QMessageBox.StandardButton.Open:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+        return False
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -502,6 +712,7 @@ class PlaylistEditView(
 
     def load_playlist(self, pl: dict):
         self._flush_image_framing_save()
+        self._wf_refresh_pending = False
         self._is_watched = False
         self._watched_path = ""
         self._pl = pl
@@ -516,10 +727,17 @@ class PlaylistEditView(
     def load_watched_folder(self, folder_path: str):
         """Load a linked folder as a full playlist with drag-reorder + sections."""
         self._flush_image_framing_save()
+        self._wf_refresh_pending = False
         self._is_watched = True
         self._watched_path = folder_path
         self._is_temp = False
-        pl = self._watched_folder_playlist_store.load_playlist(folder_path)
+        key = os.path.normcase(os.path.abspath(folder_path))
+        pending = self._pending_manifest_saves.get(key)
+        pl = (
+            copy.deepcopy(pending.playlist)
+            if pending is not None
+            else self._watched_folder_playlist_store.load_playlist(folder_path)
+        )
         self._pl = pl
         self._wf_file_availability = self._watched_file_availability(pl)
         self._thumb_queue.clear()
@@ -608,6 +826,10 @@ class PlaylistEditView(
         """Re-scan and reconcile linked folder (called by watcher)."""
         self._flush_image_framing_save()
         if not self._is_watched or not self._watched_path:
+            return
+        key = os.path.normcase(os.path.abspath(self._watched_path))
+        if key in self._pending_manifest_saves:
+            self._wf_refresh_pending = True
             return
         if self._wf_sync_thread is not None:
             self._wf_refresh_pending = True
@@ -1071,16 +1293,23 @@ class PlaylistEditView(
         self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
         self._save()
         if self._is_watched and self._watched_path and item:
-            self._watched_folder_playlist_store.remove_item(
-                self._watched_path,
-                item,
-            )
+            self._remove_watched_item(self._watched_path, item)
         elif item:
             self._schedule_cleanup([item])
         self.model.rebuild(self._pl)
         self._sync_playlist_chrome(emit_data_changed=False)
         self.bridge.emit_node_replaced(item_id, [])
         self.bridge.emit_section_counts_changed()
+
+    def _remove_watched_item(self, folder_path: str, item: dict) -> None:
+        try:
+            self._watched_folder_playlist_store.remove_item(folder_path, item)
+        except ManifestError as exc:
+            if self._warn_manifest_save_failed(folder_path, str(exc)):
+                QTimer.singleShot(
+                    0,
+                    lambda: self._remove_watched_item(folder_path, item),
+                )
 
     def _rename_item(self, item_id: str):
         if not self._pl: return

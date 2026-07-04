@@ -5,13 +5,18 @@ import tempfile
 import unittest
 import uuid
 from collections.abc import Callable
+from concurrent.futures import Future
 from datetime import date
 from pathlib import Path
 
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
-from solin.core.ingest.manifest import CACHE_DIR_NAME, MANIFEST_FILE
+from solin.core.ingest.manifest import (
+    CACHE_DIR_NAME,
+    MANIFEST_FILE,
+    ManifestWriteError,
+)
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
@@ -73,6 +78,65 @@ class _Signal:
 
     def emit(self, *args):
         self.calls.append(args)
+
+
+class _Timer:
+    def __init__(self):
+        self.interval = None
+
+    def start(self, interval=0):
+        self.interval = interval
+
+    def stop(self):
+        self.interval = None
+
+
+class _ImmediateExecutor:
+    def submit(self, function, *args, **kwargs):
+        future = Future()
+        try:
+            future.set_result(function(*args, **kwargs))
+        except BaseException as exc:  # noqa: BLE001 - test executor boundary
+            future.set_exception(exc)
+        return future
+
+
+class _ForwardSignal:
+    def __init__(self, callback):
+        self._callback = callback
+
+    def emit(self, *args):
+        self._callback(*args)
+
+
+def _configure_sync_save_queue(controller) -> None:
+    controller._pending_sync_saves = {}
+    controller._sync_save_inflight = None
+    controller._sync_save_future = None
+    controller._sync_save_executor = _ImmediateExecutor()
+    controller._sync_save_timer = _Timer()
+    controller._schedule_sync_manifest_save = (
+        lambda **kwargs: MeetingTreeController._schedule_sync_manifest_save(
+            controller,
+            **kwargs,
+        )
+    )
+    controller._arm_sync_save_timer = (
+        lambda: MeetingTreeController._arm_sync_save_timer(controller)
+    )
+    controller._drain_sync_manifest_saves = (
+        lambda: MeetingTreeController._drain_sync_manifest_saves(controller)
+    )
+    controller._on_sync_save_completed = (
+        lambda *args: MeetingTreeController._on_sync_save_completed(controller, *args)
+    )
+    controller._emit_sync_save_completed = (
+        lambda *args: MeetingTreeController._emit_sync_save_completed(controller, *args)
+    )
+    controller._notify_sync_save_failure = (
+        lambda *args: MeetingTreeController._notify_sync_save_failure(controller, *args)
+    )
+    controller._syncSaveCompleted = _ForwardSignal(controller._on_sync_save_completed)
 
 
 def _identity(pub_type: str = "mwb") -> MeetingSyncIdentity:
@@ -624,6 +688,8 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._linked_folder_files = {}
             controller._meeting_folder_imports = {}
             controller._sync_service = FakeService()
+            controller.syncStateChanged = _Signal()
+            _configure_sync_save_queue(controller)
             controller._apply_sync_record = (
                 lambda record: MeetingTreeController._apply_sync_record(
                     controller,
@@ -821,7 +887,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         self.assertEqual(controller._nodes, record.nodes)
         self.assertEqual(controller._sync_revision, 2)
 
-    def test_save_sync_manifest_failure_pauses_sync_and_warns(self):
+    def test_save_sync_manifest_permanent_failure_keeps_sync_enabled_and_warns(self):
         class FakeController:
             pass
 
@@ -840,8 +906,9 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._meeting_folder_imports = {}
         controller._sync_service = FailingService()
         controller.syncStateChanged = _Signal()
+        _configure_sync_save_queue(controller)
         warnings = []
-        controller._warn_sync_failed = warnings.append
+        controller._warn_sync_failed = lambda message, **_kwargs: warnings.append(message)
         controller._pause_sync_after_save_failure = (
             lambda message: MeetingTreeController._pause_sync_after_save_failure(
                 controller,
@@ -851,12 +918,102 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
 
         MeetingTreeController._save_sync_manifest(controller)
 
-        self.assertFalse(controller._sync_enabled)
-        self.assertEqual(controller._sync_revision, 0)
+        self.assertTrue(controller._sync_enabled)
+        self.assertEqual(controller._sync_revision, 4)
         self.assertEqual(warnings, ["manifest is unavailable"])
-        self.assertEqual(controller.syncStateChanged.calls, [()])
+        self.assertFalse(controller._pending_sync_saves)
 
-    def test_save_sync_manifest_io_failure_pauses_sync_and_warns(self):
+    def test_save_sync_manifest_retries_transient_lock_without_warning(self):
+        class FakeController:
+            pass
+
+        class FlakyService:
+            def __init__(self):
+                self.calls = 0
+
+            def save_tree(self, folder, identity, **_kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    cause = PermissionError("busy")
+                    cause.winerror = 5
+                    raise ManifestWriteError(
+                        folder / MANIFEST_FILE,
+                        operation="replace",
+                        retryable=True,
+                        cause=cause,
+                    )
+                return MeetingSyncRecord(
+                    folder=folder,
+                    tree_key=identity.tree_key,
+                    pub_type=identity.pub_type,
+                    monday=identity.monday,
+                    meeting_tag=identity.meeting_tag,
+                    folder_date=identity.monday,
+                    canonical_hash=identity.canonical_hash,
+                    nodes=[],
+                    deleted_source_keys=set(),
+                    linked_folder_files={},
+                    meeting_folder_imports={},
+                    revision=5,
+                )
+
+        controller = FakeController()
+        controller._sync_identity = _identity("mwb")
+        controller._sync_folder = "C:/tmp/2026-05-25 MW"
+        controller._sync_enabled = True
+        controller._sync_revision = 4
+        controller._nodes = []
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller._sync_service = FlakyService()
+        controller.syncStateChanged = _Signal()
+        warnings = []
+        controller._warn_sync_failed = lambda message, **_kwargs: warnings.append(message)
+        controller._apply_sync_record = (
+            lambda record: MeetingTreeController._apply_sync_record(controller, record)
+        )
+        _configure_sync_save_queue(controller)
+
+        MeetingTreeController._save_sync_manifest(controller)
+
+        self.assertEqual(controller._sync_service.calls, 1)
+        self.assertTrue(controller._pending_sync_saves)
+        self.assertEqual(warnings, [])
+        request = next(iter(controller._pending_sync_saves.values()))
+        request.next_attempt_at = 0
+
+        MeetingTreeController._drain_sync_manifest_saves(controller)
+
+        self.assertEqual(controller._sync_service.calls, 2)
+        self.assertFalse(controller._pending_sync_saves)
+        self.assertEqual(controller._sync_revision, 5)
+        self.assertEqual(warnings, [])
+
+    def test_scheduled_manifest_saves_coalesce_latest_tree(self):
+        class FakeController:
+            pass
+
+        controller = FakeController()
+        controller._sync_identity = _identity("mwb")
+        controller._sync_folder = "C:/tmp/2026-05-25 MW"
+        controller._sync_revision = 1
+        controller._nodes = [{"id": "first", "type": "media", "children": []}]
+        controller._deleted_source_keys = set()
+        controller._linked_folder_files = {}
+        controller._meeting_folder_imports = {}
+        controller.syncStateChanged = _Signal()
+        _configure_sync_save_queue(controller)
+
+        MeetingTreeController._schedule_sync_manifest_save(controller)
+        controller._nodes = [{"id": "latest", "type": "media", "children": []}]
+        MeetingTreeController._schedule_sync_manifest_save(controller)
+
+        self.assertEqual(len(controller._pending_sync_saves), 1)
+        request = next(iter(controller._pending_sync_saves.values()))
+        self.assertEqual(request.nodes[0]["id"], "latest")
+
+    def test_save_sync_manifest_io_failure_keeps_sync_enabled_and_warns(self):
         class FakeController:
             pass
 
@@ -875,8 +1032,9 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._meeting_folder_imports = {}
         controller._sync_service = FailingService()
         controller.syncStateChanged = _Signal()
+        _configure_sync_save_queue(controller)
         warnings = []
-        controller._warn_sync_failed = warnings.append
+        controller._warn_sync_failed = lambda message, **_kwargs: warnings.append(message)
         controller._pause_sync_after_save_failure = (
             lambda message: MeetingTreeController._pause_sync_after_save_failure(
                 controller,
@@ -886,10 +1044,10 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
 
         MeetingTreeController._save_sync_manifest(controller)
 
-        self.assertFalse(controller._sync_enabled)
-        self.assertEqual(controller._sync_revision, 0)
+        self.assertTrue(controller._sync_enabled)
+        self.assertEqual(controller._sync_revision, 4)
         self.assertEqual(warnings, ["[Errno 28] No space left on device"])
-        self.assertEqual(controller.syncStateChanged.calls, [()])
+        self.assertFalse(controller._pending_sync_saves)
 
     def test_enable_sync_adopts_existing_manifest_without_overwrite(self):
         class FakeController:

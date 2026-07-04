@@ -9,12 +9,25 @@ from pathlib import Path
 import pytest
 
 from solin.core.ingest import watched_folder as watched_folder_module
+from solin.core.ingest.manifest import MANIFEST_REPOSITORY
 from solin.core.ingest.local_files import local_file_availability_signature
 from solin.core.ingest.meeting_folder_sources import (
     meeting_folder_source_needs_processing,
     scan_meeting_folder_sources,
 )
 from solin.core.ingest.watched_folder import WatchedFolderSyncThread
+
+
+def _write_manifest(folder: Path, payload: dict) -> None:
+    def replace_manifest(manifest: dict) -> None:
+        manifest.clear()
+        manifest.update(payload)
+
+    MANIFEST_REPOSITORY.update(folder, replace_manifest, strict=False)
+
+
+def _read_manifest(folder: Path) -> dict:
+    return MANIFEST_REPOSITORY.load(folder, strict=True)
 
 
 class LocalFileAvailabilitySignatureTests(unittest.TestCase):
@@ -78,7 +91,18 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
                     "notes.docx",
                 },
             )
-            self.assertFalse((meeting / ".solin_cache").exists())
+        self.assertFalse((meeting / ".solin_cache").exists())
+
+    def test_playlist_scan_excludes_meeting_folder_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Music").mkdir()
+            (root / "2026-05-26 MW").mkdir()
+            (root / "2026-05-31 WE").mkdir()
+
+            playlists = watched_folder_module.scan_root(str(root))
+
+            self.assertEqual([playlist["name"] for playlist in playlists], ["Music"])
 
     def test_source_processing_decision_suppresses_removed_until_file_changes(self):
         source = {
@@ -295,7 +319,7 @@ def test_same_stem_documents_use_independent_page_caches(monkeypatch, tmp_path):
 
 
 def test_document_cache_rename_updates_saved_playlist_urls(tmp_path):
-    watched_folder_module._save_manifest(
+    _write_manifest(
         tmp_path,
         {
             "version": 1,
@@ -322,7 +346,7 @@ def test_document_cache_rename_updates_saved_playlist_urls(tmp_path):
         },
     )
 
-    manifest = watched_folder_module._load_manifest(tmp_path)
+    manifest = _read_manifest(tmp_path)
     assert manifest["playlist"]["items"][0]["url"] == (
         ".solin_cache/report.pdf-unique-page_001.jpg"
     )
@@ -345,7 +369,7 @@ def test_watched_playlist_adopts_external_generated_files_into_cache(tmp_path):
     try:
         watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
 
-        manifest = watched_folder_module._load_manifest(tmp_path)
+        manifest = _read_manifest(tmp_path)
         saved_url = manifest["playlist"]["items"][0]["url"]
         runtime_url = playlist["items"][0]["url"]
 
@@ -354,7 +378,7 @@ def test_watched_playlist_adopts_external_generated_files_into_cache(tmp_path):
         assert Path(runtime_url).is_file()
         assert Path(runtime_url).parent == tmp_path / ".solin_cache"
         assert Path(runtime_url).read_bytes() == b"page"
-        assert str(external) not in watched_folder_module._load_manifest(
+        assert str(external) not in _read_manifest(
             tmp_path,
         )["playlist"]["items"][0]["url"]
     finally:
@@ -384,7 +408,7 @@ def test_watched_playlist_round_trips_prepared_image_framing(tmp_path):
 
     watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
     loaded = watched_folder_module.load_manifest_playlist(str(tmp_path))
-    manifest = watched_folder_module._load_manifest(tmp_path)
+    manifest = _read_manifest(tmp_path)
 
     assert loaded["items"][0]["image_framing"] == framing
     assert manifest["playlist"]["items"][0]["image_framing"] == framing
@@ -393,7 +417,7 @@ def test_watched_playlist_round_trips_prepared_image_framing(tmp_path):
 def test_loading_watched_playlist_heals_existing_external_cache_url(tmp_path):
     external = tmp_path.parent / f"legacy-page-{uuid.uuid4().hex}.jpg"
     external.write_bytes(b"legacy")
-    watched_folder_module._save_manifest(
+    _write_manifest(
         tmp_path,
         {
             "version": 1,
@@ -416,7 +440,7 @@ def test_loading_watched_playlist_heals_existing_external_cache_url(tmp_path):
     try:
         playlist = watched_folder_module.load_manifest_playlist(str(tmp_path))
 
-        manifest = watched_folder_module._load_manifest(tmp_path)
+        manifest = _read_manifest(tmp_path)
         saved_url = manifest["playlist"]["items"][0]["url"]
         runtime_url = playlist["items"][0]["url"]
 
@@ -433,7 +457,7 @@ def test_scan_subfolder_includes_cache_files_referenced_by_playlist(tmp_path):
     cache.mkdir()
     page = cache / "page_001.jpg"
     page.write_bytes(b"page")
-    watched_folder_module._save_manifest(
+    _write_manifest(
         tmp_path,
         {
             "version": 1,
@@ -473,7 +497,7 @@ def test_watched_playlist_does_not_persist_missing_windows_absolute_urls(tmp_pat
 
     watched_folder_module.save_manifest_playlist(str(tmp_path), playlist)
 
-    manifest = watched_folder_module._load_manifest(tmp_path)
+    manifest = _read_manifest(tmp_path)
     saved_url = manifest["playlist"]["items"][0]["url"]
 
     assert saved_url == ".solin_cache/page_001.jpg"
@@ -491,7 +515,7 @@ def test_partial_legacy_page_cache_is_scheduled_for_reprocessing(tmp_path):
     partial_page = cache / "slides-page_001.jpg"
     partial_page.write_bytes(b"partial")
     fingerprint = watched_folder_module._file_fingerprint(source)
-    watched_folder_module._save_manifest(
+    _write_manifest(
         tmp_path,
         {
             "version": 1,
@@ -514,7 +538,7 @@ def test_completed_entry_is_committed_before_cancellation(monkeypatch, tmp_path)
     second = tmp_path / "second.jwlplaylist"
     first.write_bytes(b"first")
     second.write_bytes(b"second")
-    watched_folder_module._save_manifest(
+    _write_manifest(
         tmp_path,
         {
             "version": 1,
@@ -552,7 +576,7 @@ def test_completed_entry_is_committed_before_cancellation(monkeypatch, tmp_path)
 
     thread.run()
 
-    manifest = watched_folder_module._load_manifest(tmp_path)
+    manifest = _read_manifest(tmp_path)
     assert processed == [first.name]
     assert first.name in manifest["processed"]
     assert second.name not in manifest["processed"]
@@ -590,7 +614,7 @@ def test_manifest_commit_failure_rolls_back_new_outputs(monkeypatch, tmp_path):
     thread.run()
 
     assert not (tmp_path / ".solin_cache" / output_name).exists()
-    assert source.name not in watched_folder_module._load_manifest(tmp_path)["processed"]
+    assert source.name not in _read_manifest(tmp_path)["processed"]
 
 
 def test_cancelled_embedded_playlist_output_stays_in_staging(monkeypatch, tmp_path):

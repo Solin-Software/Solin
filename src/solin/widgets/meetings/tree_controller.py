@@ -10,11 +10,15 @@ and merge rules while sharing the same tree surface.
 from __future__ import annotations
 
 import copy
+import logging
 import os
+import random
 import time
 import uuid
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -27,7 +31,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
@@ -53,7 +57,12 @@ from ...core.i18n.strings import (
     tr_offline_downloading,
     tr_offline_downloading_progress,
 )
-from ...core.ingest.manifest import ManifestError, cache_dir
+from ...core.ingest.manifest import (
+    ManifestError,
+    ManifestWriteError,
+    cache_dir,
+    retry_manifest_write,
+)
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.meetings.linked_folder_sync import (
     MeetingSyncRecord,
@@ -128,6 +137,26 @@ if TYPE_CHECKING:
 
 _BIG_INDEX = 2**31 - 1
 _LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS = (150, 350, 750, 1_500, 3_000)
+_SYNC_SAVE_DEBOUNCE_MS = 180
+_SYNC_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
+_SYNC_SAVE_RETRY_BUDGET_SECONDS = 60.0
+
+log = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _PendingSyncSave:
+    folder: Path
+    identity: MeetingSyncIdentity
+    nodes: list[Node]
+    deleted_source_keys: set[str]
+    linked_folder_files: dict[str, str]
+    meeting_folder_imports: dict[str, dict[str, Any]]
+    expected_revision: int
+    next_attempt_at: float
+    generation: int = 1
+    first_attempt_at: float | None = None
+    retry_index: int = 0
 
 
 def _clear_tree_data_cache(controller: Any) -> None:
@@ -210,6 +239,7 @@ class MeetingTreeController(QObject):
     syncStateChanged = Signal()
     storageSaved = Signal(str)  # tree_key
     storageSaveFailed = Signal(str, str)  # tree_key, error message
+    _syncSaveCompleted = Signal(str, int, object, object)
 
     def __init__(
         self,
@@ -266,6 +296,17 @@ class MeetingTreeController(QObject):
         self._sync_enabled = False
         self._sync_busy = False
         self._sync_revision = 0
+        self._pending_sync_saves: dict[str, _PendingSyncSave] = {}
+        self._sync_save_inflight: tuple[str, int] | None = None
+        self._sync_save_future: Future[MeetingSyncRecord] | None = None
+        self._sync_save_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="meeting-manifest",
+        )
+        self._syncSaveCompleted.connect(self._on_sync_save_completed)
+        self._sync_save_timer = QTimer(self)
+        self._sync_save_timer.setSingleShot(True)
+        self._sync_save_timer.timeout.connect(self._drain_sync_manifest_saves)
         self._deleted_source_keys: set[str] = set()
         self._playlist_name = ""
         self._thumb_cache: dict[str, QPixmap] = {}
@@ -348,6 +389,13 @@ class MeetingTreeController(QObject):
     @Property(bool, notify=syncStateChanged)
     def syncBusy(self):
         return self._sync_busy
+
+    @Property(bool, notify=syncStateChanged)
+    def syncPending(self):
+        if not self._sync_folder:
+            return False
+        key = os.path.normcase(os.path.abspath(self._sync_folder))
+        return key in self._pending_sync_saves
 
     @Property(str, notify=syncStateChanged)
     def syncFolderPath(self):
@@ -468,8 +516,22 @@ class MeetingTreeController(QObject):
         self._deleted_source_keys = set(snapshot.deleted_source_keys)
         self._linked_folder_files = dict(snapshot.linked_folder_files)
         self._meeting_folder_imports = copy.deepcopy(snapshot.meeting_folder_imports)
-        sync_record = self._load_sync_record()
-        if sync_record is not None:
+        pending_lookup = getattr(self, "_pending_sync_save_for_identity", None)
+        pending_sync = (
+            pending_lookup(self._sync_identity) if callable(pending_lookup) else None
+        )
+        sync_record = None if pending_sync is not None else self._load_sync_record()
+        if pending_sync is not None:
+            self._nodes = clone_nodes(pending_sync.nodes)
+            self._deleted_source_keys = set(pending_sync.deleted_source_keys)
+            self._linked_folder_files = dict(pending_sync.linked_folder_files)
+            self._meeting_folder_imports = copy.deepcopy(
+                pending_sync.meeting_folder_imports
+            )
+            self._sync_folder = os.fspath(pending_sync.folder)
+            self._sync_enabled = True
+            self._sync_revision = pending_sync.expected_revision
+        elif sync_record is not None:
             self._apply_sync_record(sync_record)
             self._save_local_cache()
         else:
@@ -514,8 +576,22 @@ class MeetingTreeController(QObject):
         self._deleted_source_keys = self._store.load_deleted_source_keys(self._tree_key)
         self._linked_folder_files = self._store.load_linked_folder_files(self._tree_key)
         self._meeting_folder_imports = self._store.load_meeting_folder_imports(self._tree_key)
-        sync_record = self._load_sync_record()
-        if sync_record is not None:
+        pending_lookup = getattr(self, "_pending_sync_save_for_identity", None)
+        pending_sync = (
+            pending_lookup(self._sync_identity) if callable(pending_lookup) else None
+        )
+        sync_record = None if pending_sync is not None else self._load_sync_record()
+        if pending_sync is not None:
+            saved = clone_nodes(pending_sync.nodes)
+            self._deleted_source_keys = set(pending_sync.deleted_source_keys)
+            self._linked_folder_files = dict(pending_sync.linked_folder_files)
+            self._meeting_folder_imports = copy.deepcopy(
+                pending_sync.meeting_folder_imports
+            )
+            self._sync_folder = os.fspath(pending_sync.folder)
+            self._sync_enabled = True
+            self._sync_revision = pending_sync.expected_revision
+        elif sync_record is not None:
             saved = sync_record.nodes
             self._apply_sync_record(sync_record)
         else:
@@ -562,6 +638,21 @@ class MeetingTreeController(QObject):
         )
         return str(folder) if folder else ""
 
+    def _pending_sync_save_for_identity(
+        self,
+        identity: MeetingSyncIdentity | None,
+    ) -> _PendingSyncSave | None:
+        if identity is None:
+            return None
+        return next(
+            (
+                request
+                for request in getattr(self, "_pending_sync_saves", {}).values()
+                if request.identity.tree_key == identity.tree_key
+            ),
+            None,
+        )
+
     def _load_sync_record(self):
         if not self._sync_available or self._sync_identity is None:
             return None
@@ -581,6 +672,12 @@ class MeetingTreeController(QObject):
 
     def _refresh_sync_from_manifest(self) -> bool:
         self._flush_image_framing_save()
+        sync_folder = getattr(self, "_sync_folder", "")
+        pending_saves = getattr(self, "_pending_sync_saves", {})
+        if sync_folder:
+            key = os.path.normcase(os.path.abspath(sync_folder))
+            if key in pending_saves:
+                return True
         record = self._load_sync_record()
         if record is None:
             if self._sync_enabled:
@@ -1047,6 +1144,30 @@ class MeetingTreeController(QObject):
 
     def cleanup(self) -> None:
         self._flush_image_framing_save()
+        self._sync_save_timer.stop()
+        final_saves: list[Future[MeetingSyncRecord]] = []
+        for request in self._pending_sync_saves.values():
+            final_saves.append(
+                self._sync_save_executor.submit(
+                    retry_manifest_write,
+                    lambda pending=request: self._sync_service.save_tree(
+                        pending.folder,
+                        pending.identity,
+                        nodes=pending.nodes,
+                        deleted_source_keys=pending.deleted_source_keys,
+                        linked_folder_files=pending.linked_folder_files,
+                        meeting_folder_imports=pending.meeting_folder_imports,
+                        expected_revision=pending.expected_revision,
+                    ),
+                )
+            )
+        self._sync_save_executor.shutdown(wait=True, cancel_futures=False)
+        for future in final_saves:
+            try:
+                future.result()
+            except (ManifestError, MeetingSyncError, OSError):
+                log.warning("Could not flush meeting manifest during cleanup", exc_info=True)
+        self._pending_sync_saves.clear()
         _reset_media_request_queue(self)
         for threads in (
             self._pdf_threads,
@@ -1451,6 +1572,14 @@ class MeetingTreeController(QObject):
             self._linked_folder_availability = self._linked_folder_availability_signature()
             self.chromeChanged.emit()
             _emit_controller_state_changed(self)
+        except ManifestWriteError as exc:
+            if exc.retryable:
+                self._save_local_cache()
+                self._schedule_sync_manifest_save(delay_ms=100)
+            else:
+                self._restore_sync_snapshot(old_state)
+                self._save_local_cache()
+                self._warn_sync_failed(str(exc))
         except (ManifestError, MeetingSyncError, OSError) as exc:
             self._restore_sync_snapshot(old_state)
             self._save_local_cache()
@@ -1461,6 +1590,9 @@ class MeetingTreeController(QObject):
 
     def _disable_sync(self) -> None:
         if not self._sync_folder:
+            return
+        current_key = os.path.normcase(os.path.abspath(self._sync_folder))
+        if current_key in self._pending_sync_saves:
             return
         reply = QMessageBox.question(
             self.parent(),
@@ -1477,12 +1609,10 @@ class MeetingTreeController(QObject):
         old_state = self._sync_snapshot()
         self._set_sync_busy(True)
         folder = Path(self._sync_folder)
+        folder_key = os.path.normcase(os.path.abspath(folder))
+        self._pending_sync_saves.pop(folder_key, None)
+        self._arm_sync_save_timer()
         try:
-            record = self._sync_service.load_tree(self._sync_root, self._sync_identity) if self._sync_identity else None
-            if record is not None:
-                self._nodes = record.nodes
-                self._deleted_source_keys = record.deleted_source_keys
-                self._meeting_folder_imports = record.meeting_folder_imports
             durable_dir = self._durable_detached_dir()
             self._nodes = self._sync_service.detach_cache_references(
                 self._nodes,
@@ -1536,12 +1666,38 @@ class MeetingTreeController(QObject):
     def _durable_detached_dir(self) -> Path:
         return self._profile_paths.embedded_dir / "meeting_sync"
 
-    def _warn_sync_failed(self, message: str) -> None:
-        QMessageBox.warning(
-            self.parent(),
-            _tr("MeetingSync", "Meeting sync"),
-            message[:500] or _tr("MeetingSync", "Could not update meeting sync."),
+    def _warn_sync_failed(
+        self,
+        message: str,
+        *,
+        folder_path: str | None = None,
+    ) -> bool:
+        dialog = QMessageBox(self.parent())
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle(_tr("MeetingSync", "Meeting sync"))
+        dialog.setText(_tr("MeetingSync", "Could not update meeting sync."))
+        dialog.setInformativeText(
+            _tr(
+                "MeetingSync",
+                "Your changes are saved on this computer. Try again or open the linked folder.",
+            )
         )
+        if message:
+            dialog.setDetailedText(message[:2_000])
+        dialog.setStandardButtons(
+            QMessageBox.StandardButton.Retry
+            | QMessageBox.StandardButton.Open
+            | QMessageBox.StandardButton.Close
+        )
+        result = dialog.exec()
+        if result == QMessageBox.StandardButton.Retry:
+            if folder_path is None:
+                self._schedule_sync_manifest_save(delay_ms=0)
+            return True
+        target_folder = folder_path or self._sync_folder
+        if result == QMessageBox.StandardButton.Open and target_folder:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(target_folder))
+        return False
 
     @Slot()
     def newSectionClicked(self):
@@ -1942,7 +2098,7 @@ class MeetingTreeController(QObject):
                 )
                 self._pause_sync_after_save_failure(str(exc))
             else:
-                self._save_sync_manifest()
+                self._schedule_sync_manifest_save()
         return self._save_local_cache()
 
     def _save_local_cache(self) -> bool:
@@ -1974,23 +2130,179 @@ class MeetingTreeController(QObject):
             cover_bytes=self._overview.cover_bytes,
         )
 
-    def _save_sync_manifest(self) -> None:
+    def _schedule_sync_manifest_save(self, *, delay_ms: int = _SYNC_SAVE_DEBOUNCE_MS) -> None:
         if not self._sync_identity or not self._sync_folder:
             return
-        try:
-            saved_record = self._sync_service.save_tree(
-                Path(self._sync_folder),
-                self._sync_identity,
-                nodes=self._nodes,
-                deleted_source_keys=self._deleted_source_keys,
-                linked_folder_files=self._linked_folder_files,
-                meeting_folder_imports=self._meeting_folder_imports,
-                expected_revision=self._sync_revision,
+        folder = Path(self._sync_folder)
+        key = os.path.normcase(os.path.abspath(folder))
+        now = time.monotonic()
+        previous = self._pending_sync_saves.get(key)
+        self._pending_sync_saves[key] = _PendingSyncSave(
+            folder=folder,
+            identity=self._sync_identity,
+            nodes=clone_nodes(self._nodes),
+            deleted_source_keys=set(self._deleted_source_keys),
+            linked_folder_files=dict(self._linked_folder_files),
+            meeting_folder_imports=copy.deepcopy(self._meeting_folder_imports),
+            expected_revision=self._sync_revision,
+            next_attempt_at=now + max(0, delay_ms) / 1000,
+            generation=(previous.generation + 1) if previous else 1,
+            first_attempt_at=previous.first_attempt_at if previous else None,
+            retry_index=previous.retry_index if previous else 0,
+        )
+        self._arm_sync_save_timer()
+        self.syncStateChanged.emit()
+
+    def _arm_sync_save_timer(self) -> None:
+        if self._sync_save_inflight is not None:
+            self._sync_save_timer.stop()
+            return
+        if not self._pending_sync_saves:
+            self._sync_save_timer.stop()
+            return
+        next_attempt = min(
+            request.next_attempt_at for request in self._pending_sync_saves.values()
+        )
+        delay_ms = max(0, int((next_attempt - time.monotonic()) * 1000))
+        self._sync_save_timer.start(delay_ms)
+
+    def _save_sync_manifest(self) -> None:
+        """Immediately enqueue the latest state and run one due transaction."""
+
+        self._schedule_sync_manifest_save(delay_ms=0)
+        self._drain_sync_manifest_saves()
+
+    def _drain_sync_manifest_saves(self) -> None:
+        if self._sync_save_inflight is not None:
+            return
+        if not self._pending_sync_saves:
+            self.syncStateChanged.emit()
+            return
+        now = time.monotonic()
+        key, request = min(
+            self._pending_sync_saves.items(),
+            key=lambda item: item[1].next_attempt_at,
+        )
+        if request.next_attempt_at > now:
+            self._arm_sync_save_timer()
+            return
+        if request.first_attempt_at is None:
+            request.first_attempt_at = now
+        generation = request.generation
+        self._sync_save_inflight = (key, generation)
+        self._sync_save_timer.stop()
+        future = self._sync_save_executor.submit(
+            self._sync_service.save_tree,
+            request.folder,
+            request.identity,
+            nodes=request.nodes,
+            deleted_source_keys=request.deleted_source_keys,
+            linked_folder_files=request.linked_folder_files,
+            meeting_folder_imports=request.meeting_folder_imports,
+            expected_revision=request.expected_revision,
+        )
+        self._sync_save_future = future
+        future.add_done_callback(
+            lambda completed, save_key=key, save_generation=generation: (
+                self._emit_sync_save_completed(
+                    save_key,
+                    save_generation,
+                    completed,
+                )
             )
-            self._apply_sync_record(saved_record)
-        except (ManifestError, MeetingSyncError, OSError) as exc:
-            log_ignored_exception(__name__, "Could not save meeting sync manifest")
-            self._pause_sync_after_save_failure(str(exc))
+        )
+
+    def _emit_sync_save_completed(
+        self,
+        key: str,
+        generation: int,
+        future: Future[MeetingSyncRecord],
+    ) -> None:
+        try:
+            record = future.result()
+        except BaseException as exc:  # noqa: BLE001 - worker-to-Qt exception boundary
+            self._syncSaveCompleted.emit(key, generation, None, exc)
+        else:
+            self._syncSaveCompleted.emit(key, generation, record, None)
+
+    @Slot(str, int, object, object)
+    def _on_sync_save_completed(
+        self,
+        key: str,
+        generation: int,
+        saved_record: MeetingSyncRecord | None,
+        error: BaseException | None,
+    ) -> None:
+        self._sync_save_inflight = None
+        self._sync_save_future = None
+        request = self._pending_sync_saves.get(key)
+        if request is None:
+            self._arm_sync_save_timer()
+            return
+
+        now = time.monotonic()
+        is_latest = request.generation == generation
+        if error is None and saved_record is not None:
+            if is_latest:
+                self._pending_sync_saves.pop(key, None)
+            else:
+                request.expected_revision = saved_record.revision
+                request.next_attempt_at = now
+            current_key = os.path.normcase(os.path.abspath(self._sync_folder))
+            if is_latest and key == current_key and self._sync_identity == request.identity:
+                self._apply_sync_record(saved_record)
+            elif key == current_key:
+                self._sync_revision = saved_record.revision
+        elif not is_latest:
+            request.next_attempt_at = now
+        elif isinstance(error, ManifestWriteError):
+            elapsed = now - (request.first_attempt_at or now)
+            if error.retryable and elapsed < _SYNC_SAVE_RETRY_BUDGET_SECONDS:
+                delay = _SYNC_SAVE_RETRY_DELAYS_MS[
+                    min(request.retry_index, len(_SYNC_SAVE_RETRY_DELAYS_MS) - 1)
+                ]
+                request.retry_index += 1
+                request.next_attempt_at = now + (delay * random.uniform(0.8, 1.2)) / 1000
+                log.warning(
+                    "Meeting manifest publish is busy; retry %d in %d ms: %s",
+                    request.retry_index,
+                    delay,
+                    error.path,
+                )
+            else:
+                if self._notify_sync_save_failure(error, request):
+                    request.first_attempt_at = None
+                    request.retry_index = 0
+                    request.next_attempt_at = now
+                else:
+                    self._pending_sync_saves.pop(key, None)
+        else:
+            assert error is not None
+            if self._notify_sync_save_failure(error, request):
+                request.first_attempt_at = None
+                request.retry_index = 0
+                request.next_attempt_at = now
+            else:
+                self._pending_sync_saves.pop(key, None)
+
+        self._arm_sync_save_timer()
+        self.syncStateChanged.emit()
+
+    def _notify_sync_save_failure(
+        self,
+        error: BaseException,
+        request: _PendingSyncSave,
+    ) -> bool:
+        log.error(
+            "Could not save meeting sync manifest",
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        return bool(
+            self._warn_sync_failed(
+                str(error),
+                folder_path=os.fspath(request.folder),
+            )
+        )
 
     def _pause_sync_after_save_failure(self, message: str) -> None:
         self._sync_enabled = False
