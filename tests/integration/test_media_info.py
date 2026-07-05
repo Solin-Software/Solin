@@ -163,6 +163,54 @@ def test_media_info_queue_rejects_fast_path_callback_after_invalidation(tmp_path
     assert queue.get_cached(0) == (new_pixmap, "new")
 
 
+def test_media_info_queue_extracts_missing_duration_even_when_info_is_cached(
+    monkeypatch,
+    tmp_path,
+):
+    class _Signal:
+        def connect(self, _callback):
+            pass
+
+    class _Extractor:
+        def __init__(self, index):
+            self.index = index
+            self.info_ready = _Signal()
+            self.thumbnail_failed = _Signal()
+            self.duration_ready = _Signal()
+
+    created: list[int] = []
+
+    def _factory(index, _url, _media_type, _worker_pool, _parent):
+        created.append(index)
+        return _Extractor(index)
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
+    queue = _media_info_queue(tmp_path)
+    queue._cache[7] = (object(), "Cached title")
+
+    queue.request(7, str(tmp_path / "clip.mp4"), require_duration=True)
+
+    assert created == [7]
+    assert queue._scheduler.is_scheduled(7)
+
+
+def test_media_info_queue_keeps_cached_info_when_duration_is_not_required(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("unexpected extractor")),
+    )
+    queue = _media_info_queue(tmp_path)
+    queue._cache[7] = (object(), "Cached title")
+
+    queue.request(7, str(tmp_path / "clip.mp4"))
+
+    assert not queue._scheduler.is_scheduled(7)
+
+
 def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     monkeypatch,
     tmp_path,

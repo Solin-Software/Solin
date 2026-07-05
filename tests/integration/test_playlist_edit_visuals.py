@@ -45,6 +45,7 @@ def test_playlist_icons_stay_embedded_in_python():
         "cloud",
         "section",
         "marker",
+        "media_range",
         "chevron_down",
         "chevron_up",
         "edit",

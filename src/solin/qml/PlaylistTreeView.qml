@@ -1925,7 +1925,7 @@ Item {
                                     enabled: node && node.trimAvailable !== false
                                              && !mediaRoot.isMissing
                                     text: root.commonTr("_PlaylistEditView", "Start and end times")
-                                    icon.source: root.picon("edit", 13, root.iconHex(root.textMuted))
+                                    icon.source: root.picon("media_range", 13, root.iconHex(root.textMuted))
                                     onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }

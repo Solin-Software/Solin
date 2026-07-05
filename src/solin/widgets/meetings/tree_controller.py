@@ -2810,7 +2810,14 @@ class MeetingTreeController(QObject):
         self._next_token += 1
         self._token_to_node_id[token] = item_id
         self._active_info_requests.add(request_key)
-        self._info_queue.request(token, url, media_type)
+        self._info_queue.request(
+            token,
+            url,
+            media_type,
+            require_duration=(
+                purpose == "metadata" and media_type in {"audio", "video"}
+            ),
+        )
 
     @Slot(str, str, str, str)
     def _on_video_resolved(self, request_id: str, url: str, title: str, thumb_url: str):

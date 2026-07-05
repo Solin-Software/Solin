@@ -1019,29 +1019,66 @@ class PlaylistEditView(
         url = item.get("url", "")
         media_type = item.get("type", "video")
         needs_title = item.get("auto_title", False) and url.startswith(("http://", "https://"))
+        duration_ticks = item.get("base_duration_ticks")
+        has_duration = (
+            isinstance(duration_ticks, int)
+            and not isinstance(duration_ticks, bool)
+            and duration_ticks > 0
+        )
+        needs_duration = (
+            media_type in {"audio", "video"}
+            and not has_duration
+        )
 
         cached = self._id_to_thumb.get(item_id)
         if cached is not None and not cached.isNull():
-            if needs_title:
-                self._request_thumbnail(item_id, url, media_type)
+            if needs_title or needs_duration:
+                self._request_thumbnail(
+                    item_id,
+                    url,
+                    media_type,
+                    require_duration=needs_duration,
+                )
             return
 
         has_disk = self._playlist_thumbnail_store.exists(item_id)
         if has_disk:
-            if needs_title:
-                self._request_thumbnail(item_id, url, media_type)
+            if needs_title or needs_duration:
+                self._request_thumbnail(
+                    item_id,
+                    url,
+                    media_type,
+                    require_duration=needs_duration,
+                )
             return
 
-        self._request_thumbnail(item_id, url, media_type)
+        self._request_thumbnail(
+            item_id,
+            url,
+            media_type,
+            require_duration=needs_duration,
+        )
 
-    def _request_thumbnail(self, item_id: str, url: str, media_type: str) -> None:
+    def _request_thumbnail(
+        self,
+        item_id: str,
+        url: str,
+        media_type: str,
+        *,
+        require_duration: bool = False,
+    ) -> None:
         if item_id in self._thumb_pending_item_ids:
             return
         self._thumb_request_token += 1
         token = self._thumb_request_token
         self._thumb_idx_to_id[token] = item_id
         self._thumb_pending_item_ids.add(item_id)
-        self._thumb_queue.request(token, url, media_type)
+        self._thumb_queue.request(
+            token,
+            url,
+            media_type,
+            require_duration=require_duration,
+        )
 
     def _on_info(self, idx: int, pixmap: QPixmap, title: str):
         item_id = self._thumb_idx_to_id.get(idx)

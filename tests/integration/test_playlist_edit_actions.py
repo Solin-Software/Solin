@@ -13,6 +13,30 @@ def test_playlist_edit_view_uses_actions_mixin():
     )
 
 
+def test_existing_thumbnail_does_not_skip_missing_duration_hydration():
+    class _Thumbnail:
+        @staticmethod
+        def isNull():  # noqa: N802 - Qt-style test double
+            return False
+
+    requests = []
+    view = SimpleNamespace(
+        _id_to_thumb={"media-1": _Thumbnail()},
+        _request_thumbnail=lambda *args, **kwargs: requests.append((args, kwargs)),
+    )
+    item = {
+        "id": "media-1",
+        "url": "clip.mp4",
+        "type": "video",
+    }
+
+    playlist_widget.PlaylistEditView._request_missing_thumbnail_for_item(view, item)
+
+    assert requests == [
+        (("media-1", "clip.mp4", "video"), {"require_duration": True})
+    ]
+
+
 def test_temp_playlist_sessions_receive_unique_ids():
     loaded = []
     view = SimpleNamespace(
