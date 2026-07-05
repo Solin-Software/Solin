@@ -46,11 +46,13 @@ class _WindowStub:
             "project_image_signal",
         )
         self.playlist_widget.set_watched_folder = _slot("playlist_set_watched_folder")
+        self.playlist_widget.record_source_duration = _slot("record_source_duration")
 
         self.proj_bar = _signal_namespace(
             "projection_bar",
             "add_to_destination_requested",
             "send_to_temp_playlist_requested",
+            "source_duration_discovered",
             "stop_requested",
             "seek_requested",
             "toggle_requested",
@@ -220,7 +222,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 49
+    assert total_connections == 50
     assert window.songs_widget.project_video_signal.connected == [
         window._media_projection.on_sjjm_project
     ]
@@ -237,6 +239,9 @@ def test_connect_signals_wires_expected_signal_graph():
     ]
     assert window.proj_bar.seek_requested.connected == [
         window.playback_protection.request_seek
+    ]
+    assert window.proj_bar.source_duration_discovered.connected == [
+        window.playlist_widget.record_source_duration
     ]
     assert window.settings_widget.background_song_toggled.connected == [
         window._background_song_service.set_enabled

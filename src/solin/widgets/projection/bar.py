@@ -119,6 +119,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     playlist_navigate   = Signal(int)        # índice absoluto — navegação manual prev/next
     add_to_destination_requested = Signal(str, str, object)  # url, title, metadata
     send_to_temp_playlist_requested = Signal(list)  # lista de itens da playlist atual
+    source_duration_discovered = Signal(str, int)  # playlist item id, original duration ms
     monitor_manager_requested = Signal(object)   # QWidget (the button) for popup positioning
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
@@ -1706,17 +1707,16 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     @Slot(int)
     def _on_source_duration_changed(self, duration: int):
-        # Persiste a duração original, nunca a duração efetiva recortada.
-        # Roda sempre que há playlist ativa — independente de ser salva ou temp.
-        # (BaseDurationTicks = duration_ms × 10000 ticks de 100ns)
-        if duration > 0:
-            idx = self._playlist_index
-            if 0 <= idx < len(self._playlist):
-                item_id = self._playlist[idx].get("id", "")
-                if item_id:
-                    edit = getattr(self.playlist_widget, "_edit_view", None)
-                    if edit is not None:
-                        edit.notify_duration(item_id, duration)
+        if duration <= 0:
+            return
+        item = self.current_playlist_item()
+        if not item:
+            return
+        item_id = str(item.get("id") or "")
+        if item_id:
+            # Publish the original source duration. Persistence belongs to the
+            # playlist owner, not to the projection UI.
+            self.source_duration_discovered.emit(item_id, duration)
 
     @Slot(int)
     def _on_position_changed(self, position: int):

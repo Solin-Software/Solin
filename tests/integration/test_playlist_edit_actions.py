@@ -37,6 +37,21 @@ def test_existing_thumbnail_does_not_skip_missing_duration_hydration():
     ]
 
 
+def test_playlist_widget_records_source_duration_through_public_boundary():
+    recorded = []
+    widget = SimpleNamespace(
+        _edit_view=SimpleNamespace(
+            notify_duration=lambda item_id, duration: recorded.append((item_id, duration))
+        )
+    )
+
+    playlist_widget.PlaylistWidget.record_source_duration(widget, "media-1", 12_345)
+    playlist_widget.PlaylistWidget.record_source_duration(widget, "", 12_345)
+    playlist_widget.PlaylistWidget.record_source_duration(widget, "media-1", 0)
+
+    assert recorded == [("media-1", 12_345)]
+
+
 def test_temp_playlist_sessions_receive_unique_ids():
     loaded = []
     view = SimpleNamespace(

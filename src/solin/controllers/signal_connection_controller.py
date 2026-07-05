@@ -91,6 +91,9 @@ class SignalConnectionController:
         sources.playlist_widget.project_image_signal.connect(
             media_projection.project_image_bytes
         )
+        projection_bar.source_duration_discovered.connect(
+            sources.playlist_widget.record_source_duration
+        )
 
         projection_bar.add_to_destination_requested.connect(
             handlers.media_destinations.route_projected_media

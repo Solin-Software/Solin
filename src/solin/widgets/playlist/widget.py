@@ -1693,6 +1693,13 @@ class PlaylistWidget(QWidget):
         self._stack.setCurrentIndex(1)
         return playlist_id
 
+    @Slot(str, int)
+    def record_source_duration(self, item_id: str, duration_ms: int) -> None:
+        """Persist an original media duration through the active playlist owner."""
+        if not item_id or duration_ms <= 0:
+            return
+        self._edit_view.notify_duration(item_id, duration_ms)
+
     def append_temp_playlist_items(
         self,
         playlist_id: str,
