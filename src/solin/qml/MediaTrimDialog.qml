@@ -5,6 +5,7 @@ import QtMultimedia
 
 Dialog {
     id: dialog
+    objectName: "mediaTrimDialog"
 
     property var controller: null
     property string itemId: ""
@@ -20,19 +21,37 @@ Dialog {
     property string preparationError: ""
     property bool rangeDirty: false
     property bool previewAudioEnabled: true
+    property int pointerHoverCount: 0
+    property bool previewPrepared: false
+    property bool stalledLongEnough: false
+
     readonly property real minimumRangeMs: 100
+    readonly property real handleWidth: 16
     readonly property bool sourceReady: durationMs > 0 && previewPlayer.seekable
     readonly property bool rangeValid: sourceReady
                                        && startMs >= 0
                                        && endMs <= durationMs
                                        && endMs - startMs >= minimumRangeMs
+    readonly property bool initialPreviewLoading: !previewPrepared
+                                                  && preparationError === ""
+                                                  && (previewPlayer.mediaStatus === MediaPlayer.LoadingMedia
+                                                      || previewPlayer.mediaStatus === MediaPlayer.BufferingMedia)
+    readonly property bool previewActuallyStalled: previewPrepared
+                                                   && stalledLongEnough
+                                                   && preparationError === ""
+                                                   && previewPlayer.playbackState === MediaPlayer.PlayingState
+                                                   && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(760, parent ? parent.width - 48 : 760)
-    height: Math.min(650, parent ? parent.height - 48 : 650)
+    width: Math.min(760,
+                    parent ? Math.max(0, parent.width - 32) : 760,
+                    parent ? parent.width * 0.85 : 760)
+    height: Math.min(650,
+                     parent ? Math.max(0, parent.height - 32) : 650,
+                     parent ? parent.height * 0.75 : 650)
     modal: true
-    closePolicy: Popup.NoAutoClose
+    closePolicy: Popup.CloseOnEscape
     padding: 0
 
     function clamp(value, low, high) {
@@ -55,18 +74,45 @@ Dialog {
                 + two(minutes) + ":" + two(seconds) + "." + three(millis)
     }
 
-    function parseTime(value) {
-        var text = String(value).trim().replace(",", ".")
-        var parts = text.split(":")
-        if (parts.length < 2 || parts.length > 3)
-            return NaN
-        var seconds = Number(parts[parts.length - 1])
-        var minutes = Number(parts[parts.length - 2])
-        var hours = parts.length === 3 ? Number(parts[0]) : 0
-        if (!isFinite(seconds) || !isFinite(minutes) || !isFinite(hours)
-                || seconds < 0 || minutes < 0 || hours < 0)
-            return NaN
-        return (hours * 3600 + minutes * 60 + seconds) * 1000
+    function iconSource(name, size, colorValue) {
+        return "image://playlisticons/" + name + "/" + size + "/"
+                + String(colorValue).replace("#", "")
+    }
+
+    function timelineCenterFor(milliseconds, timelineWidth) {
+        if (durationMs <= 0)
+            return handleWidth / 2
+        return handleWidth / 2
+                + clamp(milliseconds / durationMs, 0, 1) * Math.max(0, timelineWidth - handleWidth)
+    }
+
+    function millisecondsAtTimelineX(positionX, timelineWidth) {
+        var usableWidth = Math.max(1, timelineWidth - handleWidth)
+        var ratio = (positionX - handleWidth / 2) / usableWidth
+        return clamp(ratio, 0, 1) * durationMs
+    }
+
+    function beginPointerHover() {
+        pointerHoverCount += 1
+        if (pointerHoverCount === 1 && controller !== null
+                && controller.pointerEnter !== undefined)
+            controller.pointerEnter()
+    }
+
+    function endPointerHover() {
+        if (pointerHoverCount <= 0)
+            return
+        pointerHoverCount -= 1
+        if (pointerHoverCount === 0 && controller !== null
+                && controller.pointerExit !== undefined)
+            controller.pointerExit()
+    }
+
+    function resetPointerHover() {
+        if (pointerHoverCount > 0 && controller !== null
+                && controller.pointerExit !== undefined)
+            controller.pointerExit()
+        pointerHoverCount = 0
     }
 
     function openFor(node) {
@@ -85,6 +131,8 @@ Dialog {
         endMs = durationMs > 0 ? Math.max(startMs, durationMs - initialEndTicks / 10000) : 0
         preparationError = ""
         rangeDirty = false
+        previewPrepared = false
+        stalledLongEnough = false
         if (node.trimAvailable === false || mediaSource === "") {
             preparationError = qsTr("This media is not available for editing.")
             open()
@@ -102,14 +150,23 @@ Dialog {
         previewPlayer.position = 0
     }
 
-    function previewFromStart() {
+    function togglePreview() {
         if (!rangeValid)
             return
-        previewPlayer.position = startMs
+        if (previewPlayer.playbackState === MediaPlayer.PlayingState) {
+            previewPlayer.pause()
+            return
+        }
+        if (previewPlayer.position < startMs
+                || previewPlayer.position >= endMs - 40)
+            previewPlayer.position = startMs
         previewPlayer.play()
     }
 
     onClosed: {
+        resetPointerHover()
+        previewPrepared = false
+        stalledLongEnough = false
         previewPlayer.stop()
         previewPlayer.source = ""
     }
@@ -125,6 +182,7 @@ Dialog {
 
     MediaPlayer {
         id: previewPlayer
+        objectName: "trimPreviewPlayer"
         audioOutput: AudioOutput {
             volume: 0.72
             muted: !dialog.previewAudioEnabled
@@ -149,6 +207,8 @@ Dialog {
                                             dialog.startMs + dialog.minimumRangeMs,
                                             duration)
             }
+            if (previewPlayer.seekable)
+                dialog.previewPrepared = true
         }
         onPositionChanged: function(position) {
             if (playbackState === MediaPlayer.PlayingState
@@ -161,14 +221,35 @@ Dialog {
             dialog.preparationError = errorString || qsTr("The media could not be opened.")
         }
         onSeekableChanged: function(seekable) {
+            if (seekable && dialog.durationMs > 0)
+                dialog.previewPrepared = true
             if ((mediaStatus === MediaPlayer.LoadedMedia
                  || mediaStatus === MediaPlayer.BufferedMedia) && !seekable)
                 dialog.preparationError = qsTr("This source does not support reliable seeking. Download it for offline use before setting custom times.")
         }
         onMediaStatusChanged: function(status) {
+            dialog.stalledLongEnough = false
+            if (status === MediaPlayer.LoadedMedia
+                    || status === MediaPlayer.BufferedMedia)
+                dialog.previewPrepared = true
             if (status === MediaPlayer.InvalidMedia)
                 dialog.preparationError = qsTr("The media could not be opened.")
         }
+        onPlaybackStateChanged: function(state) {
+            if (state !== MediaPlayer.PlayingState)
+                dialog.stalledLongEnough = false
+        }
+    }
+
+    Timer {
+        interval: 350
+        running: dialog.visible
+                 && dialog.previewPrepared
+                 && !dialog.stalledLongEnough
+                 && dialog.preparationError === ""
+                 && previewPlayer.playbackState === MediaPlayer.PlayingState
+                 && previewPlayer.mediaStatus === MediaPlayer.StalledMedia
+        onTriggered: dialog.stalledLongEnough = true
     }
 
     Timer {
@@ -178,280 +259,638 @@ Dialog {
         onTriggered: dialog.preparationError = qsTr("Timed out while checking whether this source supports seeking.")
     }
 
+    component SoftButton: Button {
+        id: softButton
+        required property var pointerOwner
+        property string variant: "secondary"
+
+        implicitWidth: Math.max(78, softButtonText.implicitWidth + 30)
+        implicitHeight: 38
+        leftPadding: 15
+        rightPadding: 15
+        opacity: enabled ? 1 : 0.45
+
+        contentItem: Text {
+            id: softButtonText
+            text: softButton.text
+            color: softButton.variant === "primary"
+                   ? appTheme.textOnAccent : appTheme.textSecondary
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        background: Rectangle {
+            radius: 10
+            color: {
+                if (softButton.variant === "primary") {
+                    if (softButton.down)
+                        return appTheme.accentPressed
+                    return softButton.hovered ? appTheme.accentHover : appTheme.accent
+                }
+                if (softButton.variant === "ghost")
+                    return softButton.hovered ? appTheme.hover : "transparent"
+                return softButton.hovered ? appTheme.hoverStrong : appTheme.surfaceAlt
+            }
+            border.width: softButton.variant === "secondary" ? 1 : 0
+            border.color: softButton.hovered ? appTheme.borderStrong : appTheme.border_
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        PointerHover {
+            owner: softButton.pointerOwner
+            enabled: softButton.enabled
+        }
+    }
+
+    component PointerHover: HoverHandler {
+        id: pointerHover
+        required property var owner
+        property bool registered: false
+
+        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+        function syncRegistration() {
+            var shouldRegister = enabled && hovered
+            if (shouldRegister === registered)
+                return
+            registered = shouldRegister
+            if (registered)
+                owner.beginPointerHover()
+            else
+                owner.endPointerHover()
+        }
+
+        onHoveredChanged: syncRegistration()
+        onEnabledChanged: syncRegistration()
+        Component.onDestruction: {
+            if (registered)
+                owner.endPointerHover()
+        }
+    }
+
     contentItem: ColumnLayout {
         spacing: 0
 
-        RowLayout {
+        Item {
             Layout.fillWidth: true
-            Layout.margins: 22
-            Layout.bottomMargin: 16
-            spacing: 12
+            Layout.preferredHeight: 66
 
-            ColumnLayout {
-                Layout.fillWidth: true
+            Column {
+                anchors.left: parent.left
+                anchors.right: closeButton.left
+                anchors.leftMargin: 20
+                anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 3
+
                 Label {
+                    width: parent.width
                     text: qsTr("Start and end times")
                     color: appTheme.textPrimary
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.weight: Font.DemiBold
+                    elide: Text.ElideRight
                 }
                 Label {
-                    Layout.fillWidth: true
+                    width: parent.width
                     text: dialog.mediaTitle
                     color: appTheme.textSecondary
                     elide: Text.ElideRight
-                    font.pixelSize: 13
-                }
-            }
-            ToolButton {
-                text: "×"
-                font.pixelSize: 24
-                onClicked: dialog.reject()
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: dialog.mediaType === "video" ? 280 : 150
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            radius: 10
-            color: "#0b0d12"
-            clip: true
-
-            VideoOutput {
-                id: previewOutput
-                anchors.fill: parent
-                visible: dialog.mediaType === "video"
-                fillMode: VideoOutput.PreserveAspectFit
-            }
-
-            Column {
-                anchors.centerIn: parent
-                visible: dialog.mediaType === "audio"
-                spacing: 10
-                Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "♫"
-                    color: appTheme.accent
-                    font.pixelSize: 42
-                }
-                Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: qsTr("Audio preview")
-                    color: appTheme.textSecondary
+                    font.pixelSize: 12
                 }
             }
 
-            BusyIndicator {
-                anchors.centerIn: parent
-                running: previewPlayer.mediaStatus === MediaPlayer.LoadingMedia
-                         || previewPlayer.mediaStatus === MediaPlayer.BufferingMedia
-                visible: running
-            }
-
-            Label {
-                anchors.left: parent.left
+            Button {
+                id: closeButton
+                objectName: "trimCloseButton"
                 anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.margins: 12
-                visible: dialog.preparationError !== ""
-                text: dialog.preparationError
-                color: appTheme.warning
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: 12
-            }
-        }
+                anchors.rightMargin: 14
+                anchors.verticalCenter: parent.verticalCenter
+                width: 34
+                height: 34
+                padding: 0
+                onClicked: dialog.reject()
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.topMargin: 18
-            spacing: 10
+                ToolTip.visible: hovered
+                ToolTip.delay: 450
+                ToolTip.text: qsTr("Close")
 
-            Item {
-                id: timeline
-                Layout.fillWidth: true
-                Layout.preferredHeight: 42
-                enabled: dialog.sourceReady
-
-                Rectangle {
-                    id: track
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    height: 8
-                    radius: 4
-                    color: appTheme.borderStrong
-                }
-                Rectangle {
-                    x: track.x + (dialog.durationMs > 0 ? dialog.startMs / dialog.durationMs * track.width : 0)
-                    width: dialog.durationMs > 0
-                           ? Math.max(2, (dialog.endMs - dialog.startMs) / dialog.durationMs * track.width)
-                           : 0
-                    anchors.verticalCenter: track.verticalCenter
-                    height: track.height
-                    radius: 4
-                    color: appTheme.accent
-                }
-                Rectangle {
-                    id: startHandle
-                    x: dialog.durationMs > 0
-                       ? dialog.startMs / dialog.durationMs * (timeline.width - width) : 0
-                    anchors.verticalCenter: track.verticalCenter
-                    width: 18; height: 28; radius: 7
-                    color: appTheme.accent
-                    border.width: 2; border.color: appTheme.surface
-                    MouseArea {
-                        anchors.fill: parent
-                        anchors.margins: -8
-                        onPositionChanged: function(mouse) {
-                            if (!pressed)
-                                return
-                            var point = mapToItem(timeline, mouse.x, mouse.y)
-                            dialog.startMs = dialog.clamp(
-                                point.x / Math.max(1, timeline.width) * dialog.durationMs,
-                                0, dialog.endMs - dialog.minimumRangeMs)
-                            dialog.rangeDirty = true
-                        }
-                        onReleased: previewPlayer.position = dialog.startMs
+                contentItem: Item {
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 13
+                        height: 1.6
+                        radius: 1
+                        rotation: 45
+                        color: closeButton.hovered ? appTheme.textPrimary : appTheme.textMuted
+                    }
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 13
+                        height: 1.6
+                        radius: 1
+                        rotation: -45
+                        color: closeButton.hovered ? appTheme.textPrimary : appTheme.textMuted
                     }
                 }
-                Rectangle {
-                    id: endHandle
-                    x: dialog.durationMs > 0
-                       ? dialog.endMs / dialog.durationMs * (timeline.width - width) : timeline.width - width
-                    anchors.verticalCenter: track.verticalCenter
-                    width: 18; height: 28; radius: 7
-                    color: appTheme.accent
-                    border.width: 2; border.color: appTheme.surface
-                    MouseArea {
-                        anchors.fill: parent
-                        anchors.margins: -8
-                        onPositionChanged: function(mouse) {
-                            if (!pressed)
-                                return
-                            var point = mapToItem(timeline, mouse.x, mouse.y)
-                            dialog.endMs = dialog.clamp(
-                                point.x / Math.max(1, timeline.width) * dialog.durationMs,
-                                dialog.startMs + dialog.minimumRangeMs, dialog.durationMs)
-                            dialog.rangeDirty = true
-                        }
-                        onReleased: previewPlayer.position = dialog.endMs
-                    }
-                }
-            }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
+                background: Rectangle {
+                    radius: 9
+                    color: closeButton.hovered ? appTheme.hover : "transparent"
+                    border.width: closeButton.hovered ? 1 : 0
+                    border.color: appTheme.border_
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Label { text: qsTr("Start"); color: appTheme.textSecondary; font.pixelSize: 12 }
-                    TextField {
-                        id: startField
-                        Layout.fillWidth: true
-                        enabled: dialog.sourceReady
-                        selectByMouse: true
-                        onEditingFinished: {
-                            var parsed = dialog.parseTime(text)
-                            if (isFinite(parsed)) {
-                                dialog.startMs = dialog.clamp(parsed, 0, dialog.endMs - dialog.minimumRangeMs)
-                                dialog.rangeDirty = true
-                                previewPlayer.position = dialog.startMs
-                            }
-                        }
-                        Binding {
-                            target: startField
-                            property: "text"
-                            value: dialog.formatTime(dialog.startMs)
-                            when: !startField.activeFocus
-                        }
-                    }
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Label { text: qsTr("End"); color: appTheme.textSecondary; font.pixelSize: 12 }
-                    TextField {
-                        id: endField
-                        Layout.fillWidth: true
-                        enabled: dialog.sourceReady
-                        selectByMouse: true
-                        onEditingFinished: {
-                            var parsed = dialog.parseTime(text)
-                            if (isFinite(parsed)) {
-                                dialog.endMs = dialog.clamp(parsed, dialog.startMs + dialog.minimumRangeMs, dialog.durationMs)
-                                dialog.rangeDirty = true
-                            }
-                        }
-                        Binding {
-                            target: endField
-                            property: "text"
-                            value: dialog.formatTime(dialog.endMs)
-                            when: !endField.activeFocus
-                        }
-                    }
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Label { text: qsTr("Result"); color: appTheme.textSecondary; font.pixelSize: 12 }
-                    Label {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 40
-                        verticalAlignment: Text.AlignVCenter
-                        text: dialog.formatTime(Math.max(0, dialog.endMs - dialog.startMs))
-                        color: appTheme.textPrimary
-                        font.pixelSize: 14
-                        font.weight: Font.Medium
-                    }
+                PointerHover {
+                    owner: dialog
+                    enabled: closeButton.enabled
                 }
             }
         }
-
-        Item { Layout.fillHeight: true }
 
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: appTheme.border_
+            opacity: 0.65
         }
-        RowLayout {
+
+        Item {
             Layout.fillWidth: true
-            Layout.margins: 18
-            spacing: 10
-            Button {
-                text: qsTr("Reset")
-                enabled: dialog.sourceReady
-                onClicked: dialog.resetRange()
+            Layout.fillHeight: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                anchors.topMargin: 14
+                anchors.bottomMargin: 12
+                spacing: 12
+
+                Rectangle {
+                    id: previewSurface
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: dialog.mediaType === "video" ? 112 : 96
+                    Layout.preferredHeight: dialog.mediaType === "video" ? 280 : 150
+                    radius: 11
+                    color: "#0b0d12"
+                    border.width: 1
+                    border.color: appTheme.border_
+                    clip: true
+
+                    VideoOutput {
+                        id: previewOutput
+                        anchors.fill: parent
+                        visible: dialog.mediaType === "video"
+                        fillMode: VideoOutput.PreserveAspectFit
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        visible: dialog.mediaType === "audio"
+                        spacing: 9
+
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 54
+                            height: 54
+                            radius: 18
+                            color: appTheme.accentTint
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 25
+                                height: 25
+                                source: dialog.iconSource("media_audio", 25, appTheme.accent)
+                                sourceSize.width: 25
+                                sourceSize.height: 25
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: qsTr("Audio preview")
+                            color: appTheme.textSecondary
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    BusyIndicator {
+                        objectName: "trimBusyIndicator"
+                        anchors.centerIn: parent
+                        running: dialog.initialPreviewLoading
+                                 || dialog.previewActuallyStalled
+                        visible: running
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 12
+                        height: errorLabel.implicitHeight + 14
+                        radius: 8
+                        visible: dialog.preparationError !== ""
+                        color: Qt.rgba(0.04, 0.05, 0.07, 0.88)
+
+                        Label {
+                            id: errorLabel
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.margins: 9
+                            text: dialog.preparationError
+                            color: appTheme.warning
+                            wrapMode: Text.Wrap
+                            horizontalAlignment: Text.AlignHCenter
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 12
+                        width: Math.min(parent.width - 24, mutedLabel.implicitWidth + 18)
+                        height: 28
+                        radius: 9
+                        visible: !dialog.previewAudioEnabled
+                                 && dialog.preparationError === ""
+                        color: Qt.rgba(0.04, 0.05, 0.07, 0.82)
+
+                        Label {
+                            id: mutedLabel
+                            anchors.centerIn: parent
+                            width: parent.width - 18
+                            text: qsTr("Preview audio is muted while another media item is active.")
+                            color: appTheme.textSecondary
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 76
+                    spacing: 8
+
+                    Button {
+                        id: previewButton
+                        objectName: "trimPreviewButton"
+                        Layout.minimumWidth: 20
+                        Layout.preferredWidth: 20
+                        Layout.maximumWidth: 20
+                        Layout.minimumHeight: 20
+                        Layout.preferredHeight: 20
+                        Layout.maximumHeight: 20
+                        Layout.alignment: Qt.AlignVCenter
+                        enabled: dialog.rangeValid
+                        padding: 0
+                        onClicked: dialog.togglePreview()
+
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 450
+                        ToolTip.text: previewPlayer.playbackState === MediaPlayer.PlayingState
+                                      ? qsTr("Pause") : qsTr("Play")
+
+                        contentItem: Image {
+                            anchors.centerIn: parent
+                            width: 10
+                            height: 10
+                            source: dialog.iconSource(
+                                        previewPlayer.playbackState === MediaPlayer.PlayingState
+                                        ? "pause" : "play",
+                                        20,
+                                        previewButton.enabled
+                                        ? (previewButton.hovered
+                                           ? appTheme.textPrimary : appTheme.textSecondary)
+                                        : appTheme.textDim)
+                            sourceSize.width: 20
+                            sourceSize.height: 20
+                            fillMode: Image.PreserveAspectFit
+                        }
+
+                        background: Item {}
+
+                        PointerHover {
+                            owner: dialog
+                            enabled: previewButton.enabled
+                        }
+                    }
+
+                    Item {
+                        id: timeline
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        enabled: dialog.sourceReady
+                        opacity: enabled ? 1 : 0.52
+
+                        Rectangle {
+                            id: track
+                            objectName: "trimTrack"
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: dialog.handleWidth / 2
+                            anchors.rightMargin: dialog.handleWidth / 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            height: 7
+                            radius: 3.5
+                            color: appTheme.borderStrong
+                        }
+
+                        Rectangle {
+                            id: selectedRange
+                            z: 1
+                            x: dialog.timelineCenterFor(dialog.startMs, timeline.width)
+                            y: track.y
+                            width: Math.max(2,
+                                            dialog.timelineCenterFor(dialog.endMs, timeline.width) - x)
+                            height: track.height
+                            radius: track.radius
+                            color: appTheme.accent
+                        }
+
+                        Item {
+                            id: seekArea
+                            objectName: "trimSeekArea"
+                            z: 2
+                            x: selectedRange.x + dialog.handleWidth
+                            y: track.y - 10
+                            width: Math.max(0, selectedRange.width - dialog.handleWidth * 2)
+                            height: track.height + 20
+                            enabled: timeline.enabled && width > 0
+
+                            function seekToPosition(positionX, positionY) {
+                                var point = mapToItem(timeline, positionX, positionY)
+                                previewPlayer.position = dialog.clamp(
+                                            dialog.millisecondsAtTimelineX(
+                                                point.x, timeline.width),
+                                            dialog.startMs,
+                                            dialog.endMs)
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: seekArea.enabled
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                preventStealing: true
+
+                                onPressed: function(mouse) {
+                                    seekArea.seekToPosition(mouse.x, mouse.y)
+                                    mouse.accepted = true
+                                }
+                                onPositionChanged: function(mouse) {
+                                    if (pressed)
+                                        seekArea.seekToPosition(mouse.x, mouse.y)
+                                }
+                            }
+
+                            PointerHover {
+                                owner: dialog
+                                enabled: seekArea.enabled
+                            }
+                        }
+
+                        Rectangle {
+                            id: playhead
+                            z: 3
+                            x: dialog.timelineCenterFor(previewPlayer.position, timeline.width) - width / 2
+                            y: track.y - 4
+                            width: 2
+                            height: track.height + 8
+                            radius: 1
+                            color: appTheme.textPrimary
+                            visible: dialog.sourceReady
+                                     && previewPlayer.position >= dialog.startMs
+                                     && previewPlayer.position <= dialog.endMs
+                            opacity: 0.85
+                        }
+
+                        Rectangle {
+                            id: startHandle
+                            z: 4
+                            objectName: "trimStartHandle"
+                            x: dialog.timelineCenterFor(dialog.startMs, timeline.width) - width / 2
+                            y: track.y + track.height / 2 - height / 2
+                            width: dialog.handleWidth
+                            height: 28
+                            radius: 6
+                            color: startDrag.pressed ? appTheme.accentHover : appTheme.accent
+                            border.width: 2
+                            border.color: appTheme.surface
+
+                            MouseArea {
+                                id: startDrag
+                                anchors.fill: parent
+                                anchors.margins: -8
+                                hoverEnabled: true
+                                cursorShape: Qt.SizeHorCursor
+                                onPressed: function(mouse) {
+                                    previewPlayer.pause()
+                                    mouse.accepted = true
+                                }
+                                onPositionChanged: function(mouse) {
+                                    if (!pressed)
+                                        return
+                                    var point = mapToItem(timeline, mouse.x, mouse.y)
+                                    dialog.startMs = dialog.clamp(
+                                                dialog.millisecondsAtTimelineX(point.x, timeline.width),
+                                                0,
+                                                dialog.endMs - dialog.minimumRangeMs)
+                                    dialog.rangeDirty = true
+                                }
+                                onReleased: function(mouse) {
+                                    previewPlayer.position = dialog.startMs
+                                    mouse.accepted = true
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: endHandle
+                            z: 4
+                            objectName: "trimEndHandle"
+                            x: dialog.timelineCenterFor(dialog.endMs, timeline.width) - width / 2
+                            y: track.y + track.height / 2 - height / 2
+                            width: dialog.handleWidth
+                            height: 28
+                            radius: 6
+                            color: endDrag.pressed ? appTheme.accentHover : appTheme.accent
+                            border.width: 2
+                            border.color: appTheme.surface
+
+                            MouseArea {
+                                id: endDrag
+                                anchors.fill: parent
+                                anchors.margins: -8
+                                hoverEnabled: true
+                                cursorShape: Qt.SizeHorCursor
+                                onPressed: function(mouse) {
+                                    previewPlayer.pause()
+                                    mouse.accepted = true
+                                }
+                                onPositionChanged: function(mouse) {
+                                    if (!pressed)
+                                        return
+                                    var point = mapToItem(timeline, mouse.x, mouse.y)
+                                    dialog.endMs = dialog.clamp(
+                                                dialog.millisecondsAtTimelineX(point.x, timeline.width),
+                                                dialog.startMs + dialog.minimumRangeMs,
+                                                dialog.durationMs)
+                                    dialog.rangeDirty = true
+                                }
+                                onReleased: function(mouse) {
+                                    previewPlayer.position = dialog.endMs
+                                    mouse.accepted = true
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: startBubble
+                            z: 5
+                            x: dialog.clamp(
+                                   dialog.timelineCenterFor(dialog.startMs, timeline.width) - width / 2,
+                                   0,
+                                   Math.max(0, timeline.width - width))
+                            y: 0
+                            width: startBubbleText.implicitWidth + 16
+                            height: 26
+                            radius: 8
+                            color: appTheme.hoverStrong
+                            border.width: 1
+                            border.color: appTheme.borderStrong
+                            opacity: startDrag.pressed ? 1 : 0
+                            visible: opacity > 0
+
+                            Label {
+                                id: startBubbleText
+                                anchors.centerIn: parent
+                                text: qsTr("Start") + "  " + dialog.formatTime(dialog.startMs)
+                                color: appTheme.textPrimary
+                                font.pixelSize: 10
+                                font.weight: Font.Medium
+                            }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: -4
+                                width: 8
+                                height: 8
+                                rotation: 45
+                                color: parent.color
+                                border.width: 1
+                                border.color: parent.border.color
+                            }
+                            Behavior on opacity { NumberAnimation { duration: 90 } }
+                        }
+
+                        Rectangle {
+                            id: endBubble
+                            z: 5
+                            x: dialog.clamp(
+                                   dialog.timelineCenterFor(dialog.endMs, timeline.width) - width / 2,
+                                   0,
+                                   Math.max(0, timeline.width - width))
+                            y: 0
+                            width: endBubbleText.implicitWidth + 16
+                            height: 26
+                            radius: 8
+                            color: appTheme.hoverStrong
+                            border.width: 1
+                            border.color: appTheme.borderStrong
+                            opacity: endDrag.pressed ? 1 : 0
+                            visible: opacity > 0
+
+                            Label {
+                                id: endBubbleText
+                                anchors.centerIn: parent
+                                text: qsTr("End") + "  " + dialog.formatTime(dialog.endMs)
+                                color: appTheme.textPrimary
+                                font.pixelSize: 10
+                                font.weight: Font.Medium
+                            }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: -4
+                                width: 8
+                                height: 8
+                                rotation: 45
+                                color: parent.color
+                                border.width: 1
+                                border.color: parent.border.color
+                            }
+                            Behavior on opacity { NumberAnimation { duration: 90 } }
+                        }
+
+                        Label {
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            text: qsTr("Selected") + "  "
+                                  + dialog.formatTime(Math.max(0, dialog.endMs - dialog.startMs))
+                            color: appTheme.textMuted
+                            font.pixelSize: 10
+                            font.weight: Font.Medium
+                        }
+                    }
+                }
             }
-            Button {
-                text: previewPlayer.playbackState === MediaPlayer.PlayingState
-                      ? qsTr("Pause preview") : qsTr("Preview")
-                enabled: dialog.rangeValid
-                onClicked: previewPlayer.playbackState === MediaPlayer.PlayingState
-                           ? previewPlayer.pause() : dialog.previewFromStart()
-            }
-            Label {
-                visible: !dialog.previewAudioEnabled
-                text: qsTr("Preview audio is muted while another media item is active.")
-                color: appTheme.textSecondary
-                font.pixelSize: 11
-            }
-            Item { Layout.fillWidth: true }
-            Button { text: qsTr("Cancel"); onClicked: dialog.reject() }
-            Button {
-                text: qsTr("Save")
-                highlighted: true
-                enabled: dialog.rangeValid && dialog.rangeDirty
-                         && dialog.controller !== null
-                onClicked: {
-                    dialog.controller.setMediaTrim(
-                        dialog.itemId, dialog.startMs, dialog.endMs, dialog.durationMs)
-                    dialog.accept()
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 1
+            color: appTheme.border_
+            opacity: 0.65
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 64
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 8
+
+                SoftButton {
+                    pointerOwner: dialog
+                    text: qsTr("Reset")
+                    variant: "ghost"
+                    enabled: dialog.sourceReady
+                    onClicked: dialog.resetRange()
+                }
+
+                Item { Layout.fillWidth: true }
+
+                SoftButton {
+                    pointerOwner: dialog
+                    text: qsTr("Cancel")
+                    variant: "secondary"
+                    onClicked: dialog.reject()
+                }
+
+                SoftButton {
+                    pointerOwner: dialog
+                    text: qsTr("Save")
+                    variant: "primary"
+                    enabled: dialog.rangeValid && dialog.rangeDirty
+                             && dialog.controller !== null
+                    onClicked: {
+                        dialog.controller.setMediaTrim(
+                            dialog.itemId, dialog.startMs, dialog.endMs, dialog.durationMs)
+                        dialog.accept()
+                    }
                 }
             }
         }

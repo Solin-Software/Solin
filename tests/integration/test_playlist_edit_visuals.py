@@ -36,6 +36,7 @@ def test_playlist_icons_stay_embedded_in_python():
         "more",
         "play_all",
         "play",
+        "pause",
         "shuffle",
         "back",
         "plus",
