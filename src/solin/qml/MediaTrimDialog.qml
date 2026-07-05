@@ -27,6 +27,8 @@ Dialog {
 
     readonly property real minimumRangeMs: 100
     readonly property real handleWidth: 16
+    readonly property real maximumDialogWidth: 820
+    readonly property real maximumDialogHeight: 700
     readonly property bool sourceReady: durationMs > 0 && previewPlayer.seekable
     readonly property bool rangeValid: sourceReady
                                        && startMs >= 0
@@ -44,12 +46,12 @@ Dialog {
 
     parent: Overlay.overlay
     anchors.centerIn: parent
-    width: Math.min(760,
-                    parent ? Math.max(0, parent.width - 32) : 760,
-                    parent ? parent.width * 0.85 : 760)
-    height: Math.min(650,
-                     parent ? Math.max(0, parent.height - 32) : 650,
-                     parent ? parent.height * 0.75 : 650)
+    width: Math.min(maximumDialogWidth,
+                    parent ? Math.max(0, parent.width - 32) : maximumDialogWidth,
+                    parent ? parent.width * 0.85 : maximumDialogWidth)
+    height: Math.min(maximumDialogHeight,
+                     parent ? Math.max(0, parent.height - 32) : maximumDialogHeight,
+                     parent ? parent.height * 0.75 : maximumDialogHeight)
     modal: true
     closePolicy: Popup.CloseOnEscape
     padding: 0
