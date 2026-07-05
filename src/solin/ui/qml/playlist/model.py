@@ -10,7 +10,7 @@ from typing import Optional
 from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, QUrl, Signal, Slot
 
 from solin.core.media.cache import MediaCacheManager
-from solin.core.media.duration import format_duration_ticks
+from solin.core.media.duration import format_effective_duration_ticks
 from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.i18n.strings import (
     tr_offline_download,
@@ -554,7 +554,11 @@ class PlaylistEditModel(QAbstractListModel):
             "title": item.get("title", ""),
             "mediaType": media_type,
             "badge": playlist_media_badge(media_type),
-            "duration": format_duration_ticks(item.get("base_duration_ticks", 0)),
+            "duration": format_effective_duration_ticks(
+                base_duration_ticks,
+                start_trim_ticks,
+                end_trim_ticks,
+            ),
             "thumbSource": self._thumb_source_for(item["id"]),
             "url": url,
             "trimSource": trim_source,
@@ -1147,7 +1151,11 @@ class PlaylistEditModel(QAbstractListModel):
             "cloud_active":  cloud_active,
             "cloud_progress": cloud_progress,
             "cloud_tooltip": cloud_tooltip,
-            "duration_text": format_duration_ticks(item.get("base_duration_ticks", 0)),
+            "duration_text": format_effective_duration_ticks(
+                item.get("base_duration_ticks", 0),
+                item.get("start_trim_ticks", 0),
+                item.get("end_trim_ticks", 0),
+            ),
             "section_id":    sid,
             "parent_id":     "",
             "section_text":  "",

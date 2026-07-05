@@ -35,7 +35,7 @@ from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
-from ...core.media.duration import format_duration_ticks
+from ...core.media.duration import format_effective_duration_ticks
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -2582,8 +2582,11 @@ class MeetingTreeController(QObject):
         return "video"
 
     def _duration_for(self, node: Node) -> str:
-        ticks = self._duration_ticks(node)
-        return format_duration_ticks(ticks)
+        return format_effective_duration_ticks(
+            self._duration_ticks(node),
+            self._trim_ticks(node, "start_trim_ticks"),
+            self._trim_ticks(node, "end_trim_ticks"),
+        )
 
     @staticmethod
     def _trim_ticks(node: Node, field: str) -> int:

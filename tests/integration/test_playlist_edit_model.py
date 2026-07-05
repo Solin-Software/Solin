@@ -160,6 +160,8 @@ def test_playlist_edit_model_builds_flat_rows_and_tree_data(tmp_path):
                     "url": "",
                     "section_id": "section-1",
                     "base_duration_ticks": 65 * 10_000_000,
+                    "start_trim_ticks": 10 * 10_000_000,
+                    "end_trim_ticks": 5 * 10_000_000,
                 }
             ],
             "markers": [],
@@ -170,11 +172,12 @@ def test_playlist_edit_model_builds_flat_rows_and_tree_data(tmp_path):
     assert model.roleNames()[PlaylistEditModel.EntryTypeRole] == b"entryType"
     assert model.data(model.index(0), PlaylistEditModel.EntryTypeRole) == "section"
     assert model.data(model.index(1), PlaylistEditModel.TitleRole) == "Song"
-    assert model.data(model.index(1), PlaylistEditModel.DurationTextRole) == "1:05"
+    assert model.data(model.index(1), PlaylistEditModel.DurationTextRole) == "0:50"
 
     tree = model.tree_data()
     assert tree[0]["type"] == "section"
     assert tree[0]["children"][0]["id"] == "media-1"
+    assert tree[0]["children"][0]["duration"] == "0:50"
 
 
 def test_tree_data_preserves_nested_marker_and_media_order(tmp_path):
