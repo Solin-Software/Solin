@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+
+import pytest
 
 from solin.core.media.downloader import (
     SongDownloader,
     _DownloadJob,
 )
 from solin.core.media.download_storage import (
+    DownloadTarget,
     DownloadProgressGate,
+    cached_path_for,
     cleanup_incomplete_cache,
+    commit_persistent_download,
     completed_cached_path,
+    is_url_cached,
     make_persistent_temp_path,
+    prepare_download_target,
     safe_remove,
 )
 from tests._paths import REPO_ROOT
@@ -79,11 +87,14 @@ def test_downloader_accepts_transparently_decoded_response(tmp_path):
         content_encoding="gzip",
     )
 
-    cached_file = tmp_path / "media.mp3"
     assert errors == []
-    assert finished == [str(cached_file)]
+    assert len(finished) == 1
+    cached_file = Path(finished[0])
+    assert cached_file.parent == tmp_path
+    assert cached_file.suffix == ".mp3"
+    assert len(cached_file.stem) == 64
     assert cached_file.read_bytes() == decoded_body
-    assert cached_file.with_name("media.mp3.done").is_file()
+    assert Path(f"{cached_file}.done").is_file()
 
 
 def test_downloader_rejects_truncated_encoded_transfer(tmp_path):
@@ -97,9 +108,112 @@ def test_downloader_rejects_truncated_encoded_transfer(tmp_path):
 
     assert finished == []
     assert errors
-    assert not (tmp_path / "media.mp3").exists()
-    assert not (tmp_path / "media.mp3.done").exists()
+    assert list(tmp_path.glob("*.mp3")) == []
+    assert list(tmp_path.glob("*.done")) == []
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_cache_path_uses_exact_url_hash_and_safe_extension(tmp_path):
+    first_url = "https://one.example/media/clip.MP4?quality=720"
+    second_url = "https://two.example/media/clip.MP4?quality=720"
+
+    first = Path(cached_path_for(first_url, tmp_path))
+    second = Path(cached_path_for(second_url, tmp_path))
+
+    assert first.name == f"{hashlib.sha256(first_url.encode()).hexdigest()}.mp4"
+    assert second.name == f"{hashlib.sha256(second_url.encode()).hexdigest()}.mp4"
+    assert first != second
+
+    unsafe = Path(cached_path_for("https://example.test/media/file.bad-ext!", tmp_path))
+    assert unsafe.name == hashlib.sha256(
+        b"https://example.test/media/file.bad-ext!"
+    ).hexdigest()
+
+
+def test_cache_marker_must_match_url_exactly(tmp_path):
+    url = "https://example.test/media/clip.mp4?token=one"
+    path = Path(cached_path_for(url, tmp_path))
+    path.write_bytes(b"wrong cache")
+    Path(f"{path}.done").write_text(f"{url}\n", encoding="utf-8")
+
+    assert completed_cached_path(url, tmp_path) is None
+    assert is_url_cached(url, tmp_path) is False
+
+    target = prepare_download_target(url, tmp_path, persist=True)
+    assert target.is_cached is False
+    assert target.final_path == str(path)
+    safe_remove(target.write_path)
+
+
+def test_valid_legacy_cache_entry_is_migrated_once(tmp_path):
+    url = "https://example.test/media/legacy.mp3?download=1"
+    legacy = tmp_path / "legacy.mp3"
+    legacy.write_bytes(b"legacy media")
+    Path(f"{legacy}.done").write_text(url, encoding="utf-8")
+    destination = Path(cached_path_for(url, tmp_path))
+
+    assert completed_cached_path(url, tmp_path) == str(destination)
+    assert destination.read_bytes() == b"legacy media"
+    assert Path(f"{destination}.done").read_text(encoding="utf-8") == url
+    assert not legacy.exists()
+    assert not Path(f"{legacy}.done").exists()
+    assert completed_cached_path(url, tmp_path) == str(destination)
+
+
+def test_legacy_cache_entry_with_different_marker_is_not_migrated(tmp_path):
+    url = "https://example.test/media/legacy.mp3?download=1"
+    legacy = tmp_path / "legacy.mp3"
+    legacy.write_bytes(b"other media")
+    Path(f"{legacy}.done").write_text(
+        "https://other.example/media/legacy.mp3",
+        encoding="utf-8",
+    )
+    destination = Path(cached_path_for(url, tmp_path))
+
+    assert completed_cached_path(url, tmp_path) is None
+    assert legacy.exists()
+    assert not destination.exists()
+
+
+def test_persistent_commit_publishes_exact_marker_and_no_staging_file(tmp_path):
+    url = "https://example.test/media/clip.mp4"
+    target = prepare_download_target(url, tmp_path, persist=True)
+    Path(target.write_path).write_bytes(b"complete media")
+
+    commit_persistent_download(target, url)
+
+    assert Path(target.final_path).read_bytes() == b"complete media"
+    assert Path(f"{target.final_path}.done").read_text(encoding="utf-8") == url
+    assert completed_cached_path(url, tmp_path) == target.final_path
+    assert not Path(target.write_path).exists()
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_failed_marker_commit_never_exposes_entry_as_complete(monkeypatch, tmp_path):
+    from solin.core.media import download_storage
+
+    url = "https://example.test/media/clip.mp4"
+    final_path = cached_path_for(url, tmp_path)
+    write_path = make_persistent_temp_path(final_path)
+    Path(write_path).write_bytes(b"new media")
+    Path(f"{final_path}.done").write_text(url, encoding="utf-8")
+    target = DownloadTarget(final_path, write_path, persist=True)
+
+    def fail_marker_commit(*_args):
+        raise OSError("marker failed")
+
+    monkeypatch.setattr(
+        download_storage,
+        "_write_marker_atomically",
+        fail_marker_commit,
+    )
+
+    with pytest.raises(OSError, match="marker failed"):
+        commit_persistent_download(target, url)
+
+    assert Path(final_path).read_bytes() == b"new media"
+    assert not Path(f"{final_path}.done").exists()
+    assert completed_cached_path(url, tmp_path) is None
 
 
 def test_persistent_download_jobs_use_isolated_staging_files(tmp_path):

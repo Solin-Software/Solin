@@ -58,6 +58,12 @@ Item {
     property var pendingCloudPatches: ({})
     property var pendingImageFramingPatches: ({})
 
+    MediaTrimDialog {
+        id: mediaTrimDialog
+        controller: root.playlistController
+        previewAudioEnabled: !root.playbackProtectionLocked
+    }
+
     function picon(name, size, colorHex) {
         return "image://playlisticons/" + name + "/" + size + "/" + colorHex
     }
@@ -1533,6 +1539,8 @@ Item {
         property string cloudTooltip: node ? node.cloudTooltip : ""
         property bool isMissing: node ? (node.isMissing === true) : false
         property var imageFraming: node ? node.imageFraming : null
+        property string mediaType: node ? node.mediaType : "video"
+        property bool hasCustomTrim: node ? (node.hasCustomTrim === true) : false
         property real framingAspectRatio: 16 / 9
         property real framingSourceAspectRatio: 0
 
@@ -1783,7 +1791,8 @@ Item {
                         Text {
                             id: durationLbl
                             anchors.centerIn: parent
-                            text: mediaRoot.displayDuration
+                            text: (mediaRoot.hasCustomTrim ? "↔ " : "")
+                                  + mediaRoot.displayDuration
                             color: root.textPrimary
                             font.pixelSize: 9
                             font.weight: Font.DemiBold
@@ -1907,6 +1916,17 @@ Item {
                                     icon.source: root.picon("play_all", 13, root.iconHex(root.textMuted))
                                     enabled: !mediaRoot.isMissing
                                     onTriggered: if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
+                                    contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                                    background: MenuBg { hovered: parent.hovered }
+                                }
+                                MenuItem {
+                                    visible: mediaRoot.mediaType === "audio"
+                                             || mediaRoot.mediaType === "video"
+                                    enabled: node && node.trimAvailable !== false
+                                             && !mediaRoot.isMissing
+                                    text: root.commonTr("_PlaylistEditView", "Start and end times")
+                                    icon.source: root.picon("edit", 13, root.iconHex(root.textMuted))
+                                    onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
                                     contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                     background: MenuBg { hovered: parent.hovered }
                                 }

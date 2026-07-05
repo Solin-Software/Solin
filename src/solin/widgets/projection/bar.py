@@ -696,6 +696,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.seek_slider.sliderMoved.connect(self.seek_requested)
         self.media.state_changed.connect(self._on_state_changed)
         self.media.duration_changed.connect(self._on_duration_changed)
+        self.media.source_duration_changed.connect(self._on_source_duration_changed)
         self.media.position_changed.connect(self._on_position_changed)
         self.media.media_ended.connect(self._on_media_ended)
         self.media.buffer_progress.connect(self._on_buffer_progress)
@@ -1186,12 +1187,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         """
         Enters GATE state: video plays muted while the conductor
         announces the song. Controls are locked — only the close button works.
-        Called by MainWindow right before media_ctrl.play_url().
+        Called by MainWindow right before media_ctrl.start_playback().
         """
         self._announce_state = "gate"
         if hasattr(self.media, "set_local_switch_deferred"):
             self.media.set_local_switch_deferred(True)
-        # Mute audio immediately (before play_url starts streaming)
+        # Mute audio immediately (before the playback request starts streaming)
         self.media.audio_output.setVolume(0.0)
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
@@ -1702,7 +1703,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if overlay is not None:
             overlay.set_duration(duration)
             overlay.set_position(self.media.position, duration)
-        # Persiste duração no item da playlist para uso no export .jwlplaylist.
+
+    @Slot(int)
+    def _on_source_duration_changed(self, duration: int):
+        # Persiste a duração original, nunca a duração efetiva recortada.
         # Roda sempre que há playlist ativa — independente de ser salva ou temp.
         # (BaseDurationTicks = duration_ms × 10000 ticks de 100ns)
         if duration > 0:

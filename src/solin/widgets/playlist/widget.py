@@ -52,6 +52,7 @@ from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.media.identity import partition_media_items
 from ...core.media.insertion import MediaInsertResult
+from ...core.media.playback_request import MediaTrim
 from ...core.playlists.items import looks_like_filename_title
 from ...core.projection.image_framing import (
     ImageTransform,
@@ -552,6 +553,7 @@ class PlaylistEditView(
         self.bridge.downloadItemSignal.connect(self._download_item)
         self.bridge.imageFramingSetRequested.connect(self._set_image_framing)
         self.bridge.imageFramingResetRequested.connect(self._reset_image_framing)
+        self.bridge.mediaTrimSetRequested.connect(self._set_media_trim)
         self.bridge.renameMarkerSignal.connect(self._rename_marker)
         self.bridge.deleteMarkerSignal.connect(self._delete_marker)
 
@@ -648,6 +650,41 @@ class PlaylistEditView(
         self.model.invalidate_tree_data_cache()
         self.bridge.emit_image_framing_changed(item_id, None)
         self._schedule_image_framing_save()
+
+    @Slot(str, float, float, float)
+    def _set_media_trim(
+        self,
+        item_id: str,
+        start_ms: float,
+        end_ms: float,
+        duration_ms: float,
+    ) -> None:
+        if not self._pl:
+            return
+        item = next(
+            (candidate for candidate in self._pl.get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        if not item or item.get("type") not in {"audio", "video"}:
+            return
+        try:
+            trim = MediaTrim.from_millisecond_bounds(start_ms, end_ms, duration_ms)
+        except (TypeError, ValueError):
+            return
+        values = {
+            "start_trim_ticks": trim.start_trim_ticks,
+            "end_trim_ticks": trim.end_trim_ticks,
+            "base_duration_ticks": trim.base_duration_ticks,
+        }
+        for field, value in values.items():
+            if field != "base_duration_ticks" and value == 0:
+                item.pop(field, None)
+            else:
+                item[field] = value
+        self.model.invalidate_tree_data_cache()
+        self.bridge.stateChanged.emit()
+        self._save()
 
     def _schedule_image_framing_save(self) -> None:
         self._image_framing_save_pending = True
@@ -1052,7 +1089,7 @@ class PlaylistEditView(
         ticks = duration_ms * 10_000
         for item in self._pl.get("items", []):
             if item.get("id") == item_id:
-                if item.get("base_duration_ticks") != ticks:
+                if not item.get("base_duration_ticks"):
                     item["base_duration_ticks"] = ticks
                     self._save()
                     self.model.update_title(item_id, item.get("title", ""))

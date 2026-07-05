@@ -5,6 +5,7 @@ import threading
 
 import solin.widgets.browser.widget as browser_widget
 from solin.core.media.browser_downloads import BrowserDownloadService
+from solin.core.media.download_storage import cached_path_for
 from solin.core.network.http import HttpError
 from solin.widgets.browser.downloads import BrowserDownloadsMixin
 
@@ -156,3 +157,23 @@ def test_browser_download_service_rejects_new_work_after_shutdown(tmp_path):
 
     assert stream_called is False
     assert list(tmp_path.iterdir()) == []
+
+
+def test_browser_media_cache_uses_shared_hashed_storage_contract(tmp_path):
+    url = "https://example.test/media/video.mp4?quality=720"
+    notified = []
+    completed = threading.Event()
+    service = BrowserDownloadService(
+        tmp_path,
+        notify_cached=lambda value: notified.append(value) or completed.set(),
+        stream_factory=lambda *_args, **_kwargs: _ByteStream((b"video",)),
+    )
+
+    service.cache_media(url)
+
+    assert completed.wait(2)
+    path = Path(cached_path_for(url, tmp_path))
+    assert path.read_bytes() == b"video"
+    assert Path(f"{path}.done").read_text(encoding="utf-8") == url
+    assert notified == [url]
+    assert service.shutdown() == []

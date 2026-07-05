@@ -36,12 +36,15 @@ DEFAULT_QT_QML_MODULES = [
     "QtQuick/Controls/Basic",
     "QtQuick/Layouts",
     "QtQuick/Templates",
+    "QtMultimedia",
 ]
 MACOS_QT_RUNTIME_FRAMEWORKS = [
     "QtCore.framework",
     "QtDBus.framework",
     "QtGui.framework",
     "QtNetwork.framework",
+    "QtMultimedia.framework",
+    "QtMultimediaQuick.framework",
     "QtOpenGL.framework",
     "QtQml.framework",
     "QtQmlMeta.framework",
@@ -318,6 +321,8 @@ def stage_windows_qt_quick_libraries(output_dir: Path) -> list[Path]:
         old_dll.unlink()
 
     patterns = [
+        "Qt6Multimedia.dll",
+        "Qt6MultimediaQuick.dll",
         "Qt6QuickControls2*.dll",
         "Qt6QuickLayouts.dll",
         "Qt6QuickTemplates2.dll",

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from solin.core.media.formats import mime_to_ext
+from solin.core.media.playback_request import MediaTrim
 from solin.core.playlists.items import create_playlist_item
 
 
@@ -98,13 +99,36 @@ def _raw_item_url(raw: Mapping[str, Any]) -> str:
 
 
 def _playlist_attributes(raw: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    attributes = {
         "key_symbol": raw.get("key_symbol"),
         "track": raw.get("track"),
         "issue_tag": raw.get("issue_tag"),
         "doc_id": raw.get("doc_id"),
         "meps_language": raw.get("meps_language", raw.get("language", 0)),
     }
+    trim_fields = (
+        "start_trim_ticks",
+        "end_trim_ticks",
+        "base_duration_ticks",
+    )
+    if any(field in raw for field in trim_fields):
+        values = {field: raw.get(field, 0) for field in trim_fields}
+        try:
+            trim = MediaTrim(**values)
+        except (TypeError, ValueError):
+            trim = None
+        if trim is not None:
+            for field in trim_fields:
+                if field in raw:
+                    attributes[field] = getattr(trim, field)
+    for field in (
+        "accuracy",
+        "end_action",
+    ):
+        value = raw.get(field)
+        if field in raw and isinstance(value, int) and not isinstance(value, bool):
+            attributes[field] = value
+    return attributes
 
 
 def _embedded_default_suffix(raw: Mapping[str, Any], media_type: str) -> str:

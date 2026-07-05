@@ -46,6 +46,9 @@ def meeting_media_from_ref(
     ref: dict[str, Any],
     *,
     image_framing: dict[str, Any] | None = None,
+    start_trim_ticks: int = 0,
+    end_trim_ticks: int = 0,
+    base_duration_ticks: int = 0,
 ) -> MeetingMedia:
     return MeetingMedia(
         multimedia_id=int_or_zero(ref.get("multimedia_id")),
@@ -62,6 +65,9 @@ def meeting_media_from_ref(
         is_song=bool(ref.get("is_song", False)),
         cbs_article_title=str(ref.get("cbs_article_title") or ""),
         image_framing=image_framing,
+        start_trim_ticks=start_trim_ticks,
+        end_trim_ticks=end_trim_ticks,
+        base_duration_ticks=base_duration_ticks,
     )
 
 
@@ -93,7 +99,7 @@ def create_manual_media_node(
         "is_song": False,
         "cbs_article_title": "",
     }
-    return {
+    node: Node = {
         "id": node_id,
         "type": "media",
         "title": display_title,
@@ -102,6 +108,7 @@ def create_manual_media_node(
         "children": [],
         "meeting_generated": False,
     }
+    return node
 
 
 def create_playlist_media_node(
@@ -134,7 +141,7 @@ def create_playlist_media_node(
         "is_song": False,
         "cbs_article_title": "",
     }
-    return {
+    node: Node = {
         "id": node_id,
         "type": "media",
         "title": title or media_fallback_title,
@@ -144,3 +151,11 @@ def create_playlist_media_node(
         "meeting_generated": False,
         "auto_title": bool(raw.get("auto_title", False)),
     }
+    for field in (
+        "start_trim_ticks",
+        "end_trim_ticks",
+        "base_duration_ticks",
+    ):
+        if raw.get(field) is not None:
+            node[field] = int_or_zero(raw.get(field))
+    return node

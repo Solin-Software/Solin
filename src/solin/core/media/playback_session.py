@@ -42,14 +42,14 @@ class MediaPlaybackSession:
         self._pending_local_switch: tuple[str, bool] | None = None
         self._pending_local_notified = False
 
-    def begin_playback(self, url: str) -> None:
+    def begin_playback(self, url: str, *, requested_playing: bool = True) -> None:
         self.current_url = url
         self.local_path = None
         self.local_is_temp = False
         self._pending_local_switch = None
         self._pending_local_notified = False
         self.cover_emitted = False
-        self.requested_playing = True
+        self.requested_playing = requested_playing
         self.session_id += 1
         self.frame_session = self.session_id
 

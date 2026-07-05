@@ -123,7 +123,7 @@ class SongDownloader(QObject):
     def cleanup_temp(self) -> None:
         """
         Apaga o tempfile entregue ao player (persist=False).
-        Deve ser chamado pelo MediaController em stop() e no play_url() seguinte.
+        Deve ser chamado pelo MediaController em stop() e no playback seguinte.
         """
         with self._lock:
             path = self._finished_temp

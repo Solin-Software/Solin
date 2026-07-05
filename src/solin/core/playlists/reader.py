@@ -108,11 +108,12 @@ class _RawItem:
 
 @dataclass
 class _IndependentMedia:
-    filepath:      str          # relativo dentro do ZIP
-    original_name: str
-    mime_type:     str
-    hash_:         str = ""
-    data:          bytes = field(default_factory=bytes, repr=False)
+    filepath:       str          # relativo dentro do ZIP
+    original_name:  str
+    mime_type:      str
+    duration_ticks: Optional[int] = None
+    hash_:          str = ""
+    data:           bytes = field(default_factory=bytes, repr=False)
 
 
 @dataclass
@@ -125,6 +126,7 @@ class _Location:
     language_id:           int = 0
     meps_language:         int = 0
     major_multimedia_type: Optional[int] = None  # 0=audio, 2=video (da PlaylistItemLocationMap)
+    base_duration_ticks:   Optional[int] = None
 
 
 # ── Parser principal ──────────────────────────────────────────────────────────
@@ -445,11 +447,21 @@ class JWLPlaylistReader:
         Carrega os bytes da imagem direto do ZIP.
         """
         result: dict[int, _IndependentMedia] = {}
+        map_columns = {
+            str(row["name"]).lower()
+            for row in con.execute(
+                "PRAGMA table_info(PlaylistItemIndependentMediaMap)"
+            ).fetchall()
+        }
+        duration_column = (
+            "m.DurationTicks" if "durationticks" in map_columns else "NULL"
+        )
         try:
             rows = con.execute(
-                """
+                f"""
                 SELECT
                     m.PlaylistItemId,
+                    {duration_column} AS DurationTicks,
                     im.FilePath,
                     im.OriginalFilename,
                     im.MimeType,
@@ -491,11 +503,12 @@ class JWLPlaylistReader:
                 continue
 
             result[row["PlaylistItemId"]] = _IndependentMedia(
-                filepath      = file_path,
-                original_name = orig_name,
-                mime_type     = mime_type,
-                hash_         = hash_value,
-                data          = data,
+                filepath       = file_path,
+                original_name  = orig_name,
+                mime_type      = mime_type,
+                duration_ticks = row["DurationTicks"],
+                hash_          = hash_value,
+                data           = data,
             )
 
         return result
@@ -538,6 +551,7 @@ class JWLPlaylistReader:
                 doc_id                = row["DocumentId"],
                 meps_language         = row["MepsLanguage"],
                 major_multimedia_type = row["MajorMultimediaType"],
+                base_duration_ticks   = row["BaseDurationTicks"],
             )
 
         return result
@@ -573,6 +587,7 @@ class JWLPlaylistReader:
             "url":               None,
             "start_trim_ticks":  raw.start_trim_ticks,
             "end_trim_ticks":    raw.end_trim_ticks,
+            "base_duration_ticks": media.duration_ticks,
             "accuracy":          raw.accuracy,
             "end_action":        raw.end_action,
         }
@@ -592,6 +607,7 @@ class JWLPlaylistReader:
             "url":               None,
             "start_trim_ticks":  raw.start_trim_ticks,
             "end_trim_ticks":    raw.end_trim_ticks,
+            "base_duration_ticks": media.duration_ticks,
             "accuracy":          raw.accuracy,
             "end_action":        raw.end_action,
         }
@@ -607,7 +623,11 @@ class JWLPlaylistReader:
             major_multimedia_type = loc.major_multimedia_type,
         )
         url            = meta["url"]            if meta else None
-        duration_ticks = meta["duration_ticks"] if meta else None
+        duration_ticks = (
+            loc.base_duration_ticks
+            if loc.base_duration_ticks is not None
+            else (meta["duration_ticks"] if meta else None)
+        )
         # Título canônico da API (ex: "Faça amizade com os mais velhos") tem
         # prioridade sobre o Label do banco — que pode ter sido editado/sufixado.
         api_title      = meta.get("title")      if meta else None

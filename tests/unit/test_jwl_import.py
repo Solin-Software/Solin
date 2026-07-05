@@ -16,6 +16,11 @@ def test_jwl_import_maps_jworg_and_local_items_with_metadata():
                 "issue_tag": 20260500,
                 "doc_id": 123,
                 "language": 99,
+                "start_trim_ticks": 10_000_000,
+                "end_trim_ticks": 20_000_000,
+                "base_duration_ticks": 90_000_000,
+                "accuracy": 2,
+                "end_action": 3,
             },
             {
                 "source": "local",
@@ -38,6 +43,32 @@ def test_jwl_import_maps_jworg_and_local_items_with_metadata():
     assert result.items[0]["issue_tag"] == 20260500
     assert result.items[0]["doc_id"] == 123
     assert result.items[0]["meps_language"] == 99
+    assert result.items[0]["start_trim_ticks"] == 10_000_000
+    assert result.items[0]["end_trim_ticks"] == 20_000_000
+    assert result.items[0]["base_duration_ticks"] == 90_000_000
+    assert result.items[0]["accuracy"] == 2
+    assert result.items[0]["end_action"] == 3
+
+
+def test_jwl_import_ignores_malformed_trim_as_one_atomic_value():
+    result = playlist_items_from_jwl_document_items(
+        [{
+            "source": "local",
+            "title": "Corrupt",
+            "type": "video",
+            "url": "clip.mp4",
+            "start_trim_ticks": "not-an-integer",
+            "end_trim_ticks": 20_000_000,
+            "base_duration_ticks": 90_000_000,
+        }],
+        source_name="playlist.jwlplaylist",
+        save_embedded=lambda *_args: "unused",
+    )
+
+    item = result.items[0]
+    assert "start_trim_ticks" not in item
+    assert "end_trim_ticks" not in item
+    assert "base_duration_ticks" not in item
 
 
 def test_jwl_import_saves_embedded_media_with_item_identifier():
@@ -56,6 +87,9 @@ def test_jwl_import_saves_embedded_media_with_item_identifier():
                 "data": b"video",
                 "filename": "clip.mp4",
                 "mime_type": "video/mp4",
+                "start_trim_ticks": 5_000_000,
+                "end_trim_ticks": 15_000_000,
+                "base_duration_ticks": 60_000_000,
             }
         ],
         source_name="playlist.jwlplaylist",
@@ -70,6 +104,9 @@ def test_jwl_import_saves_embedded_media_with_item_identifier():
     assert item["type"] == "video"
     assert item["_tmp"] is True
     assert item["original_filename"] == "clip.mp4"
+    assert item["start_trim_ticks"] == 5_000_000
+    assert item["end_trim_ticks"] == 15_000_000
+    assert item["base_duration_ticks"] == 60_000_000
 
 
 def test_jwl_import_skips_unresolved_items_and_failed_embedded_write():

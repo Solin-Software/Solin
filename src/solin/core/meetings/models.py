@@ -24,6 +24,9 @@ class MeetingMedia:
     is_song: bool = False
     cbs_article_title: str = ""
     image_framing: dict[str, Any] | None = None
+    start_trim_ticks: int = 0
+    end_trim_ticks: int = 0
+    base_duration_ticks: int = 0
 
 
 @dataclass(slots=True)

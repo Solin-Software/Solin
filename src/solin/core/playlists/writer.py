@@ -533,11 +533,14 @@ def _write_jwlplaylist(
             if jw_meta:
                 if jw_meta.get("title"):
                     title = jw_meta["title"]
-                if not base_duration and jw_meta.get("duration_ticks"):
+                if (
+                    base_duration is None
+                    and jw_meta.get("duration_ticks") is not None
+                ):
                     base_duration = jw_meta["duration_ticks"]
 
             # Fallback de duração: arquivo em cache local (item baixado mas API offline)
-            if not base_duration and local_cached_path:
+            if base_duration is None and local_cached_path:
                 try:
                     ext_c = Path(local_cached_path).suffix.lower()
                     dur_ms = _read_duration_ms_from_bytes(
@@ -656,7 +659,7 @@ def _write_jwlplaylist(
             # Duração: 0 para imagens; real para vídeo/áudio
             if is_image:
                 duration_ticks = 0
-            elif base_duration:
+            elif base_duration is not None:
                 duration_ticks = base_duration
             else:
                 dur_ms = _read_duration_ms_from_bytes(file_data, ext)
