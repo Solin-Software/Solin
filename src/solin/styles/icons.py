@@ -559,11 +559,12 @@ def _build_icon_svg(name: str) -> str:
     elif name == 'ICON_MEDIA_TRIM':
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
-            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke="currentColor" stroke-width="2.1" stroke-linecap="round"'
             ' stroke-linejoin="round">'
-            '<path d="M8 5H6a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h2"/>'
-            '<path d="M16 5h2a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-2"/>'
-            '<path d="M12 3v18"/>'
+            '<circle cx="5.5" cy="6.5" r="3.4"/>'
+            '<circle cx="5.5" cy="17.5" r="3.4"/>'
+            '<path d="M8.25 8.5 21.5 20.5"/>'
+            '<path d="M8.25 15.5 21.5 3.5"/>'
             '</svg>'
         )
     elif name == 'ICON_CLOUD_DOWNLOAD':
