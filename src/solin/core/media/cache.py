@@ -18,7 +18,7 @@ from .application import (
     QueuedPrefetch,
 )
 from .qt_contracts import PrefetchDownloader, PrefetchDownloaderFactory
-from .download_storage import is_remote_url, is_url_cached
+from .download_storage import completed_cached_path, is_remote_url, is_url_cached
 
 
 class MediaCacheManager(QObject):
@@ -68,6 +68,10 @@ class MediaCacheManager(QObject):
 
     def is_cached(self, url: str) -> bool:
         return is_url_cached(url, self.media_cache_dir)
+
+    def cached_path(self, url: str) -> str | None:
+        """Return the verified completed cache path for an exact URL."""
+        return completed_cached_path(url, self.media_cache_dir)
 
     @staticmethod
     def is_remote(url: str) -> bool:

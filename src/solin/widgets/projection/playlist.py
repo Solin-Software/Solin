@@ -181,12 +181,14 @@ class ProjectionPlaylistMixin:
                     "major_multimedia_type",
                     "type",
                     "base_duration_ticks",
+                    "start_trim_ticks",
+                    "end_trim_ticks",
                     "image_framing",
                 )
                 if item.get(k) is not None
             }
             live_dur = self.media.duration
-            if live_dur and live_dur > 0:
+            if live_dur and live_dur > 0 and not meta.get("base_duration_ticks"):
                 meta["base_duration_ticks"] = live_dur * 10_000
         elif self._mode == "image":
             title = self.ov_title.text()

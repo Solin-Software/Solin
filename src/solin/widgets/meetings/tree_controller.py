@@ -35,7 +35,7 @@ from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
 
 from ...core.media.cache import MediaCacheManager
-from ...core.media.duration import format_duration_ticks
+from ...core.media.duration import format_effective_duration_ticks
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
 from ...core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -49,6 +49,7 @@ from ...core.foundation.constants import (
 from ...core.media.formats import MEDIA_EXTS
 from ...core.media.identity import partition_media_items
 from ...core.media.insertion import MediaInsertResult
+from ...core.media.playback_request import MediaTrim
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.qt_threads import stop_owned_qthread
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -1787,7 +1788,13 @@ class MeetingTreeController(QObject):
             image_transform_from_record(node.get("image_framing"))
         )
         self.projectRequested.emit(
-            meeting_media_from_ref(ref, image_framing=framing)
+            meeting_media_from_ref(
+                ref,
+                image_framing=framing,
+                start_trim_ticks=self._trim_ticks(node, "start_trim_ticks"),
+                end_trim_ticks=self._trim_ticks(node, "end_trim_ticks"),
+                base_duration_ticks=self._trim_ticks(node, "base_duration_ticks"),
+            )
         )
 
     @Slot(result=float)
@@ -1865,6 +1872,40 @@ class MeetingTreeController(QObject):
         self._tree_data_cache = None
         self.imageFramingChanged.emit(item_id, None)
         self._schedule_image_framing_save()
+
+    @Slot(str, float, float, float)
+    def setMediaTrim(  # noqa: N802 - QML API
+        self,
+        item_id: str,
+        start_ms: float,
+        end_ms: float,
+        duration_ms: float,
+    ) -> None:
+        node = self._find_node(item_id)
+        if not node or node.get("type") != "media":
+            return
+        ref = node.get("media_ref") or {}
+        media_type = node.get("media_type") or self._media_type_from_ref(ref)
+        if media_type not in {"audio", "video"}:
+            return
+        try:
+            trim = MediaTrim.from_millisecond_bounds(start_ms, end_ms, duration_ms)
+        except (TypeError, ValueError):
+            return
+        values = {
+            "start_trim_ticks": trim.start_trim_ticks,
+            "end_trim_ticks": trim.end_trim_ticks,
+            "base_duration_ticks": trim.base_duration_ticks,
+        }
+        for field, value in values.items():
+            ref.pop(field, None)
+            if field != "base_duration_ticks" and value == 0:
+                node.pop(field, None)
+            else:
+                node[field] = value
+        self._tree_data_cache = None
+        self.stateChanged.emit()
+        self._save()
 
     def _schedule_image_framing_save(self) -> None:
         self._image_framing_save_pending = True
@@ -2489,6 +2530,13 @@ class MeetingTreeController(QObject):
         cloud_visible, cloud_active, cloud_progress, cloud_tooltip = self._cloud_state(url)
         is_remote = MediaCacheManager.is_remote(url)
         is_missing = bool(url and not is_remote and not os.path.exists(url))
+        cached_path = self._media_cache_manager.cached_path(url) if is_remote else None
+        trim_source = (
+            QUrl.fromLocalFile(cached_path).toString()
+            if cached_path
+            else url if is_remote
+            else QUrl.fromLocalFile(os.path.abspath(url)).toString() if url else ""
+        )
         return {
             "id": item_id,
             "type": "media",
@@ -2498,11 +2546,20 @@ class MeetingTreeController(QObject):
             "duration": self._duration_for(node),
             "thumbSource": self._display_thumb_source_for(node, item_id),
             "url": url,
+            "trimSource": trim_source,
+            "trimAvailable": bool(trim_source and not is_missing),
             "cloudVisible": cloud_visible,
             "cloudActive": cloud_active,
             "cloudProgress": cloud_progress,
             "cloudTooltip": cloud_tooltip,
             "isMissing": is_missing,
+            "startTrimTicks": self._trim_ticks(node, "start_trim_ticks"),
+            "endTrimTicks": self._trim_ticks(node, "end_trim_ticks"),
+            "baseDurationTicks": self._trim_ticks(node, "base_duration_ticks"),
+            "hasCustomTrim": bool(
+                self._trim_ticks(node, "start_trim_ticks")
+                or self._trim_ticks(node, "end_trim_ticks")
+            ),
             "imageFraming": image_transform_to_record(
                 image_transform_from_record(node.get("image_framing"))
             ),
@@ -2525,8 +2582,25 @@ class MeetingTreeController(QObject):
         return "video"
 
     def _duration_for(self, node: Node) -> str:
-        ticks = self._duration_ticks(node)
-        return format_duration_ticks(ticks)
+        return format_effective_duration_ticks(
+            self._duration_ticks(node),
+            self._trim_ticks(node, "start_trim_ticks"),
+            self._trim_ticks(node, "end_trim_ticks"),
+        )
+
+    @staticmethod
+    def _trim_ticks(node: Node, field: str) -> int:
+        try:
+            return max(
+                0,
+                int(
+                    node.get(field)
+                    if node.get(field) is not None
+                    else (node.get("media_ref") or {}).get(field, 0)
+                ),
+            )
+        except (TypeError, ValueError):
+            return 0
 
     def _duration_ticks(self, node: Node | None) -> int:
         if not node:
@@ -2739,7 +2813,14 @@ class MeetingTreeController(QObject):
         self._next_token += 1
         self._token_to_node_id[token] = item_id
         self._active_info_requests.add(request_key)
-        self._info_queue.request(token, url, media_type)
+        self._info_queue.request(
+            token,
+            url,
+            media_type,
+            require_duration=(
+                purpose == "metadata" and media_type in {"audio", "video"}
+            ),
+        )
 
     @Slot(str, str, str, str)
     def _on_video_resolved(self, request_id: str, url: str, title: str, thumb_url: str):
@@ -2818,7 +2899,7 @@ class MeetingTreeController(QObject):
         if not node:
             return
         ticks = int(duration_ms) * 10_000
-        if node.get("base_duration_ticks") == ticks:
+        if node.get("base_duration_ticks"):
             return
         node["base_duration_ticks"] = ticks
         self._save()

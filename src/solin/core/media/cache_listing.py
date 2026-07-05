@@ -6,6 +6,7 @@ import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.media.formats import media_type_from_path
@@ -44,14 +45,16 @@ def scan_cached_media_items(
         media_type = media_type_from_path(path, default="other")
         if media_type == "other":
             continue
+        original_url = _read_original_url(done_path)
+        filename = _display_filename(path, original_url)
         items.append(
             CachedMediaItem(
                 path=str(path),
-                filename=path.name,
-                display_title=_read_title(path, path.stem),
+                filename=filename,
+                display_title=_read_title(path, Path(filename).stem),
                 size=_file_size(path),
                 media_type=media_type,
-                original_url=_read_original_url(done_path),
+                original_url=original_url,
             )
         )
     return items
@@ -79,8 +82,19 @@ def _read_title(path: Path, fallback: str) -> str:
 
 def _read_original_url(done_path: Path) -> str:
     try:
-        content = done_path.read_text(encoding="utf-8").strip()
+        content = done_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         log_ignored_exception(__name__, "Could not read cached media origin sidecar")
         return ""
-    return content if content.startswith("http") else ""
+    return content if content == content.strip() and content.startswith("http") else ""
+
+
+def _display_filename(path: Path, original_url: str) -> str:
+    if not original_url:
+        return path.name
+    try:
+        decoded = unquote(Path(urlsplit(original_url).path).name)
+        filename = decoded.replace("\\", "/").rsplit("/", 1)[-1]
+        return filename if filename not in {"", ".", ".."} else path.name
+    except ValueError:
+        return path.name

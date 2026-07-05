@@ -51,6 +51,7 @@ class PlaylistEditBridge(QObject):
         str, float, float, float, float, float, bool
     )
     imageFramingResetRequested = Signal(str)
+    mediaTrimSetRequested = Signal(str, float, float, float)
     renameMarkerSignal   = Signal(str, str)     # marker_id, text
     deleteMarkerSignal   = Signal(str)          # marker_id
 
@@ -323,6 +324,21 @@ class PlaylistEditBridge(QObject):
     @Slot(str)
     def resetImageFraming(self, item_id: str) -> None:  # noqa: N802 - QML API
         self.imageFramingResetRequested.emit(item_id)
+
+    @Slot(str, float, float, float)
+    def setMediaTrim(  # noqa: N802 - QML API
+        self,
+        item_id: str,
+        start_ms: float,
+        end_ms: float,
+        duration_ms: float,
+    ) -> None:
+        self.mediaTrimSetRequested.emit(
+            item_id,
+            start_ms,
+            end_ms,
+            duration_ms,
+        )
 
     @Slot(result=float)
     def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API

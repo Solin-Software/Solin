@@ -14,6 +14,7 @@ from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
 )
 from ..core.media.formats import AUDIO_EXTS
+from ..core.media.playback_request import MediaPlaybackRequest, MediaTrim
 from ..core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
@@ -135,7 +136,14 @@ class MediaProjectionController:
                     user_initiated=False,
                 )
             elif url:
-                playlist_item = {"url": url, "title": title, "type": media_type}
+                playlist_item = {
+                    "url": url,
+                    "title": title,
+                    "type": media_type,
+                    "start_trim_ticks": item.get("start_trim_ticks"),
+                    "end_trim_ticks": item.get("end_trim_ticks"),
+                    "base_duration_ticks": item.get("base_duration_ticks"),
+                }
                 self.project_video(url, title, [playlist_item], None)
             return
 
@@ -166,6 +174,9 @@ class MediaProjectionController:
                 "url": item.file_path,
                 "title": title,
                 "type": media_type,
+                "start_trim_ticks": getattr(item, "start_trim_ticks", None),
+                "end_trim_ticks": getattr(item, "end_trim_ticks", None),
+                "base_duration_ticks": getattr(item, "base_duration_ticks", None),
             }
             self.project_video(
                 item.file_path,
@@ -233,10 +244,15 @@ class MediaProjectionController:
             from_saved_playlist=from_saved_playlist,
         )
         ext = os.path.splitext(url.split("?")[0])[1].lower()
+        selected_item = next(
+            (item for item in items if item.get("url") == url),
+            items[0],
+        )
         return self.project_video_core(
             url,
             title,
             is_audio=ext in AUDIO_EXTS,
+            media_item=selected_item,
             user_initiated=False,
         )
 
@@ -256,7 +272,9 @@ class MediaProjectionController:
             if current_ext not in AUDIO_EXTS:
                 for projection_window in context.projection_windows():
                     projection_window.begin_video()
-            context.media_controller.play_url(current["url"])
+            context.media_controller.start_playback(
+                self._playback_request(current, autoplay=True)
+            )
             return
 
         if media_type == "image":
@@ -275,6 +293,7 @@ class MediaProjectionController:
             title,
             keep_expanded=context.projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
+            media_item=item,
             user_initiated=False,
         )
 
@@ -284,6 +303,7 @@ class MediaProjectionController:
         title: str,
         keep_expanded: bool = False,
         is_audio: bool = False,
+        media_item: dict[str, Any] | None = None,
         user_initiated: bool = True,
     ) -> bool:
         if user_initiated and not self._allow_manual_projection_change():
@@ -318,6 +338,7 @@ class MediaProjectionController:
             is_sjjm
             and not is_audio
             and context.sjjm_announce_mode()
+            and not self._item_has_custom_trim(media_item)
         )
         if announce:
             context.projection_bar.begin_announcement_mode()
@@ -325,14 +346,18 @@ class MediaProjectionController:
         if not is_audio:
             self._handlers.prepare_video_session()
 
-        context.media_controller.play_url(url)
-
-        if (
+        start_paused = (
             not is_audio
             and not announce
             and context.start_videos_paused()
-        ):
-            context.media_controller.pause()
+        )
+        context.media_controller.start_playback(
+            self._playback_request(
+                media_item or {"url": url},
+                source=url,
+                autoplay=not start_paused,
+            )
+        )
 
         self._session.set_state({"type": "video", "is_audio": is_audio})
         self._handlers.update_projection_status(
@@ -496,6 +521,7 @@ class MediaProjectionController:
             item["title"],
             keep_expanded=keep_expanded,
             is_audio=ext in AUDIO_EXTS,
+            media_item=item,
             user_initiated=False,
         )
 
@@ -525,7 +551,52 @@ class MediaProjectionController:
             item["title"],
             keep_expanded=projection_bar.is_expanded(),
             is_audio=ext in AUDIO_EXTS,
+            media_item=item,
             user_initiated=False,
+        )
+
+    @staticmethod
+    def _item_has_custom_trim(item: dict[str, Any] | None) -> bool:
+        if not item:
+            return False
+        for field in ("start_trim_ticks", "end_trim_ticks"):
+            try:
+                if int(item.get(field) or 0) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
+
+    @staticmethod
+    def _playback_request(
+        item: dict[str, Any],
+        *,
+        source: str | None = None,
+        autoplay: bool = True,
+    ) -> MediaPlaybackRequest:
+        def ticks(name: str) -> int:
+            value = item.get(name)
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        start_ticks = ticks("start_trim_ticks")
+        end_ticks = ticks("end_trim_ticks")
+        base_ticks = ticks("base_duration_ticks")
+        try:
+            trim = MediaTrim(start_ticks, end_ticks, base_ticks)
+        except ValueError:
+            # Preserve the requested offsets and let runtime duration
+            # resolution reject an impossible range without crashing the UI.
+            try:
+                trim = MediaTrim(start_ticks, end_ticks)
+            except ValueError:
+                trim = MediaTrim()
+        return MediaPlaybackRequest(
+            source=source or str(item.get("url") or ""),
+            trim=trim if trim.custom else None,
+            autoplay=autoplay,
         )
 
     def _resolve_and_project_meeting_item(self, item, title: str) -> None:
@@ -534,7 +605,14 @@ class MediaProjectionController:
         url = resolved.get("url", "")
         if url:
             display_title = resolved.get("title") or title
-            playlist_item = {"url": url, "title": display_title, "type": "video"}
+            playlist_item = {
+                "url": url,
+                "title": display_title,
+                "type": "video",
+                "start_trim_ticks": getattr(item, "start_trim_ticks", None),
+                "end_trim_ticks": getattr(item, "end_trim_ticks", None),
+                "base_duration_ticks": getattr(item, "base_duration_ticks", None),
+            }
             self.project_video(url, display_title, [playlist_item], None)
             return
 

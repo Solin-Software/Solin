@@ -16,7 +16,9 @@ import urllib.request
 
 from solin.core.media.download_storage import (
     DownloadTarget,
+    cached_path_for,
     commit_persistent_download,
+    completed_cached_path,
     filename_from_url,
     make_persistent_temp_path,
     safe_remove,
@@ -108,8 +110,8 @@ class BrowserDownloadService:
             return
 
         filename = filename_from_url(url) or "media_file"
-        destination = self._cache_dir / filename
-        if self._is_completed(destination, url):
+        destination = Path(cached_path_for(url, self._cache_dir))
+        if completed_cached_path(url, self._cache_dir) is not None:
             return
 
         def work() -> None:
@@ -229,6 +231,6 @@ class BrowserDownloadService:
         if not destination.is_file() or not marker.is_file():
             return False
         try:
-            return marker.read_text(encoding="utf-8").strip() == url
-        except OSError:
+            return marker.read_text(encoding="utf-8") == url
+        except (OSError, UnicodeError):
             return False

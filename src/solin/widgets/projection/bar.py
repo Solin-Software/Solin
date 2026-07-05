@@ -119,6 +119,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     playlist_navigate   = Signal(int)        # índice absoluto — navegação manual prev/next
     add_to_destination_requested = Signal(str, str, object)  # url, title, metadata
     send_to_temp_playlist_requested = Signal(list)  # lista de itens da playlist atual
+    source_duration_discovered = Signal(str, int)  # playlist item id, original duration ms
     monitor_manager_requested = Signal(object)   # QWidget (the button) for popup positioning
     obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
     set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
@@ -696,6 +697,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.seek_slider.sliderMoved.connect(self.seek_requested)
         self.media.state_changed.connect(self._on_state_changed)
         self.media.duration_changed.connect(self._on_duration_changed)
+        self.media.source_duration_changed.connect(self._on_source_duration_changed)
         self.media.position_changed.connect(self._on_position_changed)
         self.media.media_ended.connect(self._on_media_ended)
         self.media.buffer_progress.connect(self._on_buffer_progress)
@@ -1186,12 +1188,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         """
         Enters GATE state: video plays muted while the conductor
         announces the song. Controls are locked — only the close button works.
-        Called by MainWindow right before media_ctrl.play_url().
+        Called by MainWindow right before media_ctrl.start_playback().
         """
         self._announce_state = "gate"
         if hasattr(self.media, "set_local_switch_deferred"):
             self.media.set_local_switch_deferred(True)
-        # Mute audio immediately (before play_url starts streaming)
+        # Mute audio immediately (before the playback request starts streaming)
         self.media.audio_output.setVolume(0.0)
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
@@ -1702,17 +1704,19 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if overlay is not None:
             overlay.set_duration(duration)
             overlay.set_position(self.media.position, duration)
-        # Persiste duração no item da playlist para uso no export .jwlplaylist.
-        # Roda sempre que há playlist ativa — independente de ser salva ou temp.
-        # (BaseDurationTicks = duration_ms × 10000 ticks de 100ns)
-        if duration > 0:
-            idx = self._playlist_index
-            if 0 <= idx < len(self._playlist):
-                item_id = self._playlist[idx].get("id", "")
-                if item_id:
-                    edit = getattr(self.playlist_widget, "_edit_view", None)
-                    if edit is not None:
-                        edit.notify_duration(item_id, duration)
+
+    @Slot(int)
+    def _on_source_duration_changed(self, duration: int):
+        if duration <= 0:
+            return
+        item = self.current_playlist_item()
+        if not item:
+            return
+        item_id = str(item.get("id") or "")
+        if item_id:
+            # Publish the original source duration. Persistence belongs to the
+            # playlist owner, not to the projection UI.
+            self.source_duration_discovered.emit(item_id, duration)
 
     @Slot(int)
     def _on_position_changed(self, position: int):

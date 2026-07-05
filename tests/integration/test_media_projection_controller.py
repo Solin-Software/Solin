@@ -30,6 +30,7 @@ class _ServiceStub:
         self.stopped = 0
         self.played = []
         self.paused = 0
+        self.requests = []
         self.events = events
         self.name = name
 
@@ -38,10 +39,11 @@ class _ServiceStub:
         if self.events is not None:
             self.events.append((self.name, "stop"))
 
-    def play_url(self, url):
-        self.played.append(url)
+    def start_playback(self, request):
+        self.requests.append(request)
+        self.played.append(request.source)
         if self.events is not None:
-            self.events.append((self.name, "play_url", url))
+            self.events.append((self.name, "start_playback", request.source))
 
     def pause(self):
         self.paused += 1
@@ -325,6 +327,27 @@ def test_project_video_classifies_audio_and_updates_status():
     ]
 
 
+def test_project_video_snapshots_custom_times_into_playback_request():
+    window = _WindowStub()
+    controller = _controller(window)
+    item = {
+        "url": "talk.mp4",
+        "title": "Talk",
+        "type": "video",
+        "start_trim_ticks": 20_000_000,
+        "end_trim_ticks": 30_000_000,
+        "base_duration_ticks": 100_000_000,
+    }
+
+    controller.project_video("talk.mp4", "Talk", [item])
+
+    request = window.media_ctrl.requests[-1]
+    assert request.source == "talk.mp4"
+    assert request.trim is not None
+    assert request.trim.start_trim_ticks == 20_000_000
+    assert request.trim.end_trim_ticks == 30_000_000
+
+
 def test_manual_projection_is_rejected_before_any_state_changes_when_locked():
     window = _WindowStub()
     window.playback_protection.locked = True
@@ -372,9 +395,29 @@ def test_project_video_core_uses_announcement_mode_for_sjjm_video():
     assert window.media_ctrl.paused == 0
     assert [projection_window.began_video for projection_window in window.windows] == [1, 1]
     assert window.events.index(("proj_bar", "begin_announcement_mode")) < (
-        window.events.index(("media", "play_url", "video.mp4"))
+        window.events.index(("media", "start_playback", "video.mp4"))
     )
     assert ("media", "pause") not in window.events
+
+
+def test_custom_times_bypass_song_announcement_mode():
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    controller = _controller(window)
+    controller._next_is_sjjm = True
+    item = {
+        "url": "song.mp4",
+        "type": "video",
+        "start_trim_ticks": 10_000_000,
+        "end_trim_ticks": 20_000_000,
+        "base_duration_ticks": 100_000_000,
+    }
+
+    controller.project_video_core("song.mp4", "Song", media_item=item)
+
+    assert window.proj_bar.announcement_count == 0
+    assert window.media_ctrl.requests[-1].trim is not None
+    assert window.media_ctrl.requests[-1].autoplay is True
 
 
 def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
@@ -386,10 +429,8 @@ def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
 
     assert window.proj_bar.announcement_count == 0
     assert window.media_ctrl.played == ["talk.mp4"]
-    assert window.media_ctrl.paused == 1
-    assert window.events.index(("media", "play_url", "talk.mp4")) < (
-        window.events.index(("media", "pause"))
-    )
+    assert window.media_ctrl.requests[-1].autoplay is False
+    assert window.media_ctrl.paused == 0
     assert window._auto_key_projection.prepared == 1
     assert [projection_window.began_video for projection_window in window.windows] == [1, 1]
 
@@ -406,7 +447,7 @@ def test_project_video_core_pauses_sjjm_video_when_announcement_mode_is_disabled
     assert controller._next_is_sjjm is False
     assert window.proj_bar.announcement_count == 0
     assert window.media_ctrl.played == ["song.mp4"]
-    assert window.media_ctrl.paused == 1
+    assert window.media_ctrl.requests[-1].autoplay is False
 
 
 def test_project_video_core_ignores_announcement_for_non_sjjm_videos_but_still_pauses():
@@ -419,7 +460,7 @@ def test_project_video_core_ignores_announcement_for_non_sjjm_videos_but_still_p
 
     assert window.proj_bar.announcement_count == 0
     assert window.media_ctrl.played == ["regular.mp4"]
-    assert window.media_ctrl.paused == 1
+    assert window.media_ctrl.requests[-1].autoplay is False
 
 
 def test_project_video_core_never_start_pauses_audio_or_enters_song_announcement():

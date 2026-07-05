@@ -72,6 +72,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         "QtQuick/Controls/Material": ["qmldir", "libqtquickcontrols2materialstyleplugin.dylib"],
         "QtQuick/Layouts": ["qmldir", "libqquicklayoutsplugin.dylib"],
         "QtQuick/Templates": ["qmldir", "libqtquicktemplates2plugin.dylib"],
+        "QtMultimedia": ["qmldir", "libquickmultimediaplugin.dylib"],
     }
     for module_name, filenames in module_files.items():
         module_dir = source_root.joinpath(*module_name.split("/"))
@@ -101,6 +102,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
     ).exists()
     assert (output_root / "QtQuick" / "Layouts" / "libqquicklayoutsplugin.dylib").exists()
     assert (output_root / "QtQuick" / "Templates" / "libqtquicktemplates2plugin.dylib").exists()
+    assert (output_root / "QtMultimedia" / "libquickmultimediaplugin.dylib").exists()
     assert not (output_root / "QtQml" / "StateMachine").exists()
     assert not (output_root / "QtQml" / "XmlListModel").exists()
     assert not (output_root / "QtQuick" / "Controls" / "Material").exists()
@@ -145,3 +147,26 @@ def test_stage_macos_qt_quick_frameworks_reports_missing_required_dependency(tmp
 
     with pytest.raises(SystemExit, match="Required macOS Qt framework"):
         compile_qml_cache.stage_macos_qt_quick_frameworks(tmp_path / "out")
+
+
+def test_stage_windows_qt_quick_libraries_includes_multimedia_runtime(
+    tmp_path,
+    monkeypatch,
+):
+    source_root = tmp_path / "PySide6"
+    source_root.mkdir()
+    for name in (
+        "Qt6Multimedia.dll",
+        "Qt6MultimediaQuick.dll",
+        "Qt6QuickLayouts.dll",
+    ):
+        (source_root / name).write_text(name, encoding="utf-8")
+    monkeypatch.setattr(compile_qml_cache, "find_pyside6_dir", lambda: source_root)
+
+    staged = compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
+
+    assert {path.name for path in staged} == {
+        "Qt6Multimedia.dll",
+        "Qt6MultimediaQuick.dll",
+        "Qt6QuickLayouts.dll",
+    }

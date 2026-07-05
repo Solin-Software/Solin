@@ -21,6 +21,11 @@ class PlaylistMediaItem(TypedDict):
     issue_tag: int | None
     doc_id: int | None
     meps_language: int
+    start_trim_ticks: NotRequired[int | None]
+    end_trim_ticks: NotRequired[int | None]
+    base_duration_ticks: NotRequired[int | None]
+    accuracy: NotRequired[int | None]
+    end_action: NotRequired[int | None]
     language: NotRequired[str]
     jw_media_id: NotRequired[str]
     image_framing: NotRequired[dict[str, Any]]

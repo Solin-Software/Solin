@@ -52,6 +52,7 @@ from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
 from ...core.media.identity import partition_media_items
 from ...core.media.insertion import MediaInsertResult
+from ...core.media.playback_request import MediaTrim
 from ...core.playlists.items import looks_like_filename_title
 from ...core.projection.image_framing import (
     ImageTransform,
@@ -552,6 +553,7 @@ class PlaylistEditView(
         self.bridge.downloadItemSignal.connect(self._download_item)
         self.bridge.imageFramingSetRequested.connect(self._set_image_framing)
         self.bridge.imageFramingResetRequested.connect(self._reset_image_framing)
+        self.bridge.mediaTrimSetRequested.connect(self._set_media_trim)
         self.bridge.renameMarkerSignal.connect(self._rename_marker)
         self.bridge.deleteMarkerSignal.connect(self._delete_marker)
 
@@ -648,6 +650,41 @@ class PlaylistEditView(
         self.model.invalidate_tree_data_cache()
         self.bridge.emit_image_framing_changed(item_id, None)
         self._schedule_image_framing_save()
+
+    @Slot(str, float, float, float)
+    def _set_media_trim(
+        self,
+        item_id: str,
+        start_ms: float,
+        end_ms: float,
+        duration_ms: float,
+    ) -> None:
+        if not self._pl:
+            return
+        item = next(
+            (candidate for candidate in self._pl.get("items", [])
+             if candidate.get("id") == item_id),
+            None,
+        )
+        if not item or item.get("type") not in {"audio", "video"}:
+            return
+        try:
+            trim = MediaTrim.from_millisecond_bounds(start_ms, end_ms, duration_ms)
+        except (TypeError, ValueError):
+            return
+        values = {
+            "start_trim_ticks": trim.start_trim_ticks,
+            "end_trim_ticks": trim.end_trim_ticks,
+            "base_duration_ticks": trim.base_duration_ticks,
+        }
+        for field, value in values.items():
+            if field != "base_duration_ticks" and value == 0:
+                item.pop(field, None)
+            else:
+                item[field] = value
+        self.model.invalidate_tree_data_cache()
+        self.bridge.stateChanged.emit()
+        self._save()
 
     def _schedule_image_framing_save(self) -> None:
         self._image_framing_save_pending = True
@@ -982,29 +1019,66 @@ class PlaylistEditView(
         url = item.get("url", "")
         media_type = item.get("type", "video")
         needs_title = item.get("auto_title", False) and url.startswith(("http://", "https://"))
+        duration_ticks = item.get("base_duration_ticks")
+        has_duration = (
+            isinstance(duration_ticks, int)
+            and not isinstance(duration_ticks, bool)
+            and duration_ticks > 0
+        )
+        needs_duration = (
+            media_type in {"audio", "video"}
+            and not has_duration
+        )
 
         cached = self._id_to_thumb.get(item_id)
         if cached is not None and not cached.isNull():
-            if needs_title:
-                self._request_thumbnail(item_id, url, media_type)
+            if needs_title or needs_duration:
+                self._request_thumbnail(
+                    item_id,
+                    url,
+                    media_type,
+                    require_duration=needs_duration,
+                )
             return
 
         has_disk = self._playlist_thumbnail_store.exists(item_id)
         if has_disk:
-            if needs_title:
-                self._request_thumbnail(item_id, url, media_type)
+            if needs_title or needs_duration:
+                self._request_thumbnail(
+                    item_id,
+                    url,
+                    media_type,
+                    require_duration=needs_duration,
+                )
             return
 
-        self._request_thumbnail(item_id, url, media_type)
+        self._request_thumbnail(
+            item_id,
+            url,
+            media_type,
+            require_duration=needs_duration,
+        )
 
-    def _request_thumbnail(self, item_id: str, url: str, media_type: str) -> None:
+    def _request_thumbnail(
+        self,
+        item_id: str,
+        url: str,
+        media_type: str,
+        *,
+        require_duration: bool = False,
+    ) -> None:
         if item_id in self._thumb_pending_item_ids:
             return
         self._thumb_request_token += 1
         token = self._thumb_request_token
         self._thumb_idx_to_id[token] = item_id
         self._thumb_pending_item_ids.add(item_id)
-        self._thumb_queue.request(token, url, media_type)
+        self._thumb_queue.request(
+            token,
+            url,
+            media_type,
+            require_duration=require_duration,
+        )
 
     def _on_info(self, idx: int, pixmap: QPixmap, title: str):
         item_id = self._thumb_idx_to_id.get(idx)
@@ -1052,7 +1126,7 @@ class PlaylistEditView(
         ticks = duration_ms * 10_000
         for item in self._pl.get("items", []):
             if item.get("id") == item_id:
-                if item.get("base_duration_ticks") != ticks:
+                if not item.get("base_duration_ticks"):
                     item["base_duration_ticks"] = ticks
                     self._save()
                     self.model.update_title(item_id, item.get("title", ""))
@@ -1618,6 +1692,13 @@ class PlaylistWidget(QWidget):
         playlist_id = self._edit_view.load_temp_playlist(items, lang, name=name)
         self._stack.setCurrentIndex(1)
         return playlist_id
+
+    @Slot(str, int)
+    def record_source_duration(self, item_id: str, duration_ms: int) -> None:
+        """Persist an original media duration through the active playlist owner."""
+        if not item_id or duration_ms <= 0:
+            return
+        self._edit_view.notify_duration(item_id, duration_ms)
 
     def append_temp_playlist_items(
         self,

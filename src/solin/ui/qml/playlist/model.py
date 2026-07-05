@@ -7,10 +7,10 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, Signal, Slot
+from PySide6.QtCore import QAbstractListModel, QModelIndex, Qt, QUrl, Signal, Slot
 
 from solin.core.media.cache import MediaCacheManager
-from solin.core.media.duration import format_duration_ticks
+from solin.core.media.duration import format_effective_duration_ticks
 from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.i18n.strings import (
     tr_offline_download,
@@ -527,9 +527,26 @@ class PlaylistEditModel(QAbstractListModel):
         # machine's disk right now.  Remote URLs are never missing here
         # (they have their own cloud download state above).
         is_missing = bool(url and not is_remote and not os.path.exists(url))
+        cached_path = cm.cached_path(url) if is_remote else None
+        trim_source = (
+            QUrl.fromLocalFile(cached_path).toString()
+            if cached_path
+            else url if is_remote
+            else QUrl.fromLocalFile(os.path.abspath(url)).toString() if url else ""
+        )
         image_framing = image_transform_to_record(
             image_transform_from_record(item.get("image_framing"))
         )
+
+        def ticks(field: str) -> int:
+            value = item.get(field)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                return value
+            return 0
+
+        start_trim_ticks = ticks("start_trim_ticks")
+        end_trim_ticks = ticks("end_trim_ticks")
+        base_duration_ticks = ticks("base_duration_ticks")
 
         return {
             "id": item["id"],
@@ -537,14 +554,24 @@ class PlaylistEditModel(QAbstractListModel):
             "title": item.get("title", ""),
             "mediaType": media_type,
             "badge": playlist_media_badge(media_type),
-            "duration": format_duration_ticks(item.get("base_duration_ticks", 0)),
+            "duration": format_effective_duration_ticks(
+                base_duration_ticks,
+                start_trim_ticks,
+                end_trim_ticks,
+            ),
             "thumbSource": self._thumb_source_for(item["id"]),
             "url": url,
+            "trimSource": trim_source,
+            "trimAvailable": bool(trim_source and not is_missing),
             "cloudVisible": cloud_visible,
             "cloudActive": bool(prefetching),
             "cloudProgress": cloud_progress,
             "cloudTooltip": cloud_tooltip,
             "isMissing": is_missing,
+            "startTrimTicks": start_trim_ticks,
+            "endTrimTicks": end_trim_ticks,
+            "baseDurationTicks": base_duration_ticks,
+            "hasCustomTrim": bool(start_trim_ticks or end_trim_ticks),
             "imageFraming": image_framing,
             "children": [],
         }
@@ -1124,7 +1151,11 @@ class PlaylistEditModel(QAbstractListModel):
             "cloud_active":  cloud_active,
             "cloud_progress": cloud_progress,
             "cloud_tooltip": cloud_tooltip,
-            "duration_text": format_duration_ticks(item.get("base_duration_ticks", 0)),
+            "duration_text": format_effective_duration_ticks(
+                item.get("base_duration_ticks", 0),
+                item.get("start_trim_ticks", 0),
+                item.get("end_trim_ticks", 0),
+            ),
             "section_id":    sid,
             "parent_id":     "",
             "section_text":  "",

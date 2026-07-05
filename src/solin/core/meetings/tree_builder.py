@@ -50,7 +50,14 @@ def _media_identity(item: MeetingMedia) -> str:
 
 
 def _media_to_ref(item: MeetingMedia) -> dict[str, Any]:
-    return clean_dict(item)
+    ref = clean_dict(item)
+    for field in (
+        "start_trim_ticks",
+        "end_trim_ticks",
+        "base_duration_ticks",
+    ):
+        ref.pop(field, None)
+    return ref
 
 
 def _section_node(
@@ -137,7 +144,7 @@ def _media_node(
         "media_ref": ref,
         "scope": scope,
     }
-    return {
+    node: Node = {
         "id": stable_node_id(source_key),
         "type": "media",
         "title": title,
@@ -149,6 +156,15 @@ def _media_node(
         "meeting_source_key": source_key,
         "meeting_source_hash": source_hash(payload),
     }
+    for field in (
+        "start_trim_ticks",
+        "end_trim_ticks",
+        "base_duration_ticks",
+    ):
+        value = int(getattr(item, field, 0) or 0)
+        if value:
+            node[field] = value
+    return node
 
 
 def _ref_attr(ref: Any, name: str, default: Any = None) -> Any:

@@ -16,7 +16,7 @@ Comportamento de buffer por modo
       Barra de buffer mostra progresso igual ao modo ON
       Ao terminar, player chaveía para tempfile → protegido contra
       queda de CDN, mas nenhum arquivo permanente fica em disco.
-      Tempfile apagado no stop() ou no play_url() seguinte.
+      Tempfile apagado no stop() ou no playback seguinte.
 """
 import logging
 import os
@@ -28,6 +28,11 @@ from PySide6.QtGui import QPixmap, QImage
 from .cache import MediaCacheManager
 from .qt_contracts import PlaybackDownloaderFactory
 from .playback_session import MediaPlaybackSession
+from .playback_request import (
+    MediaPlaybackRequest,
+    PlaybackCachePolicy,
+    ResolvedPlaybackRange,
+)
 from .settings import MediaPlaybackSettings
 
 log = logging.getLogger(__name__)
@@ -37,6 +42,7 @@ class MediaController(QObject):
     frame_ready       = Signal(QVideoFrame)
     state_changed     = Signal(QMediaPlayer.PlaybackState)
     duration_changed  = Signal(int)
+    source_duration_changed = Signal(int)
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
     playback_interrupted = Signal(str, str)  # url, message
@@ -45,6 +51,7 @@ class MediaController(QObject):
     cover_art_changed    = Signal(object)   # QPixmap | None
     title_from_metadata  = Signal(str)
     playback_download_failed = Signal(str, str, bool)  # url, message, persist
+    playback_range_changed = Signal(int, int)  # relative duration, absolute start
 
     # (downloaded_bytes, total_bytes) — 0,0 quando nao ha download ativo
     buffer_progress   = Signal(int, int)
@@ -85,6 +92,13 @@ class MediaController(QObject):
         self._remote_playback_started = False
         self._stream_recovering = False
         self._handling_terminal_error = False
+        self._request: MediaPlaybackRequest | None = None
+        self._playback_range: ResolvedPlaybackRange | None = None
+        self._trim_gate_open = True
+        self._trim_end_emitted = False
+        self._gate_previous_muted = False
+        self._audio_gate_active = False
+        self._source_generation = 0
 
         self.video_sink.videoFrameChanged.connect(self._on_frame)
         self.player.playbackStateChanged.connect(self._on_state)
@@ -112,14 +126,17 @@ class MediaController(QObject):
 
     # ── Playback público ──────────────────────────────────────────────────
 
-    def play_url(self, url: str, *, download_persist: bool | None = None):
-        """Play a URL using the standard stream+cache pipeline.
+    def start_playback(self, request: MediaPlaybackRequest) -> None:
+        """Start one immutable playback request.
 
-        When ``download_persist`` is ``None``, the profile auto-download setting
-        decides whether the parallel download is permanent or temporary.
-        Callers such as background songs can force ``False`` to get the same
-        resilient local-switch behavior without creating persistent cache files.
+        Trimmed playback is fail-closed: output remains gated until the source
+        reports a usable duration, supports seeking, and confirms the requested
+        initial position. A remote stream is never downloaded in full merely to
+        satisfy a trim request.
         """
+        if not isinstance(request, MediaPlaybackRequest):
+            raise TypeError("request must be a MediaPlaybackRequest")
+        url = request.source
         self._reconnect_timer.stop()
         self._reset_reconnect_state()
 
@@ -127,7 +144,11 @@ class MediaController(QObject):
         # start() cancela download antigo; fontes locais/cacheadas nao chamam start().
         self._cleanup_current_temp()
 
-        self._session.begin_playback(url)
+        self._request = request
+        self._playback_range = None
+        self._trim_end_emitted = False
+        self._trim_gate_open = request.trim is None or not request.trim.custom
+        self._session.begin_playback(url, requested_playing=request.autoplay)
         self._last_known_position = 0
         self._remote_playback_started = False
 
@@ -137,7 +158,8 @@ class MediaController(QObject):
             self._cache_manager.cancel_prefetch(url)
 
         self.player.stop()
-        self.player.setSource(QUrl())
+        self._clear_player_source()
+        self._restore_gated_audio()
         self.buffer_progress.emit(0, 0)
 
         if not is_remote:
@@ -159,10 +181,10 @@ class MediaController(QObject):
             self.playback_source_changed.emit(True)
         else:
             self._play_source(url)
-            auto_download = (
-                self._settings.auto_download_on_play()
-                if download_persist is None else bool(download_persist)
-            )
+            if request.cache_policy is PlaybackCachePolicy.PROFILE_DEFAULT:
+                auto_download = self._settings.auto_download_on_play()
+            else:
+                auto_download = request.cache_policy is PlaybackCachePolicy.PERSISTENT
             self._session.set_stream_persist(auto_download)
             # Inicia download (persist ou temp) — buffer bar funciona em ambos
             self._downloader.start(url, persist=auto_download)
@@ -177,19 +199,27 @@ class MediaController(QObject):
         self.player.pause()
 
     def stop(self):
+        was_gated = not self._trim_gate_open
         self._reconnect_timer.stop()
         self._reset_reconnect_state()
         self._downloader.cancel()
         self._session.begin_stop()
         self.player.stop()
-        self.player.setSource(QUrl())
+        self._clear_player_source()
         # Apaga tempfile se o player estiver usando um
         self._cleanup_current_temp()
         self._session.finish_stop()
         self._last_known_position = 0
         self._remote_playback_started = False
+        self._request = None
+        self._playback_range = None
+        self._trim_gate_open = True
+        self._trim_end_emitted = False
+        self._restore_gated_audio()
         self.buffer_progress.emit(0, 0)
         self.playback_source_changed.emit(False)
+        if was_gated:
+            self.state_changed.emit(self.player.playbackState())
 
     def toggle_play_pause(self):
         if (
@@ -201,13 +231,46 @@ class MediaController(QObject):
             self.play()
 
     def replay(self):
-        """Reinicia do comeco sem limpar a fonte — usado no loop de item unico."""
-        self.player.setPosition(0)
+        """Restart from the effective beginning without replacing the source."""
+        start_ms = self._playback_range.start_ms if self._playback_range else 0
+        self._trim_end_emitted = False
         self._session.set_requested_playing(True)
-        QTimer.singleShot(30, self.player.play)
+        if self._playback_range is None:
+            playback_session = self._session.session_id
+            source_generation = self._source_generation
+            self.player.setPosition(0)
+
+            def play_if_current() -> None:
+                if (
+                    self._session.session_id == playback_session
+                    and self._source_generation == source_generation
+                    and self._session.requested_playing
+                ):
+                    self.player.play()
+
+            QTimer.singleShot(30, play_if_current)
+            return
+        self._gate_output()
+        self.player.pause()
+        self.player.setPosition(start_ms)
+        self._confirm_trimmed_start(
+            self._session.session_id,
+            self._source_generation,
+            self._playback_range,
+        )
 
     def seek(self, ms: int):
-        self.player.setPosition(ms)
+        relative_ms = max(0, int(ms))
+        if self._playback_range is None:
+            self.player.setPosition(relative_ms)
+            return
+        absolute_ms = self._playback_range.start_ms + min(
+            relative_ms,
+            self._playback_range.duration_ms,
+        )
+        if absolute_ms < self._playback_range.end_ms:
+            self._trim_end_emitted = False
+        self.player.setPosition(absolute_ms)
 
     def set_local_switch_deferred(self, deferred: bool) -> None:
         """
@@ -241,10 +304,20 @@ class MediaController(QObject):
 
     @property
     def duration(self) -> int:
+        if self._playback_range is not None:
+            return self._playback_range.duration_ms
         return self.player.duration()
 
     @property
     def position(self) -> int:
+        if self._playback_range is not None:
+            return max(
+                0,
+                min(
+                    self.player.position() - self._playback_range.start_ms,
+                    self._playback_range.duration_ms,
+                ),
+            )
         return self.player.position()
 
     # ── Reconexao automatica ──────────────────────────────────────────────
@@ -284,6 +357,13 @@ class MediaController(QObject):
 
     def _do_reconnect(self):
         saved_pos = max(self.player.position(), self._last_known_position)
+        if self._has_active_trim_request():
+            self._gate_output()
+        if self._playback_range is not None:
+            saved_pos = max(
+                self._playback_range.start_ms,
+                min(saved_pos, self._playback_range.end_ms - 1),
+            )
         source = self._session.reconnect_source()
         if not source:
             self._fail_playback(self._last_playback_error)
@@ -291,12 +371,14 @@ class MediaController(QObject):
 
         reconnect_session = self._session.session_id
         self.player.stop()
-        self.player.setSource(QUrl())
+        self._clear_player_source()
         self._set_player_source(source)
+        reconnect_generation = self._source_generation
         self._restore_reconnect_position(
             source=source,
             saved_pos=saved_pos,
             reconnect_session=reconnect_session,
+            source_generation=reconnect_generation,
         )
 
     # ── Download callbacks ────────────────────────────────────────────────
@@ -325,16 +407,24 @@ class MediaController(QObject):
             # ── Captura o estado ANTES de tocar no player ─────────────────
             # Qualquer chamada ao player (stop, setSource) emite sinais síncronos
             # que podem perturbar a UI. Capturamos tudo antes.
-            saved_pos   = self.player.position()
-            was_playing = self.is_playing or self._session.requested_playing
+            saved_pos = self.player.position()
             switch_session = self._session.session_id  # guard contra troca de mídia
+            playback_range = self._playback_range
+            if self._has_active_trim_request():
+                self._gate_output()
+            if playback_range is not None:
+                saved_pos = max(
+                    playback_range.start_ms,
+                    min(saved_pos, playback_range.end_ms - 1),
+                )
 
             # ── Troca a fonte sem chamar stop() explicitamente ────────────
             # setSource() já interrompe o stream HTTP internamente.
             # Chamar stop() antes emite PlaybackState.StoppedState de forma
             # síncrona, o que faz a UI (botão play/pause) piscar para "parado"
             # antes de o arquivo local estar pronto.
-            self.player.setSource(QUrl.fromLocalFile(local_path))
+            self._set_player_source(local_path)
+            switch_generation = self._source_generation
 
             # ── Restaura posição e estado via polling com retry ────────────
             # A abordagem de callback (mediaStatusChanged) é frágil porque:
@@ -348,8 +438,12 @@ class MediaController(QObject):
             _attempts = [0]
 
             def _try_restore():
+                nonlocal playback_range, saved_pos
                 # Sessão mudou → nova mídia iniciada, abandona silenciosamente
-                if self._session.session_id != switch_session:
+                if (
+                    self._session.session_id != switch_session
+                    or self._source_generation != switch_generation
+                ):
                     return
 
                 _attempts[0] += 1
@@ -362,7 +456,10 @@ class MediaController(QObject):
                     QMediaPlayer.MediaStatus.NoMedia,
                 )
                 if status in bad_statuses:
-                    return  # falhou, não tenta mais
+                    self._fail_trimmed_preparation(
+                        "The downloaded media could not be opened."
+                    )
+                    return
 
                 # Considera pronto quando o player tem duração válida E o
                 # status indica que os dados estão disponíveis para seek.
@@ -371,17 +468,43 @@ class MediaController(QObject):
                     QMediaPlayer.MediaStatus.BufferedMedia,
                 )
                 if status in ready_statuses and duration > 0:
+                    if self._has_active_trim_request() and playback_range is None:
+                        self._prepare_trimmed_source(
+                            switch_session,
+                            switch_generation,
+                        )
+                        return
+                    if playback_range is not None:
+                        try:
+                            playback_range = self._resolve_active_range(duration)
+                        except ValueError as exc:
+                            self._fail_trimmed_preparation(str(exc))
+                            return
+                        self._playback_range = playback_range
+                        saved_pos = max(
+                            playback_range.start_ms,
+                            min(saved_pos, playback_range.end_ms - 1),
+                        )
                     # Seek seguro: restaura posição e estado de playback
                     self.player.setPosition(saved_pos)
-                    if was_playing:
+                    if playback_range is not None:
+                        self._confirm_local_handoff(
+                            switch_session,
+                            switch_generation,
+                            saved_pos,
+                            playback_range,
+                        )
+                    elif self._session.requested_playing:
                         self.player.play()
                     return  # concluído, não agenda mais
 
                 # Ainda carregando: tenta novamente se não excedeu o limite
                 if _attempts[0] < _MAX_ATTEMPTS:
                     QTimer.singleShot(50, _try_restore)
-                # else: timeout — o player ficará em StoppedState; o usuário
-                # precisará pressionar play manualmente (caso extremamente raro)
+                    return
+                self._fail_trimmed_preparation(
+                    "Timed out while opening the downloaded media."
+                )
 
             # Primeira tentativa após 50 ms (tempo para setSource processar)
             QTimer.singleShot(50, _try_restore)
@@ -392,6 +515,45 @@ class MediaController(QObject):
 
         # Badge offline (ícone verde)
         self.playback_source_changed.emit(self._session.stream_persist)
+
+    def _confirm_local_handoff(
+        self,
+        playback_session: int,
+        source_generation: int,
+        target_position: int,
+        playback_range: ResolvedPlaybackRange,
+    ) -> None:
+        attempts = [0]
+
+        def confirm() -> None:
+            if (
+                self._session.session_id != playback_session
+                or self._source_generation != source_generation
+            ):
+                return
+            attempts[0] += 1
+            if abs(self.player.position() - target_position) <= 150:
+                self._trim_gate_open = True
+                self._restore_gated_audio()
+                self.duration_changed.emit(playback_range.duration_ms)
+                self.playback_range_changed.emit(
+                    playback_range.duration_ms,
+                    playback_range.start_ms,
+                )
+                if self._session.requested_playing:
+                    self.player.play()
+                else:
+                    self.player.pause()
+                self.state_changed.emit(self.player.playbackState())
+                return
+            if attempts[0] < 80:
+                QTimer.singleShot(50, confirm)
+                return
+            self._fail_trimmed_preparation(
+                "The downloaded media did not confirm the playback position."
+            )
+
+        QTimer.singleShot(25, confirm)
 
     def _on_download_error(self, msg: str):
         log.warning("Downloader warning: %s", msg)
@@ -408,16 +570,23 @@ class MediaController(QObject):
     # ── Player callbacks ──────────────────────────────────────────────────
 
     def _on_frame(self, frame):
-        if not self._session.accepts_frame():
+        if not self._trim_gate_open or not self._session.accepts_frame():
             return
         self.frame_ready.emit(frame)
 
     def _on_state(self, state):
+        if not self._trim_gate_open:
+            return
         self.state_changed.emit(state)
 
     def _on_duration(self, duration):
         if MediaCacheManager.is_remote(self._session.current_url) and duration > 0:
             self._remote_playback_started = True
+        self.source_duration_changed.emit(int(duration))
+        if self._request and self._request.trim and self._request.trim.custom:
+            if self._playback_range is None:
+                return
+            duration = self._playback_range.duration_ms
         self.duration_changed.emit(int(duration))
 
     def _on_position(self, position):
@@ -431,7 +600,24 @@ class MediaController(QObject):
         if MediaCacheManager.is_remote(self._session.current_url) and position_int > 0:
             self._remote_playback_started = True
         self._last_known_position = position_int
-        self.position_changed.emit(position_int)
+        if not self._trim_gate_open:
+            return
+        playback_range = self._playback_range
+        if playback_range is None:
+            self.position_changed.emit(position_int)
+            return
+        if position_int >= playback_range.end_ms:
+            self._gate_output()
+            self.player.pause()
+            self.player.setPosition(playback_range.end_ms)
+            self.position_changed.emit(playback_range.duration_ms)
+            if not self._trim_end_emitted:
+                self._trim_end_emitted = True
+                self._session.mark_media_ended()
+                self.media_ended.emit()
+            return
+        relative_position = max(0, position_int - playback_range.start_ms)
+        self.position_changed.emit(relative_position)
 
     def _on_status(self, status):
         if status in (
@@ -445,8 +631,10 @@ class MediaController(QObject):
             if self._is_unexpected_remote_end():
                 self._schedule_reconnect("The media stream was interrupted.")
                 return
-            self._session.mark_media_ended()
-            self.media_ended.emit()
+            if not self._trim_end_emitted:
+                self._trim_end_emitted = True
+                self._session.mark_media_ended()
+                self.media_ended.emit()
 
     def _on_metadata_changed(self):
         from PySide6.QtMultimedia import QMediaMetaData
@@ -475,14 +663,175 @@ class MediaController(QObject):
     # ── Helpers ───────────────────────────────────────────────────────────
 
     def _play_source(self, source: str):
+        request = self._request
+        if request and request.trim and request.trim.custom:
+            self._gate_output()
         self._set_player_source(source)
+        if request and request.trim and request.trim.custom:
+            self._prepare_trimmed_source(
+                self._session.session_id,
+                self._source_generation,
+            )
+        elif request is None or request.autoplay:
+            self.player.play()
+        else:
+            self.player.pause()
+
+    def _gate_output(self) -> None:
+        if not self._audio_gate_active:
+            self._gate_previous_muted = self.audio_output.isMuted()
+            self.audio_output.setMuted(True)
+            self._audio_gate_active = True
+        self._trim_gate_open = False
+
+    def _restore_gated_audio(self) -> None:
+        if not self._audio_gate_active:
+            return
+        self.audio_output.setMuted(self._gate_previous_muted)
+        self._audio_gate_active = False
+
+    def _prepare_trimmed_source(
+        self,
+        playback_session: int,
+        source_generation: int,
+    ) -> None:
+        """Load, validate and seek a bounded source before exposing output."""
+        max_ready_attempts = 200  # 10 seconds
+        ready_attempts = [0]
         self.player.play()
 
+        def wait_until_seekable() -> None:
+            if (
+                self._session.session_id != playback_session
+                or self._source_generation != source_generation
+            ):
+                return
+            ready_attempts[0] += 1
+            status = self.player.mediaStatus()
+            if status in (
+                QMediaPlayer.MediaStatus.InvalidMedia,
+                QMediaPlayer.MediaStatus.NoMedia,
+            ):
+                self._fail_trimmed_preparation(
+                    "The media could not be prepared for custom start and end times."
+                )
+                return
+
+            if status in (
+                QMediaPlayer.MediaStatus.LoadedMedia,
+                QMediaPlayer.MediaStatus.BufferedMedia,
+            ) and self.player.duration() > 0:
+                if not self.player.isSeekable():
+                    if ready_attempts[0] < max_ready_attempts:
+                        QTimer.singleShot(50, wait_until_seekable)
+                        return
+                    self._fail_trimmed_preparation(
+                        "This media source does not support reliable seeking. "
+                        "Download it for offline use or remove the custom times."
+                    )
+                    return
+                request = self._request
+                if request is None or request.trim is None:
+                    return
+                try:
+                    playback_range = request.trim.resolve(self.player.duration())
+                except (TypeError, ValueError) as exc:
+                    self._fail_trimmed_preparation(str(exc))
+                    return
+                self._playback_range = playback_range
+                self.player.pause()
+                self.player.setPosition(playback_range.start_ms)
+                self._confirm_trimmed_start(
+                    playback_session,
+                    source_generation,
+                    playback_range,
+                )
+                return
+
+            if ready_attempts[0] < max_ready_attempts:
+                QTimer.singleShot(50, wait_until_seekable)
+                return
+            self._fail_trimmed_preparation(
+                "Timed out while preparing custom start and end times."
+            )
+
+        QTimer.singleShot(0, wait_until_seekable)
+
+    def _confirm_trimmed_start(
+        self,
+        playback_session: int,
+        source_generation: int,
+        playback_range: ResolvedPlaybackRange,
+    ) -> None:
+        attempts = [0]
+        max_attempts = 80  # 4 seconds after metadata is available
+
+        def confirm() -> None:
+            if (
+                self._session.session_id != playback_session
+                or self._source_generation != source_generation
+            ):
+                return
+            attempts[0] += 1
+            position = self.player.position()
+            tolerance_ms = 150
+            if (
+                playback_range.start_ms <= position
+                <= playback_range.start_ms + tolerance_ms
+            ):
+                self._trim_gate_open = True
+                self._restore_gated_audio()
+                self._trim_end_emitted = False
+                self.duration_changed.emit(playback_range.duration_ms)
+                self.position_changed.emit(0)
+                self.playback_range_changed.emit(
+                    playback_range.duration_ms,
+                    playback_range.start_ms,
+                )
+                if self._session.requested_playing:
+                    self.player.play()
+                else:
+                    self.player.pause()
+                self.state_changed.emit(self.player.playbackState())
+                return
+            if attempts[0] < max_attempts:
+                if attempts[0] % 10 == 0:
+                    self.player.setPosition(playback_range.start_ms)
+                QTimer.singleShot(50, confirm)
+                return
+            self._fail_trimmed_preparation(
+                "The media source did not confirm the custom start position."
+            )
+
+        QTimer.singleShot(25, confirm)
+
+    def _fail_trimmed_preparation(self, detail: str) -> None:
+        if not self._session.current_url:
+            return
+        message = (detail or "").strip() or "The media could not be prepared."
+        self.stop()
+        self.error_occurred.emit(message)
+
+    def _resolve_active_range(self, duration: int) -> ResolvedPlaybackRange:
+        request = self._request
+        if request is None or request.trim is None:
+            raise ValueError("Custom playback times are no longer available.")
+        return request.trim.resolve(duration)
+
+    def _has_active_trim_request(self) -> bool:
+        request = self._request
+        return bool(request and request.trim and request.trim.custom)
+
     def _set_player_source(self, source: str) -> None:
+        self._source_generation += 1
         if MediaCacheManager.is_remote(source):
             self.player.setSource(QUrl(source))
         else:
             self.player.setSource(QUrl.fromLocalFile(source))
+
+    def _clear_player_source(self) -> None:
+        self._source_generation += 1
+        self.player.setSource(QUrl())
 
     def _restore_reconnect_position(
         self,
@@ -490,12 +839,17 @@ class MediaController(QObject):
         source: str,
         saved_pos: int,
         reconnect_session: int,
+        source_generation: int,
     ) -> None:
         max_attempts = 60
         attempts = [0]
 
         def _try_restore() -> None:
-            if self._session.session_id != reconnect_session:
+            nonlocal saved_pos
+            if (
+                self._session.session_id != reconnect_session
+                or self._source_generation != source_generation
+            ):
                 return
 
             attempts[0] += 1
@@ -519,11 +873,40 @@ class MediaController(QObject):
                 QMediaPlayer.MediaStatus.StalledMedia,
             )
             if status in ready_statuses and (duration > 0 or attempts[0] >= 8):
+                playback_range = self._playback_range
+                if self._has_active_trim_request() and playback_range is None:
+                    self._prepare_trimmed_source(
+                        reconnect_session,
+                        source_generation,
+                    )
+                    return
+                if playback_range is not None:
+                    try:
+                        playback_range = self._resolve_active_range(duration)
+                    except ValueError as exc:
+                        self._fail_trimmed_preparation(str(exc))
+                        return
+                    self._playback_range = playback_range
+                    saved_pos = max(
+                        playback_range.start_ms,
+                        min(saved_pos, playback_range.end_ms - 1),
+                    )
                 if saved_pos > 0:
                     self.player.setPosition(saved_pos)
+                if playback_range is not None:
+                    self._confirm_local_handoff(
+                        reconnect_session,
+                        source_generation,
+                        saved_pos,
+                        playback_range,
+                    )
+                    return
                 QTimer.singleShot(
                     40,
-                    lambda: self._resume_after_reconnect(reconnect_session),
+                    lambda: self._resume_after_reconnect(
+                        reconnect_session,
+                        source_generation,
+                    ),
                 )
                 return
 
@@ -545,8 +928,12 @@ class MediaController(QObject):
     def _resume_after_reconnect(
         self,
         reconnect_session: int,
+        source_generation: int,
     ) -> None:
-        if self._session.session_id != reconnect_session:
+        if (
+            self._session.session_id != reconnect_session
+            or self._source_generation != source_generation
+        ):
             return
         if self._session.requested_playing:
             self.player.play()

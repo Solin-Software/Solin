@@ -1017,6 +1017,7 @@ class MediaInfoQueue(QObject):
             max_concurrent=self._MAX_CONCURRENT,
         )
         self._cache: dict[int, tuple[QPixmap, str]] = {}
+        self._duration_cache: dict[int, int] = {}
         self._extractors: dict[int, QObject] = {}
 
     # ── Disk Cache ────────────────────────────────────────────────────────────
@@ -1032,20 +1033,24 @@ class MediaInfoQueue(QObject):
         base_path = os.path.join(base_dir, h)
         return f"{base_path}.jpg", f"{base_path}.json"
 
-    def _load_from_disk_cache(self, url: str) -> "tuple[QPixmap | None, str]":
+    def _load_from_disk_cache(self, url: str) -> "tuple[QPixmap | None, str, int]":
         img_path, meta_path = self._get_cache_paths(url)
         
         # O JSON é o nosso marker de cache
         if not os.path.exists(meta_path):
-            return None, ""
+            return None, "", 0
         
         title = ""
         has_thumb = False
+        duration_ms = 0
         try:
             with open(meta_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 title = data.get("title", "")
                 has_thumb = data.get("has_thumb", True)
+                raw_duration = data.get("duration_ms", 0)
+                if isinstance(raw_duration, int) and not isinstance(raw_duration, bool):
+                    duration_ms = max(0, raw_duration)
         except (OSError, UnicodeError, json.JSONDecodeError, AttributeError) as exc:
             log.debug("Could not read media info cache %s: %s", meta_path, exc)
             
@@ -1053,9 +1058,15 @@ class MediaInfoQueue(QObject):
         if has_thumb and os.path.exists(img_path):
             px = QPixmap(img_path)
             
-        return px, title
+        return px, title, duration_ms
 
-    def _save_to_disk_cache(self, url: str, pixmap: QPixmap, title: str):
+    def _save_to_disk_cache(
+        self,
+        url: str,
+        pixmap: QPixmap,
+        title: str,
+        duration_ms: int = 0,
+    ) -> None:
         img_path, meta_path = self._get_cache_paths(url)
         try:
             os.makedirs(os.path.dirname(img_path), exist_ok=True)
@@ -1063,23 +1074,50 @@ class MediaInfoQueue(QObject):
             if has_thumb:
                 pixmap.save(img_path, "JPG", quality=90)
             with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump({"title": title, "has_thumb": has_thumb}, f, ensure_ascii=False)
+                json.dump(
+                    {
+                        "title": title,
+                        "has_thumb": has_thumb,
+                        "duration_ms": max(0, int(duration_ms)),
+                    },
+                    f,
+                    ensure_ascii=False,
+                )
         except (OSError, UnicodeError, TypeError, ValueError) as exc:
             log.debug("Could not save media info cache for %s: %s", url, exc)
 
     # ── API pública ───────────────────────────────────────────────────────────
 
-    def request(self, index: int, url: str, media_type: str = "video"):
+    def request(
+        self,
+        index: int,
+        url: str,
+        media_type: str = "video",
+        *,
+        require_duration: bool = False,
+    ) -> None:
         """Solicita extração de info para o item. Idempotente."""
-        if index in self._cache or self._scheduler.is_scheduled(index):
+        if self._scheduler.is_scheduled(index):
             return
+        if index in self._cache:
+            if not require_duration or self._duration_cache.get(index, 0) > 0:
+                return
+            self._cache.pop(index, None)
 
         # Fast-Path: Tenta carregar do cache de disco ANTES de qualquer coisa
-        disk_px, disk_title = self._load_from_disk_cache(url)
-        if disk_px is not None:
+        disk_px, disk_title, disk_duration = self._load_from_disk_cache(url)
+        if disk_px is not None and (not require_duration or disk_duration > 0):
+            version = self._scheduler.version_for(index)
             self._cache[index] = (disk_px, disk_title)
+            if disk_duration > 0:
+                self._duration_cache[index] = disk_duration
+                QTimer.singleShot(
+                    0,
+                    lambda v=version, i=index, duration=disk_duration:
+                        self._emit_duration_if_current(v, i, duration),
+                )
             self._emit_info_later(
-                self._scheduler.version_for(index),
+                version,
                 index,
                 disk_px,
                 disk_title,
@@ -1114,7 +1152,7 @@ class MediaInfoQueue(QObject):
             return
 
         # ── Áudio local — bytes brutos (zero player, zero thread) ───────────
-        if media_type == "audio" and not is_remote:
+        if media_type == "audio" and not is_remote and not require_duration:
             cover_bytes, title = _audio_info_from_file(url)
             if cover_bytes and _embedded_image_is_complete(cover_bytes):
                 px = QPixmap()
@@ -1188,10 +1226,12 @@ class MediaInfoQueue(QObject):
         for job in self._scheduler.invalidate(index):
             self._cancel_job(job)
         self._cache.pop(index, None)
+        self._duration_cache.pop(index, None)
 
     def clear(self):
         active_jobs = self._scheduler.clear()
         self._cache.clear()
+        self._duration_cache.clear()
         for job in active_jobs:
             self._cancel_job(job)
 
@@ -1237,6 +1277,21 @@ class MediaInfoQueue(QObject):
         ):
             return False
         self.info_ready.emit(index, pixmap, title)
+        return True
+
+    def _emit_duration_if_current(
+        self,
+        version: MediaInfoVersion,
+        index: int,
+        duration_ms: int,
+    ) -> bool:
+        if (
+            version.index != index
+            or not self._scheduler.is_current(version)
+            or self._duration_cache.get(index) != duration_ms
+        ):
+            return False
+        self.duration_ready.emit(index, duration_ms)
         return True
 
     def _pump(self):
@@ -1310,6 +1365,7 @@ class MediaInfoQueue(QObject):
         dur_ms: int,
     ):
         if self._scheduler.accepts_result(job, index) and dur_ms > 0:
+            self._duration_cache[index] = dur_ms
             self.duration_ready.emit(index, dur_ms)
 
     def _on_ready(
@@ -1322,7 +1378,12 @@ class MediaInfoQueue(QObject):
         if not self._scheduler.complete(job, index):
             return
         self._extractors.pop(index, None)
-        self._save_to_disk_cache(job.url, pixmap, title)
+        self._save_to_disk_cache(
+            job.url,
+            pixmap,
+            title,
+            self._duration_cache.get(index, 0),
+        )
         self._cache[index] = (pixmap, title)
         self.info_ready.emit(index, pixmap, title)
         self._pump()
@@ -1331,7 +1392,12 @@ class MediaInfoQueue(QObject):
         if not self._scheduler.fail(job, index):
             return
         self._extractors.pop(index, None)
-        self._save_to_disk_cache(job.url, QPixmap(), "")
+        self._save_to_disk_cache(
+            job.url,
+            QPixmap(),
+            "",
+            self._duration_cache.get(index, 0),
+        )
         self._cache[index] = (QPixmap(), "")
         self._pump()
 

@@ -225,11 +225,13 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     play_button = media_card.findChild(QObject, "protectedPlayButton")
     download_button = media_card.findChild(QObject, "mediaDownloadButton")
     more_button = media_card.findChild(QObject, "mediaMoreButton")
+    item_menu = media_card.findChild(QObject, "mediaItemMenu")
     card_hit_area = media_card.findChild(QObject, "mediaCardHitArea")
     framing_thumbnail = media_card.findChild(QObject, "imageFramingThumbnail")
     assert play_button is not None
     assert download_button is not None
     assert more_button is not None
+    assert item_menu is not None
     assert card_hit_area is not None
     assert framing_thumbnail is not None
     assert play_button.property("visible") is True
@@ -238,6 +240,9 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert play_button.property("x") < more_button.property("x")
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
     assert framing_thumbnail.property("clickActionEnabled") is False
+    protected_menu_count = item_menu.property("count")
+    assert media_card.findChild(QObject, "mediaItemPlayAction") is None
+    assert media_card.findChild(QObject, "mediaItemTrimAction") is not None
 
     media_card.clicked.emit()
     assert controller.projected == []
@@ -254,8 +259,16 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert play_button.property("visible") is False
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
     assert framing_thumbnail.property("clickActionEnabled") is True
+    assert item_menu.property("count") == protected_menu_count
+    assert media_card.findChild(QObject, "mediaItemPlayAction") is None
     media_card.clicked.emit()
     assert controller.projected == ["media-1", "media-1"]
+
+    unprotected_video_menu_count = item_menu.property("count")
+    media_card.setProperty("mediaType", "image")
+    QTest.qWait(1)
+    assert item_menu.property("count") == unprotected_video_menu_count - 1
+    assert media_card.findChild(QObject, "mediaItemTrimAction") is None
 
 
 def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:

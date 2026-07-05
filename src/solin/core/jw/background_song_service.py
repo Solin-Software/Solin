@@ -37,6 +37,10 @@ from solin.core.jw.background_song_status import (
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.jw.songs import JWSongsStore
 from solin.core.media.playback import MediaController
+from solin.core.media.playback_request import (
+    MediaPlaybackRequest,
+    PlaybackCachePolicy,
+)
 from solin.core.meetings.schedule import (
     MeetingSchedule,
     MeetingOccurrence,
@@ -421,7 +425,7 @@ class BackgroundSongService(QObject):
         # already cached, so a manual start/skip that already issued
         # ``_play_next`` synchronously would otherwise be restarted here. A
         # second ``_play_next`` reshuffles the queue and fires a fresh
-        # ``play_url`` racing the first, which desyncs the popup title from the
+        # playback request racing the first, which desyncs the popup title from the
         # audio. Only auto-start from here when no track is in flight yet — the
         # genuine "waiting for the list to load" case (``_current_title`` is
         # still empty because nothing has been handed to the player).
@@ -480,7 +484,12 @@ class BackgroundSongService(QObject):
         self.current_song_changed.emit(self._current_title)
         self._media.stop()
         self._media.audio_output.setVolume(self._volume_percent / 100.0)
-        self._media.play_url(url, download_persist=False)
+        self._media.start_playback(
+            MediaPlaybackRequest(
+                source=url,
+                cache_policy=PlaybackCachePolicy.TEMPORARY,
+            )
+        )
         if self._scheduled_fade_deadline is not None:
             self._start_scheduled_fade()
         else:
