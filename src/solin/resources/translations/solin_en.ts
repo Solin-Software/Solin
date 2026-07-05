@@ -1,319 +1,787 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
-    <name>AutoKeyEvents</name>
+    <name>AboutSectionMixin</name>
     <message>
-        <location filename="../src/solin/core/auto_keys.py" line="38"/>
-        <source>Media starts</source>
+        <location filename="../../widgets/settings/about_section.py" line="+48"/>
+        <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/auto_keys.py" line="39"/>
-        <source>Media ends</source>
+        <location line="+10"/>
+        <source>Official Website</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/auto_keys.py" line="40"/>
-        <source>Video pauses</source>
+        <location line="+7"/>
+        <source>Changelog</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/auto_keys.py" line="41"/>
-        <source>Video resumes</source>
+        <location line="+14"/>
+        <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AdvancedTimerPage</name>
+    <message>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="+91"/>
+        <source>Digital</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Analog</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Analog + digital</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Signature</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Classic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+119"/>
+        <source>Clock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-117"/>
+        <source>Clock + timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+121"/>
+        <source>Clock face</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Analog style</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>24-hour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>12-hour</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Show seconds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>AM / PM</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Part timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>During parts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Count direction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Count down</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Count up</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Hold duration when stopped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Less</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>More</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Display</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Display size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Monitors</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Show timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Reserved for the timer · %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Unreserve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+358"/>
+        <source>Reserve</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-355"/>
+        <source>Reserve this monitor for the timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>No secondary monitors detected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Previous week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Not the current week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Next week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Back to this week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Midweek</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Weekend</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Export PDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Meeting parts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+85"/>
+        <source>Parts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Fewer parts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>More parts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>%1 total</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+109"/>
+        <source>Monitor in use by media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AutoKeyEditorDialog</name>
+    <message>
+        <location filename="../../widgets/settings/auto_key_dialog.py" line="+125"/>
+        <source>Automatic Shortcut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose an app event and press the shortcut to send.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Event</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Shortcut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+95"/>
+        <source>Click the field, then press one shortcut.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-86"/>
+        <source>Enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Press a shortcut before saving.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Listening... press one shortcut.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Shortcut captured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AutoKeysSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/auto_keys_section.py" line="+59"/>
+        <source>Automatic Shortcuts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Sends keyboard shortcuts when visual media changes state.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Create one or more shortcuts for start, end, pause and resume events.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>No shortcuts configured.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Add shortcut</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+131"/>
+        <source>Enabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Disabled</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>AutoShareSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/auto_share_section.py" line="+55"/>
+        <source>Auto Screen Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatically shares screen via hotkeys when projecting media.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share hotkey</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+242"/>
+        <location line="+13"/>
+        <source>Not configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-248"/>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Accessibility permission</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Open Settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Click Position</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Configure</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+122"/>
+        <source>Share Hotkey</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Position: {x}, {y}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Solin can send the automatic click.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BackgroundSongPopup</name>
+    <message>
+        <location filename="../../widgets/background_song_popup.py" line="+110"/>
+        <location line="+260"/>
+        <source>Background Song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-221"/>
+        <location line="+222"/>
+        <source>Next song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-188"/>
+        <location line="+189"/>
+        <source>Meeting timing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-181"/>
+        <location line="+186"/>
+        <source>At start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-184"/>
+        <location line="+180"/>
+        <source>Stop before meeting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-175"/>
+        <location line="+177"/>
+        <source>Stops playback before the scheduled meeting time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-171"/>
+        <location line="+174"/>
+        <source>Fade duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-169"/>
+        <location line="+170"/>
+        <source>Lowers the volume before playback stops.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-130"/>
+        <source>No song playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Stop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BrowserDownloadsMixin</name>
+    <message>
+        <location filename="../../widgets/browser/downloads.py" line="+54"/>
+        <source>Downloaded file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BrowserNavigationMixin</name>
+    <message>
+        <location filename="../../widgets/browser/navigation.py" line="+67"/>
+        <location line="+151"/>
+        <source>New tab</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>BrowserUiMixin</name>
+    <message>
+        <location filename="../../widgets/browser/ui.py" line="+216"/>
+        <source>Back (Alt+←)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Forward (Alt+→)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Reload (F5)  ·  Ctrl+F5: clear cookies &amp; reload</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Paste or type a URL…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Project this tab live</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Project region of page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Cursor spotlight (presentation mode)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+55"/>
+        <source>New tab (Ctrl+T)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1467"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2890"/>
+        <location filename="../../widgets/browser/widget.py" line="+1465"/>
         <source>Back (Alt+←)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1477"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2891"/>
+        <location line="+1"/>
         <source>Forward (Alt+→)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1487"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2892"/>
+        <location line="+1"/>
         <source>Reload (F5)  ·  Ctrl+F5: clear cookies &amp; reload</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1497"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2894"/>
+        <location line="+2"/>
         <source>Paste or type a URL…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1516"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2087"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2897"/>
+        <location line="-417"/>
+        <location line="+420"/>
         <source>Project this tab live</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1543"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2899"/>
+        <location line="+2"/>
         <source>Project region of page</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1562"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2194"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2902"/>
+        <location line="-311"/>
+        <location line="+314"/>
         <source>Cursor spotlight (presentation mode)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1581"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2159"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2906"/>
+        <location line="-376"/>
+        <source>Return browser to normal size ({ratio} active)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Lock browser to 16:9</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1654"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2893"/>
+        <location line="+1"/>
+        <source>Match browser to projection screen ({ratio})</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+354"/>
         <source>New tab (Ctrl+T)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1735"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="1898"/>
-        <source>New tab</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2083"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2896"/>
+        <location line="-422"/>
+        <location line="+425"/>
         <source>Stop tab projection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2155"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2905"/>
-        <source>Return browser to normal size</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2190"/>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2901"/>
+        <location line="-312"/>
+        <location line="+317"/>
         <source>Disable cursor spotlight</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="2391"/>
-        <source>Downloaded file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>CacheManagerWidget</name>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="456"/>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="932"/>
+        <location filename="../../widgets/cache_manager_widget.py" line="+448"/>
+        <location line="+550"/>
         <source>Media Manager</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="483"/>
+        <location line="-522"/>
         <source>All</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="484"/>
+        <location line="+1"/>
         <source>Videos</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="485"/>
+        <location line="+1"/>
         <source>Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="486"/>
+        <location line="+1"/>
         <source>Images</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="511"/>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="933"/>
+        <location line="+26"/>
+        <location line="+494"/>
         <source>Loading cached media…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="526"/>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="934"/>
+        <location line="-477"/>
+        <location line="+478"/>
         <source>No cached media found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="705"/>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="901"/>
+        <location line="-228"/>
+        <location line="+195"/>
         <source>{size} · {count} file(s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="810"/>
+        <location line="-91"/>
         <source>Deselect all</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="813"/>
+        <location line="+3"/>
         <source>Select all</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="818"/>
+        <location line="+5"/>
         <source>file selected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="818"/>
+        <location line="+0"/>
         <source>files selected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="821"/>
+        <location line="+3"/>
         <source>Delete {n}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="845"/>
+        <location line="+24"/>
         <source>file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="845"/>
+        <location line="+0"/>
         <source>files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="847"/>
+        <location line="+2"/>
         <source>Confirm deletion</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="848"/>
+        <location line="+1"/>
         <source>Delete {n} {word} from this computer?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="920"/>
+        <location line="+72"/>
         <source>Delete error</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>CacheMediaWidget</name>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="361"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="669"/>
-        <source>Refresh</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="373"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="670"/>
-        <source>All</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="374"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="671"/>
-        <source>Videos</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="375"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="672"/>
-        <source>Audio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="376"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="673"/>
-        <source>Images</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="410"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="674"/>
-        <source>Select all</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="415"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="675"/>
-        <source>Deselect all</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="427"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="676"/>
-        <source>Delete selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="458"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="677"/>
-        <source>No cached media found.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="464"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="678"/>
-        <source>Loading cached media…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="535"/>
-        <source>{count} file(s)  ·  {size}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="634"/>
-        <source>{count} selected</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>CameraPopup</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="1280"/>
-        <location filename="../src/solin/main_window.py" line="1458"/>
+        <location filename="../../widgets/camera_popup.py" line="+85"/>
+        <location line="+221"/>
         <source>Camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1305"/>
-        <location filename="../src/solin/main_window.py" line="1459"/>
+        <location line="-206"/>
+        <location line="+207"/>
         <source>Refresh</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1351"/>
+        <location line="-108"/>
         <source>Looking for cameras...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1362"/>
+        <location line="+13"/>
         <source>No cameras found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1363"/>
+        <location line="+1"/>
         <source>No cameras found.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/solin/main_window.py" line="1374"/>
+        <location line="+10"/>
         <source>%n camera(s) found.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
@@ -321,679 +789,1155 @@
         </translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1406"/>
+        <location line="+30"/>
         <source>Stop Stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1413"/>
+        <location line="+7"/>
         <source>Show Stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1466"/>
+        <location line="+53"/>
         <source>Need help?</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>CameraSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/camera_section.py" line="+15"/>
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shows a camera button in the live tools toolbar.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>HuePickerDialog</name>
+    <message>
+        <location filename="../../widgets/playlist/dialogs.py" line="+164"/>
+        <source>Section color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ImageFramingThumbnail</name>
+    <message>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1725"/>
+        <source>Ctrl + scroll to zoom · Drag to pan</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Ctrl + scroll to zoom</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Reset framing</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ImagePreviewWidget</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="2030"/>
-        <location filename="../src/solin/main_window.py" line="2065"/>
+        <location filename="../../widgets/projection/preview.py" line="+115"/>
+        <source>Match projection aspect</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+147"/>
+        <source>Keep image covering the frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-136"/>
+        <location line="+43"/>
         <source>Reset</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2044"/>
-        <location filename="../src/solin/main_window.py" line="2066"/>
+        <location line="-37"/>
+        <location line="+38"/>
         <source>Apply to Projector</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+78"/>
+        <source>Match projection aspect ({ratio})</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Enable projection aspect first</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>JWMediaCatalogBridge</name>
     <message>
-        <source>Top of playlist</source>
-        <translation type="vanished">Top of playlist</translation>
-    </message>
-    <message>
-        <source>End of playlist</source>
-        <translation type="vanished">End of playlist</translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/jw_media_catalog_bridge.py" line="408"/>
+        <location filename="../../ui/qml/jw_media_catalog.py" line="+383"/>
         <source>Catalog loaded</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/jw_media_catalog_bridge.py" line="410"/>
+        <location line="+2"/>
         <source>Loading {done}/{total}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/jw_media_catalog_bridge.py" line="413"/>
+        <location line="+3"/>
         <source>Loading</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/jw_media_catalog_bridge.py" line="888"/>
-        <source>{title} added</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="37"/>
+        <location filename="../../qml/JWMediaCatalogModal.qml" line="+41"/>
         <source>All</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="38"/>
+        <location line="+1"/>
         <source>Latest</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="39"/>
+        <location line="+1"/>
         <source>Featured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="40"/>
+        <location line="+1"/>
         <source>Studio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="256"/>
+        <location line="+212"/>
         <source>Browse JW.org</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="378"/>
+        <location line="+122"/>
         <source>Search by title...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="461"/>
+        <location line="+83"/>
         <source>No results</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="462"/>
+        <location line="+1"/>
         <source>videos</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="472"/>
+        <location line="+10"/>
         <source>Audio description</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="548"/>
+        <location line="+76"/>
         <source>No videos found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="1327"/>
+        <location filename="../../qml/MediaPlacementOverlay.qml" line="+85"/>
         <source>Where to add?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/JWMediaCatalogModal.qml" line="1454"/>
+        <location line="+121"/>
         <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>JWSongsBridge</name>
+    <message>
+        <location filename="../../qml/JWSongsModal.qml" line="+145"/>
+        <source>Add video song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Songs from JW.org</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+106"/>
+        <source>Search by number or title...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>No results</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>songs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+75"/>
+        <source>No songs found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/jw_songs.py" line="+412"/>
+        <source>Loading songs...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>LanguageSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/language_section.py" line="+22"/>
+        <source>Interface</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>JW Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>(same as interface)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="4893"/>
-        <location filename="../src/solin/main_window.py" line="5097"/>
-        <location filename="../src/solin/main_window.py" line="7226"/>
-        <location filename="../src/solin/main_window.py" line="7227"/>
+        <location filename="../../main_window.py" line="+320"/>
+        <location filename="../../controllers/main_window_nav.py" line="+9"/>
         <source>Solin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5100"/>
-        <location filename="../src/solin/main_window.py" line="7228"/>
+        <location line="+686"/>
+        <source>Pause playback before changing the projected content.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playback protection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../controllers/main_window_nav.py" line="+1"/>
         <source>Audio &amp; Video</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5119"/>
+        <location line="+1"/>
         <source>Switch profile</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5135"/>
-        <location filename="../src/solin/main_window.py" line="7246"/>
+        <location line="+1"/>
+        <source>Collapse sidebar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expand sidebar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5136"/>
-        <location filename="../src/solin/main_window.py" line="7247"/>
+        <location line="+1"/>
         <source>Meetings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5137"/>
-        <location filename="../src/solin/main_window.py" line="7248"/>
+        <location line="+1"/>
         <source>Browser</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5138"/>
-        <location filename="../src/solin/main_window.py" line="7250"/>
+        <location line="+1"/>
         <source>Original Songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5139"/>
-        <location filename="../src/solin/main_window.py" line="7249"/>
+        <location line="+1"/>
         <source>Timer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5140"/>
-        <location filename="../src/solin/main_window.py" line="7251"/>
+        <location line="+1"/>
         <source>Talk theme</source>
         <translation>Talk theme</translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5141"/>
-        <location filename="../src/solin/main_window.py" line="7252"/>
+        <location line="+1"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5151"/>
-        <location filename="../src/solin/main_window.py" line="7253"/>
+        <location line="+1"/>
         <source>Playlists</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5154"/>
-        <location filename="../src/solin/main_window.py" line="7254"/>
+        <location line="+1"/>
         <source>Saved Media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="5157"/>
-        <location filename="../src/solin/main_window.py" line="7255"/>
+        <location line="+1"/>
         <source>Receive via Wi-Fi</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5705"/>
-        <location filename="../src/solin/main_window.py" line="5706"/>
-        <source>Showing image</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5722"/>
-        <location filename="../src/solin/main_window.py" line="5730"/>
-        <source>Browser — Live Tab</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5886"/>
-        <location filename="../src/solin/main_window.py" line="6873"/>
-        <location filename="../src/solin/main_window.py" line="6928"/>
-        <source>Add to Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5920"/>
-        <location filename="../src/solin/main_window.py" line="6092"/>
-        <source>Select a playlist:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5947"/>
-        <location filename="../src/solin/main_window.py" line="6894"/>
-        <source>Added to playlist
-&quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5949"/>
-        <location filename="../src/solin/main_window.py" line="6898"/>
-        <location filename="../src/solin/main_window.py" line="7069"/>
-        <source>This media is already in
-playlist &quot;%1&quot;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5968"/>
-        <location filename="../src/solin/main_window.py" line="6132"/>
-        <source>── or create a new one ──</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5973"/>
-        <location filename="../src/solin/main_window.py" line="6137"/>
-        <source>No playlists found.
-Create a new one:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5980"/>
-        <location filename="../src/solin/main_window.py" line="6144"/>
-        <source>New playlist name…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="5984"/>
-        <location filename="../src/solin/main_window.py" line="6148"/>
-        <source>Create and add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6002"/>
-        <location filename="../src/solin/main_window.py" line="6885"/>
-        <location filename="../src/solin/main_window.py" line="7050"/>
-        <source>Playlist &quot;%1&quot;
-created successfully!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6009"/>
-        <location filename="../src/solin/main_window.py" line="6192"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6038"/>
-        <source>Send Media to Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/solin/main_window.py" line="6055"/>
-        <source>📲  %n file(s) received via Wi-Fi</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6088"/>
-        <location filename="../src/solin/main_window.py" line="7063"/>
-        <source>%1 file(s) added
-to playlist &quot;%2&quot;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6184"/>
-        <source>Playlist &quot;%1&quot; created
-with %2 file(s)!</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6275"/>
-        <source>PUBLIC TALK</source>
-        <translation>PUBLIC TALK</translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6730"/>
-        <source>OBS stream is not configured.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6744"/>
-        <source>OBS Program Stream</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6760"/>
-        <source>Camera is not enabled.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6765"/>
-        <source>No camera selected.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6779"/>
-        <source>Camera</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6907"/>
-        <source>Download failed</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6908"/>
-        <source>Could not download %1:
-%2</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6971"/>
-        <location filename="../src/solin/main_window.py" line="6980"/>
-        <location filename="../src/solin/main_window.py" line="7738"/>
-        <location filename="../src/solin/main_window.py" line="7964"/>
-        <location filename="../src/solin/main_window.py" line="7971"/>
-        <location filename="../src/solin/main_window.py" line="7999"/>
-        <location filename="../src/solin/main_window.py" line="8006"/>
-        <source>Unsupported file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7036"/>
-        <source>No media found in {name}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7099"/>
-        <location filename="../src/solin/main_window.py" line="7142"/>
-        <source>Opening {name}...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7117"/>
-        <location filename="../src/solin/main_window.py" line="7783"/>
-        <location filename="../src/solin/main_window.py" line="7916"/>
-        <source>Error opening PDF</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7118"/>
-        <location filename="../src/solin/main_window.py" line="7784"/>
-        <location filename="../src/solin/main_window.py" line="7917"/>
-        <source>⚠  Error converting PDF: {error}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7184"/>
-        <source>⚠  Could not open .jwpub: {err}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7871"/>
-        <source>No media found</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7872"/>
-        <source>No media items found in {name}.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="7183"/>
-        <location filename="../src/solin/main_window.py" line="7884"/>
-        <source>Error opening .jwpub</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6972"/>
-        <location filename="../src/solin/main_window.py" line="7965"/>
-        <location filename="../src/solin/main_window.py" line="8000"/>
-        <source>Invalid or corrupted .jwlplaylist file:
-%1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/main_window.py" line="6981"/>
-        <location filename="../src/solin/main_window.py" line="7972"/>
-        <location filename="../src/solin/main_window.py" line="8007"/>
-        <source>Error reading %1:
-%2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>MediaCard</name>
     <message>
-        <location filename="../src/solin/widgets/cache_manager_widget.py" line="289"/>
+        <location filename="../../widgets/cache_manager_widget.py" line="-762"/>
         <source>Play</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>MediaDownloadActionDialog</name>
+    <name>MediaCountdownPage</name>
     <message>
-        <location filename="../src/solin/widgets/media_download_action_dialog.py" line="21"/>
-        <source>Media download</source>
+        <location filename="../../qml/MediaCountdownPage.qml" line="+52"/>
+        <source>Now</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_download_action_dialog.py" line="38"/>
-        <source>What do you want to do with this media?</source>
+        <location line="+18"/>
+        <source>Reach zero at</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_download_action_dialog.py" line="53"/>
+        <location line="+17"/>
+        <source>−1 h</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>+1 h</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>−1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>+1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Display on media window</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Circular timer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Annual text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Start countdown to this time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Or count down for</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>min</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaDestinationBridge</name>
+    <message>
+        <location filename="../../ui/qml/media_destination.py" line="+115"/>
+        <source>1 item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n items</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>MediaDestinationDialog</name>
+    <message>
+        <location filename="../../qml/MediaDestinationDialog.qml" line="+77"/>
+        <source>Back</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location filename="../../ui/qml/media_destination.py" line="+355"/>
+        <source>Media destination</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>What would you like to do?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Play now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open and play this media.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Add to…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose a playlist or a meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Preparing media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This should only take a moment.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Where should it go?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You can keep it in a playlist or prepare it for a meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Playlists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add to an existing playlist or create a new one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Meetings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose a week, meeting and position.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose a playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select one below or create a new playlist.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Search playlists…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+97"/>
+        <source>No playlists yet</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No matching playlists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>New playlist name…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Create and add</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Choose a meeting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Select the week first, then the meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Previous week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>This week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Return to this week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Next week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Could not continue</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Try again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+215"/>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+166"/>
         <source>Play</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/media_download_action_dialog.py" line="59"/>
-        <source>Add to Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/media_download_action_dialog.py" line="68"/>
-        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>MediaLibraryWidget</name>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="547"/>
+        <location filename="../../widgets/media_library_widget.py" line="+141"/>
         <source>Songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="547"/>
+        <location line="+0"/>
         <source>Original Songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="548"/>
+        <location line="+1"/>
         <source>Search song...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="548"/>
+        <location line="+0"/>
         <source>Search clip...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="549"/>
+        <location line="+1"/>
         <source>Refresh</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="550"/>
+        <location line="+1"/>
         <source>Play all (in order)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="551"/>
+        <location line="+1"/>
         <source>Play in random order</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="552"/>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="724"/>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="777"/>
+        <location line="+263"/>
         <source>Download all video songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="553"/>
+        <location line="-261"/>
         <source>Video songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="554"/>
+        <location line="+1"/>
         <source>Audio songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="577"/>
+        <location line="+24"/>
+        <location line="+80"/>
         <source>Loading songs...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="577"/>
+        <location line="-80"/>
         <source>Loading clips...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="632"/>
+        <location line="+96"/>
         <source>Updated on {date}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="647"/>
+        <location line="+15"/>
         <source>Error loading songs. Check your connection.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="647"/>
+        <location line="+0"/>
         <source>Error loading clips. Check your connection.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="726"/>
+        <location line="+124"/>
+        <source>Download all audio songs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Download {count} audio songs for offline playback?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Download {count} video songs for offline playback?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="775"/>
+        <location line="+5"/>
+        <source>All audio songs downloaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Could not finish downloading all audio songs.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Cancel downloads</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="779"/>
+        <location line="-27"/>
         <source>All video songs downloaded</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="814"/>
+        <location line="+5"/>
         <source>Could not finish downloading all video songs.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="819"/>
+        <location line="+68"/>
         <source>Download failed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="889"/>
+        <location line="+70"/>
         <source>{count} songs available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/media_library_widget.py" line="890"/>
+        <location line="+1"/>
         <source>{count} clips available</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaPlacement</name>
+    <message>
+        <location filename="../../core/i18n/media_placement.py" line="+15"/>
+        <source>Top of playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>End of playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Section</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/media_section.py" line="+23"/>
+        <source>Auto-download on play</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Downloads the playing media for offline use.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Auto-download weekly study</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Downloads this week’s and next week’s meeting media.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Song Announcement Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Song starts muted for title display. Press play to start.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Automatic background song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Start videos paused</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Videos open paused so you can start them manually.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Playback protection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Configure the meeting day/time before automatic playback can start.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Plays audio songs before configured meetings and fades out before start.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MediaTrimDialog</name>
+    <message>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <source>This media is not available for editing.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+84"/>
+        <location line="+15"/>
+        <source>The media could not be opened.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-8"/>
+        <source>This source does not support reliable seeking. Download it for offline use before setting custom times.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Timed out while checking whether this source supports seeking.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+93"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+26"/>
+        <source>Start and end times</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+98"/>
+        <source>Audio preview</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Preview audio is muted while another media item is active.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Pause</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+216"/>
+        <source>Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Reset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MeetingDestinationSession</name>
+    <message>
+        <location filename="../../widgets/meetings/destinations.py" line="+45"/>
+        <source>No media could be added.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MeetingPartRow</name>
+    <message>
+        <location filename="../../qml/MeetingPartRow.qml" line="+127"/>
+        <source>Started %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>−1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>+1 min</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Stop</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reset</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MeetingScheduleSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="+462"/>
+        <location line="+149"/>
+        <source>Used by automatic features that depend on the meeting start time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-134"/>
+        <location line="+136"/>
+        <source>Midweek meeting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-135"/>
+        <location line="+137"/>
+        <source>Day and time for the midweek meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-131"/>
+        <location line="+133"/>
+        <source>Weekend meeting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-132"/>
+        <location line="+134"/>
+        <source>Day and time for the weekend meeting.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-17"/>
+        <source>Not configured</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Monday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tuesday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wednesday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Thursday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Friday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saturday</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sunday</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>MeetingSync</name>
+    <message>
+        <location filename="../../qml/MeetingDetailView.qml" line="+136"/>
+        <source>Turn off meeting sync</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sync meeting to linked folder</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>MonitorManagerPopup</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="2335"/>
-        <location filename="../src/solin/main_window.py" line="2804"/>
+        <location filename="../../widgets/projection/monitor_manager.py" line="+98"/>
+        <location line="+586"/>
         <source>Monitors</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2365"/>
-        <location filename="../src/solin/main_window.py" line="2805"/>
+        <location line="-557"/>
+        <location line="+558"/>
         <source>Project all</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2366"/>
-        <location filename="../src/solin/main_window.py" line="2806"/>
+        <location line="-552"/>
+        <location line="+553"/>
         <source>Remove all</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2428"/>
-        <location filename="../src/solin/main_window.py" line="2807"/>
+        <location line="-456"/>
+        <location line="+457"/>
         <source>Idle Screen</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2451"/>
-        <location filename="../src/solin/main_window.py" line="2578"/>
+        <location line="-434"/>
+        <location line="+194"/>
         <source>No media selected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2460"/>
-        <location filename="../src/solin/main_window.py" line="2808"/>
+        <location line="-185"/>
+        <location line="+426"/>
         <source>Choose…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2486"/>
-        <location filename="../src/solin/main_window.py" line="2810"/>
+        <location line="-400"/>
+        <location line="+402"/>
         <source>Remove idle media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2509"/>
-        <location filename="../src/solin/main_window.py" line="2809"/>
+        <location line="-379"/>
+        <location line="+378"/>
         <source>Session only · not saved on exit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2537"/>
+        <location line="-282"/>
         <source>No secondary monitors detected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2592"/>
+        <location line="+54"/>
         <source>Windowed Preview</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2593"/>
+        <location line="+1"/>
         <source>Primary screen · shareable window</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2668"/>
+        <location line="+14"/>
+        <source>Reserved by the timer · {res}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+65"/>
         <source>Hide</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2673"/>
+        <location line="+7"/>
+        <source>Use here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
         <source>Show</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2730"/>
+        <location line="+57"/>
         <source>Choose idle screen media</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>NameDialog</name>
+    <message>
+        <location filename="../../widgets/playlist/dialogs.py" line="-147"/>
+        <source>Playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Playlist name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>E.g.: Midweek Meeting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OK</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>NotificationDialog</name>
     <message>
-        <location filename="../src/solin/widgets/notification_dialog.py" line="213"/>
+        <location filename="../../ui/dialogs/notifications.py" line="+220"/>
         <source>Solin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/notification_dialog.py" line="300"/>
+        <location line="+81"/>
         <source>Open Link</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/notification_dialog.py" line="308"/>
+        <location line="+6"/>
         <source>No, thanks</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/notification_dialog.py" line="318"/>
+        <location line="+8"/>
         <source>OK</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1001,103 +1945,664 @@ with %2 file(s)!</source>
 <context>
     <name>OBSScenePopup</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="644"/>
-        <location filename="../src/solin/main_window.py" line="1223"/>
+        <location filename="../../widgets/obs_scene_popup.py" line="+176"/>
+        <location line="+614"/>
         <source>OBS Scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="746"/>
+        <location line="-451"/>
         <source>No scenes available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="767"/>
+        <location line="+21"/>
         <source>Configured</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="783"/>
+        <location line="+12"/>
         <source>All scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="893"/>
+        <location line="+93"/>
         <source>idle</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="897"/>
+        <location line="+4"/>
         <source>media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1064"/>
-        <location filename="../src/solin/main_window.py" line="1066"/>
+        <location line="+160"/>
+        <location line="+1"/>
         <source>Stop Recording</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1088"/>
-        <location filename="../src/solin/main_window.py" line="1090"/>
+        <location line="+22"/>
+        <location line="+1"/>
         <source>Record</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1157"/>
-        <location filename="../src/solin/main_window.py" line="1177"/>
+        <location line="+71"/>
+        <location line="+20"/>
         <source>Stop Stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1158"/>
+        <location line="-19"/>
         <source>Stop OBS virtual camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1167"/>
-        <location filename="../src/solin/main_window.py" line="1187"/>
+        <location line="+9"/>
+        <location line="+20"/>
         <source>Show Stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1168"/>
+        <location line="-19"/>
         <source>Project OBS virtual camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1178"/>
+        <location line="+10"/>
         <source>Stop OBS program stream</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="1188"/>
+        <location line="+10"/>
         <source>Project OBS program stream</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ObsSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/obs_section.py" line="+49"/>
+        <source>OBS Studio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatically switches scenes during projection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <location line="+543"/>
+        <location line="+7"/>
+        <source>Disconnected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-542"/>
+        <source>WebSocket Port</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Password (optional)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Leave blank if no password is set</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+363"/>
+        <source>● Changes saved automatically</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-327"/>
+        <source>Program stream (NDI)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Available NDI sources</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>No sources loaded</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+335"/>
+        <location line="+35"/>
+        <source>Find sources</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-338"/>
+        <source>Default scene (idle)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Scene shown when nothing is being projected.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Media window scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+206"/>
+        <source>✓ Configuration saved — reconnecting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>NDI receiver is not available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Searching…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Looking for NDI sources on this network.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location line="+25"/>
+        <source>%n NDI source found.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No NDI sources found</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+53"/>
+        <source>Connecting…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected to OBS Studio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Error: {msg}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connection error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>— Select scene —</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistCard</name>
+    <message>
+        <location filename="../../widgets/playlist/components.py" line="+142"/>
+        <source>item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Export .jwlplaylist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistEditActionsMixin</name>
+    <message>
+        <location filename="../../widgets/playlist/edit_actions.py" line="+54"/>
+        <source>item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+96"/>
+        <source>1 file added</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>{count} files added</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>(1 duplicate skipped)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>({count} duplicates skipped)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>File already in playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Files already in playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+94"/>
+        <source>Add Media</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+72"/>
+        <source>Export .jwlplaylist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Export complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Exported:
+{path}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Export error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Current playback</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Save playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistEditImportMixin</name>
+    <message>
+        <location filename="../../widgets/playlist/import_export.py" line="+36"/>
+        <location line="+169"/>
+        <source>Converting PDF: {name}…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-124"/>
+        <location line="+169"/>
+        <source>{name} opened ({pages} pages)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-162"/>
+        <source>Error converting PDF: {error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Opening {name}…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>No media found in {name}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>images</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>videos</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>unresolved</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Could not open .jwpub: {err}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+118"/>
+        <source>Could not import: {name}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>1 item imported</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>{count} items imported</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistEditView</name>
+    <message>
+        <location filename="../../widgets/playlist/widget.py" line="+483"/>
+        <source>Linked folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not update the linked folder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Try again or open the linked folder to check its sync status.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+677"/>
+        <location line="+110"/>
+        <source>Section name:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-110"/>
+        <location line="+110"/>
+        <source>E.g.: Introduction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-109"/>
+        <source>New Section</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Subsection name:</source>
+        <translation type="unfinished">Subsection name:</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>E.g.: Part 1</source>
+        <translation type="unfinished">E.g.: Part 1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New Subsection</source>
+        <translation type="unfinished">New Subsection</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Rename section</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Delete section</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete section &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Media is playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Rename media</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistListView</name>
+    <message>
+        <location filename="../../widgets/playlist/list_view.py" line="+142"/>
+        <location line="+183"/>
+        <source>Playlists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-175"/>
+        <location line="+176"/>
+        <source>Import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-172"/>
+        <location line="+173"/>
+        <location line="+125"/>
+        <source>Import .jwlplaylist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-291"/>
+        <location line="+167"/>
+        <source>New Playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-147"/>
+        <location line="+151"/>
+        <source>My Playlists</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-138"/>
+        <location line="+136"/>
+        <source>No playlists yet.
+Click &apos;＋ New Playlist&apos; to create one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-127"/>
+        <location line="+130"/>
+        <source>Link Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-116"/>
+        <location line="+118"/>
+        <source>No subfolders found.
+Create subfolders inside the linked folder to use as playlists.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Rename playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Media is playing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
+Stop the projection and try again.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Delete Playlist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete playlist &quot;{name}&quot;?
+This action cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+133"/>
+        <source>Export .jwlplaylist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-106"/>
+        <location line="+130"/>
+        <source>Export complete</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-129"/>
+        <location line="+130"/>
+        <source>Exported:
+{path}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-127"/>
+        <location line="+130"/>
+        <source>Export error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <source>Import error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not import:
+{name}
+
+{error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Rename folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+20"/>
+        <source>Error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-12"/>
+        <source>Delete folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Delete folder &quot;{name}&quot; and all its contents from disk?
+This action cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Empty folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No media files found in &quot;{name}&quot;.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="444"/>
-        <location filename="../src/solin/widgets/playlist_edit_bridge.py" line="127"/>
+        <location filename="../../ui/qml/playlist/visuals.py" line="+44"/>
+        <location filename="../../widgets/playlist/panel.py" line="+251"/>
         <source>Image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="446"/>
-        <location filename="../src/solin/widgets/playlist_edit_bridge.py" line="129"/>
+        <location line="+2"/>
+        <location filename="../../widgets/playlist/panel.py" line="+2"/>
         <source>Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="447"/>
-        <location filename="../src/solin/widgets/playlist_edit_bridge.py" line="130"/>
+        <location line="+1"/>
+        <location filename="../../widgets/playlist/panel.py" line="+1"/>
         <source>Video</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/solin/main_window.py" line="450"/>
+        <location filename="../../widgets/playlist/panel.py" line="+3"/>
         <source>%n media item(s)</source>
         <translation>
             <numerusform>%n media item</numerusform>
@@ -1106,381 +2611,362 @@ with %2 file(s)!</source>
     </message>
 </context>
 <context>
-    <name>PlaylistTargetDialog</name>
+    <name>ProfileNameDialog</name>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="39"/>
-        <source>Add to Playlist</source>
+        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="65"/>
-        <source>Select a playlist:</source>
+        <location line="+1"/>
+        <source>Save</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ProfileOBSSetupMixin</name>
+    <message>
+        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
+        <location line="+7"/>
+        <source>Disconnected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="103"/>
-        <source>-- or create a new one --</source>
+        <location line="-6"/>
+        <source>Connecting…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="108"/>
-        <source>No playlists found.
-Create a new one:</source>
+        <location line="+1"/>
+        <source>Connected to OBS Studio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="115"/>
-        <source>New playlist name...</source>
+        <location line="+2"/>
+        <source>Error: {msg}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="119"/>
-        <source>Create and add</source>
+        <location line="+1"/>
+        <source>Connection error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_target_dialog.py" line="132"/>
-        <source>Close</source>
+        <location line="+15"/>
+        <source>— Select scene —</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="687"/>
+        <location filename="../../ui/profile_screen.py" line="+192"/>
         <source>Who is using Solin?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="714"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1975"/>
+        <location line="+27"/>
+        <location line="+1117"/>
         <source>New Profile</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="859"/>
+        <location line="-972"/>
         <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="868"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1869"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1973"/>
+        <location line="+9"/>
+        <location line="+867"/>
+        <location line="+94"/>
         <source>Skip setup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="898"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1656"/>
+        <location line="-931"/>
+        <location line="+624"/>
         <source>Profile name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="904"/>
+        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="906"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1702"/>
+        <location line="+2"/>
+        <location line="+662"/>
         <source>Profile 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="918"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="990"/>
+        <location line="-650"/>
+        <location line="+72"/>
         <source>Continue →</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="927"/>
+        <location line="-63"/>
         <source>Welcome to Solin</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="928"/>
+        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="948"/>
+        <location line="+20"/>
         <source>Interface language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="949"/>
+        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="967"/>
+        <location line="+18"/>
         <source>Content language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="968"/>
+        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="997"/>
+        <location line="+29"/>
         <source>Language preferences</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="998"/>
+        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1151"/>
+        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1169"/>
+        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1174"/>
+        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1179"/>
+        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1185"/>
+        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1222"/>
+        <location line="+37"/>
         <source>RTSP URL example:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1246"/>
+        <location line="+24"/>
         <source>Set up your scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1247"/>
+        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1269"/>
+        <location line="+22"/>
         <source>Open OBS Studio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1270"/>
+        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1273"/>
+        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1276"/>
+        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1280"/>
+        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1299"/>
+        <location line="+19"/>
         <source>Enable the WebSocket server</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1300"/>
+        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1323"/>
+        <location line="+23"/>
         <source>Enable OBS integration</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1342"/>
+        <location line="+19"/>
         <source>WebSocket port</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1353"/>
+        <location line="+11"/>
         <source>Password (optional)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1360"/>
+        <location line="+7"/>
         <source>Leave blank if no password is set</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1374"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1559"/>
-        <location filename="../src/solin/ui/profile_screen.py" line="1566"/>
+        <location line="+14"/>
         <source>Disconnected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1395"/>
+        <location line="+21"/>
         <source>Default scene (idle)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1400"/>
+        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1413"/>
+        <location line="+12"/>
         <source>Media window scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1419"/>
+        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1437"/>
+        <location line="+17"/>
         <source>Connect Solin to OBS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1438"/>
+        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1454"/>
+        <location line="+16"/>
         <source>Complete setup</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1461"/>
+        <location line="+7"/>
         <source>OBS Studio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1462"/>
+        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1560"/>
-        <source>Connecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1561"/>
-        <source>Connected to OBS Studio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1563"/>
-        <source>Error: {msg}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1564"/>
-        <source>Connection error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1579"/>
-        <source>— Select scene —</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1641"/>
+        <location line="+48"/>
         <source>Existing settings found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1646"/>
+        <location line="+5"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1661"/>
+        <location line="+15"/>
         <source>Example: Central Congregation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1674"/>
+        <location line="+13"/>
         <source>Confirm and migrate data</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1754"/>
+        <location line="+80"/>
         <source>Rename</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1755"/>
+        <location line="+1"/>
         <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1789"/>
+        <location line="+34"/>
         <source>Delete profile</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1790"/>
+        <location line="+1"/>
         <source>Delete &quot;{name}&quot;?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1793"/>
+        <location line="+3"/>
         <source>This will delete playlists, images, received media, browser cache, and settings for this profile. This action cannot be undone.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1828"/>
+        <location line="+35"/>
         <source>Profile {n}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1839"/>
+        <location line="+11"/>
         <source>Please enter a profile name.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1849"/>
+        <location line="+10"/>
         <source>The name cannot be empty.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1870"/>
+        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1872"/>
+        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1901"/>
+        <location line="+29"/>
         <source>My Profile</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="1955"/>
+        <location line="+44"/>
         <source>Solin</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1488,229 +2974,247 @@ Create a new one:</source>
 <context>
     <name>ProfileSwitchOverlay</name>
     <message>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="364"/>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="413"/>
+        <location filename="../../ui/profile_switch_overlay.py" line="+343"/>
+        <location line="+49"/>
         <source>Who is using Solin?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="392"/>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="415"/>
+        <location line="-21"/>
+        <location line="+22"/>
         <source>New Profile</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="412"/>
+        <location line="-2"/>
         <source>Cancel profile switch</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="414"/>
-        <source>Select a profile to continue.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ProjectableWebView</name>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="960"/>
+        <location filename="../../widgets/browser/tab.py" line="+150"/>
         <source>Project image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="961"/>
+        <location line="+1"/>
         <source>Project video</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="962"/>
+        <location line="+1"/>
         <source>Save image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="963"/>
+        <location line="+1"/>
         <source>Save video</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/browser_widget.py" line="964"/>
-        <source>Add to playlist</source>
+        <location line="+1"/>
+        <source>Add to…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ProjectionBar</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="3213"/>
-        <location filename="../src/solin/main_window.py" line="4135"/>
+        <location filename="../../widgets/projection/bar.py" line="+379"/>
+        <location line="+1043"/>
         <source>Playing offline</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3250"/>
-        <location filename="../src/solin/main_window.py" line="4122"/>
+        <location line="-1019"/>
+        <location line="+1006"/>
         <source>Pause/Resume</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3254"/>
-        <location filename="../src/solin/main_window.py" line="4126"/>
+        <location line="-1002"/>
+        <location line="+1006"/>
         <source>Previous</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3255"/>
-        <location filename="../src/solin/main_window.py" line="4127"/>
-        <location filename="../src/solin/main_window.py" line="4547"/>
+        <location line="-1005"/>
+        <location line="+1006"/>
+        <location line="+134"/>
         <source>Next</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3263"/>
-        <location filename="../src/solin/main_window.py" line="4123"/>
+        <location line="-1132"/>
+        <location line="+994"/>
         <source>Volume</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3281"/>
-        <location filename="../src/solin/main_window.py" line="4124"/>
+        <location line="-982"/>
+        <location line="+983"/>
         <source>Playback options</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3288"/>
+        <location line="-976"/>
         <source>Toggle OBS scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3304"/>
-        <location filename="../src/solin/main_window.py" line="3378"/>
-        <location filename="../src/solin/main_window.py" line="4125"/>
-        <location filename="../src/solin/main_window.py" line="4129"/>
+        <location line="+16"/>
+        <location line="+961"/>
         <source>Stop projection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3362"/>
-        <location filename="../src/solin/main_window.py" line="4128"/>
+        <location line="-903"/>
+        <location line="+906"/>
         <source>Minimize</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3373"/>
-        <location filename="../src/solin/main_window.py" line="4130"/>
+        <location line="-895"/>
+        <location line="+896"/>
         <source>Show playlist</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3391"/>
-        <location filename="../src/solin/main_window.py" line="4132"/>
-        <source>Add to Playlist</source>
+        <location line="-889"/>
+        <location line="+891"/>
+        <source>Add to…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3399"/>
-        <location filename="../src/solin/main_window.py" line="4131"/>
+        <location line="-883"/>
+        <location line="+882"/>
         <source>Open as temporary playlist</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3408"/>
-        <location filename="../src/solin/main_window.py" line="4133"/>
+        <location line="-873"/>
+        <location line="+875"/>
         <source>Set as idle screen</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3776"/>
+        <location line="-868"/>
+        <location line="+869"/>
+        <source>Fullscreen</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-703"/>
+        <source>Pause playback to seek.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+258"/>
         <source>Projected image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3889"/>
+        <location line="+123"/>
         <source>LIVE</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="3930"/>
+        <location line="+64"/>
         <source>Timer →</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4098"/>
-        <location filename="../src/solin/main_window.py" line="4136"/>
+        <location line="+177"/>
+        <location line="+84"/>
         <source>Hide media from OBS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4102"/>
+        <location line="-80"/>
         <source>Show media in OBS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4110"/>
+        <location line="+8"/>
         <source>secondary screen</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4110"/>
+        <location line="+0"/>
         <source>secondary screens</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4517"/>
+        <location line="+168"/>
         <source>Speed</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4532"/>
+        <location line="+14"/>
         <source>Loop</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4541"/>
+        <location line="+9"/>
         <source>Playback Order</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4546"/>
+        <location line="+5"/>
         <source>Off</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="4548"/>
+        <location line="+2"/>
         <source>Random</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>QuickAccessToolbar</name>
+    <message>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+405"/>
+        <location line="+8"/>
+        <source>Background Song</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="317"/>
+        <location filename="../../ui/qml/quick_toolbar.py" line="+323"/>
         <source>Manage monitors</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="318"/>
+        <location line="+1"/>
+        <source>Background Song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>OBS Scenes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="319"/>
+        <location line="+1"/>
         <source>Zoom Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="320"/>
+        <location line="+1"/>
         <source>Camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="321"/>
+        <location line="+1"/>
         <source>Minimize</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/quick_toolbar_bridge.py" line="322"/>
+        <location line="+1"/>
         <source>Expand toolbar</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1718,53 +3222,76 @@ Create a new one:</source>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../src/solin/widgets/screen_picker_overlay.py" line="118"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
         <source>Click on the share target position</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/screen_picker_overlay.py" line="130"/>
+        <location line="+12"/>
         <source>Press ESC to cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>ScreensSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/screens_section.py" line="+54"/>
+        <source>Primary Screen (control)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>No secondary screen detected. Connect an external monitor.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Secondary {n} (projection)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>PROJECTION</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>SermonThemeWidget</name>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="386"/>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="402"/>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="420"/>
+        <location filename="../../widgets/sermon_theme_widget.py" line="+383"/>
+        <location line="+16"/>
+        <location line="+91"/>
         <source>PUBLIC TALK</source>
         <translation>PUBLIC TALK</translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="413"/>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="416"/>
+        <location line="-7"/>
+        <location line="+3"/>
         <source>Talk theme</source>
         <translation>Talk theme</translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="414"/>
+        <location line="-2"/>
         <source>Project the talk title on the secondary screen</source>
         <translation>Project the talk title on the secondary screen</translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="415"/>
+        <location line="+1"/>
         <source>PREVIEW</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="417"/>
+        <location line="+2"/>
         <source>E.g.: Imitate Jehovah&apos;s mercy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="418"/>
+        <location line="+1"/>
         <source>Subtitle:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/sermon_theme_widget.py" line="430"/>
+        <location line="+12"/>
         <source>Project Theme</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1772,22 +3299,22 @@ Create a new one:</source>
 <context>
     <name>SetAsIdleConfirmDialog</name>
     <message>
-        <location filename="../src/solin/main_window.py" line="2906"/>
+        <location filename="../../widgets/projection/idle_dialog.py" line="+81"/>
         <source>Set as Idle Screen?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2932"/>
+        <location line="+24"/>
         <source>This media will be shown as the projection screen background when no content is being displayed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2946"/>
+        <location line="+13"/>
         <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/main_window.py" line="2964"/>
+        <location line="+18"/>
         <source>Set as Idle</source>
         <translation type="unfinished"></translation>
     </message>
@@ -1795,868 +3322,889 @@ Create a new one:</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="979"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3026"/>
+        <location filename="../../widgets/settings_widget.py" line="+167"/>
+        <location line="+144"/>
         <source>Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1030"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3031"/>
+        <location line="-114"/>
+        <location line="+118"/>
+        <source>Meetings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-88"/>
+        <location line="+91"/>
         <source>Annual Text</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1872"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3089"/>
+        <location line="-31"/>
+        <source>Dark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Light</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Automatic background song</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Playback protection</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Prevents media changes and seeking while audio or video is playing. Pause first to make changes.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+39"/>
         <source>Camera</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1873"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3091"/>
+        <location line="+2"/>
         <source>Shows a camera button in the live tools toolbar.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1906"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3093"/>
+        <location line="+2"/>
         <source>Automatic Shortcuts</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1913"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3095"/>
+        <location line="+2"/>
         <source>Sends keyboard shortcuts when visual media changes state.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1937"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3098"/>
+        <location line="+3"/>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1949"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3100"/>
+        <location line="+2"/>
         <source>No shortcuts configured.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1957"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3101"/>
+        <location line="+1"/>
         <source>Add shortcut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2058"/>
-        <source>Enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2058"/>
-        <source>Disabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2065"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2264"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3113"/>
+        <location line="+13"/>
         <source>Edit</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2069"/>
-        <source>Delete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2134"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3107"/>
+        <location line="-6"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2201"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3109"/>
+        <location line="+2"/>
         <source>Auto Screen Share</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2208"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3110"/>
+        <location line="+1"/>
         <source>Automatically shares screen via hotkeys when projecting media.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2240"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3111"/>
+        <location line="+1"/>
         <source>Share hotkey</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2247"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3112"/>
+        <location line="+1"/>
         <source>Uses Zoom&apos;s single start/stop screen-share shortcut.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2257"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2445"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2459"/>
-        <source>Not configured</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2284"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3120"/>
+        <location line="+8"/>
         <source>Accessibility permission</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2298"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3121"/>
+        <location line="+1"/>
         <source>Open Settings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2334"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3114"/>
+        <location line="-7"/>
         <source>Click Position</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2341"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3116"/>
+        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2456"/>
-        <source>Position: {x}, {y}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2370"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3118"/>
+        <location line="+2"/>
         <source>Configure</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2433"/>
-        <source>Share Hotkey</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2434"/>
-        <source>Press the Zoom shortcut that starts and stops screen sharing.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2477"/>
-        <source>Solin can send the automatic click.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2485"/>
-        <source>Allow Solin in macOS Accessibility so automatic clicks can work.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2546"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2695"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2768"/>
-        <source>Fetching annual text…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2560"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2751"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3128"/>
+        <location line="+10"/>
         <source>Update</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2600"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3130"/>
+        <location line="+2"/>
         <source>Scripture:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2609"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3132"/>
+        <location line="+2"/>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2620"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3134"/>
+        <location line="+2"/>
         <source>Bible reference:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2628"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3135"/>
+        <location line="+1"/>
         <source>E.g.: Matthew 5:3.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2743"/>
-        <source>Annual text updated for {year}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2774"/>
-        <source>Loading…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2781"/>
-        <source>Could not fetch annual text</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2788"/>
-        <source>Retry</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2811"/>
-        <source>▲  Edit text manually</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2813"/>
-        <source>▼  Edit text manually</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1138"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3038"/>
+        <location line="-107"/>
         <source>Auto-download on play</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1151"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3042"/>
+        <location line="+4"/>
         <source>Auto-download weekly study</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1164"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3046"/>
+        <location line="+4"/>
         <source>Song Announcement Mode</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="994"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3027"/>
+        <location line="-148"/>
+        <location line="+128"/>
         <source>Language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1000"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3028"/>
+        <location line="-122"/>
+        <location line="+123"/>
         <source>Media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1006"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3029"/>
+        <location line="-111"/>
+        <location line="+113"/>
         <source>Folders</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1012"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3030"/>
+        <location line="-107"/>
+        <location line="+108"/>
         <source>Integrations</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1059"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3034"/>
+        <location line="+4"/>
         <source>Interface</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1066"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3035"/>
+        <location line="+1"/>
         <source>JW Media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1099"/>
-        <source>(same as interface)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1036"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3032"/>
+        <location line="-89"/>
+        <location line="+86"/>
         <source>Screens</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1139"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3040"/>
+        <location line="+8"/>
         <source>Downloads the playing media for offline use.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1152"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3044"/>
+        <location line="+4"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1165"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3048"/>
+        <location line="+4"/>
         <source>Song starts muted for title display. Press play to start.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1228"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3054"/>
+        <location line="+15"/>
         <source>Link Folder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1235"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3056"/>
+        <location line="+2"/>
         <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1284"/>
-        <source>No folder selected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1254"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3059"/>
+        <location line="+3"/>
         <source>Choose…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1265"/>
-        <source>Clear</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1290"/>
-        <source>Select folder to link</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1560"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3075"/>
+        <location line="+16"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2127"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3106"/>
+        <location line="+32"/>
         <source>Zoom Meetings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2527"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3126"/>
+        <location line="+20"/>
         <source>Text shown on the projection screen when idle.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2637"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3136"/>
+        <location line="+10"/>
         <source>Save changes</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2862"/>
-        <source>Primary Screen (control)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2882"/>
-        <source>No secondary screen detected. Connect an external monitor.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2910"/>
-        <source>Secondary {n} (projection)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2928"/>
-        <source>PROJECTION</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1326"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3060"/>
+        <location line="-77"/>
         <source>OBS Studio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1177"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3050"/>
+        <location line="-17"/>
         <source>Start videos paused</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1178"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3052"/>
+        <location line="+2"/>
         <source>Videos open paused so you can start them manually.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1333"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3062"/>
+        <location line="+17"/>
         <source>Automatically switches scenes during projection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1364"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1815"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1822"/>
-        <source>Disconnected</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1373"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3064"/>
+        <location line="+2"/>
         <source>WebSocket Port</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1388"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3065"/>
+        <location line="+1"/>
         <source>Password (optional)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1396"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3067"/>
+        <location line="+2"/>
         <source>Leave blank if no password is set</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1406"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1676"/>
-        <source>● Changes saved automatically</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1442"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3078"/>
+        <location line="+11"/>
         <source>Program stream (NDI)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1448"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3080"/>
+        <location line="+2"/>
         <source>Receive the DistroAV/NDI output from OBS as a live projection.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1472"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3083"/>
+        <location line="+3"/>
         <source>Enable Main Output in DistroAV, then select the NDI source shown by OBS.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1480"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3085"/>
+        <location line="+2"/>
         <source>Available NDI sources</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1495"/>
-        <source>No sources loaded</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1499"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1737"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1774"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3086"/>
+        <location line="+1"/>
         <source>Find sources</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1534"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3069"/>
+        <location line="-17"/>
         <source>Default scene (idle)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1540"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3071"/>
+        <location line="+2"/>
         <source>Scene shown when nothing is being projected.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1553"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3073"/>
+        <location line="+2"/>
         <source>Media window scene</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1669"/>
-        <source>✓ Configuration saved — reconnecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1725"/>
-        <source>NDI receiver is not available.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1728"/>
-        <source>Searching…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1732"/>
-        <source>Looking for NDI sources on this network.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message numerus="yes">
-        <location filename="../src/solin/widgets/settings_widget.py" line="1758"/>
-        <source>%n NDI source found.</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1761"/>
-        <source>No NDI sources found</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1766"/>
-        <source>No NDI sources found. Check that DistroAV Main Output is enabled in OBS.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1816"/>
-        <source>Connecting…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1817"/>
-        <source>Connected to OBS Studio</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1819"/>
-        <source>Error: {msg}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1820"/>
-        <source>Connection error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1839"/>
-        <source>— Select scene —</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="1044"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3033"/>
+        <location line="-128"/>
+        <location line="+79"/>
         <source>About</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2967"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3138"/>
+        <location line="+115"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2977"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3145"/>
+        <location line="+7"/>
         <source>Official Website</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="2988"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3146"/>
+        <location line="+1"/>
         <source>Changelog</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3006"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="3141"/>
+        <location line="-5"/>
         <source>This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>TimerWidget</name>
+    <name>TimerBridge</name>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="190"/>
-        <source>Now: {time}</source>
+        <location filename="../../ui/qml/timer_bridge.py" line="+318"/>
+        <source>Weekend</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="202"/>
-        <source>⏭  Next day will be considered automatically</source>
+        <location line="+1"/>
+        <source>Midweek</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="225"/>
+        <location line="+110"/>
+        <source>this monitor</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>TimerPdfExport</name>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="+35"/>
+        <source>Meeting timer report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>{meeting_type} - {week}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Total {time}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In progress</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Running</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Completed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not started</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Page {page}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Part</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Planned</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Started</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Finished</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Generated</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Within time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Over time</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>TimerStepper</name>
+    <message>
+        <location filename="../../qml/TimerStepper.qml" line="+89"/>
+        <source>Double-click to edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>TimerView</name>
+    <message>
+        <location filename="../../qml/TimerView.qml" line="+72"/>
         <source>Timer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="226"/>
-        <source>Set the time at which the timer should reach zero.</source>
+        <location line="+10"/>
+        <source>Clock &amp; meeting parts on a dedicated monitor</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="227"/>
-        <source>Time for the timer to reach zero</source>
+        <location line="+1"/>
+        <source>Project a countdown on the media window</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="228"/>
-        <source>Use ↑↓ or scroll to adjust</source>
+        <location line="+10"/>
+        <source>Advanced</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/timer_widget.py" line="229"/>
-        <source>▶  Start Timer</source>
+        <location line="+0"/>
+        <source>Media countdown</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="287"/>
+        <location filename="../../ui/dialogs/update.py" line="+202"/>
         <source>Update available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="307"/>
+        <location line="+20"/>
         <source>A new update is available for Solin.
 The download is quick and the app will restart automatically.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="312"/>
+        <location line="+5"/>
         <source>A new full version of Solin is available.
 Click &apos;Download&apos; to open the download page.</source>
         <translation>A new version of Solin is available.
 Click &apos;Download&apos; to open the download page.</translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="339"/>
+        <location line="+27"/>
         <source>Not now</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="345"/>
+        <location line="+6"/>
         <source>Update now</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="347"/>
+        <location line="+2"/>
         <source>Download</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="372"/>
+        <location line="+26"/>
         <source>Downloading…</source>
         <translation type="unfinished">Downloading…</translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="377"/>
+        <location line="+5"/>
         <source>Starting download…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="387"/>
+        <location line="+10"/>
         <source>Downloading… %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="405"/>
+        <location line="+19"/>
         <source>Download failed. Check your connection.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="392"/>
+        <location line="-14"/>
         <source>Completed. Applying update…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="407"/>
+        <location line="+16"/>
         <source>Try again</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/update_dialog.py" line="435"/>
+        <location line="+14"/>
         <source>Failed to launch installer.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WatchedFolderCard</name>
+    <message>
+        <location filename="../../widgets/playlist/components.py" line="+209"/>
+        <source>item</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>items</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Rename</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Export .jwlplaylist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Delete</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WatchedFolderSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/watched_folder_section.py" line="+48"/>
+        <source>Link Folder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Sync folder (Dropbox, OneDrive, etc.) shown as playlists.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Choose…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Clear</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>No folder selected</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Select folder to link</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>WeekNavBar</name>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="455"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="518"/>
+        <location filename="../../widgets/meetings/week_nav.py" line="+256"/>
+        <location line="+65"/>
         <source>This week</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="457"/>
+        <location line="-63"/>
         <source>Previous week</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="495"/>
+        <location line="+38"/>
         <source>Next week</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>WeekPicker</name>
+    <message>
+        <location line="-205"/>
+        <source>Jump to week</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+72"/>
+        <location line="+11"/>
+        <source>Now</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>WifiReceiveWidget</name>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="601"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1372"/>
+        <location filename="../../widgets/wifi_receive_widget.py" line="+599"/>
+        <location line="+850"/>
         <source>Receive via Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="616"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1373"/>
+        <location line="-835"/>
+        <location line="+836"/>
         <source>Starting server…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="660"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1374"/>
+        <location line="-790"/>
+        <location line="+791"/>
         <source>Scan the QR code with your phone.
 Both devices must be on the same Wi-Fi network.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="670"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="690"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1380"/>
+        <location line="-781"/>
+        <location line="+20"/>
+        <location line="+767"/>
         <source>Copy link</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="702"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1375"/>
+        <location line="-755"/>
+        <location line="+750"/>
         <source>The server stops automatically after 15 minutes outside this screen.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="715"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1376"/>
+        <location line="-737"/>
+        <location line="+738"/>
         <source>  Stop server</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="735"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1381"/>
+        <location line="-717"/>
+        <location line="+722"/>
         <source>Received media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="749"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1382"/>
-        <source>  Send all to playlist</source>
+        <location line="-708"/>
+        <location line="+709"/>
+        <source>  Add all to…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="790"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1383"/>
+        <location line="-666"/>
+        <location line="+667"/>
         <source>Files sent from your phone will appear here.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="831"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1377"/>
+        <location line="-625"/>
+        <location line="+619"/>
         <source>Receive media via Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="840"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="902"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1378"/>
+        <location line="-610"/>
+        <location line="+177"/>
+        <location line="+434"/>
         <source>Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="854"/>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1379"/>
+        <location line="-597"/>
+        <location line="+598"/>
         <source>  Start server</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="874"/>
+        <location line="-482"/>
         <source>Send Media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="875"/>
+        <location line="+1"/>
         <source>Select or drag photos, videos or audio files</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="876"/>
+        <location line="+1"/>
         <source>Send media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="877"/>
+        <location line="+1"/>
         <source>Drag files here</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="878"/>
+        <location line="+1"/>
         <source>✓ File sent!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="879"/>
+        <location line="+1"/>
         <source>Upload error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1130"/>
+        <location line="+231"/>
+        <location line="+4"/>
         <source>Could not start the server.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="1135"/>
+        <location line="+6"/>
         <source>Server stopped due to inactivity.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>YearlyTextSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/yearly_text_section.py" line="+60"/>
+        <source>Text shown on the projection screen when idle.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+221"/>
+        <location line="+74"/>
+        <source>Fetching annual text…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-281"/>
+        <location line="+264"/>
+        <source>Update</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="-229"/>
+        <source>Scripture:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>E.g.: Happy are those conscious of their spiritual need.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Bible reference:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>E.g.: Matthew 5:3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Save changes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+184"/>
+        <source>Annual text updated for {year}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>Loading…</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Could not fetch annual text</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Retry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>▲  Edit text manually</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>▼  Edit text manually</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="109"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="372"/>
+        <location filename="../../widgets/zoom_panel.py" line="+91"/>
+        <location line="+312"/>
         <source>Zoom Meeting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="133"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="288"/>
+        <location line="-293"/>
+        <location line="+214"/>
         <source>Disconnected</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../src/solin/widgets/zoom_panel.py" line="169"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="301"/>
+        <location line="-180"/>
+        <location line="+193"/>
         <source>%n attendee(s)</source>
         <translation>
             <numerusform>%n attendee</numerusform>
@@ -2664,25 +4212,25 @@ Both devices must be on the same Wi-Fi network.</source>
         </translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="211"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="314"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="375"/>
+        <location line="-163"/>
+        <location line="+176"/>
+        <location line="+57"/>
         <source>Screen sharing active</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="243"/>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="373"/>
+        <location line="-204"/>
+        <location line="+201"/>
         <source>Open audio for all</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="280"/>
+        <location line="-88"/>
         <source>Connected to meeting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_panel.py" line="358"/>
+        <location line="+77"/>
         <source>Attendance can be counted in two ways:
 use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
 or put a number at the end, like &apos;Family Alves 7&apos; = 7.
@@ -2693,346 +4241,258 @@ A number at the end has priority.</source>
 <context>
     <name>ZoomPollWindow</name>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="481"/>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="524"/>
+        <location filename="../../widgets/zoom_poll_widget.py" line="+206"/>
+        <location line="+42"/>
         <source>Attendance Report</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="559"/>
+        <location line="+35"/>
         <source>Loading report…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="615"/>
+        <location line="+56"/>
         <source>Untitled meeting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="646"/>
+        <location line="+31"/>
         <source>Responses received</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="652"/>
+        <location line="+6"/>
         <source>Attendance</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="707"/>
+        <location line="+57"/>
         <source>Inconsistencies found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="723"/>
+        <location line="+16"/>
         <source>Responded {count}× with the same value ({value}). Counted once.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="737"/>
+        <location line="+14"/>
         <source>Submitted different values: [{values}]. Highest value used: {kept}.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="746"/>
+        <location line="+9"/>
         <source>Automatic corrections applied</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="756"/>
+        <location line="+10"/>
         <source>Same family</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="771"/>
+        <location line="+15"/>
         <source>max({count} members, max {max_val}) = {corrected}  ·  total: {running} → {after}{delta}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="776"/>
+        <location line="+5"/>
         <source>Possible family — last name &quot;{lastname}&quot;</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="790"/>
+        <location line="+14"/>
         <source>Estimated total</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="807"/>
+        <location line="+17"/>
         <source>{n} duplicate response(s) removed  −{delta} person(s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="816"/>
+        <location line="+9"/>
         <source>{n} conflicting response(s) resolved  −{delta} person(s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="950"/>
+        <location line="+131"/>
         <source>↳ Suggested value: {note}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="984"/>
+        <location line="+34"/>
         <source>These people did not enter a numbe.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="988"/>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1060"/>
+        <location line="+4"/>
+        <location line="+72"/>
         <source>Name</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="989"/>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1062"/>
+        <location line="-71"/>
+        <location line="+73"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="990"/>
+        <location line="-72"/>
         <source>Response</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1027"/>
+        <location line="+37"/>
         <source>Counted responses</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1035"/>
+        <location line="+8"/>
         <source>{n} removed as duplicate(s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1061"/>
+        <location line="+26"/>
         <source>E-mail</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/zoom_poll_widget.py" line="1063"/>
+        <location line="+2"/>
         <source>People</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>_AutoKeyEditorDialog</name>
+    <name>ZoomSectionMixin</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="625"/>
-        <source>Automatic Shortcut</source>
+        <location filename="../../widgets/settings/zoom_section.py" line="+32"/>
+        <source>Zoom Meetings</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="626"/>
-        <source>Choose an app event and press the shortcut to send.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="670"/>
-        <source>Event</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="685"/>
-        <source>Shortcut</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="697"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="792"/>
-        <source>Click the field, then press one shortcut.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="706"/>
-        <source>Enabled</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="724"/>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="729"/>
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="783"/>
-        <source>Press a shortcut before saving.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="787"/>
-        <source>Listening... press one shortcut.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="800"/>
-        <source>Shortcut captured.</source>
+        <location line="+7"/>
+        <source>Audio controls and attendance count during meetings.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_CloseButton</name>
     <message>
-        <location filename="../src/solin/ui/profile_switch_overlay.py" line="263"/>
+        <location filename="../../ui/profile_switch_overlay.py" line="-155"/>
         <source>Cancel profile switch</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_ConfirmDeleteDialog</name>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="695"/>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="712"/>
-        <source>Confirm deletion</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="720"/>
-        <source>Delete {count} file(s) from this computer?</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="732"/>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/cache_media_widget.py" line="742"/>
-        <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_Date</name>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="68"/>
+        <location filename="../../core/i18n/date.py" line="+69"/>
         <source>January</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="69"/>
+        <location line="+1"/>
         <source>February</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="70"/>
+        <location line="+1"/>
         <source>March</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="71"/>
+        <location line="+1"/>
         <source>April</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="72"/>
+        <location line="+1"/>
         <source>May</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="73"/>
+        <location line="+1"/>
         <source>June</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="74"/>
+        <location line="+1"/>
         <source>July</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="75"/>
+        <location line="+1"/>
         <source>August</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="76"/>
+        <location line="+1"/>
         <source>September</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="77"/>
+        <location line="+1"/>
         <source>October</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="78"/>
+        <location line="+1"/>
         <source>November</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="79"/>
+        <location line="+1"/>
         <source>December</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="95"/>
+        <location line="+16"/>
         <source>{month} {day}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="96"/>
+        <location line="+1"/>
         <source>{month} {day_start}-{day_end}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/core/date_i18n.py" line="97"/>
+        <location line="+1"/>
         <source>{month_start} {day_start}-{month_end} {day_end}</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_HuePickerDialog</name>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="727"/>
-        <source>Section color</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="751"/>
-        <source>OK</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="752"/>
-        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_JWLanguagePicker</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="364"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="380"/>
+        <location filename="../../ui/language_pickers.py" line="+248"/>
+        <location line="+16"/>
         <source>Media Language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="384"/>
+        <location line="+4"/>
         <source>Language for media from JW.org (songs, clips, meetings). Falls back to the interface language if unavailable.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="391"/>
+        <location line="+7"/>
         <source>Search…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="417"/>
+        <location line="+18"/>
         <source>Loading languages…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="423"/>
+        <location line="+4"/>
         <source>Select</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="457"/>
+        <location line="+33"/>
         <source>Could not load languages.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3040,23 +4500,23 @@ A number at the end has priority.</source>
 <context>
     <name>_LanguagePicker</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="272"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="289"/>
+        <location line="-175"/>
+        <location line="+17"/>
         <source>Interface Language</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="292"/>
+        <location line="+3"/>
         <source>Choose the language for the app interface.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="297"/>
+        <location line="+5"/>
         <source>Search…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="312"/>
+        <location line="+15"/>
         <source>Select</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3064,740 +4524,343 @@ A number at the end has priority.</source>
 <context>
     <name>_MediaCard</name>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="418"/>
+        <location filename="../../widgets/wifi_receive_widget.py" line="-862"/>
         <source>video</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="419"/>
+        <location line="+1"/>
         <source>audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="420"/>
+        <location line="+1"/>
         <source>image</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/wifi_receive_widget.py" line="448"/>
-        <source>Add to playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_MediaRow</name>
-    <message>
-        <location filename="../src/solin/core/meeting_tree_builder.py" line="48"/>
-        <source>Media</source>
+        <location line="+24"/>
+        <source>Add to…</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_MemorialCard</name>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1547"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1561"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1587"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1599"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1612"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1626"/>
+        <location filename="../../widgets/meetings/overview.py" line="+410"/>
+        <location line="+14"/>
+        <location line="+26"/>
+        <location line="+12"/>
+        <location line="+13"/>
+        <location line="+14"/>
         <source>MEMORIAL</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1548"/>
+        <location line="-78"/>
         <source>Loading…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1550"/>
+        <location line="+2"/>
         <source>Fetching publication…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1565"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1588"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1600"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1613"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1627"/>
+        <location line="+15"/>
+        <location line="+23"/>
+        <location line="+12"/>
+        <location line="+13"/>
+        <location line="+14"/>
         <source>Memorial of Jesus’ Death</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1568"/>
+        <location line="-59"/>
         <source>item</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1568"/>
+        <location line="+0"/>
         <source>items</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1590"/>
+        <location line="+22"/>
         <source>No media found</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1602"/>
+        <location line="+12"/>
         <source>Tap to retry</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1615"/>
+        <location line="+13"/>
         <source>Not available · Tap to retry</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1629"/>
+        <location line="+14"/>
         <source>Media removed by JW.ORG</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="1647"/>
+        <location line="+18"/>
         <source>Downloading… {}%</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_NameDialog</name>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="612"/>
-        <source>Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="616"/>
-        <source>Playlist name:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="620"/>
-        <source>E.g.: Midweek Meeting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="621"/>
-        <source>OK</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="622"/>
-        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
     <message>
-        <location filename="../src/solin/core/i18n.py" line="6"/>
+        <location filename="../../core/i18n/strings.py" line="+6"/>
         <source>Download for offline playback</source>
         <translation>Download for offline playback</translation>
     </message>
     <message>
-        <location filename="../src/solin/core/i18n.py" line="10"/>
+        <location line="+4"/>
         <source>Downloading…</source>
         <translation>Downloading…</translation>
     </message>
     <message>
-        <location filename="../src/solin/core/i18n.py" line="11"/>
+        <location line="+1"/>
         <source>Downloading… {pct}%</source>
         <translation>Downloading… {pct}%</translation>
     </message>
     <message>
-        <location filename="../src/solin/core/i18n.py" line="15"/>
+        <location line="+4"/>
         <source>Queued for download</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_PlaylistCard</name>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="866"/>
-        <source>item</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="866"/>
-        <source>items</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="886"/>
-        <source>Rename</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="889"/>
-        <source>Export .jwlplaylist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="892"/>
-        <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>_PlaylistEditView</name>
     <message>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="114"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+119"/>
         <source>Save as permanent playlist</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="123"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2885"/>
+        <location line="+9"/>
         <source>Export .jwlplaylist</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="175"/>
+        <location line="+60"/>
         <source>Play all (in order)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="180"/>
+        <location line="+5"/>
         <source>Play in random order</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="85"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="96"/>
+        <location filename="../../qml/MeetingDetailView.qml" line="-46"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="-92"/>
         <source>Back</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="122"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="133"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2824"/>
+        <location line="+56"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+37"/>
         <source>Add Media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="132"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="143"/>
+        <location line="+10"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+10"/>
         <source>Local File...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="140"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="151"/>
+        <location line="+8"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
         <source>Search JW.org...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="151"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="185"/>
+        <location line="+8"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <source>Add Song...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+34"/>
         <source>Section</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/MeetingDetailView.qml" line="152"/>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="186"/>
+        <location line="+1"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="+1"/>
         <source>Add a new section</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistEditView.qml" line="113"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2920"/>
+        <location filename="../../qml/PlaylistEditView.qml" line="-81"/>
         <source>Save playlist</source>
         <translation type="unfinished"></translation>
     </message>
-    <message numerus="yes">
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1887"/>
-        <source>Processing %n file(s)...</source>
-        <translation type="unfinished">
-            <numerusform></numerusform>
-            <numerusform></numerusform>
-        </translation>
-    </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1902"/>
-        <source>All files processed</source>
+        <location filename="../../qml/PlaylistTreeView.qml" line="-1389"/>
+        <source>Preparing media...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2652"/>
-        <source>item</source>
+        <location line="+1358"/>
+        <source>Media unavailable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2652"/>
-        <source>items</source>
+        <location line="+2"/>
+        <source>Pause playback before changing media</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2126"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2236"/>
-        <source>Section name:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2126"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2236"/>
-        <source>E.g.: Introduction</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2127"/>
-        <source>New Section</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2149"/>
-        <source>Subsection name:</source>
-        <translation>Subsection name:</translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2149"/>
-        <source>E.g.: Part 1</source>
-        <translation>E.g.: Part 1</translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2150"/>
-        <source>New Subsection</source>
-        <translation>New Subsection</translation>
-    </message>
-    <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1525"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2237"/>
+        <location line="+409"/>
         <source>Rename section</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1534"/>
+        <location line="+9"/>
         <source>Change color</source>
         <translation>Change color</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1562"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2253"/>
+        <location line="+28"/>
         <source>Delete section</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2254"/>
-        <source>Delete section &quot;{name}&quot;?
-Items inside will be kept.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2327"/>
-        <source>Media is playing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2328"/>
-        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
-Stop the projection and try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2349"/>
-        <source>Rename media</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2370"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2517"/>
-        <source>🔄  Converting PDF: {name}…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2377"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2524"/>
-        <source>🔄  {name} — page {current}/{total}…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2410"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2559"/>
-        <source>✓  {name} opened ({pages} pages)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2415"/>
-        <source>⚠  Error converting PDF: {error}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2440"/>
-        <source>🔄  Opening {name}…</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2474"/>
-        <source>⚠  No media found in {name}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2489"/>
-        <source>images</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2490"/>
-        <source>videos</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2492"/>
-        <source>unresolved</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2497"/>
-        <source>⚠  Could not open .jwpub: {err}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2616"/>
-        <source>⚠  Could not import: {name}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2624"/>
-        <source>✓  1 item imported</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2627"/>
-        <source>✓  {count} items imported</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2737"/>
-        <source>✓  1 file added</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2739"/>
-        <source>✓  {count} files added</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2741"/>
-        <source>({count} duplicate skipped)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2743"/>
-        <source>({count} duplicates skipped)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2747"/>
-        <source>⚠  File already in playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2749"/>
-        <source>⚠  Files already in playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2892"/>
-        <source>Export complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2893"/>
-        <source>Exported:
-{path}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2895"/>
-        <source>Export error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="2906"/>
-        <source>Current playback</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1524"/>
+        <location line="-38"/>
         <source>Rename subsection</source>
         <translation>Rename subsection</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1543"/>
+        <location line="+19"/>
         <source>Add subsection</source>
         <translation>Add subsection</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1561"/>
+        <location line="+18"/>
         <source>Delete subsection</source>
         <translation>Delete subsection</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1308"/>
+        <location line="-282"/>
         <source>Marker</source>
         <translation>Marker</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="347"/>
+        <location line="-1565"/>
+        <source>Drag media files here or click  ＋  at the top
+Use the play button to project · Drag the grip ⠿ to reorder</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1126"/>
+        <location filename="../../qml/MeetingDetailView.qml" line="-51"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1344"/>
         <source>Offline / Syncing</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1341"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+251"/>
         <source>Delete marker</source>
         <translation>Delete marker</translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/PlaylistTreeView.qml" line="1552"/>
+        <location line="+240"/>
         <source>Add marker</source>
         <translation>Add marker</translation>
     </message>
 </context>
 <context>
-    <name>_PlaylistListView</name>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1222"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1399"/>
-        <source>Playlists</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1230"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1400"/>
-        <source>Import</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1234"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1401"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1499"/>
-        <source>Import .jwlplaylist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1241"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1402"/>
-        <source>New Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1269"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1406"/>
-        <source>My Playlists</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1283"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1404"/>
-        <source>No playlists yet.
-Click &apos;＋ New Playlist&apos; to create one.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1293"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1407"/>
-        <source>Link Folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1308"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1409"/>
-        <source>No subfolders found.
-Create subfolders inside the linked folder to use as playlists.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1438"/>
-        <source>Rename playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1458"/>
-        <source>Media is playing</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1460"/>
-        <source>Cannot delete playlist &quot;{name}&quot; because one of its items is currently playing.
-Stop the projection and try again.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1465"/>
-        <source>Delete Playlist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1466"/>
-        <source>Delete playlist &quot;{name}&quot;?
-This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1479"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1600"/>
-        <source>Export .jwlplaylist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1491"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1612"/>
-        <source>Export complete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1492"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1613"/>
-        <source>Exported:
-{path}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1495"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1616"/>
-        <source>Export error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1541"/>
-        <source>Import error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1542"/>
-        <source>Could not import:
-{name}
-
-{error}</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1557"/>
-        <source>Rename folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1565"/>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1584"/>
-        <source>Error</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1572"/>
-        <source>Delete folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1574"/>
-        <source>Delete folder &quot;{name}&quot; and all its contents from disk?
-This action cannot be undone.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1595"/>
-        <source>Empty folder</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1596"/>
-        <source>No media files found in &quot;{name}&quot;.</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>_ProfileNameDialog</name>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="557"/>
-        <source>Cancel</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/ui/profile_screen.py" line="558"/>
-        <source>Save</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
     <name>_PubCard</name>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="603"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="667"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="684"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="716"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="731"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="748"/>
+        <location filename="../../widgets/meetings/overview.py" line="-353"/>
+        <location line="+17"/>
+        <location line="+36"/>
+        <location line="+25"/>
+        <location line="+15"/>
+        <location line="+16"/>
         <source>LIFE &amp; MINISTRY</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="603"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="667"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="684"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="716"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="731"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="748"/>
+        <location line="-109"/>
+        <location line="+17"/>
+        <location line="+36"/>
+        <location line="+25"/>
+        <location line="+15"/>
+        <location line="+16"/>
         <source>WATCHTOWER STUDY</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="670"/>
+        <location line="-106"/>
         <source>Loading…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="672"/>
+        <location line="+2"/>
         <source>Fetching publication…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="688"/>
+        <location line="+16"/>
+        <location line="+35"/>
         <source>Life &amp; Ministry</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="692"/>
+        <location line="-31"/>
+        <location line="+31"/>
         <source>Watchtower Study</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="698"/>
+        <location line="-25"/>
+        <location line="+29"/>
         <source>item</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="698"/>
+        <location line="-29"/>
+        <location line="+29"/>
         <source>items</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="719"/>
+        <location line="+21"/>
         <source>No meeting this week</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="734"/>
+        <location line="+15"/>
         <source>Unavailable</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="736"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="753"/>
+        <location line="+2"/>
+        <location line="+16"/>
         <source>Tap to retry</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="751"/>
+        <location line="-2"/>
         <source>Not available this week</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="775"/>
+        <location line="+20"/>
         <source>Downloading… {}%</source>
         <translation type="unfinished"></translation>
     </message>
@@ -3805,32 +4868,27 @@ This action cannot be undone.</source>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="99"/>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="-673"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="101"/>
+        <location line="+1"/>
         <source>APPLY YOURSELF TO THE FIELD MINISTRY</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="103"/>
+        <location line="+1"/>
         <source>LIVING AS CHRISTIANS</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="105"/>
-        <source>Congregation Bible Study</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="107"/>
+        <location line="+2"/>
         <source>Watchtower Study</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/qml/AdvancedTimerPage.qml" line="38"/>
+        <location line="-1"/>
         <source>PUBLIC TALK</source>
         <translation>PUBLIC TALK</translation>
     </message>
@@ -3838,59 +4896,151 @@ This action cannot be undone.</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="544"/>
-        <location filename="../src/solin/widgets/settings_widget.py" line="596"/>
+        <location filename="../../widgets/settings/auto_key_dialog.py" line="-257"/>
+        <location line="+52"/>
         <source>Click to record</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>_WatchedFolderCard</name>
+    <name>_TimePickerPopup</name>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1140"/>
-        <source>item</source>
+        <location filename="../../widgets/settings/meeting_schedule_section.py" line="-315"/>
+        <source>Hour</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1140"/>
-        <source>items</source>
+        <location line="+2"/>
+        <source>Minute</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1160"/>
-        <source>Rename</source>
+        <location line="+15"/>
+        <source>Cancel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1165"/>
-        <source>Export .jwlplaylist</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/solin/widgets/playlist_widget.py" line="1170"/>
-        <source>Delete</source>
+        <location line="+3"/>
+        <source>Apply</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
-    <name>_WeekPicker</name>
+    <name>_TimeStepper</name>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="278"/>
-        <source>Jump to week</source>
+        <location line="-108"/>
+        <source>Increase</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="356"/>
-        <location filename="../src/solin/widgets/meetings_widget.py" line="367"/>
-        <source>Now</source>
+        <location line="+1"/>
+        <source>Decrease</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>_TimerPart</name>
+    <message>
+        <location filename="../../core/i18n/timer_part_titles.py" line="+16"/>
+        <source>Treasures Talk</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Spiritual Gems</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bible Reading</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Public Talk</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Watchtower Study</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Congregation Bible Study</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Opening Comments</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Concluding Comments</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Part {number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Treasures Part {number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Public Talk {number}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Watchtower Study {number}</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>dialog</name>
     <message>
-        <location filename="../src/solin/widgets/settings_widget.py" line="249"/>
+        <location filename="../../ui/language_pickers.py" line="-64"/>
         <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>self._parent</name>
+    <message>
+        <location filename="../../controllers/timer_pdf_export_controller.py" line="+39"/>
+        <source>Export PDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>PDF files (*.pdf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Export failed</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Could not export the timer PDF:
+{error}</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>PDF exported</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Saved to:
+{path}</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

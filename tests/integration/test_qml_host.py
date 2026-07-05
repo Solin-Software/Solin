@@ -5,13 +5,24 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import Property, QObject, QPoint, QPointF, QTimer, Signal, Slot, Qt
+from PySide6.QtCore import (
+    Property,
+    QObject,
+    QPoint,
+    QPointF,
+    QTimer,
+    QTranslator,
+    Signal,
+    Slot,
+    Qt,
+)
 from PySide6.QtGui import QColor, QPixmap, QWheelEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
 
 from solin.controllers.timer_engine import TimerEngine
+from solin.core.foundation.resources import application_translation_root
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
@@ -67,6 +78,17 @@ class _PlaybackProtectionProbe(QObject):
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
         self.lockedChanged.emit()
+
+
+@pytest.fixture
+def pt_br_translator():
+    translator = QTranslator()
+    assert translator.load(
+        str(application_translation_root() / "solin_pt_BR.qm")
+    )
+    assert _APP.installTranslator(translator)
+    yield translator
+    assert _APP.removeTranslator(translator)
 
 
 class _PlaylistTreeControllerProbe(QObject):
@@ -175,7 +197,9 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
     assert probe.exited == 1
 
 
-def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:
+def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
+    pt_br_translator,
+) -> None:
     nodes = [{
         "type": "media",
         "id": "media-1",
@@ -242,7 +266,9 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert framing_thumbnail.property("clickActionEnabled") is False
     protected_menu_count = item_menu.property("count")
     assert media_card.findChild(QObject, "mediaItemPlayAction") is None
-    assert media_card.findChild(QObject, "mediaItemTrimAction") is not None
+    trim_action = media_card.findChild(QObject, "mediaItemTrimAction")
+    assert trim_action is not None
+    assert trim_action.property("text") == "Tempos de início e fim"
 
     media_card.clicked.emit()
     assert controller.projected == []

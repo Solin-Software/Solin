@@ -9,6 +9,16 @@ from solin.core.meetings.colors import accent_from_hue
 
 END_OF_LIST_INDEX = 2**31 - 1
 PLACEMENT_PROMPT_ITEM_THRESHOLD = 13
+TOP_OF_PLAYLIST_SOURCE = "Top of playlist"
+END_OF_PLAYLIST_SOURCE = "End of playlist"
+SECTION_SOURCE = "Section"
+MEDIA_PLACEMENT_SOURCES = frozenset(
+    {
+        TOP_OF_PLAYLIST_SOURCE,
+        END_OF_PLAYLIST_SOURCE,
+        SECTION_SOURCE,
+    }
+)
 
 
 class MediaPlacementOption(TypedDict):
@@ -40,13 +50,13 @@ def build_media_placement_options(
     options: list[MediaPlacementOption] = [
         {
             "id": "top",
-            "label": translate("Top of playlist"),
+            "label": translate(TOP_OF_PLAYLIST_SOURCE),
             "type": "position",
             "color": "",
         },
         {
             "id": "bottom",
-            "label": translate("End of playlist"),
+            "label": translate(END_OF_PLAYLIST_SOURCE),
             "type": "position",
             "color": "",
         },
@@ -58,7 +68,7 @@ def build_media_placement_options(
         options.append(
             {
                 "id": f"section:{section_id}",
-                "label": str(section.get("name") or translate("Section")),
+                "label": str(section.get("name") or translate(SECTION_SOURCE)),
                 "type": "section",
                 "color": accent_from_hue(_int_or_default(section.get("color_hue"), 215)),
             }
@@ -98,7 +108,11 @@ def _int_or_default(value: object, default: int) -> int:
 
 __all__ = [
     "END_OF_LIST_INDEX",
+    "END_OF_PLAYLIST_SOURCE",
+    "MEDIA_PLACEMENT_SOURCES",
     "MediaPlacementOption",
+    "SECTION_SOURCE",
+    "TOP_OF_PLAYLIST_SOURCE",
     "build_media_placement_options",
     "resolve_media_placement",
 ]

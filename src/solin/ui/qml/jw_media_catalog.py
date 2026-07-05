@@ -39,6 +39,7 @@ from solin.core.media.placement import (
     build_media_placement_options,
     resolve_media_placement,
 )
+from solin.core.i18n.media_placement import translate_media_placement
 from solin.core.media.identity import contains_media, media_identity
 from solin.core.media.insertion import MediaInsertResult
 
@@ -760,10 +761,7 @@ class JWMediaCatalogBridge(QObject):
         """Compute where the video can be placed within the playlist."""
         return build_media_placement_options(
             self._pl,
-            translate=lambda text: QCoreApplication.translate(
-                "JWMediaCatalogBridge",
-                text,
-            ),
+            translate=translate_media_placement,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────

@@ -25,6 +25,7 @@ from solin.core.media.formats import media_type_from_path
 from solin.core.media.identity import media_identity
 from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.placement import build_media_placement_options
+from solin.core.i18n.media_placement import translate_media_placement
 from solin.core.playlists.items import create_playlist_item
 from solin.ui.media_insertion_feedback import notify_media_duplicate
 from solin.ui.qml.media_destination import (
@@ -247,7 +248,7 @@ class MediaDestinationController(QObject):
             return
         options = build_media_placement_options(
             playlist_ref,
-            translate=lambda text: self._context.translate(text),
+            translate=translate_media_placement,
         )
         bridge.prepare_playlist_selection(
             playlist_id=playlist_id,
@@ -282,7 +283,7 @@ class MediaDestinationController(QObject):
         self._pending_meeting_key = (monday_text, pub_type)
         options = build_media_placement_options(
             session.placement_ref(),
-            translate=lambda text: self._context.translate(text),
+            translate=translate_media_placement,
         )
         bridge.prepare_meeting_selection(
             monday=monday_text,

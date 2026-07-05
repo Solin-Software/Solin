@@ -1920,7 +1920,7 @@ Item {
                                         objectName: "mediaItemTrimAction"
                                         enabled: node && node.trimAvailable !== false
                                                  && !mediaRoot.isMissing
-                                        text: root.commonTr("_PlaylistEditView", "Start and end times")
+                                        text: qsTranslate("MediaTrimDialog", "Start and end times")
                                         icon.source: root.picon("media_trim", 13, root.iconHex(root.textMuted))
                                         onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
                                         contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
