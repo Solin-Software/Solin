@@ -46,7 +46,7 @@ class MediaSettingsStore:
         )
 
     def auto_download_on_play(self) -> bool:
-        return bool(self.settings.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, True, bool))
+        return bool(self.settings.value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, False, bool))
 
     def set_auto_download_on_play(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.AUTO_DOWNLOAD_ON_PLAY, bool(enabled))
@@ -73,7 +73,7 @@ class MediaSettingsStore:
         return bool(
             self.settings.value(
                 SettingsKey.PLAYBACK_PROTECTION_ENABLED,
-                False,
+                True,
                 bool,
             )
         )

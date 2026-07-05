@@ -28,23 +28,23 @@ def test_media_settings_reads_defaults_and_persists_flags():
     store = MediaSettingsStore(settings)
     settings.clear()
     try:
-        assert store.auto_download_on_play() is True
+        assert store.auto_download_on_play() is False
         assert store.meetings_auto_download() is False
         assert store.sjjm_announce_mode() is False
         assert store.start_videos_paused() is False
-        assert store.playback_protection_enabled() is False
+        assert store.playback_protection_enabled() is True
 
-        store.set_auto_download_on_play(False)
+        store.set_auto_download_on_play(True)
         store.set_meetings_auto_download(True)
         store.set_sjjm_announce_mode(True)
         store.set_start_videos_paused(True)
-        store.set_playback_protection_enabled(True)
+        store.set_playback_protection_enabled(False)
 
-        assert store.auto_download_on_play() is False
+        assert store.auto_download_on_play() is True
         assert store.meetings_auto_download() is True
         assert store.sjjm_announce_mode() is True
         assert store.start_videos_paused() is True
-        assert store.playback_protection_enabled() is True
+        assert store.playback_protection_enabled() is False
     finally:
         settings.clear()
 
