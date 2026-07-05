@@ -3,6 +3,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
+import QtQml.Models 2.15
 
 Item {
     id: root
@@ -1908,27 +1909,29 @@ Item {
                             onClicked: itemMenu.open()
                             Menu {
                                 id: itemMenu
+                                objectName: "mediaItemMenu"
                                 width: 150
                                 background: MenuPanel {}
-                                MenuItem {
-                                    visible: !root.playbackProtectionEnabled
-                                    text: root.commonTr("MediaDestinationDialog", "Play")
-                                    icon.source: root.picon("play_all", 13, root.iconHex(root.textMuted))
-                                    enabled: !mediaRoot.isMissing
-                                    onTriggered: if (root.hasController) root.playlistController.projectItem(mediaRoot.nodeId)
-                                    contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
-                                    background: MenuBg { hovered: parent.hovered }
-                                }
-                                MenuItem {
-                                    visible: mediaRoot.mediaType === "audio"
-                                             || mediaRoot.mediaType === "video"
-                                    enabled: node && node.trimAvailable !== false
-                                             && !mediaRoot.isMissing
-                                    text: root.commonTr("_PlaylistEditView", "Start and end times")
-                                    icon.source: root.picon("media_trim", 13, root.iconHex(root.textMuted))
-                                    onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
-                                    contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
-                                    background: MenuBg { hovered: parent.hovered }
+
+                                Instantiator {
+                                    active: mediaRoot.mediaType === "audio"
+                                            || mediaRoot.mediaType === "video"
+                                    delegate: MenuItem {
+                                        objectName: "mediaItemTrimAction"
+                                        enabled: node && node.trimAvailable !== false
+                                                 && !mediaRoot.isMissing
+                                        text: root.commonTr("_PlaylistEditView", "Start and end times")
+                                        icon.source: root.picon("media_trim", 13, root.iconHex(root.textMuted))
+                                        onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
+                                        contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                                        background: MenuBg { hovered: parent.hovered }
+                                    }
+                                    onObjectAdded: function(index, object) {
+                                        itemMenu.insertItem(0, object)
+                                    }
+                                    onObjectRemoved: function(index, object) {
+                                        itemMenu.removeItem(object)
+                                    }
                                 }
                                 MenuItem {
                                     text: root.commonTr("_WatchedFolderCard", "Rename")
