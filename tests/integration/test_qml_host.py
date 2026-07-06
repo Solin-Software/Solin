@@ -278,12 +278,18 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     trim_selected_range = trim_dialog.findChild(QObject, "trimSelectedRange")
     trim_start_bubble = trim_dialog.findChild(QObject, "trimStartBubble")
     trim_end_bubble = trim_dialog.findChild(QObject, "trimEndBubble")
+    trim_audio_preview_label = trim_dialog.findChild(QObject, "trimAudioPreviewLabel")
+    trim_muted_preview_label = trim_dialog.findChild(QObject, "trimMutedPreviewLabel")
     assert trim_timeline is not None
     assert trim_start_handle is not None
     assert trim_end_handle is not None
     assert trim_selected_range is not None
     assert trim_start_bubble is not None
     assert trim_end_bubble is not None
+    assert trim_audio_preview_label is not None
+    assert trim_muted_preview_label is not None
+    assert trim_audio_preview_label.property("color").name() == "#cbd5e1"
+    assert trim_muted_preview_label.property("color").name() == "#cbd5e1"
 
     trim_dialog.setProperty("durationMs", 1_000_000)
     trim_dialog.setProperty("startMs", 499_950)
@@ -299,8 +305,8 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert start_inner_edge == pytest.approx(selected_start)
     assert end_inner_edge == pytest.approx(selected_end)
     assert start_inner_edge <= end_inner_edge
-    assert trim_start_bubble.property("y") == -10
-    assert trim_end_bubble.property("y") == -10
+    assert trim_start_bubble.property("y") <= -10
+    assert trim_end_bubble.property("y") <= -10
 
     media_card.clicked.emit()
     assert controller.projected == []

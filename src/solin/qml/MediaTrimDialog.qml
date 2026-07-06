@@ -29,6 +29,9 @@ Dialog {
     readonly property real handleWidth: 16
     readonly property real maximumDialogWidth: 820
     readonly property real maximumDialogHeight: 700
+    readonly property color previewSurfaceColor: "#0b0d12"
+    readonly property color previewSurfaceText: "#cbd5e1"
+    readonly property color previewSurfaceWarning: "#f2b84b"
     readonly property bool sourceReady: durationMs > 0 && previewPlayer.seekable
     readonly property bool rangeValid: sourceReady
                                        && startMs >= 0
@@ -442,7 +445,7 @@ Dialog {
                     Layout.minimumHeight: dialog.mediaType === "video" ? 112 : 96
                     Layout.preferredHeight: dialog.mediaType === "video" ? 280 : 150
                     radius: 11
-                    color: "#0b0d12"
+                    color: dialog.previewSurfaceColor
                     border.width: 1
                     border.color: appTheme.border_
                     clip: true
@@ -477,9 +480,10 @@ Dialog {
                             }
                         }
                         Label {
+                            objectName: "trimAudioPreviewLabel"
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: qsTr("Audio preview")
-                            color: appTheme.textSecondary
+                            color: dialog.previewSurfaceText
                             font.pixelSize: 12
                         }
                     }
@@ -509,7 +513,7 @@ Dialog {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.margins: 9
                             text: dialog.preparationError
-                            color: appTheme.warning
+                            color: dialog.previewSurfaceWarning
                             wrapMode: Text.Wrap
                             horizontalAlignment: Text.AlignHCenter
                             font.pixelSize: 11
@@ -529,10 +533,11 @@ Dialog {
 
                         Label {
                             id: mutedLabel
+                            objectName: "trimMutedPreviewLabel"
                             anchors.centerIn: parent
                             width: parent.width - 18
                             text: qsTr("Preview audio is muted while another media item is active.")
-                            color: appTheme.textSecondary
+                            color: dialog.previewSurfaceText
                             font.pixelSize: 10
                             elide: Text.ElideRight
                         }
