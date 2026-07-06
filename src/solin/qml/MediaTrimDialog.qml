@@ -701,9 +701,15 @@ Dialog {
 
                             MouseArea {
                                 id: startDrag
+                                objectName: "trimStartDragArea"
                                 property real grabOffsetX: 0
-                                anchors.fill: parent
-                                anchors.margins: -8
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: -8
+                                anchors.topMargin: -8
+                                anchors.bottomMargin: -8
                                 hoverEnabled: true
                                 cursorShape: Qt.SizeHorCursor
                                 onPressed: function(mouse) {
@@ -747,9 +753,15 @@ Dialog {
 
                             MouseArea {
                                 id: endDrag
+                                objectName: "trimEndDragArea"
                                 property real grabOffsetX: 0
-                                anchors.fill: parent
-                                anchors.margins: -8
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.rightMargin: -8
+                                anchors.topMargin: -8
+                                anchors.bottomMargin: -8
                                 hoverEnabled: true
                                 cursorShape: Qt.SizeHorCursor
                                 onPressed: function(mouse) {

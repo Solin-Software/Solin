@@ -275,6 +275,8 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     trim_timeline = trim_dialog.findChild(QObject, "trimTimeline")
     trim_start_handle = trim_dialog.findChild(QObject, "trimStartHandle")
     trim_end_handle = trim_dialog.findChild(QObject, "trimEndHandle")
+    trim_start_drag_area = trim_dialog.findChild(QObject, "trimStartDragArea")
+    trim_end_drag_area = trim_dialog.findChild(QObject, "trimEndDragArea")
     trim_selected_range = trim_dialog.findChild(QObject, "trimSelectedRange")
     trim_start_bubble = trim_dialog.findChild(QObject, "trimStartBubble")
     trim_end_bubble = trim_dialog.findChild(QObject, "trimEndBubble")
@@ -283,6 +285,8 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert trim_timeline is not None
     assert trim_start_handle is not None
     assert trim_end_handle is not None
+    assert trim_start_drag_area is not None
+    assert trim_end_drag_area is not None
     assert trim_selected_range is not None
     assert trim_start_bubble is not None
     assert trim_end_bubble is not None
@@ -305,6 +309,12 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert start_inner_edge == pytest.approx(selected_start)
     assert end_inner_edge == pytest.approx(selected_end)
     assert start_inner_edge <= end_inner_edge
+    assert (
+        trim_start_drag_area.property("x")
+        + trim_start_drag_area.property("width")
+        <= trim_start_handle.property("width")
+    )
+    assert trim_end_drag_area.property("x") >= 0
     assert trim_start_bubble.property("y") <= -10
     assert trim_end_bubble.property("y") <= -10
 
