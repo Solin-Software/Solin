@@ -333,7 +333,7 @@ Rectangle {
 
                         LanguageChoice {
                             Layout.fillWidth: true
-                            iconName: "book"
+                            iconName: "media_language"
                             title: qsTr("Media language")
                             value: root.draft.mediaName
                             onClicked: languageSheet.openSheet("media", qsTr("Media language"))

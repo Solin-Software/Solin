@@ -1,4 +1,5 @@
 import inspect
+from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QWidget
@@ -284,6 +285,15 @@ def test_settings_widget_uses_language_section_mixin():
         is LanguageSectionMixin._refresh_media_lang_row
     )
     assert SettingsWidget._select_lang is LanguageSectionMixin._select_lang
+
+
+def test_settings_jw_media_language_uses_media_icon():
+    source = Path("src/solin/widgets/settings/language_section.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "ICON_MEDIA_LANGUAGE" in source
+    assert "ICON_BOOK" not in source
 
 
 def test_settings_widget_uses_media_section_mixin():

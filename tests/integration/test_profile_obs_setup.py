@@ -96,6 +96,16 @@ def test_qml_onboarding_manual_download_option_uses_explicit_label_and_icon():
     assert "ICON_MANUAL_DOWNLOAD" in icons_source
 
 
+def test_qml_onboarding_media_language_uses_media_icon():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+    icons_source = Path("src/solin/styles/icons.py").read_text(encoding="utf-8")
+
+    assert 'iconName: "media_language"' in qml_source
+    assert '"media_language": ICON_MEDIA_LANGUAGE' in bridge_source
+    assert "ICON_MEDIA_LANGUAGE" in icons_source
+
+
 def test_qml_onboarding_scene_choice_uses_custom_polished_popup():
     qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
     bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
