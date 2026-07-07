@@ -180,7 +180,7 @@ class OnboardingBridge(QObject):
             self._obs_probe.stop()
             self._state["obsConnected"] = False
             self._state["obsState"] = "idle"
-            self._state["obsStatusText"] = "Not tested"
+            self._state["obsStatusText"] = "Not connected"
         self.stateChanged.emit()
 
     @Slot(str, str)
@@ -373,7 +373,7 @@ class OnboardingBridge(QObject):
             "obsPort": "4455",
             "obsPassword": "",
             "obsState": "idle",
-            "obsStatusText": "Not tested",
+            "obsStatusText": "Not connected",
             "obsConnected": False,
             "obsScenes": [],
             "obsAutomatic": False,

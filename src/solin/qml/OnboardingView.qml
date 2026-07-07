@@ -269,7 +269,7 @@ Rectangle {
                 width: Math.min(parent.width - 72, 620)
                 anchors.centerIn: parent
                 title: qsTr("Welcome to Solin")
-                subtitle: qsTr("Let's prepare a calm, reliable workspace for your meetings.")
+                subtitle: qsTr("Set up a clean, reliable workspace for meetings and media.")
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -315,8 +315,8 @@ Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
                     anchors.topMargin: 20
-                    title: qsTr("Make Solin yours")
-                    subtitle: qsTr("Choose your languages and how meeting media should be prepared.")
+                    title: qsTr("Prepare Solin for your setup")
+                    subtitle: qsTr("Choose languages and decide how meeting media should be handled.")
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -352,7 +352,7 @@ Rectangle {
                                 Layout.fillWidth: true
                                 selected: root.draft.downloadMeetingMedia
                                 iconName: "auto_download"
-                                title: qsTr("Download ahead")
+                                title: qsTr("Download automatically")
                                 subtitle: qsTr("Keep this week and next week available offline.")
                                 onClicked: onboardingBridge.updateField("downloadMeetingMedia", true)
                             }
@@ -362,7 +362,7 @@ Rectangle {
                                 selected: !root.draft.downloadMeetingMedia
                                 iconName: "manual_download"
                                 title: qsTr("Manual download")
-                                subtitle: qsTr("Download only when you click the cloud button.")
+                                subtitle: qsTr("Only download media when you click the cloud button.")
                                 onClicked: onboardingBridge.updateField("downloadMeetingMedia", false)
                             }
                         }
@@ -379,7 +379,7 @@ Rectangle {
             PageColumn {
                 width: Math.min(parent.width - 72, 760)
                 anchors.centerIn: parent
-                title: qsTr("How do you want to use Solin?")
+                title: qsTr("Choose how Solin should help")
                 subtitle: qsTr("Choose one option, both, or set them up later.")
 
                 RowLayout {
@@ -440,7 +440,7 @@ Rectangle {
                     anchors.top: parent.top
                     anchors.topMargin: 14
                     title: qsTr("Connect OBS Studio")
-                    subtitle: qsTr("Solin can control scenes and cameras without changing scenes automatically.")
+                    subtitle: qsTr("Use OBS scenes and cameras from Solin. Automatic switching is optional.")
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -523,7 +523,7 @@ Rectangle {
                                         Layout.fillWidth: true
                                         spacing: 3
                                         Text {
-                                            text: qsTr("Switch to the media scene automatically")
+                                            text: qsTr("Automatic scene switching")
                                             color: root.textPrimary
                                             font.pixelSize: 13
                                             font.weight: Font.DemiBold
@@ -588,8 +588,8 @@ Rectangle {
             PageColumn {
                 width: Math.min(parent.width - 72, 700)
                 anchors.centerIn: parent
-                title: qsTr("Automatic sharing in Zoom")
-                subtitle: qsTr("Record Zoom's share shortcut, then choose where Solin should click.")
+                title: qsTr("Set up Zoom sharing")
+                subtitle: qsTr("Record the share shortcut and choose the click target Solin should use.")
 
                 ColumnLayout {
                     Layout.fillWidth: true

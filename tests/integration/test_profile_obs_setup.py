@@ -125,8 +125,53 @@ def test_qml_onboarding_obs_action_uses_connect_language():
 
     assert 'qsTr("Connect")' in qml_source
     assert "Test connection" not in qml_source
+    assert "Not connected" in bridge_source
+    assert "Not tested" not in bridge_source
     assert "Connect to OBS or choose Set up later." in bridge_source
     assert "Test the OBS connection" not in bridge_source
+
+
+def test_qml_onboarding_copy_stays_operational_and_evergreen():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+
+    assert 'qsTr("Set up a clean, reliable workspace for meetings and media.")' in qml_source
+    assert 'qsTr("Prepare Solin for your setup")' in qml_source
+    assert (
+        'qsTr("Choose languages and decide how meeting media should be handled.")'
+        in qml_source
+    )
+    assert 'qsTr("Download automatically")' in qml_source
+    assert (
+        'qsTr("Only download media when you click the cloud button.")'
+        in qml_source
+    )
+    assert 'qsTr("Choose how Solin should help")' in qml_source
+    assert (
+        'qsTr("Use OBS scenes and cameras from Solin. Automatic switching is optional.")'
+        in qml_source
+    )
+    assert 'qsTr("Automatic scene switching")' in qml_source
+    assert 'qsTr("Set up Zoom sharing")' in qml_source
+    assert (
+        'qsTr("Record the share shortcut and choose the click target Solin should use.")'
+        in qml_source
+    )
+
+    assert 'qsTr("Each profile keeps its own settings and playlists.")' in qml_source
+    assert (
+        'qsTr("Keep this week and next week available offline.")'
+        in qml_source
+    )
+    assert 'qsTr("Choose one option, both, or set them up later.")' in qml_source
+    assert 'qsTr("Everything looks ready")' in qml_source
+    assert (
+        'qsTr("Review your choices. You can change them later in Settings.")'
+        in qml_source
+    )
+
+    assert "Make Solin yours" not in qml_source
+    assert "Download ahead" not in qml_source
+    assert "How do you want to use Solin?" not in qml_source
 
 
 def test_qml_onboarding_obs_help_link_opens_setup_guide():
