@@ -490,6 +490,14 @@ Rectangle {
                             text: root.draft.obsStatusText
                         }
 
+                        TextButton {
+                            Layout.alignment: Qt.AlignLeft
+                            Layout.topMargin: -6
+                            iconName: "book"
+                            text: qsTr("Need help setting up OBS?")
+                            onClicked: onboardingBridge.openObsSetupGuide()
+                        }
+
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: autoContent.implicitHeight + 28

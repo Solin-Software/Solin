@@ -50,6 +50,7 @@ _PAGE_INTEGRATIONS = "integrations"
 _PAGE_OBS = "obs"
 _PAGE_ZOOM = "zoom"
 _PAGE_REVIEW = "review"
+_OBS_SETUP_GUIDE_URL = "https://solinav.vercel.app/guide/#obs-studio-integration"
 
 
 class OnboardingBridge(QObject):
@@ -341,6 +342,10 @@ class OnboardingBridge(QObject):
                 "?Privacy_Accessibility"
             )
         )
+
+    @Slot()
+    def openObsSetupGuide(self) -> None:  # noqa: N802 - QML API
+        QDesktopServices.openUrl(QUrl(_OBS_SETUP_GUIDE_URL))
 
     def _reset_state(self, profile_name: str, *, allow_cancel: bool) -> None:
         interface_code = (
