@@ -1,13 +1,15 @@
-"""Multi-monitor picker for a target inside Zoom's share dialog."""
+"""Desktop overlay for configuring the automatic share click position."""
 
 from __future__ import annotations
 
 import logging
+import sys
+
+from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import (
     QEasingCurve,
     QPoint,
     QPropertyAnimation,
-    QRect,
     Qt,
     QTimer,
     Signal,
@@ -18,12 +20,7 @@ from PySide6.QtGui import (
     QGuiApplication,
     QPainter,
     QPen,
-)
-from PySide6.QtWidgets import QWidget
-
-from ..core.integrations.automation.screen_share import (
-    automation_pointer_position,
-    find_zoom_share_dialog_bounds_at_point,
+    QScreen,
 )
 
 log = logging.getLogger(__name__)
@@ -40,23 +37,16 @@ _FADE_OUT_MS      = 600            # fade-out animation duration
 _CLOSE_DELAY_MS   = 1000           # delay before starting fade-out after click
 
 
-def _united_screen_geometry(geometries: list[QRect]) -> QRect:
-    if not geometries:
-        return QRect()
-    desktop = QRect(geometries[0])
-    for geometry in geometries[1:]:
-        desktop = desktop.united(geometry)
-    return desktop
-
-
 class ScreenPickerOverlay(QWidget):
-    """Desktop-wide overlay that emits a dialog-relative Zoom share target."""
+    """Fullscreen overlay on the primary monitor."""
 
-    target_picked = Signal(float, float)
+    position_picked = Signal(int, int)
     cancelled = Signal()
 
     def __init__(
         self,
+        current_x: int = -1,
+        current_y: int = -1,
         parent: QWidget | None = None,
     ):
         super().__init__(
@@ -77,6 +67,8 @@ class ScreenPickerOverlay(QWidget):
         self._picked = False
         self._cancelled_emitted = False
         self._error_message = ""
+        if current_x >= 0 and current_y >= 0:
+            self._marker_pos = QPoint(current_x, current_y)
 
         # Fade-out timer
         self._close_timer = QTimer(self)
@@ -89,19 +81,17 @@ class ScreenPickerOverlay(QWidget):
         self._fade_anim.setEasingCurve(QEasingCurve.Type.InQuad)
         self._fade_anim.finished.connect(self.close)
 
-        # One logical overlay spans the complete Qt virtual desktop.
+        # Position on primary screen.
         self._setup_geometry()
 
     # ── Setup ─────────────────────────────────────────────────────────────
 
     def _setup_geometry(self):
-        """Cover every connected screen, including negative desktop origins."""
-        screens = QGuiApplication.screens()
-        if not screens:
+        """Cover the primary screen entirely."""
+        screen: QScreen | None = QGuiApplication.primaryScreen()
+        if screen is None:
             return
-        self.setGeometry(
-            _united_screen_geometry([screen.geometry() for screen in screens])
-        )
+        self.setGeometry(screen.geometry())
 
     # ── Paint ─────────────────────────────────────────────────────────────
 
@@ -122,7 +112,7 @@ class ScreenPickerOverlay(QWidget):
         p.drawText(
             hint_rect,
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-            self.tr("Click the Solin Media Preview tile in Zoom's share dialog"),
+            self.tr("Click on the share target position"),
         )
 
         # 3) ESC hint
@@ -188,33 +178,10 @@ class ScreenPickerOverlay(QWidget):
 
         if event.button() == Qt.MouseButton.LeftButton:
             global_pos = self.mapToGlobal(event.position().toPoint())
-            target_x, target_y = automation_pointer_position(
-                global_pos.x(),
-                global_pos.y(),
-            )
-            bounds = find_zoom_share_dialog_bounds_at_point(
-                target_x,
-                target_y,
-            )
-            if bounds is None:
-                self._error_message = self.tr(
-                    "That point is not inside a visible Zoom share dialog"
-                )
-                self.update()
-                event.accept()
-                return
-
-            left, top, width, height = bounds
-            if width <= 1 or height <= 1:
-                event.accept()
-                return
-
-            x_ratio = (target_x - left) / (width - 1)
-            y_ratio = (target_y - top) / (height - 1)
             self._marker_pos = global_pos
             self._picked = True
             self._error_message = ""
-            self.target_picked.emit(x_ratio, y_ratio)
+            self.position_picked.emit(global_pos.x(), global_pos.y())
             self.update()
             self._close_timer.start(_CLOSE_DELAY_MS)
 
@@ -244,8 +211,11 @@ class ScreenPickerOverlay(QWidget):
     # ── Public API ────────────────────────────────────────────────────────
 
     def show_overlay(self):
-        """Show the overlay across the complete virtual desktop."""
+        """Show the overlay covering the primary screen."""
         self.setWindowOpacity(1.0)
-        self.show()
+        if sys.platform == "darwin":
+            self.show()
+        else:
+            self.showFullScreen()
         self.raise_()
         self.activateWindow()

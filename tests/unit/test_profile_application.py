@@ -268,26 +268,25 @@ def test_automatic_obs_configuration_requires_obs():
 
 
 @pytest.mark.parametrize(
-    ("hotkey", "x_ratio", "y_ratio", "message"),
+    ("hotkey", "click_x", "click_y", "message"),
     [
-        ("", 0.5, 0.5, "requires a hotkey"),
-        ("Ctrl+Shift+S", -0.1, 0.5, "requires a share target"),
-        ("Ctrl+Shift+S", 0.5, 1.1, "requires a share target"),
-        ("Ctrl+Shift+S", float("nan"), 0.5, "requires a share target"),
+        ("", 300, 250, "requires a hotkey"),
+        ("Ctrl+Shift+S", -1, 250, "requires a share target"),
+        ("Ctrl+Shift+S", 300, -1, "requires a share target"),
     ],
 )
 def test_enabled_zoom_share_configuration_requires_hotkey_and_valid_target(
     hotkey,
-    x_ratio,
-    y_ratio,
+    click_x,
+    click_y,
     message,
 ):
     with pytest.raises(ValueError, match=message):
         ZoomShareOnboardingConfiguration(
             enabled=True,
             hotkey=hotkey,
-            target_x_ratio=x_ratio,
-            target_y_ratio=y_ratio,
+            click_x=click_x,
+            click_y=click_y,
         )
 
 
@@ -295,8 +294,8 @@ def test_zoom_share_configuration_normalizes_hotkey():
     configuration = ZoomShareOnboardingConfiguration(
         enabled=True,
         hotkey="  Ctrl+Shift+S  ",
-        target_x_ratio=0.0,
-        target_y_ratio=1.0,
+        click_x=300,
+        click_y=250,
     )
 
     assert configuration.hotkey == "Ctrl+Shift+S"

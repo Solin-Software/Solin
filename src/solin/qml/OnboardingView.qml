@@ -360,9 +360,9 @@ Rectangle {
                             CompactChoice {
                                 Layout.fillWidth: true
                                 selected: !root.draft.downloadMeetingMedia
-                                iconName: "share"
-                                title: qsTr("Download when used")
-                                subtitle: qsTr("Save storage and network usage for now.")
+                                iconName: "manual_download"
+                                title: qsTr("Manual download")
+                                subtitle: qsTr("Download only when you click the cloud button.")
                                 onClicked: onboardingBridge.updateField("downloadMeetingMedia", false)
                             }
                         }
@@ -533,7 +533,7 @@ Rectangle {
 
                                     AppToggle {
                                         checked: root.draft.obsAutomatic
-                                        onToggled: onboardingBridge.updateField("obsAutomatic", checked)
+                                        onToggled: checked => onboardingBridge.updateField("obsAutomatic", checked)
                                     }
                                 }
 
@@ -547,7 +547,7 @@ Rectangle {
                                         label: qsTr("Default scene")
                                         value: root.draft.obsDefaultScene
                                         model: root.draft.obsScenes
-                                        onSelected: onboardingBridge.updateField("obsDefaultScene", value)
+                                        onSelected: value => onboardingBridge.updateField("obsDefaultScene", value)
                                     }
 
                                     SceneChoice {
@@ -555,7 +555,7 @@ Rectangle {
                                         label: qsTr("Media scene")
                                         value: root.draft.obsMediaScene
                                         model: root.draft.obsScenes
-                                        onSelected: onboardingBridge.updateField("obsMediaScene", value)
+                                        onSelected: value => onboardingBridge.updateField("obsMediaScene", value)
                                     }
                                 }
                             }
@@ -581,7 +581,7 @@ Rectangle {
                 width: Math.min(parent.width - 72, 700)
                 anchors.centerIn: parent
                 title: qsTr("Automatic sharing in Zoom")
-                subtitle: qsTr("Record Zoom's share shortcut, then choose the target in its share dialog.")
+                subtitle: qsTr("Record Zoom's share shortcut, then choose where Solin should click.")
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -598,32 +598,52 @@ Rectangle {
                         complete: root.draft.zoomHotkey !== ""
 
                         FocusScope {
+                            id: hotkeyCapture
+
+                            property bool recording: false
+
                             width: 148
                             height: 42
                             activeFocusOnTab: true
+                            onActiveFocusChanged: {
+                                if (!activeFocus)
+                                    recording = false
+                            }
 
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 9
-                                color: parent.activeFocus ? root.accentTint : appTheme.surfaceAlt
+                                color: hotkeyCapture.recording ? root.accentTint : appTheme.surfaceAlt
                                 border.width: 1
-                                border.color: parent.activeFocus ? root.accent : appTheme.border
+                                border.color: hotkeyCapture.recording ? root.accent : appTheme.border
                             }
                             Text {
                                 anchors.centerIn: parent
-                                text: root.draft.zoomHotkey || qsTr("Record shortcut")
-                                color: parent.parent.activeFocus ? appTheme.accentText : root.textSecondary
+                                text: hotkeyCapture.recording
+                                      ? qsTr("Press shortcut")
+                                      : (root.draft.zoomHotkey || qsTr("Record shortcut"))
+                                color: hotkeyCapture.recording ? appTheme.accentText : root.textSecondary
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
                             }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: parent.forceActiveFocus()
+                                onClicked: {
+                                    hotkeyCapture.recording = true
+                                    hotkeyCapture.forceActiveFocus()
+                                }
                             }
                             Keys.onPressed: event => {
-                                onboardingBridge.captureHotkey(event.key, event.modifiers)
-                                event.accepted = true
+                                if (!hotkeyCapture.recording) {
+                                    event.accepted = false
+                                } else {
+                                    if (onboardingBridge.captureHotkey(event.key, event.modifiers)) {
+                                        hotkeyCapture.recording = false
+                                        root.forceActiveFocus()
+                                    }
+                                    event.accepted = true
+                                }
                             }
                         }
                     }
@@ -634,7 +654,7 @@ Rectangle {
                         title: qsTr("Share target")
                         subtitle: root.draft.zoomTargetConfigured
                                   ? qsTr("Target configured")
-                                  : qsTr("Open Zoom's share dialog, then choose the screen tile.")
+                                  : qsTr("Choose the click position on your primary monitor.")
                         complete: root.draft.zoomTargetConfigured
 
                         SecondaryButton {
@@ -682,7 +702,7 @@ Rectangle {
                         iconName: "auto_download"
                         title: qsTr("Meeting media")
                         value: root.draft.downloadMeetingMedia
-                               ? qsTr("This week and next week") : qsTr("Download when used")
+                               ? qsTr("This week and next week") : qsTr("Manual download")
                     }
                     ReviewLine {
                         iconName: "obs"
@@ -1334,47 +1354,81 @@ Rectangle {
                     Layout.fillWidth: true
                     placeholderText: qsTr("Search languages")
                 }
-                ScrollView {
+                ListView {
+                    id: languageList
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    Column {
-                        width: parent.width
-                        spacing: 4
-                        Repeater {
-                            model: sheet.filteredItems()
-                            Rectangle {
-                                required property var modelData
-                                width: parent.width
-                                height: 48
-                                radius: 8
-                                color: languageItemMouse.containsMouse ? appTheme.hover : "transparent"
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: modelData.name || modelData.code
-                                        color: root.textPrimary
-                                        font.pixelSize: 12
-                                    }
-                                    Text {
-                                        text: modelData.secondary || modelData.code
-                                        color: root.textMuted
-                                        font.pixelSize: 10
-                                    }
-                                }
-                                MouseArea {
-                                    id: languageItemMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        onboardingBridge.chooseLanguage(sheet.kind, modelData.code)
-                                        sheet.visible = false
-                                    }
-                                }
+                    spacing: 4
+                    boundsBehavior: Flickable.StopAtBounds
+                    flickableDirection: Flickable.VerticalFlick
+                    model: sheet.filteredItems()
+                    rightMargin: 14
+                    ScrollBar.vertical: ScrollBar {
+                        id: languageScrollBar
+                        policy: ScrollBar.AsNeeded
+                        width: 8
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            color: (languageScrollBar.active || languageScrollBar.hovered)
+                                   ? root.textMuted : root.borderColor
+                            opacity: (languageScrollBar.active
+                                      || languageScrollBar.hovered
+                                      || languageList.moving) ? 1.0 : 0.35
+                            anchors.horizontalCenter: parent.horizontalCenter
+
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            Behavior on opacity { NumberAnimation { duration: 180 } }
+                        }
+                    }
+
+                    delegate: Rectangle {
+                        id: languageItem
+
+                        required property var modelData
+
+                        width: Math.max(0, languageList.width - languageList.rightMargin)
+                        height: 58
+                        radius: 8
+                        color: languageHover.hovered ? appTheme.hover : "transparent"
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 18
+                            anchors.topMargin: 8
+                            anchors.bottomMargin: 8
+                            spacing: 2
+                            Text {
+                                Layout.fillWidth: true
+                                text: languageItem.modelData.name || languageItem.modelData.code
+                                color: root.textPrimary
+                                font.pixelSize: 12
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: languageItem.modelData.secondary || languageItem.modelData.code
+                                color: root.textMuted
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        HoverHandler {
+                            id: languageHover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+
+                        TapHandler {
+                            gesturePolicy: TapHandler.ReleaseWithinBounds
+                            onTapped: {
+                                onboardingBridge.chooseLanguage(
+                                    sheet.kind,
+                                    languageItem.modelData.code
+                                )
+                                sheet.visible = false
                             }
                         }
                     }

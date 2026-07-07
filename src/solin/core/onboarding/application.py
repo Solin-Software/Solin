@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import isfinite
 from typing import Protocol
 
 from solin.core.profiles.models import ProfileInfo, normalize_profile_name
@@ -38,19 +37,14 @@ class OBSOnboardingConfiguration:
 class ZoomShareOnboardingConfiguration:
     enabled: bool = False
     hotkey: str = ""
-    target_x_ratio: float = -1.0
-    target_y_ratio: float = -1.0
+    click_x: int = -1
+    click_y: int = -1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "hotkey", self.hotkey.strip())
         if self.enabled and not self.hotkey:
             raise ValueError("Automatic Zoom sharing requires a hotkey.")
-        if self.enabled and not (
-            isfinite(self.target_x_ratio)
-            and isfinite(self.target_y_ratio)
-            and 0.0 <= self.target_x_ratio <= 1.0
-            and 0.0 <= self.target_y_ratio <= 1.0
-        ):
+        if self.enabled and (self.click_x < 0 or self.click_y < 0):
             raise ValueError("Automatic Zoom sharing requires a share target.")
 
 

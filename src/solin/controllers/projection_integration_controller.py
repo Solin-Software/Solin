@@ -37,7 +37,7 @@ class ProjectionIntegrationContext:
     auto_share_settings: Any
     projection_bar: Any
     auto_share_finished: Callable[[int, bool, bool], None]
-    start_auto_share: Callable[[str, float, float], bool]
+    start_auto_share: Callable[[str, int, int], bool]
     stop_auto_share: Callable[[str], bool]
     raise_projection_window: Callable[[Any], None]
     auto_share_workers: AutoShareWorkerPool
@@ -154,15 +154,13 @@ class ProjectionIntegrationController:
         generation = self._auto_share_generation
 
         if should_share:
-            target_x_ratio, target_y_ratio = (
-                context.auto_share_settings.target_position()
-            )
+            click_x, click_y = context.auto_share_settings.click_position()
 
             def _run_start_share():
                 ok = context.start_auto_share(
                     hotkey,
-                    target_x_ratio,
-                    target_y_ratio,
+                    click_x,
+                    click_y,
                 )
                 if not context.auto_share_workers.is_stopped:
                     try:

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Protocol
 
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
-from solin.core.foundation.settings_keys import SettingsKey, _LegacySettingsKey
+from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
@@ -19,33 +18,6 @@ def _as_int(value: object, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
-
-
-def _as_float(value: object, default: float) -> float:
-    if not isinstance(value, (str, bytes, bytearray, int, float)):
-        return default
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return default
-    return result if math.isfinite(result) else default
-
-
-_UNCONFIGURED_TARGET = (-1.0, -1.0)
-
-
-def _valid_target_position(x_ratio: float, y_ratio: float) -> bool:
-    return 0.0 <= x_ratio <= 1.0 and 0.0 <= y_ratio <= 1.0
-
-
-def _legacy_target_dialog_bounds(x: int, y: int) -> tuple[int, int, int, int] | None:
-    from .screen_share import find_zoom_share_dialog_bounds_at_point
-
-    return find_zoom_share_dialog_bounds_at_point(
-        x,
-        y,
-        require_identified_dialog=True,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,95 +175,24 @@ class AutoShareSettingsStore(_ProfilePrefsSettings):
         self.settings.sync()
 
     def is_configured(self) -> bool:
-        return self.is_enabled() and bool(self.hotkey()) and self.has_target_position()
+        x, y = self.click_position()
+        return self.is_enabled() and bool(self.hotkey()) and x >= 0 and y >= 0
 
-    def target_position(self) -> tuple[float, float]:
-        x_ratio = _as_float(
-            self.settings.value(SettingsKey.SHARE_TARGET_X_RATIO, -1.0),
-            -1.0,
+    def click_position(self) -> tuple[int, int]:
+        return (
+            _as_int(self.settings.value(SettingsKey.SHARE_CLICK_X, -1, int), -1),
+            _as_int(self.settings.value(SettingsKey.SHARE_CLICK_Y, -1, int), -1),
         )
-        y_ratio = _as_float(
-            self.settings.value(SettingsKey.SHARE_TARGET_Y_RATIO, -1.0),
-            -1.0,
-        )
-        if _valid_target_position(x_ratio, y_ratio):
-            self._remove_legacy_target_keys()
-            return x_ratio, y_ratio
-        return self._migrate_legacy_target_position()
 
-    def has_target_position(self) -> bool:
-        return _valid_target_position(*self.target_position())
+    def has_click_position(self) -> bool:
+        x, y = self.click_position()
+        return x >= 0 and y >= 0
 
-    def set_target_position(self, x_ratio: float, y_ratio: float) -> None:
-        x_ratio = float(x_ratio)
-        y_ratio = float(y_ratio)
-        if not _valid_target_position(x_ratio, y_ratio):
-            raise ValueError("Share target ratios must be finite values between 0 and 1")
-        self.settings.set_value(
-            SettingsKey.SHARE_TARGET_X_RATIO,
-            x_ratio,
-            sync=False,
-        )
-        self.settings.set_value(
-            SettingsKey.SHARE_TARGET_Y_RATIO,
-            y_ratio,
-            sync=False,
-        )
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_X, sync=False)
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_Y, sync=False)
-        self.settings.sync()
-
-    def _migrate_legacy_target_position(self) -> tuple[float, float]:
-        keys = self.settings.all_keys()
-        if (
-            _LegacySettingsKey.SHARE_CLICK_X not in keys
-            and _LegacySettingsKey.SHARE_CLICK_Y not in keys
-        ):
-            return _UNCONFIGURED_TARGET
-
-        x = _as_int(self.settings.value(_LegacySettingsKey.SHARE_CLICK_X, -1), -1)
-        y = _as_int(self.settings.value(_LegacySettingsKey.SHARE_CLICK_Y, -1), -1)
-        bounds = _legacy_target_dialog_bounds(x, y) if x >= 0 and y >= 0 else None
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_X, sync=False)
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_Y, sync=False)
-
-        if bounds is None:
-            self.settings.sync()
-            return _UNCONFIGURED_TARGET
-
-        left, top, width, height = bounds
-        if width <= 1 or height <= 1:
-            self.settings.sync()
-            return _UNCONFIGURED_TARGET
-
-        x_ratio = (x - left) / (width - 1)
-        y_ratio = (y - top) / (height - 1)
-        if not _valid_target_position(x_ratio, y_ratio):
-            self.settings.sync()
-            return _UNCONFIGURED_TARGET
-
-        self.settings.set_value(
-            SettingsKey.SHARE_TARGET_X_RATIO,
-            x_ratio,
-            sync=False,
-        )
-        self.settings.set_value(
-            SettingsKey.SHARE_TARGET_Y_RATIO,
-            y_ratio,
-            sync=False,
-        )
-        self.settings.sync()
-        return x_ratio, y_ratio
-
-    def _remove_legacy_target_keys(self) -> None:
-        keys = self.settings.all_keys()
-        if (
-            _LegacySettingsKey.SHARE_CLICK_X not in keys
-            and _LegacySettingsKey.SHARE_CLICK_Y not in keys
-        ):
-            return
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_X, sync=False)
-        self.settings.remove(_LegacySettingsKey.SHARE_CLICK_Y, sync=False)
+    def set_click_position(self, x: int, y: int) -> None:
+        if x < 0 or y < 0:
+            raise ValueError("Share click position must use non-negative coordinates")
+        self.settings.set_value(SettingsKey.SHARE_CLICK_X, int(x), sync=False)
+        self.settings.set_value(SettingsKey.SHARE_CLICK_Y, int(y), sync=False)
         self.settings.sync()
 
 

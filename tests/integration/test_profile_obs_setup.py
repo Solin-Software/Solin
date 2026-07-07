@@ -1,6 +1,27 @@
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+
 from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
+from solin.ui.qml.onboarding import OnboardingBridge
+
+
+class _Signal:
+    def connect(self, _slot):
+        return None
+
+
+class _OnboardingProbe:
+    state_changed = _Signal()
+    scenes_updated = _Signal()
+
+
+def _bridge() -> OnboardingBridge:
+    return OnboardingBridge(
+        language_manager=None,
+        onboarding_service=object(),
+        obs_probe=_OnboardingProbe(),
+    )
 
 
 def test_profile_screen_hosts_qml_onboarding_instead_of_legacy_obs_mixin():
@@ -22,6 +43,121 @@ def test_qml_onboarding_does_not_construct_obs_services_directly():
     source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
 
     assert "OBSWebSocketService" not in source
+
+
+def test_qml_onboarding_host_tracks_mouse_for_hover_and_cursor_state():
+    source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+
+    assert "configure_qml_host(" in source
+    assert "mouse_tracking=True" in source
+
+
+def test_qml_onboarding_signal_handlers_use_formal_parameters():
+    source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+
+    assert 'onToggled: checked => onboardingBridge.updateField("obsAutomatic", checked)' in source
+    assert 'onSelected: value => onboardingBridge.updateField("obsDefaultScene", value)' in source
+    assert 'onSelected: value => onboardingBridge.updateField("obsMediaScene", value)' in source
+    assert 'onToggled: onboardingBridge.updateField("obsAutomatic", checked)' not in source
+    assert 'onSelected: onboardingBridge.updateField("obsDefaultScene", value)' not in source
+    assert 'onSelected: onboardingBridge.updateField("obsMediaScene", value)' not in source
+
+
+def test_qml_onboarding_hotkey_capture_is_explicit_and_one_shot():
+    source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+
+    assert "property bool recording: false" in source
+    assert "onboardingBridge.captureHotkey(event.key, event.modifiers)" in source
+    assert "hotkeyCapture.recording = false" in source
+    assert "root.forceActiveFocus()" in source
+
+
+def test_qml_onboarding_language_sheet_uses_flickable_list_handlers():
+    source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+
+    assert "id: languageList" in source
+    assert "TapHandler" in source
+    assert "HoverHandler" in source
+    assert "id: languageScrollBar" in source
+    assert "opacity: (languageScrollBar.active" in source
+    assert "root.borderStrong" not in source
+    assert "id: languageScroll\n" not in source
+
+
+def test_qml_onboarding_manual_download_option_uses_explicit_label_and_icon():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+    icons_source = Path("src/solin/styles/icons.py").read_text(encoding="utf-8")
+
+    assert 'iconName: "manual_download"' in qml_source
+    assert 'title: qsTr("Manual download")' in qml_source
+    assert "Download when used" not in qml_source
+    assert '"manual_download": ICON_MANUAL_DOWNLOAD' in bridge_source
+    assert "ICON_MANUAL_DOWNLOAD" in icons_source
+
+
+def test_onboarding_hotkey_capture_reports_only_complete_shortcuts():
+    bridge = _bridge()
+
+    assert bridge.captureHotkey(int(Qt.Key.Key_Control), 0) is False
+    assert bridge.state["zoomHotkey"] == ""
+
+    modifiers = int(
+        Qt.KeyboardModifier.ControlModifier.value
+        | Qt.KeyboardModifier.ShiftModifier.value
+    )
+    assert bridge.captureHotkey(int(Qt.Key.Key_S), modifiers) is True
+    assert bridge.state["zoomHotkey"] == "Ctrl+Shift+S"
+
+
+def test_onboarding_keeps_target_picker_alive_after_pick_for_marker_feedback():
+    bridge = _bridge()
+    picker = object()
+    bridge._target_picker = picker
+
+    bridge._on_target_picked(300, 250)
+
+    assert bridge._target_picker is picker
+    assert bridge.state["zoomTargetConfigured"] is True
+
+
+def test_onboarding_target_picker_receives_current_saved_position():
+    captured = {}
+
+    class _PickerSignal:
+        def connect(self, slot):
+            self.slot = slot
+
+    class _Picker:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.position_picked = _PickerSignal()
+            self.destroyed = _PickerSignal()
+            self.cancelled = _PickerSignal()
+            self.shown = False
+
+        def show_overlay(self):
+            self.shown = True
+
+    def _picker_factory(**kwargs):
+        return _Picker(**kwargs)
+
+    bridge = OnboardingBridge(
+        language_manager=None,
+        onboarding_service=object(),
+        obs_probe=_OnboardingProbe(),
+        target_picker_factory=_picker_factory,
+    )
+    bridge._state["zoomAvailable"] = True
+    bridge._state["zoomTargetConfigured"] = True
+    bridge._state["zoomClickX"] = 300
+    bridge._state["zoomClickY"] = 250
+
+    bridge.configureZoomTarget()
+
+    assert captured["current_x"] == 300
+    assert captured["current_y"] == 250
+    assert captured["parent"] is None
 
 
 def test_onboarding_obs_probe_receives_obs_service_factory():

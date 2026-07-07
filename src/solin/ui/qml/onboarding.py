@@ -29,6 +29,7 @@ from solin.styles.icons import (
     ICON_BOOK,
     ICON_CLOSE,
     ICON_CROSSHAIR,
+    ICON_MANUAL_DOWNLOAD,
     ICON_NAV_BROWSER,
     ICON_OBS,
     ICON_PLUG,
@@ -73,6 +74,7 @@ class OnboardingBridge(QObject):
         self._obs_probe = obs_probe
         self._target_picker_factory = target_picker_factory
         self._target_picker: Any | None = None
+        self._target_picker_token = 0
         self._history: list[str] = []
         self._session_revision = 0
         self._original_language = "en"
@@ -274,8 +276,8 @@ class OnboardingBridge(QObject):
         self.stateChanged.emit()
         self._obs_probe.connect_to(port, str(self._state["obsPassword"]))
 
-    @Slot(int, int)
-    def captureHotkey(self, key: int, modifiers: int) -> None:  # noqa: N802 - QML API
+    @Slot(int, int, result=bool)
+    def captureHotkey(self, key: int, modifiers: int) -> bool:  # noqa: N802 - QML API
         ignored = {
             int(Qt.Key.Key_Control),
             int(Qt.Key.Key_Shift),
@@ -284,15 +286,16 @@ class OnboardingBridge(QObject):
             int(Qt.Key.Key_unknown),
         }
         if key in ignored:
-            return
+            return False
         sequence = QKeySequence(modifiers | key).toString(
             QKeySequence.SequenceFormat.PortableText
         )
         if not sequence:
-            return
+            return False
         self._state["zoomHotkey"] = sequence
         self._state["errorText"] = ""
         self.stateChanged.emit()
+        return True
 
     @Slot()
     def configureZoomTarget(self) -> None:  # noqa: N802 - QML API
@@ -305,9 +308,24 @@ class OnboardingBridge(QObject):
             self.stateChanged.emit()
             return
         self._close_target_picker()
-        picker = self._target_picker_factory(parent=None)
+        self._target_picker_token += 1
+        token = self._target_picker_token
+        current_x = -1
+        current_y = -1
+        if self._state["zoomTargetConfigured"]:
+            current_x = int(self._state["zoomClickX"])
+            current_y = int(self._state["zoomClickY"])
+        picker = self._target_picker_factory(
+            current_x=current_x,
+            current_y=current_y,
+            parent=None,
+        )
         self._target_picker = picker
-        picker.target_picked.connect(self._on_target_picked)
+        picker.position_picked.connect(self._on_target_picked)
+        if hasattr(picker, "destroyed"):
+            picker.destroyed.connect(
+                lambda _obj=None, token=token: self._on_target_picker_destroyed(token)
+            )
         if hasattr(picker, "cancelled"):
             picker.cancelled.connect(self._on_target_picker_cancelled)
         picker.show_overlay()
@@ -361,8 +379,8 @@ class OnboardingBridge(QObject):
             ),
             "zoomHotkey": "",
             "zoomTargetConfigured": False,
-            "zoomTargetXRatio": -1.0,
-            "zoomTargetYRatio": -1.0,
+            "zoomClickX": -1,
+            "zoomClickY": -1,
             "busy": False,
             "errorText": "",
         }
@@ -449,8 +467,8 @@ class OnboardingBridge(QObject):
                     zoom_share=ZoomShareOnboardingConfiguration(
                         enabled=zoom_enabled,
                         hotkey=str(self._state["zoomHotkey"]),
-                        target_x_ratio=float(self._state["zoomTargetXRatio"]),
-                        target_y_ratio=float(self._state["zoomTargetYRatio"]),
+                        click_x=int(self._state["zoomClickX"]),
+                        click_y=int(self._state["zoomClickY"]),
                     ),
                 )
             )
@@ -495,19 +513,23 @@ class OnboardingBridge(QObject):
                 self._state[field] = ""
         self.stateChanged.emit()
 
-    def _on_target_picked(self, x_ratio: float, y_ratio: float) -> None:
-        self._state["zoomTargetXRatio"] = float(x_ratio)
-        self._state["zoomTargetYRatio"] = float(y_ratio)
+    def _on_target_picked(self, x: int, y: int) -> None:
+        self._state["zoomClickX"] = int(x)
+        self._state["zoomClickY"] = int(y)
         self._state["zoomTargetConfigured"] = True
         self._state["errorText"] = ""
-        self._target_picker = None
         self.stateChanged.emit()
 
     def _on_target_picker_cancelled(self) -> None:
         self._target_picker = None
 
+    def _on_target_picker_destroyed(self, token: int) -> None:
+        if token == self._target_picker_token:
+            self._target_picker = None
+
     def _close_target_picker(self) -> None:
         picker, self._target_picker = self._target_picker, None
+        self._target_picker_token += 1
         if picker is not None:
             picker.close()
 
@@ -589,6 +611,7 @@ class OnboardingQmlHost(QQuickWidget):
             "close": ICON_CLOSE,
             "crosshair": ICON_CROSSHAIR,
             "interface": ICON_NAV_BROWSER,
+            "manual_download": ICON_MANUAL_DOWNLOAD,
             "obs": ICON_OBS,
             "plug": ICON_PLUG,
             "share": ICON_SHARE_SCREEN,
@@ -605,6 +628,7 @@ class OnboardingQmlHost(QQuickWidget):
                     default_icon="interface",
                 )
             },
+            mouse_tracking=True,
         )
         if language_manager is not None:
             language_manager.language_changed.connect(

@@ -55,7 +55,7 @@ class _AutoShareSettings:
     def __init__(self) -> None:
         self.enabled = False
         self.hotkey = ""
-        self.target_position = None
+        self.click_position = None
 
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
@@ -63,8 +63,8 @@ class _AutoShareSettings:
     def set_hotkey(self, hotkey: str) -> None:
         self.hotkey = hotkey
 
-    def set_target_position(self, x_ratio: float, y_ratio: float) -> None:
-        self.target_position = (x_ratio, y_ratio)
+    def set_click_position(self, x: int, y: int) -> None:
+        self.click_position = (x, y)
 
 
 def test_qsettings_onboarding_settings_uses_injected_profile_stores():
@@ -106,8 +106,8 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
             zoom_share=ZoomShareOnboardingConfiguration(
                 enabled=True,
                 hotkey="Ctrl+Shift+S",
-                target_x_ratio=0.25,
-                target_y_ratio=0.75,
+                click_x=300,
+                click_y=250,
             ),
         ),
     )
@@ -121,7 +121,7 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
     assert obs_settings.scenes == ("Default", "Media")
     assert auto_share_settings.enabled is True
     assert auto_share_settings.hotkey == "Ctrl+Shift+S"
-    assert auto_share_settings.target_position == (0.25, 0.75)
+    assert auto_share_settings.click_position == (300, 250)
 
 
 def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
@@ -157,4 +157,4 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
     assert obs_settings.scenes == ("", "")
     assert auto_share_settings.enabled is False
     assert auto_share_settings.hotkey == ""
-    assert auto_share_settings.target_position is None
+    assert auto_share_settings.click_position is None

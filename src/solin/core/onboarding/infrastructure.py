@@ -62,7 +62,7 @@ class QSettingsOnboardingSettings:
         auto_share_settings.set_enabled(command.zoom_share.enabled)
         if command.zoom_share.enabled:
             auto_share_settings.set_hotkey(command.zoom_share.hotkey)
-            auto_share_settings.set_target_position(
-                command.zoom_share.target_x_ratio,
-                command.zoom_share.target_y_ratio,
+            auto_share_settings.set_click_position(
+                command.zoom_share.click_x,
+                command.zoom_share.click_y,
             )

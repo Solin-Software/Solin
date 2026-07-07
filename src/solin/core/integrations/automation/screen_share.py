@@ -8,8 +8,7 @@ automatic shortcuts and auto-share use exactly the same cross-platform path.
 Flow:
   1. Send a keyboard shortcut (e.g. Alt+S) to trigger the share dialog
   2. Wait until a new visible Zoom share dialog appears
-  3. Resolve the configured dialog-relative target against its current bounds
-  4. Send virtual clicks to select the target
+  3. Send virtual clicks at a pre-configured position to select the target
 
 All functions are designed to run in a background thread.
 """
@@ -41,6 +40,8 @@ SHARE_DIALOG_DETECTION_SETTLE_MS = 500
 SHARE_DIALOG_POLL_INTERVAL_MS = 50
 SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
+USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
+SHARE_DIALOG_FIXED_DELAY_MS = 500
 
 _WINDOWS_ZOOM_PROCESS_NAMES = frozenset({"zoom.exe"})
 _MACOS_ZOOM_OWNER_NAMES = frozenset({"zoom.us", "zoom", "zoom workplace"})
@@ -155,20 +156,6 @@ def send_virtual_clicks(
         return _clicks_linux(x, y, count, interval_ms)
 
     return _clicks_fallback(x, y, count, interval_ms)
-
-
-def automation_pointer_position(
-    fallback_x: int,
-    fallback_y: int,
-) -> tuple[int, int]:
-    """Return pointer coordinates in the same space as native window detection."""
-    if sys.platform != "win32":
-        return fallback_x, fallback_y
-
-    point = _POINT()
-    if ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
-        return int(point.x), int(point.y)
-    return fallback_x, fallback_y
 
 
 def _clicks_win32(x: int, y: int, count: int, interval_ms: int) -> bool:
@@ -529,7 +516,6 @@ class _ZoomWindowInfo:
     y: int
     width: int
     height: int
-    is_share_dialog: bool = False
 
     @property
     def area(self) -> int:
@@ -541,6 +527,46 @@ def _is_candidate_share_dialog(window: _ZoomWindowInfo) -> bool:
         window.width >= SHARE_DIALOG_MIN_WIDTH
         and window.height >= SHARE_DIALOG_MIN_HEIGHT
     )
+
+
+def _capture_zoom_windows_before_share_click() -> dict[str, _ZoomWindowInfo] | None:
+    if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
+        return {}
+    return _list_zoom_windows()
+
+
+def _wait_before_share_click(
+    delay_ms: int,
+    initial_windows: dict[str, _ZoomWindowInfo] | None,
+) -> bool:
+    if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
+        time.sleep(delay_ms / 1000.0)
+        return True
+    if initial_windows is None:
+        log.warning(
+            "execute_start_share: Zoom window detection is unavailable on %s",
+            sys.platform,
+        )
+        return False
+    detected = _wait_for_new_zoom_window(initial_windows)
+    if detected is None:
+        log.warning(
+            "execute_start_share: no new Zoom share dialog detected within %dms",
+            SHARE_DIALOG_DETECTION_TIMEOUT_MS,
+        )
+        return False
+
+    log.debug(
+        "execute_start_share: detected Zoom dialog %s (%dx%d at %d,%d, owner=%s)",
+        detected.window_id,
+        detected.width,
+        detected.height,
+        detected.x,
+        detected.y,
+        detected.owner,
+    )
+    time.sleep(SHARE_DIALOG_DETECTION_SETTLE_MS / 1000.0)
+    return True
 
 
 def _wait_for_new_zoom_window(
@@ -565,50 +591,6 @@ def _wait_for_new_zoom_window(
         time.sleep(SHARE_DIALOG_POLL_INTERVAL_MS / 1000.0)
 
     return None
-
-
-def find_zoom_share_dialog_bounds_at_point(
-    x: int,
-    y: int,
-    *,
-    require_identified_dialog: bool = False,
-) -> tuple[int, int, int, int] | None:
-    """Return the most specific visible Zoom dialog containing a desktop point."""
-    windows = _list_zoom_windows()
-    if windows is None:
-        return None
-
-    candidates = [
-        window
-        for window in windows.values()
-        if _is_candidate_share_dialog(window)
-        and (window.is_share_dialog or not require_identified_dialog)
-        and window.x <= x < window.x + window.width
-        and window.y <= y < window.y + window.height
-    ]
-    if not candidates:
-        return None
-
-    dialog = min(candidates, key=lambda window: window.area)
-    return dialog.x, dialog.y, dialog.width, dialog.height
-
-
-def _relative_target_point(
-    dialog: _ZoomWindowInfo,
-    x_ratio: float,
-    y_ratio: float,
-) -> tuple[int, int] | None:
-    if not (
-        0.0 <= x_ratio <= 1.0
-        and 0.0 <= y_ratio <= 1.0
-        and dialog.width > 1
-        and dialog.height > 1
-    ):
-        return None
-    return (
-        dialog.x + round(x_ratio * (dialog.width - 1)),
-        dialog.y + round(y_ratio * (dialog.height - 1)),
-    )
 
 
 def _list_zoom_windows() -> dict[str, _ZoomWindowInfo] | None:
@@ -643,12 +625,6 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
         ctypes.POINTER(ctypes.wintypes.RECT),
     ]
     user32.GetWindowRect.restype = ctypes.wintypes.BOOL
-    user32.GetClassNameW.argtypes = [
-        ctypes.wintypes.HWND,
-        ctypes.wintypes.LPWSTR,
-        ctypes.c_int,
-    ]
-    user32.GetClassNameW.restype = ctypes.c_int
 
     def _callback(hwnd, _lparam):
         if not user32.IsWindow(hwnd) or not user32.IsWindowVisible(hwnd):
@@ -669,8 +645,6 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
                 return True
 
             window_id = str(int(hwnd))
-            class_name = ctypes.create_unicode_buffer(256)
-            user32.GetClassNameW(hwnd, class_name, len(class_name))
             windows[window_id] = _ZoomWindowInfo(
                 window_id=window_id,
                 owner=process_name,
@@ -678,7 +652,6 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
                 y=int(rect.top),
                 width=width,
                 height=height,
-                is_share_dialog=class_name.value == "ZPShareEntranceClass",
             )
         except Exception as exc:  # noqa: BLE001 - Win32 enumeration callback boundary
             log.debug("Skipping Win32 window during Zoom enumeration: %s", exc)
@@ -780,9 +753,6 @@ def _list_zoom_windows_macos() -> dict[str, _ZoomWindowInfo] | None:
                 y=int(bounds.get("Y", 0)),
                 width=width,
                 height=height,
-                is_share_dialog="share" in str(
-                    raw.get("kCGWindowName") or ""
-                ).casefold(),
             )
         except (TypeError, ValueError):
             continue
@@ -840,11 +810,6 @@ def _list_zoom_windows_linux() -> dict[str, _ZoomWindowInfo] | None:
                 y=y,
                 width=width,
                 height=height,
-                is_share_dialog=_linux_window_name_contains_share(
-                    xdotool,
-                    window_id,
-                    env,
-                ),
             )
 
     return windows
@@ -910,56 +875,42 @@ def _xdotool_window_geometry(
         return None
 
 
-def _linux_window_name_contains_share(
-    xdotool: str,
-    window_id: str,
-    env: dict[str, str],
-) -> bool:
-    try:
-        result = subprocess.run(
-            [xdotool, "getwindowname", window_id],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=1.0,
-            env=env,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return "share" in result.stdout.casefold()
-
-
 # ─────────────────────────────────────────────────────────────────
 #  Orchestration: full share sequence
 # ─────────────────────────────────────────────────────────────────
 
 def execute_start_share(
     hotkey: str,
-    target_x_ratio: float,
-    target_y_ratio: float,
+    click_x: int = -1,
+    click_y: int = -1,
+    delay_ms: int | None = None,
 ) -> bool:
     """
     Execute the full start-share sequence:
       1. Send the configured hotkey (opens Zoom share dialog)
-      2. Wait for the new share dialog to appear
-      3. Resolve the target relative to the detected dialog's current bounds
-      4. Send virtual clicks at the resolved position
+      2. Wait for the share dialog to appear, or use the fixed delay fallback
+      3. Send virtual clicks at configured position (selects share target)
 
     Args:
         hotkey: Keyboard shortcut to toggle share (e.g. 'Alt+S').
-        target_x_ratio: Horizontal target position within the dialog, from 0 to 1.
-        target_y_ratio: Vertical target position within the dialog, from 0 to 1.
+        click_x: Screen X for target click (-1 = skip clicks).
+        click_y: Screen Y for target click (-1 = skip clicks).
+        delay_ms: Fixed-delay milliseconds to wait between hotkey and clicks.
+            Uses SHARE_DIALOG_FIXED_DELAY_MS when omitted.
 
     Returns:
         True if the sequence completed successfully.
     """
-    if not hotkey or not (
-        0.0 <= target_x_ratio <= 1.0 and 0.0 <= target_y_ratio <= 1.0
-    ):
+    if not hotkey:
         return False
 
-    initial_windows = _list_zoom_windows()
-    if initial_windows is None:
+    click_configured = click_x >= 0 and click_y >= 0
+    delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
+    initial_windows = (
+        _capture_zoom_windows_before_share_click()
+        if click_configured else {}
+    )
+    if click_configured and USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and initial_windows is None:
         log.warning(
             "execute_start_share: Zoom window detection is unavailable on %s",
             sys.platform,
@@ -971,35 +922,13 @@ def execute_start_share(
         log.warning("execute_start_share: hotkey '%s' failed", hotkey)
         return False
 
-    dialog = _wait_for_new_zoom_window(initial_windows)
-    if dialog is None:
-        log.warning(
-            "execute_start_share: no new Zoom share dialog detected within %dms",
-            SHARE_DIALOG_DETECTION_TIMEOUT_MS,
-        )
-        return False
-
-    log.debug(
-        "execute_start_share: detected Zoom dialog %s (%dx%d at %d,%d, owner=%s)",
-        dialog.window_id,
-        dialog.width,
-        dialog.height,
-        dialog.x,
-        dialog.y,
-        dialog.owner,
-    )
-    time.sleep(SHARE_DIALOG_DETECTION_SETTLE_MS / 1000.0)
-    target = _relative_target_point(dialog, target_x_ratio, target_y_ratio)
-    if target is None:
-        return False
-
-    ok = send_virtual_clicks(*target, count=2, interval_ms=120)
-    if not ok:
-        log.warning(
-            "execute_start_share: virtual clicks failed at (%d, %d)",
-            *target,
-        )
-        return False
+    if click_configured:
+        if not _wait_before_share_click(delay_ms, initial_windows):
+            return False
+        ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
+        if not ok:
+            log.warning("execute_start_share: virtual clicks failed at (%d, %d)", click_x, click_y)
+            return False
 
     return True
 

@@ -5,7 +5,6 @@ import pytest
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
-from solin.core.integrations.automation import settings as automation_settings
 from solin.core.integrations.automation.settings import (
     AutoShareSettingsStore,
     CameraSettingsStore,
@@ -56,7 +55,7 @@ def test_obs_settings_reads_connection_scenes_and_ndi_configuration():
         settings.clear()
 
 
-def test_auto_share_settings_uses_current_hotkey_and_relative_target():
+def test_auto_share_settings_uses_current_hotkey_and_click_position():
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     store = AutoShareSettingsStore(settings)
@@ -65,7 +64,7 @@ def test_auto_share_settings_uses_current_hotkey_and_relative_target():
         settings.set_value(SettingsKey.SHARE_ENABLED, True)
         settings.set_value(SettingsKey.SHARE_START_HOTKEY, "LegacyStart")
         settings.set_value(SettingsKey.SHARE_STOP_HOTKEY, "LegacyStop")
-        store.set_target_position(0.25, 0.75)
+        store.set_click_position(300, 250)
 
         assert store.ensure_hotkey() == "LegacyStart"
         assert store.hotkey() == "LegacyStart"
@@ -74,7 +73,7 @@ def test_auto_share_settings_uses_current_hotkey_and_relative_target():
 
         assert store.hotkey() == "Ctrl+Shift+S"
         assert store.is_configured() is True
-        assert store.target_position() == (0.25, 0.75)
+        assert store.click_position() == (300, 250)
         assert settings.string(SettingsKey.SHARE_START_HOTKEY) == ""
         assert settings.string(SettingsKey.SHARE_STOP_HOTKEY) == ""
     finally:
@@ -92,7 +91,7 @@ def test_auto_share_settings_requires_enabled_hotkey_and_target():
 
         assert store.is_configured() is False
 
-        store.set_target_position(0.4, 0.6)
+        store.set_click_position(300, 250)
 
         assert store.is_configured() is True
     finally:
@@ -100,22 +99,22 @@ def test_auto_share_settings_requires_enabled_hotkey_and_target():
 
 
 @pytest.mark.parametrize(
-    ("x_ratio", "y_ratio"),
-    [(-0.01, 0.5), (0.5, 1.01), (float("nan"), 0.5)],
+    ("x", "y"),
+    [(-1, 250), (300, -1)],
 )
-def test_auto_share_settings_rejects_invalid_relative_targets(x_ratio, y_ratio):
+def test_auto_share_settings_rejects_invalid_click_position(x, y):
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     store = AutoShareSettingsStore(settings)
     settings.clear()
     try:
-        with pytest.raises(ValueError, match="between 0 and 1"):
-            store.set_target_position(x_ratio, y_ratio)
+        with pytest.raises(ValueError, match="non-negative"):
+            store.set_click_position(x, y)
     finally:
         settings.clear()
 
 
-def test_auto_share_settings_migrates_legacy_coordinates_once(monkeypatch):
+def test_auto_share_settings_reads_existing_click_position():
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     store = AutoShareSettingsStore(settings)
@@ -123,38 +122,21 @@ def test_auto_share_settings_migrates_legacy_coordinates_once(monkeypatch):
     try:
         settings.set_value("share/click_x", 300)
         settings.set_value("share/click_y", 250)
-        monkeypatch.setattr(
-            automation_settings,
-            "_legacy_target_dialog_bounds",
-            lambda _x, _y: (100, 50, 401, 401),
-        )
 
-        assert store.target_position() == (0.5, 0.5)
-        assert "share/click_x" not in settings.all_keys()
-        assert "share/click_y" not in settings.all_keys()
-        assert settings.value(SettingsKey.SHARE_TARGET_X_RATIO, -1.0, float) == 0.5
-        assert settings.value(SettingsKey.SHARE_TARGET_Y_RATIO, -1.0, float) == 0.5
+        assert store.click_position() == (300, 250)
+        assert store.has_click_position() is True
     finally:
         settings.clear()
 
 
-def test_auto_share_settings_discards_unmigratable_legacy_coordinates(monkeypatch):
+def test_auto_share_settings_defaults_missing_click_position():
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     store = AutoShareSettingsStore(settings)
     settings.clear()
     try:
-        settings.set_value("share/click_x", 300)
-        settings.set_value("share/click_y", 250)
-        monkeypatch.setattr(
-            automation_settings,
-            "_legacy_target_dialog_bounds",
-            lambda _x, _y: None,
-        )
-
-        assert store.target_position() == (-1.0, -1.0)
-        assert "share/click_x" not in settings.all_keys()
-        assert "share/click_y" not in settings.all_keys()
+        assert store.click_position() == (-1, -1)
+        assert store.has_click_position() is False
     finally:
         settings.clear()
 

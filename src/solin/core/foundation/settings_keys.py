@@ -62,8 +62,8 @@ class SettingsKey:
     SHARE_HOTKEY: Final = "share/hotkey"
     SHARE_START_HOTKEY: Final = "share/start_hotkey"
     SHARE_STOP_HOTKEY: Final = "share/stop_hotkey"
-    SHARE_TARGET_X_RATIO: Final = "share/target_x_ratio"
-    SHARE_TARGET_Y_RATIO: Final = "share/target_y_ratio"
+    SHARE_CLICK_X: Final = "share/click_x"
+    SHARE_CLICK_Y: Final = "share/click_y"
 
     ZOOM_ENABLED: Final = "zoom/enabled"
     ZOOM_SHOW_PARTICIPANTS: Final = "zoom/show_participants"
@@ -77,10 +77,3 @@ class SettingsKey:
 
     MONITOR_ALLOCATION: Final = "allocation"
     NOTIFICATIONS_SEEN_IDS: Final = "seen_ids"
-
-
-class _LegacySettingsKey:
-    """Keys read only by one-way migrations and never written by current code."""
-
-    SHARE_CLICK_X: Final = "share/click_x"
-    SHARE_CLICK_Y: Final = "share/click_y"
