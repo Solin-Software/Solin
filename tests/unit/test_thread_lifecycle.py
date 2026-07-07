@@ -39,6 +39,14 @@ class _OBSSettings:
         return ""
 
 
+class _FakeZoomSession:
+    def __init__(self):
+        self.cancelled = False
+
+    def cancel(self):
+        self.cancelled = True
+
+
 def _wait_until(predicate, timeout: float = 3.0) -> bool:
     app = _app()
     deadline = time.monotonic() + timeout
@@ -223,6 +231,7 @@ def test_jw_language_service_owns_and_drains_its_thread_pool(tmp_path):
 def test_zoom_workers_are_coalesced_and_serialized(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
+    monkeypatch.setattr(zoom_controls, "ZoomSession", _FakeZoomSession)
     service = ZoomService(_ZoomSettings())
     service._active = True
     service._stop_evt.clear()
@@ -264,13 +273,10 @@ def test_zoom_session_is_owned_by_one_service_generation(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
 
-    class _Session:
+    class _Session(_FakeZoomSession):
         def __init__(self):
-            self.cancelled = False
+            super().__init__()
             sessions.append(self)
-
-        def cancel(self):
-            self.cancelled = True
 
     sessions: list[_Session] = []
     monkeypatch.setattr(zoom_controls, "ZoomSession", _Session)
@@ -303,6 +309,7 @@ def test_zoom_rejects_callback_from_stopped_generation(monkeypatch):
     _app()
     monkeypatch.setattr(zoom_module, "_HAS_ZOOM", True)
     service = ZoomService(_ZoomSettings())
+    monkeypatch.setattr(service, "_poll_connection", lambda: None)
     service.start()
     generation = service._generation
 

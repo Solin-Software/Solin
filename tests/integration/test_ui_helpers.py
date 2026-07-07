@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -54,6 +55,15 @@ class _QmlWidget(_CursorTarget):
         return self.host_widget
 
 
+def _wait_for(predicate, timeout_ms: int = 1000) -> bool:
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        QTest.qWait(10)
+    return bool(predicate())
+
+
 def test_qml_pointer_cursor_applies_to_widget_quick_window_and_host_window():
     qml_widget = _QmlWidget()
 
@@ -81,6 +91,4 @@ def test_fade_in_removes_opacity_effect_after_animation():
 
     assert isinstance(widget.graphicsEffect(), QGraphicsOpacityEffect)
 
-    QTest.qWait(30)
-
-    assert widget.graphicsEffect() is None
+    assert _wait_for(lambda: widget.graphicsEffect() is None)
