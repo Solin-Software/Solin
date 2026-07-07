@@ -15,6 +15,12 @@ class _OnboardingProbe:
     state_changed = _Signal()
     scenes_updated = _Signal()
 
+    def __init__(self):
+        self.stops = 0
+
+    def stop(self):
+        self.stops += 1
+
 
 def _bridge() -> OnboardingBridge:
     return OnboardingBridge(
@@ -246,6 +252,64 @@ def test_onboarding_target_picker_receives_current_saved_position():
     assert captured["current_x"] == 300
     assert captured["current_y"] == 250
     assert captured["parent"] is None
+
+
+def test_onboarding_reselects_obs_after_skip_back_and_successful_continue():
+    bridge = _bridge()
+    bridge._state.update(
+        {
+            "currentPage": "obs",
+            "obsSelected": True,
+            "zoomSelected": True,
+        }
+    )
+
+    bridge.skipCurrentIntegration()
+
+    assert bridge.state["obsSelected"] is False
+    assert bridge.state["currentPage"] == "zoom"
+
+    bridge.back()
+    bridge._state.update(
+        {
+            "obsConnected": True,
+            "obsAutomatic": False,
+        }
+    )
+
+    bridge.advance()
+
+    assert bridge.state["obsSelected"] is True
+    assert bridge.state["currentPage"] == "zoom"
+
+
+def test_onboarding_reselects_zoom_after_skip_back_and_successful_continue():
+    bridge = _bridge()
+    bridge._state.update(
+        {
+            "currentPage": "zoom",
+            "zoomSelected": True,
+            "zoomAvailable": True,
+        }
+    )
+
+    bridge.skipCurrentIntegration()
+
+    assert bridge.state["zoomSelected"] is False
+    assert bridge.state["currentPage"] == "review"
+
+    bridge.back()
+    bridge._state.update(
+        {
+            "zoomHotkey": "Ctrl+Shift+S",
+            "zoomTargetConfigured": True,
+        }
+    )
+
+    bridge.advance()
+
+    assert bridge.state["zoomSelected"] is True
+    assert bridge.state["currentPage"] == "review"
 
 
 def test_onboarding_obs_probe_receives_obs_service_factory():

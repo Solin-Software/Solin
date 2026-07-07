@@ -223,6 +223,7 @@ class OnboardingBridge(QObject):
         if current == _PAGE_REVIEW:
             self._complete()
             return
+        self._confirm_current_integration(current)
         next_page = self._next_page(current)
         self._history.append(current)
         self._navigate(next_page, direction=1)
@@ -413,6 +414,12 @@ class OnboardingBridge(QObject):
             if not self._state["zoomTargetConfigured"]:
                 return "Choose the target in Zoom's share dialog."
         return ""
+
+    def _confirm_current_integration(self, page: str) -> None:
+        if page == _PAGE_OBS:
+            self._state["obsSelected"] = True
+        elif page == _PAGE_ZOOM:
+            self._state["zoomSelected"] = True
 
     def _next_page(self, current: str) -> str:
         if current == _PAGE_PROFILE:
