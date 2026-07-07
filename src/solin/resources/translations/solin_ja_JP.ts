@@ -2298,12 +2298,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>集会用メディア</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>自動でダウンロード</translation>
     </message>
@@ -2314,12 +2314,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>手動ダウンロード</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>クラウドボタンをクリックしたときだけメディアをダウンロードします。</translation>
     </message>
@@ -2469,7 +2469,12 @@
         <translation>対象を選択</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>Zoomの設定にヘルプが必要ですか?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>Zoomは後で設定</translation>
     </message>
@@ -2535,7 +2540,7 @@
         <translation>言語を検索</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>1から65535までのポートを入力してください。</translation>
     </message>
@@ -2545,7 +2550,7 @@
         <translation>共有対象の選択ツールを利用できません。</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>プロファイル名を入力してください。</translation>
     </message>

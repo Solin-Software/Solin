@@ -207,6 +207,16 @@ def test_qml_onboarding_obs_help_link_opens_setup_guide():
     assert "https://solinav.vercel.app/guide/#obs-studio-integration" in bridge_source
 
 
+def test_qml_onboarding_zoom_help_link_opens_setup_guide():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+
+    assert 'qsTr("Need help setting up Zoom?")' in qml_source
+    assert "onboardingBridge.openZoomSetupGuide()" in qml_source
+    assert "_ZOOM_SETUP_GUIDE_URL" in bridge_source
+    assert "https://solinav.vercel.app/guide/#zoom-meetings-integration" in bridge_source
+
+
 def test_onboarding_hotkey_capture_reports_only_complete_shortcuts():
     bridge = _bridge()
 

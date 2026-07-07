@@ -2298,12 +2298,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>聚会媒体资料</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>自动下载</translation>
     </message>
@@ -2314,12 +2314,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>手动下载</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>只有点击云朵按钮时才下载媒体。</translation>
     </message>
@@ -2469,7 +2469,12 @@
         <translation>选择目标</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>需要 Zoom 设置帮助？</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>稍后设置 Zoom</translation>
     </message>
@@ -2535,7 +2540,7 @@
         <translation>搜索语言</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>请输入 1 到 65535 之间的端口。</translation>
     </message>
@@ -2545,7 +2550,7 @@
         <translation>共享目标选择器不可用。</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>请输入配置文件名称。</translation>
     </message>

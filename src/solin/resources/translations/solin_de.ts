@@ -2301,12 +2301,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>Medien für Zusammenkünfte</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>Automatisch herunterladen</translation>
     </message>
@@ -2317,12 +2317,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>Manueller Download</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Medien nur herunterladen, wenn Sie auf die Wolken-Schaltfläche klicken.</translation>
     </message>
@@ -2472,7 +2472,12 @@
         <translation>Ziel auswählen</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>Hilfe beim Einrichten von Zoom?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>Zoom später einrichten</translation>
     </message>
@@ -2538,7 +2543,7 @@
         <translation>Sprachen suchen</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Geben Sie einen Port zwischen 1 und 65535 ein.</translation>
     </message>
@@ -2548,7 +2553,7 @@
         <translation>Die Auswahl des Freigabeziels ist nicht verfügbar.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>Geben Sie einen Profilnamen ein.</translation>
     </message>

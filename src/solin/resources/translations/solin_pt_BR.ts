@@ -2301,12 +2301,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>Mídias da reunião</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>Baixar automaticamente</translation>
     </message>
@@ -2317,12 +2317,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>Download manual</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Baixar as mídias apenas quando você clicar no botão da nuvem.</translation>
     </message>
@@ -2472,7 +2472,12 @@
         <translation>Escolher alvo</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>Precisa de ajuda para configurar o Zoom?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>Configurar o Zoom depois</translation>
     </message>
@@ -2538,7 +2543,7 @@
         <translation>Buscar idiomas</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Digite uma porta entre 1 e 65535.</translation>
     </message>
@@ -2548,7 +2553,7 @@
         <translation>O seletor de alvo de compartilhamento está indisponível.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>Digite um nome de perfil.</translation>
     </message>

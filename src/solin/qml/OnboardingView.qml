@@ -676,6 +676,14 @@ Rectangle {
                     }
 
                     TextButton {
+                        Layout.alignment: Qt.AlignLeft
+                        Layout.topMargin: 2
+                        iconName: "book"
+                        text: qsTr("Need help setting up Zoom?")
+                        onClicked: onboardingBridge.openZoomSetupGuide()
+                    }
+
+                    TextButton {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 10
                         text: qsTr("Set up Zoom later")

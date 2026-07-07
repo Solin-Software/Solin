@@ -2298,12 +2298,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>Media perhimpunan</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>Unduh otomatis</translation>
     </message>
@@ -2314,12 +2314,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>Unduhan manual</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>Unduh media hanya saat Anda mengklik tombol awan.</translation>
     </message>
@@ -2469,7 +2469,12 @@
         <translation>Pilih target</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>Butuh bantuan menyiapkan Zoom?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>Siapkan Zoom nanti</translation>
     </message>
@@ -2535,7 +2540,7 @@
         <translation>Cari bahasa</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>Masukkan port antara 1 dan 65535.</translation>
     </message>
@@ -2545,7 +2550,7 @@
         <translation>Pemilih target berbagi tidak tersedia.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>Masukkan nama profil.</translation>
     </message>

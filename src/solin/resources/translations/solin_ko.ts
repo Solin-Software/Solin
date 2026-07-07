@@ -2298,12 +2298,12 @@
     </message>
     <message>
         <location line="+5"/>
-        <location line="+367"/>
+        <location line="+375"/>
         <source>Meeting media</source>
         <translation>집회 미디어</translation>
     </message>
     <message>
-        <location line="-356"/>
+        <location line="-364"/>
         <source>Download automatically</source>
         <translation>자동으로 다운로드</translation>
     </message>
@@ -2314,12 +2314,12 @@
     </message>
     <message>
         <location line="+8"/>
-        <location line="+349"/>
+        <location line="+357"/>
         <source>Manual download</source>
         <translation>수동 다운로드</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-356"/>
         <source>Only download media when you click the cloud button.</source>
         <translation>구름 버튼을 클릭할 때만 미디어를 다운로드합니다.</translation>
     </message>
@@ -2469,7 +2469,12 @@
         <translation>대상 선택</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Need help setting up Zoom?</source>
+        <translation>Zoom 설정에 도움이 필요하세요?</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Set up Zoom later</source>
         <translation>Zoom 나중에 설정</translation>
     </message>
@@ -2535,7 +2540,7 @@
         <translation>언어 검색</translation>
     </message>
     <message>
-        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <location filename="../../ui/qml/onboarding.py" line="+275"/>
         <source>Enter a port between 1 and 65535.</source>
         <translation>1에서 65535 사이의 포트를 입력하세요.</translation>
     </message>
@@ -2545,7 +2550,7 @@
         <translation>공유 대상 선택기를 사용할 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+92"/>
+        <location line="+96"/>
         <source>Enter a profile name.</source>
         <translation>프로필 이름을 입력하세요.</translation>
     </message>
