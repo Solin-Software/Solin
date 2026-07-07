@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>구성되지 않음</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>편집</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>클릭 위치</translation>
+        <source>Share target</source>
+        <translation>공유 대상</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Zoom 공유 단축키로 대화 상자가 열린 뒤 Solin이 클릭할 위치입니다.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>구성됨</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">클릭 위치</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>구성</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>화면 공유를 시작하고 중지하는 Zoom 단축키를 누르세요.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>위치: {x}, {y}</translation>
+        <translation type="vanished">위치: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin에서 자동 클릭을 보낼 수 있습니다.</translation>
     </message>
@@ -1025,13 +1037,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>프로젝션할 콘텐츠를 변경하기 전에 재생을 일시 중지하세요.</translation>
     </message>
@@ -1584,7 +1596,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>이 미디어는 편집할 수 없습니다.</translation>
     </message>
@@ -1616,12 +1628,12 @@
         <translation>닫기</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>오디오 미리 듣기</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>다른 미디어 항목이 활성 상태이므로 미리 듣기 오디오가 음소거됩니다.</translation>
     </message>
@@ -1636,12 +1648,12 @@
         <translation>재생</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>시작</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>종료</translation>
     </message>
@@ -2174,6 +2186,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>취소</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1/4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>뒤로</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Solin 사용 시작</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>계속</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Solin에 오신 것을 환영합니다</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>집회와 미디어를 위한 깔끔하고 안정적인 작업 공간을 설정합니다.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>프로필 이름</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>예: 메인 홀</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>각 프로필은 자체 설정과 재생 목록을 유지합니다.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>설정에 맞게 Solin 준비</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>언어를 선택하고 집회 미디어 처리 방식을 정하세요.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>인터페이스 언어</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>미디어 언어</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>집회 미디어</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>자동으로 다운로드</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>이번 주와 다음 주를 오프라인에서 사용할 수 있게 유지합니다.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>수동 다운로드</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>구름 버튼을 클릭할 때만 미디어를 다운로드합니다.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Solin이 도울 방식을 선택하세요</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>하나 또는 둘 다 선택하거나 나중에 설정하세요.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Solin에서 장면과 카메라를 제어합니다.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>화면을 자동으로 공유합니다.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>나중에 설정</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>OBS Studio 연결</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Solin에서 OBS 장면과 카메라를 사용합니다. 자동 전환은 선택 사항입니다.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocket 포트</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>비밀번호(선택 사항)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>연결 중…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>연결</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>OBS 설정에 도움이 필요하세요?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>자동 장면 전환</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>미디어가 투사되는 동안 Solin이 장면을 전환합니다.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>장면과 카메라의 수동 제어는 계속 사용할 수 있습니다.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>기본 장면</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>미디어 장면</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>OBS 나중에 설정</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Zoom 공유 설정</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>공유 단축키를 기록하고 Solin이 사용할 클릭 대상을 선택하세요.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>공유 단축키</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>여기를 클릭한 다음 Zoom의 공유 시작/중지 단축키를 누르세요.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>단축키 누르기</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>단축키 기록</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>공유 대상</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>대상 구성됨</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>주 모니터에서 클릭할 위치를 선택하세요.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>다시 선택</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>대상 선택</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Zoom 나중에 설정</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>모든 준비가 완료되었습니다</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>선택한 내용을 확인하세요. 나중에 설정에서 변경할 수 있습니다.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>언어</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>이번 주와 다음 주</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>구성되지 않음</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>연결됨 · 자동 장면 전환</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>연결됨 · 수동 제어</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>자동 공유 준비됨</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>마무리 중…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>장면 선택</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>닫기</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>언어 검색</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2621,7 +2946,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
@@ -2634,302 +2959,249 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>연결 끊김</translation>
+        <translation type="vanished">연결 끊김</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>연결 중…</translation>
+        <translation type="vanished">연결 중…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>OBS Studio에 연결됨</translation>
+        <translation type="vanished">OBS Studio에 연결됨</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>오류: {msg}</translation>
+        <translation type="vanished">오류: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>연결 오류</translation>
+        <translation type="vanished">연결 오류</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— 장면 선택 —</translation>
+        <translation type="vanished">— 장면 선택 —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>누가 Solin을 사용하고 있습니까?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>새 프로필</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>취소</translation>
+        <translation type="vanished">취소</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>설정 건너뛰기</translation>
+        <translation type="vanished">설정 건너뛰기</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>프로필 이름</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>예: A 회중, 이름, …</translation>
+        <translation type="vanished">예: A 회중, 이름, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>프로필 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>계속 →</translation>
+        <translation type="vanished">계속 →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Solin에 오신 것을 환영합니다</translation>
+        <translation type="vanished">Solin에 오신 것을 환영합니다</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>이 프로필의 이름을 지정하십시오. 각 프로필은 고유한 설정과 재생 목록을 유지하므로 다양한 설정을 관리하는 데 유용합니다.</translation>
+        <translation type="vanished">이 프로필의 이름을 지정하십시오. 각 프로필은 고유한 설정과 재생 목록을 유지하므로 다양한 설정을 관리하는 데 유용합니다.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>인터페이스 언어</translation>
+        <translation type="vanished">인터페이스 언어</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>앱 전체에 표시되는 메뉴, 버튼 및 모든 텍스트를 제어합니다.</translation>
+        <translation type="vanished">앱 전체에 표시되는 메뉴, 버튼 및 모든 텍스트를 제어합니다.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>콘텐츠 언어</translation>
+        <translation type="vanished">콘텐츠 언어</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>JW.org에서 다운로드하는 노래, 동영상 및 기타 미디어의 언어입니다.</translation>
+        <translation type="vanished">JW.org에서 다운로드하는 노래, 동영상 및 기타 미디어의 언어입니다.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>언어 기본 설정</translation>
+        <translation type="vanished">언어 기본 설정</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>인터페이스와 JW.org 미디어 콘텐츠에 사용할 언어를 선택하십시오.</translation>
+        <translation type="vanished">인터페이스와 JW.org 미디어 콘텐츠에 사용할 언어를 선택하십시오.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin은 WebSocket을 통해 OBS Studio에 연결되어 미디어 재생 중에 장면을 자동으로 전환합니다. 노래, 동영상, 이미지가 라이브 출력으로 원활하게 전송됩니다.</translation>
+        <translation type="vanished">Solin은 WebSocket을 통해 OBS Studio에 연결되어 미디어 재생 중에 장면을 자동으로 전환합니다. 노래, 동영상, 이미지가 라이브 출력으로 원활하게 전송됩니다.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>카메라를 사용하여 메인 장면을 만드십시오. USB 웹캠의 경우 &apos;영상 캡처 장치&apos; 소스를 추가하십시오.</translation>
+        <translation type="vanished">카메라를 사용하여 메인 장면을 만드십시오. USB 웹캠의 경우 &apos;영상 캡처 장치&apos; 소스를 추가하십시오.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>IP 카메라의 경우 &apos;미디어 소스&apos;를 추가하고 카메라의 RTSP 스트림 URL을 입력하십시오.</translation>
+        <translation type="vanished">IP 카메라의 경우 &apos;미디어 소스&apos;를 추가하고 카메라의 RTSP 스트림 URL을 입력하십시오.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>소스 → 장면 기능을 사용하여 다양한 구도(연사, 낭독자, 무대)를 위한 추가 장면을 만들고, 각 화면에 맞게 자르기 및 변형을 조정하십시오.</translation>
+        <translation type="vanished">소스 → 장면 기능을 사용하여 다양한 구도(연사, 낭독자, 무대)를 위한 추가 장면을 만들고, 각 화면에 맞게 자르기 및 변형을 조정하십시오.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Solin의 투사를 위한 별도의 미디어 장면을 만드십시오. 외부 모니터가 연결된 상태에서 &apos;디스플레이 캡처&apos; 소스를 추가하고 노래, 동영상, 이미지가 표시될 모니터를 선택하십시오.</translation>
+        <translation type="vanished">Solin의 투사를 위한 별도의 미디어 장면을 만드십시오. 외부 모니터가 연결된 상태에서 &apos;디스플레이 캡처&apos; 소스를 추가하고 노래, 동영상, 이미지가 표시될 모니터를 선택하십시오.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>RTSP URL 예시:</translation>
+        <translation type="vanished">RTSP URL 예시:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>장면 설정</translation>
+        <translation type="vanished">장면 설정</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>연결하기 전에 OBS에서 카메라 소스를 구성하고 장면 레이아웃을 만드십시오.</translation>
+        <translation type="vanished">연결하기 전에 OBS에서 카메라 소스를 구성하고 장면 레이아웃을 만드십시오.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>OBS Studio 열기</translation>
+        <translation type="vanished">OBS Studio 열기</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>도구 → WebSocket 서버 설정으로 이동</translation>
+        <translation type="vanished">도구 → WebSocket 서버 설정으로 이동</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>“WebSocket 서버 사용” 체크</translation>
+        <translation type="vanished">“WebSocket 서버 사용” 체크</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>포트(기본값: 4455)를 확인하고 필요에 따라 비밀번호를 설정하십시오</translation>
+        <translation type="vanished">포트(기본값: 4455)를 확인하고 필요에 따라 비밀번호를 설정하십시오</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>적용을 클릭하고 메시지가 나타나면 OBS를 다시 시작하십시오</translation>
+        <translation type="vanished">적용을 클릭하고 메시지가 나타나면 OBS를 다시 시작하십시오</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>WebSocket 서버 사용</translation>
+        <translation type="vanished">WebSocket 서버 사용</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin은 이 프로토콜을 통해 OBS와 통신합니다.</translation>
+        <translation type="vanished">Solin은 이 프로토콜을 통해 OBS와 통신합니다.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>OBS 통합 사용</translation>
+        <translation type="vanished">OBS 통합 사용</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocket 포트</translation>
+        <translation type="vanished">WebSocket 포트</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>비밀번호(선택 사항)</translation>
+        <translation type="vanished">비밀번호(선택 사항)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
+        <translation type="vanished">비밀번호가 설정되지 않은 경우 비워 두십시오</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>연결 끊김</translation>
+        <translation type="vanished">연결 끊김</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>기본 장면(대기 상태)</translation>
+        <translation type="vanished">기본 장면(대기 상태)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
+        <translation type="vanished">아무것도 투사되지 않을 때 표시되는 장면입니다.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>미디어 창 장면</translation>
+        <translation type="vanished">미디어 창 장면</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
+        <translation type="vanished">투사 모니터를 캡처하는 장면입니다. 콘텐츠가 표시될 때 활성화됩니다.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Solin을 OBS에 연결</translation>
+        <translation type="vanished">Solin을 OBS에 연결</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>OBS에서 구성한 것과 동일한 포트와 비밀번호를 입력하십시오.</translation>
+        <translation type="vanished">OBS에서 구성한 것과 동일한 포트와 비밀번호를 입력하십시오.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>설정 완료</translation>
+        <translation type="vanished">설정 완료</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>발표 중에 자동으로 장면을 전환하려면 OBS에 연결하십시오.</translation>
+        <translation type="vanished">발표 중에 자동으로 장면을 전환하려면 OBS에 연결하십시오.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>기존 설정 발견됨</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>이전 버전의 설정과 재생 목록이 발견되었습니다. 데이터를 계속 사용하려면 이 프로필의 이름을 지정하십시오:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>예: 중앙 회중</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>확인 및 데이터 마이그레이션</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>이름 바꾸기</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>삭제</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>프로필 삭제</translation>
     </message>
@@ -2944,37 +3216,33 @@ This action cannot be undone.</source>
         <translation>이 프로필의 재생 목록, 이미지, 수신된 미디어, 브라우저 캐시 및 설정이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>프로필 {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>프로필 이름을 입력하십시오.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>이름은 비워 둘 수 없습니다.</translation>
+        <translation type="vanished">이름은 비워 둘 수 없습니다.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>초기 설정을 건너뛰시겠습니까?</translation>
+        <translation type="vanished">초기 설정을 건너뛰시겠습니까?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>언어 및 OBS 설정은 나중에 설정 메뉴에서 구성할 수 있습니다.</translation>
+        <translation type="vanished">언어 및 OBS 설정은 나중에 설정 메뉴에서 구성할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>내 프로필</translation>
+        <translation type="vanished">내 프로필</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3230,7 +3498,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>공유 대상 위치를 클릭하세요</translation>
     </message>
@@ -3448,7 +3716,17 @@ This action cannot be undone.</source>
         <translation>Zoom의 화면 공유 시작/중지 단일 단축키를 사용합니다.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>공유 대상</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Zoom 공유 대화 상자 안의 “Solin Media Preview” 타일입니다.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>손쉬운 사용 권한</translation>
     </message>
@@ -3458,17 +3736,15 @@ This action cannot be undone.</source>
         <translation>설정 열기</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>클릭 위치</translation>
+        <translation type="vanished">클릭 위치</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
+        <translation type="vanished">공유 대화 상자가 열린 뒤 대상을 선택하기 위해 클릭할 위치입니다.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>구성</translation>
     </message>

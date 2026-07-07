@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Hindi naka-configure</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>I-edit</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Posisyon ng Click</translation>
+        <source>Share target</source>
+        <translation>Target ng pagbabahagi</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Posisyong iki-click pagkatapos bumukas ang dialog ng pagbabahagi para piliin ang target.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Kung saan dapat mag-click ang Solin matapos buksan ng shortcut sa pagbabahagi ng Zoom ang dialog.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Naka-configure</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Posisyon ng Click</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Posisyong iki-click pagkatapos bumukas ang dialog ng pagbabahagi para piliin ang target.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>I-configure</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Pindutin ang shortcut ng Zoom na nagsisimula at humihinto sa pagbabahagi ng screen.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Posisyon: {x}, {y}</translation>
+        <translation type="vanished">Posisyon: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Maaaring ipadala ng Solin ang awtomatikong click.</translation>
     </message>
@@ -1026,13 +1038,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>I-pause ang playback bago baguhin ang naka-project na content.</translation>
     </message>
@@ -1586,7 +1598,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Hindi maaaring i-edit ang media na ito.</translation>
     </message>
@@ -1618,12 +1630,12 @@
         <translation>I-close</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Preview ng audio</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Naka-mute ang audio preview habang aktibo ang ibang media.</translation>
     </message>
@@ -1638,12 +1650,12 @@
         <translation>I-play</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Simulan</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Wakas</translation>
     </message>
@@ -2177,6 +2189,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Kanselahin</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 sa 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Bumalik</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Simulang gamitin ang Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Magpatuloy</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Welcome sa Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Mag-set up ng malinis at maaasahang workspace para sa mga pulong at media.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Pangalan ng profile</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Halimbawa: Main Hall</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>May sariling settings at mga playlist ang bawat profile.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Ihanda ang Solin para sa setup mo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Pumili ng mga wika at itakda kung paano hahawakan ang media ng pulong.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Wika ng interface</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Wika ng media</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Media ng pulong</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Awtomatikong i-download</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Panatilihing available offline ang linggong ito at ang susunod.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Manual na download</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>I-download lang ang media kapag na-click mo ang cloud button.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Piliin kung paano tutulong ang Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Pumili ng isa, pareho, o i-set up ang mga ito mamaya.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Kontrolin ang mga scene at camera mula sa Solin.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Awtomatikong ibahagi ang screen.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>I-set up mamaya</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Ikonekta ang OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Gamitin ang mga OBS scene at camera mula sa Solin. Opsyonal ang awtomatikong pagpapalit.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocket port</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Password (opsyonal)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Kumokonekta…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Kumonekta</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Kailangan ng tulong sa pag-set up ng OBS?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Awtomatikong pagpapalit ng scene</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Pinapalitan ng Solin ang mga scene habang naka-project ang media.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Mananatiling available ang manual na control ng mga scene at camera.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Default na scene</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Media scene</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>I-set up ang OBS mamaya</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>I-set up ang pagbabahagi sa Zoom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>I-record ang shortcut sa pagbabahagi at piliin ang target ng click na gagamitin ng Solin.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Shortcut sa pagbabahagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>I-click dito, pagkatapos ay pindutin ang shortcut ng Zoom para simulan/ihinto ang pagbabahagi.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Pindutin ang shortcut</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>I-record ang shortcut</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Target ng pagbabahagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Naka-configure ang target</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Piliin ang posisyon ng click sa pangunahing monitor.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Pumili muli</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Pumili ng target</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>I-set up ang Zoom mamaya</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Mukhang handa na ang lahat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Suriin ang mga pinili mo. Maaari mo itong baguhin mamaya sa Settings.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Mga wika</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Ngayong linggo at sa susunod</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Hindi naka-configure</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Nakakonekta · awtomatikong pagpapalit ng scene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Nakakonekta · manual na mga control</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Handa na ang awtomatikong pagbabahagi</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Tinatapos…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Pumili ng scene</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Isara</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Maghanap ng mga wika</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2625,7 +2950,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Kanselahin</translation>
     </message>
@@ -2638,302 +2963,249 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Hindi nakakonekta</translation>
+        <translation type="vanished">Hindi nakakonekta</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Kumokonekta…</translation>
+        <translation type="vanished">Kumokonekta…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Nakakonekta sa OBS Studio</translation>
+        <translation type="vanished">Nakakonekta sa OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Error: {msg}</translation>
+        <translation type="vanished">Error: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Error sa koneksiyon</translation>
+        <translation type="vanished">Error sa koneksiyon</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Pumili ng eksena —</translation>
+        <translation type="vanished">— Pumili ng eksena —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Sino ang gumagamit ng Solin?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Bagong Profile</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Kanselahin</translation>
+        <translation type="vanished">Kanselahin</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Laktawan ang setup</translation>
+        <translation type="vanished">Laktawan ang setup</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Pangalan ng profile</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Halimbawa: Kongregasyon A, Pangalan, …</translation>
+        <translation type="vanished">Halimbawa: Kongregasyon A, Pangalan, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Profile 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Magpatuloy →</translation>
+        <translation type="vanished">Magpatuloy →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Maligayang pagdating sa Solin</translation>
+        <translation type="vanished">Maligayang pagdating sa Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Bigyan ng pangalan ang profile na ito. Ang bawat profile ay may sariling mga setting at playlist — mainam ito sa pamamahala ng iba&apos;t ibang setup.</translation>
+        <translation type="vanished">Bigyan ng pangalan ang profile na ito. Ang bawat profile ay may sariling mga setting at playlist — mainam ito sa pamamahala ng iba&apos;t ibang setup.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Wika ng interface</translation>
+        <translation type="vanished">Wika ng interface</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Kinokontrol nito ang mga menu, button, at lahat ng tekstong ipinapakita sa app.</translation>
+        <translation type="vanished">Kinokontrol nito ang mga menu, button, at lahat ng tekstong ipinapakita sa app.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Wika ng nilalaman</translation>
+        <translation type="vanished">Wika ng nilalaman</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Wika para sa mga awit, video, at iba pang media na dina-download mula sa JW.org.</translation>
+        <translation type="vanished">Wika para sa mga awit, video, at iba pang media na dina-download mula sa JW.org.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Mga kagustuhan sa wika</translation>
+        <translation type="vanished">Mga kagustuhan sa wika</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Piliin ang wika para sa interface at para sa nilalamang media mula sa JW.org.</translation>
+        <translation type="vanished">Piliin ang wika para sa interface at para sa nilalamang media mula sa JW.org.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Ang Solin ay kumokonekta sa OBS Studio sa pamamagitan ng WebSocket para awtomatikong magpalit ng mga scene habang nagpe-play ng media — ang mga Mga Awit, video, at larawan ay maayos na naipapadala sa iyong live output.</translation>
+        <translation type="vanished">Ang Solin ay kumokonekta sa OBS Studio sa pamamagitan ng WebSocket para awtomatikong magpalit ng mga scene habang nagpe-play ng media — ang mga Mga Awit, video, at larawan ay maayos na naipapadala sa iyong live output.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Gumawa ng pangunahing scene gamit ang iyong camera. Para sa mga USB webcam, magdagdag ng source na Video Capture Device.</translation>
+        <translation type="vanished">Gumawa ng pangunahing scene gamit ang iyong camera. Para sa mga USB webcam, magdagdag ng source na Video Capture Device.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>Para sa mga IP camera, magdagdag ng Media Source at ilagay ang RTSP stream URL ng iyong camera.</translation>
+        <translation type="vanished">Para sa mga IP camera, magdagdag ng Media Source at ilagay ang RTSP stream URL ng iyong camera.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Gumawa ng karagdagang mga scene para sa iba&apos;t ibang framing (tagapagsalita, mambabasa, entablado) gamit ang Source → Scene, pagkatapos ay i-adjust ang crop at transform para sa bawat view.</translation>
+        <translation type="vanished">Gumawa ng karagdagang mga scene para sa iba&apos;t ibang framing (tagapagsalita, mambabasa, entablado) gamit ang Source → Scene, pagkatapos ay i-adjust ang crop at transform para sa bawat view.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Gumawa ng hiwalay na media scene para sa projection ng Solin. Kapag nakakonekta na ang external monitor, magdagdag ng source na Display Capture at piliin ang monitor kung saan lalabas ang mga Mga Awit, video, at larawan.</translation>
+        <translation type="vanished">Gumawa ng hiwalay na media scene para sa projection ng Solin. Kapag nakakonekta na ang external monitor, magdagdag ng source na Display Capture at piliin ang monitor kung saan lalabas ang mga Mga Awit, video, at larawan.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Halimbawa ng RTSP URL:</translation>
+        <translation type="vanished">Halimbawa ng RTSP URL:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>I-set up ang iyong mga scene</translation>
+        <translation type="vanished">I-set up ang iyong mga scene</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>I-configure ang iyong mga camera source at gumawa ng mga layout ng scene sa OBS bago kumonekta.</translation>
+        <translation type="vanished">I-configure ang iyong mga camera source at gumawa ng mga layout ng scene sa OBS bago kumonekta.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Buksan ang OBS Studio</translation>
+        <translation type="vanished">Buksan ang OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Pumunta sa Tools → WebSocket Server Settings</translation>
+        <translation type="vanished">Pumunta sa Tools → WebSocket Server Settings</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>I-check ang “Enable WebSocket server”</translation>
+        <translation type="vanished">I-check ang “Enable WebSocket server”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Kumpirmahin ang port (default: 4455) at magtakda ng password kung nais</translation>
+        <translation type="vanished">Kumpirmahin ang port (default: 4455) at magtakda ng password kung nais</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>I-click ang Apply at i-restart ang OBS kung hihilingin</translation>
+        <translation type="vanished">I-click ang Apply at i-restart ang OBS kung hihilingin</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>I-enable ang WebSocket server</translation>
+        <translation type="vanished">I-enable ang WebSocket server</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Nakikipag-ugnayan ang Solin sa OBS sa pamamagitan ng protocol na ito.</translation>
+        <translation type="vanished">Nakikipag-ugnayan ang Solin sa OBS sa pamamagitan ng protocol na ito.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>I-enable ang OBS integration</translation>
+        <translation type="vanished">I-enable ang OBS integration</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocket port</translation>
+        <translation type="vanished">WebSocket port</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Password (opsyonal)</translation>
+        <translation type="vanished">Password (opsyonal)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Iwanang blangko kung walang itinakdang password</translation>
+        <translation type="vanished">Iwanang blangko kung walang itinakdang password</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Hindi nakakonekta</translation>
+        <translation type="vanished">Hindi nakakonekta</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Default na scene (idle)</translation>
+        <translation type="vanished">Default na scene (idle)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scene na ipinapakita kapag walang ipino-project.</translation>
+        <translation type="vanished">Scene na ipinapakita kapag walang ipino-project.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Scene ng media window</translation>
+        <translation type="vanished">Scene ng media window</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scene na kumukuha ng projection monitor. Naa-activate kapag may ipinapakitang content.</translation>
+        <translation type="vanished">Scene na kumukuha ng projection monitor. Naa-activate kapag may ipinapakitang content.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Ikonekta ang Solin sa OBS</translation>
+        <translation type="vanished">Ikonekta ang Solin sa OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Ilagay ang parehong port at password na na-configure mo sa OBS.</translation>
+        <translation type="vanished">Ilagay ang parehong port at password na na-configure mo sa OBS.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Tapusin ang setup</translation>
+        <translation type="vanished">Tapusin ang setup</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Ikonekta sa OBS para sa awtomatikong pagpapalit ng scene habang nagpe-present.</translation>
+        <translation type="vanished">Ikonekta sa OBS para sa awtomatikong pagpapalit ng scene habang nagpe-present.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>May nakitang mga dating setting</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>May nakitang mga setting at playlist ang Solin mula sa nakaraang bersyon. Pangalanan ang profile na ito para maipagpatuloy ang paggamit ng iyong data:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Halimbawa: Central Congregation</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Kumpirmahin at ilipat ang data</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Palitan ang pangalan</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Burahin</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Burahin ang profile</translation>
     </message>
@@ -2948,37 +3220,33 @@ Hindi na ito maibabalik.</translation>
         <translation>Buburahin nito ang mga playlist, larawan, natanggap na media, browser cache, at mga setting para sa profile na ito. Hindi na mababawi ang aksyong ito.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Profile {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Pakilagay ang pangalan ng profile.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Hindi maaaring walang laman ang pangalan.</translation>
+        <translation type="vanished">Hindi maaaring walang laman ang pangalan.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Gusto mo bang laktawan ang paunang setup?</translation>
+        <translation type="vanished">Gusto mo bang laktawan ang paunang setup?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Maaari mong i-configure ang mga wika at OBS mamaya sa Settings.</translation>
+        <translation type="vanished">Maaari mong i-configure ang mga wika at OBS mamaya sa Settings.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Aking Profile</translation>
+        <translation type="vanished">Aking Profile</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3234,7 +3502,7 @@ Hindi na ito maibabalik.</translation>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>I-click ang target na posisyon para sa pagbabahagi</translation>
     </message>
@@ -3573,7 +3841,17 @@ Hindi na ito maibabalik.</translation>
         <translation>Ginagamit ang iisang shortcut ng Zoom para simulan at ihinto ang pagbabahagi ng screen.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Target ng pagbabahagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Ang tile na “Solin Media Preview” sa loob ng dialog ng pagbabahagi ng Zoom.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Pahintulot sa Accessibility</translation>
     </message>
@@ -3583,17 +3861,15 @@ Hindi na ito maibabalik.</translation>
         <translation>Buksan ang Settings</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Posisyon ng Click</translation>
+        <translation type="vanished">Posisyon ng Click</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Posisyong iki-click pagkatapos bumukas ang dialog ng pagbabahagi para piliin ang target.</translation>
+        <translation type="vanished">Posisyong iki-click pagkatapos bumukas ang dialog ng pagbabahagi para piliin ang target.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>I-configure</translation>
     </message>

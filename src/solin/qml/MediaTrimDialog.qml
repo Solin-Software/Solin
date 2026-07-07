@@ -29,6 +29,9 @@ Dialog {
     readonly property real handleWidth: 16
     readonly property real maximumDialogWidth: 820
     readonly property real maximumDialogHeight: 700
+    readonly property color previewSurfaceColor: "#0b0d12"
+    readonly property color previewSurfaceText: "#cbd5e1"
+    readonly property color previewSurfaceWarning: "#f2b84b"
     readonly property bool sourceReady: durationMs > 0 && previewPlayer.seekable
     readonly property bool rangeValid: sourceReady
                                        && startMs >= 0
@@ -81,16 +84,17 @@ Dialog {
                 + String(colorValue).replace("#", "")
     }
 
-    function timelineCenterFor(milliseconds, timelineWidth) {
+    function timelinePositionFor(milliseconds, timelineWidth) {
         if (durationMs <= 0)
-            return handleWidth / 2
-        return handleWidth / 2
-                + clamp(milliseconds / durationMs, 0, 1) * Math.max(0, timelineWidth - handleWidth)
+            return handleWidth
+        return handleWidth
+                + clamp(milliseconds / durationMs, 0, 1)
+                  * Math.max(0, timelineWidth - handleWidth * 2)
     }
 
     function millisecondsAtTimelineX(positionX, timelineWidth) {
-        var usableWidth = Math.max(1, timelineWidth - handleWidth)
-        var ratio = (positionX - handleWidth / 2) / usableWidth
+        var usableWidth = Math.max(1, timelineWidth - handleWidth * 2)
+        var ratio = (positionX - handleWidth) / usableWidth
         return clamp(ratio, 0, 1) * durationMs
     }
 
@@ -441,7 +445,7 @@ Dialog {
                     Layout.minimumHeight: dialog.mediaType === "video" ? 112 : 96
                     Layout.preferredHeight: dialog.mediaType === "video" ? 280 : 150
                     radius: 11
-                    color: "#0b0d12"
+                    color: dialog.previewSurfaceColor
                     border.width: 1
                     border.color: appTheme.border_
                     clip: true
@@ -476,9 +480,10 @@ Dialog {
                             }
                         }
                         Label {
+                            objectName: "trimAudioPreviewLabel"
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: qsTr("Audio preview")
-                            color: appTheme.textSecondary
+                            color: dialog.previewSurfaceText
                             font.pixelSize: 12
                         }
                     }
@@ -508,7 +513,7 @@ Dialog {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.margins: 9
                             text: dialog.preparationError
-                            color: appTheme.warning
+                            color: dialog.previewSurfaceWarning
                             wrapMode: Text.Wrap
                             horizontalAlignment: Text.AlignHCenter
                             font.pixelSize: 11
@@ -528,10 +533,11 @@ Dialog {
 
                         Label {
                             id: mutedLabel
+                            objectName: "trimMutedPreviewLabel"
                             anchors.centerIn: parent
                             width: parent.width - 18
                             text: qsTr("Preview audio is muted while another media item is active.")
-                            color: appTheme.textSecondary
+                            color: dialog.previewSurfaceText
                             font.pixelSize: 10
                             elide: Text.ElideRight
                         }
@@ -589,6 +595,7 @@ Dialog {
 
                     Item {
                         id: timeline
+                        objectName: "trimTimeline"
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         enabled: dialog.sourceReady
@@ -599,8 +606,8 @@ Dialog {
                             objectName: "trimTrack"
                             anchors.left: parent.left
                             anchors.right: parent.right
-                            anchors.leftMargin: dialog.handleWidth / 2
-                            anchors.rightMargin: dialog.handleWidth / 2
+                            anchors.leftMargin: dialog.handleWidth
+                            anchors.rightMargin: dialog.handleWidth
                             anchors.verticalCenter: parent.verticalCenter
                             height: 7
                             radius: 3.5
@@ -609,11 +616,13 @@ Dialog {
 
                         Rectangle {
                             id: selectedRange
+                            objectName: "trimSelectedRange"
                             z: 1
-                            x: dialog.timelineCenterFor(dialog.startMs, timeline.width)
+                            x: dialog.timelinePositionFor(dialog.startMs, timeline.width)
                             y: track.y
-                            width: Math.max(2,
-                                            dialog.timelineCenterFor(dialog.endMs, timeline.width) - x)
+                            width: Math.max(
+                                       0,
+                                       dialog.timelinePositionFor(dialog.endMs, timeline.width) - x)
                             height: track.height
                             radius: track.radius
                             color: appTheme.accent
@@ -623,9 +632,9 @@ Dialog {
                             id: seekArea
                             objectName: "trimSeekArea"
                             z: 2
-                            x: selectedRange.x + dialog.handleWidth
+                            x: selectedRange.x
                             y: track.y - 10
-                            width: Math.max(0, selectedRange.width - dialog.handleWidth * 2)
+                            width: selectedRange.width
                             height: track.height + 20
                             enabled: timeline.enabled && width > 0
 
@@ -664,7 +673,8 @@ Dialog {
                         Rectangle {
                             id: playhead
                             z: 3
-                            x: dialog.timelineCenterFor(previewPlayer.position, timeline.width) - width / 2
+                            x: dialog.timelinePositionFor(
+                                   previewPlayer.position, timeline.width) - width / 2
                             y: track.y - 4
                             width: 2
                             height: track.height + 8
@@ -680,7 +690,7 @@ Dialog {
                             id: startHandle
                             z: 4
                             objectName: "trimStartHandle"
-                            x: dialog.timelineCenterFor(dialog.startMs, timeline.width) - width / 2
+                            x: dialog.timelinePositionFor(dialog.startMs, timeline.width) - width
                             y: track.y + track.height / 2 - height / 2
                             width: dialog.handleWidth
                             height: 28
@@ -691,12 +701,22 @@ Dialog {
 
                             MouseArea {
                                 id: startDrag
-                                anchors.fill: parent
-                                anchors.margins: -8
+                                objectName: "trimStartDragArea"
+                                property real grabOffsetX: 0
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.leftMargin: -8
+                                anchors.topMargin: -8
+                                anchors.bottomMargin: -8
                                 hoverEnabled: true
                                 cursorShape: Qt.SizeHorCursor
                                 onPressed: function(mouse) {
                                     previewPlayer.pause()
+                                    var point = mapToItem(timeline, mouse.x, mouse.y)
+                                    grabOffsetX = point.x - dialog.timelinePositionFor(
+                                                dialog.startMs, timeline.width)
                                     mouse.accepted = true
                                 }
                                 onPositionChanged: function(mouse) {
@@ -704,7 +724,9 @@ Dialog {
                                         return
                                     var point = mapToItem(timeline, mouse.x, mouse.y)
                                     dialog.startMs = dialog.clamp(
-                                                dialog.millisecondsAtTimelineX(point.x, timeline.width),
+                                                dialog.millisecondsAtTimelineX(
+                                                    point.x - grabOffsetX,
+                                                    timeline.width),
                                                 0,
                                                 dialog.endMs - dialog.minimumRangeMs)
                                     dialog.rangeDirty = true
@@ -720,7 +742,7 @@ Dialog {
                             id: endHandle
                             z: 4
                             objectName: "trimEndHandle"
-                            x: dialog.timelineCenterFor(dialog.endMs, timeline.width) - width / 2
+                            x: dialog.timelinePositionFor(dialog.endMs, timeline.width)
                             y: track.y + track.height / 2 - height / 2
                             width: dialog.handleWidth
                             height: 28
@@ -731,12 +753,22 @@ Dialog {
 
                             MouseArea {
                                 id: endDrag
-                                anchors.fill: parent
-                                anchors.margins: -8
+                                objectName: "trimEndDragArea"
+                                property real grabOffsetX: 0
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.rightMargin: -8
+                                anchors.topMargin: -8
+                                anchors.bottomMargin: -8
                                 hoverEnabled: true
                                 cursorShape: Qt.SizeHorCursor
                                 onPressed: function(mouse) {
                                     previewPlayer.pause()
+                                    var point = mapToItem(timeline, mouse.x, mouse.y)
+                                    grabOffsetX = point.x - dialog.timelinePositionFor(
+                                                dialog.endMs, timeline.width)
                                     mouse.accepted = true
                                 }
                                 onPositionChanged: function(mouse) {
@@ -744,7 +776,9 @@ Dialog {
                                         return
                                     var point = mapToItem(timeline, mouse.x, mouse.y)
                                     dialog.endMs = dialog.clamp(
-                                                dialog.millisecondsAtTimelineX(point.x, timeline.width),
+                                                dialog.millisecondsAtTimelineX(
+                                                    point.x - grabOffsetX,
+                                                    timeline.width),
                                                 dialog.startMs + dialog.minimumRangeMs,
                                                 dialog.durationMs)
                                     dialog.rangeDirty = true
@@ -758,12 +792,13 @@ Dialog {
 
                         Rectangle {
                             id: startBubble
+                            objectName: "trimStartBubble"
                             z: 5
                             x: dialog.clamp(
-                                   dialog.timelineCenterFor(dialog.startMs, timeline.width) - width / 2,
+                                   startHandle.x + startHandle.width / 2 - width / 2,
                                    0,
                                    Math.max(0, timeline.width - width))
-                            y: 0
+                            y: -17
                             width: startBubbleText.implicitWidth + 16
                             height: 26
                             radius: 8
@@ -797,12 +832,13 @@ Dialog {
 
                         Rectangle {
                             id: endBubble
+                            objectName: "trimEndBubble"
                             z: 5
                             x: dialog.clamp(
-                                   dialog.timelineCenterFor(dialog.endMs, timeline.width) - width / 2,
+                                   endHandle.x + endHandle.width / 2 - width / 2,
                                    0,
                                    Math.max(0, timeline.width - width))
-                            y: 0
+                            y: -17
                             width: endBubbleText.implicitWidth + 16
                             height: 26
                             radius: 8

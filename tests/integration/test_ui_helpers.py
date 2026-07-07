@@ -1,4 +1,23 @@
+from __future__ import annotations
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import pytest
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QWidget
+
 from solin.ui import helpers
+
+_APP = QApplication.instance()
+if _APP is None:
+    _APP = QApplication([])
+elif not isinstance(_APP, QApplication):
+    pytest.skip(
+        "UI helper tests require QApplication before QCoreApplication.",
+        allow_module_level=True,
+    )
 
 
 class _CursorTarget:
@@ -53,3 +72,15 @@ def test_qml_pointer_cursor_unsets_all_cursor_targets():
     assert qml_widget.unset_count == 1
     assert qml_widget.quick_window.unset_count == 1
     assert qml_widget.host_window.unset_count == 1
+
+
+def test_fade_in_removes_opacity_effect_after_animation():
+    widget = QWidget()
+
+    helpers.fade_in(widget, duration=1)
+
+    assert isinstance(widget.graphicsEffect(), QGraphicsOpacityEffect)
+
+    QTest.qWait(30)
+
+    assert widget.graphicsEffect() is None

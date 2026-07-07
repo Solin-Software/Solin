@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+from solin.core.integrations.automation import screen_share
+
+
+def _window(
+    window_id: str,
+    *,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+) -> screen_share._ZoomWindowInfo:
+    return screen_share._ZoomWindowInfo(
+        window_id=window_id,
+        owner="zoom.exe",
+        x=x,
+        y=y,
+        width=width,
+        height=height,
+    )
+
+
+def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
+    dialog = _window("dialog", x=-1200, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: {})
+    monkeypatch.setattr(
+        screen_share,
+        "_wait_for_new_zoom_window",
+        lambda _initial: dialog,
+    )
+    monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
+    monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
+        or True,
+    )
+
+    assert screen_share.execute_start_share("Alt+S", 300, 250) is True
+    assert clicks == [(300, 250, 2, 120)]
+
+
+def test_execute_start_share_without_target_sends_hotkey_only(monkeypatch):
+    sent_hotkeys: list[str] = []
+    clicks: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        screen_share,
+        "send_hotkey",
+        lambda hotkey: sent_hotkeys.append(hotkey) or True,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
+        or True,
+    )
+
+    assert screen_share.execute_start_share("Alt+S") is True
+    assert sent_hotkeys == ["Alt+S"]
+    assert clicks == []
+
+
+def test_execute_start_share_rejects_missing_hotkey_before_click(monkeypatch):
+    clicks: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
+        or True,
+    )
+
+    assert screen_share.execute_start_share("", 300, 250) is False
+    assert clicks == []

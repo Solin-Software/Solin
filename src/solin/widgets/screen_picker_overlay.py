@@ -1,10 +1,4 @@
-"""
-ScreenPickerOverlay — fullscreen overlay for configuring Quick Share Click position.
-
-Covers the primary monitor with a semi-transparent dark layer (like Win+Shift+S).
-Shows a crosshair marker at the configured position (if any).
-On click: saves the new position, shows the marker, and fades out after 1 second.
-"""
+"""Desktop overlay for configuring the automatic share click position."""
 
 from __future__ import annotations
 
@@ -13,10 +7,20 @@ import sys
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import (
-    Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, Signal,
+    QEasingCurve,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
 )
 from PySide6.QtGui import (
-    QGuiApplication, QPainter, QColor, QPen, QBrush, QScreen,
+    QBrush,
+    QColor,
+    QGuiApplication,
+    QPainter,
+    QPen,
+    QScreen,
 )
 
 log = logging.getLogger(__name__)
@@ -34,14 +38,10 @@ _CLOSE_DELAY_MS   = 1000           # delay before starting fade-out after click
 
 
 class ScreenPickerOverlay(QWidget):
-    """
-    Fullscreen overlay on the primary monitor.
-
-    Signals:
-        position_picked(int, int): emitted with (x, y) screen coords when user clicks.
-    """
+    """Fullscreen overlay on the primary monitor."""
 
     position_picked = Signal(int, int)
+    cancelled = Signal()
 
     def __init__(
         self,
@@ -64,9 +64,9 @@ class ScreenPickerOverlay(QWidget):
 
         # Marker state
         self._marker_pos: QPoint | None = None
-        self._picked = False   # True after user clicks (prevents re-click)
-
-        # Load existing position
+        self._picked = False
+        self._cancelled_emitted = False
+        self._error_message = ""
         if current_x >= 0 and current_y >= 0:
             self._marker_pos = QPoint(current_x, current_y)
 
@@ -81,7 +81,7 @@ class ScreenPickerOverlay(QWidget):
         self._fade_anim.setEasingCurve(QEasingCurve.Type.InQuad)
         self._fade_anim.finished.connect(self.close)
 
-        # Position on primary screen
+        # Position on primary screen.
         self._setup_geometry()
 
     # ── Setup ─────────────────────────────────────────────────────────────
@@ -91,9 +91,7 @@ class ScreenPickerOverlay(QWidget):
         screen: QScreen | None = QGuiApplication.primaryScreen()
         if screen is None:
             return
-        geo = screen.geometry()
-        self.setGeometry(geo)
-        self._screen_geo = geo
+        self.setGeometry(screen.geometry())
 
     # ── Paint ─────────────────────────────────────────────────────────────
 
@@ -126,7 +124,7 @@ class ScreenPickerOverlay(QWidget):
         p.drawText(
             esc_rect,
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-            self.tr("Press ESC to cancel"),
+            self._error_message or self.tr("Press ESC to cancel"),
         )
 
         # 4) Draw marker if position is set
@@ -179,18 +177,12 @@ class ScreenPickerOverlay(QWidget):
             return  # Already picked, ignore further clicks
 
         if event.button() == Qt.MouseButton.LeftButton:
-            # Map widget-local click to global screen coords
             global_pos = self.mapToGlobal(event.position().toPoint())
             self._marker_pos = global_pos
             self._picked = True
-
-            # Emit signal with screen coords
+            self._error_message = ""
             self.position_picked.emit(global_pos.x(), global_pos.y())
-
-            # Repaint to show marker at new position
             self.update()
-
-            # Schedule fade-out
             self._close_timer.start(_CLOSE_DELAY_MS)
 
         event.accept()
@@ -202,6 +194,12 @@ class ScreenPickerOverlay(QWidget):
             self.close()
         else:
             super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        if not self._picked and not self._cancelled_emitted:
+            self._cancelled_emitted = True
+            self.cancelled.emit()
+        super().closeEvent(event)
 
     # ── Fade-out ──────────────────────────────────────────────────────────
 
@@ -216,9 +214,6 @@ class ScreenPickerOverlay(QWidget):
         """Show the overlay covering the primary screen."""
         self.setWindowOpacity(1.0)
         if sys.platform == "darwin":
-            # showFullScreen() creates a dedicated macOS Space and makes the
-            # windows underneath disappear. A borderless, top-level window keeps
-            # the current desktop visible through the translucent overlay.
             self.show()
         else:
             self.showFullScreen()

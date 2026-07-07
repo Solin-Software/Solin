@@ -124,7 +124,7 @@ def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
 # ── Qt widget icons (usa currentColor para fácil coloração) ───────────────────
 
 _SVG_CACHE: dict[str, str] = {}
-_ICON_NAMES = frozenset(('ICON_PLAY', 'ICON_PAUSE', 'ICON_PLAY_PAUSE', 'ICON_VOLUME_HIGH', 'ICON_VOLUME_LOW', 'ICON_VOLUME_MUTE', 'ICON_MUSIC', 'ICON_SONG_ANNOUNCEMENT', 'ICON_VIDEO', 'ICON_CAMERA', 'ICON_IMAGE', 'ICON_CLOSE', 'ICON_MORE_VERT', 'ICON_MENU', 'ICON_ARROW_LEFT', 'ICON_IMPORT', 'ICON_EXPORT', 'ICON_PLUS', 'ICON_TRASH', 'ICON_EDIT', 'ICON_GRIP', 'ICON_REPEAT', 'ICON_SHUFFLE', 'ICON_SKIP_NEXT', 'ICON_SKIP_PREV', 'ICON_PANEL_RIGHT', 'ICON_SCREEN', 'ICON_PLAY_ALL', 'ICON_PLAY_SHUFFLE', 'ICON_CHEVRON_DOWN', 'ICON_CHEVRON_UP', 'ICON_NAV_SONGS', 'ICON_NAV_BROWSER', 'ICON_NAV_CLIPS', 'ICON_NAV_TIMER', 'ICON_NAV_SETTINGS', 'ICON_MONITOR', 'ICON_TV', 'ICON_SET_AS_IDLE', 'ICON_CAST', 'ICON_NAV_THEME', 'ICON_NAV_PLAYLIST', 'ICON_ADD_TO_PLAYLIST', 'ICON_SEND_TO_PLAYLIST', 'ICON_SAVE_PLAYLIST', 'ICON_CROP', 'ICON_MEDIA_TRIM', 'ICON_CLOUD_DOWNLOAD', 'ICON_CLOUD_DONE', 'ICON_AUDIO_COVER', 'ICON_AUTO_DOWNLOAD', 'JS_SVG_IMAGE', 'JS_SVG_VIDEO', 'ICON_NAV_CACHE', 'ICON_NAV_WIFI', 'ICON_NAV_MEETINGS', 'ICON_HOME', 'ICON_CHEVRON_LEFT', 'ICON_CHEVRON_RIGHT', 'ICON_CALENDAR', 'ICON_FLAG_PT_BR', 'ICON_FLAG_EN_US', 'ICON_FLAG_ES', 'ICON_FLAG_FR_FR', 'ICON_FLAG_IT_IT', 'ICON_FLAG_ZH_CN', 'ICON_FLAG_JA_JP', 'ICON_OBS', 'ICON_REC_CIRCLE', 'ICON_REC_STOP', 'ICON_FOLDER_LINK', 'ICON_ZOOM', 'ICON_PEOPLE', 'ICON_INFO_CIRCLE', 'ICON_SPEAKER_PHONE', 'ICON_OVERLAY_CLOSE', 'ICON_BOOK', 'ICON_PLUG', 'ICON_CLAPPERBOARD', 'ICON_PACKAGE', 'ICON_KEYBOARD', 'ICON_CROSSHAIR', 'ICON_SHIELD', 'ICON_SHARE_SCREEN', 'ICON_ASPECT_MATCH', 'ICON_BOUNDS', 'ICON_SECTION', 'ICON_MARKER', 'ICON_PALETTE', 'ICON_FULLSCREEN', 'ICON_FULLSCREEN_EXIT',))
+_ICON_NAMES = frozenset(('ICON_PLAY', 'ICON_PAUSE', 'ICON_PLAY_PAUSE', 'ICON_VOLUME_HIGH', 'ICON_VOLUME_LOW', 'ICON_VOLUME_MUTE', 'ICON_MUSIC', 'ICON_SONG_ANNOUNCEMENT', 'ICON_VIDEO', 'ICON_CAMERA', 'ICON_IMAGE', 'ICON_CLOSE', 'ICON_MORE_VERT', 'ICON_MENU', 'ICON_ARROW_LEFT', 'ICON_IMPORT', 'ICON_EXPORT', 'ICON_PLUS', 'ICON_TRASH', 'ICON_EDIT', 'ICON_GRIP', 'ICON_REPEAT', 'ICON_SHUFFLE', 'ICON_SKIP_NEXT', 'ICON_SKIP_PREV', 'ICON_PANEL_RIGHT', 'ICON_SCREEN', 'ICON_PLAY_ALL', 'ICON_PLAY_SHUFFLE', 'ICON_CHEVRON_DOWN', 'ICON_CHEVRON_UP', 'ICON_NAV_SONGS', 'ICON_NAV_BROWSER', 'ICON_NAV_CLIPS', 'ICON_NAV_TIMER', 'ICON_NAV_SETTINGS', 'ICON_MONITOR', 'ICON_TV', 'ICON_SET_AS_IDLE', 'ICON_CAST', 'ICON_NAV_THEME', 'ICON_NAV_PLAYLIST', 'ICON_ADD_TO_PLAYLIST', 'ICON_SEND_TO_PLAYLIST', 'ICON_SAVE_PLAYLIST', 'ICON_CROP', 'ICON_MEDIA_TRIM', 'ICON_MEDIA_LANGUAGE', 'ICON_CLOUD_DOWNLOAD', 'ICON_MANUAL_DOWNLOAD', 'ICON_CLOUD_DONE', 'ICON_AUDIO_COVER', 'ICON_AUTO_DOWNLOAD', 'JS_SVG_IMAGE', 'JS_SVG_VIDEO', 'ICON_NAV_CACHE', 'ICON_NAV_WIFI', 'ICON_NAV_MEETINGS', 'ICON_HOME', 'ICON_CHEVRON_LEFT', 'ICON_CHEVRON_RIGHT', 'ICON_CALENDAR', 'ICON_FLAG_PT_BR', 'ICON_FLAG_EN_US', 'ICON_FLAG_ES', 'ICON_FLAG_FR_FR', 'ICON_FLAG_IT_IT', 'ICON_FLAG_ZH_CN', 'ICON_FLAG_JA_JP', 'ICON_OBS', 'ICON_REC_CIRCLE', 'ICON_REC_STOP', 'ICON_FOLDER_LINK', 'ICON_ZOOM', 'ICON_PEOPLE', 'ICON_INFO_CIRCLE', 'ICON_SPEAKER_PHONE', 'ICON_OVERLAY_CLOSE', 'ICON_BOOK', 'ICON_PLUG', 'ICON_CLAPPERBOARD', 'ICON_PACKAGE', 'ICON_KEYBOARD', 'ICON_CROSSHAIR', 'ICON_SHIELD', 'ICON_SHARE_SCREEN', 'ICON_ASPECT_MATCH', 'ICON_BOUNDS', 'ICON_SECTION', 'ICON_MARKER', 'ICON_PALETTE', 'ICON_FULLSCREEN', 'ICON_FULLSCREEN_EXIT',))
 _FLAG_ICON_NAMES: dict[str, str] = {
     'pt_BR': 'ICON_FLAG_PT_BR',
     'en': 'ICON_FLAG_EN_US',
@@ -567,6 +567,23 @@ def _build_icon_svg(name: str) -> str:
             '<path d="M8.25 15.5 21.5 3.5"/>'
             '</svg>'
         )
+    elif name == 'ICON_MEDIA_LANGUAGE':
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+            '<defs>'
+            '<mask id="mediaLanguageMask">'
+            '<path fill="#fff" d="M0 0h24v24H0z"/>'
+            '<rect x="2.25" y="6.25" width="15.5" height="15.5" rx="2.8" fill="#000"/>'
+            '</mask>'
+            '</defs>'
+            '<rect x="6" y="2.75" width="15.5" height="15.5" rx="2.8"'
+            ' stroke="currentColor" stroke-width="1.3" opacity=".55"'
+            ' mask="url(#mediaLanguageMask)"/>'
+            '<rect x="2.25" y="6.25" width="15.5" height="15.5" rx="2.8"'
+            ' stroke="currentColor" stroke-width="1.5"/>'
+            '<path d="M7.4 10.1 13.9 14l-6.5 3.9z" fill="currentColor"/>'
+            '</svg>'
+        )
     elif name == 'ICON_CLOUD_DOWNLOAD':
         return (
             # SVG fornecido pelo designer — nuvem + seta de download
@@ -575,6 +592,16 @@ def _build_icon_svg(name: str) -> str:
             '<path d="M6.5 17a4.5 4.5 0 1 1 .8-8.9 5.5 5.5 0 0 1 9.7.4 3.8 3.8 0 1 1 .8 7.5"/>'
             '<path d="M12 10.7v8.6"/>'
             '<path d="m9.8 17.8 2.2 2.5 2.2-2.5"/>'
+            '</svg>'
+        )
+    elif name == 'ICON_MANUAL_DOWNLOAD':
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M6.4 16.6a4.15 4.15 0 0 1 .8-8.2 5.05 5.05 0 0 1 9.1.35 3.55 3.55 0 0 1 .9 7.05"/>'
+            '<path d="M12 10.6v7.3"/>'
+            '<path d="m9.8 15.8 2.2 2.3 2.2-2.3"/>'
+            '<path d="M8.7 20.6h6.6"/>'
             '</svg>'
         )
     elif name == 'ICON_CLOUD_DONE':

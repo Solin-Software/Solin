@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Nie skonfigurowano</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>Edytuj</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Pozycja kliknięcia</translation>
+        <source>Share target</source>
+        <translation>Cel udostępniania</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Pozycja kliknięcia po otwarciu okna udostępniania, aby wybrać cel.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Miejsce, w którym Solin ma kliknąć po otwarciu okna przez skrót udostępniania Zoom.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Skonfigurowano</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Pozycja kliknięcia</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Pozycja kliknięcia po otwarciu okna udostępniania, aby wybrać cel.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>Skonfiguruj</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Naciśnij skrót Zoom, który rozpoczyna i zatrzymuje udostępnianie ekranu.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Pozycja: {x}, {y}</translation>
+        <translation type="vanished">Pozycja: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin może wysłać automatyczne kliknięcie.</translation>
     </message>
@@ -1027,13 +1039,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Wstrzymaj odtwarzanie przed zmianą wyświetlanej treści.</translation>
     </message>
@@ -1588,7 +1600,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Tego pliku multimedialnego nie można edytować.</translation>
     </message>
@@ -1620,12 +1632,12 @@
         <translation>Zamknij</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Podgląd audio</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Dźwięk podglądu jest wyciszony, gdy aktywny jest inny element multimedialny.</translation>
     </message>
@@ -1640,12 +1652,12 @@
         <translation>Odtwórz</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Koniec</translation>
     </message>
@@ -2180,6 +2192,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Anuluj</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 z 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Wstecz</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Zacznij używać Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Kontynuuj</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Witamy w Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Skonfiguruj przejrzyste, niezawodne środowisko do zebrań i multimediów.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Nazwa profilu</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Przykład: sala główna</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>Każdy profil zachowuje własne ustawienia i playlisty.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Przygotuj Solin do swojej konfiguracji</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Wybierz języki i zdecyduj, jak obsługiwać multimedia zebrania.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Język interfejsu</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Język multimediów</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Multimedia zebrania</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Pobieraj automatycznie</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Zachowaj ten i przyszły tydzień dostępne offline.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Pobieranie ręczne</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>Pobieraj multimedia tylko po kliknięciu przycisku chmury.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Wybierz, jak Solin ma pomóc</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Wybierz jedną opcję, obie albo skonfiguruj je później.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Steruj scenami i kamerami z Solin.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Udostępniaj ekran automatycznie.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>Skonfiguruj później</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Połącz z OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Używaj scen i kamer OBS z Solin. Automatyczne przełączanie jest opcjonalne.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>Port WebSocket</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Hasło (opcjonalnie)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Łączenie…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Połącz</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Potrzebujesz pomocy z konfiguracją OBS?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Automatyczne przełączanie scen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Solin przełącza sceny podczas prezentowania multimediów.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Ręczne sterowanie scenami i kamerami pozostaje dostępne.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Scena domyślna</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Scena multimediów</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>Skonfiguruj OBS później</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Skonfiguruj udostępnianie Zoom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>Zarejestruj skrót udostępniania i wybierz cel kliknięcia, którego Solin ma używać.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Skrót udostępniania</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>Kliknij tutaj, a następnie naciśnij skrót Zoom do rozpoczęcia/zatrzymania udostępniania.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Naciśnij skrót</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>Zarejestruj skrót</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Cel udostępniania</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Cel skonfigurowany</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Wybierz pozycję kliknięcia na głównym monitorze.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Wybierz ponownie</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Wybierz cel</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Skonfiguruj Zoom później</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Wszystko wygląda na gotowe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Sprawdź swoje wybory. Możesz je później zmienić w Ustawieniach.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Języki</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Ten i przyszły tydzień</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Nie skonfigurowano</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Połączono · automatyczne przełączanie scen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Połączono · sterowanie ręczne</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Automatyczne udostępnianie gotowe</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Kończenie…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Wybierz scenę</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Zamknij</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Szukaj języków</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2629,7 +2954,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Anuluj</translation>
     </message>
@@ -2642,302 +2967,249 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Rozłączono</translation>
+        <translation type="vanished">Rozłączono</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Łączenie…</translation>
+        <translation type="vanished">Łączenie…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Połączono z OBS Studio</translation>
+        <translation type="vanished">Połączono z OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Błąd: {msg}</translation>
+        <translation type="vanished">Błąd: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Błąd połączenia</translation>
+        <translation type="vanished">Błąd połączenia</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Wybierz scenę —</translation>
+        <translation type="vanished">— Wybierz scenę —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Kto korzysta z programu Solin?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Nowy profil</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Anuluj</translation>
+        <translation type="vanished">Anuluj</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Pomiń konfigurację</translation>
+        <translation type="vanished">Pomiń konfigurację</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Nazwa profilu</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Przykład: Zbór A, Imię, …</translation>
+        <translation type="vanished">Przykład: Zbór A, Imię, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Profil 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Dalej →</translation>
+        <translation type="vanished">Dalej →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Witamy w Solin</translation>
+        <translation type="vanished">Witamy w Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Nadaj nazwę temu profilowi. Każdy profil przechowuje własne ustawienia i playlisty — jest to przydatne przy zarządzaniu różnymi konfiguracjami.</translation>
+        <translation type="vanished">Nadaj nazwę temu profilowi. Każdy profil przechowuje własne ustawienia i playlisty — jest to przydatne przy zarządzaniu różnymi konfiguracjami.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Język interfejsu</translation>
+        <translation type="vanished">Język interfejsu</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Określa język menu, przycisków i całego tekstu wyświetlanego w aplikacji.</translation>
+        <translation type="vanished">Określa język menu, przycisków i całego tekstu wyświetlanego w aplikacji.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Język treści</translation>
+        <translation type="vanished">Język treści</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Język pieśni, filmów i innych materiałów pobieranych z serwisu JW.org.</translation>
+        <translation type="vanished">Język pieśni, filmów i innych materiałów pobieranych z serwisu JW.org.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Preferencje językowe</translation>
+        <translation type="vanished">Preferencje językowe</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Wybierz język interfejsu oraz język materiałów multimedialnych z serwisu JW.org.</translation>
+        <translation type="vanished">Wybierz język interfejsu oraz język materiałów multimedialnych z serwisu JW.org.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Program Solin łączy się z OBS Studio przez WebSocket, aby automatycznie przełączać sceny podczas odtwarzania multimediów — pieśni, filmy i obrazy są płynnie przesyłane do transmisji na żywo.</translation>
+        <translation type="vanished">Program Solin łączy się z OBS Studio przez WebSocket, aby automatycznie przełączać sceny podczas odtwarzania multimediów — pieśni, filmy i obrazy są płynnie przesyłane do transmisji na żywo.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Utwórz główną scenę z kamerą. W przypadku kamer internetowych USB dodaj źródło „Urządzenie do przechwytywania wideo”.</translation>
+        <translation type="vanished">Utwórz główną scenę z kamerą. W przypadku kamer internetowych USB dodaj źródło „Urządzenie do przechwytywania wideo”.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>W przypadku kamer IP dodaj „Źródło mediów” i wprowadź adres URL strumienia RTSP swojej kamery.</translation>
+        <translation type="vanished">W przypadku kamer IP dodaj „Źródło mediów” i wprowadź adres URL strumienia RTSP swojej kamery.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Utwórz dodatkowe sceny dla różnych kadrów (mówca, czytający, scena), używając opcji Źródło → Scena, a następnie dostosuj przycięcie i przekształcenie dla każdego widoku.</translation>
+        <translation type="vanished">Utwórz dodatkowe sceny dla różnych kadrów (mówca, czytający, scena), używając opcji Źródło → Scena, a następnie dostosuj przycięcie i przekształcenie dla każdego widoku.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Utwórz oddzielną scenę multimedialną dla projekcji Solin. Po podłączeniu zewnętrznego monitora dodaj źródło „Przechwytywanie ekranu” i wybierz monitor, na którym będą wyświetlane pieśni, filmy i obrazy.</translation>
+        <translation type="vanished">Utwórz oddzielną scenę multimedialną dla projekcji Solin. Po podłączeniu zewnętrznego monitora dodaj źródło „Przechwytywanie ekranu” i wybierz monitor, na którym będą wyświetlane pieśni, filmy i obrazy.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Przykład adresu URL RTSP:</translation>
+        <translation type="vanished">Przykład adresu URL RTSP:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>Skonfiguruj swoje sceny</translation>
+        <translation type="vanished">Skonfiguruj swoje sceny</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>Przed nawiązaniem połączenia skonfiguruj źródła kamery i utwórz układy scen w programie OBS.</translation>
+        <translation type="vanished">Przed nawiązaniem połączenia skonfiguruj źródła kamery i utwórz układy scen w programie OBS.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Otwórz OBS Studio</translation>
+        <translation type="vanished">Otwórz OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Przejdź do Narzędzia → Ustawienia serwera WebSocket</translation>
+        <translation type="vanished">Przejdź do Narzędzia → Ustawienia serwera WebSocket</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>Zaznacz „Włącz serwer WebSocket”</translation>
+        <translation type="vanished">Zaznacz „Włącz serwer WebSocket”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Potwierdź port (domyślnie: 4455) i w razie potrzeby ustaw hasło</translation>
+        <translation type="vanished">Potwierdź port (domyślnie: 4455) i w razie potrzeby ustaw hasło</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>Kliknij Zastosuj i zrestartuj OBS, jeśli pojawi się monit</translation>
+        <translation type="vanished">Kliknij Zastosuj i zrestartuj OBS, jeśli pojawi się monit</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>Włącz serwer WebSocket</translation>
+        <translation type="vanished">Włącz serwer WebSocket</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin komunikuje się z OBS za pomocą tego protokołu.</translation>
+        <translation type="vanished">Solin komunikuje się z OBS za pomocą tego protokołu.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>Włącz integrację z OBS</translation>
+        <translation type="vanished">Włącz integrację z OBS</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>Port WebSocket</translation>
+        <translation type="vanished">Port WebSocket</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Hasło (opcjonalnie)</translation>
+        <translation type="vanished">Hasło (opcjonalnie)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Pozostaw puste, jeśli hasło nie jest ustawione</translation>
+        <translation type="vanished">Pozostaw puste, jeśli hasło nie jest ustawione</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Rozłączono</translation>
+        <translation type="vanished">Rozłączono</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Scena domyślna (bezczynność)</translation>
+        <translation type="vanished">Scena domyślna (bezczynność)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scena wyświetlana, gdy nic nie jest prezentowane.</translation>
+        <translation type="vanished">Scena wyświetlana, gdy nic nie jest prezentowane.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Scena okna multimediów</translation>
+        <translation type="vanished">Scena okna multimediów</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scena przechwytująca monitor projekcyjny. Aktywowana podczas wyświetlania treści.</translation>
+        <translation type="vanished">Scena przechwytująca monitor projekcyjny. Aktywowana podczas wyświetlania treści.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Połącz Solin z OBS</translation>
+        <translation type="vanished">Połącz Solin z OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Wprowadź ten sam port i hasło, które skonfigurowano w OBS.</translation>
+        <translation type="vanished">Wprowadź ten sam port i hasło, które skonfigurowano w OBS.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Zakończ konfigurację</translation>
+        <translation type="vanished">Zakończ konfigurację</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Połącz się z OBS, aby automatycznie przełączać sceny podczas prezentacji.</translation>
+        <translation type="vanished">Połącz się z OBS, aby automatycznie przełączać sceny podczas prezentacji.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>Znaleziono istniejące ustawienia</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Program Solin znalazł ustawienia i playlisty z poprzedniej wersji. Nadaj nazwę temu profilowi, aby kontynuować pracę z użyciem swoich danych:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Przykład: Zbór Centralny</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Potwierdź i przenieś dane</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Zmień nazwę</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Usuń</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Usuń profil</translation>
     </message>
@@ -2952,37 +3224,33 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Spowoduje to usunięcie playlist, obrazów, odebranych multimediów, pamięci podręcznej przeglądarki oraz ustawień tego profilu. Tej czynności nie można cofnąć.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Profil {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Proszę podać nazwę profilu.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Nazwa nie może być pusta.</translation>
+        <translation type="vanished">Nazwa nie może być pusta.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Czy chcesz pominąć wstępną konfigurację?</translation>
+        <translation type="vanished">Czy chcesz pominąć wstępną konfigurację?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Języki i ustawienia OBS można skonfigurować później w Ustawieniach.</translation>
+        <translation type="vanished">Języki i ustawienia OBS można skonfigurować później w Ustawieniach.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Mój profil</translation>
+        <translation type="vanished">Mój profil</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3238,7 +3506,7 @@ Tej akcji nie można cofnąć.</translation>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>Kliknij pozycję docelową udostępniania</translation>
     </message>
@@ -3622,7 +3890,17 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Używa jednego skrótu Zoom do rozpoczynania i zatrzymywania udostępniania ekranu.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Cel udostępniania</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Kafelek „Solin Media Preview” w oknie udostępniania Zoom.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Uprawnienie Dostępność</translation>
     </message>
@@ -3632,17 +3910,15 @@ Tej akcji nie można cofnąć.</translation>
         <translation>Otwórz ustawienia</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Pozycja kliknięcia</translation>
+        <translation type="vanished">Pozycja kliknięcia</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Pozycja kliknięcia po otwarciu okna udostępniania, aby wybrać cel.</translation>
+        <translation type="vanished">Pozycja kliknięcia po otwarciu okna udostępniania, aby wybrać cel.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>Skonfiguruj</translation>
     </message>

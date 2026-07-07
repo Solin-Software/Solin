@@ -175,7 +175,8 @@ class AutoShareSettingsStore(_ProfilePrefsSettings):
         self.settings.sync()
 
     def is_configured(self) -> bool:
-        return self.is_enabled() and bool(self.hotkey())
+        x, y = self.click_position()
+        return self.is_enabled() and bool(self.hotkey()) and x >= 0 and y >= 0
 
     def click_position(self) -> tuple[int, int]:
         return (
@@ -183,7 +184,13 @@ class AutoShareSettingsStore(_ProfilePrefsSettings):
             _as_int(self.settings.value(SettingsKey.SHARE_CLICK_Y, -1, int), -1),
         )
 
+    def has_click_position(self) -> bool:
+        x, y = self.click_position()
+        return x >= 0 and y >= 0
+
     def set_click_position(self, x: int, y: int) -> None:
+        if x < 0 or y < 0:
+            raise ValueError("Share click position must use non-negative coordinates")
         self.settings.set_value(SettingsKey.SHARE_CLICK_X, int(x), sync=False)
         self.settings.set_value(SettingsKey.SHARE_CLICK_Y, int(y), sync=False)
         self.settings.sync()

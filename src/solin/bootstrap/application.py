@@ -387,6 +387,7 @@ def _create_profile_screen(container, lang_manager):
     from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.ui.profile_screen import ProfileScreen
+    from solin.widgets.screen_picker_overlay import ScreenPickerOverlay
 
     obs_probe = OnboardingOBSProbe(
         lambda settings, parent: OBSWebSocketService(settings, parent=parent)
@@ -400,6 +401,7 @@ def _create_profile_screen(container, lang_manager):
         ),
         onboarding_service=container.onboarding_service,
         obs_probe=obs_probe,
+        target_picker_factory=ScreenPickerOverlay,
     )
 
 

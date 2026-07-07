@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Belum dikonfigurasi</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Posisi Klik</translation>
+        <source>Share target</source>
+        <translation>Target berbagi</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Tempat Solin harus mengklik setelah pintasan berbagi Zoom membuka dialog.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Sudah dikonfigurasi</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Posisi Klik</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>Konfigurasi</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Tekan pintasan Zoom yang memulai dan menghentikan berbagi layar.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Posisi: {x}, {y}</translation>
+        <translation type="vanished">Posisi: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin dapat mengirim klik otomatis.</translation>
     </message>
@@ -1025,13 +1037,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Jeda pemutaran sebelum mengubah konten yang diproyeksikan.</translation>
     </message>
@@ -1584,7 +1596,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Media ini tidak tersedia untuk diedit.</translation>
     </message>
@@ -1616,12 +1628,12 @@
         <translation>Tutup</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Pratinjau audio</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Audio pratinjau dibisukan saat item media lain aktif.</translation>
     </message>
@@ -1636,12 +1648,12 @@
         <translation>Putar</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Mulai</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Selesai</translation>
     </message>
@@ -2174,6 +2186,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Batal</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 dari 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Kembali</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Mulai gunakan Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Lanjutkan</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Selamat datang di Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Siapkan ruang kerja yang rapi dan andal untuk perhimpunan dan media.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Nama profil</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Contoh: Aula Utama</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>Setiap profil menyimpan pengaturan dan daftar putarnya sendiri.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Siapkan Solin untuk pengaturan Anda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Pilih bahasa dan tentukan cara media perhimpunan ditangani.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Bahasa antarmuka</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Bahasa media</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Media perhimpunan</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Unduh otomatis</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Simpan minggu ini dan minggu depan agar tersedia offline.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Unduhan manual</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>Unduh media hanya saat Anda mengklik tombol awan.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Pilih bagaimana Solin akan membantu</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Pilih satu opsi, keduanya, atau atur nanti.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Kendalikan adegan dan kamera dari Solin.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Bagikan layar Anda secara otomatis.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>Siapkan nanti</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Hubungkan OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Gunakan adegan dan kamera OBS dari Solin. Pergantian otomatis bersifat opsional.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>Port WebSocket</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Kata sandi (opsional)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Menghubungkan…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Hubungkan</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Butuh bantuan menyiapkan OBS?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Pergantian adegan otomatis</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Solin mengganti adegan saat media diproyeksikan.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Kontrol adegan dan kamera manual tetap tersedia.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Adegan standar</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Adegan media</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>Siapkan OBS nanti</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Siapkan berbagi Zoom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>Rekam pintasan berbagi dan pilih target klik yang harus digunakan Solin.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Pintasan berbagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>Klik di sini, lalu tekan pintasan Zoom untuk mulai/berhenti berbagi.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Tekan pintasan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>Rekam pintasan</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Target berbagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Target dikonfigurasi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Pilih posisi klik pada monitor utama Anda.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Pilih lagi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Pilih target</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Siapkan Zoom nanti</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Semuanya terlihat siap</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Tinjau pilihan Anda. Anda dapat mengubahnya nanti di Pengaturan.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Bahasa</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Minggu ini dan minggu depan</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Belum dikonfigurasi</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Terhubung · pergantian adegan otomatis</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Terhubung · kontrol manual</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Berbagi otomatis siap</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Menyelesaikan…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Pilih adegan</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Tutup</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Cari bahasa</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2621,7 +2946,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Batal</translation>
     </message>
@@ -2634,302 +2959,249 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Terputus</translation>
+        <translation type="vanished">Terputus</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Menghubungkan…</translation>
+        <translation type="vanished">Menghubungkan…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Terhubung ke OBS Studio</translation>
+        <translation type="vanished">Terhubung ke OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Kesalahan: {msg}</translation>
+        <translation type="vanished">Kesalahan: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Kesalahan koneksi</translation>
+        <translation type="vanished">Kesalahan koneksi</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Pilih adegan —</translation>
+        <translation type="vanished">— Pilih adegan —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Siapa yang menggunakan Solin?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Profil Baru</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Batal</translation>
+        <translation type="vanished">Batal</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Lewati penyiapan</translation>
+        <translation type="vanished">Lewati penyiapan</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Nama profil</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Contoh: Sidang A, Nama, …</translation>
+        <translation type="vanished">Contoh: Sidang A, Nama, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Profil 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Lanjutkan →</translation>
+        <translation type="vanished">Lanjutkan →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Selamat datang di Solin</translation>
+        <translation type="vanished">Selamat datang di Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Berikan nama untuk profil ini. Setiap profil menyimpan pengaturan dan daftar putarnya sendiri — sangat berguna untuk mengelola berbagai pengaturan.</translation>
+        <translation type="vanished">Berikan nama untuk profil ini. Setiap profil menyimpan pengaturan dan daftar putarnya sendiri — sangat berguna untuk mengelola berbagai pengaturan.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Bahasa antarmuka</translation>
+        <translation type="vanished">Bahasa antarmuka</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Mengatur menu, tombol, dan semua teks yang ditampilkan di seluruh aplikasi.</translation>
+        <translation type="vanished">Mengatur menu, tombol, dan semua teks yang ditampilkan di seluruh aplikasi.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Bahasa konten</translation>
+        <translation type="vanished">Bahasa konten</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Bahasa untuk Lagu-Lagu, video, dan media lain yang diunduh dari JW.org.</translation>
+        <translation type="vanished">Bahasa untuk Lagu-Lagu, video, dan media lain yang diunduh dari JW.org.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Preferensi bahasa</translation>
+        <translation type="vanished">Preferensi bahasa</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Pilih bahasa untuk antarmuka dan untuk konten media dari JW.org.</translation>
+        <translation type="vanished">Pilih bahasa untuk antarmuka dan untuk konten media dari JW.org.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin terhubung ke OBS Studio melalui WebSocket untuk mengganti adegan secara otomatis saat pemutaran media — Lagu-Lagu, video, dan gambar dikirim dengan lancar ke output siaran Anda.</translation>
+        <translation type="vanished">Solin terhubung ke OBS Studio melalui WebSocket untuk mengganti adegan secara otomatis saat pemutaran media — Lagu-Lagu, video, dan gambar dikirim dengan lancar ke output siaran Anda.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Buat adegan utama dengan kamera Anda. Untuk kamera web USB, tambahkan sumber Perangkat Penangkap Video.</translation>
+        <translation type="vanished">Buat adegan utama dengan kamera Anda. Untuk kamera web USB, tambahkan sumber Perangkat Penangkap Video.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>Untuk kamera IP, tambahkan Sumber Media dan masukkan URL aliran RTSP kamera Anda.</translation>
+        <translation type="vanished">Untuk kamera IP, tambahkan Sumber Media dan masukkan URL aliran RTSP kamera Anda.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Buat adegan tambahan untuk pembingkaian yang berbeda (pembicara, pembaca, panggung) menggunakan Sumber → Adegan, lalu sesuaikan pemotongan dan transformasi untuk setiap tampilan.</translation>
+        <translation type="vanished">Buat adegan tambahan untuk pembingkaian yang berbeda (pembicara, pembaca, panggung) menggunakan Sumber → Adegan, lalu sesuaikan pemotongan dan transformasi untuk setiap tampilan.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Buat adegan media terpisah untuk proyeksi Solin. Dengan monitor eksternal terhubung, tambahkan sumber Penangkapan Layar dan pilih monitor tempat Lagu-Lagu, video, dan gambar akan muncul.</translation>
+        <translation type="vanished">Buat adegan media terpisah untuk proyeksi Solin. Dengan monitor eksternal terhubung, tambahkan sumber Penangkapan Layar dan pilih monitor tempat Lagu-Lagu, video, dan gambar akan muncul.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Contoh URL RTSP:</translation>
+        <translation type="vanished">Contoh URL RTSP:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>Siapkan adegan Anda</translation>
+        <translation type="vanished">Siapkan adegan Anda</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>Konfigurasikan sumber kamera Anda dan buat tata letak adegan di OBS sebelum menghubungkan.</translation>
+        <translation type="vanished">Konfigurasikan sumber kamera Anda dan buat tata letak adegan di OBS sebelum menghubungkan.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Buka OBS Studio</translation>
+        <translation type="vanished">Buka OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Buka Alat → Pengaturan Server WebSocket</translation>
+        <translation type="vanished">Buka Alat → Pengaturan Server WebSocket</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>Centang “Aktifkan server WebSocket”</translation>
+        <translation type="vanished">Centang “Aktifkan server WebSocket”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Konfirmasi porta (standar: 4455) dan atur kata sandi jika diinginkan</translation>
+        <translation type="vanished">Konfirmasi porta (standar: 4455) dan atur kata sandi jika diinginkan</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>Klik Terapkan dan mulai ulang OBS jika diminta</translation>
+        <translation type="vanished">Klik Terapkan dan mulai ulang OBS jika diminta</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>Aktifkan server WebSocket</translation>
+        <translation type="vanished">Aktifkan server WebSocket</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin berkomunikasi dengan OBS melalui protokol ini.</translation>
+        <translation type="vanished">Solin berkomunikasi dengan OBS melalui protokol ini.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>Aktifkan integrasi OBS</translation>
+        <translation type="vanished">Aktifkan integrasi OBS</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>Porta WebSocket</translation>
+        <translation type="vanished">Porta WebSocket</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Kata sandi (opsional)</translation>
+        <translation type="vanished">Kata sandi (opsional)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
+        <translation type="vanished">Biarkan kosong jika tidak ada kata sandi yang diatur</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Terputus</translation>
+        <translation type="vanished">Terputus</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Adegan standar (diam)</translation>
+        <translation type="vanished">Adegan standar (diam)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
+        <translation type="vanished">Adegan yang ditampilkan saat tidak ada yang diproyeksikan.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Adegan jendela media</translation>
+        <translation type="vanished">Adegan jendela media</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
+        <translation type="vanished">Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Hubungkan Solin ke OBS</translation>
+        <translation type="vanished">Hubungkan Solin ke OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Masukkan porta dan kata sandi yang sama dengan yang Anda konfigurasikan di OBS.</translation>
+        <translation type="vanished">Masukkan porta dan kata sandi yang sama dengan yang Anda konfigurasikan di OBS.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Selesaikan penyiapan</translation>
+        <translation type="vanished">Selesaikan penyiapan</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Hubungkan ke OBS untuk penggantian adegan otomatis selama presentasi.</translation>
+        <translation type="vanished">Hubungkan ke OBS untuk penggantian adegan otomatis selama presentasi.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>Pengaturan yang ada ditemukan</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Solin menemukan pengaturan dan daftar putar dari versi sebelumnya. Beri nama profil ini untuk melanjutkan dengan data Anda:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Contoh: Sidang Pusat</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Konfirmasi dan migrasi data</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Ubah nama</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Hapus</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Hapus profil</translation>
     </message>
@@ -2944,37 +3216,33 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <translation>Tindakan ini akan menghapus daftar putar, gambar, media yang diterima, tembolok peramban, dan pengaturan untuk profil ini. Tindakan ini tidak dapat dibatalkan.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Profil {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Harap masukkan nama profil.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Nama tidak boleh kosong.</translation>
+        <translation type="vanished">Nama tidak boleh kosong.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Apakah Anda ingin melewati penyiapan awal?</translation>
+        <translation type="vanished">Apakah Anda ingin melewati penyiapan awal?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Anda dapat mengonfigurasi bahasa dan OBS nanti di Pengaturan.</translation>
+        <translation type="vanished">Anda dapat mengonfigurasi bahasa dan OBS nanti di Pengaturan.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Profil Saya</translation>
+        <translation type="vanished">Profil Saya</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3230,7 +3498,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>Klik posisi target berbagi</translation>
     </message>
@@ -3569,7 +3837,17 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <translation>Menggunakan satu pintasan Zoom untuk memulai/menghentikan berbagi layar.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Target berbagi</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Ubin “Solin Media Preview” di dalam dialog berbagi Zoom.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Izin Aksesibilitas</translation>
     </message>
@@ -3579,17 +3857,15 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <translation>Buka Pengaturan</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Posisi Klik</translation>
+        <translation type="vanished">Posisi Klik</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
+        <translation type="vanished">Posisi yang diklik setelah dialog berbagi terbuka untuk memilih target.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>Konfigurasi</translation>
     </message>

@@ -141,17 +141,12 @@ class ProjectionIntegrationController:
             active, visual = self.current_projection_activity()
 
         context = self._context
-        if not context.auto_share_settings.is_enabled():
+        if not context.auto_share_settings.is_configured():
             self._auto_share_generation += 1
             self._auto_share_active = False
             return
 
         hotkey = self.auto_share_hotkey()
-        if not hotkey:
-            self._auto_share_generation += 1
-            self._auto_share_active = False
-            return
-
         should_share = active and visual and self.has_visible_projection_output()
         if should_share == self._auto_share_active:
             return
@@ -162,7 +157,11 @@ class ProjectionIntegrationController:
             click_x, click_y = context.auto_share_settings.click_position()
 
             def _run_start_share():
-                ok = context.start_auto_share(hotkey, click_x, click_y)
+                ok = context.start_auto_share(
+                    hotkey,
+                    click_x,
+                    click_y,
+                )
                 if not context.auto_share_workers.is_stopped:
                     try:
                         context.auto_share_finished(generation, True, ok)

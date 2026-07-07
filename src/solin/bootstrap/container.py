@@ -60,7 +60,11 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
-    from solin.core.integrations.automation.settings import OBSSettingsStore
+    from solin.core.integrations.automation.settings import (
+        AutoShareSettingsStore,
+        OBSSettingsStore,
+    )
+    from solin.core.media.settings import MediaSettingsStore
     from solin.core.onboarding.infrastructure import (
         OnboardingSettingsStores,
         QSettingsOnboardingSettings,
@@ -98,7 +102,9 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
             media_language_settings=JWLanguageSettingsStore.for_profile_settings(
                 settings
             ),
+            media_settings=MediaSettingsStore.for_profile_settings(settings),
             obs_settings=OBSSettingsStore.for_profile_settings(settings),
+            auto_share_settings=AutoShareSettingsStore.for_profile_settings(settings),
         )
 
     onboarding_service = OnboardingService(

@@ -9,6 +9,7 @@ from solin.core.onboarding.application import (
     OBSOnboardingConfiguration,
     OnboardingService,
     ProfileOnboardingCommand,
+    ZoomShareOnboardingConfiguration,
 )
 from solin.core.profiles.application import ProfileService
 from solin.core.profiles.models import ProfileInfo
@@ -156,6 +157,7 @@ def test_complete_onboarding_applies_settings_then_activates_profile(tmp_path):
             enabled=True,
             port=4455,
             password="secret",
+            automatic_scene_switching=True,
             default_scene="Default",
             media_scene="Media",
         ),
@@ -236,3 +238,64 @@ def test_relaunch_selection_does_not_mutate_active_runtime_profile(tmp_path):
 def test_enabled_obs_configuration_rejects_invalid_port():
     with pytest.raises(ValueError, match="between 1 and 65535"):
         OBSOnboardingConfiguration(enabled=True, port=0)
+
+
+@pytest.mark.parametrize(
+    ("default_scene", "media_scene", "message"),
+    [
+        ("", "Media", "requires both scenes"),
+        ("Default", "", "requires both scenes"),
+        ("Same", "Same", "must be different"),
+    ],
+)
+def test_automatic_obs_configuration_requires_distinct_scenes(
+    default_scene,
+    media_scene,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        OBSOnboardingConfiguration(
+            enabled=True,
+            automatic_scene_switching=True,
+            default_scene=default_scene,
+            media_scene=media_scene,
+        )
+
+
+def test_automatic_obs_configuration_requires_obs():
+    with pytest.raises(ValueError, match="requires OBS"):
+        OBSOnboardingConfiguration(automatic_scene_switching=True)
+
+
+@pytest.mark.parametrize(
+    ("hotkey", "click_x", "click_y", "message"),
+    [
+        ("", 300, 250, "requires a hotkey"),
+        ("Ctrl+Shift+S", -1, 250, "requires a share target"),
+        ("Ctrl+Shift+S", 300, -1, "requires a share target"),
+    ],
+)
+def test_enabled_zoom_share_configuration_requires_hotkey_and_valid_target(
+    hotkey,
+    click_x,
+    click_y,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        ZoomShareOnboardingConfiguration(
+            enabled=True,
+            hotkey=hotkey,
+            click_x=click_x,
+            click_y=click_y,
+        )
+
+
+def test_zoom_share_configuration_normalizes_hotkey():
+    configuration = ZoomShareOnboardingConfiguration(
+        enabled=True,
+        hotkey="  Ctrl+Shift+S  ",
+        click_x=300,
+        click_y=250,
+    )
+
+    assert configuration.hotkey == "Ctrl+Shift+S"

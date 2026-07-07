@@ -1,5 +1,7 @@
 import uuid
 
+import pytest
+
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
@@ -53,7 +55,7 @@ def test_obs_settings_reads_connection_scenes_and_ndi_configuration():
         settings.clear()
 
 
-def test_auto_share_settings_prefers_current_hotkey_before_legacy_keys():
+def test_auto_share_settings_uses_current_hotkey_and_click_position():
     profile_settings = _profile_settings()
     settings = _settings(profile_settings)
     store = AutoShareSettingsStore(settings)
@@ -62,7 +64,7 @@ def test_auto_share_settings_prefers_current_hotkey_before_legacy_keys():
         settings.set_value(SettingsKey.SHARE_ENABLED, True)
         settings.set_value(SettingsKey.SHARE_START_HOTKEY, "LegacyStart")
         settings.set_value(SettingsKey.SHARE_STOP_HOTKEY, "LegacyStop")
-        store.set_click_position(320, 240)
+        store.set_click_position(300, 250)
 
         assert store.ensure_hotkey() == "LegacyStart"
         assert store.hotkey() == "LegacyStart"
@@ -71,9 +73,70 @@ def test_auto_share_settings_prefers_current_hotkey_before_legacy_keys():
 
         assert store.hotkey() == "Ctrl+Shift+S"
         assert store.is_configured() is True
-        assert store.click_position() == (320, 240)
+        assert store.click_position() == (300, 250)
         assert settings.string(SettingsKey.SHARE_START_HOTKEY) == ""
         assert settings.string(SettingsKey.SHARE_STOP_HOTKEY) == ""
+    finally:
+        settings.clear()
+
+
+def test_auto_share_settings_requires_enabled_hotkey_and_target():
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    store = AutoShareSettingsStore(settings)
+    settings.clear()
+    try:
+        store.set_enabled(True)
+        store.set_hotkey("Alt+S")
+
+        assert store.is_configured() is False
+
+        store.set_click_position(300, 250)
+
+        assert store.is_configured() is True
+    finally:
+        settings.clear()
+
+
+@pytest.mark.parametrize(
+    ("x", "y"),
+    [(-1, 250), (300, -1)],
+)
+def test_auto_share_settings_rejects_invalid_click_position(x, y):
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    store = AutoShareSettingsStore(settings)
+    settings.clear()
+    try:
+        with pytest.raises(ValueError, match="non-negative"):
+            store.set_click_position(x, y)
+    finally:
+        settings.clear()
+
+
+def test_auto_share_settings_reads_existing_click_position():
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    store = AutoShareSettingsStore(settings)
+    settings.clear()
+    try:
+        settings.set_value("share/click_x", 300)
+        settings.set_value("share/click_y", 250)
+
+        assert store.click_position() == (300, 250)
+        assert store.has_click_position() is True
+    finally:
+        settings.clear()
+
+
+def test_auto_share_settings_defaults_missing_click_position():
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    store = AutoShareSettingsStore(settings)
+    settings.clear()
+    try:
+        assert store.click_position() == (-1, -1)
+        assert store.has_click_position() is False
     finally:
         settings.clear()
 

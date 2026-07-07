@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QDialog, QLabel
 
 from ...core.jw.language_context import jw_media_language_context
-from ...styles.icons import ICON_BOOK, ICON_NAV_BROWSER
+from ...styles.icons import ICON_MEDIA_LANGUAGE, ICON_NAV_BROWSER
 from ...ui.language_pickers import (
     create_interface_language_picker,
     create_jw_language_picker,
@@ -27,7 +27,7 @@ class LanguageSectionMixin:
         lay.addWidget(row)
         lay.addWidget(self._divider())
         row2, self._media_lang_name_lbl, self._media_lang_label, _ = self._clickable_row(
-            ICON_BOOK,
+            ICON_MEDIA_LANGUAGE,
             self.tr("JW Media"),
             "",
         )
