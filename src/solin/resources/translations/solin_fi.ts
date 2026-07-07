@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Ei määritetty</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>Muokkaa</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Napsautussijainti</translation>
+        <source>Share target</source>
+        <translation>Jakamisen kohde</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Kohta, johon Solinin tulee klikata sen jälkeen, kun Zoomin jakopikanäppäin avaa ikkunan.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Määritetty</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Napsautussijainti</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>Määritä</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Paina Zoomin pikanäppäintä, jolla näytönjako aloitetaan ja lopetetaan.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Sijainti: {x}, {y}</translation>
+        <translation type="vanished">Sijainti: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin voi lähettää automaattisen napsautuksen.</translation>
     </message>
@@ -1026,13 +1038,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Keskeytä toisto ennen esitettävän sisällön vaihtamista.</translation>
     </message>
@@ -1586,7 +1598,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Tätä mediaa ei voi muokata.</translation>
     </message>
@@ -1618,12 +1630,12 @@
         <translation>Sulje</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Äänen esikuuntelu</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Esikuuntelun ääni on mykistetty, kun toinen media on aktiivinen.</translation>
     </message>
@@ -1638,12 +1650,12 @@
         <translation>Toista</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Aloita</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Loppu</translation>
     </message>
@@ -2177,6 +2189,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Peruuta</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 / 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Takaisin</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Aloita Solinin käyttö</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Jatka</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Tervetuloa Soliniin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Luo selkeä ja luotettava työtila kokouksia ja mediaa varten.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Profiilin nimi</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Esimerkki: Pääsali</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>Jokaisella profiililla on omat asetukset ja soittolistat.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Valmistele Solin kokoonpanoasi varten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Valitse kielet ja päätä, miten kokouksen media käsitellään.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Käyttöliittymän kieli</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Median kieli</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Kokouksen media</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Lataa automaattisesti</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Pidä tämä ja ensi viikko käytettävissä offline-tilassa.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Manuaalinen lataus</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>Lataa media vain, kun napsautat pilvipainiketta.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Valitse, miten Solin voi auttaa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Valitse yksi vaihtoehto, molemmat tai määritä ne myöhemmin.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Ohjaa kohtauksia ja kameroita Solinista.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Jaa näyttö automaattisesti.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>Määritä myöhemmin</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Yhdistä OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Käytä OBS-kohtauksia ja kameroita Solinista. Automaattinen vaihto on valinnainen.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocket-portti</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Salasana (valinnainen)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Yhdistetään…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Yhdistä</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Tarvitsetko apua OBS:n käyttöönotossa?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Automaattinen kohtausten vaihto</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Solin vaihtaa kohtauksia, kun mediaa projisoidaan.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Kohtausten ja kameroiden manuaaliset ohjaimet pysyvät käytettävissä.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Oletuskohtaus</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Mediakohtaus</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>Määritä OBS myöhemmin</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Määritä Zoom-jakaminen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>Tallenna jakamisen pikanäppäin ja valitse klikkauskohde, jota Solinin tulee käyttää.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Jakamisen pikanäppäin</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>Klikkaa tähän ja paina sitten Zoomin jakamisen aloitus-/lopetuspikanäppäintä.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Paina pikanäppäintä</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>Tallenna pikanäppäin</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Jakamisen kohde</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Kohde määritetty</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Valitse klikkauskohta ensisijaisella näytöllä.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Valitse uudelleen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Valitse kohde</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Määritä Zoom myöhemmin</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Kaikki näyttää valmiilta</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Tarkista valintasi. Voit muuttaa niitä myöhemmin asetuksissa.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Kielet</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Tämä ja ensi viikko</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Ei määritetty</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Yhdistetty · automaattinen kohtausten vaihto</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Yhdistetty · manuaaliset ohjaimet</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Automaattinen jakaminen valmis</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Viimeistellään…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Valitse kohtaus</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Sulje</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Etsi kieliä</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2625,7 +2950,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Peruuta</translation>
     </message>
@@ -2638,302 +2963,249 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Yhteys katkaistu</translation>
+        <translation type="vanished">Yhteys katkaistu</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Yhdistetään...</translation>
+        <translation type="vanished">Yhdistetään...</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Yhdistetty OBS Studioon</translation>
+        <translation type="vanished">Yhdistetty OBS Studioon</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Virhe: {msg}</translation>
+        <translation type="vanished">Virhe: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Yhteysvirhe</translation>
+        <translation type="vanished">Yhteysvirhe</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Valitse kohtaus —</translation>
+        <translation type="vanished">— Valitse kohtaus —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Kuka käyttää Solinia?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Uusi profiili</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Peruuta</translation>
+        <translation type="vanished">Peruuta</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Ohita käyttöönotto</translation>
+        <translation type="vanished">Ohita käyttöönotto</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Profiilin nimi</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Esimerkki: Seurakunta A, Nimi, …</translation>
+        <translation type="vanished">Esimerkki: Seurakunta A, Nimi, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Profiili 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Jatka →</translation>
+        <translation type="vanished">Jatka →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Tervetuloa Soliniin</translation>
+        <translation type="vanished">Tervetuloa Soliniin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Anna tälle profiilille nimi. Jokaisella profiililla on omat asetukset ja soittolistat – tämä on kätevää eri kokoonpanojen hallinnassa.</translation>
+        <translation type="vanished">Anna tälle profiilille nimi. Jokaisella profiililla on omat asetukset ja soittolistat – tämä on kätevää eri kokoonpanojen hallinnassa.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Käyttöliittymän kieli</translation>
+        <translation type="vanished">Käyttöliittymän kieli</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Määrittää valikot, painikkeet ja kaiken sovelluksessa näkyvän tekstin.</translation>
+        <translation type="vanished">Määrittää valikot, painikkeet ja kaiken sovelluksessa näkyvän tekstin.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Sisällön kieli</translation>
+        <translation type="vanished">Sisällön kieli</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Kieli, jolla laulut, videot ja muu JW.org-sivustolta ladattu aineisto näkyvät.</translation>
+        <translation type="vanished">Kieli, jolla laulut, videot ja muu JW.org-sivustolta ladattu aineisto näkyvät.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Kieliasetukset</translation>
+        <translation type="vanished">Kieliasetukset</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Valitse kieli käyttöliittymälle sekä JW.org-sivustolta ladattavalle aineistolle.</translation>
+        <translation type="vanished">Valitse kieli käyttöliittymälle sekä JW.org-sivustolta ladattavalle aineistolle.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin yhdistyy OBS Studioon WebSocketin kautta, jotta kohtaukset vaihtuvat automaattisesti median toiston aikana – laulut, videot ja kuvat lähetetään saumattomasti suoraan lähetykseen.</translation>
+        <translation type="vanished">Solin yhdistyy OBS Studioon WebSocketin kautta, jotta kohtaukset vaihtuvat automaattisesti median toiston aikana – laulut, videot ja kuvat lähetetään saumattomasti suoraan lähetykseen.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Luo pääkohtaus kameraasi varten. Jos käytät USB-verkkokameraa, lisää videon sieppauslaite (Video Capture Device).</translation>
+        <translation type="vanished">Luo pääkohtaus kameraasi varten. Jos käytät USB-verkkokameraa, lisää videon sieppauslaite (Video Capture Device).</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>Jos käytät IP-kameraa, lisää medialähde (Media Source) ja syötä kamerasi RTSP-suoratoisto-URL-osoite.</translation>
+        <translation type="vanished">Jos käytät IP-kameraa, lisää medialähde (Media Source) ja syötä kamerasi RTSP-suoratoisto-URL-osoite.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Luo lisäkohtauksia eri kuvakulmia varten (puhuja, lukija, näyttämö) käyttämällä Lähde → Kohtaus -toimintoa ja säädä sitten kunkin näkymän rajaus ja muunnos.</translation>
+        <translation type="vanished">Luo lisäkohtauksia eri kuvakulmia varten (puhuja, lukija, näyttämö) käyttämällä Lähde → Kohtaus -toimintoa ja säädä sitten kunkin näkymän rajaus ja muunnos.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Luo erillinen mediakohtaus Solinin heijastusta varten. Kun ulkoinen näyttö on kytketty, lisää näytön sieppauslähde (Display Capture) ja valitse näyttö, jolla laulut, videot ja kuvat näkyvät.</translation>
+        <translation type="vanished">Luo erillinen mediakohtaus Solinin heijastusta varten. Kun ulkoinen näyttö on kytketty, lisää näytön sieppauslähde (Display Capture) ja valitse näyttö, jolla laulut, videot ja kuvat näkyvät.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Esimerkki RTSP-URL-osoitteesta:</translation>
+        <translation type="vanished">Esimerkki RTSP-URL-osoitteesta:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>Määritä kohtaukset</translation>
+        <translation type="vanished">Määritä kohtaukset</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>Määritä kameralähteet ja luo kohtausasettelut OBS:ssä ennen yhdistämistä.</translation>
+        <translation type="vanished">Määritä kameralähteet ja luo kohtausasettelut OBS:ssä ennen yhdistämistä.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Avaa OBS Studio</translation>
+        <translation type="vanished">Avaa OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Siirry kohtaan Työkalut → WebSocket-palvelimen asetukset</translation>
+        <translation type="vanished">Siirry kohtaan Työkalut → WebSocket-palvelimen asetukset</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>Valitse ”Ota WebSocket-palvelin käyttöön”</translation>
+        <translation type="vanished">Valitse ”Ota WebSocket-palvelin käyttöön”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Vahvista portti (oletus: 4455) ja aseta halutessasi salasana</translation>
+        <translation type="vanished">Vahvista portti (oletus: 4455) ja aseta halutessasi salasana</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>Napsauta Käytä ja käynnistä OBS uudelleen, jos sitä pyydetään</translation>
+        <translation type="vanished">Napsauta Käytä ja käynnistä OBS uudelleen, jos sitä pyydetään</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>Ota WebSocket-palvelin käyttöön</translation>
+        <translation type="vanished">Ota WebSocket-palvelin käyttöön</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin kommunikoi OBS:n kanssa tämän protokollan välityksellä.</translation>
+        <translation type="vanished">Solin kommunikoi OBS:n kanssa tämän protokollan välityksellä.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>Ota OBS-integraatio käyttöön</translation>
+        <translation type="vanished">Ota OBS-integraatio käyttöön</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocket-portti</translation>
+        <translation type="vanished">WebSocket-portti</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Salasana (valinnainen)</translation>
+        <translation type="vanished">Salasana (valinnainen)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
+        <translation type="vanished">Jätä tyhjäksi, jos salasanaa ei ole asetettu</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Yhteys katkaistu</translation>
+        <translation type="vanished">Yhteys katkaistu</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Oletuskohtaus (valmiustila)</translation>
+        <translation type="vanished">Oletuskohtaus (valmiustila)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
+        <translation type="vanished">Kohtaus, joka näkyy, kun mitään ei heijasteta.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Mediaikkunakohtaus</translation>
+        <translation type="vanished">Mediaikkunakohtaus</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
+        <translation type="vanished">Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Yhdistä Solin OBS:ään</translation>
+        <translation type="vanished">Yhdistä Solin OBS:ään</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Syötä sama portti ja salasana, jotka määritit OBS:ssä.</translation>
+        <translation type="vanished">Syötä sama portti ja salasana, jotka määritit OBS:ssä.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Viimeistele käyttöönotto</translation>
+        <translation type="vanished">Viimeistele käyttöönotto</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Yhdistä OBS:ään automaattista kohtausten vaihtoa varten esitysten aikana.</translation>
+        <translation type="vanished">Yhdistä OBS:ään automaattista kohtausten vaihtoa varten esitysten aikana.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>Aiemmat asetukset löytyivät</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Solin löysi asetuksia ja soittolistoja aiemmasta versiosta. Anna tälle profiilille nimi, jotta voit jatkaa tietojesi käyttöä:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Esimerkki: Keskusseurakunta</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Vahvista ja siirrä tiedot</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Nimeä uudelleen</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Poista</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Poista profiili</translation>
     </message>
@@ -2948,37 +3220,33 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Tämä poistaa tämän profiilin soittolistat, kuvat, vastaanotetun median, selainvälimuistin ja asetukset. Tätä toimintoa ei voi kumota.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Profiili {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Anna profiilille nimi.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Nimi ei voi olla tyhjä.</translation>
+        <translation type="vanished">Nimi ei voi olla tyhjä.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Haluatko ohittaa alkuasetukset?</translation>
+        <translation type="vanished">Haluatko ohittaa alkuasetukset?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Voit määrittää kielet ja OBS-asetukset myöhemmin Asetuksissa.</translation>
+        <translation type="vanished">Voit määrittää kielet ja OBS-asetukset myöhemmin Asetuksissa.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Oma profiili</translation>
+        <translation type="vanished">Oma profiili</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3234,7 +3502,7 @@ Tätä toimintoa ei voi peruuttaa.</translation>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>Napsauta jaon kohdesijaintia</translation>
     </message>
@@ -3573,7 +3841,17 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Käyttää Zoomin yhtä näytönjaon aloitus-/lopetuspikanäppäintä.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Jakamisen kohde</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>“Solin Media Preview” -ruutu Zoomin jakamisikkunassa.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Käyttöapu-oikeus</translation>
     </message>
@@ -3583,17 +3861,15 @@ Tätä toimintoa ei voi peruuttaa.</translation>
         <translation>Avaa asetukset</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Napsautussijainti</translation>
+        <translation type="vanished">Napsautussijainti</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
+        <translation type="vanished">Sijainti, jota napsautetaan jakovalintaikkunan avautumisen jälkeen kohteen valitsemiseksi.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>Määritä</translation>
     </message>

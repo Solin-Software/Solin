@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>未設定</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>編集</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>クリック位置</translation>
+        <source>Share target</source>
+        <translation>共有対象</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Zoomの共有ショートカットでダイアログが開いた後、Solinがクリックする場所です。</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>設定済み</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">クリック位置</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>設定</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>画面共有を開始および停止する Zoom のショートカットを押してください。</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>位置: {x}, {y}</translation>
+        <translation type="vanished">位置: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin は自動クリックを送信できます。</translation>
     </message>
@@ -1025,13 +1037,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>投影する内容を変更する前に再生を一時停止してください。</translation>
     </message>
@@ -1584,7 +1596,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>このメディアは編集できません。</translation>
     </message>
@@ -1616,12 +1628,12 @@
         <translation>閉じる</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>音声プレビュー</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>別のメディアが再生中のため、プレビュー音声はミュートされています。</translation>
     </message>
@@ -1636,12 +1648,12 @@
         <translation>再生</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>開始</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>終了</translation>
     </message>
@@ -2174,6 +2186,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 / 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>戻る</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Solinを使い始める</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>続ける</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Solinへようこそ</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>集会とメディアのために、使いやすく安定した作業環境を整えます。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>プロファイル名</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>例: メインホール</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>各プロファイルには、それぞれの設定とプレイリストが保存されます。</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Solinをセットアップに合わせて準備します</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>言語を選び、集会用メディアの扱い方を決めます。</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>表示言語</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>メディアの言語</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>集会用メディア</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>自動でダウンロード</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>今週と来週の分をオフラインで使えるようにします。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>手動ダウンロード</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>クラウドボタンをクリックしたときだけメディアをダウンロードします。</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Solinで何を設定するか選択します</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>どちらか一方、両方、または後で設定することを選べます。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Solinからシーンとカメラを操作します。</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>画面を自動で共有します。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>後で設定</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>OBS Studioに接続</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>SolinからOBSのシーンとカメラを使えます。自動切り替えは任意です。</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocketポート</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>パスワード（任意）</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>接続中…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>接続</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>OBSの設定にヘルプが必要ですか?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>シーンの自動切り替え</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>メディアの投影中、Solinがシーンを切り替えます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>シーンとカメラの手動操作は引き続き使えます。</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>デフォルトのシーン</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>メディアシーン</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>OBSは後で設定</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Zoom共有を設定</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>共有ショートカットを記録し、Solinが使うクリック対象を選択します。</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>共有ショートカット</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>ここをクリックしてから、Zoomの共有開始/停止ショートカットを押してください。</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>ショートカットを押す</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>ショートカットを記録</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>共有対象</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>対象を設定済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>メインモニター上のクリック位置を選択します。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>選び直す</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>対象を選択</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Zoomは後で設定</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>準備が整いました</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>選択内容を確認してください。後で設定から変更できます。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>言語</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>今週と来週</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>未設定</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>接続済み · シーンの自動切り替え</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>接続済み · 手動操作</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>自動共有の準備完了</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>完了しています…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>シーンを選択</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>言語を検索</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2621,7 +2946,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>キャンセル</translation>
     </message>
@@ -2634,302 +2959,249 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>未接続</translation>
+        <translation type="vanished">未接続</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>接続中…</translation>
+        <translation type="vanished">接続中…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>OBS Studioに接続済み</translation>
+        <translation type="vanished">OBS Studioに接続済み</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>エラー：{msg}</translation>
+        <translation type="vanished">エラー：{msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>接続エラー</translation>
+        <translation type="vanished">接続エラー</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— シーンを選択 —</translation>
+        <translation type="vanished">— シーンを選択 —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Solinを使用しているのは誰ですか？</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>新しいプロファイル</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>キャンセル</translation>
+        <translation type="vanished">キャンセル</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>セットアップをスキップする</translation>
+        <translation type="vanished">セットアップをスキップする</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>プロファイル名</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>例：A会衆、名前、…</translation>
+        <translation type="vanished">例：A会衆、名前、…</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>プロファイル 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>次へ →</translation>
+        <translation type="vanished">次へ →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Solinへようこそ</translation>
+        <translation type="vanished">Solinへようこそ</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>プロファイルに名前を付けます。各プロファイルは個別の設定とプレイリストを保持するため、異なるセットアップを管理するのに便利です。</translation>
+        <translation type="vanished">プロファイルに名前を付けます。各プロファイルは個別の設定とプレイリストを保持するため、異なるセットアップを管理するのに便利です。</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>インターフェース言語</translation>
+        <translation type="vanished">インターフェース言語</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>アプリ全体に表示されるメニュー、ボタン、すべてのテキストの言語を制御します。</translation>
+        <translation type="vanished">アプリ全体に表示されるメニュー、ボタン、すべてのテキストの言語を制御します。</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>コンテンツ言語</translation>
+        <translation type="vanished">コンテンツ言語</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>JW.orgからダウンロードされる歌、動画、その他のメディアの言語です。</translation>
+        <translation type="vanished">JW.orgからダウンロードされる歌、動画、その他のメディアの言語です。</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>言語設定</translation>
+        <translation type="vanished">言語設定</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>インターフェースおよびJW.orgからのメディアコンテンツの言語を選択します。</translation>
+        <translation type="vanished">インターフェースおよびJW.orgからのメディアコンテンツの言語を選択します。</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>SolinはWebSocket経由でOBS Studioに接続し、メディア再生中にシーンを自動的に切り替えます。歌、動画、画像がライブ出力へシームレスに送信されます。</translation>
+        <translation type="vanished">SolinはWebSocket経由でOBS Studioに接続し、メディア再生中にシーンを自動的に切り替えます。歌、動画、画像がライブ出力へシームレスに送信されます。</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>カメラを使用してメインシーンを作成します。USBウェブカメラの場合は、「映像キャプチャデバイス」ソースを追加してください。</translation>
+        <translation type="vanished">カメラを使用してメインシーンを作成します。USBウェブカメラの場合は、「映像キャプチャデバイス」ソースを追加してください。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>IPカメラの場合は、「メディアソース」を追加し、カメラのRTSPストリームURLを入力してください。</translation>
+        <translation type="vanished">IPカメラの場合は、「メディアソース」を追加し、カメラのRTSPストリームURLを入力してください。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>「ソース」→「シーン」を使用して、異なるフレーミング（話者、朗読者、演壇）用の追加シーンを作成し、各ビューのクロップと変形を調整します。</translation>
+        <translation type="vanished">「ソース」→「シーン」を使用して、異なるフレーミング（話者、朗読者、演壇）用の追加シーンを作成し、各ビューのクロップと変形を調整します。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Solinの投影用に別のメディアシーンを作成します。外部モニターを接続した状態で、「画面キャプチャ」ソースを追加し、歌、動画、画像を表示するモニターを選択してください。</translation>
+        <translation type="vanished">Solinの投影用に別のメディアシーンを作成します。外部モニターを接続した状態で、「画面キャプチャ」ソースを追加し、歌、動画、画像を表示するモニターを選択してください。</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>RTSP URLの例:</translation>
+        <translation type="vanished">RTSP URLの例:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>シーンをセットアップする</translation>
+        <translation type="vanished">シーンをセットアップする</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>接続する前に、OBSでカメラソースを設定し、シーンレイアウトを作成してください。</translation>
+        <translation type="vanished">接続する前に、OBSでカメラソースを設定し、シーンレイアウトを作成してください。</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>OBS Studioを開く</translation>
+        <translation type="vanished">OBS Studioを開く</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>「ツール」→「WebSocketサーバー設定」に移動する</translation>
+        <translation type="vanished">「ツール」→「WebSocketサーバー設定」に移動する</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>「WebSocketサーバーを有効にする」にチェックを入れる</translation>
+        <translation type="vanished">「WebSocketサーバーを有効にする」にチェックを入れる</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>ポート（デフォルト: 4455）を確認し、必要に応じてパスワードを設定する</translation>
+        <translation type="vanished">ポート（デフォルト: 4455）を確認し、必要に応じてパスワードを設定する</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>「適用」をクリックし、指示があればOBSを再起動する</translation>
+        <translation type="vanished">「適用」をクリックし、指示があればOBSを再起動する</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>WebSocketサーバーを有効にする</translation>
+        <translation type="vanished">WebSocketサーバーを有効にする</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solinはこのプロトコルを通じてOBSと通信します。</translation>
+        <translation type="vanished">Solinはこのプロトコルを通じてOBSと通信します。</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>OBS連携を有効にする</translation>
+        <translation type="vanished">OBS連携を有効にする</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocketポート</translation>
+        <translation type="vanished">WebSocketポート</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>パスワード（任意）</translation>
+        <translation type="vanished">パスワード（任意）</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>パスワードを設定しない場合は空欄のままにする</translation>
+        <translation type="vanished">パスワードを設定しない場合は空欄のままにする</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>未接続</translation>
+        <translation type="vanished">未接続</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>デフォルトのシーン（待機中）</translation>
+        <translation type="vanished">デフォルトのシーン（待機中）</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>何も投影されていないときに表示されるシーン。</translation>
+        <translation type="vanished">何も投影されていないときに表示されるシーン。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>メディアウィンドウのシーン</translation>
+        <translation type="vanished">メディアウィンドウのシーン</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
+        <translation type="vanished">投影モニターをキャプチャするシーン。コンテンツが表示されると有効になります。</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>SolinをOBSに接続する</translation>
+        <translation type="vanished">SolinをOBSに接続する</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>OBSで設定したものと同じポートとパスワードを入力してください。</translation>
+        <translation type="vanished">OBSで設定したものと同じポートとパスワードを入力してください。</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>セットアップを完了する</translation>
+        <translation type="vanished">セットアップを完了する</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>プレゼンテーション中の自動シーン切り替えのためにOBSに接続します。</translation>
+        <translation type="vanished">プレゼンテーション中の自動シーン切り替えのためにOBSに接続します。</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>既存の設定が見つかりました</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>以前のバージョンの設定とプレイリストが見つかりました。データを引き継ぐために、このプロファイルに名前を付けてください：</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>例：中央会衆</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>確認してデータを移行する</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>名前の変更</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>削除</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>プロファイルを削除</translation>
     </message>
@@ -2944,37 +3216,33 @@ This action cannot be undone.</source>
         <translation>これにより、このプロファイルのプレイリスト、画像、受信したメディア、ブラウザキャッシュ、設定が削除されます。この操作は取り消せません。</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>プロファイル {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>プロファイル名を入力してください。</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>名前を空にすることはできません。</translation>
+        <translation type="vanished">名前を空にすることはできません。</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>初期セットアップをスキップしますか？</translation>
+        <translation type="vanished">初期セットアップをスキップしますか？</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>言語やOBSの設定は、後で「設定」から行うことができます。</translation>
+        <translation type="vanished">言語やOBSの設定は、後で「設定」から行うことができます。</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>マイプロファイル</translation>
+        <translation type="vanished">マイプロファイル</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3230,7 +3498,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>共有対象の位置をクリックしてください</translation>
     </message>
@@ -3448,7 +3716,17 @@ This action cannot be undone.</source>
         <translation>Zoom の画面共有を開始/停止する 1 つのショートカットを使用します。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>共有対象</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Zoomの共有ダイアログ内にある「Solin Media Preview」のタイルです。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>アクセシビリティ権限</translation>
     </message>
@@ -3458,17 +3736,15 @@ This action cannot be undone.</source>
         <translation>設定を開く</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>クリック位置</translation>
+        <translation type="vanished">クリック位置</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
+        <translation type="vanished">共有ダイアログが開いた後、対象を選択するためにクリックする位置です。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>設定</translation>
     </message>

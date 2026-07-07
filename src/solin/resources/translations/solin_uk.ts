@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Не налаштовано</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>Редагувати</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Позиція клацання</translation>
+        <source>Share target</source>
+        <translation>Ціль демонстрації</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Місце, де Solin має клацнути після того, як комбінація клавіш Zoom відкриє вікно демонстрації.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Налаштовано</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Позиція клацання</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>Налаштувати</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Натисніть гарячу клавішу Zoom, яка запускає й зупиняє демонстрацію екрана.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Позиція: {x}, {y}</translation>
+        <translation type="vanished">Позиція: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin може надіслати автоматичне клацання.</translation>
     </message>
@@ -1027,13 +1039,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Призупиніть відтворення, перш ніж змінювати вміст проекції.</translation>
     </message>
@@ -1588,7 +1600,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Цей медіафайл не можна редагувати.</translation>
     </message>
@@ -1620,12 +1632,12 @@
         <translation>Закрити</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Попереднє прослуховування аудіо</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Звук попереднього прослуховування вимкнено, поки активне інше медіа.</translation>
     </message>
@@ -1640,12 +1652,12 @@
         <translation>Відтворити</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Почати</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Кінець</translation>
     </message>
@@ -2180,6 +2192,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 з 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Почати користуватися Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Продовжити</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Ласкаво просимо до Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Налаштуйте зручний і надійний робочий простір для зібрань і медіа.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Назва профілю</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Приклад: головний зал</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>Кожен профіль зберігає власні налаштування й плейлісти.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Підготуйте Solin до своєї конфігурації</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Виберіть мови й визначте, як обробляти медіафайли для зібрання.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Мова інтерфейсу</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Мова медіа</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Медіафайли для зібрання</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Завантажувати автоматично</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Зберігати цей і наступний тиждень доступними офлайн.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Ручне завантаження</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>Завантажувати медіа лише після натискання кнопки з хмарою.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Виберіть, як Solin має допомагати</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Виберіть один варіант, обидва або налаштуйте їх пізніше.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Керуйте сценами й камерами із Solin.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Автоматично демонструйте екран.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>Налаштувати пізніше</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Підключити OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Використовуйте сцени й камери OBS із Solin. Автоматичне перемикання необов’язкове.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>Порт WebSocket</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Пароль (необов’язково)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Підключення…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Підключити</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Потрібна допомога з налаштуванням OBS?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Автоматичне перемикання сцен</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Solin перемикає сцени під час проєктування медіа.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Ручне керування сценами й камерами залишається доступним.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Сцена за замовчуванням</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Медіасцена</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>Налаштувати OBS пізніше</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Налаштувати демонстрацію Zoom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>Запишіть комбінацію клавіш демонстрації та виберіть ціль клацання, яку має використовувати Solin.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Комбінація клавіш демонстрації</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>Клацніть тут, а потім натисніть комбінацію клавіш Zoom для початку/зупинки демонстрації.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Натисніть комбінацію клавіш</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>Записати комбінацію клавіш</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Ціль демонстрації</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Ціль налаштовано</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Виберіть позицію клацання на основному моніторі.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Вибрати ще раз</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Вибрати ціль</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Налаштувати Zoom пізніше</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Усе виглядає готовим</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Перевірте свій вибір. Пізніше його можна змінити в Налаштуваннях.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Мови</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Цей і наступний тиждень</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Не налаштовано</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Підключено · автоматичне перемикання сцен</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Підключено · ручне керування</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Автоматична демонстрація готова</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Завершення…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Виберіть сцену</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Закрити</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Пошук мов</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2629,7 +2954,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Скасувати</translation>
     </message>
@@ -2642,302 +2967,249 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Відключено</translation>
+        <translation type="vanished">Відключено</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Підключення…</translation>
+        <translation type="vanished">Підключення…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Підключено до OBS Studio</translation>
+        <translation type="vanished">Підключено до OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Помилка: {msg}</translation>
+        <translation type="vanished">Помилка: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Помилка підключення</translation>
+        <translation type="vanished">Помилка підключення</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Виберіть сцену —</translation>
+        <translation type="vanished">— Виберіть сцену —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Хто використовує Solin?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Новий профіль</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Скасувати</translation>
+        <translation type="vanished">Скасувати</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Пропустити налаштування</translation>
+        <translation type="vanished">Пропустити налаштування</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Назва профілю</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Приклад: Збір А, Ім’я, …</translation>
+        <translation type="vanished">Приклад: Збір А, Ім’я, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Профіль 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Продовжити →</translation>
+        <translation type="vanished">Продовжити →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Ласкаво просимо до Solin</translation>
+        <translation type="vanished">Ласкаво просимо до Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Дайте назву цьому профілю. Кожен профіль зберігає власні налаштування та списки відтворення — це зручно для керування різними конфігураціями.</translation>
+        <translation type="vanished">Дайте назву цьому профілю. Кожен профіль зберігає власні налаштування та списки відтворення — це зручно для керування різними конфігураціями.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Мова інтерфейсу</translation>
+        <translation type="vanished">Мова інтерфейсу</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Визначає мову меню, кнопок та всього тексту, що відображається в додатку.</translation>
+        <translation type="vanished">Визначає мову меню, кнопок та всього тексту, що відображається в додатку.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Мова вмісту</translation>
+        <translation type="vanished">Мова вмісту</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Мова для пісень, відео та інших матеріалів, завантажених з JW.org.</translation>
+        <translation type="vanished">Мова для пісень, відео та інших матеріалів, завантажених з JW.org.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Мовні налаштування</translation>
+        <translation type="vanished">Мовні налаштування</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Виберіть мову інтерфейсу та медіавмісту з JW.org.</translation>
+        <translation type="vanished">Виберіть мову інтерфейсу та медіавмісту з JW.org.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin підключається до OBS Studio через WebSocket для автоматичного перемикання сцен під час відтворення медіа — Пісні, відео та зображення безперешкодно надсилаються у ваш прямий ефір.</translation>
+        <translation type="vanished">Solin підключається до OBS Studio через WebSocket для автоматичного перемикання сцен під час відтворення медіа — Пісні, відео та зображення безперешкодно надсилаються у ваш прямий ефір.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Створіть головну сцену з вашою камерою. Для USB-веб-камер додайте джерело «Пристрій захоплення відео».</translation>
+        <translation type="vanished">Створіть головну сцену з вашою камерою. Для USB-веб-камер додайте джерело «Пристрій захоплення відео».</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>Для IP-камер додайте «Джерело медіа» і введіть RTSP-посилання на потік вашої камери.</translation>
+        <translation type="vanished">Для IP-камер додайте «Джерело медіа» і введіть RTSP-посилання на потік вашої камери.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Створіть додаткові сцени для різних ракурсів (промовець, читець, сцена), використовуючи «Джерело» → «Сцена», а потім налаштуйте кадрування та трансформацію для кожного вигляду.</translation>
+        <translation type="vanished">Створіть додаткові сцени для різних ракурсів (промовець, читець, сцена), використовуючи «Джерело» → «Сцена», а потім налаштуйте кадрування та трансформацію для кожного вигляду.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Створіть окрему медіа-сцену для проекції Solin. Підключивши зовнішній монітор, додайте джерело «Захоплення екрана» і виберіть монітор, на якому відображатимуться Пісні, відео та зображення.</translation>
+        <translation type="vanished">Створіть окрему медіа-сцену для проекції Solin. Підключивши зовнішній монітор, додайте джерело «Захоплення екрана» і виберіть монітор, на якому відображатимуться Пісні, відео та зображення.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Приклад RTSP-посилання:</translation>
+        <translation type="vanished">Приклад RTSP-посилання:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>Налаштуйте свої сцени</translation>
+        <translation type="vanished">Налаштуйте свої сцени</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>Перед підключенням налаштуйте джерела камери та створіть макети сцен в OBS.</translation>
+        <translation type="vanished">Перед підключенням налаштуйте джерела камери та створіть макети сцен в OBS.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Відкрийте OBS Studio</translation>
+        <translation type="vanished">Відкрийте OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Перейдіть у «Інструменти» → «Налаштування сервера WebSocket»</translation>
+        <translation type="vanished">Перейдіть у «Інструменти» → «Налаштування сервера WebSocket»</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>Поставте прапорець «Увімкнути сервер WebSocket»</translation>
+        <translation type="vanished">Поставте прапорець «Увімкнути сервер WebSocket»</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Підтвердьте порт (за замовчуванням: 4455) і, за бажанням, встановіть пароль</translation>
+        <translation type="vanished">Підтвердьте порт (за замовчуванням: 4455) і, за бажанням, встановіть пароль</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>Натисніть «Застосувати» і перезапустіть OBS, якщо з&apos;явиться відповідний запит</translation>
+        <translation type="vanished">Натисніть «Застосувати» і перезапустіть OBS, якщо з&apos;явиться відповідний запит</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>Увімкніть сервер WebSocket</translation>
+        <translation type="vanished">Увімкніть сервер WebSocket</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin взаємодіє з OBS через цей протокол.</translation>
+        <translation type="vanished">Solin взаємодіє з OBS через цей протокол.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>Увімкнути інтеграцію з OBS</translation>
+        <translation type="vanished">Увімкнути інтеграцію з OBS</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>Порт WebSocket</translation>
+        <translation type="vanished">Порт WebSocket</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Пароль (необов’язково)</translation>
+        <translation type="vanished">Пароль (необов’язково)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Залиште порожнім, якщо пароль не встановлено</translation>
+        <translation type="vanished">Залиште порожнім, якщо пароль не встановлено</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Відключено</translation>
+        <translation type="vanished">Відключено</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Сцена за замовчуванням (режим очікування)</translation>
+        <translation type="vanished">Сцена за замовчуванням (режим очікування)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Сцена, що відображається, коли нічого не проектується.</translation>
+        <translation type="vanished">Сцена, що відображається, коли нічого не проектується.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Сцена медіавікна</translation>
+        <translation type="vanished">Сцена медіавікна</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
+        <translation type="vanished">Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Підключити Solin до OBS</translation>
+        <translation type="vanished">Підключити Solin до OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Введіть той самий порт і пароль, які ви налаштували в OBS.</translation>
+        <translation type="vanished">Введіть той самий порт і пароль, які ви налаштували в OBS.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Завершити налаштування</translation>
+        <translation type="vanished">Завершити налаштування</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Підключіться до OBS для автоматичного перемикання сцен під час презентацій.</translation>
+        <translation type="vanished">Підключіться до OBS для автоматичного перемикання сцен під час презентацій.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>Знайдено наявні налаштування</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Програма Solin знайшла налаштування та списки відтворення з попередньої версії. Вкажіть назву цього профілю, щоб продовжити роботу з наявними даними:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Приклад: Центральний збір</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Підтвердити та перенести дані</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Перейменувати</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Видалити</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Видалити профіль</translation>
     </message>
@@ -2952,37 +3224,33 @@ This action cannot be undone.</source>
         <translation>Це призведе до видалення списків відтворення, зображень, отриманих медіафайлів, кешу браузера та налаштувань для цього профілю. Цю дію неможливо скасувати.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Профіль {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Будь ласка, введіть назву профілю.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Назва не може бути порожньою.</translation>
+        <translation type="vanished">Назва не може бути порожньою.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Бажаєте пропустити початкове налаштування?</translation>
+        <translation type="vanished">Бажаєте пропустити початкове налаштування?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Ви можете налаштувати мови та OBS пізніше в розділі «Налаштування».</translation>
+        <translation type="vanished">Ви можете налаштувати мови та OBS пізніше в розділі «Налаштування».</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Мій профіль</translation>
+        <translation type="vanished">Мій профіль</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3238,7 +3506,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>Клацніть цільову позицію для демонстрації</translation>
     </message>
@@ -3577,7 +3845,17 @@ This action cannot be undone.</source>
         <translation>Використовує одну гарячу клавішу Zoom для запуску й зупинки демонстрації екрана.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Ціль демонстрації</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Плитка «Solin Media Preview» у вікні демонстрації Zoom.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Дозвіл доступності</translation>
     </message>
@@ -3587,17 +3865,15 @@ This action cannot be undone.</source>
         <translation>Відкрити налаштування</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Позиція клацання</translation>
+        <translation type="vanished">Позиція клацання</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
+        <translation type="vanished">Позиція, яку потрібно клацнути після відкриття діалогу демонстрації, щоб вибрати ціль.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>Налаштувати</translation>
     </message>

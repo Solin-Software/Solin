@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>Inte konfigurerad</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>Redigera</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>Klickposition</translation>
+        <source>Share target</source>
+        <translation>Delningsmål</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Var Solin ska klicka efter att Zooms delningsgenväg har öppnat dialogrutan.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>Konfigurerad</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">Klickposition</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>Konfigurera</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>Tryck på Zoom-kortkommandot som startar och stoppar skärmdelning.</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>Position: {x}, {y}</translation>
+        <translation type="vanished">Position: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin kan skicka det automatiska klicket.</translation>
     </message>
@@ -1026,13 +1038,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pausa uppspelningen innan du ändrar det projicerade innehållet.</translation>
     </message>
@@ -1586,7 +1598,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Det här mediet kan inte redigeras.</translation>
     </message>
@@ -1618,12 +1630,12 @@
         <translation>Stäng</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>Ljudförhandsgranskning</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>Ljudet i förhandsgranskningen är avstängt medan ett annat medieobjekt är aktivt.</translation>
     </message>
@@ -1638,12 +1650,12 @@
         <translation>Spela upp</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>Starta</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>Slut</translation>
     </message>
@@ -2177,6 +2189,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>Avbryt</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1 av 4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>Tillbaka</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>Börja använda Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>Fortsätt</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>Välkommen till Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>Ställ in en tydlig och pålitlig arbetsyta för möten och media.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>Profilnamn</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>Exempel: huvudsalen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>Varje profil behåller sina egna inställningar och spellistor.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>Förbered Solin för din konfiguration</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>Välj språk och bestäm hur mötesmedia ska hanteras.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>Gränssnittsspråk</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>Mediaspråk</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>Mötesmedia</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>Ladda ner automatiskt</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>Håll den här veckan och nästa vecka tillgängliga offline.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>Manuell nedladdning</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>Ladda bara ner media när du klickar på molnknappen.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>Välj hur Solin ska hjälpa till</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>Välj ett alternativ, båda, eller ställ in dem senare.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>Styr scener och kameror från Solin.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>Dela skärmen automatiskt.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>Ställ in senare</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>Anslut OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>Använd OBS-scener och kameror från Solin. Automatiskt byte är valfritt.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocket-port</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>Lösenord (valfritt)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>Ansluter…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>Anslut</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>Behöver du hjälp med att ställa in OBS?</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>Automatiskt scenbyte</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>Solin byter scener medan media projiceras.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>Manuell kontroll av scener och kameror finns fortfarande.</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>Standardscen</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>Mediescen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>Ställ in OBS senare</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>Ställ in Zoom-delning</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>Spela in delningsgenvägen och välj klickmålet som Solin ska använda.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>Delningsgenväg</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>Klicka här och tryck sedan på Zooms genväg för att starta/stoppa delning.</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>Tryck på genväg</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>Spela in genväg</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>Delningsmål</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>Målet konfigurerat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>Välj klickpositionen på din huvudskärm.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>Välj igen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>Välj mål</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>Ställ in Zoom senare</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>Allt verkar klart</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>Granska dina val. Du kan ändra dem senare i Inställningar.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>Språk</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>Den här veckan och nästa vecka</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>Inte konfigurerad</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>Ansluten · automatiskt scenbyte</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>Ansluten · manuella kontroller</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>Automatisk delning klar</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>Slutför…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>Välj en scen</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>Stäng</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>Sök språk</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2624,7 +2949,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>Avbryt</translation>
     </message>
@@ -2637,302 +2962,249 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>Frånkopplad</translation>
+        <translation type="vanished">Frånkopplad</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>Ansluter…</translation>
+        <translation type="vanished">Ansluter…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Ansluten till OBS Studio</translation>
+        <translation type="vanished">Ansluten till OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Fel: {msg}</translation>
+        <translation type="vanished">Fel: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Anslutningsfel</translation>
+        <translation type="vanished">Anslutningsfel</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— Välj scen —</translation>
+        <translation type="vanished">— Välj scen —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>Vem använder Solin?</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>Ny profil</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>Avbryt</translation>
+        <translation type="vanished">Avbryt</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>Hoppa över konfiguration</translation>
+        <translation type="vanished">Hoppa över konfiguration</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>Profilnamn</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>Exempel: Församling A, Namn, …</translation>
+        <translation type="vanished">Exempel: Församling A, Namn, …</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>Profil 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>Fortsätt →</translation>
+        <translation type="vanished">Fortsätt →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>Välkommen till Solin</translation>
+        <translation type="vanished">Välkommen till Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>Ge profilen ett namn. Varje profil sparar egna inställningar och spellistor – praktiskt för att hantera olika uppsättningar.</translation>
+        <translation type="vanished">Ge profilen ett namn. Varje profil sparar egna inställningar och spellistor – praktiskt för att hantera olika uppsättningar.</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>Gränssnittsspråk</translation>
+        <translation type="vanished">Gränssnittsspråk</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>Styr menyer, knappar och all text som visas i appen.</translation>
+        <translation type="vanished">Styr menyer, knappar och all text som visas i appen.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>Innehållsspråk</translation>
+        <translation type="vanished">Innehållsspråk</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>Språk för Sånger, videor och annat material som hämtas från JW.org.</translation>
+        <translation type="vanished">Språk för Sånger, videor och annat material som hämtas från JW.org.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>Språkinställningar</translation>
+        <translation type="vanished">Språkinställningar</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>Välj språk för gränssnittet och för innehåll från JW.org.</translation>
+        <translation type="vanished">Välj språk för gränssnittet och för innehåll från JW.org.</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin ansluter till OBS Studio via WebSocket för att automatiskt växla scener under medieuppspelning – Sånger, videor och bilder skickas sömlöst till din live-output.</translation>
+        <translation type="vanished">Solin ansluter till OBS Studio via WebSocket för att automatiskt växla scener under medieuppspelning – Sånger, videor och bilder skickas sömlöst till din live-output.</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>Skapa en huvudscen med din kamera. För USB-webbkameror, lägg till en källa för videoinspelningsenhet.</translation>
+        <translation type="vanished">Skapa en huvudscen med din kamera. För USB-webbkameror, lägg till en källa för videoinspelningsenhet.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>För IP-kameror, lägg till en mediekälla och ange kamerans RTSP-ström-URL.</translation>
+        <translation type="vanished">För IP-kameror, lägg till en mediekälla och ange kamerans RTSP-ström-URL.</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>Skapa ytterligare scener för olika bildutsnitt (talare, uppläsare, scen) genom att använda Källa → Scen, och justera sedan beskärning och transformering för varje vy.</translation>
+        <translation type="vanished">Skapa ytterligare scener för olika bildutsnitt (talare, uppläsare, scen) genom att använda Källa → Scen, och justera sedan beskärning och transformering för varje vy.</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>Skapa en separat mediescen för Solins projektion. När den externa bildskärmen är ansluten, lägg till en källa för bildskärmsinsamling och välj den bildskärm där Sånger, videor och bilder ska visas.</translation>
+        <translation type="vanished">Skapa en separat mediescen för Solins projektion. När den externa bildskärmen är ansluten, lägg till en källa för bildskärmsinsamling och välj den bildskärm där Sånger, videor och bilder ska visas.</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>Exempel på RTSP-URL:</translation>
+        <translation type="vanished">Exempel på RTSP-URL:</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>Ställ in dina scener</translation>
+        <translation type="vanished">Ställ in dina scener</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>Konfigurera dina kamerakällor och skapa scenlayouter i OBS innan anslutning.</translation>
+        <translation type="vanished">Konfigurera dina kamerakällor och skapa scenlayouter i OBS innan anslutning.</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>Öppna OBS Studio</translation>
+        <translation type="vanished">Öppna OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>Gå till Verktyg → Inställningar för WebSocket-server</translation>
+        <translation type="vanished">Gå till Verktyg → Inställningar för WebSocket-server</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>Markera ”Aktivera WebSocket-server”</translation>
+        <translation type="vanished">Markera ”Aktivera WebSocket-server”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>Bekräfta porten (standard: 4455) och ange ett lösenord om så önskas</translation>
+        <translation type="vanished">Bekräfta porten (standard: 4455) och ange ett lösenord om så önskas</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>Klicka på Verkställ och starta om OBS om du blir ombedd att göra det</translation>
+        <translation type="vanished">Klicka på Verkställ och starta om OBS om du blir ombedd att göra det</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>Aktivera WebSocket-servern</translation>
+        <translation type="vanished">Aktivera WebSocket-servern</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin kommunicerar med OBS via detta protokoll.</translation>
+        <translation type="vanished">Solin kommunicerar med OBS via detta protokoll.</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>Aktivera OBS-integrering</translation>
+        <translation type="vanished">Aktivera OBS-integrering</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocket-port</translation>
+        <translation type="vanished">WebSocket-port</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>Lösenord (valfritt)</translation>
+        <translation type="vanished">Lösenord (valfritt)</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>Lämna tomt om inget lösenord har angetts</translation>
+        <translation type="vanished">Lämna tomt om inget lösenord har angetts</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>Frånkopplad</translation>
+        <translation type="vanished">Frånkopplad</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>Standardscen (viloläge)</translation>
+        <translation type="vanished">Standardscen (viloläge)</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>Scen som visas när inget projiceras.</translation>
+        <translation type="vanished">Scen som visas när inget projiceras.</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>Mediefönsterscen</translation>
+        <translation type="vanished">Mediefönsterscen</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
+        <translation type="vanished">Scen som fångar projektorskärmen. Aktiveras när innehåll visas.</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>Anslut Solin till OBS</translation>
+        <translation type="vanished">Anslut Solin till OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>Ange samma port och lösenord som du konfigurerade i OBS.</translation>
+        <translation type="vanished">Ange samma port och lösenord som du konfigurerade i OBS.</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>Slutför konfiguration</translation>
+        <translation type="vanished">Slutför konfiguration</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>Anslut till OBS för automatisk scenväxling under presentationer.</translation>
+        <translation type="vanished">Anslut till OBS för automatisk scenväxling under presentationer.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>Befintliga inställningar hittades</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Solin hittade inställningar och spellistor från en tidigare version. Ge profilen ett namn för att fortsätta med din data:</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>Exempel: Centrala församlingen</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>Bekräfta och migrera data</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>Byt namn</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>Ta bort</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>Ta bort profil</translation>
     </message>
@@ -2947,37 +3219,33 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Detta tar bort spellistor, bilder, mottagna medier, webbläsarens cache och inställningar för denna profil. Denna åtgärd kan inte ångras.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>Profil {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>Ange ett profilnamn.</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>Namnet får inte vara tomt.</translation>
+        <translation type="vanished">Namnet får inte vara tomt.</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>Vill du hoppa över den inledande konfigurationen?</translation>
+        <translation type="vanished">Vill du hoppa över den inledande konfigurationen?</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>Du kan konfigurera språk och OBS senare under Inställningar.</translation>
+        <translation type="vanished">Du kan konfigurera språk och OBS senare under Inställningar.</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>Min profil</translation>
+        <translation type="vanished">Min profil</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3233,7 +3501,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>Klicka på målpositionen för delning</translation>
     </message>
@@ -3451,7 +3719,17 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Använder Zooms enda kortkommando för att starta och stoppa skärmdelning.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>Delningsmål</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Rutan “Solin Media Preview” i Zooms delningsdialog.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>Behörighet för hjälpmedel</translation>
     </message>
@@ -3461,17 +3739,15 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>Öppna inställningar</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>Klickposition</translation>
+        <translation type="vanished">Klickposition</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
+        <translation type="vanished">Positionen att klicka på efter att delningsdialogen öppnas för att välja målet.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>Konfigurera</translation>
     </message>

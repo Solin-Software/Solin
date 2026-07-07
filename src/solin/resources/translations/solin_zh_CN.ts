@@ -395,13 +395,13 @@
     </message>
     <message>
         <location line="+10"/>
-        <location line="+242"/>
-        <location line="+13"/>
+        <location line="+241"/>
+        <location line="+9"/>
         <source>Not configured</source>
         <translation>未配置</translation>
     </message>
     <message>
-        <location line="-248"/>
+        <location line="-243"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
@@ -417,16 +417,29 @@
     </message>
     <message>
         <location line="+35"/>
-        <source>Click Position</source>
-        <translation>点击位置</translation>
+        <source>Share target</source>
+        <translation>共享目标</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>共享对话框打开后用于选择目标的点击位置。</translation>
+        <source>Where Solin should click after Zoom&apos;s share shortcut opens the dialog.</source>
+        <translation>Zoom 的共享快捷键打开对话框后，Solin 应点击的位置。</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+167"/>
+        <source>Configured</source>
+        <translation>已配置</translation>
+    </message>
+    <message>
+        <source>Click Position</source>
+        <translation type="vanished">点击位置</translation>
+    </message>
+    <message>
+        <source>Position to click after the share dialog opens to select the target.</source>
+        <translation type="vanished">共享对话框打开后用于选择目标的点击位置。</translation>
+    </message>
+    <message>
+        <location line="-141"/>
         <source>Configure</source>
         <translation>配置</translation>
     </message>
@@ -441,12 +454,11 @@
         <translation>按下用于开始和停止屏幕共享的 Zoom 快捷键。</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Position: {x}, {y}</source>
-        <translation>位置: {x}, {y}</translation>
+        <translation type="vanished">位置: {x}, {y}</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+35"/>
         <source>Solin can send the automatic click.</source>
         <translation>Solin 可以发送自动点击。</translation>
     </message>
@@ -1025,13 +1037,13 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../../main_window.py" line="+320"/>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
+        <location filename="../../main_window.py" line="+320"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location line="+686"/>
+        <location filename="../../main_window.py" line="+686"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>请先暂停播放，再更改投影内容。</translation>
     </message>
@@ -1584,7 +1596,7 @@
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+139"/>
+        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>此媒体无法编辑。</translation>
     </message>
@@ -1616,12 +1628,12 @@
         <translation>关闭</translation>
     </message>
     <message>
-        <location line="+98"/>
+        <location line="+99"/>
         <source>Audio preview</source>
         <translation>音频预览</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+54"/>
         <source>Preview audio is muted while another media item is active.</source>
         <translation>其他媒体项目处于活动状态时，预览音频将静音。</translation>
     </message>
@@ -1636,12 +1648,12 @@
         <translation>播放</translation>
     </message>
     <message>
-        <location line="+216"/>
+        <location line="+245"/>
         <source>Start</source>
         <translation>开始</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>End</source>
         <translation>结束</translation>
     </message>
@@ -2174,6 +2186,319 @@
     </message>
 </context>
 <context>
+    <name>OnboardingView</name>
+    <message>
+        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>%1 of 4</source>
+        <translation>%1/4</translation>
+    </message>
+    <message>
+        <location line="+112"/>
+        <source>Back</source>
+        <translation>返回</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Start using Solin</source>
+        <translation>开始使用 Solin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue</source>
+        <translation>继续</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Welcome to Solin</source>
+        <translation>欢迎使用 Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set up a clean, reliable workspace for meetings and media.</source>
+        <translation>为聚会和媒体设置一个清爽可靠的工作空间。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Profile name</source>
+        <translation>配置文件名称</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Example: Main Hall</source>
+        <translation>示例：主会场</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Each profile keeps its own settings and playlists.</source>
+        <translation>每个配置文件都会保留自己的设置和播放列表。</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Prepare Solin for your setup</source>
+        <translation>根据你的设置准备 Solin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose languages and decide how meeting media should be handled.</source>
+        <translation>选择语言，并决定如何处理聚会媒体资料。</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <location line="+2"/>
+        <source>Interface language</source>
+        <translation>界面语言</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <location line="+2"/>
+        <source>Media language</source>
+        <translation>媒体语言</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+367"/>
+        <source>Meeting media</source>
+        <translation>聚会媒体资料</translation>
+    </message>
+    <message>
+        <location line="-356"/>
+        <source>Download automatically</source>
+        <translation>自动下载</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Keep this week and next week available offline.</source>
+        <translation>让本周和下周的内容可离线使用。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+349"/>
+        <source>Manual download</source>
+        <translation>手动下载</translation>
+    </message>
+    <message>
+        <location line="-348"/>
+        <source>Only download media when you click the cloud button.</source>
+        <translation>只有点击云朵按钮时才下载媒体。</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Choose how Solin should help</source>
+        <translation>选择 Solin 要提供的帮助</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose one option, both, or set them up later.</source>
+        <translation>选择一个、两个都选，或稍后再设置。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Control scenes and cameras from Solin.</source>
+        <translation>从 Solin 控制场景和摄像头。</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Share your screen automatically.</source>
+        <translation>自动共享屏幕。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up later</source>
+        <translation>稍后设置</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Connect OBS Studio</source>
+        <translation>连接 OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
+        <translation>从 Solin 使用 OBS 场景和摄像头。自动切换是可选的。</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>WebSocket port</source>
+        <translation>WebSocket 端口</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Password (optional)</source>
+        <translation>密码（可选）</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Connecting…</source>
+        <translation>正在连接…</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Connect</source>
+        <translation>连接</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Need help setting up OBS?</source>
+        <translation>需要 OBS 设置帮助？</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Automatic scene switching</source>
+        <translation>自动切换场景</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Solin switches scenes while media is projected.</source>
+        <translation>投影媒体时，Solin 会切换场景。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Manual scene and camera controls remain available.</source>
+        <translation>仍可手动控制场景和摄像头。</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Default scene</source>
+        <translation>默认场景</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Media scene</source>
+        <translation>媒体场景</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set up OBS later</source>
+        <translation>稍后设置 OBS</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Set up Zoom sharing</source>
+        <translation>设置 Zoom 共享</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record the share shortcut and choose the click target Solin should use.</source>
+        <translation>记录共享快捷键，并选择 Solin 要使用的点击目标。</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Share shortcut</source>
+        <translation>共享快捷键</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Click here, then press Zoom&apos;s start/stop sharing shortcut.</source>
+        <translation>点击这里，然后按下 Zoom 开始/停止共享的快捷键。</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Press shortcut</source>
+        <translation>按下快捷键</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Record shortcut</source>
+        <translation>记录快捷键</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>Share target</source>
+        <translation>共享目标</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Target configured</source>
+        <translation>目标已配置</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Choose the click position on your primary monitor.</source>
+        <translation>在主显示器上选择点击位置。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Choose again</source>
+        <translation>重新选择</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Choose target</source>
+        <translation>选择目标</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Set up Zoom later</source>
+        <translation>稍后设置 Zoom</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Everything looks ready</source>
+        <translation>一切准备就绪</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review your choices. You can change them later in Settings.</source>
+        <translation>检查你的选择。之后可在“设置”中更改。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Languages</source>
+        <translation>语言</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This week and next week</source>
+        <translation>本周和下周</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+9"/>
+        <source>Not configured</source>
+        <translation>未配置</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>Connected · automatic scene switching</source>
+        <translation>已连接 · 自动切换场景</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Connected · manual controls</source>
+        <translation>已连接 · 手动控制</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Automatic sharing ready</source>
+        <translation>自动共享已就绪</translation>
+    </message>
+    <message>
+        <location line="+120"/>
+        <source>Finishing…</source>
+        <translation>正在完成…</translation>
+    </message>
+    <message>
+        <location line="+327"/>
+        <source>Choose a scene</source>
+        <translation>选择场景</translation>
+    </message>
+    <message>
+        <location line="+316"/>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Search languages</source>
+        <translation>搜索语言</translation>
+    </message>
+</context>
+<context>
     <name>PlaylistCard</name>
     <message>
         <location filename="../../widgets/playlist/components.py" line="+142"/>
@@ -2621,7 +2946,7 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileNameDialog</name>
     <message>
-        <location filename="../../ui/profile_widgets.py" line="+499"/>
+        <location filename="../../ui/profile_widgets.py" line="+330"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
@@ -2634,302 +2959,249 @@ This action cannot be undone.</source>
 <context>
     <name>ProfileOBSSetupMixin</name>
     <message>
-        <location filename="../../ui/profile_obs_setup.py" line="+83"/>
-        <location line="+7"/>
         <source>Disconnected</source>
-        <translation>已断开连接</translation>
+        <translation type="vanished">已断开连接</translation>
     </message>
     <message>
-        <location line="-6"/>
         <source>Connecting…</source>
-        <translation>正在连接…</translation>
+        <translation type="vanished">正在连接…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>已连接至 OBS Studio</translation>
+        <translation type="vanished">已连接至 OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>错误：{msg}</translation>
+        <translation type="vanished">错误：{msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>连接错误</translation>
+        <translation type="vanished">连接错误</translation>
     </message>
     <message>
-        <location line="+15"/>
         <source>— Select scene —</source>
-        <translation>— 选择场景 —</translation>
+        <translation type="vanished">— 选择场景 —</translation>
     </message>
 </context>
 <context>
     <name>ProfileScreen</name>
     <message>
-        <location filename="../../ui/profile_screen.py" line="+192"/>
+        <location filename="../../ui/profile_screen.py" line="+145"/>
         <source>Who is using Solin?</source>
         <translation>谁在使用Solin？</translation>
     </message>
     <message>
-        <location line="+27"/>
-        <location line="+1117"/>
+        <location line="+24"/>
+        <location line="+245"/>
         <source>New Profile</source>
         <translation>新建配置</translation>
     </message>
     <message>
-        <location line="-972"/>
         <source>Cancel</source>
-        <translation>取消</translation>
+        <translation type="vanished">取消</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+867"/>
-        <location line="+94"/>
         <source>Skip setup</source>
-        <translation>跳过设置</translation>
+        <translation type="vanished">跳过设置</translation>
     </message>
     <message>
-        <location line="-931"/>
-        <location line="+624"/>
+        <location line="-176"/>
         <source>Profile name</source>
         <translation>配置名称</translation>
     </message>
     <message>
-        <location line="-618"/>
         <source>Example: Congregation A, Name, …</source>
-        <translation>例如：某某会众，姓名，……</translation>
+        <translation type="vanished">例如：某某会众，姓名，……</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <location line="+662"/>
+        <location line="+29"/>
         <source>Profile 1</source>
         <translation>配置 1</translation>
     </message>
     <message>
-        <location line="-650"/>
-        <location line="+72"/>
         <source>Continue →</source>
-        <translation>继续 →</translation>
+        <translation type="vanished">继续 →</translation>
     </message>
     <message>
-        <location line="-63"/>
         <source>Welcome to Solin</source>
-        <translation>欢迎使用 Solin</translation>
+        <translation type="vanished">欢迎使用 Solin</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Give this profile a name. Each profile keeps its own settings and playlists — great for managing different setups.</source>
-        <translation>请为该配置命名。每个配置都会保留各自的设置和播放列表，方便管理不同的设置方案。</translation>
+        <translation type="vanished">请为该配置命名。每个配置都会保留各自的设置和播放列表，方便管理不同的设置方案。</translation>
     </message>
     <message>
-        <location line="+20"/>
         <source>Interface language</source>
-        <translation>界面语言</translation>
+        <translation type="vanished">界面语言</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Controls menus, buttons, and all text displayed throughout the app.</source>
-        <translation>控制应用程序中显示的菜单、按钮及所有文本。</translation>
+        <translation type="vanished">控制应用程序中显示的菜单、按钮及所有文本。</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Content language</source>
-        <translation>内容语言</translation>
+        <translation type="vanished">内容语言</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Language for songs, videos, and other media downloaded from JW.org.</source>
-        <translation>用于从 JW.org 下载的诗歌、视频及其他媒体的语言。</translation>
+        <translation type="vanished">用于从 JW.org 下载的诗歌、视频及其他媒体的语言。</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>Language preferences</source>
-        <translation>语言偏好</translation>
+        <translation type="vanished">语言偏好</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Choose the language for the interface and for media content from JW.org.</source>
-        <translation>选择界面语言以及来自 JW.org 的媒体内容语言。</translation>
+        <translation type="vanished">选择界面语言以及来自 JW.org 的媒体内容语言。</translation>
     </message>
     <message>
-        <location line="+152"/>
         <source>Solin connects to OBS Studio via WebSocket to automatically switch scenes during media playback — songs, videos, and images are sent seamlessly to your live output.</source>
-        <translation>Solin 通过 WebSocket 连接到 OBS Studio，以便在播放媒体时自动切换场景——诗歌、视频和图片将无缝发送到您的直播输出中。</translation>
+        <translation type="vanished">Solin 通过 WebSocket 连接到 OBS Studio，以便在播放媒体时自动切换场景——诗歌、视频和图片将无缝发送到您的直播输出中。</translation>
     </message>
     <message>
-        <location line="+18"/>
         <source>Create a main scene with your camera. For USB webcams, add a Video Capture Device source.</source>
-        <translation>使用您的摄像机创建一个主场景。对于 USB 网络摄像头，请添加“视频采集设备”来源。</translation>
+        <translation type="vanished">使用您的摄像机创建一个主场景。对于 USB 网络摄像头，请添加“视频采集设备”来源。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>For IP cameras, add a Media Source and enter the RTSP stream URL of your camera.</source>
-        <translation>对于 IP 摄像机，请添加“媒体源”并输入您摄像机的 RTSP 流地址。</translation>
+        <translation type="vanished">对于 IP 摄像机，请添加“媒体源”并输入您摄像机的 RTSP 流地址。</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Create additional scenes for different framings (speaker, reader, stage) using Source → Scene, then adjust the crop and transform for each view.</source>
-        <translation>使用“来源”→“场景”为不同的取景（演讲者、朗读者、舞台）创建额外场景，然后调整每个视图的裁剪和变换。</translation>
+        <translation type="vanished">使用“来源”→“场景”为不同的取景（演讲者、朗读者、舞台）创建额外场景，然后调整每个视图的裁剪和变换。</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Create a separate media scene for Solin&apos;s projection. With the external monitor connected, add a Display Capture source and select the monitor where songs, videos, and images will appear.</source>
-        <translation>为 Solin 的投影创建一个独立的媒体场景。在连接外接显示器后，添加“显示器采集”来源，并选择将要显示诗歌、视频和图片的显示器。</translation>
+        <translation type="vanished">为 Solin 的投影创建一个独立的媒体场景。在连接外接显示器后，添加“显示器采集”来源，并选择将要显示诗歌、视频和图片的显示器。</translation>
     </message>
     <message>
-        <location line="+37"/>
         <source>RTSP URL example:</source>
-        <translation>RTSP 地址示例：</translation>
+        <translation type="vanished">RTSP 地址示例：</translation>
     </message>
     <message>
-        <location line="+24"/>
         <source>Set up your scenes</source>
-        <translation>设置您的场景</translation>
+        <translation type="vanished">设置您的场景</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Configure your camera sources and create scene layouts in OBS before connecting.</source>
-        <translation>在连接之前，请先在 OBS 中配置您的摄像机来源并创建场景布局。</translation>
+        <translation type="vanished">在连接之前，请先在 OBS 中配置您的摄像机来源并创建场景布局。</translation>
     </message>
     <message>
-        <location line="+22"/>
         <source>Open OBS Studio</source>
-        <translation>打开 OBS Studio</translation>
+        <translation type="vanished">打开 OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Go to Tools → WebSocket Server Settings</source>
-        <translation>前往“工具”→“WebSocket 服务器设置”</translation>
+        <translation type="vanished">前往“工具”→“WebSocket 服务器设置”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Check “Enable WebSocket server”</source>
-        <translation>勾选“启用 WebSocket 服务器”</translation>
+        <translation type="vanished">勾选“启用 WebSocket 服务器”</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Confirm the port (default: 4455) and set a password if desired</source>
-        <translation>确认端口（默认：4455），并根据需要设置密码</translation>
+        <translation type="vanished">确认端口（默认：4455），并根据需要设置密码</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Click Apply and restart OBS if prompted</source>
-        <translation>点击“应用”，如果系统提示，请重启 OBS</translation>
+        <translation type="vanished">点击“应用”，如果系统提示，请重启 OBS</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>Enable the WebSocket server</source>
-        <translation>启用 WebSocket 服务器</translation>
+        <translation type="vanished">启用 WebSocket 服务器</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Solin communicates with OBS through this protocol.</source>
-        <translation>Solin 通过此协议与 OBS 通信。</translation>
+        <translation type="vanished">Solin 通过此协议与 OBS 通信。</translation>
     </message>
     <message>
-        <location line="+23"/>
         <source>Enable OBS integration</source>
-        <translation>启用 OBS 集成</translation>
+        <translation type="vanished">启用 OBS 集成</translation>
     </message>
     <message>
-        <location line="+19"/>
         <source>WebSocket port</source>
-        <translation>WebSocket 端口</translation>
+        <translation type="vanished">WebSocket 端口</translation>
     </message>
     <message>
-        <location line="+11"/>
         <source>Password (optional)</source>
-        <translation>密码（可选）</translation>
+        <translation type="vanished">密码（可选）</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>Leave blank if no password is set</source>
-        <translation>如果没有设置密码，请留空</translation>
+        <translation type="vanished">如果没有设置密码，请留空</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Disconnected</source>
-        <translation>已断开连接</translation>
+        <translation type="vanished">已断开连接</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Default scene (idle)</source>
-        <translation>默认场景（空闲）</translation>
+        <translation type="vanished">默认场景（空闲）</translation>
     </message>
     <message>
-        <location line="+5"/>
         <source>Scene shown when nothing is being projected.</source>
-        <translation>未投影任何内容时显示的场景。</translation>
+        <translation type="vanished">未投影任何内容时显示的场景。</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>Media window scene</source>
-        <translation>媒体窗口场景</translation>
+        <translation type="vanished">媒体窗口场景</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Scene that captures the projection monitor. Activated when content is displayed.</source>
-        <translation>捕获投影显示器的场景。当显示内容时激活。</translation>
+        <translation type="vanished">捕获投影显示器的场景。当显示内容时激活。</translation>
     </message>
     <message>
-        <location line="+17"/>
         <source>Connect Solin to OBS</source>
-        <translation>将 Solin 连接到 OBS</translation>
+        <translation type="vanished">将 Solin 连接到 OBS</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Enter the same port and password you configured in OBS.</source>
-        <translation>输入您在 OBS 中配置的相同端口和密码。</translation>
+        <translation type="vanished">输入您在 OBS 中配置的相同端口和密码。</translation>
     </message>
     <message>
-        <location line="+16"/>
         <source>Complete setup</source>
-        <translation>完成设置</translation>
+        <translation type="vanished">完成设置</translation>
     </message>
     <message>
-        <location line="+7"/>
         <source>OBS Studio</source>
-        <translation>OBS Studio</translation>
+        <translation type="vanished">OBS Studio</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connect to OBS for automatic scene switching during presentations.</source>
-        <translation>连接到 OBS，以便在演示期间自动切换场景。</translation>
+        <translation type="vanished">连接到 OBS，以便在演示期间自动切换场景。</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-52"/>
         <source>Existing settings found</source>
         <translation>发现现有设置</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+12"/>
         <source>Solin found settings and playlists from a previous version. Name this profile to continue with your data:</source>
         <translation>Solin在旧版本中发现了设置和播放列表。请为此配置文件命名，以便继续使用您的数据：</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Example: Central Congregation</source>
         <translation>例如：中央会众</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+9"/>
         <source>Confirm and migrate data</source>
         <translation>确认并迁移数据</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+89"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+32"/>
         <source>Delete profile</source>
         <translation>删除配置</translation>
     </message>
@@ -2944,37 +3216,33 @@ This action cannot be undone.</source>
         <translation>这将删除此配置的播放列表、图片、接收到的媒体、浏览器缓存和设置。此操作无法撤销。</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="-101"/>
         <source>Profile {n}</source>
         <translation>配置 {n}</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+116"/>
         <source>Please enter a profile name.</source>
         <translation>请输入配置名称。</translation>
     </message>
     <message>
-        <location line="+10"/>
         <source>The name cannot be empty.</source>
-        <translation>名称不能为空。</translation>
+        <translation type="vanished">名称不能为空。</translation>
     </message>
     <message>
-        <location line="+21"/>
         <source>Do you want to skip initial setup?</source>
-        <translation>您想跳过初始设置吗？</translation>
+        <translation type="vanished">您想跳过初始设置吗？</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>You can configure languages and OBS later in Settings.</source>
-        <translation>您稍后可以在“设置”中配置语言和 OBS。</translation>
+        <translation type="vanished">您稍后可以在“设置”中配置语言和 OBS。</translation>
     </message>
     <message>
-        <location line="+29"/>
         <source>My Profile</source>
-        <translation>我的配置</translation>
+        <translation type="vanished">我的配置</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
@@ -3230,7 +3498,7 @@ This action cannot be undone.</source>
 <context>
     <name>ScreenPickerOverlay</name>
     <message>
-        <location filename="../../widgets/screen_picker_overlay.py" line="+117"/>
+        <location filename="../../widgets/screen_picker_overlay.py" line="+115"/>
         <source>Click on the share target position</source>
         <translation>点击共享目标位置</translation>
     </message>
@@ -3669,7 +3937,17 @@ This action cannot be undone.</source>
         <translation>使用 Zoom 的单个开始/停止屏幕共享快捷键。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+2"/>
+        <source>Share target</source>
+        <translation>共享目标</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The Solin Media Preview tile inside Zoom&apos;s share dialog.</source>
+        <translation>Zoom 共享对话框中的“Solin Media Preview”磁贴。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Accessibility permission</source>
         <translation>辅助功能权限</translation>
     </message>
@@ -3679,17 +3957,15 @@ This action cannot be undone.</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location line="-7"/>
         <source>Click Position</source>
-        <translation>点击位置</translation>
+        <translation type="vanished">点击位置</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Position to click after the share dialog opens to select the target.</source>
-        <translation>共享对话框打开后用于选择目标的点击位置。</translation>
+        <translation type="vanished">共享对话框打开后用于选择目标的点击位置。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-3"/>
         <source>Configure</source>
         <translation>配置</translation>
     </message>
