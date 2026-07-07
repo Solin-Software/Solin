@@ -1955,6 +1955,49 @@
     </message>
 </context>
 <context>
+    <name>OBSConnectionStatus</name>
+    <message>
+        <location filename="../../ui/obs_status_text.py" line="+12"/>
+        <source>Not connected</source>
+        <translation>Inte ansluten</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnected</source>
+        <translation>Frånkopplad</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Incorrect password.</source>
+        <translation>Fel lösenord.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OBS requires a password but none was provided.</source>
+        <translation>OBS kräver ett lösenord, men inget angavs.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Connecting…</source>
+        <translation>Ansluter…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connected to OBS Studio</source>
+        <translation>Ansluten till OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Error: {msg}</source>
+        <translation>Fel: {msg}</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connection error</source>
+        <translation>Anslutningsfel</translation>
+    </message>
+</context>
+<context>
     <name>OBSScenePopup</name>
     <message>
         <location filename="../../widgets/obs_scene_popup.py" line="+176"/>
@@ -2035,7 +2078,7 @@
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+49"/>
+        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2046,13 +2089,11 @@
     </message>
     <message>
         <location line="+29"/>
-        <location line="+543"/>
-        <location line="+7"/>
         <source>Disconnected</source>
         <translation>Frånkopplad</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="+8"/>
         <source>WebSocket Port</source>
         <translation>WebSocket-port</translation>
     </message>
@@ -2163,27 +2204,23 @@
         <translation>Inga NDI-källor hittades. Kontrollera att DistroAV Main Output är aktiverat i OBS.</translation>
     </message>
     <message>
-        <location line="+53"/>
         <source>Connecting…</source>
-        <translation>Ansluter…</translation>
+        <translation type="vanished">Ansluter…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Ansluten till OBS Studio</translation>
+        <translation type="vanished">Ansluten till OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Fel: {msg}</translation>
+        <translation type="vanished">Fel: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Anslutningsfel</translation>
+        <translation type="vanished">Anslutningsfel</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+72"/>
         <source>— Select scene —</source>
         <translation>— Välj scen —</translation>
     </message>
@@ -2499,6 +2536,66 @@
         <location line="+7"/>
         <source>Search languages</source>
         <translation>Sök språk</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <source>Enter a port between 1 and 65535.</source>
+        <translation>Ange en port mellan 1 och 65535.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>The share target picker is unavailable.</source>
+        <translation>Väljaren för delningsmål är inte tillgänglig.</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Enter a profile name.</source>
+        <translation>Ange ett profilnamn.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Connect to OBS or choose Set up later.</source>
+        <translation>Anslut till OBS eller välj Ställ in senare.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Choose both OBS scenes.</source>
+        <translation>Välj båda OBS-scenerna.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose two different OBS scenes.</source>
+        <translation>Välj två olika OBS-scener.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Record the Zoom share shortcut.</source>
+        <translation>Spela in Zooms delningsgenväg.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose the target in Zoom&apos;s share dialog.</source>
+        <translation>Välj målet i Zooms delningsdialog.</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Could not create the profile.</source>
+        <translation>Det gick inte att skapa profilen.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>Allow Solin in macOS Accessibility settings.</source>
+        <translation>Tillåt Solin i macOS-inställningarna för Hjälpmedel.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatic sharing is unavailable on Wayland.</source>
+        <translation>Automatisk delning är inte tillgänglig på Wayland.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Install xdotool to use automatic sharing.</source>
+        <translation>Installera xdotool för att använda automatisk delning.</translation>
     </message>
 </context>
 <context>

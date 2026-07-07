@@ -1957,6 +1957,49 @@
     </message>
 </context>
 <context>
+    <name>OBSConnectionStatus</name>
+    <message>
+        <location filename="../../ui/obs_status_text.py" line="+12"/>
+        <source>Not connected</source>
+        <translation>Не підключено</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnected</source>
+        <translation>Відключено</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Incorrect password.</source>
+        <translation>Неправильний пароль.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OBS requires a password but none was provided.</source>
+        <translation>OBS вимагає пароль, але його не було вказано.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Connecting…</source>
+        <translation>Підключення…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connected to OBS Studio</source>
+        <translation>Підключено до OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Error: {msg}</source>
+        <translation>Помилка: {msg}</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connection error</source>
+        <translation>Помилка підключення</translation>
+    </message>
+</context>
+<context>
     <name>OBSScenePopup</name>
     <message>
         <location filename="../../widgets/obs_scene_popup.py" line="+176"/>
@@ -2037,7 +2080,7 @@
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+49"/>
+        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2048,13 +2091,11 @@
     </message>
     <message>
         <location line="+29"/>
-        <location line="+543"/>
-        <location line="+7"/>
         <source>Disconnected</source>
         <translation>Відключено</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="+8"/>
         <source>WebSocket Port</source>
         <translation>Порт WebSocket</translation>
     </message>
@@ -2166,27 +2207,23 @@
         <translation>Джерел NDI не знайдено. Перевірте, чи ввімкнено основний вихід (Main Output) DistroAV в OBS.</translation>
     </message>
     <message>
-        <location line="+53"/>
         <source>Connecting…</source>
-        <translation>Підключення…</translation>
+        <translation type="vanished">Підключення…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Підключено до OBS Studio</translation>
+        <translation type="vanished">Підключено до OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Помилка: {msg}</translation>
+        <translation type="vanished">Помилка: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Помилка підключення</translation>
+        <translation type="vanished">Помилка підключення</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+72"/>
         <source>— Select scene —</source>
         <translation>— Виберіть сцену —</translation>
     </message>
@@ -2502,6 +2539,66 @@
         <location line="+7"/>
         <source>Search languages</source>
         <translation>Пошук мов</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <source>Enter a port between 1 and 65535.</source>
+        <translation>Введіть порт від 1 до 65535.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>The share target picker is unavailable.</source>
+        <translation>Засіб вибору цілі демонстрації недоступний.</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Enter a profile name.</source>
+        <translation>Введіть назву профілю.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Connect to OBS or choose Set up later.</source>
+        <translation>Підключіться до OBS або виберіть Налаштувати пізніше.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Choose both OBS scenes.</source>
+        <translation>Виберіть обидві сцени OBS.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose two different OBS scenes.</source>
+        <translation>Виберіть дві різні сцени OBS.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Record the Zoom share shortcut.</source>
+        <translation>Запишіть комбінацію клавіш демонстрації Zoom.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose the target in Zoom&apos;s share dialog.</source>
+        <translation>Виберіть ціль у вікні демонстрації Zoom.</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Could not create the profile.</source>
+        <translation>Не вдалося створити профіль.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>Allow Solin in macOS Accessibility settings.</source>
+        <translation>Дозвольте Solin у налаштуваннях доступності macOS.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatic sharing is unavailable on Wayland.</source>
+        <translation>Автоматична демонстрація недоступна у Wayland.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Install xdotool to use automatic sharing.</source>
+        <translation>Установіть xdotool, щоб використовувати автоматичну демонстрацію.</translation>
     </message>
 </context>
 <context>

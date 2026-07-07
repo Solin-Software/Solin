@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QObject, Property, Signal, Slot, Qt, QUrl
+from PySide6.QtCore import QObject, Property, QCoreApplication, Signal, Slot, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QKeySequence
 from PySide6.QtQuickWidgets import QQuickWidget
 
@@ -39,6 +39,7 @@ from solin.styles.icons import (
     ICON_ZOOM,
 )
 from solin.styles.theme import PALETTE
+from solin.ui.obs_status_text import translated_obs_status_text
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.svg_icons import SvgIconProvider
 
@@ -82,6 +83,8 @@ class OnboardingBridge(QObject):
         self._session_revision = 0
         self._original_language = "en"
         self._media_language_touched = False
+        self._obs_status_state = OBSConnectionState.DISCONNECTED
+        self._obs_status_message = ""
         self._state: dict[str, Any] = {}
         self._reset_state("Profile 1", allow_cancel=False)
 
@@ -180,7 +183,9 @@ class OnboardingBridge(QObject):
             self._obs_probe.stop()
             self._state["obsConnected"] = False
             self._state["obsState"] = "idle"
-            self._state["obsStatusText"] = "Not connected"
+            self._obs_status_state = OBSConnectionState.DISCONNECTED
+            self._obs_status_message = ""
+            self._state["obsStatusText"] = self._onboarding_obs_status_text()
         self.stateChanged.emit()
 
     @Slot(str, str)
@@ -266,14 +271,19 @@ class OnboardingBridge(QObject):
         except ValueError:
             port = 0
         if not 1 <= port <= 65535:
-            self._state["errorText"] = "Enter a port between 1 and 65535."
+            self._state["errorText"] = QCoreApplication.translate(
+                "OnboardingView",
+                "Enter a port between 1 and 65535.",
+            )
             self.stateChanged.emit()
             return
+        self._obs_status_state = OBSConnectionState.CONNECTING
+        self._obs_status_message = ""
         self._state.update(
             {
                 "errorText": "",
                 "obsState": "connecting",
-                "obsStatusText": "Connecting…",
+                "obsStatusText": self._onboarding_obs_status_text(),
                 "obsConnected": False,
             }
         )
@@ -308,7 +318,10 @@ class OnboardingBridge(QObject):
             self.stateChanged.emit()
             return
         if self._target_picker_factory is None:
-            self._state["errorText"] = "The share target picker is unavailable."
+            self._state["errorText"] = QCoreApplication.translate(
+                "OnboardingView",
+                "The share target picker is unavailable.",
+            )
             self.stateChanged.emit()
             return
         self._close_target_picker()
@@ -357,6 +370,8 @@ class OnboardingBridge(QObject):
         )
         media_code = self._interface_api_code(interface_code) or "E"
         zoom_available, zoom_reason = self._zoom_capability()
+        self._obs_status_state = OBSConnectionState.DISCONNECTED
+        self._obs_status_message = ""
         self._state = {
             "sessionRevision": self._session_revision,
             "currentPage": _PAGE_PROFILE,
@@ -374,7 +389,7 @@ class OnboardingBridge(QObject):
             "obsPort": "4455",
             "obsPassword": "",
             "obsState": "idle",
-            "obsStatusText": "Not connected",
+            "obsStatusText": self._onboarding_obs_status_text(),
             "obsConnected": False,
             "obsScenes": [],
             "obsAutomatic": False,
@@ -395,24 +410,39 @@ class OnboardingBridge(QObject):
 
     def _validate_page(self, page: str) -> str:
         if page == _PAGE_PROFILE and not str(self._state["profileName"]).strip():
-            return "Enter a profile name."
+            return QCoreApplication.translate("OnboardingView", "Enter a profile name.")
         if page == _PAGE_OBS:
             if not self._state["obsConnected"]:
-                return "Connect to OBS or choose Set up later."
+                return QCoreApplication.translate(
+                    "OnboardingView",
+                    "Connect to OBS or choose Set up later.",
+                )
             if self._state["obsAutomatic"]:
                 default_scene = str(self._state["obsDefaultScene"])
                 media_scene = str(self._state["obsMediaScene"])
                 if not default_scene or not media_scene:
-                    return "Choose both OBS scenes."
+                    return QCoreApplication.translate(
+                        "OnboardingView",
+                        "Choose both OBS scenes.",
+                    )
                 if default_scene == media_scene:
-                    return "Choose two different OBS scenes."
+                    return QCoreApplication.translate(
+                        "OnboardingView",
+                        "Choose two different OBS scenes.",
+                    )
         if page == _PAGE_ZOOM:
             if not self._state["zoomAvailable"]:
                 return self._state["zoomUnavailableReason"]
             if not str(self._state["zoomHotkey"]).strip():
-                return "Record the Zoom share shortcut."
+                return QCoreApplication.translate(
+                    "OnboardingView",
+                    "Record the Zoom share shortcut.",
+                )
             if not self._state["zoomTargetConfigured"]:
-                return "Choose the target in Zoom's share dialog."
+                return QCoreApplication.translate(
+                    "OnboardingView",
+                    "Choose the target in Zoom's share dialog.",
+                )
         return ""
 
     def _confirm_current_integration(self, page: str) -> None:
@@ -489,7 +519,10 @@ class OnboardingBridge(QObject):
         except Exception as exc:  # noqa: BLE001 - UI transaction boundary
             log.exception("Could not complete onboarding")
             self._state["busy"] = False
-            self._state["errorText"] = str(exc) or "Could not create the profile."
+            self._state["errorText"] = str(exc) or QCoreApplication.translate(
+                "OnboardingView",
+                "Could not create the profile.",
+            )
             self.stateChanged.emit()
             return
         self.shutdown()
@@ -506,12 +539,9 @@ class OnboardingBridge(QObject):
             OBSConnectionState.CONNECTED: "connected",
             OBSConnectionState.ERROR: "error",
         }.get(state, "idle")
-        text = {
-            OBSConnectionState.DISCONNECTED: "Disconnected",
-            OBSConnectionState.CONNECTING: "Connecting…",
-            OBSConnectionState.CONNECTED: "Connected to OBS Studio",
-            OBSConnectionState.ERROR: message or "Connection error",
-        }.get(state, message or "Disconnected")
+        self._obs_status_state = state
+        self._obs_status_message = message or ""
+        text = self._onboarding_obs_status_text()
         self._state["obsState"] = key
         self._state["obsStatusText"] = text
         self._state["obsConnected"] = state is OBSConnectionState.CONNECTED
@@ -548,6 +578,12 @@ class OnboardingBridge(QObject):
             picker.close()
 
     def _on_language_changed(self, _code: str) -> None:
+        zoom_available, zoom_reason = self._zoom_capability()
+        self._state["zoomAvailable"] = zoom_available
+        self._state["zoomUnavailableReason"] = zoom_reason
+        self._state["obsStatusText"] = self._onboarding_obs_status_text()
+        if self._obs_status_state is OBSConnectionState.ERROR:
+            self._state["errorText"] = self._state["obsStatusText"]
         self.stateChanged.emit()
 
     def _on_media_languages_ready(self, _languages: list[Any]) -> None:
@@ -582,14 +618,31 @@ class OnboardingBridge(QObject):
     def _zoom_capability() -> tuple[bool, str]:
         if sys.platform == "darwin":
             if macos_accessibility_trusted() is not True:
-                return False, "Allow Solin in macOS Accessibility settings."
+                return False, QCoreApplication.translate(
+                    "OnboardingView",
+                    "Allow Solin in macOS Accessibility settings.",
+                )
             return True, ""
         if sys.platform.startswith("linux"):
             if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
-                return False, "Automatic sharing is unavailable on Wayland."
+                return False, QCoreApplication.translate(
+                    "OnboardingView",
+                    "Automatic sharing is unavailable on Wayland.",
+                )
             if shutil.which("xdotool") is None:
-                return False, "Install xdotool to use automatic sharing."
+                return False, QCoreApplication.translate(
+                    "OnboardingView",
+                    "Install xdotool to use automatic sharing.",
+                )
         return True, ""
+
+    def _onboarding_obs_status_text(self) -> str:
+        return translated_obs_status_text(
+            self._obs_status_state,
+            self._obs_status_message,
+            disconnected_source="Not connected",
+            include_error_prefix=False,
+        )
 
 
 class OnboardingQmlHost(QQuickWidget):

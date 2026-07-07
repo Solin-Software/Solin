@@ -1955,6 +1955,49 @@
     </message>
 </context>
 <context>
+    <name>OBSConnectionStatus</name>
+    <message>
+        <location filename="../../ui/obs_status_text.py" line="+12"/>
+        <source>Not connected</source>
+        <translation>Non connesso</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnected</source>
+        <translation>Disconnesso</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Incorrect password.</source>
+        <translation>Password errata.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OBS requires a password but none was provided.</source>
+        <translation>OBS richiede una password, ma non ne è stata fornita una.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Connecting…</source>
+        <translation>Connessione…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connected to OBS Studio</source>
+        <translation>Connesso a OBS Studio</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Error: {msg}</source>
+        <translation>Errore: {msg}</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connection error</source>
+        <translation>Errore di connessione</translation>
+    </message>
+</context>
+<context>
     <name>OBSScenePopup</name>
     <message>
         <location filename="../../widgets/obs_scene_popup.py" line="+176"/>
@@ -2035,7 +2078,7 @@
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+49"/>
+        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2046,13 +2089,11 @@
     </message>
     <message>
         <location line="+29"/>
-        <location line="+543"/>
-        <location line="+7"/>
         <source>Disconnected</source>
         <translation>Disconnesso</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="+8"/>
         <source>WebSocket Port</source>
         <translation>Porta WebSocket</translation>
     </message>
@@ -2163,27 +2204,23 @@
         <translation>Nessuna sorgente NDI trovata. Verificare che l&apos;output principale di DistroAV sia abilitato in OBS.</translation>
     </message>
     <message>
-        <location line="+53"/>
         <source>Connecting…</source>
-        <translation>Connessione in corso…</translation>
+        <translation type="vanished">Connessione in corso…</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Connesso a OBS Studio</translation>
+        <translation type="vanished">Connesso a OBS Studio</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Errore: {msg}</translation>
+        <translation type="vanished">Errore: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Errore di connessione</translation>
+        <translation type="vanished">Errore di connessione</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+72"/>
         <source>— Select scene —</source>
         <translation>— Selezionare scena —</translation>
     </message>
@@ -2499,6 +2536,66 @@
         <location line="+7"/>
         <source>Search languages</source>
         <translation>Cerca lingue</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <source>Enter a port between 1 and 65535.</source>
+        <translation>Inserisci una porta tra 1 e 65535.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>The share target picker is unavailable.</source>
+        <translation>Il selettore della destinazione di condivisione non è disponibile.</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Enter a profile name.</source>
+        <translation>Inserisci un nome profilo.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Connect to OBS or choose Set up later.</source>
+        <translation>Connetti OBS o scegli Configura più tardi.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Choose both OBS scenes.</source>
+        <translation>Scegli entrambe le scene OBS.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose two different OBS scenes.</source>
+        <translation>Scegli due scene OBS diverse.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Record the Zoom share shortcut.</source>
+        <translation>Registra la scorciatoia di condivisione di Zoom.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose the target in Zoom&apos;s share dialog.</source>
+        <translation>Scegli la destinazione nella finestra di dialogo di condivisione di Zoom.</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Could not create the profile.</source>
+        <translation>Non è stato possibile creare il profilo.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>Allow Solin in macOS Accessibility settings.</source>
+        <translation>Consenti Solin nelle impostazioni Accessibilità di macOS.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatic sharing is unavailable on Wayland.</source>
+        <translation>La condivisione automatica non è disponibile su Wayland.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Install xdotool to use automatic sharing.</source>
+        <translation>Installa xdotool per usare la condivisione automatica.</translation>
     </message>
 </context>
 <context>

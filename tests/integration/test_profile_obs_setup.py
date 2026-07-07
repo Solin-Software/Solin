@@ -128,13 +128,30 @@ def test_qml_onboarding_scene_choice_uses_custom_polished_popup():
 def test_qml_onboarding_obs_action_uses_connect_language():
     qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
     bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+    obs_status_source = Path("src/solin/ui/obs_status_text.py").read_text(encoding="utf-8")
 
     assert 'qsTr("Connect")' in qml_source
     assert "Test connection" not in qml_source
     assert "Not connected" in bridge_source
+    assert "Not connected" in obs_status_source
+    assert "Incorrect password." in obs_status_source
+    assert "OBS requires a password but none was provided." in obs_status_source
+    assert "translated_obs_status_text" in bridge_source
     assert "Not tested" not in bridge_source
     assert "Connect to OBS or choose Set up later." in bridge_source
     assert "Test the OBS connection" not in bridge_source
+
+
+def test_qml_onboarding_dynamic_messages_are_translatable():
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+
+    assert 'QCoreApplication.translate("OnboardingView", "Enter a profile name.")' in bridge_source
+    assert "Record the Zoom share shortcut." in bridge_source
+    assert "Choose the target in Zoom's share dialog." in bridge_source
+    assert "The share target picker is unavailable." in bridge_source
+    assert "root.draft.errorText" in Path("src/solin/qml/OnboardingView.qml").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_qml_onboarding_copy_stays_operational_and_evergreen():

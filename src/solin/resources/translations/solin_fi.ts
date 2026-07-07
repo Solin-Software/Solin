@@ -1955,6 +1955,49 @@
     </message>
 </context>
 <context>
+    <name>OBSConnectionStatus</name>
+    <message>
+        <location filename="../../ui/obs_status_text.py" line="+12"/>
+        <source>Not connected</source>
+        <translation>Ei yhteyttä</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Disconnected</source>
+        <translation>Yhteys katkaistu</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Incorrect password.</source>
+        <translation>Virheellinen salasana.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>OBS requires a password but none was provided.</source>
+        <translation>OBS vaatii salasanan, mutta sitä ei annettu.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Connecting…</source>
+        <translation>Yhdistetään…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Connected to OBS Studio</source>
+        <translation>Yhdistetty OBS Studioon</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Error: {msg}</source>
+        <translation>Virhe: {msg}</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Connection error</source>
+        <translation>Yhteysvirhe</translation>
+    </message>
+</context>
+<context>
     <name>OBSScenePopup</name>
     <message>
         <location filename="../../widgets/obs_scene_popup.py" line="+176"/>
@@ -2035,7 +2078,7 @@
 <context>
     <name>ObsSectionMixin</name>
     <message>
-        <location filename="../../widgets/settings/obs_section.py" line="+49"/>
+        <location filename="../../widgets/settings/obs_section.py" line="+50"/>
         <source>OBS Studio</source>
         <translation>OBS Studio</translation>
     </message>
@@ -2046,13 +2089,11 @@
     </message>
     <message>
         <location line="+29"/>
-        <location line="+543"/>
-        <location line="+7"/>
         <source>Disconnected</source>
         <translation>Yhteys katkaistu</translation>
     </message>
     <message>
-        <location line="-542"/>
+        <location line="+8"/>
         <source>WebSocket Port</source>
         <translation>WebSocket-portti</translation>
     </message>
@@ -2163,27 +2204,23 @@
         <translation>NDI-lähteitä ei löytynyt. Varmista, että DistroAV:n päälähtö on käytössä OBS:ssä.</translation>
     </message>
     <message>
-        <location line="+53"/>
         <source>Connecting…</source>
-        <translation>Yhdistetään...</translation>
+        <translation type="vanished">Yhdistetään...</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connected to OBS Studio</source>
-        <translation>Yhdistetty OBS Studioon</translation>
+        <translation type="vanished">Yhdistetty OBS Studioon</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>Error: {msg}</source>
-        <translation>Virhe: {msg}</translation>
+        <translation type="vanished">Virhe: {msg}</translation>
     </message>
     <message>
-        <location line="+1"/>
         <source>Connection error</source>
-        <translation>Yhteysvirhe</translation>
+        <translation type="vanished">Yhteysvirhe</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+72"/>
         <source>— Select scene —</source>
         <translation>— Valitse kohtaus —</translation>
     </message>
@@ -2499,6 +2536,66 @@
         <location line="+7"/>
         <source>Search languages</source>
         <translation>Etsi kieliä</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/onboarding.py" line="+274"/>
+        <source>Enter a port between 1 and 65535.</source>
+        <translation>Anna portti väliltä 1–65535.</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>The share target picker is unavailable.</source>
+        <translation>Jakamiskohteen valitsin ei ole käytettävissä.</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Enter a profile name.</source>
+        <translation>Anna profiilin nimi.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Connect to OBS or choose Set up later.</source>
+        <translation>Yhdistä OBS:ään tai valitse Määritä myöhemmin.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Choose both OBS scenes.</source>
+        <translation>Valitse molemmat OBS-kohtaukset.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose two different OBS scenes.</source>
+        <translation>Valitse kaksi eri OBS-kohtausta.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Record the Zoom share shortcut.</source>
+        <translation>Tallenna Zoomin jakamisen pikanäppäin.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Choose the target in Zoom&apos;s share dialog.</source>
+        <translation>Valitse kohde Zoomin jakamisikkunassa.</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Could not create the profile.</source>
+        <translation>Profiilin luominen ei onnistunut.</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>Allow Solin in macOS Accessibility settings.</source>
+        <translation>Salli Solin macOS:n Käyttöapu-asetuksissa.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Automatic sharing is unavailable on Wayland.</source>
+        <translation>Automaattinen jakaminen ei ole käytettävissä Waylandissa.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Install xdotool to use automatic sharing.</source>
+        <translation>Asenna xdotool käyttääksesi automaattista jakamista.</translation>
     </message>
 </context>
 <context>

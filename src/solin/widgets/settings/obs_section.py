@@ -7,6 +7,7 @@ from ...core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from ...core.integrations.automation.obs import OBSConnectionState
 from ...styles.icons import ICON_CAST, ICON_OBS, make_icon
 from ...ui.controls import NoScrollComboBox
+from ...ui.obs_status_text import translated_obs_status_text
 from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_ACCENT_MUTED,
@@ -624,15 +625,7 @@ class ObsSectionMixin:
             OBSConnectionState.CONNECTED: SETTINGS_SUCCESS,
             OBSConnectionState.ERROR: SETTINGS_DANGER,
         }.get(state, SETTINGS_DIM)
-        label = {
-            OBSConnectionState.DISCONNECTED: self.tr("Disconnected"),
-            OBSConnectionState.CONNECTING: self.tr("Connecting\u2026"),
-            OBSConnectionState.CONNECTED: self.tr("Connected to OBS Studio"),
-            OBSConnectionState.ERROR: (
-                self.tr("Error: {msg}").replace("{msg}", message)
-                if message else self.tr("Connection error")
-            ),
-        }.get(state, message or self.tr("Disconnected"))
+        label = translated_obs_status_text(state, message)
         self._obs_dot.setStyleSheet(
             f"color: {dot_color}; font-size: 10px; background: transparent; border: none;"
         )

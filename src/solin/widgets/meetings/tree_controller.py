@@ -198,6 +198,9 @@ def _tr(context: str, source: str) -> str:
     return QCoreApplication.translate(context, source)
 
 
+_PLAYLIST_EDIT_CONTEXT = "PlaylistEditView"
+
+
 def _translate_section_title(source: str) -> str:
     context = "SermonThemeWidget" if source == "PUBLIC TALK" else "_Section"
     return _tr(context, source)
@@ -1704,10 +1707,11 @@ class MeetingTreeController(QObject):
     def newSectionClicked(self):
         dlg = NameDialog(
             parent=self.parent(),
-            label=_tr("_PlaylistEditView", "Section name:"),
-            placeholder=_tr("_PlaylistEditView", "E.g.: Introduction"),
+            lang=True,
+            label=_tr(_PLAYLIST_EDIT_CONTEXT, "Section name:"),
+            placeholder=_tr(_PLAYLIST_EDIT_CONTEXT, "E.g.: Introduction"),
         )
-        dlg.setWindowTitle(_tr("_PlaylistEditView", "New Section"))
+        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "New Section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -1732,10 +1736,11 @@ class MeetingTreeController(QObject):
             return
         dlg = NameDialog(
             parent=self.parent(),
-            label=_tr("_PlaylistEditView", "Subsection name:"),
-            placeholder=_tr("_PlaylistEditView", "E.g.: Part 1"),
+            lang=True,
+            label=_tr(_PLAYLIST_EDIT_CONTEXT, "Subsection name:"),
+            placeholder=_tr(_PLAYLIST_EDIT_CONTEXT, "E.g.: Part 1"),
         )
-        dlg.setWindowTitle(_tr("_PlaylistEditView", "New Subsection"))
+        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "New Subsection"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -1986,8 +1991,8 @@ class MeetingTreeController(QObject):
         node = self._find_node(item_id)
         if not node or node.get("type") != "media":
             return
-        dlg = NameDialog(node.get("title", ""), parent=self.parent())
-        dlg.setWindowTitle(_tr("_PlaylistEditView", "Rename media"))
+        dlg = NameDialog(node.get("title", ""), lang=True, parent=self.parent())
+        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "Rename media"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -2035,12 +2040,12 @@ class MeetingTreeController(QObject):
         if not node or node.get("type") not in ("section", "subsection"):
             return
         label = (
-            _tr("_PlaylistEditView", "Subsection name:")
+            _tr(_PLAYLIST_EDIT_CONTEXT, "Subsection name:")
             if node.get("type") == "subsection"
-            else _tr("_PlaylistEditView", "Section name:")
+            else _tr(_PLAYLIST_EDIT_CONTEXT, "Section name:")
         )
-        dlg = NameDialog(node.get("title", ""), parent=self.parent(), label=label)
-        dlg.setWindowTitle(_tr("_PlaylistEditView", "Rename section"))
+        dlg = NameDialog(node.get("title", ""), lang=True, parent=self.parent(), label=label)
+        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "Rename section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -2059,8 +2064,8 @@ class MeetingTreeController(QObject):
             return
         reply = QMessageBox.question(
             self.parent(),
-            _tr("_PlaylistEditView", "Delete section"),
-            _tr("_PlaylistEditView", 'Delete section "{name}"?\nItems inside will be kept.').replace(
+            _tr(_PLAYLIST_EDIT_CONTEXT, "Delete section"),
+            _tr(_PLAYLIST_EDIT_CONTEXT, 'Delete section "{name}"?\nItems inside will be kept.').replace(
                 "{name}", str(node.get("title", ""))
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
