@@ -185,6 +185,13 @@ class LanguageManager(QObject):
             return
         self._apply_language(code)
 
+    def preview_language(self, code: str) -> None:
+        """Apply a temporary language without mutating profile or bootstrap settings."""
+        if code not in self._meta:
+            log.warning("Unknown language: %r", code)
+            return
+        self._apply_language(code)
+
     def _apply_language(self, code: str) -> None:
         if code == self.current_code:
             return

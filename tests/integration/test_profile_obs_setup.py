@@ -1,19 +1,14 @@
 from pathlib import Path
 
 from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
-from solin.ui.profile_obs_setup import ProfileOBSSetupMixin
-from solin.ui.profile_screen import ProfileScreen
 
 
-def test_profile_screen_uses_obs_setup_mixin():
-    assert issubclass(ProfileScreen, ProfileOBSSetupMixin)
-    assert ProfileScreen._ob_obs_teardown is ProfileOBSSetupMixin._ob_obs_teardown
-    assert ProfileScreen._ob_obs_populate_combos is (
-        ProfileOBSSetupMixin._ob_obs_populate_combos
-    )
-    assert ProfileScreen._refresh_ob_obs_status is (
-        ProfileOBSSetupMixin._refresh_ob_obs_status
-    )
+def test_profile_screen_hosts_qml_onboarding_instead_of_legacy_obs_mixin():
+    source = Path("src/solin/ui/profile_screen.py").read_text(encoding="utf-8")
+
+    assert "OnboardingQmlHost" in source
+    assert "ProfileOBSSetupMixin" not in source
+    assert not Path("src/solin/ui/profile_obs_setup.py").exists()
 
 
 def test_profile_screen_onboarding_uses_typed_settings_stores():
@@ -23,8 +18,8 @@ def test_profile_screen_onboarding_uses_typed_settings_stores():
     assert ".setValue(" not in source
 
 
-def test_profile_widgets_do_not_construct_obs_services():
-    source = Path("src/solin/ui/profile_obs_setup.py").read_text(encoding="utf-8")
+def test_qml_onboarding_does_not_construct_obs_services_directly():
+    source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
 
     assert "OBSWebSocketService" not in source
 

@@ -49,3 +49,10 @@ def test_qml_image_providers_register_through_the_shared_host():
     ]
 
     assert offenders == []
+
+
+def test_qml_hosts_force_customizable_controls_style():
+    source = _QML_HOST.read_text(encoding="utf-8")
+
+    assert 'QQuickStyle.setStyle(_QML_CONTROLS_STYLE)' in source
+    assert '_QML_CONTROLS_STYLE = "Basic"' in source

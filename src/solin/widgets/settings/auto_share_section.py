@@ -182,14 +182,14 @@ class AutoShareSectionMixin:
 
         qc_col = QVBoxLayout()
         qc_col.setSpacing(1)
-        self._autoshare_pos_title = QLabel(self.tr("Click Position"))
+        self._autoshare_pos_title = QLabel(self.tr("Share target"))
         self._autoshare_pos_title.setStyleSheet(
             f"font-size: 13px; font-weight: 500; color: {SETTINGS_TEXT};"
             " background: transparent; border: none;"
         )
         qc_col.addWidget(self._autoshare_pos_title)
         self._autoshare_pos_desc = QLabel(
-            self.tr("Position to click after the share dialog opens to select the target.")
+            self.tr("The Solin Media Preview tile inside Zoom's share dialog.")
         )
         self._autoshare_pos_desc.setStyleSheet(
             f"font-size: 11px; color: {SETTINGS_DIM}; background: transparent; border: none;"
@@ -205,8 +205,7 @@ class AutoShareSectionMixin:
         qc_cfg_lay.setContentsMargins(32, 2, 0, 0)
         qc_cfg_lay.setSpacing(10)
 
-        saved_x, saved_y = self._auto_share_settings.click_position()
-        has_pos = saved_x >= 0 and saved_y >= 0
+        has_pos = self._auto_share_settings.has_target_position()
 
         self._autoshare_pos_status = QLabel()
         self._autoshare_pos_status.setStyleSheet(
@@ -355,15 +354,10 @@ class AutoShareSectionMixin:
         )
 
     def _refresh_autoshare_position_label(self):
-        saved_x, saved_y = self._auto_share_settings.click_position()
-        has_pos = saved_x >= 0 and saved_y >= 0
-        text = (
-            self.tr("Position: {x}, {y}")
-            .replace("{x}", str(saved_x))
-            .replace("{y}", str(saved_y))
-            if has_pos else self.tr("Not configured")
+        has_pos = self._auto_share_settings.has_target_position()
+        self._autoshare_pos_status.setText(
+            self.tr("Configured") if has_pos else self.tr("Not configured")
         )
-        self._autoshare_pos_status.setText(text)
         self._autoshare_pos_status.setStyleSheet(
             f"font-size: 11px; color: {SETTINGS_SUCCESS if has_pos else SETTINGS_DIM};"
             " background: transparent; border: none;"
@@ -401,14 +395,10 @@ class AutoShareSectionMixin:
     def _on_autoshare_configure(self):
         from ..screen_picker_overlay import ScreenPickerOverlay
 
-        saved_x, saved_y = self._auto_share_settings.click_position()
-
-        self._as_overlay = ScreenPickerOverlay(
-            current_x=saved_x, current_y=saved_y, parent=None,
-        )
-        self._as_overlay.position_picked.connect(self._on_autoshare_position_picked)
+        self._as_overlay = ScreenPickerOverlay(parent=None)
+        self._as_overlay.target_picked.connect(self._on_autoshare_target_picked)
         self._as_overlay.show_overlay()
 
-    def _on_autoshare_position_picked(self, x: int, y: int):
-        self._auto_share_settings.set_click_position(x, y)
+    def _on_autoshare_target_picked(self, x_ratio: float, y_ratio: float):
+        self._auto_share_settings.set_target_position(x_ratio, y_ratio)
         self._refresh_autoshare_position_label()

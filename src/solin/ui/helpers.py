@@ -38,12 +38,23 @@ def initials(name: str) -> str:
 def fade_in(widget: QWidget, duration: int = 300) -> None:
     """Fade in a widget with a short cubic opacity animation."""
     effect = QGraphicsOpacityEffect(widget)
+    effect.setObjectName("_solin_fade_in_effect")
     widget.setGraphicsEffect(effect)
     anim = QPropertyAnimation(effect, b"opacity", widget)
     anim.setDuration(duration)
     anim.setStartValue(0.0)
     anim.setEndValue(1.0)
     anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    def cleanup_effect() -> None:
+        current = widget.graphicsEffect()
+        if current is effect or (
+            current is not None
+            and current.objectName() == "_solin_fade_in_effect"
+        ):
+            widget.setGraphicsEffect(None)
+
+    anim.finished.connect(cleanup_effect)
     anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
 

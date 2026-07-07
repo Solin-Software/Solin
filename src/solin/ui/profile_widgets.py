@@ -1,7 +1,7 @@
 """Visual widgets and style helpers for ProfileScreen."""
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -14,7 +14,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -26,8 +25,7 @@ from PySide6.QtWidgets import (
 from ..core.profiles.models import ProfileInfo
 from .helpers import avatar_colors
 from .helpers import initials
-from ..styles.icons import make_icon
-from ..styles.theme import PALETTE, SCROLLBAR_STYLESHEET
+from ..styles.theme import PALETTE
 
 # ── Cores ────────────────────────────────────────────────────────────────────
 PROFILE_BG = PALETTE.bg0
@@ -38,39 +36,7 @@ PROFILE_MUTED = PALETTE.text_muted
 PROFILE_TEXT = PALETTE.text_primary
 PROFILE_DIM = PALETTE.text_dim
 PROFILE_ACCENT = PALETTE.accent
-PROFILE_SUCCESS = PALETTE.success
 PROFILE_DANGER = PALETTE.danger
-PROFILE_WARNING = PALETTE.warning
-
-PROFILE_SCROLLBAR_STYLESHEET = SCROLLBAR_STYLESHEET
-
-
-def obs_field_style() -> str:
-    return (
-        f"QLineEdit {{ background: {PALETTE.surface_card}; color: {PROFILE_TEXT};"
-        f" border: 1.5px solid {PALETTE.border_muted}; border-radius: 10px;"
-        f" font-size: 13px; padding: 0 14px; }}"
-        f"QLineEdit:focus {{ border-color: {PROFILE_ACCENT}; background: {PALETTE.surface_hover}; }}"
-    )
-
-
-def obs_combo_style() -> str:
-    return (
-        f"QComboBox {{ background: {PALETTE.surface_card}; color: {PROFILE_TEXT};"
-        f" border: 1.5px solid {PALETTE.border_muted}; border-radius: 10px;"
-        f" font-size: 13px; padding: 0 14px; min-height: 44px; }}"
-        f"QComboBox:focus {{ border-color: {PROFILE_ACCENT}; }}"
-        f"QComboBox::drop-down {{ border: none; width: 28px; }}"
-        f"QComboBox::down-arrow {{"
-        f" border-left: 4px solid transparent;"
-        f" border-right: 4px solid transparent;"
-        f" border-top: 5px solid {PROFILE_MUTED}; margin-right: 12px; }}"
-        f"QComboBox QAbstractItemView {{"
-        f" background: {PROFILE_SURFACE}; color: {PROFILE_TEXT};"
-        f" border: 1px solid {PALETTE.border_muted};"
-        f" selection-background-color: {PALETTE.accent_muted}; }}"
-    )
-
 
 # ── ProfileCard ───────────────────────────────────────────────────────────────
 
@@ -256,87 +222,6 @@ class AddProfileCard(QWidget):
         p.end()
 
 
-# ── StepProgress ──────────────────────────────────────────────────────────────
-
-class StepProgress(QWidget):
-    """Modern connected-dot progress indicator with gradient track."""
-
-    def __init__(self, total: int, parent=None):
-        super().__init__(parent)
-        self._total = total
-        self._current = 0
-        self.setFixedHeight(24)
-        self.setFixedWidth(200)
-
-    def set_step(self, step: int) -> None:
-        self._current = step
-        self.update()
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w = self.width()
-        cy = self.height() / 2
-        r_done = 5
-        r_active = 6
-        r_future = 4
-        margin = 16
-        usable = w - 2 * margin
-        step_w = usable / (self._total - 1) if self._total > 1 else 0
-
-        # Background track
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(PROFILE_BORDER))
-        p.drawRoundedRect(QRectF(margin, cy - 1, usable, 2), 1, 1)
-
-        # Filled track (gradient)
-        if self._current > 0:
-            fill_w = step_w * self._current
-            grad = QLinearGradient(margin, cy, margin + fill_w, cy)
-            grad.setColorAt(0, QColor(PALETTE.accent_pressed))
-            grad.setColorAt(1, QColor(PROFILE_ACCENT))
-            p.setBrush(QBrush(grad))
-            p.drawRoundedRect(QRectF(margin, cy - 1.5, fill_w, 3), 1.5, 1.5)
-
-        for i in range(self._total):
-            cx_dot = margin + step_w * i
-            done = i < self._current
-            active = i == self._current
-
-            if done:
-                p.setBrush(QColor(PROFILE_ACCENT))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QPointF(cx_dot, cy), r_done, r_done)
-                # Check mark
-                pen = QPen(QColor(PALETTE.white), 1.5)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                p.setPen(pen)
-                p.drawLine(
-                    QPointF(cx_dot - 2.5, cy + 0.5),
-                    QPointF(cx_dot - 0.5, cy + 2.5),
-                )
-                p.drawLine(
-                    QPointF(cx_dot - 0.5, cy + 2.5),
-                    QPointF(cx_dot + 3, cy - 1.5),
-                )
-            elif active:
-                # Glow ring
-                glow = QColor(PROFILE_ACCENT)
-                glow.setAlpha(50)
-                p.setBrush(glow)
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(QPointF(cx_dot, cy), r_active + 4, r_active + 4)
-                # Inner dot
-                p.setBrush(QColor(PROFILE_ACCENT))
-                p.drawEllipse(QPointF(cx_dot, cy), r_active, r_active)
-            else:
-                p.setBrush(QColor(PROFILE_SURFACE))
-                p.setPen(QPen(QColor(PROFILE_BORDER), 1.5))
-                p.drawEllipse(QPointF(cx_dot, cy), r_future, r_future)
-
-        p.end()
-
-
 # ── Helpers de estilo ─────────────────────────────────────────────────────────
 
 def profile_button(text: str, primary: bool = True) -> QPushButton:
@@ -412,60 +297,6 @@ def profile_label(text: str, size: int = 13, color: str = PROFILE_TEXT,
     return l
 
 
-def profile_section_card(title: str, icon: str, desc: str,
-                  extra_widget: QWidget = None) -> QFrame:
-    """Premium styled tutorial card with icon badge."""
-    card = QFrame()
-    card.setObjectName("SectionCard")
-    card.setStyleSheet(f"""
-        QFrame#SectionCard {{
-            background: {PROFILE_SURFACE};
-            border: 1px solid {PALETTE.border_muted};
-            border-radius: 14px;
-        }}
-    """)
-    lay = QVBoxLayout(card)
-    lay.setContentsMargins(24, 20, 24, 20)
-    lay.setSpacing(12)
-
-    # Header: icon badge + title
-    top = QHBoxLayout()
-    top.setSpacing(12)
-    icon_bg = QLabel()
-    icon_bg.setFixedSize(38, 38)
-    icon_bg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    icon_bg.setStyleSheet(
-        f"background: {PALETTE.surface_card}; "
-        f"border: 1px solid {PALETTE.border_muted}; border-radius: 11px;"
-    )
-    # Render as SVG pixmap (clean, professional)
-    pix = make_icon(icon, size=18, color=PROFILE_MUTED).pixmap(18, 18)
-    icon_bg.setPixmap(pix)
-    top.addWidget(icon_bg)
-
-    title_label = profile_label(title, 15, PROFILE_TEXT, 600)
-    top.addWidget(title_label, 1)
-    lay.addLayout(top)
-
-    description_label = QLabel(desc)
-    description_label.setWordWrap(True)
-    description_label.setStyleSheet(
-        f"color: {PROFILE_MUTED}; font-size: 12.5px; "
-        f"line-height: 18px; "
-        "background: transparent; border: none;"
-    )
-    if desc:
-        lay.addWidget(description_label)
-    card.title_label = title_label
-    card.description_label = description_label
-
-    if extra_widget:
-        lay.addSpacing(4)
-        lay.addWidget(extra_widget)
-
-    return card
-
-
 class ProfileNameDialog(QDialog):
     def __init__(self, current: str = "", parent=None,
                  title: str = "Profile", label: str = "Profile name"):
@@ -513,50 +344,6 @@ class ProfileNameDialog(QDialog):
     def result_name(self) -> str:
         return self._field.text().strip()
 
-# ── Toggle simples para OBS no onboarding ─────────────────────────────────────
-
-class OBSToggle(QWidget):
-    toggled = Signal(bool)
-    _W, _H = 40, 22
-
-    def __init__(self, checked: bool = False, parent=None):
-        super().__init__(parent)
-        self._checked = checked
-        self.setFixedSize(self._W, self._H)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    @property
-    def is_checked(self) -> bool:
-        return self._checked
-
-    def set_checked(self, checked: bool) -> None:
-        if self._checked == checked:
-            return
-        self._checked = checked
-        self.update()
-        self.toggled.emit(self._checked)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._checked = not self._checked
-            self.update()
-            self.toggled.emit(self._checked)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        track = QColor(PROFILE_ACCENT if self._checked else PROFILE_BORDER)
-        p.setBrush(track)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawRoundedRect(0, 0, self._W, self._H, self._H // 2, self._H // 2)
-        margin = 3
-        dia    = self._H - 2 * margin
-        x      = (self._W - margin - dia) if self._checked else margin
-        p.setBrush(QColor(PALETTE.white))
-        p.drawEllipse(x, margin, dia, dia)
-        p.end()
-
-
 # ── FlowLayout ─────────────────────────────────────────────────────────────────
 
 class ProfileFlowLayout(QHBoxLayout):
@@ -575,26 +362,18 @@ class ProfileFlowLayout(QHBoxLayout):
 __all__ = [
     "AddProfileCard",
     "ProfileCard",
-    "StepProgress",
     "PROFILE_ACCENT",
-    "PROFILE_WARNING",
     "PROFILE_BG",
     "PROFILE_BORDER",
     "PROFILE_CARD",
     "PROFILE_DIM",
     "ProfileFlowLayout",
-    "PROFILE_SUCCESS",
     "PROFILE_MUTED",
-    "OBSToggle",
     "ProfileNameDialog",
     "PROFILE_DANGER",
-    "PROFILE_SCROLLBAR_STYLESHEET",
     "PROFILE_SURFACE",
     "PROFILE_TEXT",
     "profile_button",
     "profile_field",
     "profile_label",
-    "obs_combo_style",
-    "obs_field_style",
-    "profile_section_card",
 ]

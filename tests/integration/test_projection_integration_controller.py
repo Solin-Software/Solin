@@ -21,10 +21,10 @@ class _ObsSettingsStub:
 
 
 class _AutoShareSettingsStub:
-    def __init__(self, *, enabled=False, hotkey="", click_position=(-1, -1)):
+    def __init__(self, *, enabled=False, hotkey="", target_position=(0.5, 0.5)):
         self._enabled = enabled
         self._hotkey = hotkey
-        self._click_position = click_position
+        self._target_position = target_position
 
     def is_enabled(self):
         return self._enabled
@@ -33,10 +33,16 @@ class _AutoShareSettingsStub:
         return self._hotkey
 
     def is_configured(self):
-        return self._enabled and bool(self._hotkey)
+        x_ratio, y_ratio = self._target_position
+        return (
+            self._enabled
+            and bool(self._hotkey)
+            and 0 <= x_ratio <= 1
+            and 0 <= y_ratio <= 1
+        )
 
-    def click_position(self):
-        return self._click_position
+    def target_position(self):
+        return self._target_position
 
 
 class _ObsServiceStub:
@@ -86,8 +92,8 @@ class _WindowStub:
     def _all_windows(self):
         return [_ProjectionWindowStub(self._visible)]
 
-    def start_auto_share(self, hotkey, click_x, click_y):
-        self.started_shares.append((hotkey, click_x, click_y))
+    def start_auto_share(self, hotkey, target_x_ratio, target_y_ratio):
+        self.started_shares.append((hotkey, target_x_ratio, target_y_ratio))
         self.share_started.set()
         return True
 
@@ -201,18 +207,30 @@ def test_auto_share_configured_rejects_missing_hotkey():
     assert controller.auto_share_configured() is False
 
 
+def test_auto_share_configured_rejects_missing_target():
+    window = _WindowStub()
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+        target_position=(-1.0, -1.0),
+    )
+    controller = _controller(window)
+
+    assert controller.auto_share_configured() is False
+
+
 def test_auto_share_uses_injected_share_actions():
     window = _WindowStub(visible=True)
     window._auto_share_settings = _AutoShareSettingsStub(
         enabled=True,
         hotkey="Alt+S",
-        click_position=(10, 20),
+        target_position=(0.25, 0.75),
     )
     controller = _controller(window)
 
     controller.sync_zoom_share(active=True, visual=True)
     assert window.share_started.wait(1)
-    assert window.started_shares == [("Alt+S", 10, 20)]
+    assert window.started_shares == [("Alt+S", 0.25, 0.75)]
 
     controller.sync_zoom_share(active=False, visual=True)
     assert window.share_stopped.wait(1)

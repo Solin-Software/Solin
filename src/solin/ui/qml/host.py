@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from typing import Any
 
 from PySide6.QtGui import QColor, QSurfaceFormat
+from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE, QML_THEME
 from solin.ui.qml.loader import load_qml_type
 
+_QML_CONTROLS_STYLE = "Basic"
+
 
 def current_qml_theme() -> dict[str, Any]:
     return dict(QML_THEME)
+
+
+def configure_qml_controls_style() -> None:
+    """Use a customisable Qt Quick Controls style for all Solin QML surfaces."""
+    os.environ["QT_QUICK_CONTROLS_STYLE"] = _QML_CONTROLS_STYLE
+    if QQuickStyle.name().casefold() != _QML_CONTROLS_STYLE.casefold():
+        QQuickStyle.setStyle(_QML_CONTROLS_STYLE)
 
 
 def apply_qml_theme(
@@ -19,6 +30,7 @@ def apply_qml_theme(
     *,
     clear_color: QColor | str | None = None,
 ) -> None:
+    configure_qml_controls_style()
     widget.rootContext().setContextProperty("appTheme", current_qml_theme())
     if clear_color is not None:
         widget.setClearColor(
@@ -40,6 +52,7 @@ def configure_qml_host(
     resize_to_root: bool = True,
     alpha_buffer_size: int = 8,
 ) -> None:
+    configure_qml_controls_style()
     surface_format = QSurfaceFormat()
     surface_format.setAlphaBufferSize(alpha_buffer_size)
     widget.setFormat(surface_format)

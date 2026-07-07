@@ -1,0 +1,1385 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+
+Rectangle {
+    id: root
+
+    property var draft: onboardingBridge.state
+    property string renderedPage: ""
+    property int renderedSession: -1
+    property color backgroundColor: appTheme.bg
+    property color surfaceColor: appTheme.surface
+    property color surfaceChrome: appTheme.surfaceChrome
+    property color borderColor: appTheme.borderChrome
+    property color textPrimary: appTheme.textPrimary
+    property color textSecondary: appTheme.textSecondary
+    property color textMuted: appTheme.textMuted
+    property color textDim: appTheme.textDim
+    property color accent: appTheme.accent
+    property color accentTint: appTheme.accentTint
+
+    color: backgroundColor
+    focus: true
+
+    function iconSource(name, size, color) {
+        return "image://onboardingicons/" + name + "/" + size + "/"
+                + String(color).replace("#", "")
+    }
+
+    function componentForPage(page) {
+        if (page === "profile") return profilePage
+        if (page === "preferences") return preferencesPage
+        if (page === "integrations") return integrationsPage
+        if (page === "obs") return obsPage
+        if (page === "zoom") return zoomPage
+        return reviewPage
+    }
+
+    function resetStack() {
+        pageStack.clear()
+        renderedPage = draft.currentPage
+        renderedSession = draft.sessionRevision
+        pageStack.push(componentForPage(renderedPage), {}, StackView.Immediate)
+    }
+
+    function syncPage() {
+        if (renderedSession !== draft.sessionRevision) {
+            resetStack()
+            return
+        }
+        if (renderedPage === draft.currentPage)
+            return
+        renderedPage = draft.currentPage
+        if (draft.direction > 0)
+            pageStack.push(componentForPage(renderedPage))
+        else if (pageStack.depth > 1)
+            pageStack.pop()
+        else
+            pageStack.replace(componentForPage(renderedPage))
+    }
+
+    Component.onCompleted: resetStack()
+
+    Connections {
+        target: onboardingBridge
+        function onStateChanged() { root.syncPage() }
+    }
+
+    Item {
+        id: header
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 76
+
+        Text {
+            anchors.left: parent.left
+            anchors.leftMargin: 36
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Solin"
+            color: root.textPrimary
+            font.pixelSize: 20
+            font.weight: Font.DemiBold
+        }
+
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: 36
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 18
+
+            TextButton {
+                visible: root.draft.allowCancel
+                text: qsTr("Cancel")
+                onClicked: onboardingBridge.cancel()
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("%1 of 4").arg(root.draft.progressStage + 1)
+                color: root.textMuted
+                font.pixelSize: 12
+            }
+
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 9
+
+                Repeater {
+                    model: 4
+
+                    Rectangle {
+                        required property int index
+                        width: index === root.draft.progressStage ? 18 : 7
+                        height: 7
+                        radius: 4
+                        color: index === root.draft.progressStage
+                               ? root.accent
+                               : (index < root.draft.progressStage
+                                  ? appTheme.accentMutedHover : appTheme.textDim)
+
+                        Behavior on width {
+                            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                        }
+                        Behavior on color { ColorAnimation { duration: 160 } }
+                    }
+                }
+            }
+        }
+    }
+
+    StackView {
+        id: pageStack
+        anchors.top: header.bottom
+        anchors.bottom: footer.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        clip: true
+
+        pushEnter: Transition {
+            ParallelAnimation {
+                NumberAnimation {
+                    property: "x"
+                    from: pageStack.width * 0.055
+                    to: 0
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation {
+                    property: "opacity"
+                    from: 0
+                    to: 1
+                    duration: 170
+                    easing.type: Easing.OutCubic
+                }
+            }
+        }
+        pushExit: Transition {
+            ParallelAnimation {
+                NumberAnimation {
+                    property: "x"
+                    from: 0
+                    to: -pageStack.width * 0.025
+                    duration: 190
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 130 }
+            }
+        }
+        popEnter: Transition {
+            ParallelAnimation {
+                NumberAnimation {
+                    property: "x"
+                    from: -pageStack.width * 0.045
+                    to: 0
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 170 }
+            }
+        }
+        popExit: Transition {
+            ParallelAnimation {
+                NumberAnimation {
+                    property: "x"
+                    from: 0
+                    to: pageStack.width * 0.025
+                    duration: 190
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 130 }
+            }
+        }
+    }
+
+    Item {
+        id: footer
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 86
+
+        Item {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(parent.width - 72, 760)
+            height: parent.height
+
+            TextButton {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.draft.currentPage !== "profile"
+                text: qsTr("Back")
+                iconName: "arrow_left"
+                onClicked: onboardingBridge.back()
+            }
+
+            PrimaryButton {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                enabled: !root.draft.busy
+                text: root.draft.currentPage === "review"
+                      ? qsTr("Start using Solin") : qsTr("Continue")
+                busy: root.draft.busy
+                onClicked: onboardingBridge.advance()
+            }
+        }
+    }
+
+    Rectangle {
+        id: errorBanner
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: footer.top
+        anchors.bottomMargin: 4
+        width: Math.min(errorText.implicitWidth + 38, root.width - 80)
+        height: visible ? Math.max(42, errorText.implicitHeight + 18) : 0
+        radius: 10
+        color: appTheme.dangerSubtle
+        border.width: 1
+        border.color: appTheme.danger
+        visible: root.draft.errorText !== ""
+        opacity: visible ? 1 : 0
+
+        Behavior on opacity { NumberAnimation { duration: 140 } }
+
+        Text {
+            id: errorText
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, root.width - 118)
+            text: root.draft.errorText
+            color: appTheme.dangerText
+            font.pixelSize: 11
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+        }
+    }
+
+    LanguageSheet {
+        id: languageSheet
+        anchors.fill: parent
+    }
+
+    Component {
+        id: profilePage
+
+        FocusScope {
+            PageColumn {
+                width: Math.min(parent.width - 72, 620)
+                anchors.centerIn: parent
+                title: qsTr("Welcome to Solin")
+                subtitle: qsTr("Let's prepare a calm, reliable workspace for your meetings.")
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 28
+                    spacing: 9
+
+                    FieldLabel { text: qsTr("Profile name") }
+
+                    AppTextField {
+                        id: profileName
+                        Layout.fillWidth: true
+                        text: root.draft.profileName
+                        placeholderText: qsTr("Example: Main Hall")
+                        focus: true
+                        onTextEdited: onboardingBridge.updateField("profileName", text)
+                        onAccepted: onboardingBridge.advance()
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Each profile keeps its own settings and playlists.")
+                        color: root.textMuted
+                        font.pixelSize: 11
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: preferencesPage
+
+        FocusScope {
+            Flickable {
+                anchors.fill: parent
+                contentHeight: preferencesContent.implicitHeight + 52
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                PageColumn {
+                    id: preferencesContent
+                    width: Math.min(parent.width - 72, 700)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 20
+                    title: qsTr("Make Solin yours")
+                    subtitle: qsTr("Choose your languages and how meeting media should be prepared.")
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 22
+                        spacing: 10
+
+                        LanguageChoice {
+                            Layout.fillWidth: true
+                            iconName: "interface"
+                            title: qsTr("Interface language")
+                            value: root.draft.interfaceName
+                            onClicked: languageSheet.openSheet("interface", qsTr("Interface language"))
+                        }
+
+                        LanguageChoice {
+                            Layout.fillWidth: true
+                            iconName: "book"
+                            title: qsTr("Media language")
+                            value: root.draft.mediaName
+                            onClicked: languageSheet.openSheet("media", qsTr("Media language"))
+                        }
+
+                        FieldLabel {
+                            Layout.topMargin: 18
+                            text: qsTr("Meeting media")
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            CompactChoice {
+                                Layout.fillWidth: true
+                                selected: root.draft.downloadMeetingMedia
+                                iconName: "auto_download"
+                                title: qsTr("Download ahead")
+                                subtitle: qsTr("Keep this week and next week available offline.")
+                                onClicked: onboardingBridge.updateField("downloadMeetingMedia", true)
+                            }
+
+                            CompactChoice {
+                                Layout.fillWidth: true
+                                selected: !root.draft.downloadMeetingMedia
+                                iconName: "share"
+                                title: qsTr("Download when used")
+                                subtitle: qsTr("Save storage and network usage for now.")
+                                onClicked: onboardingBridge.updateField("downloadMeetingMedia", false)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: integrationsPage
+
+        FocusScope {
+            PageColumn {
+                width: Math.min(parent.width - 72, 760)
+                anchors.centerIn: parent
+                title: qsTr("How do you want to use Solin?")
+                subtitle: qsTr("Choose one option, both, or set them up later.")
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 28
+                    spacing: 12
+
+                    IntegrationChoice {
+                        Layout.fillWidth: true
+                        selected: root.draft.obsSelected
+                        iconName: "obs"
+                        title: "OBS Studio"
+                        subtitle: qsTr("Control scenes and cameras from Solin.")
+                        onClicked: onboardingBridge.updateField("obsSelected", !selected)
+                    }
+
+                    IntegrationChoice {
+                        Layout.fillWidth: true
+                        selected: root.draft.zoomSelected
+                        enabled: root.draft.zoomAvailable
+                        iconName: "zoom"
+                        title: "Zoom Meetings"
+                        subtitle: root.draft.zoomAvailable
+                                  ? qsTr("Share your screen automatically.")
+                                  : root.draft.zoomUnavailableReason
+                        onClicked: onboardingBridge.updateField("zoomSelected", !selected)
+                    }
+                }
+
+                TextButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 18
+                    text: qsTr("Set up later")
+                    visible: root.draft.obsSelected || root.draft.zoomSelected
+                    onClicked: {
+                        onboardingBridge.updateField("obsSelected", false)
+                        onboardingBridge.updateField("zoomSelected", false)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: obsPage
+
+        FocusScope {
+            Flickable {
+                anchors.fill: parent
+                contentHeight: obsContent.implicitHeight + 52
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                PageColumn {
+                    id: obsContent
+                    width: Math.min(parent.width - 72, 700)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 14
+                    title: qsTr("Connect OBS Studio")
+                    subtitle: qsTr("Solin can control scenes and cameras without changing scenes automatically.")
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 20
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 7
+                                FieldLabel { text: qsTr("WebSocket port") }
+                                AppTextField {
+                                    Layout.fillWidth: true
+                                    text: root.draft.obsPort
+                                    inputMethodHints: Qt.ImhDigitsOnly
+                                    onTextEdited: onboardingBridge.updateField("obsPort", text)
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 7
+                                FieldLabel { text: qsTr("Password (optional)") }
+                                AppTextField {
+                                    Layout.fillWidth: true
+                                    text: root.draft.obsPassword
+                                    echoMode: TextInput.Password
+                                    onTextEdited: onboardingBridge.updateField("obsPassword", text)
+                                }
+                            }
+
+                            SecondaryButton {
+                                Layout.alignment: Qt.AlignBottom
+                                text: root.draft.obsState === "connecting"
+                                      ? qsTr("Connecting…") : qsTr("Test connection")
+                                enabled: root.draft.obsState !== "connecting"
+                                onClicked: onboardingBridge.testObsConnection()
+                            }
+                        }
+
+                        StatusLine {
+                            Layout.fillWidth: true
+                            stateKey: root.draft.obsState
+                            text: root.draft.obsStatusText
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: autoContent.implicitHeight + 28
+                            visible: root.draft.obsConnected
+                            radius: 12
+                            color: root.surfaceColor
+                            border.width: 1
+                            border.color: root.draft.obsAutomatic ? root.accent : appTheme.border
+
+                            ColumnLayout {
+                                id: autoContent
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 14
+                                spacing: 10
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 12
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+                                        Text {
+                                            text: qsTr("Switch to the media scene automatically")
+                                            color: root.textPrimary
+                                            font.pixelSize: 13
+                                            font.weight: Font.DemiBold
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: root.draft.obsAutomatic
+                                                  ? qsTr("Solin switches scenes while media is projected.")
+                                                  : qsTr("Manual scene and camera controls remain available.")
+                                            color: root.textMuted
+                                            font.pixelSize: 11
+                                            wrapMode: Text.Wrap
+                                        }
+                                    }
+
+                                    AppToggle {
+                                        checked: root.draft.obsAutomatic
+                                        onToggled: onboardingBridge.updateField("obsAutomatic", checked)
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+                                    visible: root.draft.obsAutomatic
+
+                                    SceneChoice {
+                                        Layout.fillWidth: true
+                                        label: qsTr("Default scene")
+                                        value: root.draft.obsDefaultScene
+                                        model: root.draft.obsScenes
+                                        onSelected: onboardingBridge.updateField("obsDefaultScene", value)
+                                    }
+
+                                    SceneChoice {
+                                        Layout.fillWidth: true
+                                        label: qsTr("Media scene")
+                                        value: root.draft.obsMediaScene
+                                        model: root.draft.obsScenes
+                                        onSelected: onboardingBridge.updateField("obsMediaScene", value)
+                                    }
+                                }
+                            }
+                        }
+
+                        TextButton {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: 4
+                            text: qsTr("Set up OBS later")
+                            onClicked: onboardingBridge.skipCurrentIntegration()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: zoomPage
+
+        FocusScope {
+            PageColumn {
+                width: Math.min(parent.width - 72, 700)
+                anchors.centerIn: parent
+                title: qsTr("Automatic sharing in Zoom")
+                subtitle: qsTr("Record Zoom's share shortcut, then choose the target in its share dialog.")
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 22
+                    spacing: 10
+
+                    SetupRow {
+                        Layout.fillWidth: true
+                        step: "1"
+                        title: qsTr("Share shortcut")
+                        subtitle: root.draft.zoomHotkey === ""
+                                  ? qsTr("Click here, then press Zoom's start/stop sharing shortcut.")
+                                  : root.draft.zoomHotkey
+                        complete: root.draft.zoomHotkey !== ""
+
+                        FocusScope {
+                            width: 148
+                            height: 42
+                            activeFocusOnTab: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 9
+                                color: parent.activeFocus ? root.accentTint : appTheme.surfaceAlt
+                                border.width: 1
+                                border.color: parent.activeFocus ? root.accent : appTheme.border
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                text: root.draft.zoomHotkey || qsTr("Record shortcut")
+                                color: parent.parent.activeFocus ? appTheme.accentText : root.textSecondary
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: parent.forceActiveFocus()
+                            }
+                            Keys.onPressed: event => {
+                                onboardingBridge.captureHotkey(event.key, event.modifiers)
+                                event.accepted = true
+                            }
+                        }
+                    }
+
+                    SetupRow {
+                        Layout.fillWidth: true
+                        step: "2"
+                        title: qsTr("Share target")
+                        subtitle: root.draft.zoomTargetConfigured
+                                  ? qsTr("Target configured")
+                                  : qsTr("Open Zoom's share dialog, then choose the screen tile.")
+                        complete: root.draft.zoomTargetConfigured
+
+                        SecondaryButton {
+                            width: implicitWidth
+                            height: implicitHeight
+                            text: root.draft.zoomTargetConfigured
+                                  ? qsTr("Choose again") : qsTr("Choose target")
+                            enabled: root.draft.zoomAvailable
+                            onClicked: onboardingBridge.configureZoomTarget()
+                        }
+                    }
+
+                    TextButton {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 10
+                        text: qsTr("Set up Zoom later")
+                        onClicked: onboardingBridge.skipCurrentIntegration()
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: reviewPage
+
+        FocusScope {
+            PageColumn {
+                width: Math.min(parent.width - 72, 680)
+                anchors.centerIn: parent
+                title: qsTr("Everything looks ready")
+                subtitle: qsTr("Review your choices. You can change them later in Settings.")
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 24
+                    spacing: 0
+
+                    ReviewLine {
+                        iconName: "interface"
+                        title: qsTr("Languages")
+                        value: root.draft.interfaceName + "  ·  " + root.draft.mediaName
+                    }
+                    ReviewLine {
+                        iconName: "auto_download"
+                        title: qsTr("Meeting media")
+                        value: root.draft.downloadMeetingMedia
+                               ? qsTr("This week and next week") : qsTr("Download when used")
+                    }
+                    ReviewLine {
+                        iconName: "obs"
+                        title: "OBS Studio"
+                        value: !root.draft.obsSelected ? qsTr("Not configured")
+                               : (root.draft.obsAutomatic
+                                  ? qsTr("Connected · automatic scene switching")
+                                  : qsTr("Connected · manual controls"))
+                    }
+                    ReviewLine {
+                        iconName: "zoom"
+                        title: "Zoom Meetings"
+                        value: root.draft.zoomSelected
+                               ? qsTr("Automatic sharing ready") : qsTr("Not configured")
+                        last: true
+                    }
+                }
+            }
+        }
+    }
+
+    component PageColumn: ColumnLayout {
+        property string title: ""
+        property string subtitle: ""
+        spacing: 8
+
+        Text {
+            Layout.fillWidth: true
+            text: parent.title
+            color: root.textPrimary
+            font.pixelSize: 28
+            font.weight: Font.DemiBold
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+        }
+
+        Text {
+            Layout.fillWidth: true
+            text: parent.subtitle
+            color: root.textMuted
+            font.pixelSize: 13
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+        }
+    }
+
+    component FieldLabel: Text {
+        color: root.textSecondary
+        font.pixelSize: 11
+        font.weight: Font.DemiBold
+    }
+
+    component AppTextField: TextField {
+        id: field
+        implicitHeight: 44
+        color: root.textPrimary
+        placeholderTextColor: root.textDim
+        selectByMouse: true
+        leftPadding: 13
+        rightPadding: 13
+        font.pixelSize: 13
+
+        background: Rectangle {
+            radius: 9
+            color: field.activeFocus ? appTheme.surfaceInputFocus : root.surfaceColor
+            border.width: 1
+            border.color: field.activeFocus ? root.accent : appTheme.border
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+        }
+    }
+
+    component TextButton: Item {
+        id: textButton
+        property string text: ""
+        property string iconName: ""
+        signal clicked()
+        implicitWidth: textRow.implicitWidth + 12
+        implicitHeight: 38
+        opacity: enabled ? 1 : 0.4
+        Accessible.name: text
+        Accessible.role: Accessible.Button
+
+        Row {
+            id: textRow
+            anchors.centerIn: parent
+            spacing: 7
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: textButton.iconName !== ""
+                width: 14
+                height: 14
+                source: root.iconSource(textButton.iconName, 14, root.textMuted)
+                sourceSize: Qt.size(14, 14)
+            }
+            Text {
+                text: textButton.text
+                color: textMouse.containsMouse ? root.textPrimary : root.textMuted
+                font.pixelSize: 12
+                font.weight: Font.Medium
+                Behavior on color { ColorAnimation { duration: 110 } }
+            }
+        }
+        MouseArea {
+            id: textMouse
+            anchors.fill: parent
+            enabled: textButton.enabled
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: textButton.clicked()
+        }
+    }
+
+    component PrimaryButton: Rectangle {
+        id: primary
+        property string text: ""
+        property bool busy: false
+        signal clicked()
+        implicitWidth: Math.max(126, primaryText.implicitWidth + 34)
+        implicitHeight: 44
+        radius: 11
+        color: !enabled ? appTheme.accentMuted
+              : primaryMouse.pressed ? appTheme.accentPressed
+              : primaryMouse.containsMouse ? appTheme.accentHover : root.accent
+        opacity: enabled ? 1 : 0.65
+        Accessible.name: text
+        Accessible.role: Accessible.Button
+
+        Behavior on color { ColorAnimation { duration: 110 } }
+
+        Text {
+            id: primaryText
+            anchors.centerIn: parent
+            text: primary.busy ? qsTr("Finishing…") : primary.text
+            color: appTheme.textOnAccent
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+        }
+        MouseArea {
+            id: primaryMouse
+            anchors.fill: parent
+            enabled: primary.enabled
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: primary.clicked()
+        }
+    }
+
+    component SecondaryButton: Rectangle {
+        id: secondary
+        property string text: ""
+        signal clicked()
+        implicitWidth: Math.max(116, secondaryText.implicitWidth + 26)
+        implicitHeight: 42
+        radius: 9
+        color: secondaryMouse.containsMouse && enabled ? appTheme.hover : root.surfaceColor
+        border.width: 1
+        border.color: enabled ? appTheme.borderChrome : appTheme.border
+        opacity: enabled ? 1 : 0.45
+        Accessible.name: text
+        Accessible.role: Accessible.Button
+
+        Text {
+            id: secondaryText
+            anchors.centerIn: parent
+            text: secondary.text
+            color: root.textSecondary
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+        }
+        MouseArea {
+            id: secondaryMouse
+            anchors.fill: parent
+            enabled: secondary.enabled
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: secondary.clicked()
+        }
+    }
+
+    component IntegrationChoice: Rectangle {
+        id: integration
+        property bool selected: false
+        property string iconName: ""
+        property string title: ""
+        property string subtitle: ""
+        signal clicked()
+        Layout.preferredHeight: 126
+        radius: 13
+        color: selected ? root.accentTint
+              : (integrationMouse.containsMouse ? appTheme.hover : root.surfaceColor)
+        border.width: 1
+        border.color: selected ? root.accent : appTheme.borderChrome
+        opacity: enabled ? 1 : 0.48
+        Accessible.name: title
+        Accessible.description: subtitle
+        Accessible.role: Accessible.CheckBox
+        Accessible.checked: selected
+
+        Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 18
+            spacing: 14
+
+            Rectangle {
+                Layout.preferredWidth: 48
+                Layout.preferredHeight: 48
+                radius: 24
+                color: integration.selected ? appTheme.accentMuted : appTheme.surfaceAlt
+
+                Image {
+                    anchors.centerIn: parent
+                    width: 23
+                    height: 23
+                    source: root.iconSource(
+                        integration.iconName,
+                        23,
+                        integration.selected ? appTheme.accentText : root.textSecondary
+                    )
+                    sourceSize: Qt.size(23, 23)
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 5
+                Text {
+                    Layout.fillWidth: true
+                    text: integration.title
+                    color: root.textPrimary
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: integration.subtitle
+                    color: root.textMuted
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+                radius: 12
+                color: integration.selected ? root.accent : "transparent"
+                border.width: 1.5
+                border.color: integration.selected ? root.accent : root.textDim
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: integration.selected
+                    text: "✓"
+                    color: appTheme.white
+                    font.pixelSize: 14
+                    font.weight: Font.Bold
+                }
+            }
+        }
+
+        MouseArea {
+            id: integrationMouse
+            anchors.fill: parent
+            enabled: integration.enabled
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: integration.clicked()
+        }
+    }
+
+    component LanguageChoice: Rectangle {
+        id: languageChoice
+        property string iconName: ""
+        property string title: ""
+        property string value: ""
+        signal clicked()
+        implicitHeight: 58
+        radius: 11
+        color: languageMouse.containsMouse ? appTheme.hover : root.surfaceColor
+        border.width: 1
+        border.color: languageMouse.containsMouse ? appTheme.borderChrome : appTheme.border
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            spacing: 12
+            Image {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                source: root.iconSource(languageChoice.iconName, 18, root.textMuted)
+                sourceSize: Qt.size(18, 18)
+            }
+            Text {
+                Layout.fillWidth: true
+                text: languageChoice.title
+                color: root.textSecondary
+                font.pixelSize: 12
+            }
+            Text {
+                text: languageChoice.value
+                color: root.textPrimary
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+            Text { text: "›"; color: root.textMuted; font.pixelSize: 20 }
+        }
+        MouseArea {
+            id: languageMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: languageChoice.clicked()
+        }
+    }
+
+    component CompactChoice: Rectangle {
+        id: compact
+        property bool selected: false
+        property string iconName: ""
+        property string title: ""
+        property string subtitle: ""
+        signal clicked()
+        Layout.preferredHeight: 86
+        radius: 11
+        color: selected ? root.accentTint : root.surfaceColor
+        border.width: 1
+        border.color: selected ? root.accent : appTheme.border
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 13
+            spacing: 11
+            Image {
+                Layout.preferredWidth: 19
+                Layout.preferredHeight: 19
+                source: root.iconSource(
+                    compact.iconName, 19, compact.selected ? appTheme.accentText : root.textMuted
+                )
+                sourceSize: Qt.size(19, 19)
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 3
+                Text {
+                    text: compact.title
+                    color: root.textPrimary
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: compact.subtitle
+                    color: root.textMuted
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+            }
+            Rectangle {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                radius: 9
+                color: compact.selected ? root.accent : "transparent"
+                border.width: 1
+                border.color: compact.selected ? root.accent : root.textDim
+                Text {
+                    anchors.centerIn: parent
+                    visible: compact.selected
+                    text: "✓"
+                    color: appTheme.white
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                }
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: compact.clicked()
+        }
+    }
+
+    component StatusLine: Rectangle {
+        property string stateKey: "idle"
+        property alias text: statusText.text
+        implicitHeight: 42
+        radius: 9
+        color: stateKey === "connected" ? appTheme.successSurface
+             : stateKey === "error" ? appTheme.dangerSubtle : appTheme.surfaceAlt
+
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: 13
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 9
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 7
+                height: 7
+                radius: 4
+                color: stateKey === "connected" ? appTheme.success
+                     : stateKey === "connecting" ? appTheme.warning
+                     : stateKey === "error" ? appTheme.danger : root.textDim
+            }
+            Text {
+                id: statusText
+                anchors.verticalCenter: parent.verticalCenter
+                color: stateKey === "connected" ? appTheme.success : root.textMuted
+                font.pixelSize: 11
+                font.weight: Font.Medium
+            }
+        }
+    }
+
+    component AppToggle: Rectangle {
+        id: toggle
+        property bool checked: false
+        signal toggled(bool checked)
+        implicitWidth: 42
+        implicitHeight: 24
+        radius: 12
+        color: checked ? root.accent : appTheme.borderChrome
+
+        Behavior on color { ColorAnimation { duration: 130 } }
+        Rectangle {
+            width: 18
+            height: 18
+            radius: 9
+            y: 3
+            x: toggle.checked ? toggle.width - width - 3 : 3
+            color: appTheme.white
+            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: toggle.toggled(!toggle.checked)
+        }
+    }
+
+    component SceneChoice: ColumnLayout {
+        id: sceneChoice
+        property string label: ""
+        property string value: ""
+        property var model: []
+        signal selected(string value)
+        spacing: 6
+
+        FieldLabel { text: sceneChoice.label }
+        ComboBox {
+            id: sceneCombo
+            Layout.fillWidth: true
+            Layout.preferredHeight: 40
+            model: sceneChoice.model
+            currentIndex: Math.max(0, sceneChoice.model.indexOf(sceneChoice.value))
+            displayText: sceneChoice.value || qsTr("Choose a scene")
+            onActivated: sceneChoice.selected(currentText)
+            contentItem: Text {
+                leftPadding: 11
+                rightPadding: 26
+                text: sceneCombo.displayText
+                color: root.textPrimary
+                font.pixelSize: 11
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            background: Rectangle {
+                radius: 8
+                color: root.surfaceChrome
+                border.width: 1
+                border.color: sceneCombo.activeFocus ? root.accent : appTheme.border
+            }
+        }
+    }
+
+    component SetupRow: Rectangle {
+        id: setup
+        property string step: ""
+        property string title: ""
+        property string subtitle: ""
+        property bool complete: false
+        default property alias trailing: trailingItem.data
+        implicitHeight: 82
+        radius: 11
+        color: root.surfaceColor
+        border.width: 1
+        border.color: complete ? appTheme.successBorder : appTheme.border
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 13
+            spacing: 12
+            Rectangle {
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+                radius: 15
+                color: setup.complete ? appTheme.successSurface : appTheme.surfaceAlt
+                border.width: 1
+                border.color: setup.complete ? appTheme.successBorder : appTheme.borderChrome
+                Text {
+                    anchors.centerIn: parent
+                    text: setup.complete ? "✓" : setup.step
+                    color: setup.complete ? appTheme.success : root.textMuted
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                }
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 3
+                Text {
+                    text: setup.title
+                    color: root.textPrimary
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: setup.subtitle
+                    color: setup.complete ? appTheme.success : root.textMuted
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+            }
+            Item {
+                id: trailingItem
+                Layout.preferredWidth: Math.max(0, childrenRect.width)
+                Layout.preferredHeight: Math.max(42, childrenRect.height)
+            }
+        }
+    }
+
+    component ReviewLine: Rectangle {
+        id: review
+        property string iconName: ""
+        property string title: ""
+        property string value: ""
+        property bool last: false
+        Layout.fillWidth: true
+        Layout.preferredHeight: 58
+        color: "transparent"
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: appTheme.border
+            visible: !review.last
+        }
+        RowLayout {
+            anchors.fill: parent
+            spacing: 12
+            Image {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                source: root.iconSource(review.iconName, 18, root.textMuted)
+                sourceSize: Qt.size(18, 18)
+            }
+            Text {
+                Layout.preferredWidth: 150
+                text: review.title
+                color: root.textSecondary
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+            }
+            Text {
+                Layout.fillWidth: true
+                text: review.value
+                color: root.textPrimary
+                font.pixelSize: 11
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    component LanguageSheet: Rectangle {
+        id: sheet
+        property string kind: "interface"
+        property string title: ""
+        property var allItems: kind === "interface"
+                               ? onboardingBridge.interfaceLanguages
+                               : onboardingBridge.mediaLanguages
+        visible: false
+        color: Qt.rgba(0, 0, 0, 0.58)
+        z: 100
+
+        function openSheet(targetKind, targetTitle) {
+            kind = targetKind
+            title = targetTitle
+            search.text = ""
+            visible = true
+            search.forceActiveFocus()
+        }
+
+        function filteredItems() {
+            var query = search.text.trim().toLowerCase()
+            if (query === "") return allItems
+            var result = []
+            for (var i = 0; i < allItems.length; ++i) {
+                var item = allItems[i]
+                var haystack = String(item.name || "") + " "
+                             + String(item.secondary || "") + " "
+                             + String(item.code || "")
+                if (haystack.toLowerCase().indexOf(query) !== -1)
+                    result.push(item)
+            }
+            return result
+        }
+
+        MouseArea { anchors.fill: parent; onClicked: sheet.visible = false }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 72, 520)
+            height: Math.min(parent.height - 72, 520)
+            radius: 14
+            color: appTheme.surface2
+            border.width: 1
+            border.color: appTheme.borderChrome
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 18
+                spacing: 12
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        text: sheet.title
+                        color: root.textPrimary
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
+                    TextButton {
+                        text: qsTr("Close")
+                        onClicked: sheet.visible = false
+                    }
+                }
+                AppTextField {
+                    id: search
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Search languages")
+                }
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    Column {
+                        width: parent.width
+                        spacing: 4
+                        Repeater {
+                            model: sheet.filteredItems()
+                            Rectangle {
+                                required property var modelData
+                                width: parent.width
+                                height: 48
+                                radius: 8
+                                color: languageItemMouse.containsMouse ? appTheme.hover : "transparent"
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: modelData.name || modelData.code
+                                        color: root.textPrimary
+                                        font.pixelSize: 12
+                                    }
+                                    Text {
+                                        text: modelData.secondary || modelData.code
+                                        color: root.textMuted
+                                        font.pixelSize: 10
+                                    }
+                                }
+                                MouseArea {
+                                    id: languageItemMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        onboardingBridge.chooseLanguage(sheet.kind, modelData.code)
+                                        sheet.visible = false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

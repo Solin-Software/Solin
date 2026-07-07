@@ -1,0 +1,622 @@
+"""QML presentation bridge and host for profile onboarding."""
+
+from __future__ import annotations
+
+import logging
+import os
+import shutil
+import sys
+from collections.abc import Callable
+from typing import Any
+
+from PySide6.QtCore import QObject, Property, Signal, Slot, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QKeySequence
+from PySide6.QtQuickWidgets import QQuickWidget
+
+from solin.core.integrations.automation.obs import OBSConnectionState
+from solin.core.integrations.automation.screen_share import (
+    macos_accessibility_trusted,
+)
+from solin.core.onboarding.application import (
+    OBSOnboardingConfiguration,
+    OnboardingService,
+    ProfileOnboardingCommand,
+    ZoomShareOnboardingConfiguration,
+)
+from solin.styles.icons import (
+    ICON_ARROW_LEFT,
+    ICON_AUTO_DOWNLOAD,
+    ICON_BOOK,
+    ICON_CLOSE,
+    ICON_CROSSHAIR,
+    ICON_NAV_BROWSER,
+    ICON_OBS,
+    ICON_PLUG,
+    ICON_SHARE_SCREEN,
+    ICON_ZOOM,
+)
+from solin.styles.theme import PALETTE
+from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.svg_icons import SvgIconProvider
+
+log = logging.getLogger(__name__)
+
+
+_PAGE_PROFILE = "profile"
+_PAGE_PREFERENCES = "preferences"
+_PAGE_INTEGRATIONS = "integrations"
+_PAGE_OBS = "obs"
+_PAGE_ZOOM = "zoom"
+_PAGE_REVIEW = "review"
+
+
+class OnboardingBridge(QObject):
+    """Own the onboarding draft and expose a reactive, store-free QML API."""
+
+    stateChanged = Signal()
+    languagesChanged = Signal()
+    completed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(
+        self,
+        *,
+        language_manager: Any,
+        onboarding_service: OnboardingService,
+        obs_probe: Any,
+        target_picker_factory: Callable[..., Any] | None = None,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._language_manager = language_manager
+        self._onboarding = onboarding_service
+        self._obs_probe = obs_probe
+        self._target_picker_factory = target_picker_factory
+        self._target_picker: Any | None = None
+        self._history: list[str] = []
+        self._session_revision = 0
+        self._original_language = "en"
+        self._media_language_touched = False
+        self._state: dict[str, Any] = {}
+        self._reset_state("Profile 1", allow_cancel=False)
+
+        self._obs_probe.state_changed.connect(self._on_obs_state_changed)
+        self._obs_probe.scenes_updated.connect(self._on_obs_scenes_updated)
+        if self._language_manager is not None:
+            self._language_manager.language_changed.connect(
+                self._on_language_changed
+            )
+            media_service = self._language_manager.jw_lang_service
+            media_service.languages_ready.connect(self._on_media_languages_ready)
+            media_service.fetch_if_needed()
+
+    @Property("QVariantMap", notify=stateChanged)
+    def state(self) -> dict[str, Any]:
+        return dict(self._state)
+
+    @Property("QVariantList", notify=languagesChanged)
+    def interfaceLanguages(self) -> list[dict[str, str]]:  # noqa: N802 - QML API
+        if self._language_manager is None:
+            items = [("en", "English"), ("pt_BR", "Português (Brasil)")]
+        else:
+            items = sorted(
+                self._language_manager.available_languages(),
+                key=lambda item: item[1].casefold(),
+            )
+        return [{"code": code, "name": name} for code, name in items]
+
+    @Property("QVariantList", notify=languagesChanged)
+    def mediaLanguages(self) -> list[dict[str, Any]]:  # noqa: N802 - QML API
+        service = (
+            self._language_manager.jw_lang_service
+            if self._language_manager is not None
+            else None
+        )
+        if service is not None and service.has_data:
+            languages = sorted(
+                service.languages,
+                key=lambda item: (
+                    item.get("vernacular")
+                    or item.get("name")
+                    or item.get("code", "")
+                ).casefold(),
+            )
+            return [
+                {
+                    "code": item.get("code", ""),
+                    "name": item.get("vernacular") or item.get("name") or "",
+                    "secondary": item.get("name") or item.get("code") or "",
+                    "rtl": bool(item.get("isRTL")),
+                }
+                for item in languages
+                if item.get("code")
+            ]
+        return [
+            {"code": "E", "name": "English", "secondary": "E", "rtl": False},
+            {"code": "T", "name": "Português", "secondary": "T", "rtl": False},
+            {"code": "S", "name": "Español", "secondary": "S", "rtl": False},
+            {"code": "I", "name": "Italiano", "secondary": "I", "rtl": False},
+        ]
+
+    def start(self, profile_name: str, *, allow_cancel: bool) -> None:
+        self._original_language = (
+            self._language_manager.current_code
+            if self._language_manager is not None
+            else "en"
+        )
+        self._history.clear()
+        self._session_revision += 1
+        self._media_language_touched = False
+        self._obs_probe.stop()
+        self._reset_state(profile_name, allow_cancel=allow_cancel)
+        self.stateChanged.emit()
+
+    def shutdown(self) -> None:
+        self._obs_probe.stop()
+        self._close_target_picker()
+
+    @Slot(str, "QVariant")
+    def updateField(self, name: str, value: Any) -> None:  # noqa: N802 - QML API
+        if name not in self._state:
+            return
+        normalized: Any = value
+        if name in {
+            "downloadMeetingMedia",
+            "obsSelected",
+            "zoomSelected",
+            "obsAutomatic",
+        }:
+            normalized = bool(value)
+        elif name in {"profileName", "obsPort", "obsPassword"}:
+            normalized = str(value)
+        self._state[name] = normalized
+        self._state["errorText"] = ""
+        if name == "obsSelected" and not normalized:
+            self._obs_probe.stop()
+            self._state["obsConnected"] = False
+            self._state["obsState"] = "idle"
+            self._state["obsStatusText"] = "Not tested"
+        self.stateChanged.emit()
+
+    @Slot(str, str)
+    def chooseLanguage(self, kind: str, code: str) -> None:  # noqa: N802 - QML API
+        if kind == "interface":
+            name = self._interface_language_name(code)
+            if not name:
+                return
+            self._state["interfaceCode"] = code
+            self._state["interfaceName"] = name
+            if not self._media_language_touched:
+                media_code = self._interface_api_code(code)
+                if media_code:
+                    self._state["mediaCode"] = media_code
+                    self._state["mediaName"] = self._media_language_name(media_code)
+            if self._language_manager is not None:
+                self._language_manager.preview_language(code)
+        elif kind == "media":
+            name = self._media_language_name(code)
+            if not name:
+                return
+            self._media_language_touched = True
+            self._state["mediaCode"] = code
+            self._state["mediaName"] = name
+        else:
+            return
+        self._state["errorText"] = ""
+        self.stateChanged.emit()
+
+    @Slot()
+    def advance(self) -> None:
+        if self._state["busy"]:
+            return
+        current = self._state["currentPage"]
+        error = self._validate_page(current)
+        if error:
+            self._state["errorText"] = error
+            self.stateChanged.emit()
+            return
+        if current == _PAGE_REVIEW:
+            self._complete()
+            return
+        next_page = self._next_page(current)
+        self._history.append(current)
+        self._navigate(next_page, direction=1)
+
+    @Slot()
+    def back(self) -> None:
+        if self._state["busy"] or not self._history:
+            return
+        self._navigate(self._history.pop(), direction=-1)
+
+    @Slot()
+    def cancel(self) -> None:
+        if not self._state["allowCancel"] or self._state["busy"]:
+            return
+        self.shutdown()
+        self._restore_original_language()
+        self.cancelled.emit()
+
+    @Slot()
+    def skipCurrentIntegration(self) -> None:  # noqa: N802 - QML API
+        current = self._state["currentPage"]
+        if current == _PAGE_OBS:
+            self._state["obsSelected"] = False
+            self._obs_probe.stop()
+        elif current == _PAGE_ZOOM:
+            self._state["zoomSelected"] = False
+        else:
+            return
+        self._state["errorText"] = ""
+        next_page = self._next_page(current)
+        self._history.append(current)
+        self._navigate(next_page, direction=1)
+
+    @Slot()
+    def testObsConnection(self) -> None:  # noqa: N802 - QML API
+        if self._state["busy"]:
+            return
+        try:
+            port = int(str(self._state["obsPort"]).strip() or "4455")
+        except ValueError:
+            port = 0
+        if not 1 <= port <= 65535:
+            self._state["errorText"] = "Enter a port between 1 and 65535."
+            self.stateChanged.emit()
+            return
+        self._state.update(
+            {
+                "errorText": "",
+                "obsState": "connecting",
+                "obsStatusText": "Connecting…",
+                "obsConnected": False,
+            }
+        )
+        self.stateChanged.emit()
+        self._obs_probe.connect_to(port, str(self._state["obsPassword"]))
+
+    @Slot(int, int)
+    def captureHotkey(self, key: int, modifiers: int) -> None:  # noqa: N802 - QML API
+        ignored = {
+            int(Qt.Key.Key_Control),
+            int(Qt.Key.Key_Shift),
+            int(Qt.Key.Key_Alt),
+            int(Qt.Key.Key_Meta),
+            int(Qt.Key.Key_unknown),
+        }
+        if key in ignored:
+            return
+        sequence = QKeySequence(modifiers | key).toString(
+            QKeySequence.SequenceFormat.PortableText
+        )
+        if not sequence:
+            return
+        self._state["zoomHotkey"] = sequence
+        self._state["errorText"] = ""
+        self.stateChanged.emit()
+
+    @Slot()
+    def configureZoomTarget(self) -> None:  # noqa: N802 - QML API
+        if not self._state["zoomAvailable"]:
+            self._state["errorText"] = self._state["zoomUnavailableReason"]
+            self.stateChanged.emit()
+            return
+        if self._target_picker_factory is None:
+            self._state["errorText"] = "The share target picker is unavailable."
+            self.stateChanged.emit()
+            return
+        self._close_target_picker()
+        picker = self._target_picker_factory(parent=None)
+        self._target_picker = picker
+        picker.target_picked.connect(self._on_target_picked)
+        if hasattr(picker, "cancelled"):
+            picker.cancelled.connect(self._on_target_picker_cancelled)
+        picker.show_overlay()
+
+    @Slot()
+    def openAccessibilitySettings(self) -> None:  # noqa: N802 - QML API
+        if sys.platform != "darwin":
+            return
+        QDesktopServices.openUrl(
+            QUrl(
+                "x-apple.systempreferences:com.apple.preference.security"
+                "?Privacy_Accessibility"
+            )
+        )
+
+    def _reset_state(self, profile_name: str, *, allow_cancel: bool) -> None:
+        interface_code = (
+            self._language_manager.current_code
+            if self._language_manager is not None
+            else "en"
+        )
+        media_code = self._interface_api_code(interface_code) or "E"
+        zoom_available, zoom_reason = self._zoom_capability()
+        self._state = {
+            "sessionRevision": self._session_revision,
+            "currentPage": _PAGE_PROFILE,
+            "progressStage": 0,
+            "direction": 1,
+            "allowCancel": allow_cancel,
+            "profileName": profile_name,
+            "interfaceCode": interface_code,
+            "interfaceName": self._interface_language_name(interface_code),
+            "mediaCode": media_code,
+            "mediaName": self._media_language_name(media_code),
+            "downloadMeetingMedia": False,
+            "obsSelected": False,
+            "zoomSelected": False,
+            "obsPort": "4455",
+            "obsPassword": "",
+            "obsState": "idle",
+            "obsStatusText": "Not tested",
+            "obsConnected": False,
+            "obsScenes": [],
+            "obsAutomatic": False,
+            "obsDefaultScene": "",
+            "obsMediaScene": "",
+            "zoomAvailable": zoom_available,
+            "zoomUnavailableReason": zoom_reason,
+            "zoomAccessibilityRequired": (
+                sys.platform == "darwin" and not zoom_available
+            ),
+            "zoomHotkey": "",
+            "zoomTargetConfigured": False,
+            "zoomTargetXRatio": -1.0,
+            "zoomTargetYRatio": -1.0,
+            "busy": False,
+            "errorText": "",
+        }
+
+    def _validate_page(self, page: str) -> str:
+        if page == _PAGE_PROFILE and not str(self._state["profileName"]).strip():
+            return "Enter a profile name."
+        if page == _PAGE_OBS:
+            if not self._state["obsConnected"]:
+                return "Test the OBS connection or choose Set up later."
+            if self._state["obsAutomatic"]:
+                default_scene = str(self._state["obsDefaultScene"])
+                media_scene = str(self._state["obsMediaScene"])
+                if not default_scene or not media_scene:
+                    return "Choose both OBS scenes."
+                if default_scene == media_scene:
+                    return "Choose two different OBS scenes."
+        if page == _PAGE_ZOOM:
+            if not self._state["zoomAvailable"]:
+                return self._state["zoomUnavailableReason"]
+            if not str(self._state["zoomHotkey"]).strip():
+                return "Record the Zoom share shortcut."
+            if not self._state["zoomTargetConfigured"]:
+                return "Choose the target in Zoom's share dialog."
+        return ""
+
+    def _next_page(self, current: str) -> str:
+        if current == _PAGE_PROFILE:
+            return _PAGE_PREFERENCES
+        if current == _PAGE_PREFERENCES:
+            return _PAGE_INTEGRATIONS
+        if current == _PAGE_INTEGRATIONS:
+            if self._state["obsSelected"]:
+                return _PAGE_OBS
+            if self._state["zoomSelected"]:
+                return _PAGE_ZOOM
+            return _PAGE_REVIEW
+        if current == _PAGE_OBS:
+            return _PAGE_ZOOM if self._state["zoomSelected"] else _PAGE_REVIEW
+        if current == _PAGE_ZOOM:
+            return _PAGE_REVIEW
+        return _PAGE_REVIEW
+
+    def _navigate(self, page: str, *, direction: int) -> None:
+        self._state["currentPage"] = page
+        self._state["progressStage"] = {
+            _PAGE_PROFILE: 0,
+            _PAGE_PREFERENCES: 1,
+            _PAGE_INTEGRATIONS: 2,
+            _PAGE_OBS: 2,
+            _PAGE_ZOOM: 2,
+            _PAGE_REVIEW: 3,
+        }[page]
+        self._state["direction"] = direction
+        self._state["errorText"] = ""
+        self.stateChanged.emit()
+
+    def _complete(self) -> None:
+        self._state["busy"] = True
+        self._state["errorText"] = ""
+        self.stateChanged.emit()
+        try:
+            obs_enabled = bool(self._state["obsSelected"])
+            zoom_enabled = bool(self._state["zoomSelected"])
+            obs_port = int(str(self._state["obsPort"]) or "4455") if obs_enabled else 4455
+            profile = self._onboarding.complete(
+                ProfileOnboardingCommand(
+                    name=str(self._state["profileName"]),
+                    interface_language=str(self._state["interfaceCode"]),
+                    media_language=str(self._state["mediaCode"]),
+                    download_meeting_media=bool(
+                        self._state["downloadMeetingMedia"]
+                    ),
+                    obs=OBSOnboardingConfiguration(
+                        enabled=obs_enabled,
+                        port=obs_port,
+                        password=str(self._state["obsPassword"]),
+                        automatic_scene_switching=(
+                            obs_enabled and bool(self._state["obsAutomatic"])
+                        ),
+                        default_scene=str(self._state["obsDefaultScene"]),
+                        media_scene=str(self._state["obsMediaScene"]),
+                    ),
+                    zoom_share=ZoomShareOnboardingConfiguration(
+                        enabled=zoom_enabled,
+                        hotkey=str(self._state["zoomHotkey"]),
+                        target_x_ratio=float(self._state["zoomTargetXRatio"]),
+                        target_y_ratio=float(self._state["zoomTargetYRatio"]),
+                    ),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - UI transaction boundary
+            log.exception("Could not complete onboarding")
+            self._state["busy"] = False
+            self._state["errorText"] = str(exc) or "Could not create the profile."
+            self.stateChanged.emit()
+            return
+        self.shutdown()
+        self.completed.emit(profile.id)
+
+    def _on_obs_state_changed(
+        self,
+        state: OBSConnectionState,
+        message: str,
+    ) -> None:
+        key = {
+            OBSConnectionState.DISCONNECTED: "idle",
+            OBSConnectionState.CONNECTING: "connecting",
+            OBSConnectionState.CONNECTED: "connected",
+            OBSConnectionState.ERROR: "error",
+        }.get(state, "idle")
+        text = {
+            OBSConnectionState.DISCONNECTED: "Disconnected",
+            OBSConnectionState.CONNECTING: "Connecting…",
+            OBSConnectionState.CONNECTED: "Connected to OBS Studio",
+            OBSConnectionState.ERROR: message or "Connection error",
+        }.get(state, message or "Disconnected")
+        self._state["obsState"] = key
+        self._state["obsStatusText"] = text
+        self._state["obsConnected"] = state is OBSConnectionState.CONNECTED
+        if state is OBSConnectionState.ERROR:
+            self._state["errorText"] = text
+        self.stateChanged.emit()
+
+    def _on_obs_scenes_updated(self, scenes: list[str]) -> None:
+        normalized = [str(scene) for scene in scenes if str(scene).strip()]
+        self._state["obsScenes"] = normalized
+        for field in ("obsDefaultScene", "obsMediaScene"):
+            if self._state[field] not in normalized:
+                self._state[field] = ""
+        self.stateChanged.emit()
+
+    def _on_target_picked(self, x_ratio: float, y_ratio: float) -> None:
+        self._state["zoomTargetXRatio"] = float(x_ratio)
+        self._state["zoomTargetYRatio"] = float(y_ratio)
+        self._state["zoomTargetConfigured"] = True
+        self._state["errorText"] = ""
+        self._target_picker = None
+        self.stateChanged.emit()
+
+    def _on_target_picker_cancelled(self) -> None:
+        self._target_picker = None
+
+    def _close_target_picker(self) -> None:
+        picker, self._target_picker = self._target_picker, None
+        if picker is not None:
+            picker.close()
+
+    def _on_language_changed(self, _code: str) -> None:
+        self.stateChanged.emit()
+
+    def _on_media_languages_ready(self, _languages: list[Any]) -> None:
+        self._state["mediaName"] = self._media_language_name(
+            str(self._state["mediaCode"])
+        )
+        self.languagesChanged.emit()
+        self.stateChanged.emit()
+
+    def _restore_original_language(self) -> None:
+        if self._language_manager is not None:
+            self._language_manager.preview_language(self._original_language)
+
+    def _interface_language_name(self, code: str) -> str:
+        for item in self.interfaceLanguages:
+            if item["code"] == code:
+                return item["name"]
+        return code
+
+    def _interface_api_code(self, code: str) -> str:
+        if self._language_manager is not None:
+            return self._language_manager.api_code_for_language(code)
+        return "T" if code == "pt_BR" else "E"
+
+    def _media_language_name(self, code: str) -> str:
+        for item in self.mediaLanguages:
+            if item["code"] == code:
+                return str(item["name"])
+        return code
+
+    @staticmethod
+    def _zoom_capability() -> tuple[bool, str]:
+        if sys.platform == "darwin":
+            if macos_accessibility_trusted() is not True:
+                return False, "Allow Solin in macOS Accessibility settings."
+            return True, ""
+        if sys.platform.startswith("linux"):
+            if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+                return False, "Automatic sharing is unavailable on Wayland."
+            if shutil.which("xdotool") is None:
+                return False, "Install xdotool to use automatic sharing."
+        return True, ""
+
+
+class OnboardingQmlHost(QQuickWidget):
+    """Compose the QML onboarding scene and its Python bridge."""
+
+    completed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(
+        self,
+        *,
+        language_manager: Any,
+        onboarding_service: OnboardingService,
+        obs_probe: Any,
+        target_picker_factory: Callable[..., Any] | None,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.bridge = OnboardingBridge(
+            language_manager=language_manager,
+            onboarding_service=onboarding_service,
+            obs_probe=obs_probe,
+            target_picker_factory=target_picker_factory,
+            parent=self,
+        )
+        self.bridge.completed.connect(self.completed.emit)
+        self.bridge.cancelled.connect(self.cancelled.emit)
+
+        icons = {
+            "arrow_left": ICON_ARROW_LEFT,
+            "auto_download": ICON_AUTO_DOWNLOAD,
+            "book": ICON_BOOK,
+            "close": ICON_CLOSE,
+            "crosshair": ICON_CROSSHAIR,
+            "interface": ICON_NAV_BROWSER,
+            "obs": ICON_OBS,
+            "plug": ICON_PLUG,
+            "share": ICON_SHARE_SCREEN,
+            "zoom": ICON_ZOOM,
+        }
+        configure_qml_host(
+            self,
+            type_name="OnboardingView",
+            clear_color=PALETTE.bg0,
+            context_properties={"onboardingBridge": self.bridge},
+            image_providers={
+                "onboardingicons": SvgIconProvider(
+                    icons,
+                    default_icon="interface",
+                )
+            },
+        )
+        if language_manager is not None:
+            language_manager.language_changed.connect(
+                lambda _code: self.engine().retranslate()
+            )
+
+    def start(self, profile_name: str, *, allow_cancel: bool) -> None:
+        self.bridge.start(profile_name, allow_cancel=allow_cancel)
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def shutdown(self) -> None:
+        self.bridge.shutdown()
+
+
+__all__ = ["OnboardingBridge", "OnboardingQmlHost"]

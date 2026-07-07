@@ -408,9 +408,9 @@ class SettingsWidget(
             self._autoshare_hotkey_lbl.setText(self.tr("Share hotkey"))
             self._autoshare_hotkey_hint.setText(self.tr("Uses Zoom's single start/stop screen-share shortcut."))
             self._autoshare_hotkey_btn.setToolTip(self.tr("Edit"))
-            self._autoshare_pos_title.setText(self.tr("Click Position"))
+            self._autoshare_pos_title.setText(self.tr("Share target"))
             self._autoshare_pos_desc.setText(
-                self.tr("Position to click after the share dialog opens to select the target.")
+                self.tr("The Solin Media Preview tile inside Zoom's share dialog.")
             )
             self._autoshare_config_btn.setText(self.tr("Configure"))
             if sys.platform == "darwin" and hasattr(self, "_autoshare_access_title"):
