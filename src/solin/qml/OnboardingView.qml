@@ -478,7 +478,7 @@ Rectangle {
                             SecondaryButton {
                                 Layout.alignment: Qt.AlignBottom
                                 text: root.draft.obsState === "connecting"
-                                      ? qsTr("Connecting…") : qsTr("Test connection")
+                                      ? qsTr("Connecting…") : qsTr("Connect")
                                 enabled: root.draft.obsState !== "connecting"
                                 onClicked: onboardingBridge.testObsConnection()
                             }
@@ -1152,6 +1152,7 @@ Rectangle {
         property string label: ""
         property string value: ""
         property var model: []
+        readonly property int popupScrollbarGutter: 14
         signal selected(string value)
         spacing: 6
 
@@ -1159,25 +1160,158 @@ Rectangle {
         ComboBox {
             id: sceneCombo
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
+            Layout.preferredHeight: 42
             model: sceneChoice.model
-            currentIndex: Math.max(0, sceneChoice.model.indexOf(sceneChoice.value))
+            currentIndex: sceneChoice.model.indexOf(sceneChoice.value)
             displayText: sceneChoice.value || qsTr("Choose a scene")
-            onActivated: sceneChoice.selected(currentText)
+            hoverEnabled: true
+            onActivated: index => {
+                if (index >= 0)
+                    sceneChoice.selected(String(sceneChoice.model[index]))
+            }
             contentItem: Text {
-                leftPadding: 11
-                rightPadding: 26
+                leftPadding: 13
+                rightPadding: 38
                 text: sceneCombo.displayText
                 color: root.textPrimary
                 font.pixelSize: 11
+                font.weight: Font.Medium
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
             }
+            indicator: Image {
+                x: sceneCombo.width - width - 13
+                y: Math.round((sceneCombo.height - height) / 2)
+                width: 15
+                height: 15
+                source: root.iconSource(
+                    "chevron_down",
+                    15,
+                    sceneCombo.popup.visible ? root.accent : root.textMuted
+                )
+                rotation: sceneCombo.popup.visible ? 180 : 0
+                opacity: sceneCombo.enabled ? 1.0 : 0.45
+
+                Behavior on rotation { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+            }
             background: Rectangle {
-                radius: 8
-                color: root.surfaceChrome
+                radius: 10
+                color: sceneCombo.popup.visible || sceneCombo.hovered
+                       ? appTheme.surfaceAlt : root.surfaceChrome
                 border.width: 1
-                border.color: sceneCombo.activeFocus ? root.accent : appTheme.border
+                border.color: sceneCombo.popup.visible || sceneCombo.activeFocus
+                              ? root.accent : appTheme.border
+
+                Behavior on color { ColorAnimation { duration: 140 } }
+                Behavior on border.color { ColorAnimation { duration: 140 } }
+            }
+            delegate: ItemDelegate {
+                id: sceneOption
+
+                required property int index
+                required property var modelData
+
+                width: Math.max(
+                    0,
+                    sceneCombo.width - 12 - sceneChoice.popupScrollbarGutter
+                )
+                height: 38
+                leftPadding: 10
+                rightPadding: 10
+                topPadding: 0
+                bottomPadding: 0
+                hoverEnabled: true
+                highlighted: sceneCombo.highlightedIndex === index
+
+                property bool selectedScene: sceneChoice.value === String(modelData)
+
+                background: Rectangle {
+                    radius: 9
+                    color: sceneOption.selectedScene
+                           ? root.accentTint
+                           : (sceneOption.highlighted || sceneOption.hovered
+                              ? appTheme.hover : "transparent")
+                    border.width: sceneOption.selectedScene ? 1 : 0
+                    border.color: sceneOption.selectedScene ? root.accent : "transparent"
+
+                    Behavior on color { ColorAnimation { duration: 110 } }
+                }
+                contentItem: RowLayout {
+                    spacing: 9
+                    Rectangle {
+                        Layout.preferredWidth: 6
+                        Layout.preferredHeight: 6
+                        radius: 3
+                        color: sceneOption.selectedScene ? root.accent : "transparent"
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: String(sceneOption.modelData)
+                        color: sceneOption.selectedScene ? root.textPrimary : root.textSecondary
+                        font.pixelSize: 11
+                        font.weight: sceneOption.selectedScene ? Font.DemiBold : Font.Medium
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+            popup: Popup {
+                id: scenePopup
+
+                y: sceneCombo.height + 8
+                width: sceneCombo.width
+                implicitHeight: Math.min(sceneList.contentHeight + 12, 224)
+                padding: 6
+                modal: false
+                focus: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                enter: Transition {
+                    NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120 }
+                    NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 140; easing.type: Easing.OutCubic }
+                }
+                exit: Transition {
+                    NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 90 }
+                    NumberAnimation { property: "scale"; from: 1.0; to: 0.98; duration: 90; easing.type: Easing.InCubic }
+                }
+                background: Rectangle {
+                    radius: 13
+                    color: root.surfaceColor
+                    border.width: 1
+                    border.color: appTheme.borderChrome
+                }
+                contentItem: ListView {
+                    id: sceneList
+
+                    clip: true
+                    implicitHeight: Math.min(contentHeight, 212)
+                    model: scenePopup.visible ? sceneCombo.delegateModel : null
+                    currentIndex: sceneCombo.highlightedIndex
+                    boundsBehavior: Flickable.StopAtBounds
+                    rightMargin: sceneChoice.popupScrollbarGutter
+                    spacing: 4
+
+                    ScrollBar.vertical: ScrollBar {
+                        id: sceneScrollBar
+
+                        policy: ScrollBar.AsNeeded
+                        width: 8
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            color: (sceneScrollBar.active || sceneScrollBar.hovered)
+                                   ? root.textMuted : root.borderColor
+                            opacity: (sceneScrollBar.active
+                                      || sceneScrollBar.hovered
+                                      || sceneList.moving) ? 1.0 : 0.35
+                            anchors.horizontalCenter: parent.horizontalCenter
+
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            Behavior on opacity { NumberAnimation { duration: 180 } }
+                        }
+                    }
+                }
             }
         }
     }

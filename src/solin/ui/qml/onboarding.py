@@ -27,6 +27,7 @@ from solin.styles.icons import (
     ICON_ARROW_LEFT,
     ICON_AUTO_DOWNLOAD,
     ICON_BOOK,
+    ICON_CHEVRON_DOWN,
     ICON_CLOSE,
     ICON_CROSSHAIR,
     ICON_MANUAL_DOWNLOAD,
@@ -390,7 +391,7 @@ class OnboardingBridge(QObject):
             return "Enter a profile name."
         if page == _PAGE_OBS:
             if not self._state["obsConnected"]:
-                return "Test the OBS connection or choose Set up later."
+                return "Connect to OBS or choose Set up later."
             if self._state["obsAutomatic"]:
                 default_scene = str(self._state["obsDefaultScene"])
                 media_scene = str(self._state["obsMediaScene"])
@@ -608,6 +609,7 @@ class OnboardingQmlHost(QQuickWidget):
             "arrow_left": ICON_ARROW_LEFT,
             "auto_download": ICON_AUTO_DOWNLOAD,
             "book": ICON_BOOK,
+            "chevron_down": ICON_CHEVRON_DOWN,
             "close": ICON_CLOSE,
             "crosshair": ICON_CROSSHAIR,
             "interface": ICON_NAV_BROWSER,

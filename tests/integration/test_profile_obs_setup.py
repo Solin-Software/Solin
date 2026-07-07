@@ -96,6 +96,29 @@ def test_qml_onboarding_manual_download_option_uses_explicit_label_and_icon():
     assert "ICON_MANUAL_DOWNLOAD" in icons_source
 
 
+def test_qml_onboarding_scene_choice_uses_custom_polished_popup():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+
+    assert "component SceneChoice: ColumnLayout" in qml_source
+    assert "delegate: ItemDelegate" in qml_source
+    assert "popup: Popup" in qml_source
+    assert "popupScrollbarGutter" in qml_source
+    assert "rightMargin: sceneChoice.popupScrollbarGutter" in qml_source
+    assert "root.accentTint" in qml_source
+    assert '"chevron_down": ICON_CHEVRON_DOWN' in bridge_source
+
+
+def test_qml_onboarding_obs_action_uses_connect_language():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
+
+    assert 'qsTr("Connect")' in qml_source
+    assert "Test connection" not in qml_source
+    assert "Connect to OBS or choose Set up later." in bridge_source
+    assert "Test the OBS connection" not in bridge_source
+
+
 def test_onboarding_hotkey_capture_reports_only_complete_shortcuts():
     bridge = _bridge()
 
