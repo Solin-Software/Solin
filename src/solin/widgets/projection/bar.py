@@ -185,6 +185,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._timer_blink_timer = QTimer(self)
         self._timer_blink_timer.setInterval(400)
         self._timer_blink_timer.timeout.connect(self._on_blink_tick)
+        self._timer_auto_close = QTimer(self)
+        self._timer_auto_close.setSingleShot(True)
+        self._timer_auto_close.setInterval(5000)
+        self._timer_auto_close.timeout.connect(self._auto_close_timer)
         self._blink_count = 0
         self._blink_on = False
 
@@ -878,6 +882,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if overlay is not None:
             overlay.set_title(title)
 
+    def _enter_mode(self, mode: str | None) -> None:
+        """End mode-specific timer work before changing projected content."""
+        self._stop_timer_internals()
+        self._mode = mode
+
     def hide_add_to_destination_action(self) -> None:
         self.ov_add_destination_btn.setVisible(False)
 
@@ -886,7 +895,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def activate_video(self, title: str, keep_expanded: bool = False, is_audio: bool = False):
         self._cancel_announcement_mode()
-        self._mode = 'video'
+        self._enter_mode("video")
         self._is_audio = is_audio
         self._image_pixmap = None
         self._stop_wave_animation()   # para animação da faixa anterior (se houver)
@@ -897,8 +906,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._live_thumb_captured = False
         # Sempre reseta a capa de áudio ao trocar de faixa — a nova mídia pode não ter capa.
         self._audio_cover_pixmap = None
-        self._stop_timer_internals()
-
         # Disable interactive image mode
         self.preview_content.set_image_mode(False)
 
@@ -968,7 +975,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         keep_expanded: bool = False,
         initial_transform: ImageTransform | None = None,
     ):
-        self._mode = 'image'
+        self._enter_mode("image")
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
         self._sync_app_fullscreen_availability()
@@ -1074,7 +1081,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def activate_live_stream(self, title: str, keep_expanded: bool = False):
         self._cancel_announcement_mode()
-        self._mode = 'live_stream'
+        self._enter_mode("live_stream")
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
         self._sync_app_fullscreen_availability()
@@ -1084,7 +1091,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._image_file_path = ""
         self._audio_cover_pixmap = None
         self._stop_wave_animation()
-        self._stop_timer_internals()
         self.preview_content.set_image_mode(False)
 
         short = (title[:24] + "…") if len(title) > 24 else title
@@ -1142,8 +1148,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         target_dt: QDateTime,
         presentation: MediaCountdownPresentation,
     ) -> None:
-        self._stop_timer_internals()
-        self._mode = 'timer'
+        self._enter_mode("timer")
         self._timer_presentation = presentation
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
@@ -1270,7 +1275,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def deactivate(self):
         self._cancel_announcement_mode()
         self._reset_app_fullscreen()
-        self._mode = None
+        self._enter_mode(None)
         self._image_pixmap = None
         self._image_file_path = ""
         self._is_audio = False
@@ -1280,7 +1285,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._played_indices = set()
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
-        self._stop_timer_internals()
         if self._expanded:
             self._collapse()
         # Fecha e reseta o painel
@@ -1656,7 +1660,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._blink_count = 0
         self._blink_on = False
         self._timer_blink_timer.start()
-        QTimer.singleShot(5000, self._auto_close_timer)
+        self._timer_auto_close.start()
 
     def _on_blink_tick(self):
         self._blink_on = not self._blink_on
@@ -1669,6 +1673,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
 
     def _auto_close_timer(self):
+        if self._mode != "timer":
+            return
         self._timer_blink_timer.stop()
         self._set_timer_preview_blink(False)
         self.stop_requested.emit()
@@ -1676,6 +1682,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _stop_timer_internals(self):
         self._timer_tick.stop()
         self._timer_blink_timer.stop()
+        self._timer_auto_close.stop()
         self._timer_target = None
         self._timer_presentation = None
         self._blink_on = False

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QVBoxLayout
 
 from solin.core.timer.models import MediaCountdownPresentation
+from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM
 from solin.projection.window import BaseProjectionView
 from solin.projection.yearly_text import YearlyTextWidget
 
@@ -164,3 +166,16 @@ def test_new_projection_cancels_pending_yearly_page_fade_out():
     assert view._yearly_widget._countdown_remaining is None
     assert view._yearly_opacity.opacity() == 1.0
     assert view._stack.currentIndex() != view._PAGE_IDLE_MEDIA
+
+
+def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
+    view = _ProjectionViewHarness()
+    image = QImage(160, 90, QImage.Format.Format_RGB32)
+    image.fill(QColor("white"))
+    view.show_image_from_qimage(image)
+    view.set_image_transform(2.0, 0.2, -0.1, animate=False)
+
+    view.clear()
+    view.show_image_from_qimage(image, cache_pixmap=False)
+
+    assert view.display_label._image_transform.current == IDENTITY_IMAGE_TRANSFORM

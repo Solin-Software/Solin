@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.projection.image_framing import ImageTransform
+from ..core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM, ImageTransform
 from ..core.projection.transform_animation import ProjectionTransformAnimation
 from ..core.rendering.fonts import FontManager
 from ..core.timer.models import MediaCountdownPresentation
@@ -294,13 +294,13 @@ class VideoDisplayWidget(QWidget):
         self._static_image = image
         self._mode = "image"
         self._cached_src_size = QSize()
-        if initial_transform is not None:
-            self.set_image_transform(
-                initial_transform.zoom,
-                initial_transform.norm_x,
-                initial_transform.norm_y,
-                animate=False,
-            )
+        transform = initial_transform or IDENTITY_IMAGE_TRANSFORM
+        self.set_image_transform(
+            transform.zoom,
+            transform.norm_x,
+            transform.norm_y,
+            animate=False,
+        )
         # Only trigger smoothstep fade-in on the very first frame (from black).
         # Live-tab projections can update very frequently — restarting the fade every
         # call would keep _fade_t perpetually near 0 and the screen stays black.
