@@ -4293,6 +4293,11 @@ Click &apos;Download&apos; to open the download page.</source>
         <source>Failed to launch installer.</source>
         <translation>Не вдалося запустити інсталятор.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Список змін (Changelog)</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

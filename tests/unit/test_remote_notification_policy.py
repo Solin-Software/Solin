@@ -69,6 +69,45 @@ def test_remote_notification_policy_uses_english_fallback_and_filters_seen_ids()
     assert result.mark_seen_ids == ("new",)
 
 
+def test_remote_notification_policy_uses_first_available_server_fallback() -> None:
+    result = resolve_remote_notifications(
+        {
+            "notifications": [
+                {
+                    "id": "localized",
+                    "type": "info",
+                    "content": {"S": {"title": "Disponible", "detail": "Detalle"}},
+                }
+            ]
+        },
+        api_code="T",
+        seen_ids=set(),
+    )
+
+    assert [notification.title for notification in result.notifications] == ["Disponible"]
+
+
+def test_remote_notification_policy_skips_incomplete_requested_translation() -> None:
+    result = resolve_remote_notifications(
+        {
+            "notifications": [
+                {
+                    "id": "fallback",
+                    "type": "info",
+                    "content": {
+                        "T": {"detail": "Sem título"},
+                        "E": {"title": "Available", "detail": "English detail"},
+                    },
+                }
+            ]
+        },
+        api_code="T",
+        seen_ids=set(),
+    )
+
+    assert [notification.title for notification in result.notifications] == ["Available"]
+
+
 def test_remote_notification_policy_deduplicates_ids_inside_one_payload() -> None:
     result = resolve_remote_notifications(
         {

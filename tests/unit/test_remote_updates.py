@@ -20,7 +20,7 @@ def test_update_worker_uses_injected_install_id_provider(monkeypatch) -> None:
         return {}
 
     monkeypatch.setattr(updates_module, "get_json", fake_get_json)
-    worker = UpdateWorker(lambda: "install-1")
+    worker = UpdateWorker(lambda: "install-1", lambda: "T")
 
     worker.run()
 
@@ -28,4 +28,6 @@ def test_update_worker_uses_injected_install_id_provider(monkeypatch) -> None:
         "v": updates_module.APP_VERSION,
         "id": "install-1",
         "platform": updates_module.APP_PLATFORM,
+        "lang": "T",
+        "include": "changelog",
     }

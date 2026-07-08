@@ -4289,6 +4289,11 @@ Bofya &apos;Pakua&apos; ili kufungua ukurasa wa kupakua.</translation>
         <source>Failed to launch installer.</source>
         <translation>Imeshindwa kuanzisha kisakinishi.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Changelog</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

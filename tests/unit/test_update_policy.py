@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from solin.core.remote.update_policy import (
+    ReleaseNote,
     ReleaseVersion,
     UpdateKind,
     evaluate_update,
@@ -16,6 +17,14 @@ def test_release_version_parses_two_to_four_numeric_components():
     assert str(ReleaseVersion.parse("26.17")) == "26.17.0.0"
     assert str(ReleaseVersion.parse("26.17.1")) == "26.17.1.0"
     assert str(ReleaseVersion.parse("26.17.1.2")) == "26.17.1.2"
+
+
+def test_release_version_matches_website_public_formatting():
+    assert ReleaseVersion.parse("26.30").display_version == "26.30"
+    assert ReleaseVersion.parse("26.30.0").display_version == "26.30.0"
+    assert ReleaseVersion.parse("26.30.0.0").display_version == "26.30.0"
+    assert ReleaseVersion.parse("26.30.0.7").display_version == "26.30.0"
+    assert ReleaseVersion.parse("1.11.0.0").display_version == "1.11.0.0"
 
 
 @pytest.mark.parametrize(
@@ -111,3 +120,52 @@ def test_safe_update_urls_allow_https_and_local_development_http():
     assert is_safe_update_url("http://127.0.0.1:5000/setup.exe") is True
     assert is_safe_update_url("http://releases.example/setup.exe") is False
     assert is_safe_update_url("file:///tmp/setup.exe") is False
+
+
+def test_update_policy_parses_sorted_changelog_within_selected_target():
+    info = evaluate_update(
+        {
+            "patch": {
+                "version": "26.24.0.0",
+                "min_version": "26.20.0.0",
+                "url": "https://releases.example/SolinPatch.exe",
+            },
+            "setup": {
+                "version": "27.0.0.0",
+                "url": "https://releases.example/SolinSetup.exe",
+            },
+            "changelog": {
+                "entries": [
+                    {"version": "27.0.0.0", "language": "T", "markdown": "Future"},
+                    {"version": "26.23.1.0", "language": "T", "markdown": "Older"},
+                    {"version": "26.24.0.0", "language": "T", "markdown": "Latest"},
+                    {"version": "26.23.1", "language": "T", "markdown": "Duplicate"},
+                ]
+            },
+        },
+        current_version="26.23.0.0",
+    )
+
+    assert info is not None
+    assert info.kind is UpdateKind.PATCH
+    assert info.changelog == (
+        ReleaseNote(ReleaseVersion.parse("26.24.0.0"), "Latest", "T"),
+        ReleaseNote(ReleaseVersion.parse("26.23.1.0"), "Older", "T"),
+    )
+
+
+def test_update_policy_ignores_malformed_changelog_without_losing_update():
+    info = evaluate_update(
+        {
+            "setup": {
+                "version": "27.0.0.0",
+                "url": "https://releases.example/SolinSetup.exe",
+            },
+            "changelog": {"entries": [{"version": "bad", "markdown": object()}]},
+        },
+        current_version="26.23.0.0",
+    )
+
+    assert info is not None
+    assert info.kind is UpdateKind.SETUP
+    assert info.changelog == ()

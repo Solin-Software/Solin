@@ -30,7 +30,7 @@ from PySide6.QtCore import (
     QByteArray,
     QPoint,
 )
-from PySide6.QtGui import QDesktopServices, QMouseEvent
+from PySide6.QtGui import QDesktopServices, QMouseEvent, QTextDocument
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -40,12 +40,14 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QFrame,
     QGraphicsOpacityEffect,
+    QTextBrowser,
 )
 
 if TYPE_CHECKING:
     from solin.core.remote.patch_installer import PatchDownloadWorker
     from solin.core.remote.update_policy import UpdateInfo
 
+from solin.core.remote.urls import is_safe_remote_url
 from solin.styles.theme import PALETTE, qss_rgba
 
 log = logging.getLogger(__name__)
@@ -62,6 +64,15 @@ _C = {
     "yellow": PALETTE.warning,
     "red": PALETTE.danger,
 }
+
+
+class _ReleaseNotesBrowser(QTextBrowser):
+    """Markdown viewer that never fetches embedded image resources."""
+
+    def loadResource(self, resource_type: int, name: QUrl):  # noqa: N802 - Qt override
+        if resource_type == QTextDocument.ResourceType.ImageResource:
+            return None
+        return super().loadResource(resource_type, name)
 
 # The QDialog itself must be transparent (WA_TranslucentBackground is set).
 # Only QFrame#card carries the actual background color — this prevents the
@@ -96,6 +107,19 @@ QLabel#version_badge {{
     border: 1px solid {qss_rgba(PALETTE.success, 0.3)};
     border-radius: 4px;
     padding: 2px 8px;
+}}
+QLabel#section_title {{
+    color: {_C["text"]};
+    font-size: 12px;
+    font-weight: 700;
+}}
+QTextBrowser#changelog {{
+    background: {_C["bg0"]};
+    color: {_C["text"]};
+    border: 1px solid {_C["border"]};
+    border-radius: 7px;
+    padding: 10px 12px;
+    selection-background-color: {_C["accent"]};
 }}
 QPushButton#btn_primary {{
     background: {_C["accent"]};
@@ -170,7 +194,7 @@ class UpdateDialog(QDialog):
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(False)
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
 
         self._build_ui()
         self.setStyleSheet(_QSS)
@@ -204,7 +228,7 @@ class UpdateDialog(QDialog):
         hdr.addWidget(title)
         hdr.addStretch()
 
-        badge = QLabel(f"v{self._info.version}")
+        badge = QLabel(f"v{self._info.version.display_version}")
         badge.setObjectName("version_badge")
         hdr.addWidget(badge)
         lay.addLayout(hdr)
@@ -232,6 +256,30 @@ class UpdateDialog(QDialog):
         body.setObjectName("body")
         body.setWordWrap(True)
         lay.addWidget(body)
+
+        self._changelog_browser: QTextBrowser | None = None
+        if self._info.changelog:
+            changelog_title = QLabel(self.tr("Changelog"))
+            changelog_title.setObjectName("section_title")
+            lay.addWidget(changelog_title)
+
+            browser = _ReleaseNotesBrowser()
+            browser.setObjectName("changelog")
+            browser.setReadOnly(True)
+            browser.setOpenExternalLinks(False)
+            browser.setMinimumHeight(150)
+            browser.setMaximumHeight(300)
+            browser.document().setDefaultStyleSheet(
+                f"h2 {{ color: {_C['text']}; font-size: 15px; margin: 4px 0 8px 0; }}"
+                f"p, li {{ color: {_C['text']}; font-size: 12px; }}"
+                f"a {{ color: {_C['accent']}; text-decoration: none; }}"
+                f"code {{ color: {_C['yellow']}; background: {_C['bg2']}; }}"
+                f"hr {{ color: {_C['border']}; }}"
+            )
+            browser.setMarkdown(self._changelog_markdown())
+            browser.anchorClicked.connect(self._open_changelog_link)
+            lay.addWidget(browser)
+            self._changelog_browser = browser
 
         # ── Progress bar (patch only) ──────────────────────────────────────────
         self._progress_bar = QProgressBar()
@@ -266,6 +314,17 @@ class UpdateDialog(QDialog):
         btn_row.addWidget(self._btn_action)
 
         lay.addLayout(btn_row)
+
+    def _changelog_markdown(self) -> str:
+        return "\n\n---\n\n".join(
+            f"## v{note.version.display_version}\n\n{note.markdown}"
+            for note in self._info.changelog
+        )
+
+    @staticmethod
+    def _open_changelog_link(url: QUrl) -> None:
+        if is_safe_remote_url(url.toString()):
+            QDesktopServices.openUrl(url)
 
     # ── Actions ────────────────────────────────────────────────────────────────
 

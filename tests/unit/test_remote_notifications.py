@@ -88,4 +88,5 @@ def test_notification_worker_uses_injected_install_id_provider(monkeypatch) -> N
         "id": "install-1",
         "v": notifications_module.APP_VERSION,
         "platform": notifications_module.APP_PLATFORM,
+        "lang": "T",
     }

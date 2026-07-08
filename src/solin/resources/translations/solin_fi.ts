@@ -4289,6 +4289,11 @@ Avaa lataussivu napsauttamalla &apos;Lataa&apos;.</translation>
         <source>Failed to launch installer.</source>
         <translation>Asennusohjelman käynnistäminen epäonnistui.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Muutosloki</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

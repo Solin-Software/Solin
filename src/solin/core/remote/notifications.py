@@ -8,8 +8,9 @@ Fluxo completo:
   2. Faz GET na NOTIFICATION_API_URL com timeout curto (não trava a UI).
   3. Valida o schema mínimo do payload.
   4. Filtra notificações cujo ID já está no histórico local do perfil.
-  5. Resolve o conteúdo localizado usando o api_code do idioma ativo,
-     com fallback para "E" (inglês) se o código não estiver disponível.
+  5. Solicita o conteúdo no api_code do idioma ativo; o servidor resolve
+     idioma solicitado, inglês e primeiro conteúdo disponível, nessa ordem.
+     O cliente mantém a mesma resolução defensiva para backends antigos.
   6. Emite o signal `notifications_ready` com a lista já processada.
   7. A MainWindow conecta esse signal e enfileira os dialogs (não-modais).
 
@@ -101,6 +102,7 @@ class NotificationWorker(QObject):
                 "id":       self._install_id_provider(),
                 "v":        APP_VERSION,
                 "platform": APP_PLATFORM,
+                "lang":     self._api_code,
             }
             payload = get_json(
                 NOTIFICATION_API_URL,

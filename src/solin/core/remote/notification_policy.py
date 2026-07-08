@@ -75,14 +75,11 @@ def _resolve_notification(
     if not isinstance(content, dict):
         return None
 
-    localized = content.get(api_code) or content.get(FALLBACK_LANG)
-    if not isinstance(localized, dict):
+    localized = _localized_content(content, api_code)
+    if localized is None:
         return None
 
     title = str(localized.get("title", "")).strip()
-    if not title:
-        return None
-
     detail = str(localized.get("detail", "")).strip()
     notification_type = str(item.get("type", "info")).lower()
     if notification_type not in _VALID_TYPES:
@@ -104,4 +101,24 @@ def _resolve_notification(
         detail=detail,
         action_url=action_url,
         action_label=action_label,
+    )
+
+
+def _localized_content(content: dict, api_code: str) -> dict | None:
+    preferred_codes = (api_code, FALLBACK_LANG)
+    for code in preferred_codes:
+        candidate = content.get(code)
+        if _has_title(candidate):
+            return candidate
+    return next(
+        (candidate for candidate in content.values() if _has_title(candidate)),
+        None,
+    )
+
+
+def _has_title(candidate: object) -> bool:
+    return (
+        isinstance(candidate, dict)
+        and isinstance(candidate.get("title"), str)
+        and bool(candidate["title"].strip())
     )

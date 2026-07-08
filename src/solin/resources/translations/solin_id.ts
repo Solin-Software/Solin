@@ -4285,6 +4285,11 @@ Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
         <source>Failed to launch installer.</source>
         <translation>Gagal meluncurkan penginstal.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Changelog</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

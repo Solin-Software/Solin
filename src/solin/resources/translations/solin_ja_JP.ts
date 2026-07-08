@@ -4285,6 +4285,11 @@ Click &apos;Download&apos; to open the download page.</source>
         <source>Failed to launch installer.</source>
         <translation>インストーラーの起動に失敗しました。</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>更新履歴</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

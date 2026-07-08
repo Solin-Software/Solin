@@ -4289,6 +4289,11 @@ Klik op &apos;Downloaden&apos; om de downloadpagina te openen.</translation>
         <source>Failed to launch installer.</source>
         <translation>Starten van installatieprogramma mislukt.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Wijzigingsgeschiedenis</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

@@ -4033,6 +4033,11 @@ Click &apos;Download&apos; to open the download page.</translation>
         <source>Failed to launch installer.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

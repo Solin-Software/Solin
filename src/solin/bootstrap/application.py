@@ -189,7 +189,11 @@ def _build_main_window_service_factories(
             ),
             update_service=cast(
                 RemoteUpdateService,
-                UpdateService(install_id_provider, parent),
+                UpdateService(
+                    install_id_provider,
+                    lambda: lang_manager.api_code,
+                    parent,
+                ),
             ),
             update_dialog_factory=lambda info: UpdateDialog(
                 cast(UpdateInfo, info),

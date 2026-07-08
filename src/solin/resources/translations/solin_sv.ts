@@ -4288,6 +4288,11 @@ Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
         <source>Failed to launch installer.</source>
         <translation>Fel vid start av installationsprogrammet.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Ändringslogg</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

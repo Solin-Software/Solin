@@ -4289,6 +4289,11 @@ I-click ang &apos;Download&apos; para i-open ang download page.</translation>
         <source>Failed to launch installer.</source>
         <translation>Nabigong i-launch ang installer.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Changelog</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>

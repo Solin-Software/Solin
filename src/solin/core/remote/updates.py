@@ -5,7 +5,7 @@ Serviço assíncrono de verificação de atualizações do Solin.
 
 Fluxo:
   1. UpdateWorker roda em QThread separado, alguns segundos após o app abrir.
-  2. Faz GET em UPDATE_CHECK_URL — endpoint JSON leve (< 1 KB).
+  2. Faz GET em UPDATE_CHECK_URL e solicita changelog localizado acumulado.
   3. Compara a versão atual (APP_VERSION) com setup/patch disponíveis.
   4. Prioridade: patch > setup (patch é menor e silencioso).
   5. Patch só é oferecido se current >= patch.min_version.
@@ -21,6 +21,12 @@ Formato esperado da API (GET /v1/version):
       "version":     "1.0.1.0",
       "url":         "https://releases.solinav.com/SolinPatch_1.0.1.0.exe",
       "min_version": "1.0.0.0"
+    },
+    "changelog": {
+      "requested_language": "T",
+      "entries": [
+        {"version": "1.1.0.0", "language": "T", "markdown": "- Mudança"}
+      ]
     }
   }
 
@@ -44,6 +50,7 @@ log = logging.getLogger(__name__)
 
 FETCH_TIMEOUT_S: int = 10
 InstallIdProvider = Callable[[], str]
+LanguageCodeProvider = Callable[[], str]
 
 
 # ── Worker ─────────────────────────────────────────────────────────────────────
@@ -60,10 +67,12 @@ class UpdateWorker(QObject):
     def __init__(
         self,
         install_id_provider: InstallIdProvider,
+        language_code_provider: LanguageCodeProvider,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._install_id_provider = install_id_provider
+        self._language_code_provider = language_code_provider
 
     def run(self) -> None:
         try:
@@ -71,6 +80,8 @@ class UpdateWorker(QObject):
                 "v":        APP_VERSION,
                 "id":       self._install_id_provider(),
                 "platform": APP_PLATFORM,
+                "lang":     self._language_code_provider(),
+                "include":  "changelog",
             }
             payload = get_json(
                 UPDATE_CHECK_URL,
@@ -101,7 +112,11 @@ class UpdateService(QObject):
     Fachada pública. Gerencia ciclo de vida da thread.
 
     Uso típico (em MainWindow.__init__):
-        self._update_svc = UpdateService(install_id_provider, self)
+        self._update_svc = UpdateService(
+            install_id_provider,
+            language_code_provider,
+            self,
+        )
         self._update_svc.update_available.connect(self._on_update_available)
         QTimer.singleShot(UPDATE_CHECK_DELAY_MS, self._update_svc.check)
     """
@@ -110,10 +125,12 @@ class UpdateService(QObject):
     def __init__(
         self,
         install_id_provider: InstallIdProvider,
+        language_code_provider: LanguageCodeProvider,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._install_id_provider = install_id_provider
+        self._language_code_provider = language_code_provider
         self._thread: QThread | None = None
         self._worker: UpdateWorker | None = None
         self._running = False
@@ -127,7 +144,10 @@ class UpdateService(QObject):
         self._running = True
 
         self._thread = QThread(self)
-        self._worker = UpdateWorker(self._install_id_provider)
+        self._worker = UpdateWorker(
+            self._install_id_provider,
+            self._language_code_provider,
+        )
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)

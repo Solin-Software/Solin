@@ -4289,6 +4289,11 @@ Fai clic su &quot;Scarica&quot; per aprire la pagina di download.</translation>
         <source>Failed to launch installer.</source>
         <translation>Impossibile avviare l’installer.</translation>
     </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <source>Changelog</source>
+        <translation>Registro modifiche</translation>
+    </message>
 </context>
 <context>
     <name>WatchedFolderCard</name>
