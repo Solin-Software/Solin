@@ -89,7 +89,7 @@ from .controls import (
     projection_menu_style,
 )
 from .fullscreen import FullscreenVideoOverlay
-from .playlist import ProjectionPlaylistMixin
+from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
 from .preview import ImagePreviewWidget
 from solin.widgets.songs_widget import BufferedSlider
 
@@ -814,6 +814,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.set_speed(self._speed)
         overlay.set_loop_enabled(self._loop)
         overlay.set_playback_order(self._playback_order)
+        overlay.set_playback_options_active(self._playback_options_indicator_active())
         overlay.set_duration(self.media.duration)
         overlay.set_position(self.media.position, self.media.duration)
         overlay.set_buffer_progress(*self._last_buffer_progress)
@@ -852,6 +853,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                 and self._playlist_index < item_count - 1
             ),
         )
+        overlay.set_playback_options_active(self._playback_options_indicator_active())
 
     def _on_fullscreen_volume_changed(self, volume: float) -> None:
         self.vol_slider.setValue(int(round(max(0.0, min(1.0, volume)) * 100)))
@@ -1395,6 +1397,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._on_state_changed(self.media.player.playbackState())
         self._on_volume_slider(self.vol_slider.value())
         self._update_nav_buttons()
+        self._refresh_playback_options_indicator()
         self._refresh_obs_scene_btn()
         self.playlist_panel.apply_theme()
         overlay = getattr(self, "_fullscreen_overlay", None)
@@ -1571,6 +1574,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _toggle_loop(self):
         self._loop = not self._loop
         self._playback_settings.set_loop_enabled(self._loop)
+        self._refresh_playback_options_indicator()
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_loop_enabled(self._loop)
@@ -1580,9 +1584,32 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._playback_settings.set_playback_order(order)
         # Reinicia rastreamento de aleatório ao mudar de modo
         self._played_indices = {self._playlist_index}
+        self._refresh_playback_options_indicator()
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_playback_order(order)
+
+    def _playback_options_indicator_active(self) -> bool:
+        if getattr(self, "_mode", None) != "video":
+            return False
+        if bool(getattr(self, "_loop", False)):
+            return True
+        return playback_order_has_pending_item(
+            order=getattr(self, "_playback_order", ORDER_OFF),
+            item_count=len(getattr(self, "_playlist", ())),
+            current_index=getattr(self, "_playlist_index", 0),
+            played_indices=set(getattr(self, "_played_indices", ())),
+        )
+
+    def _refresh_playback_options_indicator(self) -> None:
+        active = self._playback_options_indicator_active()
+        color = PALETTE.warning if active else PALETTE.text_muted
+        more_btn = getattr(self, "more_btn", None)
+        if more_btn is not None:
+            more_btn.setIcon(make_icon(ICON_MORE_VERT, 15, color))
+        overlay = getattr(self, "_fullscreen_overlay", None)
+        if overlay is not None:
+            overlay.set_playback_options_active(active)
 
     # ── Volume ────────────────────────────────────────────────────────────
 

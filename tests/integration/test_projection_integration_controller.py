@@ -84,6 +84,7 @@ class _WindowStub:
         self._visible = visible
         self.started_shares = []
         self.stopped_shares = []
+        self.mouse_interference_warnings = 0
         self.raised_projection_windows = []
         self.share_started = threading.Event()
         self.share_stopped = threading.Event()
@@ -92,8 +93,10 @@ class _WindowStub:
     def _all_windows(self):
         return [_ProjectionWindowStub(self._visible)]
 
-    def start_auto_share(self, hotkey, click_x, click_y):
+    def start_auto_share(self, hotkey, click_x, click_y, *, movement_warning=None):
         self.started_shares.append((hotkey, click_x, click_y))
+        if movement_warning is not None:
+            movement_warning()
         self.share_started.set()
         return True
 
@@ -120,6 +123,13 @@ def _controller(window):
             auto_share_finished=lambda *_args: None,
             start_auto_share=window.start_auto_share,
             stop_auto_share=window.stop_auto_share,
+            auto_share_mouse_interference_warning=(
+                lambda: setattr(
+                    window,
+                    "mouse_interference_warnings",
+                    window.mouse_interference_warnings + 1,
+                )
+            ),
             raise_projection_window=window.raise_projection_window,
             auto_share_workers=window.auto_share_workers,
         )
@@ -231,6 +241,7 @@ def test_auto_share_uses_injected_share_actions():
     controller.sync_zoom_share(active=True, visual=True)
     assert window.share_started.wait(1)
     assert window.started_shares == [("Alt+S", 300, 250)]
+    assert window.mouse_interference_warnings == 1
 
     controller.sync_zoom_share(active=False, visual=True)
     assert window.share_stopped.wait(1)

@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -42,6 +43,8 @@ SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
 SHARE_DIALOG_FIXED_DELAY_MS = 500
+MOUSE_INTERFERENCE_DISTANCE_PX = 80
+MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
 
 _WINDOWS_ZOOM_PROCESS_NAMES = frozenset({"zoom.exe"})
 _MACOS_ZOOM_OWNER_NAMES = frozenset({"zoom.us", "zoom", "zoom workplace"})
@@ -156,6 +159,149 @@ def send_virtual_clicks(
         return _clicks_linux(x, y, count, interval_ms)
 
     return _clicks_fallback(x, y, count, interval_ms)
+
+
+def _cursor_position() -> tuple[int, int] | None:
+    if sys.platform == "win32":
+        point = _POINT()
+        try:
+            if ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
+                return int(point.x), int(point.y)
+        except Exception as exc:  # noqa: BLE001 - Win32 cursor API boundary
+            log.debug("Could not read Win32 cursor position: %s", exc)
+        return None
+
+    if sys.platform == "darwin":
+        position = _cursor_position_macos_pyobjc()
+        if position is not None:
+            return position
+        return _cursor_position_macos_ctypes()
+
+    if sys.platform.startswith("linux"):
+        xdotool = shutil.which("xdotool")
+        if not xdotool:
+            return None
+        return _xdotool_position(xdotool, os.environ.copy())
+
+    return None
+
+
+def _cursor_position_macos_pyobjc() -> tuple[int, int] | None:
+    try:
+        import Quartz
+    except ImportError:
+        return None
+    try:
+        event = Quartz.CGEventCreate(None)
+        if not event:
+            return None
+        x, y = _point_tuple(Quartz.CGEventGetLocation(event))
+        return int(round(x)), int(round(y))
+    except Exception as exc:  # noqa: BLE001 - PyObjC cursor API boundary
+        log.debug("Could not read macOS cursor position through PyObjC: %s", exc)
+        return None
+
+
+def _cursor_position_macos_ctypes() -> tuple[int, int] | None:
+    app_services = _load_application_services()
+    if app_services is None:
+        return None
+    event = app_services.CGEventCreate(None)
+    if not event:
+        return None
+    try:
+        point = app_services.CGEventGetLocation(event)
+        return int(round(point.x)), int(round(point.y))
+    finally:
+        app_services.CFRelease(event)
+
+
+def _distance_sq(a: tuple[int, int], b: tuple[int, int]) -> int:
+    dx = a[0] - b[0]
+    dy = a[1] - b[1]
+    return dx * dx + dy * dy
+
+
+class _MouseInterferenceMonitor:
+    def __init__(
+        self,
+        on_warning: Callable[[], None] | None,
+        *,
+        threshold_px: int = MOUSE_INTERFERENCE_DISTANCE_PX,
+        cursor_position: Callable[[], tuple[int, int] | None] | None = None,
+    ) -> None:
+        self._on_warning = on_warning
+        self._threshold_sq = threshold_px * threshold_px
+        self._cursor_position = cursor_position or _cursor_position
+        self._baseline = self._cursor_position() if on_warning is not None else None
+        self._warned = False
+
+    @property
+    def enabled(self) -> bool:
+        return self._on_warning is not None and self._baseline is not None
+
+    def check(self, *extra_allowed_positions: tuple[int, int]) -> None:
+        if not self.enabled or self._warned or self._baseline is None:
+            return
+        current = self._cursor_position()
+        if current is None:
+            return
+        allowed_positions = (self._baseline, *extra_allowed_positions)
+        if any(_distance_sq(current, allowed) <= self._threshold_sq for allowed in allowed_positions):
+            return
+        self._warned = True
+        try:
+            if self._on_warning is not None:
+                self._on_warning()
+        except Exception as exc:  # noqa: BLE001 - notification callback boundary
+            log.debug("Auto-share mouse warning callback failed: %s", exc)
+
+    def watch_during(
+        self,
+        operation: Callable[[], bool],
+        *,
+        target: tuple[int, int],
+    ) -> bool:
+        if not self.enabled:
+            return operation()
+
+        stop = threading.Event()
+
+        def _poll() -> None:
+            while not stop.wait(MOUSE_INTERFERENCE_POLL_INTERVAL_MS / 1000.0):
+                self.check(target)
+
+        thread = threading.Thread(
+            target=_poll,
+            name="solin-auto-share-mouse-watch",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            return operation()
+        finally:
+            stop.set()
+            thread.join(timeout=0.2)
+            self.check(target)
+
+
+def _sleep_with_mouse_monitoring(
+    milliseconds: int,
+    monitor: _MouseInterferenceMonitor | None,
+) -> None:
+    if milliseconds <= 0:
+        return
+    if monitor is None or not monitor.enabled:
+        time.sleep(milliseconds / 1000.0)
+        return
+    deadline = time.monotonic() + milliseconds / 1000.0
+    interval = MOUSE_INTERFERENCE_POLL_INTERVAL_MS / 1000.0
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(interval, remaining))
+        monitor.check()
 
 
 def _clicks_win32(x: int, y: int, count: int, interval_ms: int) -> bool:
@@ -538,9 +684,10 @@ def _capture_zoom_windows_before_share_click() -> dict[str, _ZoomWindowInfo] | N
 def _wait_before_share_click(
     delay_ms: int,
     initial_windows: dict[str, _ZoomWindowInfo] | None,
+    monitor: _MouseInterferenceMonitor | None = None,
 ) -> bool:
     if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
-        time.sleep(delay_ms / 1000.0)
+        _sleep_with_mouse_monitoring(delay_ms, monitor)
         return True
     if initial_windows is None:
         log.warning(
@@ -548,7 +695,7 @@ def _wait_before_share_click(
             sys.platform,
         )
         return False
-    detected = _wait_for_new_zoom_window(initial_windows)
+    detected = _wait_for_new_zoom_window(initial_windows, monitor)
     if detected is None:
         log.warning(
             "execute_start_share: no new Zoom share dialog detected within %dms",
@@ -565,17 +712,20 @@ def _wait_before_share_click(
         detected.y,
         detected.owner,
     )
-    time.sleep(SHARE_DIALOG_DETECTION_SETTLE_MS / 1000.0)
+    _sleep_with_mouse_monitoring(SHARE_DIALOG_DETECTION_SETTLE_MS, monitor)
     return True
 
 
 def _wait_for_new_zoom_window(
     initial_windows: dict[str, _ZoomWindowInfo],
+    monitor: _MouseInterferenceMonitor | None = None,
 ) -> _ZoomWindowInfo | None:
     deadline = time.monotonic() + (SHARE_DIALOG_DETECTION_TIMEOUT_MS / 1000.0)
     initial_ids = set(initial_windows)
 
     while time.monotonic() < deadline:
+        if monitor is not None:
+            monitor.check()
         current_windows = _list_zoom_windows()
         if current_windows is None:
             return None
@@ -588,7 +738,7 @@ def _wait_for_new_zoom_window(
         if candidates:
             return max(candidates, key=lambda window: window.area)
 
-        time.sleep(SHARE_DIALOG_POLL_INTERVAL_MS / 1000.0)
+        _sleep_with_mouse_monitoring(SHARE_DIALOG_POLL_INTERVAL_MS, monitor)
 
     return None
 
@@ -883,7 +1033,9 @@ def execute_start_share(
     hotkey: str,
     click_x: int = -1,
     click_y: int = -1,
+    *,
     delay_ms: int | None = None,
+    movement_warning: Callable[[], None] | None = None,
 ) -> bool:
     """
     Execute the full start-share sequence:
@@ -897,6 +1049,8 @@ def execute_start_share(
         click_y: Screen Y for target click (-1 = skip clicks).
         delay_ms: Fixed-delay milliseconds to wait between hotkey and clicks.
             Uses SHARE_DIALOG_FIXED_DELAY_MS when omitted.
+        movement_warning: Optional callback invoked once if the cursor moves
+            enough to risk competing with the automated share-target click.
 
     Returns:
         True if the sequence completed successfully.
@@ -906,6 +1060,10 @@ def execute_start_share(
 
     click_configured = click_x >= 0 and click_y >= 0
     delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
+    monitor = (
+        _MouseInterferenceMonitor(movement_warning)
+        if click_configured else None
+    )
     initial_windows = (
         _capture_zoom_windows_before_share_click()
         if click_configured else {}
@@ -923,9 +1081,16 @@ def execute_start_share(
         return False
 
     if click_configured:
-        if not _wait_before_share_click(delay_ms, initial_windows):
+        if not _wait_before_share_click(delay_ms, initial_windows, monitor):
             return False
-        ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
+        if monitor is not None:
+            monitor.check()
+            ok = monitor.watch_during(
+                lambda: send_virtual_clicks(click_x, click_y, count=2, interval_ms=120),
+                target=(click_x, click_y),
+            )
+        else:
+            ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
         if not ok:
             log.warning("execute_start_share: virtual clicks failed at (%d, %d)", click_x, click_y)
             return False

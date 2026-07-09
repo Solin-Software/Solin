@@ -1055,6 +1055,16 @@
         <translation>Ochrona odtwarzania</translation>
     </message>
     <message>
+        <location filename="../../main_window.py" line="+6"/>
+        <source>Keep the mouse still while Solin selects the share target.</source>
+        <translation>Nie ruszaj myszą, gdy Solin wybiera cel udostępniania.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Auto Screen Share</source>
+        <translation>Automatyczne udostępnianie ekranu</translation>
+    </message>
+    <message>
         <location filename="../../controllers/main_window_nav.py" line="+1"/>
         <source>Audio &amp; Video</source>
         <translation>Audio i wideo</translation>
@@ -1068,16 +1078,6 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>Zwiń pasek boczny</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Expand sidebar</source>
-        <translation>Rozwiń pasek boczny</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Songs</source>
-        <translation>Pieśni</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1124,6 +1124,7 @@
         <source>Receive via Wi-Fi</source>
         <translation>Odbierz przez Wi-Fi</translation>
     </message>
+
 </context>
 <context>
     <name>MediaCard</name>

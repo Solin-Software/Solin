@@ -1053,6 +1053,16 @@
         <translation>재생 보호</translation>
     </message>
     <message>
+        <location filename="../../main_window.py" line="+6"/>
+        <source>Keep the mouse still while Solin selects the share target.</source>
+        <translation>Solin이 공유 대상을 선택하는 동안 마우스를 움직이지 마세요.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Auto Screen Share</source>
+        <translation>자동 화면 공유</translation>
+    </message>
+    <message>
         <location filename="../../controllers/main_window_nav.py" line="+1"/>
         <source>Audio &amp; Video</source>
         <translation>오디오 및 비디오</translation>
@@ -1066,16 +1076,6 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>사이드바 접기</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Expand sidebar</source>
-        <translation>사이드바 펼치기</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Songs</source>
-        <translation>노래</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1122,6 +1122,7 @@
         <source>Receive via Wi-Fi</source>
         <translation>Wi-Fi를 통해 수신</translation>
     </message>
+
 </context>
 <context>
     <name>MediaCard</name>

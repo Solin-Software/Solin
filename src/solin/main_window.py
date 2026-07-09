@@ -145,6 +145,7 @@ if TYPE_CHECKING:
 
 class MainWindow(QMainWindow):
     _auto_share_finished = Signal(int, bool, bool)
+    _auto_share_mouse_interference_warning = Signal()
     proj_bar: Any
     right_col: Any
     _quick_toolbar: Any
@@ -350,6 +351,9 @@ class MainWindow(QMainWindow):
         )
         self.playback_protection.manualChangeBlocked.connect(
             self._notify_playback_protection_blocked
+        )
+        self._auto_share_mouse_interference_warning.connect(
+            self._notify_auto_share_mouse_interference
         )
         self._media_download_notifications = MediaDownloadNotificationController(
             self.notifications,
@@ -602,6 +606,9 @@ class MainWindow(QMainWindow):
                 auto_share_finished=self._auto_share_finished.emit,
                 start_auto_share=execute_start_share,
                 stop_auto_share=execute_stop_share,
+                auto_share_mouse_interference_warning=(
+                    self._auto_share_mouse_interference_warning.emit
+                ),
                 raise_projection_window=raise_projection_window,
                 auto_share_workers=service_factories.auto_share_workers(),
             )
@@ -1006,6 +1013,13 @@ class MainWindow(QMainWindow):
             self.tr("Pause playback before changing the projected content."),
             title=self.tr("Playback protection"),
             dedupe_key="playback-protection:manual-change",
+        )
+
+    def _notify_auto_share_mouse_interference(self) -> None:
+        self.notifications.warning(
+            self.tr("Keep the mouse still while Solin selects the share target."),
+            title=self.tr("Auto Screen Share"),
+            dedupe_key="auto-share:mouse-interference",
         )
 
     def _edit_view_is_temp(self) -> bool:

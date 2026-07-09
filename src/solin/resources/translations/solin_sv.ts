@@ -1054,6 +1054,16 @@
         <translation>Uppspelningsskydd</translation>
     </message>
     <message>
+        <location filename="../../main_window.py" line="+6"/>
+        <source>Keep the mouse still while Solin selects the share target.</source>
+        <translation>Rör inte musen medan Solin väljer delningsmålet.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Auto Screen Share</source>
+        <translation>Automatisk skärmdelning</translation>
+    </message>
+    <message>
         <location filename="../../controllers/main_window_nav.py" line="+1"/>
         <source>Audio &amp; Video</source>
         <translation>Ljud &amp; Video</translation>
@@ -1067,16 +1077,6 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>Fäll in sidofältet</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Expand sidebar</source>
-        <translation>Fäll ut sidofältet</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Songs</source>
-        <translation>Sånger</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1123,6 +1123,7 @@
         <source>Receive via Wi-Fi</source>
         <translation>Ta emot via Wi-Fi</translation>
     </message>
+
 </context>
 <context>
     <name>MediaCard</name>

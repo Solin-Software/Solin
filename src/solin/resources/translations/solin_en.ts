@@ -1042,6 +1042,16 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../../main_window.py" line="+6"/>
+        <source>Keep the mouse still while Solin selects the share target.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Auto Screen Share</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../../controllers/main_window_nav.py" line="+1"/>
         <source>Audio &amp; Video</source>
         <translation type="unfinished"></translation>
@@ -1054,16 +1064,6 @@
     <message>
         <location line="+1"/>
         <source>Collapse sidebar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Expand sidebar</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Songs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1111,6 +1111,7 @@
         <source>Receive via Wi-Fi</source>
         <translation type="unfinished"></translation>
     </message>
+
 </context>
 <context>
     <name>MediaCard</name>

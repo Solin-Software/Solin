@@ -15,6 +15,24 @@ from .idle_dialog import SetAsIdleConfirmDialog
 _ANIM_MS = 220
 
 
+def playback_order_has_pending_item(
+    *,
+    order: str,
+    item_count: int,
+    current_index: int,
+    played_indices: set[int],
+) -> bool:
+    if item_count <= 1:
+        return False
+    if order == ORDER_NEXT:
+        return current_index < item_count - 1
+    if order == ORDER_RANDOM:
+        unavailable = set(played_indices)
+        unavailable.add(current_index)
+        return any(index not in unavailable for index in range(item_count))
+    return False
+
+
 class ProjectionPlaylistMixin:
     def set_playlist(
         self,
@@ -93,6 +111,9 @@ class ProjectionPlaylistMixin:
         sync_fullscreen = getattr(self, "_sync_app_fullscreen_navigation", None)
         if sync_fullscreen is not None:
             sync_fullscreen()
+        refresh_options = getattr(self, "_refresh_playback_options_indicator", None)
+        if refresh_options is not None:
+            refresh_options()
 
     def _on_prev_clicked(self):
         if not self._playback_protection.allow_manual_projection_change():

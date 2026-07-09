@@ -28,7 +28,7 @@ def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
     monkeypatch.setattr(
         screen_share,
         "_wait_for_new_zoom_window",
-        lambda _initial: dialog,
+        lambda _initial, _monitor=None: dialog,
     )
     monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
     monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
@@ -41,6 +41,35 @@ def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
 
     assert screen_share.execute_start_share("Alt+S", 300, 250) is True
     assert clicks == [(300, 250, 2, 120)]
+
+
+def test_execute_start_share_warns_once_when_mouse_moves_during_wait(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    calls = {"windows": 0}
+    positions = iter([(10, 10), (10, 10), (140, 10), (140, 10), (140, 10)])
+    warnings: list[bool] = []
+
+    def _list_windows():
+        calls["windows"] += 1
+        return {"dialog": dialog} if calls["windows"] >= 2 else {}
+
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", _list_windows)
+    monkeypatch.setattr(screen_share, "_cursor_position", lambda: next(positions, (140, 10)))
+    monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: True,
+    )
+
+    assert screen_share.execute_start_share(
+        "Alt+S",
+        300,
+        250,
+        movement_warning=lambda: warnings.append(True),
+    ) is True
+    assert warnings == [True]
 
 
 def test_execute_start_share_without_target_sends_hotkey_only(monkeypatch):

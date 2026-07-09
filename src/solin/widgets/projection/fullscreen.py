@@ -133,6 +133,7 @@ class FullscreenVideoOverlay(QWidget):
         self._speed = 1.0
         self._loop_enabled = False
         self._playback_order = ORDER_OFF
+        self._playback_options_active = False
         self._muted = False
         self._pre_mute_volume = 0.8
         self._playback_state = QMediaPlayer.PlaybackState.StoppedState
@@ -439,6 +440,10 @@ class FullscreenVideoOverlay(QWidget):
     def set_playback_order(self, order: str) -> None:
         self._playback_order = order
 
+    def set_playback_options_active(self, active: bool) -> None:
+        self._playback_options_active = bool(active)
+        self._refresh_playback_options_icon()
+
     def set_navigation(self, *, show: bool, can_previous: bool, can_next: bool) -> None:
         self._navigation_state = (show, can_previous, can_next)
         self.prev_btn.setVisible(show)
@@ -479,7 +484,7 @@ class FullscreenVideoOverlay(QWidget):
         self.stop_btn.setStyleSheet(self._stop_button_stylesheet())
         self._apply_icon_button_styles()
         self.exit_btn.setIcon(make_icon(ICON_FULLSCREEN_EXIT, 15, PALETTE.text_secondary))
-        self.more_btn.setIcon(make_icon(ICON_MORE_VERT, 16, PALETTE.text_secondary))
+        self._refresh_playback_options_icon()
         self.set_playback_state(self._playback_state)
         show, can_previous, can_next = self._navigation_state
         self.set_navigation(
@@ -680,6 +685,10 @@ class FullscreenVideoOverlay(QWidget):
         else:
             icon = ICON_VOLUME_HIGH
         self.vol_btn.setIcon(make_icon(icon, 16, PALETTE.text_secondary))
+
+    def _refresh_playback_options_icon(self) -> None:
+        color = PALETTE.warning if self._playback_options_active else PALETTE.text_secondary
+        self.more_btn.setIcon(make_icon(ICON_MORE_VERT, 16, color))
 
     def _update_time_label(self, position: int, duration: int) -> None:
         self.time_label.setText(

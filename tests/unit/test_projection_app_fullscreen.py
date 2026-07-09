@@ -62,6 +62,7 @@ class _Overlay:
         self.navigation = []
         self.play_enabled = []
         self.seek_enabled = []
+        self.playback_options_active = []
 
     def is_active(self):
         return self.active
@@ -92,6 +93,9 @@ class _Overlay:
     def set_seek_enabled(self, enabled):
         self.seek_enabled.append(enabled)
 
+    def set_playback_options_active(self, active):
+        self.playback_options_active.append(active)
+
 
 def _bar(*, mode="video", audio=False, overlay=None):
     bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
@@ -100,6 +104,9 @@ def _bar(*, mode="video", audio=False, overlay=None):
     bar._expanded = False
     bar._playlist = []
     bar._playlist_index = 0
+    bar._played_indices = {0}
+    bar._loop = False
+    bar._playback_order = projection_bar.ORDER_OFF
     bar._fullscreen_overlay = overlay
     bar.ov_fullscreen_btn = _Button()
     bar.seek_slider = _Slider()
@@ -188,6 +195,59 @@ def test_playlist_navigation_state_is_mirrored_to_app_fullscreen():
     bar._sync_app_fullscreen_navigation()
 
     assert overlay.navigation == [(True, True, True)]
+
+
+def test_playback_options_indicator_follows_effective_auto_playback():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", overlay=overlay)
+    bar._loop = False
+    bar._playback_order = projection_bar.ORDER_NEXT
+    bar._playlist = [{}, {}]
+    bar._playlist_index = 0
+    bar._played_indices = {0}
+    bar.more_btn = _Button()
+    bar.more_btn.setIcon = lambda _icon: None
+
+    bar._refresh_playback_options_indicator()
+
+    assert overlay.playback_options_active == [True]
+
+    bar._playlist_index = 1
+    bar._refresh_playback_options_indicator()
+
+    assert overlay.playback_options_active == [True, False]
+
+
+def test_playback_options_indicator_treats_loop_as_active_without_next_item():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", overlay=overlay)
+    bar._loop = True
+    bar._playback_order = projection_bar.ORDER_OFF
+    bar._playlist = [{}]
+    bar._playlist_index = 0
+    bar._played_indices = {0}
+    bar.more_btn = _Button()
+    bar.more_btn.setIcon = lambda _icon: None
+
+    bar._refresh_playback_options_indicator()
+
+    assert overlay.playback_options_active == [True]
+
+
+def test_playback_options_indicator_ignores_exhausted_random_order():
+    overlay = _Overlay(active=True)
+    bar = _bar(mode="video", overlay=overlay)
+    bar._loop = False
+    bar._playback_order = projection_bar.ORDER_RANDOM
+    bar._playlist = [{}, {}]
+    bar._playlist_index = 1
+    bar._played_indices = {0, 1}
+    bar.more_btn = _Button()
+    bar.more_btn.setIcon = lambda _icon: None
+
+    bar._refresh_playback_options_indicator()
+
+    assert overlay.playback_options_active == [False]
 
 
 def test_fullscreen_seek_respects_song_announcement_lock():

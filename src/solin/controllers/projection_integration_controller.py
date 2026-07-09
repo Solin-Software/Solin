@@ -24,6 +24,17 @@ class AutoShareWorkerPool(Protocol):
     def shutdown(self, timeout: float = 8.0) -> tuple[str, ...]: ...
 
 
+class StartAutoShare(Protocol):
+    def __call__(
+        self,
+        hotkey: str,
+        click_x: int,
+        click_y: int,
+        *,
+        movement_warning: Callable[[], None] | None = None,
+    ) -> bool: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectionIntegrationContext:
     """Dependencies for synchronizing projection with external integrations."""
@@ -37,8 +48,9 @@ class ProjectionIntegrationContext:
     auto_share_settings: Any
     projection_bar: Any
     auto_share_finished: Callable[[int, bool, bool], None]
-    start_auto_share: Callable[[str, int, int], bool]
+    start_auto_share: StartAutoShare
     stop_auto_share: Callable[[str], bool]
+    auto_share_mouse_interference_warning: Callable[[], None]
     raise_projection_window: Callable[[Any], None]
     auto_share_workers: AutoShareWorkerPool
 
@@ -161,6 +173,7 @@ class ProjectionIntegrationController:
                     hotkey,
                     click_x,
                     click_y,
+                    movement_warning=context.auto_share_mouse_interference_warning,
                 )
                 if not context.auto_share_workers.is_stopped:
                     try:
