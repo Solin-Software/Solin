@@ -7,6 +7,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 
 from solin.core.meetings.catalog_placement import MeetingCatalogPlaylistRef
+from solin.core.meetings.tree_store import parse_meeting_tree_key
 
 
 class MeetingDestinationSession(QObject):
@@ -24,6 +25,33 @@ class MeetingDestinationSession(QObject):
 
     def placement_ref(self) -> MeetingCatalogPlaylistRef:
         return self.controller.placement_playlist_ref()
+
+    @property
+    def tree_key(self) -> str:
+        return str(getattr(self.controller, "_tree_key", "") or "")
+
+    def update_snapshot(self, snapshot) -> None:
+        current = parse_meeting_tree_key(self.tree_key)
+        incoming = parse_meeting_tree_key(snapshot.tree_key)
+        if (
+            self._closed
+            or current is None
+            or incoming is None
+            or (
+                current.pub_type,
+                current.monday,
+                current.language,
+                current.is_sign_language,
+            )
+            != (
+                incoming.pub_type,
+                incoming.monday,
+                incoming.language,
+                incoming.is_sign_language,
+            )
+        ):
+            return
+        self.controller.load_saved_tree(snapshot)
 
     def add_items(
         self,

@@ -35,6 +35,13 @@ from ...core.meetings.meeting_weeks import (
     is_selectable_meeting_week,
 )
 from ...core.meetings.models import MemorialData, WeekData
+from ...core.meetings.preparation import (
+    MeetingPreparationKey,
+    MeetingPreparationPriority,
+    MeetingPreparationRequest,
+    MeetingPreparationService,
+    MeetingPreparationState,
+)
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -154,8 +161,8 @@ class StudyDetailView(QWidget):
                  jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
                  jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
                  jw_songs_store: JWSongsStore,
+                 saved_snapshot: MeetingTreeSnapshot,
                  meeting_tree_saved_handler: Callable[[str], None] | None = None,
-                 saved_snapshot: MeetingTreeSnapshot | None = None,
                  watched_folder: str = "",
                  parent=None):
         super().__init__(parent)
@@ -235,35 +242,28 @@ class StudyDetailView(QWidget):
         )
         self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
-        if self._saved_snapshot is not None:
-            self.controller.load_saved_tree(self._saved_snapshot)
-        else:
-            self.controller.load_week(self._pub, self._wd)
+        loaded_snapshot = self.controller.load_saved_tree(self._saved_snapshot)
+        if loaded_snapshot is not None:
+            self._saved_snapshot = loaded_snapshot
         if self._watched_folder:
             self.controller.inject_linked_folder_media(self._watched_folder)
         self._sync_catalog_placement()
 
-    def _populate(self):
-        if hasattr(self, "controller"):
-            self.controller.set_sync_root(self._watched_folder)
-            self.controller.refresh_week(self._pub, self._wd)
-            if self._watched_folder:
-                self.controller.inject_linked_folder_media(self._watched_folder)
-
-    def update_week(self, wd: "WeekData"):
-        """
-        Re-render this open detail with a freshly-loaded WeekData (e.g. when a
-        background revalidation found a server-side update). Edits the user made
-        are preserved by MeetingTreeMerger, so the merge happens in place even
-        while the detail is being viewed — no jump back to the overview.
-        """
-        self._wd = wd
-        self._saved_snapshot = None
-        self._refresh_shell_texts()
-        self._populate()
-
-    def refresh_cbs(self):
-        self._populate()
+    def update_snapshot(self, snapshot: MeetingTreeSnapshot) -> None:
+        if self._disposed or snapshot.pub_type != self._pub:
+            return
+        if (
+            snapshot.tree_key == self._saved_snapshot.tree_key
+            and snapshot.revision <= self._saved_snapshot.revision
+        ):
+            return
+        loaded_snapshot = self.controller.load_saved_tree(snapshot)
+        if loaded_snapshot is None:
+            return
+        self._saved_snapshot = loaded_snapshot
+        if self._watched_folder:
+            self.controller.inject_linked_folder_media(self._watched_folder)
+        self._sync_catalog_placement()
 
     def _sync_catalog_placement(self):
         if not hasattr(self, "controller"):
@@ -660,7 +660,8 @@ class MeetingsWidget(QWidget):
         jw_songs_store: JWSongsStore,
         media_settings: MediaSettingsStore,
         meeting_linked_folder_sync: MeetingLinkedFolderSync,
-        jwpub_service_factory: Callable[[QObject], JwpubService],
+        publication_service: JwpubService,
+        preparation_service: MeetingPreparationService,
         memorial_service_factory: Callable[[QObject], MemorialService],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         projection_aspect_ratio_provider: Callable[[], object] | None = None,
@@ -671,7 +672,6 @@ class MeetingsWidget(QWidget):
         self._notifications = notifications
         self._playback_protection = playback_protection
         self._monday    = current_monday()
-        self._cache:   dict[str, WeekData]       = {}
         self._saved_snapshots: dict[str, dict[str, MeetingTreeSnapshot]] = {}
         self._details: dict[str, StudyDetailView | _MemorialDetailView] = {}
         self._destination_sessions: set[MeetingDestinationSession] = set()
@@ -697,7 +697,8 @@ class MeetingsWidget(QWidget):
         self._media_info_queue_factory = media_info_queue_factory
         self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
 
-        self._service = jwpub_service_factory(self)
+        self._service = publication_service
+        self._preparation = preparation_service
         self._tree_controller_factory = MeetingTreeControllerFactory(
             MeetingTreeControllerDependencies(
                 service=self._service,
@@ -719,11 +720,10 @@ class MeetingsWidget(QWidget):
         )
         self._set_lang_from_mgr()
 
-        self._service.mwb_ready.connect(self._on_mwb_ready)
-        self._service.wt_ready.connect(self._on_wt_ready)
-        self._service.cbs_ready.connect(self._on_cbs_ready)
-        self._service.progress.connect(self._on_progress)
-        self._service.error_sig.connect(self._on_error)
+        self._preparation.tree_changed.connect(self._on_tree_changed)
+        self._preparation.state_changed.connect(self._on_preparation_state_changed)
+        self._preparation.progress.connect(self._on_preparation_progress)
+        self._preparation.error.connect(self._on_preparation_error)
 
         # ── Memorial service ───────────────────────────────────────────────────
         self._memorial_svc = memorial_service_factory(self)
@@ -742,10 +742,10 @@ class MeetingsWidget(QWidget):
             )
 
         self._build()
-        self._navigate_to(self._monday, reload=True)
+        self._navigate_to(self._monday)
         self._auto_download_timer = QTimer(self)
         self._auto_download_timer.setSingleShot(True)
-        self._auto_download_timer.timeout.connect(self._service.auto_download_if_enabled)
+        self._auto_download_timer.timeout.connect(self.sync_automatic_downloads)
         self._auto_download_timer.start(3000)
 
         self._folder_watcher = self._watched_folder_watcher_factory(self)
@@ -758,6 +758,48 @@ class MeetingsWidget(QWidget):
 
     def _current_media_context(self) -> JWMediaLanguageContext:
         return jw_media_language_context(self._lang_mgr, default_api_code="T")
+
+    def _preparation_key(self, monday: date) -> MeetingPreparationKey:
+        return MeetingPreparationKey.from_context(
+            monday,
+            self._current_media_context(),
+        )
+
+    def _ensure_week(
+        self,
+        monday: date,
+        *,
+        force: bool = False,
+        download_media: bool = False,
+        priority: MeetingPreparationPriority = MeetingPreparationPriority.INTERACTIVE,
+    ) -> MeetingPreparationState:
+        return self._preparation.ensure_week(
+            MeetingPreparationRequest(
+                key=self._preparation_key(monday),
+                force_refresh=force,
+                download_media=download_media,
+                priority=priority,
+            )
+        )
+
+    def sync_automatic_downloads(self) -> None:
+        if not self._media_settings.meetings_auto_download():
+            self._preparation.cancel_automatic_downloads()
+            return
+        monday = current_monday()
+        for target in (monday, monday + timedelta(weeks=1)):
+            self._ensure_week(
+                target,
+                download_media=True,
+                priority=MeetingPreparationPriority.BACKGROUND,
+            )
+
+    @Slot(bool)
+    def set_automatic_download_enabled(self, enabled: bool) -> None:
+        if enabled:
+            self.sync_automatic_downloads()
+        else:
+            self._preparation.cancel_automatic_downloads()
 
     def _set_lang_from_mgr(self):
         context = self._current_media_context()
@@ -851,7 +893,10 @@ class MeetingsWidget(QWidget):
             self._discard_detail(detail_key)
 
     def _show_picker(self):
-        popup = WeekPicker(self._monday, cache=self._cache)
+        popup = WeekPicker(
+            self._monday,
+            cache=self._preparation.loaded_week_data(self._current_media_context()),
+        )
         popup.week_selected.connect(self._on_week_picked)
         popup.show_near(self._navbar)
 
@@ -863,58 +908,28 @@ class MeetingsWidget(QWidget):
     def _navigate_to(self, monday: date, reload: bool = False):
         self._monday = monday
         self._refresh_saved_snapshots(monday)
-        wd = self._cache.get(monday.isoformat())
-        db_label = (wd.mwb_date_label or wd.mwb_week_title) if wd else ""
+        snapshots = self._saved_snapshots_for(monday)
+        db_label = snapshots.get("mwb").overview.title if snapshots.get("mwb") else ""
         self._navbar.update_week(monday, db_label)
         self._refresh_overview_cards(monday)
-        if reload or not self._service.get_week_data(monday):
-            self._service.load_week(monday, force=reload)
+        self._ensure_week(monday, force=reload)
         # Carrega mídias do Memorial se estamos na semana correta
         # (MemorialService decide internamente se está na janela de 7 dias)
         if self._memorial_svc.is_memorial_week(monday):
             self._memorial_svc.load(force=reload)
 
     def _refresh_overview_cards(self, monday: date):
-        key = monday.isoformat()
-        wd  = self._cache.get(key)
         snapshots = self._saved_snapshots_for(monday)
         mwb_snapshot = snapshots.get("mwb")
         wt_snapshot = snapshots.get("wt")
-        if not wd:
-            if mwb_snapshot is not None:
-                self._overview.mwb_card.set_saved(mwb_snapshot)
-            else:
-                self._overview.mwb_card.set_loading()
-            if wt_snapshot is not None:
-                self._overview.wt_card.set_saved(wt_snapshot)
-            else:
-                self._overview.wt_card.set_loading()
+        if mwb_snapshot is not None:
+            self._overview.mwb_card.set_saved(mwb_snapshot)
         else:
-            if wd.mwb_status == "ready":
-                self._overview.mwb_card.set_ready(wd)
-            elif mwb_snapshot is not None:
-                self._overview.mwb_card.set_saved(mwb_snapshot)
-            elif wd.mwb_status == "empty":
-                self._overview.mwb_card.set_empty()
-            elif wd.mwb_status == "not_found":
-                self._overview.mwb_card.set_not_found()
-            elif wd.mwb_status == "error":
-                self._overview.mwb_card.set_error()
-            else:
-                self._overview.mwb_card.set_loading()
-
-            if wd.wt_status == "ready":
-                self._overview.wt_card.set_ready(wd)
-            elif wt_snapshot is not None:
-                self._overview.wt_card.set_saved(wt_snapshot)
-            elif wd.wt_status == "empty":
-                self._overview.wt_card.set_empty()
-            elif wd.wt_status == "not_found":
-                self._overview.wt_card.set_not_found()
-            elif wd.wt_status == "error":
-                self._overview.wt_card.set_error()
-            else:
-                self._overview.wt_card.set_loading()
+            self._apply_unavailable_card_state(self._overview.mwb_card, monday, "mwb")
+        if wt_snapshot is not None:
+            self._overview.wt_card.set_saved(wt_snapshot)
+        else:
+            self._apply_unavailable_card_state(self._overview.wt_card, monday, "wt")
 
         # ── Memorial card ──────────────────────────────────────────────────────
         is_memorial_week = self._memorial_svc.is_memorial_week(monday)
@@ -941,34 +956,39 @@ class MeetingsWidget(QWidget):
             else:
                 mc.set_loading()
 
+    def _apply_unavailable_card_state(self, card, monday: date, pub_type: str) -> None:
+        state = self._preparation.state(self._preparation_key(monday), pub_type)
+        if state.source_status == "empty":
+            card.set_empty()
+        elif state.source_status == "not_found" or state.error == "NOT_FOUND":
+            card.set_not_found()
+        elif state.error:
+            card.set_error()
+        else:
+            card.set_loading()
+
     # ── Detail ────────────────────────────────────────────────────────────────
 
     def _open_detail(self, pub_type: str):
         key    = self._monday.isoformat()
-        wd     = self._cache.get(key)
         snapshot = self._saved_snapshot_for(pub_type, self._monday)
-        status = ""
-        if wd:
-            status = wd.mwb_status if pub_type == "mwb" else wd.wt_status
-
-        # Error / not-found: retry the load instead of silently ignoring the click.
-        if status in ("error", "not_found") and snapshot is None:
+        if snapshot is None:
+            state = self._preparation.state(
+                self._preparation_key(self._monday),
+                pub_type,
+            )
+            if not state.error:
+                return
             card = self._overview.mwb_card if pub_type == "mwb" else self._overview.wt_card
             card.set_loading()
-            self._service.load_week(self._monday, force=True)
+            self._ensure_week(self._monday, force=True)
             return
-
-        # Still loading, empty, or in an unknown transient state — do nothing.
-        if (not wd or status in ("empty", "loading", "idle")) and snapshot is None:
-            return
-
-        # Status is "ready" — open the detail view.
+        wd = self._preparation.week_data(self._preparation_key(self._monday))
         if wd is None:
             wd = WeekData(monday=self._monday)
-        snapshot_for_open = snapshot if status != "ready" else None
         detail_key = f"{pub_type}:{key}"
         if detail_key not in self._details:
-            self._show_study_detail(pub_type, wd, snapshot_for_open)
+            self._show_study_detail(pub_type, wd, snapshot)
 
         self._navbar.setVisible(False)
         self._stack.setCurrentWidget(self._details[detail_key])
@@ -977,7 +997,7 @@ class MeetingsWidget(QWidget):
         self,
         pub_type: str,
         wd: WeekData,
-        saved_snapshot: MeetingTreeSnapshot | None,
+        saved_snapshot: MeetingTreeSnapshot,
     ) -> None:
         detail_key = f"{pub_type}:{wd.monday.isoformat()}"
         d = StudyDetailView(
@@ -1011,7 +1031,11 @@ class MeetingsWidget(QWidget):
         if key is None or key.pub_type not in {"mwb", "wt"}:
             return
         self._saved_snapshots.pop(
-            self._saved_snapshot_cache_key_for(key.monday, key.language),
+            self._saved_snapshot_cache_key_for(
+                key.monday,
+                key.language,
+                key.is_sign_language,
+            ),
             None,
         )
         if key.monday == self._monday:
@@ -1052,76 +1076,78 @@ class MeetingsWidget(QWidget):
         self._navbar.setVisible(False)
         self._stack.setCurrentWidget(self._details[detail_key])
 
-    # ── Service callbacks ─────────────────────────────────────────────────────
+    # ── Preparation callbacks ─────────────────────────────────────────────────
 
-    @Slot(str, object)
-    def _on_mwb_ready(self, key: str, wd: "WeekData"):
-        self._cache[key] = wd
-        self.destinationTargetsChanged.emit(key)
-        # If a detail is open, refresh it in place (merging the user's edits)
-        # instead of discarding it — so a background update never yanks the user
-        # back to the overview. On the first (cache) emit no detail exists yet.
-        detail = self._details.get(f"mwb:{key}")
+    @Slot(object, str, object)
+    def _on_tree_changed(
+        self,
+        key: MeetingPreparationKey,
+        pub_type: str,
+        snapshot: MeetingTreeSnapshot,
+    ) -> None:
+        cache_key = self._saved_snapshot_cache_key_for(
+            key.monday,
+            key.language_code,
+            key.is_sign_language,
+        )
+        self._saved_snapshots[cache_key] = self._meeting_tree_store.snapshots_for_week(
+            key.monday,
+            key.language_code,
+            key.is_sign_language,
+        )
+        monday_text = key.monday.isoformat()
+        self.destinationTargetsChanged.emit(monday_text)
+        detail = self._details.get(f"{pub_type}:{monday_text}")
         if isinstance(detail, StudyDetailView):
-            detail.update_week(wd)
-        self._refresh_saved_snapshots(wd.monday)
-        if key == self._monday.isoformat():
-            self._navbar.update_week(
-                self._monday, wd.mwb_date_label or wd.mwb_week_title
-            )
+            detail.update_snapshot(snapshot)
+        for session in list(self._destination_sessions):
+            if (
+                not (
+                    isinstance(detail, StudyDetailView)
+                    and session.controller is detail.controller
+                )
+            ):
+                session.update_snapshot(snapshot)
+        if key == self._preparation_key(self._monday):
+            if pub_type == "mwb":
+                self._navbar.update_week(self._monday, snapshot.overview.title)
             self._refresh_overview_cards(self._monday)
 
-    @Slot(str, object)
-    def _on_wt_ready(self, key: str, wd: "WeekData"):
-        self._cache[key] = wd
-        self.destinationTargetsChanged.emit(key)
-        detail = self._details.get(f"wt:{key}")
-        if isinstance(detail, StudyDetailView):
-            detail.update_week(wd)
-        self._refresh_saved_snapshots(wd.monday)
-        if key == self._monday.isoformat():
+    @Slot(object, str, object)
+    def _on_preparation_state_changed(
+        self,
+        key: MeetingPreparationKey,
+        _pub_type: str,
+        _state: MeetingPreparationState,
+    ) -> None:
+        self.destinationTargetsChanged.emit(key.monday.isoformat())
+        if key == self._preparation_key(self._monday):
             self._refresh_overview_cards(self._monday)
 
-    @Slot(str, object)
-    def _on_cbs_ready(self, key: str, wd: "WeekData"):
-        self._cache[key] = wd
-        if key == self._monday.isoformat():
-            self._overview.mwb_card.set_ready(wd)
-        dk = f"mwb:{key}"
-        detail = self._details.get(dk)
-        if isinstance(detail, StudyDetailView):
-            detail.refresh_cbs()
-        self._refresh_saved_snapshots(wd.monday)
+    @Slot(object, str, int)
+    def _on_preparation_progress(
+        self,
+        key: MeetingPreparationKey,
+        pub_type: str,
+        percent: int,
+    ) -> None:
+        if key != self._preparation_key(self._monday):
+            return
+        if self._saved_snapshot_for(pub_type, key.monday) is not None:
+            return
+        card = self._overview.mwb_card if pub_type == "mwb" else self._overview.wt_card
+        card.set_progress(percent)
 
-    @Slot(str, str, int)
-    def _on_progress(self, key: str, pub: str, pct: int):
-        if key != self._monday.isoformat():
-            return
-        if self._saved_snapshot_for_key(pub, key) is not None:
-            return
-        if pub == "mwb":
-            self._overview.mwb_card.set_progress(pct)
-        else:
-            self._overview.wt_card.set_progress(pct)
-
-    @Slot(str, str, str)
-    def _on_error(self, key: str, pub: str, _msg: str):
-        self.destinationTargetsChanged.emit(key)
-        if key != self._monday.isoformat():
-            return
-        if self._saved_snapshot_for_key(pub, key) is not None:
-            return
-        is_not_found = (_msg == "NOT_FOUND")
-        if pub == "mwb":
-            if is_not_found:
-                self._overview.mwb_card.set_not_found()
-            else:
-                self._overview.mwb_card.set_error()
-        else:
-            if is_not_found:
-                self._overview.wt_card.set_not_found()
-            else:
-                self._overview.wt_card.set_error()
+    @Slot(object, str, str)
+    def _on_preparation_error(
+        self,
+        key: MeetingPreparationKey,
+        pub_type: str,
+        _message: str,
+    ) -> None:
+        self.destinationTargetsChanged.emit(key.monday.isoformat())
+        if key == self._preparation_key(self._monday):
+            self._refresh_overview_cards(self._monday)
 
     # ── Memorial callbacks ────────────────────────────────────────────────────
 
@@ -1167,17 +1193,18 @@ class MeetingsWidget(QWidget):
 
     @Slot(str)
     def _on_lang_changed(self, code: str):
+        self._preparation.cancel_other_language_contexts(
+            self._current_media_context()
+        )
         self._set_lang_from_mgr()
         self._set_memorial_lang_from_mgr()
-        for key in list(self._cache.keys()):
-            self._service.clear_week(date.fromisoformat(key))
-        self._cache.clear()
         self._saved_snapshots.clear()
         self._clear_details()
         self._overview.mwb_card.set_loading()
         self._overview.wt_card.set_loading()
         self._overview.memorial_card.set_loading()
         self._navigate_to(self._monday, reload=True)
+        self.sync_automatic_downloads()
 
     @Slot(str)
     def _on_media_lang_changed(self, _code: str):
@@ -1185,17 +1212,18 @@ class MeetingsWidget(QWidget):
         Idioma de mídia JW mudou → recarrega reuniões com o novo código.
         Usa o contexto JW centralizado em vez do fallback da interface.
         """
+        self._preparation.cancel_other_language_contexts(
+            self._current_media_context()
+        )
         self._set_lang_from_mgr()
         self._set_memorial_lang_from_mgr()
-        for key in list(self._cache.keys()):
-            self._service.clear_week(date.fromisoformat(key))
-        self._cache.clear()
         self._saved_snapshots.clear()
         self._clear_details()
         self._overview.mwb_card.set_loading()
         self._overview.wt_card.set_loading()
         self._overview.memorial_card.set_loading()
         self._navigate_to(self._monday, reload=True)
+        self.sync_automatic_downloads()
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -1227,18 +1255,15 @@ class MeetingsWidget(QWidget):
 
         if not is_selectable_meeting_week(monday):
             return
-        if force:
-            self._cache.pop(monday.isoformat(), None)
         self._refresh_saved_snapshots(monday)
         self.destinationTargetsChanged.emit(monday.isoformat())
-        self._service.load_week(monday, force=force)
+        self._ensure_week(monday, force=force)
 
     def destination_targets(self, monday: date) -> list[dict[str, object]]:
         if not is_selectable_meeting_week(monday):
             return []
-        key = monday.isoformat()
         snapshots = self._saved_snapshots_for(monday)
-        week_data = self._cache.get(key) or self._service.get_week_data(monday)
+        week_data = self._preparation.week_data(self._preparation_key(monday))
         return [
             self._destination_target(
                 pub_type,
@@ -1270,12 +1295,8 @@ class MeetingsWidget(QWidget):
 
         snapshots = self._saved_snapshots_for(monday)
         snapshot = snapshots.get(pub_type)
-        week_data = self._cache.get(key) or self._service.get_week_data(monday)
-        status = self._meeting_week_status(week_data, pub_type)
-        if snapshot is None and status != "ready":
+        if snapshot is None:
             return None
-        if week_data is None:
-            week_data = WeekData(monday=monday)
 
         context = self._current_media_context()
         controller = self._tree_controller_factory.create(
@@ -1286,10 +1307,7 @@ class MeetingsWidget(QWidget):
         controller.storageSaved.connect(self._on_detail_tree_saved)
         controller.storageSaveFailed.connect(self._on_destination_storage_failed)
         controller.set_sync_root(self._watched_folder)
-        if snapshot is not None and status != "ready":
-            controller.load_saved_tree(snapshot)
-        else:
-            controller.load_week(pub_type, week_data)
+        controller.load_saved_tree(snapshot)
         if self._watched_folder:
             controller.inject_linked_folder_media(self._watched_folder)
 
@@ -1315,11 +1333,13 @@ class MeetingsWidget(QWidget):
         week_data: WeekData | None,
         snapshot: MeetingTreeSnapshot | None,
     ) -> dict[str, object]:
-        status = self._meeting_week_status(week_data, pub_type)
-        available = snapshot is not None or status == "ready"
+        state = self._preparation.state(self._preparation_key(monday), pub_type)
+        available = snapshot is not None
         if available:
             display_status = "ready"
-        elif status in {"error", "not_found", "empty"}:
+        elif state.source_status == "empty":
+            display_status = "unavailable"
+        elif state.error:
             display_status = "error"
         else:
             display_status = "loading"
@@ -1340,6 +1360,8 @@ class MeetingsWidget(QWidget):
             detail = snapshot.overview.title or detail
         if not detail:
             detail = week_label(monday)
+        if display_status == "unavailable" and snapshot is None:
+            detail = _tr_ctx("_PubCard", "No meeting this week")
         if display_status == "error" and snapshot is None:
             detail = _tr_ctx("MediaDestinationDialog", "Unavailable — try again")
 
@@ -1352,41 +1374,41 @@ class MeetingsWidget(QWidget):
             "color": color,
         }
 
-    @staticmethod
-    def _meeting_week_status(week_data: WeekData | None, pub_type: str) -> str:
-        if week_data is None:
-            return "loading"
-        return str(
-            week_data.mwb_status if pub_type == "mwb" else week_data.wt_status
-        )
-
     def _on_destination_storage_failed(self, tree_key: str, error: str) -> None:
         _notify_meeting_tree_save_failed(self._notifications, tree_key, error)
 
     def _saved_snapshot_cache_key(self, monday: date) -> str:
+        context = self._current_media_context()
         return self._saved_snapshot_cache_key_for(
             monday,
-            self._current_media_context().api_code,
+            context.api_code,
+            context.is_sign_language,
         )
 
-    def _saved_snapshot_cache_key_for(self, monday: date, language: str) -> str:
-        return f"{monday.isoformat()}:{language}"
+    def _saved_snapshot_cache_key_for(
+        self,
+        monday: date,
+        language: str,
+        is_sign_language: bool = False,
+    ) -> str:
+        variant = "sign" if is_sign_language else "spoken"
+        return f"{monday.isoformat()}:{language}:{variant}"
 
     def _refresh_saved_snapshots(
         self,
         monday: date,
     ) -> dict[str, MeetingTreeSnapshot]:
         context = self._current_media_context()
-        snapshots: dict[str, MeetingTreeSnapshot] = {}
-        for pub_type in ("mwb", "wt"):
-            snapshot = self._meeting_tree_store.find_snapshot(
-                pub_type,
-                monday,
-                context.api_code,
-            )
-            if snapshot is not None:
-                snapshots[pub_type] = snapshot
-        cache_key = f"{monday.isoformat()}:{context.api_code}"
+        snapshots = self._meeting_tree_store.snapshots_for_week(
+            monday,
+            context.api_code,
+            context.is_sign_language,
+        )
+        cache_key = self._saved_snapshot_cache_key_for(
+            monday,
+            context.api_code,
+            context.is_sign_language,
+        )
         self._saved_snapshots[cache_key] = snapshots
         return snapshots
 
@@ -1403,17 +1425,6 @@ class MeetingsWidget(QWidget):
     ) -> MeetingTreeSnapshot | None:
         return self._saved_snapshots_for(monday).get(pub_type)
 
-    def _saved_snapshot_for_key(
-        self,
-        pub_type: str,
-        key: str,
-    ) -> MeetingTreeSnapshot | None:
-        try:
-            monday = date.fromisoformat(key)
-        except ValueError:
-            return None
-        return self._saved_snapshot_for(pub_type, monday)
-
     def cleanup(self) -> None:
         """Para serviços com QThread antes da janela principal ser destruída."""
         timer = getattr(self, "_auto_download_timer", None)
@@ -1424,9 +1435,9 @@ class MeetingsWidget(QWidget):
         self._destination_sessions.clear()
         self._clear_details()
         try:
-            self._service.shutdown(wait_ms=100, delete_when_stopped=True)
+            self._preparation.shutdown(wait_ms=100)
         except Exception:  # noqa: BLE001 - background service shutdown boundary
-            log_ignored_exception(__name__, "Could not shut down meeting service")
+            log_ignored_exception(__name__, "Could not shut down meeting preparation")
         try:
             self._memorial_svc.shutdown(wait_ms=100, delete_when_stopped=True)
         except Exception:  # noqa: BLE001 - background service shutdown boundary

@@ -320,11 +320,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         (
             "service_factories",
             (
-                "lang",
-                runtime_paths,
-                profile_settings_bundle,
-                media_cache_manager,
-                jwpub_checksum_store,
+                    "lang",
+                    runtime_paths,
+                    profile_settings_bundle,
+                    jwpub_checksum_store,
                 installation_settings,
             ),
         ),
@@ -526,11 +525,10 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         (
             "service_factories",
             (
-                "lang",
-                runtime_paths,
-                profile_settings_bundle,
-                media_cache_manager,
-                jwpub_checksum_store,
+                    "lang",
+                    runtime_paths,
+                    profile_settings_bundle,
+                    jwpub_checksum_store,
                 installation_settings,
             ),
         ),

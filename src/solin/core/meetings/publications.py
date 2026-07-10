@@ -26,24 +26,33 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, timedelta
+import itertools
+from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 from PySide6.QtCore import (
     QObject, QThread, Signal, Slot,
 )
 
-from solin.core.media.cache import MediaCacheManager
-from solin.core.media.settings import MediaSettingsStore
 from solin.core.jw.publication_archive import resolve_meeting_video
 from . import models as meeting_models
 from .jwpub_cache import JwpubChecksumStore
-from .meeting_weeks import (
-    current_monday,
-)
 from .publication_worker import JwpubWorker
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _WeekLoadRequest:
+    monday: date
+    force: bool
+    language: str
+    is_sign_language: bool
+    generation: int
+    priority: int
+    order: int
+
 
 # ── JwpubService — vive na main thread, gerencia o worker thread ──────────────
 
@@ -67,34 +76,35 @@ class JwpubService(QObject):
     week_ready     = Signal(str, object)
     progress       = Signal(str, str, int)
     error_sig      = Signal(str, str, str)
+    context_progress = Signal(str, str, int, str, bool, int)
+    context_error = Signal(str, str, str, str, bool, int)
     video_resolved = Signal(str, str, str, str)   # request_id, url, title, thumb
 
     # Sinais internos para o worker (despacham para a worker thread)
-    _sig_load_week         = Signal(object, bool)
+    _sig_load_week         = Signal(object, bool, str, bool, int)
     _sig_set_lang          = Signal(str)
     _sig_set_sign_language = Signal(bool)
-    _sig_resolve           = Signal(str, str, int, int, int, str)
-    _sig_prefetch_wd       = Signal(object)
-
+    _sig_resolve           = Signal(str, str, int, int, int, str, bool)
     def __init__(
         self,
-        media_settings: MediaSettingsStore,
-        cache_manager: MediaCacheManager,
         jwpub_cache_dir: str | os.PathLike[str],
         checksum_store: JwpubChecksumStore,
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._media_settings = media_settings
-        self._cache_manager = cache_manager
-        self._active: dict[str, meeting_models.WeekData] = {}
+        self._active: dict[tuple[str, str, bool, int], meeting_models.WeekData] = {}
         self._lang   = "T"
         self._is_sign_language = False
+        self._load_order = itertools.count()
+        self._pending_loads: dict[
+            tuple[str, str, bool, int],
+            _WeekLoadRequest,
+        ] = {}
+        self._active_load_key: tuple[str, str, bool, int] | None = None
 
         # Cria worker + thread dedicada
         self._thread = QThread(self)
         self._worker = JwpubWorker(
-            cache_manager.media_cache_dir,
             jwpub_cache_dir,
             checksum_store,
         )
@@ -107,20 +117,20 @@ class JwpubService(QObject):
         self._worker.cbs_done.connect(self._on_cbs_done)
         self._worker.progress.connect(self._on_worker_progress)
         self._worker.error.connect(self._on_worker_error)
+        self._worker.load_finished.connect(self._on_load_finished)
         self._worker.video_resolved.connect(self.video_resolved)
-        self._worker.prefetch_requested.connect(self._on_prefetch_requested)
 
         # JwpubService → Worker (worker thread, QueuedConnection automática)
         self._sig_load_week.connect(self._worker.load_week)
         self._sig_set_lang.connect(self._worker.set_lang)
         self._sig_set_sign_language.connect(self._worker.set_sign_language)
         self._sig_resolve.connect(self._worker.resolve_video_async)
-        self._sig_prefetch_wd.connect(self._worker.prefetch_week_media)
 
         self._thread.start()
 
     def shutdown(self, wait_ms: int = 3000, delete_when_stopped: bool = False) -> None:
         """Encerra explicitamente a worker thread de reuniões."""
+        self._pending_loads.clear()
         thread: QThread | None = getattr(self, "_thread", None)
         if thread is None:
             return
@@ -169,19 +179,125 @@ class JwpubService(QObject):
     def is_sign_language(self) -> bool:
         return self._is_sign_language
 
-    def load_week(self, monday: date, force: bool = False):
-        key = monday.isoformat()
+    def load_week(
+        self,
+        monday: date,
+        force: bool = False,
+        *,
+        language_code: str | None = None,
+        is_sign_language: bool | None = None,
+        generation: int = 0,
+        priority: int = 1,
+    ):
+        language = (language_code or self._lang).strip() or "T"
+        is_sign = (
+            self._is_sign_language
+            if is_sign_language is None
+            else bool(is_sign_language)
+        )
+        key = self._active_key(monday, language, is_sign, generation)
+        pending = self._pending_loads.get(key)
+        if pending is not None:
+            pending.priority = max(pending.priority, int(priority))
+            return
+        if self._active_load_key == key:
+            return
         if not force and key in self._active:
             # Já existe entrada — só recarrega se alguma metade da semana falhou.
             existing = self._active[key]
             if existing.mwb_status not in ("error",) and existing.wt_status not in ("error",):
                 return
-        wd = meeting_models.WeekData(monday=monday)
+        wd = meeting_models.WeekData(
+            monday=monday,
+            language_code=language,
+            is_sign_language=is_sign,
+            request_generation=max(0, int(generation)),
+        )
         self._active[key] = wd
-        self._sig_load_week.emit(monday, force)
+        self._pending_loads[key] = _WeekLoadRequest(
+            monday,
+            force,
+            language,
+            is_sign,
+            max(0, int(generation)),
+            int(priority),
+            next(self._load_order),
+        )
+        self._dispatch_week_load()
 
-    def get_week_data(self, monday: date) -> Optional[meeting_models.WeekData]:
-        return self._active.get(monday.isoformat())
+    def promote_week(
+        self,
+        monday: date,
+        *,
+        language_code: str,
+        is_sign_language: bool,
+        generation: int,
+        priority: int,
+    ) -> None:
+        key = self._active_key(
+            monday,
+            language_code,
+            is_sign_language,
+            generation,
+        )
+        pending = self._pending_loads.get(key)
+        if pending is not None:
+            pending.priority = max(pending.priority, int(priority))
+
+    def cancel_pending_week(
+        self,
+        monday: date,
+        *,
+        language_code: str,
+        is_sign_language: bool,
+        generation: int,
+    ) -> None:
+        key = self._active_key(
+            monday,
+            language_code,
+            is_sign_language,
+            generation,
+        )
+        self._pending_loads.pop(key, None)
+
+    def _dispatch_week_load(self) -> None:
+        if self._active_load_key is not None or not self._pending_loads:
+            return
+        key, request = max(
+            self._pending_loads.items(),
+            key=lambda item: (item[1].priority, -item[1].order),
+        )
+        self._pending_loads.pop(key, None)
+        self._active_load_key = key
+        self._sig_load_week.emit(
+            request.monday,
+            request.force,
+            request.language,
+            request.is_sign_language,
+            request.generation,
+        )
+
+    def get_week_data(
+        self,
+        monday: date,
+        *,
+        language_code: str | None = None,
+        is_sign_language: bool | None = None,
+    ) -> Optional[meeting_models.WeekData]:
+        language = (language_code or self._lang).strip() or "T"
+        is_sign = (
+            self._is_sign_language
+            if is_sign_language is None
+            else bool(is_sign_language)
+        )
+        candidates = [
+            week
+            for active_key, week in self._active.items()
+            if active_key[:3] == (monday.isoformat(), language, is_sign)
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda week: week.request_generation)
 
     def resolve_video_async(self, request_id: str, item: "meeting_models.MeetingMedia"):
         """
@@ -192,7 +308,7 @@ class JwpubService(QObject):
         self._sig_resolve.emit(
             request_id,
             item.key_symbol, item.track, item.issue_tag,
-            item.meps_doc_id, self._lang,
+            item.meps_doc_id, self._lang, self._is_sign_language,
         )
 
     def resolve_video(self, item: "meeting_models.MeetingMedia") -> dict:
@@ -209,46 +325,45 @@ class JwpubService(QObject):
         )
 
     def clear_week(self, monday: date):
-        self._active.pop(monday.isoformat(), None)
+        monday_key = monday.isoformat()
+        for key in [key for key in self._active if key[0] == monday_key]:
+            self._active.pop(key, None)
 
-    def auto_download_if_enabled(self):
-        if not self._media_settings.meetings_auto_download():
-            return
-        mon      = current_monday()
-        next_mon = mon + timedelta(weeks=1)
+    def clear_all(self) -> None:
+        self._active.clear()
 
-        # Conecta antes de disparar load_week — garante que não perdemos o sinal
-        # caso o load seja muito rápido (cache quente).
-        if not getattr(self, "_auto_dl_connected", False):
-            self._auto_dl_connected = True
-            self.mwb_ready.connect(self._on_auto_dl_ready)
-            self.wt_ready.connect(self._on_auto_dl_ready)
-            self.cbs_ready.connect(self._on_auto_dl_ready)
+    @staticmethod
+    def _active_key(
+        monday: date,
+        language: str,
+        is_sign_language: bool,
+        generation: int = 0,
+    ) -> tuple[str, str, bool, int]:
+        return (
+            monday.isoformat(),
+            language,
+            bool(is_sign_language),
+            max(0, int(generation)),
+        )
 
-        # Se a semana atual já está pronta (cache quente), o mwb_ready já foi emitido
-        # antes desta conexão — dispara o prefetch diretamente.
-        mon_wd = self._active.get(mon.isoformat())
-        if mon_wd and mon_wd.mwb_status == "ready":
-            self._sig_prefetch_wd.emit(mon_wd)
-
-        # A semana atual já foi carregada por _navigate_to — não recarregar.
-        # Apenas carrega a semana seguinte (que ainda não foi pedida).
-        self.load_week(next_mon)
-
-    @Slot(str, object)
-    def _on_auto_dl_ready(self, key: str, wd: object):
-        if not self._media_settings.meetings_auto_download():
-            return
-        mon = current_monday()
-        target_keys = {mon.isoformat(), (mon + timedelta(weeks=1)).isoformat()}
-        if key in target_keys:
-            self._sig_prefetch_wd.emit(wd)
+    @classmethod
+    def _active_key_for_week_data(
+        cls,
+        wd: meeting_models.WeekData,
+    ) -> tuple[str, str, bool, int]:
+        return cls._active_key(
+            wd.monday,
+            wd.language_code or "T",
+            wd.is_sign_language,
+            wd.request_generation,
+        )
 
     # ── Worker callbacks (chegam na main thread via QueuedConnection) ─────────
 
     @Slot(str, object)
     def _on_mwb_done(self, key: str, wd: meeting_models.WeekData):
-        existing = self._active.get(key)
+        active_key = self._active_key_for_week_data(wd)
+        existing = self._active.get(active_key)
         if existing:
             existing.mwb_pub_dir     = wd.mwb_pub_dir
             existing.mwb_cover_bytes = wd.mwb_cover_bytes
@@ -261,15 +376,16 @@ class JwpubService(QObject):
             existing.cbs_ref         = wd.cbs_ref
             existing.cbs_status      = wd.cbs_status
             self.mwb_ready.emit(key, existing)
-            self._check_complete(key)
+            self._check_complete(key, existing)
         else:
-            self._active[key] = wd
+            self._active[active_key] = wd
             self.mwb_ready.emit(key, wd)
-            self._check_complete(key)
+            self._check_complete(key, wd)
 
     @Slot(str, object)
     def _on_wt_done(self, key: str, wd: meeting_models.WeekData):
-        existing = self._active.get(key)
+        active_key = self._active_key_for_week_data(wd)
+        existing = self._active.get(active_key)
         if existing:
             existing.wt_pub_dir     = wd.wt_pub_dir
             existing.wt_cover_bytes = wd.wt_cover_bytes
@@ -278,15 +394,16 @@ class JwpubService(QObject):
             existing.wt_all_media   = wd.wt_all_media
             existing.wt_status      = wd.wt_status
             self.wt_ready.emit(key, existing)
-            self._check_complete(key)
+            self._check_complete(key, existing)
         else:
-            self._active[key] = wd
+            self._active[active_key] = wd
             self.wt_ready.emit(key, wd)
-            self._check_complete(key)
+            self._check_complete(key, wd)
 
     @Slot(str, object)
     def _on_cbs_done(self, key: str, wd: meeting_models.WeekData):
-        existing = self._active.get(key)
+        active_key = self._active_key_for_week_data(wd)
+        existing = self._active.get(active_key)
         if existing:
             existing.cbs_pub_dir = wd.cbs_pub_dir
             existing.cbs_items   = wd.cbs_items
@@ -294,36 +411,80 @@ class JwpubService(QObject):
             existing.cbs_status  = wd.cbs_status
             self.cbs_ready.emit(key, existing)
         else:
-            self._active[key] = wd
+            self._active[active_key] = wd
             self.cbs_ready.emit(key, wd)
 
-    @Slot(str, str, int)
-    def _on_worker_progress(self, key: str, pub: str, pct: int):
+    @Slot(str, str, int, str, bool, int)
+    def _on_worker_progress(
+        self,
+        key: str,
+        pub: str,
+        pct: int,
+        language: str,
+        is_sign_language: bool,
+        generation: int,
+    ):
         self.progress.emit(key, pub, pct)
+        self.context_progress.emit(
+            key,
+            pub,
+            pct,
+            language,
+            is_sign_language,
+            generation,
+        )
 
-    @Slot(str, str, str)
-    def _on_worker_error(self, key: str, pub: str, msg: str):
+    @Slot(str, str, str, str, bool, int)
+    def _on_worker_error(
+        self,
+        key: str,
+        pub: str,
+        msg: str,
+        language: str,
+        is_sign_language: bool,
+        generation: int,
+    ):
         # "NOT_FOUND" is a sentinel emitted by the worker when the JW API
         # confirmed the publication does not exist (empty files list).
         # Any other message means a generic connectivity / extraction failure.
         status = "not_found" if msg == "NOT_FOUND" else "error"
-        wd = self._active.get(key)
+        wd = self._active.get(
+            (key, language, bool(is_sign_language), max(0, int(generation))),
+        )
         if wd:
             if pub == "mwb":
                 wd.mwb_status = status
             elif pub == "wt":
                 wd.wt_status = status
         self.error_sig.emit(key, pub, msg)
+        self.context_error.emit(
+            key,
+            pub,
+            msg,
+            language,
+            is_sign_language,
+            generation,
+        )
 
-    @Slot(str)
-    def _on_prefetch_requested(self, url: str):
-        """Recebe pedido de prefetch do worker — já estamos na main thread."""
-        mgr = self._cache_manager
-        if not mgr.is_cached(url) and not mgr.is_prefetching(url):
-            mgr.prefetch(url)
+    @Slot(str, str, bool, int)
+    def _on_load_finished(
+        self,
+        monday_text: str,
+        language: str,
+        is_sign_language: bool,
+        generation: int,
+    ) -> None:
+        key = (
+            monday_text,
+            language,
+            bool(is_sign_language),
+            max(0, int(generation)),
+        )
+        if self._active_load_key == key:
+            self._active_load_key = None
+        self._dispatch_week_load()
 
-    def _check_complete(self, key: str):
-        wd = self._active.get(key)
+    def _check_complete(self, key: str, wd: meeting_models.WeekData):
         if wd and wd.mwb_status in ("ready", "empty") \
                 and wd.wt_status in ("ready", "empty"):
             self.week_ready.emit(key, wd)

@@ -152,7 +152,8 @@ class _PubCard(QFrame):
     def set_loading(self):
         self._last_pct = -1
         self._progress_style_set = False
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setEnabled(False)
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
         self._pill.setText(pill_text)
@@ -169,6 +170,7 @@ class _PubCard(QFrame):
     def set_ready(self, wd: "WeekData"):
         self._last_pct = -1
         self._progress_style_set = False
+        self.setEnabled(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
@@ -205,6 +207,7 @@ class _PubCard(QFrame):
     def set_saved(self, snapshot: "MeetingTreeSnapshot"):
         self._last_pct = -1
         self._progress_style_set = False
+        self.setEnabled(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
@@ -240,11 +243,13 @@ class _PubCard(QFrame):
         self._status_lbl.setText("")
         self._cover.setPixmap(QPixmap())
         self._arrow.setVisible(False)
+        self.setEnabled(False)
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_error(self, _msg: str = ""):
         self._last_pct = -1
         self._progress_style_set = False
+        self.setEnabled(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
@@ -261,6 +266,7 @@ class _PubCard(QFrame):
     def set_not_found(self):
         self._last_pct = -1
         self._progress_style_set = False
+        self.setEnabled(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")

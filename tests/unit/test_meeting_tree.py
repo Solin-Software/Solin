@@ -32,11 +32,58 @@ from solin.core.meetings.tree_builder import MeetingTreeBuilder
 from solin.core.meetings.tree_store import (
     MeetingTreeOverview,
     MeetingTreeStore,
+    make_meeting_tree_key,
 )
 from solin.core.meetings.tree_store import flush_meeting_thumbs_dir
-from solin.core.meetings.tree_merger import MeetingTreeMerger
+from solin.core.meetings.tree_merger import (
+    MeetingTreeMerger,
+    media_identity_signature,
+    merge_persisted_meeting_trees,
+)
+from solin.core.meetings.tree_types import iter_nodes
 from tests._paths import FIXTURES_DIR
 from solin.widgets.meetings.tree_controller import MeetingTreeController
+
+
+def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> None:
+    emitted = []
+    background = publications_module._WeekLoadRequest(
+        date(2026, 6, 1),
+        False,
+        "T",
+        False,
+        1,
+        0,
+        0,
+    )
+    interactive = publications_module._WeekLoadRequest(
+        date(2026, 6, 8),
+        False,
+        "T",
+        False,
+        2,
+        1,
+        1,
+    )
+    background_key = ("2026-06-01", "T", False, 1)
+    interactive_key = ("2026-06-08", "T", False, 2)
+    service = SimpleNamespace(
+        _active_load_key=None,
+        _pending_loads={
+            background_key: background,
+            interactive_key: interactive,
+        },
+        _sig_load_week=SimpleNamespace(
+            emit=lambda *args: emitted.append(args),
+        ),
+    )
+
+    publications_module.JwpubService._dispatch_week_load(service)
+
+    self_request = emitted[0]
+    assert service._active_load_key == interactive_key
+    assert self_request[0] == interactive.monday
+    assert background_key in service._pending_loads
 
 
 class PublicationSqlErrorBoundaryTests(unittest.TestCase):
@@ -522,6 +569,92 @@ class MeetingTreeMergerTests(unittest.TestCase):
         self.assertEqual(media_node["thumbnail_local_path"], saved_media["thumbnail_local_path"])
         self.assertEqual(media_node["thumbnail_cache_key"], saved_media["thumbnail_cache_key"])
         self.assertEqual(media_node["base_duration_ticks"], 123_000_000)
+
+    def test_canonical_resolution_wins_without_discarding_saved_user_state(self):
+        canonical = self.canonical()
+        saved = self.canonical()
+        canonical_media = self.wt_section(canonical)["children"][0]
+        saved_media = self.wt_section(saved)["children"][0]
+        canonical_media["resolved_url"] = "https://cdn.example/fresh.mp4"
+        canonical_media["thumbnail_url"] = "https://cdn.example/fresh.jpg"
+        saved_media["resolved_url"] = "https://cdn.example/stale.mp4"
+        saved_media["thumbnail_url"] = "https://cdn.example/stale.jpg"
+        saved_media["start_trim_ticks"] = 10
+        saved_media["image_framing"] = {"scale": 1.2}
+
+        merged = MeetingTreeMerger(canonical).merge(saved)
+        media_node = self.wt_section(merged)["children"][0]
+
+        self.assertEqual(media_node["resolved_url"], canonical_media["resolved_url"])
+        self.assertEqual(media_node["thumbnail_url"], canonical_media["thumbnail_url"])
+        self.assertEqual(media_node["start_trim_ticks"], 10)
+        self.assertEqual(media_node["image_framing"], {"scale": 1.2})
+
+    def test_persisted_union_keeps_manual_nodes_from_local_and_portable_state(self):
+        prepared = self.canonical()
+        portable = self.canonical()
+        self.wt_section(prepared)["children"].append(
+            {
+                "id": "local-manual",
+                "type": "media",
+                "title": "Local",
+                "children": [],
+                "meeting_generated": False,
+            }
+        )
+        self.wt_section(portable)["children"].append(
+            {
+                "id": "portable-manual",
+                "type": "media",
+                "title": "Portable",
+                "children": [],
+                "meeting_generated": False,
+            }
+        )
+
+        merged = merge_persisted_meeting_trees(prepared, portable)
+        node_ids = {
+            node["id"] for node in self.wt_section(merged)["children"]
+        }
+
+        self.assertIn("local-manual", node_ids)
+        self.assertIn("portable-manual", node_ids)
+
+    def test_persisted_union_does_not_duplicate_official_nodes_nested_locally(self):
+        prepared = self.canonical()
+        portable = self.canonical()
+        official = copy.deepcopy(self.wt_section(prepared)["children"][0])
+        prepared.append(
+            {
+                "id": "manual-section",
+                "type": "section",
+                "title": "Manual section",
+                "children": [
+                    official,
+                    {
+                        "id": "nested-manual",
+                        "type": "media",
+                        "title": "Nested",
+                        "children": [],
+                        "meeting_generated": False,
+                    },
+                ],
+                "meeting_generated": False,
+            }
+        )
+
+        merged = merge_persisted_meeting_trees(prepared, portable)
+        source_key = official["meeting_source_key"]
+        matching_official = [
+            node
+            for node in iter_nodes(merged)
+            if node.get("meeting_source_key") == source_key
+        ]
+
+        self.assertEqual(len(matching_official), 1)
+        self.assertTrue(
+            any(node.get("id") == "nested-manual" for node in iter_nodes(merged))
+        )
 
     def test_discards_durable_media_metadata_when_identity_changes(self):
         canonical = self.canonical()
@@ -1203,6 +1336,134 @@ class MeetingTreeStoreTests(unittest.TestCase):
             self.assertEqual(snapshot.tree_key, "wt:2026-05-25:T:20260500")
             self.assertEqual(snapshot.nodes, newer)
             self.assertIsNone(store.find_snapshot("wt", date(2026, 5, 25), "E"))
+
+    def test_find_snapshot_accepts_structural_tree_without_media(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            store.save(
+                "wt:2026-05-25:T:20260500",
+                [{"id": "section", "type": "section", "children": []}],
+                "hash",
+                overview=MeetingTreeOverview(title="Study", media_count=0),
+            )
+
+            snapshot = store.find_snapshot("wt", date(2026, 5, 25), "T")
+
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            self.assertEqual(snapshot.media_count, 0)
+            self.assertEqual(snapshot.overview.title, "Study")
+
+    def test_store_revisions_increment_and_migrate_v1_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "meeting_trees.json"
+            tree_key = "mwb:2026-05-25:T:20260500"
+            path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "trees": {
+                            tree_key: {
+                                "nodes": [],
+                                "last_canonical_hash": "old",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            store = MeetingTreeStore(path)
+
+            migrated = store.find_snapshot("mwb", date(2026, 5, 25), "T")
+            assert migrated is not None
+            self.assertEqual(migrated.revision, 0)
+            saved = store.save(tree_key, [], "new")
+
+            self.assertEqual(saved.revision, 1)
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(raw["version"], 2)
+            self.assertEqual(raw["trees"][tree_key]["revision"], 1)
+
+    def test_spoken_and_sign_variants_have_distinct_persisted_identities(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            monday = date(2026, 5, 25)
+            spoken_key = make_meeting_tree_key(
+                "mwb",
+                monday,
+                "T",
+                "20260500",
+            )
+            sign_key = make_meeting_tree_key(
+                "mwb",
+                monday,
+                "T",
+                "20260500",
+                is_sign_language=True,
+            )
+            store.save(spoken_key, [], "spoken")
+            store.save(sign_key, [], "sign")
+
+            spoken = store.find_snapshot("mwb", monday, "T", False)
+            sign = store.find_snapshot("mwb", monday, "T", True)
+
+            assert spoken is not None
+            assert sign is not None
+            self.assertEqual(spoken.tree_key, spoken_key)
+            self.assertEqual(sign.tree_key, sign_key)
+            self.assertFalse(spoken.is_sign_language)
+            self.assertTrue(sign.is_sign_language)
+
+    def test_corrupt_store_write_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "meeting_trees.json"
+            path.write_text("{broken", encoding="utf-8")
+            store = MeetingTreeStore(path)
+
+            with self.assertRaises(json.JSONDecodeError):
+                store.save("mwb:2026-05-25:T:20260500", [], "hash")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "{broken")
+
+    def test_resolution_patch_preserves_user_title_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")
+            tree_key = "mwb:2026-05-25:T:20260500"
+            node = {
+                "id": "official",
+                "type": "media",
+                "title": "My title",
+                "user_title_override": True,
+                "auto_title": False,
+                "children": [],
+                "media_ref": {
+                    "key_symbol": "mwbv",
+                    "track": 1,
+                    "label": "My title",
+                },
+            }
+            store.save(tree_key, [node], "hash")
+
+            snapshot = store.patch_media_batch(
+                tree_key,
+                {
+                    "official": (
+                        media_identity_signature(node),
+                        {
+                            "resolved_url": "https://cdn.example/fresh.mp4",
+                            "title": "JW title",
+                            "auto_title": False,
+                            "media_ref_label": "JW title",
+                        },
+                    )
+                },
+            )
+
+            assert snapshot is not None
+            updated = snapshot.nodes[0]
+            self.assertEqual(updated["resolved_url"], "https://cdn.example/fresh.mp4")
+            self.assertEqual(updated["title"], "My title")
+            self.assertEqual(updated["media_ref"]["label"], "My title")
 
     def test_round_trip_meeting_folder_imports(self):
         with tempfile.TemporaryDirectory() as tmp:

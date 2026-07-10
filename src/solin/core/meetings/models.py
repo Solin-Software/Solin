@@ -45,6 +45,9 @@ class MeetingPublicationRef:
 @dataclass(slots=True)
 class WeekData:
     monday: date = field(default_factory=date.today)
+    language_code: str = ""
+    is_sign_language: bool = False
+    request_generation: int = 0
     mwb_pub_dir: Path | None = None
     mwb_cover_bytes: bytes | None = None
     mwb_date_label: str = ""
