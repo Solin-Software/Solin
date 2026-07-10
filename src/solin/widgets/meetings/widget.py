@@ -313,6 +313,8 @@ class StudyDetailView(QWidget):
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
             self._refresh_shell_texts()
+            if hasattr(self, "controller"):
+                self.controller.refresh_language()
         super().changeEvent(event)
 
     def begin_qml_pointer_cursor(self):
@@ -538,6 +540,8 @@ class _MemorialDetailView(QWidget):
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
             self._refresh_shell_texts()
+            if hasattr(self, "controller"):
+                self.controller.refresh_language()
         super().changeEvent(event)
 
     def begin_qml_pointer_cursor(self):

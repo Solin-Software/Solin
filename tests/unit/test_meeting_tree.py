@@ -43,7 +43,10 @@ from solin.core.meetings.tree_merger import (
 )
 from solin.core.meetings.tree_types import iter_nodes
 from tests._paths import FIXTURES_DIR
-from solin.widgets.meetings.tree_controller import MeetingTreeController
+from solin.widgets.meetings.tree_controller import (
+    MeetingTreeController,
+    _display_section_title,
+)
 
 
 def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> None:
@@ -216,6 +219,36 @@ class MeetingMediaPathTests(unittest.TestCase):
             )
 
             self.assertEqual(item.file_path, str(video_path))
+
+
+class MeetingSectionTitleTests(unittest.TestCase):
+    def test_generated_section_uses_its_structural_translation_key(self):
+        node = {
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+        }
+
+        with patch(
+            "solin.widgets.meetings.tree_controller._translate_section_title",
+            return_value="Nossa Vida Cristã",
+        ) as translate:
+            title = _display_section_title(node)
+
+        self.assertEqual(title, "Nossa Vida Cristã")
+        translate.assert_called_once_with("LIVING AS CHRISTIANS")
+
+    def test_renamed_section_keeps_its_user_title(self):
+        node = {
+            "type": "section",
+            "title": "Minha seção",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "user_title_override": True,
+        }
+
+        self.assertEqual(_display_section_title(node), "Minha seção")
 
 
 class MeetingTreeBuilderTests(unittest.TestCase):

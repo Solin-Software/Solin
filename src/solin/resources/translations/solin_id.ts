@@ -849,7 +849,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1725"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1854"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + gulir untuk memperbesar · Seret untuk menggeser</translation>
     </message>
@@ -1038,12 +1038,12 @@
     <name>MainWindow</name>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
-        <location filename="../../main_window.py" line="+320"/>
+        <location filename="../../main_window.py" line="+321"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+686"/>
+        <location filename="../../main_window.py" line="+692"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Jeda pemutaran sebelum mengubah konten yang diproyeksikan.</translation>
     </message>
@@ -1053,7 +1053,7 @@
         <translation>Perlindungan pemutaran</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+6"/>
+        <location line="+6"/>
         <source>Keep the mouse still while Solin selects the share target.</source>
         <translation>Jangan gerakkan mouse saat Solin memilih target berbagi.</translation>
     </message>
@@ -1076,6 +1076,16 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>Ciutkan bilah sisi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expand sidebar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Songs</source>
+        <translation>Lagu-Lagu</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1122,7 +1132,6 @@
         <source>Receive via Wi-Fi</source>
         <translation>Terima melalui Wi-Fi</translation>
     </message>
-
 </context>
 <context>
     <name>MediaCard</name>
@@ -1584,7 +1593,7 @@
         <translation>Mencegah perubahan media dan pergeseran posisi selama audio atau video diputar. Jeda terlebih dahulu untuk membuat perubahan.</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
         <translation>Atur hari dan waktu perhimpunan sebelum pemutaran otomatis dapat dimulai.</translation>
     </message>
@@ -1682,7 +1691,7 @@
 <context>
     <name>MeetingDestinationSession</name>
     <message>
-        <location filename="../../widgets/meetings/destinations.py" line="+45"/>
+        <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Tidak ada media yang dapat ditambahkan.</translation>
     </message>
@@ -3401,117 +3410,117 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>ProjectionBar</name>
     <message>
-        <location filename="../../widgets/projection/bar.py" line="+379"/>
-        <location line="+1043"/>
+        <location filename="../../widgets/projection/bar.py" line="+383"/>
+        <location line="+1046"/>
         <source>Playing offline</source>
         <translation>Memutar offline</translation>
     </message>
     <message>
-        <location line="-1019"/>
-        <location line="+1006"/>
+        <location line="-1022"/>
+        <location line="+1009"/>
         <source>Pause/Resume</source>
         <translation>Jeda/Lanjutkan</translation>
     </message>
     <message>
-        <location line="-1002"/>
-        <location line="+1006"/>
+        <location line="-1005"/>
+        <location line="+1009"/>
         <source>Previous</source>
         <translation>Sebelumnya</translation>
     </message>
     <message>
-        <location line="-1005"/>
-        <location line="+1006"/>
+        <location line="-1008"/>
+        <location line="+1009"/>
         <location line="+134"/>
         <source>Next</source>
         <translation>Selanjutnya</translation>
     </message>
     <message>
-        <location line="-1132"/>
-        <location line="+994"/>
+        <location line="-1135"/>
+        <location line="+997"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="-982"/>
-        <location line="+983"/>
+        <location line="-985"/>
+        <location line="+986"/>
         <source>Playback options</source>
         <translation>Opsi pemutaran</translation>
     </message>
     <message>
-        <location line="-976"/>
+        <location line="-979"/>
         <source>Toggle OBS scene</source>
         <translation>Beralih adegan OBS</translation>
     </message>
     <message>
         <location line="+16"/>
-        <location line="+961"/>
+        <location line="+964"/>
         <source>Stop projection</source>
         <translation>Hentikan proyeksi</translation>
     </message>
     <message>
-        <location line="-903"/>
-        <location line="+906"/>
+        <location line="-906"/>
+        <location line="+909"/>
         <source>Minimize</source>
         <translation>Perkecil</translation>
     </message>
     <message>
-        <location line="-895"/>
-        <location line="+896"/>
+        <location line="-898"/>
+        <location line="+899"/>
         <source>Show playlist</source>
         <translation>Tampilkan daftar putar</translation>
     </message>
     <message>
-        <location line="-889"/>
-        <location line="+891"/>
+        <location line="-892"/>
+        <location line="+894"/>
         <source>Add to…</source>
         <translation>Tambahkan ke…</translation>
     </message>
     <message>
-        <location line="-883"/>
-        <location line="+882"/>
+        <location line="-886"/>
+        <location line="+885"/>
         <source>Open as temporary playlist</source>
         <translation>Buka sebagai daftar putar sementara</translation>
     </message>
     <message>
-        <location line="-873"/>
-        <location line="+875"/>
+        <location line="-876"/>
+        <location line="+878"/>
         <source>Set as idle screen</source>
         <translation>Jadikan layar siaga</translation>
     </message>
     <message>
-        <location line="-868"/>
-        <location line="+869"/>
+        <location line="-871"/>
+        <location line="+872"/>
         <source>Fullscreen</source>
         <translation>Layar penuh</translation>
     </message>
     <message>
-        <location line="-703"/>
+        <location line="-706"/>
         <source>Pause playback to seek.</source>
         <translation>Jeda pemutaran untuk menggeser posisi.</translation>
     </message>
     <message>
-        <location line="+258"/>
+        <location line="+263"/>
         <source>Projected image</source>
         <translation>Gambar yang diproyeksikan</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+122"/>
         <source>LIVE</source>
         <translation>LANGSUNG</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+63"/>
         <source>Timer →</source>
         <translation>Pengatur Waktu →</translation>
     </message>
     <message>
-        <location line="+177"/>
-        <location line="+84"/>
+        <location line="+176"/>
+        <location line="+85"/>
         <source>Hide media from OBS</source>
         <translation>Sembunyikan media dari OBS</translation>
     </message>
     <message>
-        <location line="-80"/>
+        <location line="-81"/>
         <source>Show media in OBS</source>
         <translation>Tampilkan media di OBS</translation>
     </message>
@@ -3526,7 +3535,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
         <translation>layar sekunder</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+169"/>
         <source>Speed</source>
         <translation>Kecepatan</translation>
     </message>
@@ -3701,7 +3710,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+167"/>
+        <location filename="../../widgets/settings_widget.py" line="+168"/>
         <location line="+144"/>
         <source>Settings</source>
         <translation>Pengaturan</translation>
@@ -4218,7 +4227,7 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+202"/>
+        <location filename="../../ui/dialogs/update.py" line="+226"/>
         <source>Update available</source>
         <translation>Pembaruan tersedia</translation>
     </message>
@@ -4237,7 +4246,7 @@ Click &apos;Download&apos; to open the download page.</source>
 Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+51"/>
         <source>Not now</source>
         <translation>Nanti saja</translation>
     </message>
@@ -4252,7 +4261,7 @@ Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
         <translation>Unduh</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+37"/>
         <source>Downloading…</source>
         <translation>Mengunduh…</translation>
     </message>
@@ -4287,7 +4296,7 @@ Klik &apos;Unduh&apos; untuk membuka halaman unduhan.</translation>
         <translation>Gagal meluncurkan penginstal.</translation>
     </message>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <location line="-135"/>
         <source>Changelog</source>
         <translation>Changelog</translation>
     </message>
@@ -4943,7 +4952,7 @@ Angka di akhir memiliki prioritas.</translation>
 <context>
     <name>_MemorialCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="+410"/>
+        <location filename="../../widgets/meetings/overview.py" line="+416"/>
         <location line="+14"/>
         <location line="+26"/>
         <location line="+12"/>
@@ -5100,7 +5109,7 @@ Angka di akhir memiliki prioritas.</translation>
         <translation>Tambah bagian baru</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1428"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="-1543"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Seret file media ke sini atau klik  ＋  di bagian atas
@@ -5119,7 +5128,7 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Menyiapkan media...</translation>
     </message>
     <message>
-        <location line="+1358"/>
+        <location line="+1473"/>
         <source>Media unavailable</source>
         <translation>Media tidak tersedia</translation>
     </message>
@@ -5183,27 +5192,27 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_PubCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="-353"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location filename="../../widgets/meetings/overview.py" line="-358"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>LIFE &amp; MINISTRY</source>
         <translation>PELAYANAN DAN KEHIDUPAN</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location line="-114"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>WATCHTOWER STUDY</source>
         <translation>PELAJARAN MENARA PENGAWAL</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-111"/>
         <source>Loading…</source>
         <translation>Memuat…</translation>
     </message>
@@ -5213,26 +5222,26 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Mengambil publikasi…</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <location line="+35"/>
+        <location line="+17"/>
+        <location line="+36"/>
         <source>Life &amp; Ministry</source>
         <translation>Pelayanan dan Kehidupan</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <location line="+31"/>
+        <location line="-32"/>
+        <location line="+32"/>
         <source>Watchtower Study</source>
         <translation>Pelajaran Menara Pengawal</translation>
     </message>
     <message>
-        <location line="-25"/>
-        <location line="+29"/>
+        <location line="-26"/>
+        <location line="+30"/>
         <source>item</source>
         <translation>item</translation>
     </message>
     <message>
-        <location line="-29"/>
-        <location line="+29"/>
+        <location line="-30"/>
+        <location line="+30"/>
         <source>items</source>
         <translation>item</translation>
     </message>
@@ -5242,13 +5251,13 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Tidak ada perhimpunan minggu ini</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Unavailable</source>
         <translation>Tidak tersedia</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Tap to retry</source>
         <translation>Ketuk untuk mencoba lagi</translation>
     </message>

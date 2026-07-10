@@ -850,7 +850,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1725"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1854"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Strg + Scrollen zum Zoomen · Ziehen zum Verschieben</translation>
     </message>
@@ -1039,12 +1039,12 @@
     <name>MainWindow</name>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
-        <location filename="../../main_window.py" line="+320"/>
+        <location filename="../../main_window.py" line="+321"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+686"/>
+        <location filename="../../main_window.py" line="+692"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Wiedergabe pausieren, bevor der projizierte Inhalt geändert wird.</translation>
     </message>
@@ -1054,7 +1054,7 @@
         <translation>Wiedergabeschutz</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+6"/>
+        <location line="+6"/>
         <source>Keep the mouse still while Solin selects the share target.</source>
         <translation>Bewegen Sie die Maus nicht, während Solin das Freigabeziel auswählt.</translation>
     </message>
@@ -1077,6 +1077,16 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>Seitenleiste einklappen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expand sidebar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Songs</source>
+        <translation>Lieder</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1123,7 +1133,6 @@
         <source>Receive via Wi-Fi</source>
         <translation>Über WLAN empfangen</translation>
     </message>
-
 </context>
 <context>
     <name>MediaCard</name>
@@ -1586,7 +1595,7 @@
         <translation>Verhindert Medienwechsel und Suchen während der Audio- oder Videowiedergabe. Pausieren Sie zuerst, um Änderungen vorzunehmen.</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
         <translation>Lege Tag und Uhrzeit der Zusammenkunft fest, bevor die automatische Wiedergabe gestartet werden kann.</translation>
     </message>
@@ -1684,7 +1693,7 @@
 <context>
     <name>MeetingDestinationSession</name>
     <message>
-        <location filename="../../widgets/meetings/destinations.py" line="+45"/>
+        <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Es konnten keine Medien hinzugefügt werden.</translation>
     </message>
@@ -3405,117 +3414,117 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>ProjectionBar</name>
     <message>
-        <location filename="../../widgets/projection/bar.py" line="+379"/>
-        <location line="+1043"/>
+        <location filename="../../widgets/projection/bar.py" line="+383"/>
+        <location line="+1046"/>
         <source>Playing offline</source>
         <translation>Offline-Wiedergabe</translation>
     </message>
     <message>
-        <location line="-1019"/>
-        <location line="+1006"/>
+        <location line="-1022"/>
+        <location line="+1009"/>
         <source>Pause/Resume</source>
         <translation>Pause/Fortsetzen</translation>
     </message>
     <message>
-        <location line="-1002"/>
-        <location line="+1006"/>
+        <location line="-1005"/>
+        <location line="+1009"/>
         <source>Previous</source>
         <translation>Zurück</translation>
     </message>
     <message>
-        <location line="-1005"/>
-        <location line="+1006"/>
+        <location line="-1008"/>
+        <location line="+1009"/>
         <location line="+134"/>
         <source>Next</source>
         <translation>Weiter</translation>
     </message>
     <message>
-        <location line="-1132"/>
-        <location line="+994"/>
+        <location line="-1135"/>
+        <location line="+997"/>
         <source>Volume</source>
         <translation>Lautstärke</translation>
     </message>
     <message>
-        <location line="-982"/>
-        <location line="+983"/>
+        <location line="-985"/>
+        <location line="+986"/>
         <source>Playback options</source>
         <translation>Wiedergabeoptionen</translation>
     </message>
     <message>
-        <location line="-976"/>
+        <location line="-979"/>
         <source>Toggle OBS scene</source>
         <translation>OBS-Szene umschalten</translation>
     </message>
     <message>
         <location line="+16"/>
-        <location line="+961"/>
+        <location line="+964"/>
         <source>Stop projection</source>
         <translation>Projektion beenden</translation>
     </message>
     <message>
-        <location line="-903"/>
-        <location line="+906"/>
+        <location line="-906"/>
+        <location line="+909"/>
         <source>Minimize</source>
         <translation>Minimieren</translation>
     </message>
     <message>
-        <location line="-895"/>
-        <location line="+896"/>
+        <location line="-898"/>
+        <location line="+899"/>
         <source>Show playlist</source>
         <translation>Wiedergabeliste anzeigen</translation>
     </message>
     <message>
-        <location line="-889"/>
-        <location line="+891"/>
+        <location line="-892"/>
+        <location line="+894"/>
         <source>Add to…</source>
         <translation>Hinzufügen zu…</translation>
     </message>
     <message>
-        <location line="-883"/>
-        <location line="+882"/>
+        <location line="-886"/>
+        <location line="+885"/>
         <source>Open as temporary playlist</source>
         <translation>Als temporäre Wiedergabeliste öffnen</translation>
     </message>
     <message>
-        <location line="-873"/>
-        <location line="+875"/>
+        <location line="-876"/>
+        <location line="+878"/>
         <source>Set as idle screen</source>
         <translation>Als Ruhebild festlegen</translation>
     </message>
     <message>
-        <location line="-868"/>
-        <location line="+869"/>
+        <location line="-871"/>
+        <location line="+872"/>
         <source>Fullscreen</source>
         <translation>Vollbild</translation>
     </message>
     <message>
-        <location line="-703"/>
+        <location line="-706"/>
         <source>Pause playback to seek.</source>
         <translation>Wiedergabe zum Suchen pausieren.</translation>
     </message>
     <message>
-        <location line="+258"/>
+        <location line="+263"/>
         <source>Projected image</source>
         <translation>Projiziertes Bild</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+122"/>
         <source>LIVE</source>
         <translation>LIVE</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+63"/>
         <source>Timer →</source>
         <translation>Timer →</translation>
     </message>
     <message>
-        <location line="+177"/>
-        <location line="+84"/>
+        <location line="+176"/>
+        <location line="+85"/>
         <source>Hide media from OBS</source>
         <translation>Medien in OBS ausblenden</translation>
     </message>
     <message>
-        <location line="-80"/>
+        <location line="-81"/>
         <source>Show media in OBS</source>
         <translation>Medien in OBS einblenden</translation>
     </message>
@@ -3530,7 +3539,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
         <translation>Nebenbildschirme</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+169"/>
         <source>Speed</source>
         <translation>Geschwindigkeit</translation>
     </message>
@@ -3705,7 +3714,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+167"/>
+        <location filename="../../widgets/settings_widget.py" line="+168"/>
         <location line="+144"/>
         <source>Settings</source>
         <translation>Einstellungen</translation>
@@ -4222,7 +4231,7 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+202"/>
+        <location filename="../../ui/dialogs/update.py" line="+226"/>
         <source>Update available</source>
         <translation>Update verfügbar</translation>
     </message>
@@ -4241,7 +4250,7 @@ Click &apos;Download&apos; to open the download page.</source>
 Auf „Herunterladen&quot; klicken, um die Download-Seite zu öffnen.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+51"/>
         <source>Not now</source>
         <translation>Nicht jetzt</translation>
     </message>
@@ -4256,7 +4265,7 @@ Auf „Herunterladen&quot; klicken, um die Download-Seite zu öffnen.</translati
         <translation>Herunterladen</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+37"/>
         <source>Downloading…</source>
         <translation>Wird heruntergeladen…</translation>
     </message>
@@ -4291,7 +4300,7 @@ Auf „Herunterladen&quot; klicken, um die Download-Seite zu öffnen.</translati
         <translation>Installer konnte nicht gestartet werden.</translation>
     </message>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <location line="-135"/>
         <source>Changelog</source>
         <translation>Änderungsprotokoll</translation>
     </message>
@@ -4948,7 +4957,7 @@ Eine Zahl am Ende hat Vorrang.</translation>
 <context>
     <name>_MemorialCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="+410"/>
+        <location filename="../../widgets/meetings/overview.py" line="+416"/>
         <location line="+14"/>
         <location line="+26"/>
         <location line="+12"/>
@@ -5105,7 +5114,7 @@ Eine Zahl am Ende hat Vorrang.</translation>
         <translation>Neuen Abschnitt hinzufügen</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1428"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="-1543"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Mediendateien hierher ziehen oder oben auf  ＋  tippen
@@ -5124,7 +5133,7 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <translation>Medium wird vorbereitet...</translation>
     </message>
     <message>
-        <location line="+1358"/>
+        <location line="+1473"/>
         <source>Media unavailable</source>
         <translation>Medium nicht verfügbar</translation>
     </message>
@@ -5188,27 +5197,27 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
 <context>
     <name>_PubCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="-353"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location filename="../../widgets/meetings/overview.py" line="-358"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>LIFE &amp; MINISTRY</source>
         <translation>LEBEN UND DIENST</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location line="-114"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>WATCHTOWER STUDY</source>
         <translation>WACHTTURM-STUDIUM</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-111"/>
         <source>Loading…</source>
         <translation>Wird geladen…</translation>
     </message>
@@ -5218,26 +5227,26 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <translation>Publikation wird abgerufen…</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <location line="+35"/>
+        <location line="+17"/>
+        <location line="+36"/>
         <source>Life &amp; Ministry</source>
         <translation>Leben und Dienst</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <location line="+31"/>
+        <location line="-32"/>
+        <location line="+32"/>
         <source>Watchtower Study</source>
         <translation>Wachtturm-Studium</translation>
     </message>
     <message>
-        <location line="-25"/>
-        <location line="+29"/>
+        <location line="-26"/>
+        <location line="+30"/>
         <source>item</source>
         <translation>Element</translation>
     </message>
     <message>
-        <location line="-29"/>
-        <location line="+29"/>
+        <location line="-30"/>
+        <location line="+30"/>
         <source>items</source>
         <translation>Elemente</translation>
     </message>
@@ -5247,13 +5256,13 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <translation>Diese Woche keine Zusammenkunft</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Unavailable</source>
         <translation>Nicht verfügbar</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Tap to retry</source>
         <translation>Zum Wiederholen tippen</translation>
     </message>

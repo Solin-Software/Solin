@@ -850,7 +850,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1725"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1854"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + rulla för att zooma · Dra för att panorera</translation>
     </message>
@@ -1039,12 +1039,12 @@
     <name>MainWindow</name>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
-        <location filename="../../main_window.py" line="+320"/>
+        <location filename="../../main_window.py" line="+321"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+686"/>
+        <location filename="../../main_window.py" line="+692"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pausa uppspelningen innan du ändrar det projicerade innehållet.</translation>
     </message>
@@ -1054,7 +1054,7 @@
         <translation>Uppspelningsskydd</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+6"/>
+        <location line="+6"/>
         <source>Keep the mouse still while Solin selects the share target.</source>
         <translation>Rör inte musen medan Solin väljer delningsmålet.</translation>
     </message>
@@ -1077,6 +1077,16 @@
         <location line="+1"/>
         <source>Collapse sidebar</source>
         <translation>Fäll in sidofältet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expand sidebar</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Songs</source>
+        <translation>Sånger</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1123,7 +1133,6 @@
         <source>Receive via Wi-Fi</source>
         <translation>Ta emot via Wi-Fi</translation>
     </message>
-
 </context>
 <context>
     <name>MediaCard</name>
@@ -1586,7 +1595,7 @@
         <translation>Förhindrar mediebyten och sökning medan ljud eller video spelas upp. Pausa först för att göra ändringar.</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>Configure the meeting day/time before automatic playback can start.</source>
         <translation>Ställ in mötets dag och tid innan automatisk uppspelning kan starta.</translation>
     </message>
@@ -1684,7 +1693,7 @@
 <context>
     <name>MeetingDestinationSession</name>
     <message>
-        <location filename="../../widgets/meetings/destinations.py" line="+45"/>
+        <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Inga medier kunde läggas till.</translation>
     </message>
@@ -3404,117 +3413,117 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>ProjectionBar</name>
     <message>
-        <location filename="../../widgets/projection/bar.py" line="+379"/>
-        <location line="+1043"/>
+        <location filename="../../widgets/projection/bar.py" line="+383"/>
+        <location line="+1046"/>
         <source>Playing offline</source>
         <translation>Spelar upp offline</translation>
     </message>
     <message>
-        <location line="-1019"/>
-        <location line="+1006"/>
+        <location line="-1022"/>
+        <location line="+1009"/>
         <source>Pause/Resume</source>
         <translation>Pausa/Återuppta</translation>
     </message>
     <message>
-        <location line="-1002"/>
-        <location line="+1006"/>
+        <location line="-1005"/>
+        <location line="+1009"/>
         <source>Previous</source>
         <translation>Tidigare</translation>
     </message>
     <message>
-        <location line="-1005"/>
-        <location line="+1006"/>
+        <location line="-1008"/>
+        <location line="+1009"/>
         <location line="+134"/>
         <source>Next</source>
         <translation>Nästa</translation>
     </message>
     <message>
-        <location line="-1132"/>
-        <location line="+994"/>
+        <location line="-1135"/>
+        <location line="+997"/>
         <source>Volume</source>
         <translation>Volym</translation>
     </message>
     <message>
-        <location line="-982"/>
-        <location line="+983"/>
+        <location line="-985"/>
+        <location line="+986"/>
         <source>Playback options</source>
         <translation>Uppspelningsalternativ</translation>
     </message>
     <message>
-        <location line="-976"/>
+        <location line="-979"/>
         <source>Toggle OBS scene</source>
         <translation>Växla OBS-scen</translation>
     </message>
     <message>
         <location line="+16"/>
-        <location line="+961"/>
+        <location line="+964"/>
         <source>Stop projection</source>
         <translation>Stoppa projektion</translation>
     </message>
     <message>
-        <location line="-903"/>
-        <location line="+906"/>
+        <location line="-906"/>
+        <location line="+909"/>
         <source>Minimize</source>
         <translation>Minimera</translation>
     </message>
     <message>
-        <location line="-895"/>
-        <location line="+896"/>
+        <location line="-898"/>
+        <location line="+899"/>
         <source>Show playlist</source>
         <translation>Visa spellista</translation>
     </message>
     <message>
-        <location line="-889"/>
-        <location line="+891"/>
+        <location line="-892"/>
+        <location line="+894"/>
         <source>Add to…</source>
         <translation>Lägg till i…</translation>
     </message>
     <message>
-        <location line="-883"/>
-        <location line="+882"/>
+        <location line="-886"/>
+        <location line="+885"/>
         <source>Open as temporary playlist</source>
         <translation>Öppna som tillfällig spellista</translation>
     </message>
     <message>
-        <location line="-873"/>
-        <location line="+875"/>
+        <location line="-876"/>
+        <location line="+878"/>
         <source>Set as idle screen</source>
         <translation>Ange som vilaskärm</translation>
     </message>
     <message>
-        <location line="-868"/>
-        <location line="+869"/>
+        <location line="-871"/>
+        <location line="+872"/>
         <source>Fullscreen</source>
         <translation>Helskärm</translation>
     </message>
     <message>
-        <location line="-703"/>
+        <location line="-706"/>
         <source>Pause playback to seek.</source>
         <translation>Pausa uppspelningen för att söka.</translation>
     </message>
     <message>
-        <location line="+258"/>
+        <location line="+263"/>
         <source>Projected image</source>
         <translation>Projicerad bild</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+122"/>
         <source>LIVE</source>
         <translation>LIVE</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+63"/>
         <source>Timer →</source>
         <translation>Räknare →</translation>
     </message>
     <message>
-        <location line="+177"/>
-        <location line="+84"/>
+        <location line="+176"/>
+        <location line="+85"/>
         <source>Hide media from OBS</source>
         <translation>Dölj media från OBS</translation>
     </message>
     <message>
-        <location line="-80"/>
+        <location line="-81"/>
         <source>Show media in OBS</source>
         <translation>Visa media i OBS</translation>
     </message>
@@ -3529,7 +3538,7 @@ Den här åtgärden kan inte ångras.</translation>
         <translation>sekundära skärmar</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+169"/>
         <source>Speed</source>
         <translation>Hastighet</translation>
     </message>
@@ -3704,7 +3713,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+167"/>
+        <location filename="../../widgets/settings_widget.py" line="+168"/>
         <location line="+144"/>
         <source>Settings</source>
         <translation>Inställningar</translation>
@@ -4221,7 +4230,7 @@ Den här åtgärden kan inte ångras.</translation>
 <context>
     <name>UpdateDialog</name>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+202"/>
+        <location filename="../../ui/dialogs/update.py" line="+226"/>
         <source>Update available</source>
         <translation>Uppdatering tillgänglig</translation>
     </message>
@@ -4240,7 +4249,7 @@ Click &apos;Download&apos; to open the download page.</source>
 Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+51"/>
         <source>Not now</source>
         <translation>Inte nu</translation>
     </message>
@@ -4255,7 +4264,7 @@ Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
         <translation>Ladda ned</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+37"/>
         <source>Downloading…</source>
         <translation>Hämtar…</translation>
     </message>
@@ -4290,7 +4299,7 @@ Klicka på ”Ladda ner” för att öppna nedladdningssidan.</translation>
         <translation>Fel vid start av installationsprogrammet.</translation>
     </message>
     <message>
-        <location filename="../../ui/dialogs/update.py" line="+268"/>
+        <location line="-135"/>
         <source>Changelog</source>
         <translation>Ändringslogg</translation>
     </message>
@@ -4947,7 +4956,7 @@ Ett nummer i slutet har prioritet.</translation>
 <context>
     <name>_MemorialCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="+410"/>
+        <location filename="../../widgets/meetings/overview.py" line="+416"/>
         <location line="+14"/>
         <location line="+26"/>
         <location line="+12"/>
@@ -5104,7 +5113,7 @@ Ett nummer i slutet har prioritet.</translation>
         <translation>Lägg till ett nytt avsnitt</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1428"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="-1543"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Dra mediefiler hit eller klicka på ＋ högst upp
@@ -5123,7 +5132,7 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Förbereder media...</translation>
     </message>
     <message>
-        <location line="+1358"/>
+        <location line="+1473"/>
         <source>Media unavailable</source>
         <translation>Mediet är inte tillgängligt</translation>
     </message>
@@ -5187,27 +5196,27 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 <context>
     <name>_PubCard</name>
     <message>
-        <location filename="../../widgets/meetings/overview.py" line="-353"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location filename="../../widgets/meetings/overview.py" line="-358"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>LIFE &amp; MINISTRY</source>
         <translation>LIVET OCH TJÄNSTEN SOM KRISTEN</translation>
     </message>
     <message>
-        <location line="-109"/>
-        <location line="+17"/>
-        <location line="+36"/>
+        <location line="-114"/>
+        <location line="+18"/>
+        <location line="+37"/>
         <location line="+25"/>
-        <location line="+15"/>
-        <location line="+16"/>
+        <location line="+17"/>
+        <location line="+17"/>
         <source>WATCHTOWER STUDY</source>
         <translation>VAKTTORNSSTUDIET</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-111"/>
         <source>Loading…</source>
         <translation>Laddar…</translation>
     </message>
@@ -5217,26 +5226,26 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Söker efter publikation…</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <location line="+35"/>
+        <location line="+17"/>
+        <location line="+36"/>
         <source>Life &amp; Ministry</source>
         <translation>Livet och tjänsten som kristen</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <location line="+31"/>
+        <location line="-32"/>
+        <location line="+32"/>
         <source>Watchtower Study</source>
         <translation>Vakttornsstudiet</translation>
     </message>
     <message>
-        <location line="-25"/>
-        <location line="+29"/>
+        <location line="-26"/>
+        <location line="+30"/>
         <source>item</source>
         <translation>objekt</translation>
     </message>
     <message>
-        <location line="-29"/>
-        <location line="+29"/>
+        <location line="-30"/>
+        <location line="+30"/>
         <source>items</source>
         <translation>objekt</translation>
     </message>
@@ -5246,13 +5255,13 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Ingen möte denna vecka</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Unavailable</source>
         <translation>Otillgänglig</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Tap to retry</source>
         <translation>Tryck för att försöka igen</translation>
     </message>
