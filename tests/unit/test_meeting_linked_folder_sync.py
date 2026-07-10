@@ -673,7 +673,14 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 meeting_tag="MW",
                 folder_date=date(2026, 5, 25),
                 canonical_hash="hash",
-                nodes=[{"id": "remote", "type": "media", "children": []}],
+                nodes=[
+                    {
+                        "id": "remote",
+                        "type": "media",
+                        "children": [],
+                        "image_framing": {"scale": 1.0},
+                    }
+                ],
                 deleted_source_keys={"remote-source"},
                 linked_folder_files={"remote.mp4": "remote"},
                 meeting_folder_imports={"remote.mp4": {"status": "processed"}},
@@ -683,12 +690,21 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._sync_identity = _identity("mwb")
             controller._sync_folder = str(folder)
             controller._sync_revision = 3
-            controller._nodes = [{"id": "local", "type": "media", "children": []}]
+            controller._nodes = [
+                {
+                    "id": "remote",
+                    "type": "media",
+                    "children": [],
+                    "image_framing": {"scale": 1.4},
+                }
+            ]
+            controller._image_framing_save_pending = True
             controller._deleted_source_keys = set()
             controller._linked_folder_files = {}
             controller._meeting_folder_imports = {}
             controller._sync_service = FakeService()
             controller.syncStateChanged = _Signal()
+            local_saves = []
             _configure_sync_save_queue(controller)
             controller._apply_sync_record = (
                 lambda record: MeetingTreeController._apply_sync_record(
@@ -702,13 +718,19 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                     message,
                 )
             )
+            controller._save_local_cache = lambda: local_saves.append(True)
 
             MeetingTreeController._save_sync_manifest(controller)
 
-            self.assertEqual(controller._nodes, saved_record.nodes)
+            self.assertEqual(controller._nodes[0]["id"], "remote")
+            self.assertEqual(
+                controller._nodes[0]["image_framing"],
+                {"scale": 1.4},
+            )
             self.assertEqual(controller._deleted_source_keys, {"remote-source"})
             self.assertEqual(controller._linked_folder_files, {"remote.mp4": "remote"})
             self.assertEqual(controller._sync_revision, 7)
+            self.assertEqual(local_saves, [True])
 
     def test_refresh_sync_from_manifest_emits_incremental_reorder(self):
         class FakeController:
@@ -973,6 +995,8 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._apply_sync_record = (
             lambda record: MeetingTreeController._apply_sync_record(controller, record)
         )
+        local_saves = []
+        controller._save_local_cache = lambda: local_saves.append(True)
         _configure_sync_save_queue(controller)
 
         MeetingTreeController._save_sync_manifest(controller)
@@ -989,6 +1013,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         self.assertFalse(controller._pending_sync_saves)
         self.assertEqual(controller._sync_revision, 5)
         self.assertEqual(warnings, [])
+        self.assertEqual(local_saves, [True])
 
     def test_scheduled_manifest_saves_coalesce_latest_tree(self):
         class FakeController:

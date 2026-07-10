@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.meetings.tree_store import flush_meeting_thumbs_dir
+from ..core.meetings.preparation import MeetingPreparationService
 from ..core.playlists.cleanup import (
     flush_embedded_dir,
     flush_images_dir,
@@ -463,6 +464,13 @@ class MainWindowUiController:
             ),
             parent=context.parent,
         )
+        meeting_publication_service = context.jwpub_service_factory(context.parent)
+        meeting_preparation_service = MeetingPreparationService(
+            meeting_publication_service,
+            context.meeting_tree_store,
+            context.media_cache_manager,
+            parent=context.parent,
+        )
         meetings_widget = MeetingsWidget(
             context.lang_manager,
             notifications=context.notifications,
@@ -484,7 +492,8 @@ class MainWindowUiController:
             jw_songs_store=context.jw_songs_store,
             media_settings=context.media_settings,
             meeting_linked_folder_sync=context.meeting_linked_folder_sync,
-            jwpub_service_factory=context.jwpub_service_factory,
+            publication_service=meeting_publication_service,
+            preparation_service=meeting_preparation_service,
             memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=(
@@ -493,6 +502,9 @@ class MainWindowUiController:
             parent=context.parent,
         )
         meetings_widget.set_watched_folder(watched_folder)
+        settings_widget.meetings_auto_download_toggled.connect(
+            meetings_widget.set_automatic_download_enabled
+        )
 
         self._flush_orphaned_media_files()
 

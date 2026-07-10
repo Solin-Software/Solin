@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ..media.formats import media_type_from_path
+from ..playlists.items import looks_like_filename_title
 from .models import MeetingMedia
 from .tree_types import Node, new_node_id
 
@@ -33,6 +34,23 @@ def mime_for_meeting_media(path: str, media_type: str) -> str:
 
 def media_ref_title(ref: dict[str, Any]) -> str:
     return clean_media_title(str(ref.get("label") or ref.get("caption") or ""))
+
+
+def should_accept_resolved_media_title(
+    node: Node,
+    *,
+    placeholder_titles: tuple[str, ...] = (),
+) -> bool:
+    if node.get("user_title_override"):
+        return False
+    title = clean_media_title(str(node.get("title") or ""))
+    ref = node.get("media_ref") or {}
+    placeholders = {"", "Media", *placeholder_titles}
+    return (
+        bool(node.get("auto_title"))
+        or (isinstance(ref, dict) and not media_ref_title(ref) and title in placeholders)
+        or looks_like_filename_title(title)
+    )
 
 
 def int_or_zero(value: Any) -> int:

@@ -6,8 +6,10 @@ Per-profile persistence for automatic meeting trees.
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path, PureWindowsPath
@@ -16,9 +18,13 @@ from typing import Any
 from solin.core.storage.json_repository import JsonFileRepository
 
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
-from .tree_types import Node, clone_nodes, count_media, iter_nodes_strict
+from .media_nodes import should_accept_resolved_media_title
+from .tree_merger import MeetingTreeMerger, media_identity_signature
+from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_strict
 
 log = logging.getLogger(__name__)
+
+MEETING_TREE_STORE_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +35,7 @@ class MeetingTreeKey:
     monday: date
     language: str
     issue: str
+    is_sign_language: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +88,9 @@ class MeetingTreeSnapshot:
     linked_folder_files: dict[str, str]
     meeting_folder_imports: dict[str, dict[str, Any]]
     overview: MeetingTreeOverview
+    source_checksum: str = ""
+    revision: int = 0
+    is_sign_language: bool = False
 
     @property
     def media_count(self) -> int:
@@ -95,29 +105,46 @@ class MeetingTreeStore:
         path: str | Path,
     ) -> None:
         self._json = JsonFileRepository(path)
+        self._lock = threading.RLock()
+        self._data: dict[str, Any] | None = None
 
     @property
     def path(self) -> Path:
         return self._json.path
 
     def _empty(self) -> dict[str, Any]:
-        return {"version": 1, "trees": {}}
+        return {"version": MEETING_TREE_STORE_VERSION, "trees": {}}
+
+    @staticmethod
+    def _normalize(data: dict[str, Any]) -> dict[str, Any]:
+        trees = data.setdefault("trees", {})
+        if not isinstance(trees, dict):
+            raise ValueError("Meeting tree storage 'trees' must be an object")
+        for record in trees.values():
+            if isinstance(record, dict):
+                record.setdefault("revision", 0)
+        data["version"] = MEETING_TREE_STORE_VERSION
+        return data
+
+    def _runtime_data(self) -> dict[str, Any]:
+        if self._data is None:
+            self._data = self.load_all_strict()
+        return self._data
 
     def load_all(self) -> dict[str, Any]:
-        path = self.path
-        if not self._json.exists():
-            return self._empty()
-        try:
-            return self.load_all_strict()
-        except (
-            OSError,
-            UnicodeError,
-            json.JSONDecodeError,
-            TypeError,
-            ValueError,
-        ) as exc:
-            log.warning("Could not load meeting tree store %s: %s", path, exc)
-            return self._empty()
+        with self._lock:
+            path = self.path
+            try:
+                return copy.deepcopy(self._runtime_data())
+            except (
+                OSError,
+                UnicodeError,
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                log.warning("Could not load meeting tree store %s: %s", path, exc)
+                return self._empty()
 
     def load_all_strict(self) -> dict[str, Any]:
         """Load meeting trees while preserving read/parse failures for destructive callers."""
@@ -126,77 +153,123 @@ class MeetingTreeStore:
         data = self._json.read()
         if not isinstance(data, dict):
             raise ValueError("Meeting tree storage root must be an object")
-        data.setdefault("version", 1)
-        data.setdefault("trees", {})
-        if not isinstance(data["trees"], dict):
-            raise ValueError("Meeting tree storage 'trees' must be an object")
-        return data
+        return self._normalize(data)
+
+    def snapshots_for_week(
+        self,
+        monday: date,
+        language: str,
+        is_sign_language: bool = False,
+    ) -> dict[str, MeetingTreeSnapshot]:
+        """Return one consistent persisted view for both weekly meetings."""
+        lang = (language or "").strip()
+        if not lang:
+            return {}
+        with self._lock:
+            trees = self._runtime_data().get("trees", {})
+            snapshots: dict[str, MeetingTreeSnapshot] = {}
+            for pub_type in ("mwb", "wt"):
+                candidates = [
+                    snapshot
+                    for tree_key, record in trees.items()
+                    if isinstance(tree_key, str)
+                    and (
+                        parsed := parse_meeting_tree_key(tree_key)
+                    ) is not None
+                    and parsed.pub_type == pub_type
+                    and parsed.monday == monday
+                    and parsed.language == lang
+                    and parsed.is_sign_language == bool(is_sign_language)
+                    and (snapshot := _snapshot_from_record(tree_key, record)) is not None
+                ]
+                if candidates:
+                    snapshots[pub_type] = max(
+                        candidates,
+                        key=lambda snapshot: _issue_sort_key(snapshot.issue),
+                    )
+            return snapshots
 
     def load(self, tree_key: str) -> tuple[list[Node] | None, str]:
-        record = self.load_all().get("trees", {}).get(tree_key)
-        if not isinstance(record, dict):
-            return None, ""
-        nodes = record.get("nodes")
-        if not isinstance(nodes, list):
-            return None, ""
-        return clone_nodes(nodes), str(record.get("last_canonical_hash", ""))
+        with self._lock:
+            record = self._runtime_data().get("trees", {}).get(tree_key)
+            if not isinstance(record, dict):
+                return None, ""
+            nodes = record.get("nodes")
+            if not isinstance(nodes, list):
+                return None, ""
+            return clone_nodes(nodes), str(record.get("last_canonical_hash", ""))
+
+    def snapshot(self, tree_key: str) -> MeetingTreeSnapshot | None:
+        """Return the latest in-process revision for one exact tree identity."""
+        with self._lock:
+            return _snapshot_from_record(
+                tree_key,
+                self._runtime_data().get("trees", {}).get(tree_key),
+            )
 
     def load_deleted_source_keys(self, tree_key: str) -> set[str]:
-        record = self.load_all().get("trees", {}).get(tree_key)
-        if not isinstance(record, dict):
-            return set()
-        values = record.get("deleted_source_keys", [])
-        if not isinstance(values, list):
-            return set()
-        return {str(value) for value in values if value}
+        with self._lock:
+            record = self._runtime_data().get("trees", {}).get(tree_key)
+            if not isinstance(record, dict):
+                return set()
+            values = record.get("deleted_source_keys", [])
+            if not isinstance(values, list):
+                return set()
+            return {str(value) for value in values if value}
 
     def load_linked_folder_files(self, tree_key: str) -> dict[str, str]:
         """Return ``{file_path: node_id}`` for linked-folder items in *tree_key*."""
-        record = self.load_all().get("trees", {}).get(tree_key)
-        if not isinstance(record, dict):
-            return {}
-        mapping = record.get("linked_folder_files", {})
-        if not isinstance(mapping, dict):
-            return {}
-        return {str(k): str(v) for k, v in mapping.items() if k and v}
+        with self._lock:
+            record = self._runtime_data().get("trees", {}).get(tree_key)
+            if not isinstance(record, dict):
+                return {}
+            mapping = record.get("linked_folder_files", {})
+            if not isinstance(mapping, dict):
+                return {}
+            return {str(k): str(v) for k, v in mapping.items() if k and v}
 
     def load_meeting_folder_imports(self, tree_key: str) -> dict[str, dict[str, Any]]:
         """Return source-file import records for meeting-targeted folders."""
-        record = self.load_all().get("trees", {}).get(tree_key)
-        if not isinstance(record, dict):
-            return {}
-        mapping = record.get("meeting_folder_imports", {})
-        if not isinstance(mapping, dict):
-            return {}
-        return {
-            str(k): v
-            for k, v in mapping.items()
-            if k and isinstance(v, dict)
-        }
+        with self._lock:
+            record = self._runtime_data().get("trees", {}).get(tree_key)
+            if not isinstance(record, dict):
+                return {}
+            mapping = record.get("meeting_folder_imports", {})
+            if not isinstance(mapping, dict):
+                return {}
+            return {
+                str(k): copy.deepcopy(v)
+                for k, v in mapping.items()
+                if k and isinstance(v, dict)
+            }
 
     def find_snapshot(
         self,
         pub_type: str,
         monday: date,
         language: str,
+        is_sign_language: bool = False,
     ) -> MeetingTreeSnapshot | None:
         """Return the newest usable persisted tree for publication/week/language."""
         pub = (pub_type or "").strip()
         lang = (language or "").strip()
         if not pub or not lang:
             return None
-        prefix = f"{pub}:{monday.isoformat()}:{lang}:"
-        trees = self.load_all().get("trees", {})
-        if not isinstance(trees, dict):
-            return None
-
-        candidates: list[MeetingTreeSnapshot] = []
-        for tree_key, record in trees.items():
-            if not isinstance(tree_key, str) or not tree_key.startswith(prefix):
-                continue
-            snapshot = _snapshot_from_record(tree_key, record)
-            if snapshot is not None and snapshot.media_count > 0:
-                candidates.append(snapshot)
+        with self._lock:
+            trees = self._runtime_data().get("trees", {})
+            candidates = [
+                snapshot
+                for tree_key, record in trees.items()
+                if isinstance(tree_key, str)
+                and (
+                    parsed := parse_meeting_tree_key(tree_key)
+                ) is not None
+                and parsed.pub_type == pub
+                and parsed.monday == monday
+                and parsed.language == lang
+                and parsed.is_sign_language == bool(is_sign_language)
+                and (snapshot := _snapshot_from_record(tree_key, record)) is not None
+            ]
         if not candidates:
             return None
         return max(candidates, key=lambda snapshot: _issue_sort_key(snapshot.issue))
@@ -210,46 +283,166 @@ class MeetingTreeStore:
         linked_folder_files: dict[str, str] | None = None,
         meeting_folder_imports: dict[str, dict[str, Any]] | None = None,
         overview: MeetingTreeOverview | None = None,
-    ) -> None:
-        data = self.load_all()
-        trees = data.setdefault("trees", {})
-        existing = trees.get(tree_key)
-        existing_overview = (
-            existing.get("overview")
-            if isinstance(existing, dict) and isinstance(existing.get("overview"), dict)
-            else None
-        )
-        record: dict[str, Any] = {
-            "deleted_source_keys": sorted(deleted_source_keys or set()),
-            "last_canonical_hash": canonical_hash,
-            "nodes": clone_nodes(nodes),
-        }
-        if overview is not None:
-            record["overview"] = overview.to_record()
-        elif existing_overview is not None:
-            record["overview"] = existing_overview
-        if linked_folder_files:
-            record["linked_folder_files"] = dict(linked_folder_files)
-        if meeting_folder_imports:
-            record["meeting_folder_imports"] = dict(meeting_folder_imports)
-        trees[tree_key] = record
-        self._write(data)
+        *,
+        source_checksum: str | None = None,
+    ) -> MeetingTreeSnapshot:
+        with self._lock:
+            data = copy.deepcopy(self._runtime_data())
+            trees = data.setdefault("trees", {})
+            existing = trees.get(tree_key)
+            existing_overview = (
+                existing.get("overview")
+                if isinstance(existing, dict) and isinstance(existing.get("overview"), dict)
+                else None
+            )
+            revision = (
+                _int_or_default(existing.get("revision"), 0) + 1
+                if isinstance(existing, dict)
+                else 1
+            )
+            record: dict[str, Any] = {
+                "deleted_source_keys": sorted(deleted_source_keys or set()),
+                "last_canonical_hash": canonical_hash,
+                "nodes": clone_nodes(nodes),
+                "revision": revision,
+            }
+            if source_checksum is not None:
+                record["source_checksum"] = str(source_checksum)
+            elif isinstance(existing, dict) and existing.get("source_checksum"):
+                record["source_checksum"] = str(existing["source_checksum"])
+            if overview is not None:
+                record["overview"] = overview.to_record()
+            elif existing_overview is not None:
+                record["overview"] = existing_overview
+            if linked_folder_files:
+                record["linked_folder_files"] = dict(linked_folder_files)
+            if meeting_folder_imports:
+                record["meeting_folder_imports"] = copy.deepcopy(
+                    meeting_folder_imports
+                )
+            trees[tree_key] = record
+            self._write(data)
+            snapshot = _snapshot_from_record(tree_key, record)
+            if snapshot is None:
+                raise ValueError(f"Could not materialize meeting tree '{tree_key}'.")
+            return snapshot
+
+    def reconcile(
+        self,
+        tree_key: str,
+        canonical: list[Node],
+        canonical_hash: str,
+        overview: MeetingTreeOverview,
+        *,
+        fallback: MeetingTreeSnapshot | None = None,
+        source_checksum: str | None = None,
+    ) -> MeetingTreeSnapshot:
+        """Atomically merge canonical data into the latest persisted aggregate."""
+        with self._lock:
+            current = _snapshot_from_record(
+                tree_key,
+                self._runtime_data().get("trees", {}).get(tree_key),
+            )
+            saved = current or fallback
+            deleted_source_keys = (
+                set(saved.deleted_source_keys) if saved is not None else set()
+            )
+            merged = MeetingTreeMerger(canonical, deleted_source_keys).merge(
+                saved.nodes if saved is not None else None
+            )
+            return self.save(
+                tree_key,
+                merged,
+                canonical_hash,
+                deleted_source_keys,
+                dict(saved.linked_folder_files) if saved is not None else None,
+                (
+                    copy.deepcopy(saved.meeting_folder_imports)
+                    if saved is not None
+                    else None
+                ),
+                overview,
+                source_checksum=(
+                    source_checksum
+                    if source_checksum is not None
+                    else (saved.source_checksum if saved is not None else "")
+                ),
+            )
+
+    def patch_media_batch(
+        self,
+        tree_key: str,
+        patches: dict[str, tuple[tuple, dict[str, Any]]],
+    ) -> MeetingTreeSnapshot | None:
+        """Patch resolved metadata in one atomic revision."""
+        with self._lock:
+            current = _snapshot_from_record(
+                tree_key,
+                self._runtime_data().get("trees", {}).get(tree_key),
+            )
+            if current is None:
+                return None
+            changed = False
+            for target in iter_nodes(current.nodes):
+                node_id = str(target.get("id") or "")
+                entry = patches.get(node_id)
+                if entry is None or target.get("type") != "media":
+                    continue
+                expected_identity, patch = entry
+                if media_identity_signature(target) != expected_identity:
+                    continue
+                accepts_title = should_accept_resolved_media_title(target)
+                for field, value in patch.items():
+                    if not accepts_title and field in {
+                        "title",
+                        "auto_title",
+                        "media_ref_label",
+                    }:
+                        continue
+                    if field == "media_ref_label":
+                        media_ref = target.setdefault("media_ref", {})
+                        if (
+                            isinstance(media_ref, dict)
+                            and value not in (None, "")
+                            and media_ref.get("label") != value
+                        ):
+                            media_ref["label"] = copy.deepcopy(value)
+                            changed = True
+                        continue
+                    if value not in (None, "") and target.get(field) != value:
+                        target[field] = copy.deepcopy(value)
+                        changed = True
+            if not changed:
+                return current
+            return self.save(
+                tree_key,
+                current.nodes,
+                current.canonical_hash,
+                current.deleted_source_keys,
+                current.linked_folder_files or None,
+                current.meeting_folder_imports or None,
+                current.overview,
+                source_checksum=current.source_checksum,
+            )
 
     def remove_old_trees(self, keep: set[str]) -> None:
         if not keep:
             return
-        data = self.load_all()
-        trees = data.setdefault("trees", {})
-        changed = False
-        for key in list(trees.keys()):
-            if key not in keep:
-                trees.pop(key, None)
-                changed = True
-        if changed:
-            self._write(data)
+        with self._lock:
+            data = copy.deepcopy(self._runtime_data())
+            trees = data.setdefault("trees", {})
+            changed = False
+            for key in list(trees.keys()):
+                if key not in keep:
+                    trees.pop(key, None)
+                    changed = True
+            if changed:
+                self._write(data)
 
     def _write(self, data: dict[str, Any]) -> None:
+        normalized = self._normalize(data)
         self._json.write(data, sort_keys=True, trailing_newline=True)
+        self._data = copy.deepcopy(normalized)
 
 
 def _stored_file_name(value: str) -> str:
@@ -276,18 +469,42 @@ def _decode_cover_bytes(value: object) -> bytes | None:
         return None
 
 
+def make_meeting_tree_key(
+    pub_type: str,
+    monday: date,
+    language: str,
+    issue: str,
+    *,
+    is_sign_language: bool = False,
+) -> str:
+    variant = ":sign" if is_sign_language else ""
+    return f"{pub_type}:{monday.isoformat()}:{language}{variant}:{issue}"
+
+
 def parse_meeting_tree_key(tree_key: str) -> MeetingTreeKey | None:
-    parts = tree_key.split(":", 3)
-    if len(parts) != 4:
-        return None
-    pub_type, monday_text, language, issue = parts
+    sign_parts = tree_key.split(":", 4)
+    if len(sign_parts) == 5 and sign_parts[3] == "sign":
+        pub_type, monday_text, language, _variant, issue = sign_parts
+        is_sign_language = True
+    else:
+        parts = tree_key.split(":", 3)
+        if len(parts) != 4:
+            return None
+        pub_type, monday_text, language, issue = parts
+        is_sign_language = False
     if not pub_type or not monday_text or not language:
         return None
     try:
         monday = date.fromisoformat(monday_text)
     except ValueError:
         return None
-    return MeetingTreeKey(pub_type, monday, language, issue)
+    return MeetingTreeKey(
+        pub_type,
+        monday,
+        language,
+        issue,
+        is_sign_language,
+    )
 
 
 def _string_set(value: object) -> set[str]:
@@ -340,6 +557,9 @@ def _snapshot_from_record(
         linked_folder_files=_string_mapping(record.get("linked_folder_files", {})),
         meeting_folder_imports=_import_mapping(record.get("meeting_folder_imports", {})),
         overview=overview,
+        source_checksum=str(record.get("source_checksum", "")),
+        revision=max(0, _int_or_default(record.get("revision"), 0)),
+        is_sign_language=key.is_sign_language,
     )
 
 

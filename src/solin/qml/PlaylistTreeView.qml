@@ -244,6 +244,7 @@ Item {
 
     QtObject {
         id: dragManager
+        objectName: "dragManager"
         property var draggedItem: null
         property string draggedId: ""
         property string draggedType: ""
@@ -252,6 +253,7 @@ Item {
 
         property Rectangle placeholder: Rectangle {
             id: placeholderRect
+            objectName: "dragPlaceholder"
             property var parentList: null
             property bool suspendBehavior: false
             parent: dragOverlay
@@ -339,16 +341,26 @@ Item {
 
             var item = draggedItem
             var targetList = placeholder.parentList
-            var ok = false
+            var modelMoved = false
+            var viewSynchronized = false
 
             if (targetList) {
                 var index = targetList.indexOfNode(placeholder)
-                ok = root.hasController
-                     && root.playlistController.moveNode(draggedId, targetList.listId, index)
-                if (ok) {
-                    targetList.insertBeforeNode(item, placeholder)
-                    targetList.removeNode(placeholder)
+                modelMoved = root.hasController
+                             && root.playlistController.moveNode(
+                                 draggedId,
+                                 targetList.listId,
+                                 index
+                             )
+                if (modelMoved) {
+                    viewSynchronized = rootPlaylist.moveExistingNode(
+                        draggedId,
+                        targetList.listId,
+                        index,
+                        item
+                    )
                 }
+                targetList.removeNode(placeholder)
             }
 
             item.opacity = 1.0
@@ -361,8 +373,10 @@ Item {
             draggedType = ""
             externalActive = false
 
-            if (!ok)
-                rootPlaylist.rebuildFromNodes(root.playlistNodes)
+            if (!modelMoved || !viewSynchronized) {
+                item.destroy()
+                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+            }
         }
 
         function cancelDrag() {
@@ -816,6 +830,40 @@ Item {
             return items.indexOf(node)
         }
 
+        function directPendingNodeIndex(nodeId) {
+            for (var i = 0; i < pendingNodes.length; i++) {
+                if (pendingNodes[i] && pendingNodes[i].id === nodeId)
+                    return i
+            }
+            return -1
+        }
+
+        function synchronizePendingInsertion(insertIndex, visualNode) {
+            if (!visualNode || !visualNode.node)
+                return
+            var nodeId = visualNode.nodeId
+            var existingIndex = directPendingNodeIndex(nodeId)
+            if (existingIndex === insertIndex)
+                return
+            var pendingNode = visualNode.node
+            if (existingIndex >= 0)
+                pendingNode = pendingNodes.splice(existingIndex, 1)[0]
+            var index = Math.max(0, Math.min(insertIndex, pendingNodes.length))
+            spliceArray(pendingNodes, index, 0, [pendingNode])
+        }
+
+        function destroyDirectVisualNodes(nodeId, excluded) {
+            var destroyed = 0
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i]
+                if (child && child !== excluded && child.nodeId === nodeId) {
+                    child.destroy()
+                    destroyed += 1
+                }
+            }
+            return destroyed
+        }
+
         function updateNodeList(node) {
             if (node === dragManager.placeholder) {
                 if (node.parentList && node.parentList !== listRoot)
@@ -878,7 +926,7 @@ Item {
             }
         }
 
-        function moveExistingNode(nodeId, targetListId, insertIndex) {
+        function moveExistingNode(nodeId, targetListId, insertIndex, visualNode) {
             if (root.treeHydrating || rebuildQueued)
                 return false
             var taken = takePendingNode(pendingNodes, nodeId)
@@ -895,8 +943,9 @@ Item {
                 return false
             }
 
-            var visual = takeVisualNode(nodeId)
+            var visual = visualNode || takeVisualNode(nodeId)
             var targetList = findList(targetListId)
+            removePendingNodeFromVisibleLists(nodeId, targetList)
             if (targetList && !targetList.collapsed) {
                 if (!visual)
                     visual = targetList.createNodeObject(taken.node)
@@ -907,6 +956,26 @@ Item {
                 visual.destroy()
             requestLayout()
             return true
+        }
+
+        function removePendingNodeFromVisibleLists(nodeId, excludedList) {
+            if (listRoot !== excludedList) {
+                var localIndex = directPendingNodeIndex(nodeId)
+                if (localIndex >= 0) {
+                    pendingNodes.splice(localIndex, 1)
+                    if (localIndex < pendingIndex)
+                        pendingIndex = Math.max(0, pendingIndex - 1)
+                }
+            }
+            for (var i = 0; i < items.length; i++) {
+                var child = items[i]
+                if (child && child.bodyList) {
+                    child.bodyList.removePendingNodeFromVisibleLists(
+                        nodeId,
+                        excludedList
+                    )
+                }
+            }
         }
 
         function takePendingNode(sourceNodes, nodeId) {
@@ -956,6 +1025,9 @@ Item {
                 var child = items[i]
                 if (child && child.nodeId === nodeId) {
                     var visual = items.splice(i, 1)[0]
+                    var localPendingIndex = directPendingNodeIndex(nodeId)
+                    if (localPendingIndex >= 0)
+                        pendingNodes.splice(localPendingIndex, 1)
                     pendingIndex = Math.max(0, pendingIndex - 1)
                     requestLayout()
                     return visual
@@ -984,7 +1056,10 @@ Item {
         }
 
         function insertVisualNode(insertIndex, node) {
-            if (!node || collapsed || rebuildQueued)
+            if (!node)
+                return false
+            synchronizePendingInsertion(insertIndex, node)
+            if (collapsed || rebuildQueued)
                 return false
             if (insertIndex > pendingIndex)
                 return false
@@ -998,18 +1073,24 @@ Item {
         }
 
         function insertNodes(targetListId, insertIndex, nodes) {
+            var insertedNodes = nodes || []
+            if (insertedNodes.length === 0)
+                return true
             if (listId === targetListId) {
-                return insertNodesHere(insertIndex, nodes || [])
+                return insertNodesHere(insertIndex, insertedNodes)
             }
 
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (child && child.bodyList
-                        && child.bodyList.insertNodes(targetListId, insertIndex, nodes)) {
-                    return true
-                }
+            var visibleTarget = findList(targetListId)
+            if (visibleTarget
+                    && !visibleTarget.insertNodesHere(insertIndex, insertedNodes)) {
+                return false
             }
-            return insertNodesInPendingTree(pendingNodes, targetListId, insertIndex, nodes || [])
+            return synchronizeNodesInPendingTree(
+                pendingNodes,
+                targetListId,
+                insertIndex,
+                insertedNodes
+            )
         }
 
         function insertNodesHere(insertIndex, nodes) {
@@ -1035,7 +1116,31 @@ Item {
             return true
         }
 
-        function insertNodesInPendingTree(sourceNodes, targetListId, insertIndex, nodes) {
+        function synchronizePendingInsertionRange(targetNodes, insertIndex, nodes) {
+            var idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
+            var alreadySynchronized = idx + nodes.length <= targetNodes.length
+            for (var n = 0; alreadySynchronized && n < nodes.length; n++) {
+                alreadySynchronized = targetNodes[idx + n]
+                                      && targetNodes[idx + n].id === nodes[n].id
+            }
+            if (alreadySynchronized)
+                return
+
+            for (var i = targetNodes.length - 1; i >= 0; i--) {
+                for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+                    if (targetNodes[i]
+                            && targetNodes[i].id === nodes[nodeIndex].id) {
+                        targetNodes.splice(i, 1)
+                        break
+                    }
+                }
+            }
+            idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
+            spliceArray(targetNodes, idx, 0, nodes)
+        }
+
+        function synchronizeNodesInPendingTree(
+                sourceNodes, targetListId, insertIndex, nodes) {
             if (!sourceNodes || !nodes || nodes.length === 0)
                 return false
             for (var i = 0; i < sourceNodes.length; i++) {
@@ -1043,12 +1148,20 @@ Item {
                 if (childListIdForNode(node) === targetListId) {
                     if (!node.children)
                         node.children = []
-                    var idx = Math.max(0, Math.min(insertIndex, node.children.length))
-                    spliceArray(node.children, idx, 0, nodes)
+                    synchronizePendingInsertionRange(
+                        node.children,
+                        insertIndex,
+                        nodes
+                    )
                     return true
                 }
                 if (node.children
-                        && insertNodesInPendingTree(node.children, targetListId, insertIndex, nodes)) {
+                        && synchronizeNodesInPendingTree(
+                            node.children,
+                            targetListId,
+                            insertIndex,
+                            nodes
+                        )) {
                     return true
                 }
             }
@@ -1084,12 +1197,28 @@ Item {
                     break
                 }
             }
-            if (visualIdx < 0)
-                visualIdx = Math.max(0, Math.min(pendingIdx, items.length - 1))
+            if (visualIdx < 0) {
+                // A freshly moved delegate may already be reparented here but
+                // not yet registered in items. Remove only the exact ID.
+                destroyDirectVisualNodes(oldNodeId, null)
+                if (nodes.length === 0) {
+                    pendingIndex = Math.max(
+                        0,
+                        Math.min(pendingNodes.length, pendingIndex - 1)
+                    )
+                    requestLayout()
+                    return true
+                }
+                // Replacements need deterministic positioning. If the exact
+                // delegate is absent, rebuild from the already-correct model.
+                scheduleRebuild(pendingNodes)
+                return true
+            }
 
             var existing = items[visualIdx]
             if (existing)
                 existing.destroy()
+            destroyDirectVisualNodes(oldNodeId, existing)
             items.splice(visualIdx, 1)
             for (var n = 0; n < nodes.length; n++) {
                 var obj = createNodeObject(nodes[n])

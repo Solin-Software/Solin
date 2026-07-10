@@ -45,6 +45,9 @@ class MeetingPublicationRef:
 @dataclass(slots=True)
 class WeekData:
     monday: date = field(default_factory=date.today)
+    language_code: str = ""
+    is_sign_language: bool = False
+    request_generation: int = 0
     mwb_pub_dir: Path | None = None
     mwb_cover_bytes: bytes | None = None
     mwb_date_label: str = ""
@@ -53,10 +56,12 @@ class WeekData:
     mwb_publication_refs: list[MeetingPublicationRef] = field(default_factory=list)
     mwb_status: str = "idle"
     mwb_issue: str = ""
+    mwb_source_checksum: str = ""
     wt_pub_dir: Path | None = None
     wt_cover_bytes: bytes | None = None
     wt_study_title: str = ""
     wt_issue: str = ""
+    wt_source_checksum: str = ""
     wt_all_media: list[MeetingMedia] = field(default_factory=list)
     wt_status: str = "idle"
     cbs_ref: dict[str, Any] | None = None

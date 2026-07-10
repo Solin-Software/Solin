@@ -109,7 +109,6 @@ def _build_main_window_service_factories(
     lang_manager,
     runtime_paths,
     profile_settings,
-    media_cache_manager,
     jwpub_checksum_store,
     installation_settings,
 ):
@@ -161,8 +160,6 @@ def _build_main_window_service_factories(
             parent=parent,
         ),
         jwpub=lambda parent: JwpubService(
-            profile_settings.media,
-            media_cache_manager,
             runtime_paths.jwpub_cache_dir,
             jwpub_checksum_store,
             parent,
@@ -314,7 +311,6 @@ def _launch_main_window(
         lang_manager,
         runtime_paths,
         main_window_profile_settings,
-        media.cache_manager,
         jwpub_checksum_store,
         installation_settings,
     )

@@ -109,6 +109,7 @@ class MediaSectionMixin:
 
     def _on_meetings_dl_toggled(self, checked):
         self._media_settings.set_meetings_auto_download(checked)
+        self.meetings_auto_download_toggled.emit(bool(checked))
 
     def get_meetings_auto_download(self):
         return self._media_settings.meetings_auto_download()

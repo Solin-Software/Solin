@@ -2280,6 +2280,32 @@ def test_live_and_headless_meeting_trees_share_one_controller_factory() -> None:
     assert source.count("_tree_controller_factory.create(") == 1
 
 
+def test_meeting_preparation_is_the_only_weekly_prefetch_pipeline() -> None:
+    source_root = PROJECT_ROOT / "src" / "solin"
+    preparation = (
+        source_root / "core" / "meetings" / "preparation.py"
+    ).read_text(encoding="utf-8")
+    facade = (
+        source_root / "core" / "meetings" / "publications.py"
+    ).read_text(encoding="utf-8")
+    worker = (
+        source_root / "core" / "meetings" / "publication_worker.py"
+    ).read_text(encoding="utf-8")
+    widget = (
+        source_root / "widgets" / "meetings" / "widget.py"
+    ).read_text(encoding="utf-8")
+
+    assert "class MeetingPreparationService" in preparation
+    assert "self._store.reconcile(" in preparation
+    assert "self._store.patch_media_batch(" in preparation
+    assert "self._cache_manager.prefetch_many(" in preparation
+    assert "auto_download_if_enabled" not in facade
+    assert "prefetch_week_media" not in worker
+    assert "self._preparation.ensure_week(" in widget
+    assert ".load_week(" not in widget
+    assert "jwpub_service_factory" not in widget
+
+
 def test_main_window_wires_media_destination_to_the_signal_graph() -> None:
     path = PROJECT_ROOT / "src" / "solin" / "main_window.py"
     calls = {
