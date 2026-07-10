@@ -56,10 +56,12 @@ class WeekData:
     mwb_publication_refs: list[MeetingPublicationRef] = field(default_factory=list)
     mwb_status: str = "idle"
     mwb_issue: str = ""
+    mwb_source_checksum: str = ""
     wt_pub_dir: Path | None = None
     wt_cover_bytes: bytes | None = None
     wt_study_title: str = ""
     wt_issue: str = ""
+    wt_source_checksum: str = ""
     wt_all_media: list[MeetingMedia] = field(default_factory=list)
     wt_status: str = "idle"
     cbs_ref: dict[str, Any] | None = None

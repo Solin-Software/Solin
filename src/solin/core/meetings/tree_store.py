@@ -88,6 +88,7 @@ class MeetingTreeSnapshot:
     linked_folder_files: dict[str, str]
     meeting_folder_imports: dict[str, dict[str, Any]]
     overview: MeetingTreeOverview
+    source_checksum: str = ""
     revision: int = 0
     is_sign_language: bool = False
 
@@ -282,6 +283,8 @@ class MeetingTreeStore:
         linked_folder_files: dict[str, str] | None = None,
         meeting_folder_imports: dict[str, dict[str, Any]] | None = None,
         overview: MeetingTreeOverview | None = None,
+        *,
+        source_checksum: str | None = None,
     ) -> MeetingTreeSnapshot:
         with self._lock:
             data = copy.deepcopy(self._runtime_data())
@@ -303,6 +306,10 @@ class MeetingTreeStore:
                 "nodes": clone_nodes(nodes),
                 "revision": revision,
             }
+            if source_checksum is not None:
+                record["source_checksum"] = str(source_checksum)
+            elif isinstance(existing, dict) and existing.get("source_checksum"):
+                record["source_checksum"] = str(existing["source_checksum"])
             if overview is not None:
                 record["overview"] = overview.to_record()
             elif existing_overview is not None:
@@ -328,6 +335,7 @@ class MeetingTreeStore:
         overview: MeetingTreeOverview,
         *,
         fallback: MeetingTreeSnapshot | None = None,
+        source_checksum: str | None = None,
     ) -> MeetingTreeSnapshot:
         """Atomically merge canonical data into the latest persisted aggregate."""
         with self._lock:
@@ -354,6 +362,11 @@ class MeetingTreeStore:
                     else None
                 ),
                 overview,
+                source_checksum=(
+                    source_checksum
+                    if source_checksum is not None
+                    else (saved.source_checksum if saved is not None else "")
+                ),
             )
 
     def patch_media_batch(
@@ -409,6 +422,7 @@ class MeetingTreeStore:
                 current.linked_folder_files or None,
                 current.meeting_folder_imports or None,
                 current.overview,
+                source_checksum=current.source_checksum,
             )
 
     def remove_old_trees(self, keep: set[str]) -> None:
@@ -543,6 +557,7 @@ def _snapshot_from_record(
         linked_folder_files=_string_mapping(record.get("linked_folder_files", {})),
         meeting_folder_imports=_import_mapping(record.get("meeting_folder_imports", {})),
         overview=overview,
+        source_checksum=str(record.get("source_checksum", "")),
         revision=max(0, _int_or_default(record.get("revision"), 0)),
         is_sign_language=key.is_sign_language,
     )

@@ -58,6 +58,9 @@ def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> N
         False,
         1,
         0,
+        frozenset({"mwb", "wt"}),
+        "",
+        {},
         0,
     )
     interactive = publications_module._WeekLoadRequest(
@@ -67,6 +70,9 @@ def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> N
         False,
         2,
         1,
+        frozenset({"mwb", "wt"}),
+        "",
+        {},
         1,
     )
     background_key = ("2026-06-01", "T", False, 1)

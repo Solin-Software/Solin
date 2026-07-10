@@ -126,7 +126,12 @@ def _service(monkeypatch, tmp_path, resolver_class=_ImmediateResolver):
     return service, publication, store, cache
 
 
-def _week_data(generation: int, *, with_media: bool) -> WeekData:
+def _week_data(
+    generation: int,
+    *,
+    with_media: bool,
+    source_checksum: str = "",
+) -> WeekData:
     media = (
         [
             MeetingMedia(
@@ -146,6 +151,7 @@ def _week_data(generation: int, *, with_media: bool) -> WeekData:
         request_generation=generation,
         mwb_status="ready",
         mwb_issue="20260500",
+        mwb_source_checksum=source_checksum,
         mwb_date_label="May 25-31",
         mwb_all_media=media,
     )
@@ -214,6 +220,27 @@ def test_on_demand_preparation_persists_tree_without_prefetch(monkeypatch, tmp_p
         service.shutdown(wait_ms=1000)
 
 
+def test_reconciled_tree_records_the_confirmed_source_checksum(monkeypatch, tmp_path) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+        generation = int(publication.loads[0]["generation"])
+        publication.mwb_ready.emit(
+            key.monday.isoformat(),
+            _week_data(generation, with_media=False, source_checksum="confirmed"),
+        )
+
+        _spin_until(
+            lambda: (
+                (snapshot := store.find_snapshot("mwb", key.monday, "T")) is not None
+                and snapshot.source_checksum == "confirmed"
+            )
+        )
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
 def test_automatic_download_prefetches_persisted_url_before_revalidation(
     monkeypatch,
     tmp_path,
@@ -242,6 +269,32 @@ def test_automatic_download_prefetches_persisted_url_before_revalidation(
 
         assert cache.prefetch_calls[0][0] == ["https://cdn.example/meeting.mp4"]
         assert len(publication.loads) == 1
+        assert publication.loads[0]["materialize_cached_publications"] == frozenset({"wt"})
+        assert publication.loads[0]["known_wt_issue"] == ""
+        assert publication.loads[0]["persisted_source_checksums"] == {"mwb": ""}
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_persisted_week_skips_cached_materialization_and_passes_wt_issue(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    for pub_type, issue in (("mwb", "20260500"), ("wt", "20260400")):
+        store.save(
+            f"{pub_type}:2026-05-25:T:{issue}",
+            [],
+            "hash",
+        )
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+
+        request = publication.loads[0]
+        assert request["materialize_cached_publications"] == frozenset()
+        assert request["known_wt_issue"] == "20260400"
+        assert request["persisted_source_checksums"] == {"mwb": "", "wt": ""}
     finally:
         service.shutdown(wait_ms=1000)
 

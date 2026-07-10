@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import itertools
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
@@ -51,6 +52,9 @@ class _WeekLoadRequest:
     is_sign_language: bool
     generation: int
     priority: int
+    materialize_cached_publications: frozenset[str]
+    known_wt_issue: str
+    persisted_source_checksums: dict[str, str]
     order: int
 
 
@@ -81,7 +85,7 @@ class JwpubService(QObject):
     video_resolved = Signal(str, str, str, str)   # request_id, url, title, thumb
 
     # Sinais internos para o worker (despacham para a worker thread)
-    _sig_load_week         = Signal(object, bool, str, bool, int)
+    _sig_load_week         = Signal(object, bool, str, bool, int, object, str, object)
     _sig_set_lang          = Signal(str)
     _sig_set_sign_language = Signal(bool)
     _sig_resolve           = Signal(str, str, int, int, int, str, bool)
@@ -188,6 +192,9 @@ class JwpubService(QObject):
         is_sign_language: bool | None = None,
         generation: int = 0,
         priority: int = 1,
+        materialize_cached_publications: Collection[str] | None = None,
+        known_wt_issue: str = "",
+        persisted_source_checksums: Mapping[str, str] | None = None,
     ):
         language = (language_code or self._lang).strip() or "T"
         is_sign = (
@@ -221,6 +228,21 @@ class JwpubService(QObject):
             is_sign,
             max(0, int(generation)),
             int(priority),
+            frozenset(
+                {"mwb", "wt"}
+                if materialize_cached_publications is None
+                else {
+                    str(pub_type)
+                    for pub_type in materialize_cached_publications
+                    if pub_type in {"mwb", "wt"}
+                }
+            ),
+            str(known_wt_issue or ""),
+            {
+                str(pub_type): str(checksum or "")
+                for pub_type, checksum in (persisted_source_checksums or {}).items()
+                if pub_type in {"mwb", "wt"}
+            },
             next(self._load_order),
         )
         self._dispatch_week_load()
@@ -275,6 +297,9 @@ class JwpubService(QObject):
             request.language,
             request.is_sign_language,
             request.generation,
+            request.materialize_cached_publications,
+            request.known_wt_issue,
+            request.persisted_source_checksums,
         )
 
     def get_week_data(
@@ -373,6 +398,7 @@ class JwpubService(QObject):
             existing.mwb_publication_refs = wd.mwb_publication_refs
             existing.mwb_status      = wd.mwb_status
             existing.mwb_issue       = wd.mwb_issue
+            existing.mwb_source_checksum = wd.mwb_source_checksum
             existing.cbs_ref         = wd.cbs_ref
             existing.cbs_status      = wd.cbs_status
             self.mwb_ready.emit(key, existing)
@@ -391,6 +417,7 @@ class JwpubService(QObject):
             existing.wt_cover_bytes = wd.wt_cover_bytes
             existing.wt_study_title = wd.wt_study_title
             existing.wt_issue       = wd.wt_issue
+            existing.wt_source_checksum = wd.wt_source_checksum
             existing.wt_all_media   = wd.wt_all_media
             existing.wt_status      = wd.wt_status
             self.wt_ready.emit(key, existing)

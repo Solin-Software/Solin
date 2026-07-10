@@ -212,6 +212,8 @@ class MeetingPreparationService(QObject):
         if job.download_media:
             self._prefetch_existing_snapshots(job)
         self._emit_states(key)
+        snapshots = self.snapshots(key)
+        wt_snapshot = snapshots.get("wt")
         self._publication_service.load_week(
             key.monday,
             force=request.force_refresh,
@@ -219,6 +221,16 @@ class MeetingPreparationService(QObject):
             is_sign_language=key.is_sign_language,
             generation=job.generation,
             priority=int(job.priority),
+            materialize_cached_publications=frozenset(
+                pub_type
+                for pub_type in ("mwb", "wt")
+                if pub_type not in snapshots
+            ),
+            known_wt_issue=wt_snapshot.issue if wt_snapshot is not None else "",
+            persisted_source_checksums={
+                pub_type: snapshot.source_checksum
+                for pub_type, snapshot in snapshots.items()
+            },
         )
         return self.state(key, "mwb")
 
@@ -426,6 +438,11 @@ class MeetingPreparationService(QObject):
                 self._builder.canonical_hash(canonical),
                 overview,
                 fallback=fallback,
+                source_checksum=(
+                    wd.mwb_source_checksum
+                    if pub_type == "mwb"
+                    else wd.wt_source_checksum
+                ),
             )
         except (OSError, UnicodeError, ValueError) as exc:
             message = str(exc)

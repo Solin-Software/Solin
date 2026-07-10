@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Iterable, Mapping
 from datetime import date
 from os import PathLike
 from pathlib import Path
@@ -109,7 +110,7 @@ class JwpubWorker(QObject):
 
     # ── Load week ─────────────────────────────────────────────────────────────
 
-    @Slot(object, bool, str, bool, int)
+    @Slot(object, bool, str, bool, int, object, str, object)
     def load_week(
         self,
         monday: date,
@@ -117,19 +118,23 @@ class JwpubWorker(QObject):
         language: str = "T",
         is_sign_language: bool = False,
         generation: int = 0,
+        materialize_cached_publications: object = None,
+        known_wt_issue: str = "",
+        persisted_source_checksums: object = None,
     ):
         """
         Entry point: carrega MWB + WT para a semana dada.
 
         Stale-while-revalidate (SWR)
         ────────────────────────────
-        Fase 1 — SERVIR: se houver cópia local utilizável, renderiza as duas
-                 reuniões IMEDIATAMENTE, sem tocar na rede. É isto que torna um
-                 launch "quente" instantâneo — nunca bloqueamos a tela só para
-                 confirmar um arquivo que não mudou.
+        Fase 1 — MATERIALIZAR: se a árvore persistida daquela publicação ainda
+                 não existe, usa uma cópia local utilizável imediatamente. Uma
+                 árvore já persistida é a fonte de verdade e não é reconstruída
+                 a partir do JWPUB cacheado.
         Fase 2 — REVALIDAR: consulta a API em segundo plano (thread do worker).
-                 Só baixa e re-emite quando o checksum do servidor realmente
-                 mudou. Se nada mudou, nada acontece (sem segundo emit).
+                 Só baixa, lê e re-emite quando o checksum do servidor realmente
+                 mudou. Árvores antigas sem revisão persistida recebem uma única
+                 materialização confirmada para registrar essa revisão.
 
         force=True (retry de erro / troca de idioma) pula a fase de servir e faz
         uma revalidação limpa, mantendo a semântica de "recarregar de verdade".
@@ -137,14 +142,45 @@ class JwpubWorker(QObject):
         self._lang = language or "T"
         self._is_sign_language = bool(is_sign_language)
         self._request_generation = max(0, int(generation))
+        cached_publications = (
+            materialize_cached_publications
+            if isinstance(materialize_cached_publications, Iterable)
+            and not isinstance(materialize_cached_publications, (str, bytes))
+            else ()
+        )
+        materialize_cached = frozenset(
+            str(pub_type)
+            for pub_type in cached_publications
+            if pub_type in {"mwb", "wt"}
+        )
+        persisted_checksums = (
+            persisted_source_checksums
+            if isinstance(persisted_source_checksums, Mapping)
+            else {}
+        )
+        mwb_source_checksum = str(persisted_checksums.get("mwb") or "")
+        wt_source_checksum = str(persisted_checksums.get("wt") or "")
         try:
             mwb_served = False
             wt_served: Optional[str] = None
             if not force:
-                mwb_served = self._serve_mwb_cached(monday)
-                wt_served = self._serve_wt_cached(monday)
-            self._revalidate_mwb(monday, mwb_served)
-            self._revalidate_wt(monday, wt_served)
+                if "mwb" in materialize_cached:
+                    mwb_served = self._serve_mwb_cached(monday)
+                if "wt" in materialize_cached:
+                    wt_served = self._serve_wt_cached(monday)
+            self._revalidate_mwb(
+                monday,
+                mwb_served,
+                materialize_cached="mwb" in materialize_cached,
+                persisted_source_checksum=mwb_source_checksum,
+            )
+            self._revalidate_wt(
+                monday,
+                wt_served,
+                materialize_cached="wt" in materialize_cached,
+                known_issue=str(known_wt_issue or ""),
+                persisted_source_checksum=wt_source_checksum,
+            )
         finally:
             self.load_finished.emit(
                 monday.isoformat(),
@@ -162,12 +198,26 @@ class JwpubWorker(QObject):
         if not self._cache.is_cached("mwb", lang, issue):
             return False
         self._parse_mwb(
-            self._new_week_data(monday, mwb_status="loading", mwb_issue=issue),
-            monday, issue, lang,
+            self._new_week_data(
+                monday,
+                mwb_status="loading",
+                mwb_issue=issue,
+                mwb_source_checksum=self._checksum_store.get("mwb", lang, issue),
+            ),
+            monday,
+            issue,
+            lang,
         )
         return True
 
-    def _revalidate_mwb(self, monday: date, served: bool):
+    def _revalidate_mwb(
+        self,
+        monday: date,
+        served: bool,
+        *,
+        materialize_cached: bool,
+        persisted_source_checksum: str,
+    ):
         """
         Fase 2 (SWR): consulta a API e só re-emite se o conteúdo do servidor
         mudou. ``served`` indica se a fase 1 já mostrou uma cópia do cache.
@@ -183,13 +233,22 @@ class JwpubWorker(QObject):
 
         if not url:
             # API inalcançável, ou a publicação não existe para esta semana/idioma.
-            if served:
+            if served or not materialize_cached:
                 return  # já mostramos o cache — nada a fazer
             if self._cache.is_cached("mwb", lang, issue):
                 log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
                 self._parse_mwb(
-                    self._new_week_data(monday, mwb_status="loading", mwb_issue=issue),
-                    monday, issue, lang,
+                    self._new_week_data(
+                        monday,
+                        mwb_status="loading",
+                        mwb_issue=issue,
+                        mwb_source_checksum=self._checksum_store.get(
+                            "mwb", lang, issue
+                        ),
+                    ),
+                    monday,
+                    issue,
+                    lang,
                 )
                 return
             self._emit_error(
@@ -197,24 +256,52 @@ class JwpubWorker(QObject):
             )
             return
 
-        if not needs_jwpub_download(
-            self._cache, self._checksum_store, "mwb", lang, issue, checksum
+        if not self._needs_jwpub_refresh(
+            "mwb",
+            lang,
+            issue,
+            checksum,
+            persisted_source_checksum=persisted_source_checksum,
         ):
-            # Cópia local confirmada atual. Se já a servimos, "nada acontece".
-            if not served:
+            if (
+                (not served and materialize_cached)
+                or (checksum and checksum != persisted_source_checksum)
+            ):
                 self._parse_mwb(
-                    self._new_week_data(monday, mwb_status="loading", mwb_issue=issue),
-                    monday, issue, lang,
+                    self._new_week_data(
+                        monday,
+                        mwb_status="loading",
+                        mwb_issue=issue,
+                        mwb_source_checksum=checksum,
+                    ),
+                    monday,
+                    issue,
+                    lang,
                 )
             return
 
         # Conteúdo mudou no servidor (ou nada em cache ainda) → baixa e re-renderiza.
-        if not self._download("mwb", lang, issue, url, key, "mwb", emit_error=not served):
+        if not self._download(
+            "mwb",
+            lang,
+            issue,
+            url,
+            key,
+            "mwb",
+            emit_error=not (served or not materialize_cached),
+        ):
             return  # falhou; se já servimos cache, ele permanece na tela
         self._checksum_store.save("mwb", lang, issue, checksum)
         self._parse_mwb(
-            self._new_week_data(monday, mwb_status="loading", mwb_issue=issue),
-            monday, issue, lang,
+            self._new_week_data(
+                monday,
+                mwb_status="loading",
+                mwb_issue=issue,
+                mwb_source_checksum=checksum,
+            ),
+            monday,
+            issue,
+            lang,
         )
 
     def _parse_mwb(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
@@ -280,32 +367,76 @@ class JwpubWorker(QObject):
         for issue in watchtower_issue_candidates(monday):
             if not self._cache.is_cached("w", lang, issue):
                 continue
-            wd = self._new_week_data(monday, wt_status="loading")
+            wd = self._new_week_data(
+                monday,
+                wt_status="loading",
+                wt_source_checksum=self._checksum_store.get("w", lang, issue),
+            )
             if self._try_wt_cached(wd, monday, issue, lang):
                 return issue
         return None
 
-    def _revalidate_wt(self, monday: date, served_issue: Optional[str]):
+    def _revalidate_wt(
+        self,
+        monday: date,
+        served_issue: Optional[str],
+        *,
+        materialize_cached: bool,
+        known_issue: str,
+        persisted_source_checksum: str,
+    ):
         """
-        Fase 2 (SWR). Se já servimos uma edição do cache, revalida APENAS ela
-        (a única que importa) e só re-emite se mudou. Caso contrário, cai no
-        resolvedor frio que sonda os candidatos pela rede e baixa o correto.
+        Fase 2 (SWR). Revalida a edição servida do cache ou a edição registrada
+        na árvore persistida e só re-emite se mudou. Sem uma edição conhecida,
+        cai no resolvedor frio que sonda os candidatos pela rede.
         """
         lang = self._lang
-        if served_issue is not None:
+        issue = served_issue or known_issue
+        if issue:
             key = monday.isoformat()
-            archive_info = resolve_jwpub_archive("w", lang, served_issue)
+            archive_info = resolve_jwpub_archive("w", lang, issue)
             url = archive_info.download_url
             checksum = archive_info.checksum
-            if url and needs_jwpub_download(
-                self._cache, self._checksum_store, "w", lang, served_issue, checksum
+            if url and self._needs_jwpub_refresh(
+                "w",
+                lang,
+                issue,
+                checksum,
+                persisted_source_checksum=persisted_source_checksum,
             ):
-                if self._download("w", lang, served_issue, url, key, "wt", emit_error=False):
-                    self._checksum_store.save("w", lang, served_issue, checksum)
+                if self._download(
+                    "w",
+                    lang,
+                    issue,
+                    url,
+                    key,
+                    "wt",
+                    emit_error=materialize_cached,
+                ):
+                    self._checksum_store.save("w", lang, issue, checksum)
                     self._try_wt_cached(
-                        self._new_week_data(monday, wt_status="loading"),
-                        monday, served_issue, lang,
+                        self._new_week_data(
+                            monday,
+                            wt_status="loading",
+                            wt_source_checksum=checksum,
+                        ),
+                        monday,
+                        issue,
+                        lang,
                     )
+            elif checksum and checksum != persisted_source_checksum:
+                self._try_wt_cached(
+                    self._new_week_data(
+                        monday,
+                        wt_status="loading",
+                        wt_source_checksum=checksum,
+                    ),
+                    monday,
+                    issue,
+                    lang,
+                )
+            return
+        if not materialize_cached:
             return
         # Caminho frio: sem cache utilizável → sonda candidatos e baixa pela rede.
         self._download_wt_chain(
@@ -362,7 +493,13 @@ class JwpubWorker(QObject):
                         "wt %s: API unreachable, falling back to cached copy",
                         issue,
                     )
-                    wd = self._new_week_data(monday, wt_status="loading")
+                    wd = self._new_week_data(
+                        monday,
+                        wt_status="loading",
+                        wt_source_checksum=self._checksum_store.get(
+                            "w", lang, issue
+                        ),
+                    )
                     if self._try_wt_cached(wd, monday, issue, lang):
                         return
                 continue
@@ -374,7 +511,11 @@ class JwpubWorker(QObject):
                     continue
                 self._checksum_store.save("w", lang, issue, checksum)
 
-            wd = self._new_week_data(monday, wt_status="loading")
+            wd = self._new_week_data(
+                monday,
+                wt_status="loading",
+                wt_source_checksum=checksum,
+            )
             if self._try_wt_cached(wd, monday, issue, lang):
                 return
 
@@ -384,6 +525,32 @@ class JwpubWorker(QObject):
         )
         msg = "NOT_FOUND" if had_api else "No WT issue found for this week"
         self._emit_error(key, "wt", msg)
+
+    def _needs_jwpub_refresh(
+        self,
+        publication: str,
+        language: str,
+        issue: str,
+        checksum: str,
+        *,
+        persisted_source_checksum: str,
+    ) -> bool:
+        """Return whether a confirmed remote revision requires tree rebuilding."""
+
+        if (
+            checksum
+            and persisted_source_checksum
+            and persisted_source_checksum == checksum
+        ):
+            return False
+        return needs_jwpub_download(
+            self._cache,
+            self._checksum_store,
+            publication,
+            language,
+            issue,
+            checksum,
+        )
 
     def _parse_wt(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
         key     = monday.isoformat()
