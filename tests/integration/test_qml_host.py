@@ -97,7 +97,7 @@ class _PlaylistTreeControllerProbe(QObject):
     imageFramingChanged = Signal(str, object)
     mediaInserted = Signal(str, int, object)
     nodesInserted = Signal(str, int, object)
-    nodeReplaced = Signal(str, object)
+    nodeReplaced = Signal(str, "QVariant")
     nodeMoved = Signal(str, str, int)
     sectionChanged = Signal(str, str, str, str, str, int)
     sectionCollapseChanged = Signal(str, bool)
@@ -109,6 +109,7 @@ class _PlaylistTreeControllerProbe(QObject):
         super().__init__()
         self._nodes = nodes
         self.projected: list[str] = []
+        self.moves: list[tuple[str, str, int]] = []
 
     @Property(object, notify=stateChanged)
     def playlistData(self):  # noqa: N802 - QML API
@@ -126,6 +127,87 @@ class _PlaylistTreeControllerProbe(QObject):
     def imageFramingSourceAspectRatio(self, _item_id: str) -> float:  # noqa: N802
         return 16 / 9
 
+    @Slot(str, str, int, result=bool)
+    def moveNode(  # noqa: N802 - QML API
+        self,
+        node_id: str,
+        target_list_id: str,
+        insert_index: int,
+    ) -> bool:
+        self.moves.append((node_id, target_list_id, insert_index))
+        return True
+
+
+def _playlist_media_node(item_id: str, title: str) -> dict:
+    return {
+        "type": "media",
+        "id": item_id,
+        "title": title,
+        "duration": "1:00",
+        "thumbSource": "",
+        "cloudVisible": False,
+        "cloudActive": False,
+        "cloudProgress": -1.0,
+        "cloudTooltip": "",
+        "isMissing": False,
+        "imageFraming": None,
+        "mediaType": "video",
+        "badge": "Video",
+    }
+
+
+def _playlist_section_node(
+    section_id: str,
+    children: list[dict],
+) -> dict:
+    return {
+        "type": "section",
+        "id": section_id,
+        "title": "Section",
+        "color": "#4f8cff",
+        "textColor": "#ffffff",
+        "badgeBg": "#26466f",
+        "itemCount": len(children),
+        "collapsed": False,
+        "children": children,
+    }
+
+
+def _playlist_tree_host(
+    nodes: list[dict],
+    *,
+    height: int = 260,
+) -> tuple[
+    QQuickWidget,
+    _PlaylistTreeControllerProbe,
+    QObject,
+    _PlaybackProtectionProbe,
+]:
+    protection = _PlaybackProtectionProbe(enabled=False)
+    controller = _PlaylistTreeControllerProbe(nodes)
+    widget = QQuickWidget()
+    widget.resize(520, height)
+    configure_qml_host(
+        widget,
+        type_name="PlaylistTreeView",
+        clear_color="#000000",
+        image_providers={"playlisticons": PlaylistIconProvider()},
+        context_properties={"playbackProtection": protection},
+        mouse_tracking=True,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("playlistController", controller)
+    root.setProperty("playlistNodes", nodes)
+    root.setProperty("hasItems", True)
+    root_playlist = root.findChild(QObject, "rootPlaylist")
+    assert root_playlist is not None
+    root_playlist.scheduleRebuild(nodes)
+    widget.show()
+    QTest.qWait(40)
+    assert root_playlist.property("rebuildQueued") is False
+    return widget, controller, root_playlist, protection
+
 
 def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
     visible = parent_visible and bool(item.property("visible"))
@@ -136,6 +218,144 @@ def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
     for child in item.childItems():
         texts.extend(_visible_texts(child, parent_visible=visible))
     return texts
+
+
+def test_deleting_untracked_moved_delegate_is_exact_and_does_not_rebuild() -> None:
+    nodes = [
+        _playlist_media_node("keep", "Keep"),
+        _playlist_media_node("remove", "Remove"),
+    ]
+    widget, controller, root_playlist, _protection = _playlist_tree_host(
+        nodes,
+        height=220,
+    )
+
+    remove_card = next(
+        item
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId") == "remove"
+    )
+    root_playlist.removeNode(remove_card)
+
+    controller._nodes = [nodes[0]]
+    controller.nodeReplaced.emit("remove", [])
+    assert root_playlist.property("rebuildQueued") is False
+    QTest.qWait(30)
+
+    visual_ids = [
+        item.property("nodeId")
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeType") == "media"
+    ]
+    assert "keep" in visual_ids
+    assert "remove" not in visual_ids
+
+    widget.deleteLater()
+
+
+def test_move_from_section_to_root_then_delete_stays_incremental() -> None:
+    moved = _playlist_media_node("moved", "Moved")
+    section = _playlist_section_node("section", [moved])
+    nodes = [section]
+    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
+
+    section_without_media = _playlist_section_node("section", [])
+    controller._nodes = [section_without_media, moved]
+    controller.nodeMoved.emit("moved", "root", 1)
+    assert root_playlist.property("rebuildQueued") is False
+
+    controller._nodes = [section_without_media]
+    controller.nodeReplaced.emit("moved", [])
+    assert root_playlist.property("rebuildQueued") is False
+    QTest.qWait(20)
+
+    visual_ids = [
+        item.property("nodeId")
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId")
+    ]
+    assert "section" in visual_ids
+    assert "moved" not in visual_ids
+
+    widget.deleteLater()
+
+
+def test_move_from_root_to_section_then_delete_stays_incremental() -> None:
+    moved = _playlist_media_node("moved", "Moved")
+    empty_section = _playlist_section_node("section", [])
+    nodes = [moved, empty_section]
+    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
+    target_list = root_playlist.findList("section:section")
+    assert target_list is not None
+    assert target_list.property("collapsed") is False
+    assert target_list.property("rebuildQueued") is False
+    assert target_list.property("pendingIndex") == 0
+
+    section_with_media = _playlist_section_node("section", [moved])
+    controller._nodes = [section_with_media]
+    controller.nodeMoved.emit("moved", "section:section", 0)
+    assert root_playlist.property("rebuildQueued") is False
+
+    controller._nodes = [_playlist_section_node("section", [])]
+    controller.nodeReplaced.emit("moved", [])
+    assert root_playlist.property("rebuildQueued") is False
+    QTest.qWait(20)
+
+    visual_ids = [
+        item.property("nodeId")
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId")
+    ]
+    assert "section" in visual_ids
+    assert "moved" not in visual_ids
+
+    widget.deleteLater()
+
+
+def test_move_between_sections_then_delete_stays_incremental() -> None:
+    moved = _playlist_media_node("moved", "Moved")
+    source_section = _playlist_section_node("source", [moved])
+    target_section = _playlist_section_node("target", [])
+    nodes = [source_section, target_section]
+    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
+
+    moved_card = next(
+        item
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId") == "moved"
+    )
+    target_list = root_playlist.findList("section:target")
+    assert target_list is not None
+    drag_manager = widget.rootObject().findChild(QObject, "dragManager")
+    assert drag_manager is not None
+    placeholder = widget.rootObject().findChild(QObject, "dragPlaceholder")
+    assert placeholder is not None
+
+    drag_manager.startDrag(moved_card)
+    target_list.appendNode(placeholder)
+    drag_manager.endDrag()
+    assert controller.moves == [("moved", "section:target", 0)]
+    assert root_playlist.property("rebuildQueued") is False
+
+    source_without_media = _playlist_section_node("source", [])
+    controller._nodes = [
+        source_without_media,
+        _playlist_section_node("target", []),
+    ]
+    controller.nodeReplaced.emit("moved", [])
+    assert root_playlist.property("rebuildQueued") is False
+    QTest.qWait(20)
+
+    visual_ids = [
+        item.property("nodeId")
+        for item in root_playlist.findChildren(QObject)
+        if item.property("nodeId")
+    ]
+    assert "source" in visual_ids
+    assert "target" in visual_ids
+    assert "moved" not in visual_ids
+
+    widget.deleteLater()
 
 
 def test_qml_host_renders_clock_face_content() -> None:
