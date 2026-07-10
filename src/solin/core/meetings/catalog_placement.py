@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, TypedDict
 
 from .tree_types import Node
@@ -34,6 +34,8 @@ class MeetingCatalogPlaylistRef(TypedDict):
 
 def build_meeting_catalog_playlist_ref(
     nodes: Sequence[Node],
+    *,
+    section_title: Callable[[Node], str] | None = None,
 ) -> MeetingCatalogPlaylistRef:
     """Project a meeting tree into the placement contract consumed by JW dialogs."""
     items: list[MeetingPlacementItem] = []
@@ -63,7 +65,11 @@ def build_meeting_catalog_playlist_ref(
                 sections.append(
                     {
                         "id": node_id,
-                        "name": node.get("title", ""),
+                        "name": (
+                            section_title(node)
+                            if section_title is not None
+                            else node.get("title", "")
+                        ),
                         "parent_id": parent_section_id or None,
                         "color_hue": int(node.get("color_hue", 215)),
                     }

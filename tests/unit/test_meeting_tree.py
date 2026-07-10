@@ -1124,6 +1124,26 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             },
         )
 
+    def test_placement_playlist_ref_uses_localized_section_titles(self):
+        controller = self.controller([
+            {
+                "id": "section",
+                "type": "section",
+                "title": "LIVING AS CHRISTIANS",
+                "meeting_generated": True,
+                "meeting_source_key": "section:mwb:lac",
+                "children": [],
+            },
+        ])
+
+        with patch(
+            "solin.widgets.meetings.tree_controller._display_section_title",
+            return_value="Nossa Vida Cristã",
+        ):
+            result = MeetingTreeController.placement_playlist_ref(controller)
+
+        self.assertEqual(result["sections"][0]["name"], "Nossa Vida Cristã")
+
     def test_move_node_reparents_media_and_emits_persistence_updates(self):
         nodes = [
             {"id": "media", "type": "media", "children": []},

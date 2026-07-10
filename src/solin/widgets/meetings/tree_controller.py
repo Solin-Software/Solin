@@ -443,7 +443,10 @@ class MeetingTreeController(QObject):
         return self.tree_data()
 
     def placement_playlist_ref(self) -> MeetingCatalogPlaylistRef:
-        return build_meeting_catalog_playlist_ref(self._nodes)
+        return build_meeting_catalog_playlist_ref(
+            self._nodes,
+            section_title=_display_section_title,
+        )
 
     def add_external_media_items(
         self,

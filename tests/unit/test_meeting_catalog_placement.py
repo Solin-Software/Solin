@@ -102,3 +102,21 @@ def test_unknown_container_is_transparent_and_input_is_not_modified():
 
     assert result["sections"][1]["parent_id"] == "section"
     assert nodes == original
+
+
+def test_catalog_placement_can_use_display_section_titles():
+    nodes = [
+        {
+            "id": "section",
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "children": [],
+        }
+    ]
+
+    result = build_meeting_catalog_playlist_ref(
+        nodes,
+        section_title=lambda node: f"Traduzido: {node['title']}",
+    )
+
+    assert result["sections"][0]["name"] == "Traduzido: LIVING AS CHRISTIANS"
