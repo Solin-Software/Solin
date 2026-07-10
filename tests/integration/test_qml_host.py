@@ -95,8 +95,8 @@ class _PlaylistTreeControllerProbe(QObject):
     stateChanged = Signal()
     mediaChanged = Signal(str, str, str, str)
     imageFramingChanged = Signal(str, object)
-    mediaInserted = Signal(str, int, object)
-    nodesInserted = Signal(str, int, object)
+    mediaInserted = Signal(str, int, "QVariant")
+    nodesInserted = Signal(str, int, "QVariant")
     nodeReplaced = Signal(str, "QVariant")
     nodeMoved = Signal(str, str, int)
     sectionChanged = Signal(str, str, str, str, str, int)
@@ -354,6 +354,48 @@ def test_move_between_sections_then_delete_stays_incremental() -> None:
     assert "source" in visual_ids
     assert "target" in visual_ids
     assert "moved" not in visual_ids
+
+    widget.deleteLater()
+
+
+def test_first_reorder_after_section_insertion_stays_incremental() -> None:
+    existing = _playlist_media_node("existing", "Existing")
+    section = _playlist_section_node("section", [existing])
+    nodes = [section]
+    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
+
+    inserted = _playlist_media_node("inserted", "Inserted")
+    controller._nodes = [
+        _playlist_section_node("section", [existing, inserted]),
+    ]
+    controller.mediaInserted.emit("section:section", 2**31 - 1, [inserted])
+    assert root_playlist.property("rebuildQueued") is False
+
+    target_list = root_playlist.findList("section:section")
+    assert target_list is not None
+    existing_card = next(
+        item
+        for item in target_list.findChildren(QObject)
+        if item.property("nodeId") == "existing"
+    )
+    inserted_card = next(
+        item
+        for item in target_list.findChildren(QObject)
+        if item.property("nodeId") == "inserted"
+    )
+    drag_manager = widget.rootObject().findChild(QObject, "dragManager")
+    placeholder = widget.rootObject().findChild(QObject, "dragPlaceholder")
+    assert drag_manager is not None
+    assert placeholder is not None
+
+    drag_manager.startDrag(inserted_card)
+    target_list.insertBeforeNode(placeholder, existing_card)
+    drag_manager.endDrag()
+
+    assert controller.moves == [("inserted", "section:section", 0)]
+    assert root_playlist.property("rebuildQueued") is False
+    assert target_list.indexOfNode(inserted_card) == 0
+    assert target_list.indexOfNode(existing_card) == 1
 
     widget.deleteLater()
 

@@ -1073,18 +1073,24 @@ Item {
         }
 
         function insertNodes(targetListId, insertIndex, nodes) {
+            var insertedNodes = nodes || []
+            if (insertedNodes.length === 0)
+                return true
             if (listId === targetListId) {
-                return insertNodesHere(insertIndex, nodes || [])
+                return insertNodesHere(insertIndex, insertedNodes)
             }
 
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (child && child.bodyList
-                        && child.bodyList.insertNodes(targetListId, insertIndex, nodes)) {
-                    return true
-                }
+            var visibleTarget = findList(targetListId)
+            if (visibleTarget
+                    && !visibleTarget.insertNodesHere(insertIndex, insertedNodes)) {
+                return false
             }
-            return insertNodesInPendingTree(pendingNodes, targetListId, insertIndex, nodes || [])
+            return synchronizeNodesInPendingTree(
+                pendingNodes,
+                targetListId,
+                insertIndex,
+                insertedNodes
+            )
         }
 
         function insertNodesHere(insertIndex, nodes) {
@@ -1110,7 +1116,31 @@ Item {
             return true
         }
 
-        function insertNodesInPendingTree(sourceNodes, targetListId, insertIndex, nodes) {
+        function synchronizePendingInsertionRange(targetNodes, insertIndex, nodes) {
+            var idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
+            var alreadySynchronized = idx + nodes.length <= targetNodes.length
+            for (var n = 0; alreadySynchronized && n < nodes.length; n++) {
+                alreadySynchronized = targetNodes[idx + n]
+                                      && targetNodes[idx + n].id === nodes[n].id
+            }
+            if (alreadySynchronized)
+                return
+
+            for (var i = targetNodes.length - 1; i >= 0; i--) {
+                for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+                    if (targetNodes[i]
+                            && targetNodes[i].id === nodes[nodeIndex].id) {
+                        targetNodes.splice(i, 1)
+                        break
+                    }
+                }
+            }
+            idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
+            spliceArray(targetNodes, idx, 0, nodes)
+        }
+
+        function synchronizeNodesInPendingTree(
+                sourceNodes, targetListId, insertIndex, nodes) {
             if (!sourceNodes || !nodes || nodes.length === 0)
                 return false
             for (var i = 0; i < sourceNodes.length; i++) {
@@ -1118,12 +1148,20 @@ Item {
                 if (childListIdForNode(node) === targetListId) {
                     if (!node.children)
                         node.children = []
-                    var idx = Math.max(0, Math.min(insertIndex, node.children.length))
-                    spliceArray(node.children, idx, 0, nodes)
+                    synchronizePendingInsertionRange(
+                        node.children,
+                        insertIndex,
+                        nodes
+                    )
                     return true
                 }
                 if (node.children
-                        && insertNodesInPendingTree(node.children, targetListId, insertIndex, nodes)) {
+                        && synchronizeNodesInPendingTree(
+                            node.children,
+                            targetListId,
+                            insertIndex,
+                            nodes
+                        )) {
                     return true
                 }
             }
