@@ -22,6 +22,7 @@ from solin.core.meetings.meeting_folder_imports import (
 )
 from solin.core.meetings.models import MeetingMedia, MeetingPublicationRef, WeekData
 from solin.core.meetings.publication_content import (
+    dedup_multimedia_rows,
     find_mwb_document_id,
     get_cbs_reference,
     get_mwb_publication_refs,
@@ -144,6 +145,29 @@ def multimedia_row(**kwargs) -> dict:
 
 
 class MeetingMediaPathTests(unittest.TestCase):
+    def test_jwpub_svg_multimedia_is_ignored(self):
+        rows = [
+            multimedia_row(
+                MultimediaId=1,
+                MimeType="image/svg+xml; charset=utf-8",
+                FilePath="internal-graphic",
+            ),
+            multimedia_row(
+                MultimediaId=2,
+                MimeType="image/png",
+                FilePath="assets/INTERNAL.SVG?revision=1",
+            ),
+            multimedia_row(
+                MultimediaId=3,
+                MimeType="image/png",
+                FilePath="meeting-image.png",
+            ),
+        ]
+
+        filtered = dedup_multimedia_rows(rows)
+
+        self.assertEqual([row["MultimediaId"] for row in filtered], [3])
+
     def test_jwpub_image_file_path_becomes_existing_absolute_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             pub_dir = Path(tmp)

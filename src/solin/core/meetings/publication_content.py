@@ -521,12 +521,24 @@ def make_media_item(
     )
 
 
+def _is_svg_multimedia(row: Any) -> bool:
+    mime_type = str(row["MimeType"] or "").partition(";")[0].strip().casefold()
+    if mime_type.endswith(("/svg", "/svg+xml")):
+        return True
+
+    raw_path = str(row["FilePath"] or "").strip()
+    normalized_path = raw_path.split("?", 1)[0].split("#", 1)[0]
+    return Path(normalized_path).suffix.casefold() == ".svg"
+
+
 def dedup_multimedia_rows(rows: list[Any]) -> list[Any]:
     seen_multimedia_ids: set[int] = set()
     seen_video_keys: set[tuple[Any, ...]] = set()
     seen_images: set[str] = set()
     result = []
     for row in rows:
+        if _is_svg_multimedia(row):
+            continue
         multimedia_id = row["MultimediaId"]
         if multimedia_id in seen_multimedia_ids:
             continue
