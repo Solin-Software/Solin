@@ -112,6 +112,7 @@ from ...core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
 )
+from ...core.meetings.thumbnails import meeting_thumb_storage_id
 from ...core.meetings.section_meta import SECTION_META
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.projection.aspect_ratio import (
@@ -1844,7 +1845,10 @@ class MeetingTreeController(QObject):
             return ratio
         pixmap = self._thumb_cache.get(item_id)
         if pixmap is None or pixmap.isNull():
-            pixmap = load_thumbnail(self._meeting_thumbnail_store, item_id)
+            pixmap = load_thumbnail(
+                self._meeting_thumbnail_store,
+                self._thumbnail_storage_id(node, item_id),
+            )
         return image_source_aspect_ratio(pixmap=pixmap)
 
     @Slot(str, float, float, float, float, float, bool)
@@ -2680,12 +2684,23 @@ class MeetingTreeController(QObject):
 
     def _thumbnail_local_path(self, node: Node | None, item_id: str = "") -> str:
         item_id = item_id or str((node or {}).get("id", ""))
+        storage_id = self._thumbnail_storage_id(node, item_id)
         stored = str((node or {}).get("thumbnail_local_path") or "")
-        if stored:
+        if not storage_id:
             return stored
-        if not item_id:
-            return ""
-        return os.fspath(self._meeting_thumbnail_store.path(item_id))
+        if stored and (
+            not (node or {}).get("meeting_generated")
+            or (node or {}).get("linked_folder_source")
+            or Path(stored).name == self._meeting_thumbnail_store.path(storage_id).name
+        ):
+            return stored
+        return os.fspath(self._meeting_thumbnail_store.path(storage_id))
+
+    def _thumbnail_storage_id(self, node: Node | None, item_id: str = "") -> str:
+        item_id = item_id or str((node or {}).get("id", ""))
+        if not item_id or not (node or {}).get("meeting_generated"):
+            return item_id
+        return meeting_thumb_storage_id(self._tree_key, item_id)
 
     def _has_local_thumbnail(self, node: Node | None) -> bool:
         item_id = str((node or {}).get("id", ""))
@@ -2696,13 +2711,14 @@ class MeetingTreeController(QObject):
         item_id = str(node.get("id", ""))
         if not item_id or pixmap is None or pixmap.isNull():
             return ""
+        storage_id = self._thumbnail_storage_id(node, item_id)
         try:
-            if not save_thumbnail(self._meeting_thumbnail_store, item_id, pixmap):
+            if not save_thumbnail(self._meeting_thumbnail_store, storage_id, pixmap):
                 return ""
         except Exception:  # noqa: BLE001 - Qt image codec boundary
             log_ignored_exception(__name__, "Could not save meeting thumbnail")
             return ""
-        path = self._meeting_thumbnail_store.path(item_id)
+        path = self._meeting_thumbnail_store.path(storage_id)
         node["thumbnail_cache_key"] = path.name
         node["thumbnail_local_path"] = os.fspath(path)
         return os.fspath(path)
