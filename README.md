@@ -49,6 +49,41 @@ QT_QPA_PLATFORM=xcb python main.py
 
 For an Ubuntu development machine, install the native runtime/build dependencies
 with `sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config`.
+For QtMultimedia hardware acceleration and PipeWire integration in minimal Linux
+installations, also install `libva2`, `libva-drm2`, `libva-x11-2`, and
+`pipewire-bin`. WebVTT subtitles and some QtMultimedia video sinks require
+`gstreamer1.0-plugins-bad`. Automatic Zoom sharing on Linux/X11 additionally requires the
+system executable `xdotool` (`sudo apt install xdotool`); it is not a Python
+package and cannot be installed with `pip`.
+
+### Linux standalone build
+
+The Linux build uses Nuitka and must run inside Linux. From WSL 2, use the
+existing Linux Python 3.13 environment:
+
+```bash
+cd /path/to/Solin
+SOLIN_PYTHON="$HOME/.venvs/solin/bin/python" bash scripts/build_solin.sh
+```
+
+The build requires `build-essential` and `patchelf`, plus the WebKitGTK runtime
+described above. On WSL, compilation intermediates are automatically kept in
+the faster Linux filesystem and the finished distribution is synchronized back
+to `build/linux/main.dist`. Start it through the generated `run-solin` launcher,
+which selects Qt's XCB backend automatically:
+
+```bash
+build/linux/main.dist/run-solin
+```
+
+The launcher also disables WebKitGTK's DMAbuf renderer by default because that
+path commonly produces a blank native webview with virtual GPUs and some Linux
+compositors. On a machine where DMAbuf is known to work, opt back in with
+`WEBKIT_DISABLE_DMABUF_RENDERER=0 build/linux/main.dist/run-solin`.
+
+The manual `Build Solin Linux` GitHub Actions workflow runs the same script on
+Ubuntu 24.04, performs a packaged startup smoke test under Xvfb, and uploads a
+versioned x86-64 standalone `tar.gz` with its SHA-256 checksum.
 
 ## Quality Checks
 

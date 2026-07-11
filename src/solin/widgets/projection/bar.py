@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 import random
+import sys
 from collections.abc import Callable
 
 from PySide6.QtCore import (
     QDateTime,
     QEvent,
     QObject,
+    QPoint,
     Qt,
     QTimer,
     Signal,
@@ -96,6 +98,7 @@ from solin.widgets.songs_widget import BufferedSlider
 
 # Keep ProjectionBar decoupled from PlaylistPanel internals while preserving timing.
 _ANIM_MS = 220
+_LINUX = sys.platform.startswith("linux")
 
 # Projection bar (bottom-right projection control)
 
@@ -264,6 +267,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         if self._container is not None:
             self._container.installEventFilter(self)
+            if _LINUX:
+                self._container.window().installEventFilter(self)
 
         # Aplica volume salvo
         self.vol_slider.setValue(int(self._volume * 100))
@@ -487,7 +492,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _build_overlay(self):
         parent = self._container if self._container else self
-        self.overlay = QWidget(parent)
+        if _LINUX and self._container is not None:
+            self.overlay = QWidget(
+                parent,
+                Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint,
+            )
+        else:
+            self.overlay = QWidget(parent)
         self.overlay.setVisible(False)
         self.overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.overlay.setAutoFillBackground(True)
@@ -611,13 +622,27 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if not self._container:
             return
         c = self._container
-        self.overlay.setGeometry(0, 0, c.width(), c.height() - self._BAR_H)
+        origin = c.mapToGlobal(QPoint(0, 0)) if _LINUX else QPoint(0, 0)
+        self.overlay.setGeometry(
+            origin.x(),
+            origin.y(),
+            c.width(),
+            max(0, c.height() - self._BAR_H),
+        )
 
     # ── Event filter: botão fechar muda ícone no hover ────────────────────
 
     def eventFilter(self, obj, event):
         from PySide6.QtCore import QEvent
-        if obj is self._container and event.type() == QEvent.Type.Resize:
+        geometry_hosts = (
+            self._container,
+            self._container.window() if self._container is not None else None,
+        )
+        if obj in geometry_hosts and event.type() in (
+            QEvent.Type.Move,
+            QEvent.Type.Resize,
+            QEvent.Type.WindowStateChange,
+        ):
             if self._expanded:
                 self._update_overlay_geometry()
                 self.overlay.raise_()

@@ -479,11 +479,18 @@ document.addEventListener("contextmenu", function(event) {
         native_container: QtWidgets.QWidget | None,
         foreign_window: QtGui.QWindow | None,
     ) -> None:
-        if native_container is not None:
-            native_container.hide()
-            shiboken6.delete(native_container)
-        elif foreign_window is not None:
-            shiboken6.delete(foreign_window)
+        if native_container is not None and shiboken6.isValid(native_container):
+            try:
+                native_container.hide()
+                shiboken6.delete(native_container)
+            except RuntimeError:
+                # Qt may delete the native child while tearing down its parent.
+                pass
+        elif foreign_window is not None and shiboken6.isValid(foreign_window):
+            try:
+                shiboken6.delete(foreign_window)
+            except RuntimeError:
+                pass
 
     def _require_created(self) -> None:
         if not self._created:

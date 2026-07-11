@@ -61,6 +61,7 @@ _QAT_MINI_RADIUS = 8
 # corners are recovered by clipping the native layer. Windows keeps the proven
 # fixed-size + translucent + mask path untouched.
 _MAC = sys.platform == "darwin"
+_LINUX = sys.platform.startswith("linux")
 
 
 def _icon_hex(color: str) -> str:
@@ -125,7 +126,21 @@ class QuickAccessToolbar(QQuickWidget):
         # width is driven entirely by QML layout.
         #
         if parent is not None:
-            self.setParent(parent)
+            if _LINUX:
+                # A GtkPlug embedded by createWindowContainer is a native X11
+                # child and always stacks above ordinary sibling widgets.
+                # A transient tool window participates in native stacking and
+                # can therefore remain usable over the browser.
+                self.setParent(
+                    parent,
+                    Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint,
+                )
+                self.setAttribute(
+                    Qt.WidgetAttribute.WA_ShowWithoutActivating,
+                    True,
+                )
+            else:
+                self.setParent(parent)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, True)
@@ -536,7 +551,7 @@ class QuickAccessToolbar(QQuickWidget):
             # Position so that only the miniTab (right-aligned in QML) is
             # visible at the parent's right edge.
             x = p.width() - _QAT_MAX_W
-            self.move(x, base_y)
+            self.move(self._parent_position(p, x, base_y))
             # Mask: only the miniTab area at the right edge is interactive.
             self.setMask(QRegion(
                 _QAT_MAX_W - _QAT_MINI_W,
@@ -549,13 +564,21 @@ class QuickAccessToolbar(QQuickWidget):
             # The pill is centred inside the fixed-width QML root, so we
             # centre the entire QQuickWidget based on _QAT_MAX_W.
             x = (p.width() - _QAT_MAX_W) // 2
-            self.move(x, base_y)
+            self.move(self._parent_position(p, x, base_y))
             # Mask: the pill is centred in the QQuickWidget; expose only that
             # rectangle so surrounding transparent pixels pass clicks through.
             pill_x = (_QAT_MAX_W - pill_w) // 2
             self.setMask(QRegion(pill_x, 0, pill_w, _QAT_H))
             # Keep the monitor-button popup anchor aligned with the pill.
             self._monitor_btn.move(pill_x + 6, (_QAT_H - 30) // 2)
+
+        if _LINUX:
+            self.raise_()
+
+    @staticmethod
+    def _parent_position(parent: QWidget, x: int, y: int) -> QPoint:
+        point = QPoint(x, y)
+        return parent.mapToGlobal(point) if _LINUX else point
 
     def _reposition_solid(self, p, base_y: int) -> None:
         """macOS solid-mode placement.
@@ -600,12 +623,14 @@ class QuickAccessToolbar(QQuickWidget):
 
             # Start at the right edge so it slides in from the right.
             start_x = p.width() - _QAT_MAX_W
-            self.move(start_x, base_y)
+            start = self._parent_position(p, start_x, base_y)
+            target = self._parent_position(p, target_x, base_y)
+            self.move(start)
             self.clearMask()  # full widget visible during animation
 
             self._slide_anim.stop()
-            self._slide_anim.setStartValue(QPoint(start_x, base_y))
-            self._slide_anim.setEndValue(QPoint(target_x, base_y))
+            self._slide_anim.setStartValue(start)
+            self._slide_anim.setEndValue(target)
             self._slide_anim.start()
             QTimer.singleShot(_QAT_ANIM_MS + 20, self._reposition)
         else:
@@ -616,7 +641,9 @@ class QuickAccessToolbar(QQuickWidget):
             self.clearMask()  # full widget visible during animation
             self._slide_anim.stop()
             self._slide_anim.setStartValue(self.pos())
-            self._slide_anim.setEndValue(QPoint(target_x, base_y))
+            self._slide_anim.setEndValue(
+                self._parent_position(p, target_x, base_y)
+            )
             self._slide_anim.finished.connect(self._on_min_done, Qt.ConnectionType.UniqueConnection)
             self._slide_anim.start()
 

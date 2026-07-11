@@ -170,3 +170,49 @@ def test_stage_windows_qt_quick_libraries_includes_multimedia_runtime(
         "Qt6MultimediaQuick.dll",
         "Qt6QuickLayouts.dll",
     }
+
+
+def test_stage_linux_qt_quick_libraries_copies_only_transitive_qt_dependencies(
+    tmp_path,
+    monkeypatch,
+):
+    source_root = tmp_path / "PySide6" / "Qt" / "lib"
+    qml_root = tmp_path / "qml"
+    output_root = tmp_path / "out"
+    source_root.mkdir(parents=True)
+    qml_root.mkdir()
+
+    plugin = qml_root / "libqtquickcontrols2plugin.so"
+    controls = source_root / "libQt6QuickControls2Impl.so.6"
+    templates = source_root / "libQt6QuickTemplates2.so.6"
+    unused = source_root / "libQt6Pdf.so.6"
+    for binary in (plugin, controls, templates, unused):
+        binary.write_text(binary.name, encoding="utf-8")
+
+    dependencies = {
+        plugin.resolve(): ["libQt6QuickControls2Impl.so.6", "libc.so.6"],
+        controls.resolve(): ["libQt6QuickTemplates2.so.6", "libQt6Core.so.6"],
+        templates.resolve(): [],
+    }
+    (source_root / "libQt6Core.so.6").write_text("core", encoding="utf-8")
+    dependencies[(source_root / "libQt6Core.so.6").resolve()] = []
+
+    monkeypatch.setattr(
+        compile_qml_cache,
+        "find_qt_library_dir",
+        lambda _patterns: source_root,
+    )
+    monkeypatch.setattr(
+        compile_qml_cache,
+        "linux_shared_library_dependencies",
+        lambda binary: dependencies[binary.resolve()],
+    )
+
+    staged = compile_qml_cache.stage_linux_qt_quick_libraries(output_root, qml_root)
+
+    assert {path.name for path in staged} == {
+        "libQt6Core.so.6",
+        "libQt6QuickControls2Impl.so.6",
+        "libQt6QuickTemplates2.so.6",
+    }
+    assert not (output_root / "libQt6Pdf.so.6").exists()
