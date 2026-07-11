@@ -25,6 +25,31 @@ The importable application package lives under `src/solin`. Use the installed
 `solin` GUI entry point after editable installation, or `python main.py` as the
 thin local launcher during development.
 
+### Linux native webview
+
+Solin's embedded browser uses WebKitGTK 4.1 with GTK 3 and libsoup 3 on Linux.
+Place the sideview artifact at:
+
+```text
+src/native_webview_widget/libnative_webview_widget.so
+```
+
+After copying it, validate the vendored artifact and ABI with:
+
+```bash
+python scripts/validate_native_webview.py --require-linux
+```
+
+The native view is embedded through X11/XCB. On a Wayland desktop, start Solin
+through XWayland:
+
+```bash
+QT_QPA_PLATFORM=xcb python main.py
+```
+
+For an Ubuntu development machine, install the native runtime/build dependencies
+with `sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config`.
+
 ## Quality Checks
 
 ```powershell

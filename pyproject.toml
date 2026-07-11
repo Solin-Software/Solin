@@ -43,7 +43,7 @@ solin = [
     "resources/translations/*.qm",
     "resources/translations/locales/*.json",
 ]
-native_webview_widget = ["*.dll", "*.dylib"]
+native_webview_widget = ["*.dll", "*.dylib", "libnative_webview_widget.so"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

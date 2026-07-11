@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Callable
 from pathlib import Path
+from typing import Callable
 from uuid import NAMESPACE_URL, uuid5
 
+import shiboken6
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ._backend import NativeBackend, NativeCookie, NativeOptions, NativeWebViewError
@@ -58,7 +59,12 @@ class NativeWebView(QtWidgets.QWidget):
         self._handle = 0
         self._created = False
         self._native_ready = False
+        self._disposed = False
         self._create_pending = False
+        self._creation_error: NativeWebViewError | None = None
+        self._foreign_window: QtGui.QWindow | None = None
+        self._native_container: QtWidgets.QWidget | None = None
+        self._lifecycle_parent: QtCore.QObject | None = None
         self._pending_url = url
         self._pending_html = html
         self._pending_base_url: str | None = None
@@ -82,6 +88,7 @@ class NativeWebView(QtWidgets.QWidget):
         self._bridge = _EventBridge(self)
         self._bridge.received.connect(self._handle_native_event, QtCore.Qt.ConnectionType.QueuedConnection)
         self._bridge.captureReceived.connect(self._handle_capture_event, QtCore.Qt.ConnectionType.QueuedConnection)
+        self._bind_parent_lifecycle()
 
     def navigate(self, url: str) -> None:
         if not self._created or not self._native_ready:
@@ -324,11 +331,24 @@ document.addEventListener("contextmenu", function(event) {
         super().showEvent(event)
         self._schedule_ensure_created()
 
+    def event(self, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.DeferredDelete:
+            self.dispose()
+        handled = super().event(event)
+        if (
+            event.type() == QtCore.QEvent.Type.ParentChange
+            and hasattr(self, "_lifecycle_parent")
+        ):
+            self._bind_parent_lifecycle()
+        return handled
+
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:  # type: ignore[name-defined]
         super().resizeEvent(event)
         if self._created:
             size = event.size()
             self._backend.resize(self._handle, size.width(), size.height())
+            if self._native_container is not None:
+                self._native_container.setGeometry(self.rect())
         elif self.isVisible():
             self._schedule_ensure_created()
 
@@ -337,42 +357,133 @@ document.addEventListener("contextmenu", function(event) {
         super().closeEvent(event)
 
     def dispose(self) -> None:
+        if self._disposed:
+            return
+        self._disposed = True
+        self._create_pending = False
         if self._handle:
             self._backend.stop_frame_stream(self._handle)
+        self._destroy_native_container()
+        if self._handle:
             self._backend.destroy(self._handle)
         self._handle = 0
         self._created = False
         self._native_ready = False
-        self._create_pending = False
 
     def _schedule_ensure_created(self) -> None:
-        if self._created or self._create_pending:
+        if self._created or self._disposed or self._create_pending or self._creation_error:
             return
         self._create_pending = True
         QtCore.QTimer.singleShot(0, self._ensure_created_if_ready)
 
     def _ensure_created_if_ready(self) -> None:
         self._create_pending = False
-        if self._created or not self.isVisible():
+        if self._created or self._disposed or not self.isVisible():
             return
         if self.width() <= 0 or self.height() <= 0:
             return
-        self._ensure_created()
+        try:
+            self._ensure_created()
+        except NativeWebViewError as exc:
+            self._creation_error = exc
+            self.navigationFailed.emit(str(exc))
 
     def _ensure_created(self) -> None:
         if self._created:
             return
+        if self._disposed:
+            raise NativeWebViewError("This native webview has already been disposed.")
+        if self._creation_error is not None:
+            raise self._creation_error
 
         self._create_pending = False
         self.ensurePolished()
         width = max(1, self.width())
         height = max(1, self.height())
-        parent_handle = int(self.winId())
-        self._handle = self._backend.create(parent_handle, self._options, self._emit_native_event)
+
+        if self._backend.uses_foreign_window:
+            qt_platform = QtGui.QGuiApplication.platformName().lower()
+            if qt_platform != "xcb":
+                raise NativeWebViewError(
+                    "The Linux WebKitGTK backend requires Qt's X11/XCB platform. "
+                    "On a Wayland desktop, start Solin with QT_QPA_PLATFORM=xcb."
+                )
+
+        parent_handle = 0 if self._backend.uses_foreign_window else int(self.winId())
+        handle = self._backend.create(parent_handle, self._options, self._emit_native_event)
+        foreign_window: QtGui.QWindow | None = None
+        native_container: QtWidgets.QWidget | None = None
+        try:
+            if self._backend.uses_foreign_window:
+                native_view = self._backend.native_view(handle)
+                if not native_view:
+                    raise NativeWebViewError("WebKitGTK did not expose an X11 window for embedding.")
+                foreign_window = QtGui.QWindow.fromWinId(native_view)
+                if foreign_window is None:
+                    raise NativeWebViewError("Qt could not wrap the WebKitGTK X11 window.")
+                native_container = QtWidgets.QWidget.createWindowContainer(
+                    foreign_window,
+                    self,
+                )
+                native_container.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+                native_container.setGeometry(self.rect())
+                native_container.show()
+                self._foreign_window = foreign_window
+                self._native_container = native_container
+                self.setFocusProxy(native_container)
+        except Exception as exc:  # noqa: BLE001 - normalizes Qt/Shiboken embedding failures.
+            self._destroy_foreign_window(native_container, foreign_window)
+            self._native_container = None
+            self._foreign_window = None
+            self.setFocusProxy(None)  # pyright: ignore[reportArgumentType] - Qt accepts nullptr.
+            self._backend.destroy(handle)
+            if isinstance(exc, NativeWebViewError):
+                raise
+            raise NativeWebViewError(
+                f"Failed to embed the native webview window: {exc}"
+            ) from exc
+
+        self._handle = handle
         self._created = True
         self._backend.set_policy_callback(self._handle, self._handle_policy_request)
         self._backend.set_capture_callback(self._handle, self._emit_capture_event)
         self._backend.resize(self._handle, width, height)
+
+    def _destroy_native_container(self) -> None:
+        self.setFocusProxy(None)  # pyright: ignore[reportArgumentType] - Qt accepts nullptr.
+        native_container = self._native_container
+        foreign_window = self._foreign_window
+        self._native_container = None
+        self._foreign_window = None
+        self._destroy_foreign_window(native_container, foreign_window)
+
+    def _bind_parent_lifecycle(self) -> None:
+        parent = self.parent()
+        if parent is self._lifecycle_parent:
+            return
+        if self._lifecycle_parent is not None:
+            try:
+                self._lifecycle_parent.destroyed.disconnect(self._on_parent_destroyed)
+            except (RuntimeError, TypeError):  # noqa: S110 - parent may already be gone.
+                pass
+        self._lifecycle_parent = parent
+        if parent is not None:
+            parent.destroyed.connect(self._on_parent_destroyed)
+
+    def _on_parent_destroyed(self, *_args: object) -> None:
+        self._lifecycle_parent = None
+        self.dispose()
+
+    @staticmethod
+    def _destroy_foreign_window(
+        native_container: QtWidgets.QWidget | None,
+        foreign_window: QtGui.QWindow | None,
+    ) -> None:
+        if native_container is not None:
+            native_container.hide()
+            shiboken6.delete(native_container)
+        elif foreign_window is not None:
+            shiboken6.delete(foreign_window)
 
     def _require_created(self) -> None:
         if not self._created:
@@ -385,6 +496,8 @@ document.addEventListener("contextmenu", function(event) {
         self._bridge.captureReceived.emit(request_id, success, data, error)
 
     def _handle_native_event(self, event_type: int, message: str) -> None:
+        if self._disposed or not self._created:
+            return
         if event_type == NativeBackend.EVENT_READY:
             self._native_ready = True
             self.ready.emit()
@@ -512,6 +625,8 @@ document.addEventListener("contextmenu", function(event) {
         return request_id
 
     def _handle_capture_event(self, request_id: int, success: bool, data: bytes, error: str) -> None:
+        if self._disposed or not self._created:
+            return
         if request_id == 0:
             if success:
                 self.frameStreamFrame.emit(data)

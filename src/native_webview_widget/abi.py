@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-ABI_VERSION = 2
+ABI_VERSION = 3
 
 WINDOWS_LIBRARY_NAME = "native_webview_widget.dll"
 MACOS_LIBRARY_NAMES = (
     "libnative_webview_widget.dylib",
     "native_webview_widget.dylib",
 )
+LINUX_LIBRARY_NAMES = ("libnative_webview_widget.so",)
 
 REQUIRED_EXPORTS = (
     "nwv_create",
+    "nwv_get_native_view",
     "nwv_destroy",
     "nwv_set_event_callback",
     "nwv_set_policy_callback",
@@ -42,12 +44,16 @@ ZOOM_EXPORTS = (
     "nwv_set_zoom_factor",
     "nwv_get_zoom_factor",
 )
+NATIVE_VIEW_EXPORT = "nwv_get_native_view"
 
 
 def required_exports_for_system(system: str) -> tuple[str, ...]:
+    optional_exports: set[str] = set()
+    if system != "Linux":
+        optional_exports.add(NATIVE_VIEW_EXPORT)
     if system == "Darwin":
-        return tuple(name for name in REQUIRED_EXPORTS if name not in ZOOM_EXPORTS)
-    return REQUIRED_EXPORTS
+        optional_exports.update(ZOOM_EXPORTS)
+    return tuple(name for name in REQUIRED_EXPORTS if name not in optional_exports)
 
 EVENT_READY = 1
 EVENT_NAVIGATION_STARTED = 2
@@ -77,4 +83,6 @@ def native_library_candidates(system: str, package_dir: Path) -> tuple[Path, ...
         return (package_dir / WINDOWS_LIBRARY_NAME,)
     if system == "Darwin":
         return tuple(package_dir / name for name in MACOS_LIBRARY_NAMES)
+    if system == "Linux":
+        return tuple(package_dir / name for name in LINUX_LIBRARY_NAMES)
     return ()
