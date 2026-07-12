@@ -103,6 +103,16 @@ def test_native_webview_emits_only_effective_native_zoom_changes():
     assert emitted == [1.25]
 
 
+def test_linux_zoom_events_bypass_the_queued_native_event_bridge():
+    source = inspect.getsource(native_widget.NativeWebView._emit_native_event)
+
+    assert "self._backend.uses_foreign_window" in source
+    assert "EVENT_ZOOM_FACTOR_CHANGED" in source
+    assert "EVENT_ZOOM_FACTOR_REQUESTED" in source
+    assert "QThread.currentThread() == self.thread()" in source
+    assert "self._handle_native_event(event_type, message)" in source
+
+
 def test_native_webview_allows_native_ancestors_for_webview_z_order():
     source = inspect.getsource(native_widget.NativeWebView.__init__)
 

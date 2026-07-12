@@ -509,6 +509,17 @@ document.addEventListener("contextmenu", function(event) {
             self._ensure_created()
 
     def _emit_native_event(self, event_type: int, message: str) -> None:
+        if (
+            self._backend.uses_foreign_window
+            and event_type
+            in {
+                NativeBackend.EVENT_ZOOM_FACTOR_CHANGED,
+                NativeBackend.EVENT_ZOOM_FACTOR_REQUESTED,
+            }
+            and QtCore.QThread.currentThread() == self.thread()
+        ):
+            self._handle_native_event(event_type, message)
+            return
         self._bridge.received.emit(event_type, message)
 
     def _emit_capture_event(self, request_id: int, success: bool, data: bytes, error: str) -> None:
