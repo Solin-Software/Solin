@@ -559,7 +559,6 @@ document.addEventListener("contextmenu", function(event) {
                 factor = self._validated_zoom_factor(float(message))
             except (TypeError, ValueError):
                 return
-            self.zoomFactorRequested.emit(factor)
             if not math.isclose(
                 self._zoom_factor,
                 factor,
@@ -567,6 +566,7 @@ document.addEventListener("contextmenu", function(event) {
                 abs_tol=1e-6,
             ):
                 self.set_zoom_factor(factor)
+            self.zoomFactorRequested.emit(factor)
 
     def _handle_policy_request(self, event_type: int, message: str) -> bool:
         if event_type == NativeBackend.EVENT_DOWNLOAD_REQUESTED:
