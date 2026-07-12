@@ -770,6 +770,7 @@ class BrowserWidget(
         self._download_service = download_service
         self._zoom_settings = zoom_settings
         self._browser_zoom_factor = zoom_settings.zoom_factor()
+        self._native_views_occluded = False
         self._aspect_ratio_provider = (
             aspect_ratio_provider or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
@@ -894,6 +895,14 @@ class BrowserWidget(
             tab = self._stack.widget(index)
             if isinstance(tab, BrowserTab) and tab is not source_tab:
                 tab.view.set_zoom_factor(factor)
+
+    def set_native_views_occluded(self, occluded: bool) -> None:
+        """Temporarily unmap Linux foreign surfaces beneath a Qt overlay."""
+        self._native_views_occluded = bool(occluded)
+        for index in range(self._stack.count()):
+            tab = self._stack.widget(index)
+            if isinstance(tab, BrowserTab):
+                tab.view.set_native_surface_visible(not self._native_views_occluded)
 
     def _on_cast_clicked(self, checked: bool):
         tab = self._current_tab()

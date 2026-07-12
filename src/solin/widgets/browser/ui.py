@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -193,7 +195,10 @@ class BrowserUiMixin:
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        # WebKitGTK is an opaque native X11 child. On Linux, reserve the exact
+        # toolbar band instead of attempting to composite a Qt widget over it.
+        browser_toolbar_reserve = 56 if sys.platform.startswith("linux") else 0
+        root.setContentsMargins(0, 0, 0, browser_toolbar_reserve)
         root.setSpacing(0)
 
         topbar = QFrame()

@@ -62,6 +62,7 @@ class BrowserNavigationMixin:
         tab.view.user_zoom_factor_changed.connect(
             lambda factor, t=tab: self._on_browser_zoom_factor_changed(t, factor)
         )
+        tab.view.set_native_surface_visible(not self._native_views_occluded)
         self._apply_browser_aspect_to_tab(tab)
 
         label = self.tr("New tab")

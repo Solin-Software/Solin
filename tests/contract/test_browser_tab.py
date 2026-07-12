@@ -53,6 +53,24 @@ def test_projectable_webview_rejects_site_zoom_during_navigation():
     assert "self.user_zoom_factor_changed.emit(factor)" in source
 
 
+def test_projectable_webview_forwards_native_user_zoom_requests():
+    emitted = []
+
+    class SignalDouble:
+        def emit(self, factor):
+            emitted.append(factor)
+
+    view = type(
+        "ProjectableViewDouble",
+        (),
+        {"user_zoom_factor_changed": SignalDouble()},
+    )()
+
+    ProjectableWebView._on_native_zoom_factor_requested(view, 1.25)
+
+    assert emitted == [1.25]
+
+
 def test_native_webview_emits_only_effective_native_zoom_changes():
     emitted = []
 

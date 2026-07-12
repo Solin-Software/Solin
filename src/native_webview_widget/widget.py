@@ -37,6 +37,7 @@ class NativeWebView(QtWidgets.QWidget):
     frameStreamFrame = QtCore.Signal(bytes)
     frameStreamFailed = QtCore.Signal(str)
     zoomFactorChanged = QtCore.Signal(float)
+    zoomFactorRequested = QtCore.Signal(float)
 
     def __init__(
         self,
@@ -64,6 +65,7 @@ class NativeWebView(QtWidgets.QWidget):
         self._creation_error: NativeWebViewError | None = None
         self._foreign_window: QtGui.QWindow | None = None
         self._native_container: QtWidgets.QWidget | None = None
+        self._native_surface_visible = True
         self._lifecycle_parent: QtCore.QObject | None = None
         self._pending_url = url
         self._pending_html = html
@@ -211,6 +213,16 @@ document.addEventListener("contextmenu", function(event) {
             if MIN_ZOOM_FACTOR <= factor <= MAX_ZOOM_FACTOR:
                 self._zoom_factor = factor
         return self._zoom_factor
+
+    def set_native_surface_visible(self, visible: bool) -> None:
+        """Show or hide only the embedded foreign surface on Linux.
+
+        The webview backend remains alive, so navigation, media state, and
+        off-screen snapshots are preserved while a Qt overlay covers it.
+        """
+        self._native_surface_visible = bool(visible)
+        if self._native_container is not None:
+            self._native_container.setVisible(self._native_surface_visible)
 
     def capture_frame(self) -> int:
         """Capture the visible webview viewport as PNG bytes.
@@ -427,7 +439,7 @@ document.addEventListener("contextmenu", function(event) {
                 )
                 native_container.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
                 native_container.setGeometry(self.rect())
-                native_container.show()
+                native_container.setVisible(self._native_surface_visible)
                 self._foreign_window = foreign_window
                 self._native_container = native_container
                 self.setFocusProxy(native_container)
@@ -482,13 +494,13 @@ document.addEventListener("contextmenu", function(event) {
         if native_container is not None and shiboken6.isValid(native_container):
             try:
                 native_container.hide()
-                shiboken6.delete(native_container)
+                native_container.deleteLater()
             except RuntimeError:
                 # Qt may delete the native child while tearing down its parent.
                 pass
         elif foreign_window is not None and shiboken6.isValid(foreign_window):
             try:
-                shiboken6.delete(foreign_window)
+                foreign_window.deleteLater()
             except RuntimeError:
                 pass
 
@@ -542,6 +554,19 @@ document.addEventListener("contextmenu", function(event) {
             self._zoom_factor = factor
             if changed:
                 self.zoomFactorChanged.emit(factor)
+        elif event_type == NativeBackend.EVENT_ZOOM_FACTOR_REQUESTED:
+            try:
+                factor = self._validated_zoom_factor(float(message))
+            except (TypeError, ValueError):
+                return
+            self.zoomFactorRequested.emit(factor)
+            if not math.isclose(
+                self._zoom_factor,
+                factor,
+                rel_tol=0.0,
+                abs_tol=1e-6,
+            ):
+                self.set_zoom_factor(factor)
 
     def _handle_policy_request(self, event_type: int, message: str) -> bool:
         if event_type == NativeBackend.EVENT_DOWNLOAD_REQUESTED:

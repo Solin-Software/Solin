@@ -303,6 +303,9 @@ class MainWindowUiController:
 
         bottom_bar, projection_bar = self._build_bottom_bar(right_col)
         projection_bar_ref["value"] = projection_bar
+        projection_bar.expanded_changed.connect(
+            lazy_pages.set_browser_native_views_occluded
+        )
         right_layout.addWidget(bottom_bar)
 
         root.addWidget(right_col, stretch=1)

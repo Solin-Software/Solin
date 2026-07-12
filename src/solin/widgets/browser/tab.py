@@ -67,6 +67,7 @@ class ProjectableWebView(NativeWebView):
         self.navigationFailed.connect(self._on_navigation_failed)
         self.titleChanged.connect(self._on_title_changed)
         self.zoomFactorChanged.connect(self._on_native_zoom_factor_changed)
+        self.zoomFactorRequested.connect(self._on_native_zoom_factor_requested)
         self.newWindowRequested.connect(
             lambda url: self.new_tab_requested.emit(url or "https://www.google.com")
         )
@@ -106,6 +107,9 @@ class ProjectableWebView(NativeWebView):
             super().set_zoom_factor(self._shared_zoom_factor)
             return
         self._shared_zoom_factor = factor
+        self.user_zoom_factor_changed.emit(factor)
+
+    def _on_native_zoom_factor_requested(self, factor: float) -> None:
         self.user_zoom_factor_changed.emit(factor)
 
     def set_zoom_factor(self, factor: float) -> None:

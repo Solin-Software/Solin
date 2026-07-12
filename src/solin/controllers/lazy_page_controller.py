@@ -187,6 +187,10 @@ class LazyPageController:
         if self._browser_widget is not None:
             self._browser_widget._stop_tab_projection_internal()
 
+    def set_browser_native_views_occluded(self, occluded: bool) -> None:
+        if self._browser_widget is not None:
+            self._browser_widget.set_native_views_occluded(occluded)
+
     def cleanup_browser(self) -> None:
         if self._browser_widget is not None:
             self._browser_widget.cleanup_browser()

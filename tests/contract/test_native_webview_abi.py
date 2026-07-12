@@ -69,6 +69,7 @@ def test_native_webview_event_ids_are_stable():
         "new_window_requested": 7,
         "script_message": 8,
         "zoom_factor_changed": 9,
+        "zoom_factor_requested": 10,
     }
 
 
