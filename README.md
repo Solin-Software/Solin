@@ -76,14 +76,65 @@ which selects Qt's XCB backend automatically:
 build/linux/main.dist/run-solin
 ```
 
-The launcher also disables WebKitGTK's DMAbuf renderer by default because that
-path commonly produces a blank native webview with virtual GPUs and some Linux
-compositors. On a machine where DMAbuf is known to work, opt back in with
-`WEBKIT_DISABLE_DMABUF_RENDERER=0 build/linux/main.dist/run-solin`.
+WebKitGTK's accelerated DMABuf renderer remains enabled by default. If a virtual
+GPU or incompatible graphics driver produces a blank browser, use the explicit
+compatibility workaround only for that machine:
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 build/linux/main.dist/run-solin
+```
+
+### Linux AppImage
+
+The AppImage packager reuses the standalone build and the same script in local
+WSL and GitHub Actions. From Windows, run the complete build with:
+
+```bat
+scripts\build_solin_appimage.bat
+```
+
+To repackage an already current `build/linux/main.dist` without recompiling
+Nuitka, use:
+
+```bat
+scripts\build_solin_appimage.bat --skip-standalone
+```
+
+The equivalent command inside Ubuntu/WSL is:
+
+```bash
+cd /path/to/Solin
+SOLIN_PYTHON="$HOME/.venvs/solin/bin/python" bash scripts/package_solin_appimage.sh
+```
+
+The output is `dist/Solin-<version>-x86_64.AppImage` plus its SHA-256 file.
+`appimagetool` 1.9.1 and the Type 2 runtime are downloaded to the WSL cache and
+verified against pinned SHA-256 hashes. On WSL, the AppDir and compression work
+remain in the Linux filesystem for better I/O performance.
+
+The AppImage bundles Solin, Python, PySide6 and the required Qt runtime. It
+intentionally uses the distribution's security-maintained WebKitGTK 4.1, GTK 3
+and libsoup 3. On Ubuntu, install the required system runtime with:
+
+```bash
+# Ubuntu 24.04
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 libsoup-3.0-0
+
+# Ubuntu 22.04
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libsoup-3.0-0
+```
+
+After downloading the AppImage, make it executable and run it:
+
+```bash
+chmod +x Solin-*-x86_64.AppImage
+./Solin-*-x86_64.AppImage
+```
 
 The manual `Build Solin Linux` GitHub Actions workflow runs the same script on
-Ubuntu 24.04, performs a packaged startup smoke test under Xvfb, and uploads a
-versioned x86-64 standalone `tar.gz` with its SHA-256 checksum.
+Ubuntu 22.04 for an older compatible glibc baseline, validates the
+desktop/AppStream metadata, performs an AppImage startup smoke test under Xvfb,
+and uploads the versioned AppImage with its SHA-256 checksum.
 
 ## Quality Checks
 

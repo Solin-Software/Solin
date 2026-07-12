@@ -24,13 +24,12 @@ concurrency:
 env:
   APP_NAME: Solin
   PYTHON_VERSION: "3.13.12"
-  BUILD_DIR: build/linux
   DIST_DIR: dist
 
 jobs:
   build:
-    name: Ubuntu 24.04 x64
-    runs-on: ubuntu-24.04
+    name: Ubuntu 22.04 x64
+    runs-on: ubuntu-22.04
     timeout-minutes: 180
 
     steps:
@@ -45,10 +44,14 @@ jobs:
             binutils \
             build-essential \
             ccache \
+            desktop-file-utils \
             patchelf \
+            appstream \
+            file \
+            shellcheck \
             xauth \
             xvfb \
-            libgtk-3-0t64 \
+            libgtk-3-0 \
             libwebkit2gtk-4.1-0 \
             libsoup-3.0-0 \
             libjavascriptcoregtk-4.1-0 \
@@ -131,36 +134,46 @@ jobs:
           SOLIN_BUILD_DIR: ${{ github.workspace }}/build/linux
         run: SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh
 
-      - name: Run packaged startup smoke
+      - name: Validate Linux packaging scripts
+        shell: bash
+        run: |
+          shellcheck \
+            scripts/build_solin.sh \
+            scripts/package_solin_appimage.sh \
+            packaging/linux/appimage/AppRun \
+            packaging/linux/appimage/solin
+
+      - name: Package AppImage
+        shell: bash
+        env:
+          SOLIN_APPIMAGE_SKIP_BUILD: "1"
+          SOLIN_BUILD_DIR: ${{ github.workspace }}/build/linux
+          SOLIN_APPIMAGE_OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: SOLIN_PYTHON="$(command -v python)" bash scripts/package_solin_appimage.sh
+
+      - name: Run AppImage startup smoke
         if: ${{ inputs.run_packaged_smoke_test }}
         shell: bash
         run: |
+          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-x86_64.AppImage"
           set +e
-          timeout --signal=TERM 8s xvfb-run --auto-servernum \
+          timeout --signal=TERM 15s xvfb-run --auto-servernum \
             --server-args="-screen 0 1280x720x24" \
-            "${BUILD_DIR}/main.dist/run-solin"
+            env APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
           status=$?
           set -e
           if [[ "$status" -ne 124 && "$status" -ne 143 ]]; then
-            echo "Packaged Solin exited unexpectedly with status $status." >&2
+            echo "Solin AppImage exited unexpectedly with status $status." >&2
             exit "$status"
           fi
-          echo "Packaged Solin remained running for the smoke-test window."
+          echo "Solin AppImage remained running for the smoke-test window."
 
-      - name: Package standalone archive
-        shell: bash
-        run: |
-          mkdir -p "${DIST_DIR}"
-          archive="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-linux-x86_64-standalone.tar.gz"
-          tar -C "${BUILD_DIR}/main.dist" -czf "$archive" .
-          sha256sum "$archive" > "${DIST_DIR}/SHA256SUMS-linux.txt"
-
-      - name: Upload Linux standalone
+      - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: Solin-${{ steps.version.outputs.app_version }}-linux-x86_64-standalone
+          name: Solin-${{ steps.version.outputs.app_version }}-x86_64-AppImage
           path: |
-            dist/*linux-x86_64-standalone.tar.gz
-            dist/SHA256SUMS-linux.txt
+            dist/*.AppImage
+            dist/*.AppImage.sha256
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days }}

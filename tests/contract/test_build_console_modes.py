@@ -36,10 +36,11 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "libnative_webview_widget.so" in script
     assert "scripts/validate_native_webview.py --require-linux" in script
     assert "QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}" in script
-    assert "WEBKIT_DISABLE_DMABUF_RENDERER=${WEBKIT_DISABLE_DMABUF_RENDERER:-1}" in script
+    assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in script
     assert 'rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"' in script
     assert '"${WORK_ROOT}/main.build"' in script
     assert "bash scripts/build_solin.sh" in workflow
     assert "gstreamer1.0-plugins-bad" in workflow
-    assert "runs-on: ubuntu-24.04" in workflow
-    assert "linux-x86_64-standalone.tar.gz" in workflow
+    assert "runs-on: ubuntu-22.04" in workflow
+    assert "scripts/package_solin_appimage.sh" in workflow
+    assert "*.AppImage.sha256" in workflow

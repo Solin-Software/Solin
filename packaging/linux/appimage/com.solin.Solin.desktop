@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Solin
+GenericName=Media and projection control
+Comment=Control meetings, media, projection, OBS and Zoom
+Exec=solin %U
+Icon=com.solin.Solin
+Terminal=false
+Categories=AudioVideo;
+StartupNotify=true
+StartupWMClass=Solin

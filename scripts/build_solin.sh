@@ -164,7 +164,6 @@ cat > "${DIST_DIR}/run-solin" <<'LAUNCHER'
 set -eu
 APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
-export WEBKIT_DISABLE_DMABUF_RENDERER=${WEBKIT_DISABLE_DMABUF_RENDERER:-1}
 exec "$APP_DIR/Solin.bin" "$@"
 LAUNCHER
 chmod 755 "${DIST_DIR}/run-solin"
