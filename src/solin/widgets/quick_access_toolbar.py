@@ -176,6 +176,8 @@ class QuickAccessToolbar(QQuickWidget):
         self._anchor_parent = parent
         self._anchor_window = parent.window() if parent is not None else None
         self._browser_overlay_mode = False
+        self._browser_surface_should_be_visible = False
+        self._projection_overlay_active = False
         self._browser_surface: _LinuxBrowserToolbarSurface | None = None
         self._browser_monitor_btn: QWidget | None = None
         self._reposition_pending = False
@@ -558,20 +560,56 @@ class QuickAccessToolbar(QQuickWidget):
             return
 
         if overlay_mode:
-            should_show = not self.isHidden()
+            self._browser_surface_should_be_visible = not self.isHidden()
             self.hide()
             self._browser_overlay_mode = True
-            if should_show:
+            if (
+                self._browser_surface_should_be_visible
+                and not self._projection_overlay_active
+            ):
                 self._ensure_transient_parent()
                 browser_surface.show()
                 self._ensure_transient_parent()
         else:
-            should_show = not browser_surface.isHidden()
             browser_surface.hide()
             self._browser_overlay_mode = False
-            if should_show:
+            if self._browser_surface_should_be_visible:
                 self.show()
+            self._browser_surface_should_be_visible = False
         self._schedule_reposition()
+
+    def set_projection_overlay_active(self, active: bool) -> None:
+        """Keep the Linux browser toolbar below the expanded player overlay."""
+        active = bool(active)
+        if active == self._projection_overlay_active:
+            return
+        self._projection_overlay_active = active
+
+        surface = self._browser_surface
+        if not self._browser_overlay_mode or surface is None:
+            return
+        if active:
+            hide_themed_tooltip()
+            surface.hide()
+            return
+
+        # Navigation collapses the player before it updates browser mode.
+        # Defer restoration so a page switch cannot flash the transient window.
+        QTimer.singleShot(0, self._restore_browser_surface_after_projection)
+
+    def _restore_browser_surface_after_projection(self) -> None:
+        surface = self._browser_surface
+        if (
+            surface is None
+            or not self._browser_overlay_mode
+            or self._projection_overlay_active
+            or not self._browser_surface_should_be_visible
+        ):
+            return
+        self._ensure_transient_parent()
+        surface.show()
+        self._ensure_transient_parent()
+        self._reposition()
 
     def _ensure_browser_surface(self) -> _LinuxBrowserToolbarSurface | None:
         if self._browser_surface is not None:

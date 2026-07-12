@@ -17,6 +17,9 @@ def test_linux_browser_promotes_only_the_toolbar_to_a_transient_window():
     surface_source = inspect.getsource(_LinuxBrowserToolbarSurface.__init__)
     overlay_source = inspect.getsource(QuickAccessToolbar.set_browser_overlay_mode)
     lazy_surface_source = inspect.getsource(QuickAccessToolbar._ensure_browser_surface)
+    projection_source = inspect.getsource(
+        QuickAccessToolbar.set_projection_overlay_active
+    )
     position_source = inspect.getsource(QuickAccessToolbar._anchor_point)
     corner_source = inspect.getsource(QuickAccessToolbar.set_browser_rect_mode)
     browser_ui_source = inspect.getsource(BrowserUiMixin._build_ui)
@@ -34,6 +37,8 @@ def test_linux_browser_promotes_only_the_toolbar_to_a_transient_window():
     assert "browser_surface.hide()" in overlay_source
     assert "_LinuxBrowserToolbarSurface" in lazy_surface_source
     assert "self._bridge, self._anchor_window" in lazy_surface_source
+    assert "surface.hide()" in projection_source
+    assert "_restore_browser_surface_after_projection" in projection_source
     assert "mapToGlobal" in position_source
     assert "bool(enabled) and _WINDOWS" in corner_source
     assert "root.setContentsMargins(0, 0, 0, 0)" in browser_ui_source
