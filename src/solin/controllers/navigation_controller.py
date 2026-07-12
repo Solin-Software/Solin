@@ -40,9 +40,8 @@ class NavigationController:
         quick_toolbar = self._quick_toolbar()
         if quick_toolbar is None:
             return
-        browser_active = (
-            self._stack.currentWidget() is self._lazy_pages.browser_widget
-        )
+        browser_active = self._stack.currentWidget() is self._lazy_pages.browser_widget
+        quick_toolbar.set_browser_overlay_mode(browser_active)
         quick_toolbar.set_browser_rect_mode(browser_active)
         if browser_active:
             quick_toolbar.raise_()

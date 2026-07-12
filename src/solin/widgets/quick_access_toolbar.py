@@ -7,11 +7,13 @@ import sys
 from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
+    QObject,
     QPoint,
     QRect,
     QPropertyAnimation,
     Qt,
     QTimer,
+    QUrl,
     Signal,
 )
 from PySide6.QtGui import QColor, QCursor, QFontMetrics, QGuiApplication, QRegion
@@ -61,10 +63,69 @@ _QAT_MINI_RADIUS = 8
 # corners are recovered by clipping the native layer. Windows keeps the proven
 # fixed-size + translucent + mask path untouched.
 _MAC = sys.platform == "darwin"
+_LINUX = sys.platform.startswith("linux")
+_WINDOWS = sys.platform.startswith("win")
 
 
 def _icon_hex(color: str) -> str:
     return color.lstrip("#")
+
+
+def _configure_toolbar_surface(
+    surface: QQuickWidget,
+    bridge: QuickToolbarBridge,
+) -> None:
+    """Configure one rendering surface for the shared toolbar state."""
+    surface.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+    surface.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, True)
+    surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+    surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+    surface.setStyleSheet("background: transparent;")
+    if _MAC:
+        surface.resize(_QAT_MAX_W, _QAT_H)
+    else:
+        surface.setFixedSize(_QAT_MAX_W, _QAT_H)
+
+    configure_qml_host(
+        surface,
+        type_name="QuickAccessToolbar",
+        clear_color=QColor(0, 0, 0, 0),
+        image_providers={
+            "icons": SvgIconProvider(
+                QUICK_TOOLBAR_ICON_SVGS,
+                default_icon="monitor",
+            )
+        },
+        context_properties={"bridge": bridge},
+        mouse_tracking=True,
+    )
+
+
+class _LinuxBrowserToolbarSurface(QQuickWidget):
+    """Stable native surface used only while WebKitGTK is visible."""
+
+    def __init__(self, bridge: QuickToolbarBridge, parent_window: QWidget) -> None:
+        super().__init__(None)
+        flags = (
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        self.setParent(parent_window, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        _configure_toolbar_surface(self, bridge)
+        self.hide()
+
+
+def _dispose_browser_toolbar_surface(surface: QQuickWidget) -> None:
+    """Release the second QML root before its shared bridge is destroyed."""
+    try:
+        surface.hide()
+        surface.setSource(QUrl())
+        surface.deleteLater()
+    except RuntimeError:
+        pass
 
 
 class QuickAccessToolbar(QQuickWidget):
@@ -112,6 +173,12 @@ class QuickAccessToolbar(QQuickWidget):
         self._camera_enabled = False
         self._camera_stream_active = False
         self._qml_pointer_depth = 0
+        self._anchor_parent = parent
+        self._anchor_window = parent.window() if parent is not None else None
+        self._browser_overlay_mode = False
+        self._browser_surface: _LinuxBrowserToolbarSurface | None = None
+        self._browser_monitor_btn: QWidget | None = None
+        self._reposition_pending = False
 
         # ── QQuickWidget setup: transparent, always on top ────────────────
         #
@@ -126,24 +193,12 @@ class QuickAccessToolbar(QQuickWidget):
         #
         if parent is not None:
             self.setParent(parent)
-
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-        self.setStyleSheet("background: transparent;")
-        if _MAC:
-            # Solid mode: the widget is resized to its content (no transparent
-            # padding). Start at a sane size; _reposition() sets the exact one.
-            self.resize(_QAT_MAX_W, _QAT_H)
-        else:
-            self.setFixedSize(_QAT_MAX_W, _QAT_H)  # fixed size — never changes
         self.installEventFilter(self)
 
         # ── Bridge (Python ↔ QML) ─────────────────────────────────────────
         self._bridge = QuickToolbarBridge(self)
         self._bridge.monitorClicked.connect(
-            lambda: self.monitor_clicked.emit(self._monitor_btn)
+            lambda: self.monitor_clicked.emit(self._active_monitor_button())
         )
         self._bridge.backgroundSongClicked.connect(self._on_background_song_clicked)
         self._bridge.obsClicked.connect(self._on_obs_clicked)
@@ -159,19 +214,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.set_solid_mode(True)
 
         # ── QML engine: image provider + context ──────────────────────────
-        configure_qml_host(
-            self,
-            type_name="QuickAccessToolbar",
-            clear_color=QColor(0, 0, 0, 0),
-            image_providers={
-                "icons": SvgIconProvider(
-                    QUICK_TOOLBAR_ICON_SVGS,
-                    default_icon="monitor",
-                )
-            },
-            context_properties={"bridge": self._bridge},
-            mouse_tracking=True,
-        )
+        _configure_toolbar_surface(self, self._bridge)
 
         # ── Monitor-button proxy (anchor for popup positioning) ───────────
         self._monitor_btn = QWidget(self)
@@ -235,6 +278,10 @@ class QuickAccessToolbar(QQuickWidget):
         self._slide_anim = QPropertyAnimation(self, anim_prop)
         self._slide_anim.setDuration(_QAT_ANIM_MS)
         self._slide_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        if self._anchor_parent is not None:
+            self._anchor_parent.installEventFilter(self)
+        if self._anchor_window is not None and self._anchor_window is not self._anchor_parent:
+            self._anchor_window.installEventFilter(self)
 
     def _begin_qml_pointer_cursor(self):
         self._qml_pointer_depth += 1
@@ -250,9 +297,17 @@ class QuickAccessToolbar(QQuickWidget):
         end_qml_pointer_cursor(self)
         hide_themed_tooltip()
 
-    def eventFilter(self, obj, event):
-        if obj is self and event.type() == QEvent.Type.Leave:
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if obj in (self, self._browser_surface) and event.type() == QEvent.Type.Leave:
             self._reset_qml_pointer_cursor()
+        if obj in (self._anchor_parent, self._anchor_window) and event.type() in (
+            QEvent.Type.Move,
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.WindowStateChange,
+            QEvent.Type.LayoutRequest,
+        ):
+            self._schedule_reposition()
         return super().eventFilter(obj, event)
 
     def showEvent(self, event) -> None:
@@ -285,12 +340,13 @@ class QuickAccessToolbar(QQuickWidget):
             return
 
         rect = QRect(round(x), round(y), round(width), round(height))
-        anchor = self.mapToGlobal(QPoint(rect.center().x(), rect.top()))
-        top_left = self.mapToGlobal(QPoint(rect.left(), rect.top()))
+        surface = self._active_surface()
+        anchor = surface.mapToGlobal(QPoint(rect.center().x(), rect.top()))
+        top_left = surface.mapToGlobal(QPoint(rect.left(), rect.top()))
 
         screen = QGuiApplication.screenAt(anchor)
-        if screen is None and self.windowHandle() is not None:
-            screen = self.windowHandle().screen()
+        if screen is None and surface.windowHandle() is not None:
+            screen = surface.windowHandle().screen()
         if screen is None:
             screen = QGuiApplication.primaryScreen()
 
@@ -451,6 +507,11 @@ class QuickAccessToolbar(QQuickWidget):
     def apply_theme(self) -> None:
         hide_themed_tooltip()
         apply_qml_theme(self, clear_color=QColor(0, 0, 0, 0))
+        if self._browser_surface is not None:
+            apply_qml_theme(
+                self._browser_surface,
+                clear_color=QColor(0, 0, 0, 0),
+            )
         self.set_screen_count(self._screen_count)
         if self._obs_connected:
             self.set_obs_connected(True)
@@ -480,7 +541,91 @@ class QuickAccessToolbar(QQuickWidget):
         # SetWindowRgn clips are 1-bit (aliased), and DWM rounding only applies
         # to top-level windows. So browserRectMode intentionally stays
         # Windows-only and is the correct solution for that platform.
-        self._bridge.set_browser_rect_mode(enabled)
+        self._bridge.set_browser_rect_mode(bool(enabled) and _WINDOWS)
+
+    def set_browser_overlay_mode(self, enabled: bool) -> None:
+        """Use a transient native toolbar only above WebKitGTK on Linux."""
+        if not _LINUX:
+            return
+        overlay_mode = bool(enabled)
+        if overlay_mode == self._browser_overlay_mode:
+            self._schedule_reposition()
+            return
+
+        self._slide_anim.stop()
+        browser_surface = self._ensure_browser_surface() if overlay_mode else self._browser_surface
+        if browser_surface is None:
+            return
+
+        if overlay_mode:
+            should_show = not self.isHidden()
+            self.hide()
+            self._browser_overlay_mode = True
+            if should_show:
+                self._ensure_transient_parent()
+                browser_surface.show()
+                self._ensure_transient_parent()
+        else:
+            should_show = not browser_surface.isHidden()
+            browser_surface.hide()
+            self._browser_overlay_mode = False
+            if should_show:
+                self.show()
+        self._schedule_reposition()
+
+    def _ensure_browser_surface(self) -> _LinuxBrowserToolbarSurface | None:
+        if self._browser_surface is not None:
+            return self._browser_surface
+        if self._anchor_window is None:
+            return None
+
+        surface = _LinuxBrowserToolbarSurface(self._bridge, self._anchor_window)
+        surface.installEventFilter(self)
+        self._browser_surface = surface
+
+        monitor_button = QWidget(surface)
+        monitor_button.setFixedSize(30, 30)
+        monitor_button.move(6, (_QAT_H - 30) // 2)
+        monitor_button.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        monitor_button.setStyleSheet("background: transparent; border: none;")
+        self._browser_monitor_btn = monitor_button
+
+        self.destroyed.connect(lambda _destroyed=None: _dispose_browser_toolbar_surface(surface))
+        return surface
+
+    def _ensure_transient_parent(self) -> None:
+        if self._browser_surface is None or self._anchor_window is None:
+            return
+        window_handle = self._browser_surface.windowHandle()
+        anchor_handle = self._anchor_window.windowHandle()
+        if window_handle is not None and anchor_handle is not None:
+            window_handle.setTransientParent(anchor_handle)
+
+    def _active_surface(self) -> QQuickWidget:
+        if self._browser_overlay_mode and self._browser_surface is not None:
+            return self._browser_surface
+        return self
+
+    def _active_monitor_button(self) -> QWidget:
+        if self._browser_overlay_mode and self._browser_monitor_btn is not None:
+            return self._browser_monitor_btn
+        return self._monitor_btn
+
+    def _schedule_reposition(self) -> None:
+        if self._reposition_pending:
+            return
+        self._reposition_pending = True
+        QTimer.singleShot(0, self._run_scheduled_reposition)
+
+    def _run_scheduled_reposition(self) -> None:
+        self._reposition_pending = False
+        self._reposition()
+
+    def _anchor_point(self, x: int, y: int) -> QPoint:
+        point = QPoint(x, y)
+        if self._browser_overlay_mode and self._anchor_parent is not None:
+            return self._anchor_parent.mapToGlobal(point)
+        return point
 
     # ── Internal ──────────────────────────────────────────────────────────
 
@@ -521,9 +666,11 @@ class QuickAccessToolbar(QQuickWidget):
         ``setMask()`` is safe here: it only changes the input/paint clip
         region, NOT the surface dimensions, so the alpha buffer is preserved.
         """
-        p = self.parent()
+        p = self._anchor_parent
         if not p:
             return
+        surface = self._active_surface()
+        monitor_button = self._active_monitor_button()
 
         base_y = p.height() - _QAT_BAR_H - _QAT_MARGIN_B - _QAT_H
 
@@ -536,26 +683,30 @@ class QuickAccessToolbar(QQuickWidget):
             # Position so that only the miniTab (right-aligned in QML) is
             # visible at the parent's right edge.
             x = p.width() - _QAT_MAX_W
-            self.move(x, base_y)
+            surface.move(self._anchor_point(x, base_y))
             # Mask: only the miniTab area at the right edge is interactive.
-            self.setMask(QRegion(
-                _QAT_MAX_W - _QAT_MINI_W,
-                (_QAT_H - _QAT_MINI_H) // 2,
-                _QAT_MINI_W,
-                _QAT_MINI_H,
-            ))
+            surface.setMask(
+                QRegion(
+                    _QAT_MAX_W - _QAT_MINI_W,
+                    (_QAT_H - _QAT_MINI_H) // 2,
+                    _QAT_MINI_W,
+                    _QAT_MINI_H,
+                )
+            )
         else:
             # Centre the *visible pill* within the parent.
             # The pill is centred inside the fixed-width QML root, so we
             # centre the entire QQuickWidget based on _QAT_MAX_W.
             x = (p.width() - _QAT_MAX_W) // 2
-            self.move(x, base_y)
+            surface.move(self._anchor_point(x, base_y))
             # Mask: the pill is centred in the QQuickWidget; expose only that
             # rectangle so surrounding transparent pixels pass clicks through.
             pill_x = (_QAT_MAX_W - pill_w) // 2
-            self.setMask(QRegion(pill_x, 0, pill_w, _QAT_H))
+            surface.setMask(QRegion(pill_x, 0, pill_w, _QAT_H))
             # Keep the monitor-button popup anchor aligned with the pill.
-            self._monitor_btn.move(pill_x + 6, (_QAT_H - 30) // 2)
+            monitor_button.move(pill_x + 6, (_QAT_H - 30) // 2)
+        if self._browser_overlay_mode:
+            surface.raise_()
 
     def _reposition_solid(self, p, base_y: int) -> None:
         """macOS solid-mode placement.
@@ -580,9 +731,10 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _toggle_minimize(self):
         hide_themed_tooltip()
-        p = self.parent()
+        p = self._anchor_parent
         if not p:
             return
+        surface = self._active_surface()
 
         base_y = p.height() - _QAT_BAR_H - _QAT_MARGIN_B - _QAT_H
 
@@ -600,12 +752,15 @@ class QuickAccessToolbar(QQuickWidget):
 
             # Start at the right edge so it slides in from the right.
             start_x = p.width() - _QAT_MAX_W
-            self.move(start_x, base_y)
-            self.clearMask()  # full widget visible during animation
+            start = self._anchor_point(start_x, base_y)
+            target = self._anchor_point(target_x, base_y)
+            surface.move(start)
+            surface.clearMask()  # full widget visible during animation
 
             self._slide_anim.stop()
-            self._slide_anim.setStartValue(QPoint(start_x, base_y))
-            self._slide_anim.setEndValue(QPoint(target_x, base_y))
+            self._slide_anim.setTargetObject(surface)
+            self._slide_anim.setStartValue(start)
+            self._slide_anim.setEndValue(target)
             self._slide_anim.start()
             QTimer.singleShot(_QAT_ANIM_MS + 20, self._reposition)
         else:
@@ -613,11 +768,14 @@ class QuickAccessToolbar(QQuickWidget):
             self._minimized = True
             target_x = p.width() - _QAT_MAX_W
 
-            self.clearMask()  # full widget visible during animation
+            surface.clearMask()  # full widget visible during animation
             self._slide_anim.stop()
-            self._slide_anim.setStartValue(self.pos())
-            self._slide_anim.setEndValue(QPoint(target_x, base_y))
-            self._slide_anim.finished.connect(self._on_min_done, Qt.ConnectionType.UniqueConnection)
+            self._slide_anim.setTargetObject(surface)
+            self._slide_anim.setStartValue(surface.pos())
+            self._slide_anim.setEndValue(self._anchor_point(target_x, base_y))
+            self._slide_anim.finished.connect(
+                self._on_min_done, Qt.ConnectionType.UniqueConnection
+            )
             self._slide_anim.start()
 
     def _on_min_done(self):
@@ -658,9 +816,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._minimized = True
             self._slide_anim.setStartValue(self.geometry())
             self._slide_anim.setEndValue(mini_geo)
-            self._slide_anim.finished.connect(
-                self._on_min_done, Qt.ConnectionType.UniqueConnection
-            )
+            self._slide_anim.finished.connect(self._on_min_done, Qt.ConnectionType.UniqueConnection)
             self._slide_anim.start()
 
     def _on_obs_clicked(self):
@@ -672,7 +828,7 @@ class QuickAccessToolbar(QQuickWidget):
         idle_scene = self._obs_settings.default_scene()
         media_scene = self._obs_settings.media_window_scene()
         self._scene_popup.populate(scenes, current, idle_scene, media_scene)
-        self._scene_popup.show_above(self)
+        self._scene_popup.show_above(self._active_surface())
         if not scenes:
             self._obs.request_scenes_refresh()
 
@@ -682,19 +838,19 @@ class QuickAccessToolbar(QQuickWidget):
             return
         if not self._background_song.is_enabled:
             return
-        self._background_song_panel.show_above(self)
+        self._background_song_panel.show_above(self._active_surface())
 
     def _on_zoom_clicked(self):
         hide_themed_tooltip()
         if not self._zoom or not self._zoom.is_connected:
             return
-        self._zoom_panel.show_above(self)
+        self._zoom_panel.show_above(self._active_surface())
 
     def _on_camera_clicked(self):
         hide_themed_tooltip()
         if not self._camera_panel:
             return
-        self._camera_panel.show_above(self)
+        self._camera_panel.show_above(self._active_surface())
 
     # ── i18n ──────────────────────────────────────────────────────────────
 
@@ -703,4 +859,3 @@ class QuickAccessToolbar(QQuickWidget):
             self._bridge.update_translations()
             self._sync_background_song_state()
         super().changeEvent(event)
-

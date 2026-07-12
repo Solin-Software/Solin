@@ -6,17 +6,37 @@ from solin.controllers.lazy_page_controller import LazyPageController
 from solin.widgets.browser.ui import BrowserUiMixin
 from solin.widgets.browser.widget import BrowserWidget
 from solin.widgets.projection.bar import ProjectionBar
-from solin.widgets.quick_access_toolbar import QuickAccessToolbar
+from solin.widgets.quick_access_toolbar import (
+    QuickAccessToolbar,
+    _LinuxBrowserToolbarSurface,
+)
 
 
-def test_linux_browser_reserves_a_non_overlapping_toolbar_band():
+def test_linux_browser_promotes_only_the_toolbar_to_a_transient_window():
     setup_source = inspect.getsource(QuickAccessToolbar.__init__)
+    surface_source = inspect.getsource(_LinuxBrowserToolbarSurface.__init__)
+    overlay_source = inspect.getsource(QuickAccessToolbar.set_browser_overlay_mode)
+    lazy_surface_source = inspect.getsource(QuickAccessToolbar._ensure_browser_surface)
+    position_source = inspect.getsource(QuickAccessToolbar._anchor_point)
+    corner_source = inspect.getsource(QuickAccessToolbar.set_browser_rect_mode)
     browser_ui_source = inspect.getsource(BrowserUiMixin._build_ui)
 
     assert "self.setParent(parent)" in setup_source
-    assert "WindowType.Tool" not in setup_source
-    assert "browser_toolbar_reserve = 56" in browser_ui_source
-    assert "root.setContentsMargins(0, 0, 0, browser_toolbar_reserve)" in browser_ui_source
+    assert "WindowType.Tool" in surface_source
+    assert "FramelessWindowHint" in surface_source
+    assert "NoDropShadowWindowHint" in surface_source
+    assert "WindowDoesNotAcceptFocus" in surface_source
+    assert "self.setParent(parent_window, flags)" in surface_source
+    assert "self.setParent" not in overlay_source
+    assert "if not _LINUX" in overlay_source
+    assert "self._ensure_browser_surface()" in overlay_source
+    assert "browser_surface.show()" in overlay_source
+    assert "browser_surface.hide()" in overlay_source
+    assert "_LinuxBrowserToolbarSurface" in lazy_surface_source
+    assert "self._bridge, self._anchor_window" in lazy_surface_source
+    assert "mapToGlobal" in position_source
+    assert "bool(enabled) and _WINDOWS" in corner_source
+    assert "root.setContentsMargins(0, 0, 0, 0)" in browser_ui_source
 
 
 def test_projection_overlay_occludes_only_the_foreign_browser_surface():
