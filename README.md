@@ -134,6 +134,12 @@ non-core X11 libraries and redistribution notices. This feature remains limited
 to X11/Xorg (including applications running through XWayland); `xdotool` cannot
 control native Wayland windows.
 
+Because Zoom does not expose its screen-share shortcut as global on Linux,
+Solin resolves visible windows from exact Zoom process IDs, activates and
+verifies the selected X11 window before dispatching the shortcut, then restores
+the previously focused window. The largest Zoom window is preferred so a small
+floating meeting toolbar is not selected while the main meeting window exists.
+
 After downloading the AppImage, make it executable and run it:
 
 ```bash

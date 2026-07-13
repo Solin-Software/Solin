@@ -31,6 +31,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+from .linux_zoom_focus import (
+    LinuxZoomFocusSession,
+    acquire_zoom_focus,
+    list_zoom_windows,
+    restore_previous_focus,
+    zoom_has_focus,
+)
 from .shortcuts import send_key_sequence
 
 log = logging.getLogger(__name__)
@@ -48,7 +55,6 @@ MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
 
 _WINDOWS_ZOOM_PROCESS_NAMES = frozenset({"zoom.exe"})
 _MACOS_ZOOM_OWNER_NAMES = frozenset({"zoom.us", "zoom", "zoom workplace"})
-_LINUX_ZOOM_PROCESS_NAMES = frozenset({"zoom", "zoom.real"})
 
 
 def send_hotkey(shortcut: str) -> bool:
@@ -916,113 +922,30 @@ def _is_macos_zoom_owner(owner_name: str) -> bool:
 
 
 def _list_zoom_windows_linux() -> dict[str, _ZoomWindowInfo] | None:
-    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
-    if session_type == "wayland":
+    linux_windows = list_zoom_windows()
+    if linux_windows is None:
         return None
-
-    xdotool = shutil.which("xdotool")
-    if not xdotool:
-        return None
-
-    env = os.environ.copy()
-    pids = _linux_zoom_pids()
-    if not pids:
-        return {}
-
-    windows: dict[str, _ZoomWindowInfo] = {}
-    for pid, owner in pids.items():
-        try:
-            result = subprocess.run(
-                [xdotool, "search", "--onlyvisible", "--pid", str(pid)],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=1.0,
-                env=env,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-
-        for raw_window_id in result.stdout.splitlines():
-            window_id = raw_window_id.strip()
-            if not window_id:
-                continue
-            geometry = _xdotool_window_geometry(xdotool, window_id, env)
-            if geometry is None:
-                continue
-            x, y, width, height = geometry
-            if width <= 0 or height <= 0:
-                continue
-            windows[window_id] = _ZoomWindowInfo(
-                window_id=window_id,
-                owner=owner,
-                x=x,
-                y=y,
-                width=width,
-                height=height,
-            )
-
-    return windows
-
-
-def _linux_zoom_pids() -> dict[int, str]:
-    pids: dict[int, str] = {}
-    proc_root = Path("/proc")
-    if not proc_root.is_dir():
-        return pids
-
-    for proc_dir in proc_root.iterdir():
-        if not proc_dir.name.isdigit():
-            continue
-        try:
-            comm = (proc_dir / "comm").read_text(encoding="utf-8", errors="ignore").strip()
-            cmdline = (proc_dir / "cmdline").read_bytes().decode(
-                "utf-8", errors="ignore"
-            ).replace("\x00", " ")
-        except OSError:
-            continue
-        owner = comm or cmdline
-        normalized_owner = owner.casefold()
-        normalized_cmdline = cmdline.casefold()
-        if (
-            normalized_owner in _LINUX_ZOOM_PROCESS_NAMES
-            or "/zoom" in normalized_cmdline
-            or "zoom.us" in normalized_cmdline
-        ):
-            pids[int(proc_dir.name)] = owner
-
-    return pids
-
-
-def _xdotool_window_geometry(
-    xdotool: str,
-    window_id: str,
-    env: dict[str, str],
-) -> tuple[int, int, int, int] | None:
-    try:
-        result = subprocess.run(
-            [xdotool, "getwindowgeometry", "--shell", window_id],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=1.0,
-            env=env,
+    return {
+        window_id: _ZoomWindowInfo(
+            window_id=window.window_id,
+            owner=window.owner,
+            x=window.x,
+            y=window.y,
+            width=window.width,
+            height=window.height,
         )
-    except (OSError, subprocess.SubprocessError):
-        return None
+        for window_id, window in linux_windows.items()
+    }
 
-    values = dict(
-        re.findall(r"^(X|Y|WIDTH|HEIGHT)=(-?\d+)$", result.stdout, re.MULTILINE)
-    )
-    try:
-        return (
-            int(values["X"]),
-            int(values["Y"]),
-            int(values["WIDTH"]),
-            int(values["HEIGHT"]),
-        )
-    except (KeyError, ValueError):
+
+def _acquire_linux_zoom_focus() -> LinuxZoomFocusSession | None:
+    if not sys.platform.startswith("linux"):
         return None
+    return acquire_zoom_focus()
+
+
+def _linux_zoom_focus_is_required() -> bool:
+    return sys.platform.startswith("linux")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1058,44 +981,61 @@ def execute_start_share(
     if not hotkey:
         return False
 
-    click_configured = click_x >= 0 and click_y >= 0
-    delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
-    monitor = (
-        _MouseInterferenceMonitor(movement_warning)
-        if click_configured else None
-    )
-    initial_windows = (
-        _capture_zoom_windows_before_share_click()
-        if click_configured else {}
-    )
-    if click_configured and USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and initial_windows is None:
-        log.warning(
-            "execute_start_share: Zoom window detection is unavailable on %s",
-            sys.platform,
+    focus_session = _acquire_linux_zoom_focus()
+    if _linux_zoom_focus_is_required() and focus_session is None:
+        log.warning("execute_start_share: a verified Zoom window could not receive focus")
+        return False
+
+    try:
+        click_configured = click_x >= 0 and click_y >= 0
+        delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
+        monitor = (
+            _MouseInterferenceMonitor(movement_warning)
+            if click_configured else None
         )
-        return False
-
-    ok = send_hotkey(hotkey)
-    if not ok:
-        log.warning("execute_start_share: hotkey '%s' failed", hotkey)
-        return False
-
-    if click_configured:
-        if not _wait_before_share_click(delay_ms, initial_windows, monitor):
-            return False
-        if monitor is not None:
-            monitor.check()
-            ok = monitor.watch_during(
-                lambda: send_virtual_clicks(click_x, click_y, count=2, interval_ms=120),
-                target=(click_x, click_y),
+        initial_windows = (
+            _capture_zoom_windows_before_share_click()
+            if click_configured else {}
+        )
+        if click_configured and USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and initial_windows is None:
+            log.warning(
+                "execute_start_share: Zoom window detection is unavailable on %s",
+                sys.platform,
             )
-        else:
-            ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
-        if not ok:
-            log.warning("execute_start_share: virtual clicks failed at (%d, %d)", click_x, click_y)
             return False
 
-    return True
+        if focus_session is not None and not zoom_has_focus(focus_session):
+            log.warning("execute_start_share: Zoom lost focus before shortcut dispatch")
+            return False
+
+        ok = send_hotkey(hotkey)
+        if not ok:
+            log.warning("execute_start_share: hotkey '%s' failed", hotkey)
+            return False
+
+        if click_configured:
+            if not _wait_before_share_click(delay_ms, initial_windows, monitor):
+                return False
+            if monitor is not None:
+                monitor.check()
+                ok = monitor.watch_during(
+                    lambda: send_virtual_clicks(click_x, click_y, count=2, interval_ms=120),
+                    target=(click_x, click_y),
+                )
+            else:
+                ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
+            if not ok:
+                log.warning(
+                    "execute_start_share: virtual clicks failed at (%d, %d)",
+                    click_x,
+                    click_y,
+                )
+                return False
+
+        return True
+    finally:
+        if focus_session is not None:
+            restore_previous_focus(focus_session)
 
 
 def execute_stop_share(hotkey: str) -> bool:
@@ -1110,4 +1050,17 @@ def execute_stop_share(hotkey: str) -> bool:
     """
     if not hotkey:
         return False
-    return send_hotkey(hotkey)
+
+    focus_session = _acquire_linux_zoom_focus()
+    if _linux_zoom_focus_is_required() and focus_session is None:
+        log.warning("execute_stop_share: a verified Zoom window could not receive focus")
+        return False
+
+    try:
+        if focus_session is not None and not zoom_has_focus(focus_session):
+            log.warning("execute_stop_share: Zoom lost focus before shortcut dispatch")
+            return False
+        return send_hotkey(hotkey)
+    finally:
+        if focus_session is not None:
+            restore_previous_focus(focus_session)
