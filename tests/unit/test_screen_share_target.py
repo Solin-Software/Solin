@@ -25,9 +25,7 @@ def _window(
     )
 
 
-def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
-    dialog = _window("dialog", x=-1200, y=100, width=801, height=601)
-    clicks: list[tuple[int, int, int, int]] = []
+def _configure_detected_share_dialog(monkeypatch, dialog, clicks) -> None:
     monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: {})
     monkeypatch.setattr(
         screen_share,
@@ -43,6 +41,12 @@ def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
         or True,
     )
 
+
+def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
+    dialog = _window("dialog", x=-1200, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    _configure_detected_share_dialog(monkeypatch, dialog, clicks)
+
     assert screen_share.execute_start_share("Alt+S", 300, 250) is True
     assert clicks == [(300, 250, 2, 120)]
 
@@ -55,7 +59,7 @@ def test_execute_start_share_warns_once_when_mouse_moves_during_wait(monkeypatch
 
     def _list_windows():
         calls["windows"] += 1
-        return {"dialog": dialog} if calls["windows"] >= 2 else {}
+        return {"dialog": dialog} if calls["windows"] == 2 else {}
 
     monkeypatch.setattr(screen_share, "_list_zoom_windows", _list_windows)
     monkeypatch.setattr(screen_share, "_cursor_position", lambda: next(positions, (140, 10)))
@@ -107,6 +111,90 @@ def test_execute_start_share_rejects_missing_hotkey_before_click(monkeypatch):
 
     assert screen_share.execute_start_share("", 300, 250) is False
     assert clicks == []
+
+
+def test_execute_start_share_retries_once_when_same_dialog_remains(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    presences = iter(
+        [
+            screen_share._ShareDialogPresence.PRESENT,
+            screen_share._ShareDialogPresence.ABSENT,
+        ]
+    )
+    confirmation_timeouts: list[int] = []
+    clicks: list[tuple[int, int, int, int]] = []
+    _configure_detected_share_dialog(monkeypatch, dialog, clicks)
+
+    def _wait_for_exit(_dialog, timeout_ms, _monitor=None):
+        confirmation_timeouts.append(timeout_ms)
+        return next(presences)
+
+    monkeypatch.setattr(screen_share, "_wait_for_share_dialog_exit", _wait_for_exit)
+
+    assert screen_share.execute_start_share("Alt+S", 300, 250) is True
+    assert clicks == [(300, 250, 2, 120), (300, 250, 2, 120)]
+    assert confirmation_timeouts == [
+        screen_share.SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS,
+        screen_share.SHARE_DIALOG_RETRY_CONFIRMATION_MS,
+    ]
+
+
+def test_execute_start_share_does_not_retry_when_dialog_state_is_unknown(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    _configure_detected_share_dialog(monkeypatch, dialog, clicks)
+    monkeypatch.setattr(
+        screen_share,
+        "_wait_for_share_dialog_exit",
+        lambda _dialog, _timeout_ms, _monitor=None: screen_share._ShareDialogPresence.UNKNOWN,
+    )
+
+    assert screen_share.execute_start_share("Alt+S", 300, 250) is True
+    assert clicks == [(300, 250, 2, 120)]
+
+
+def test_execute_start_share_fails_after_one_unsuccessful_retry(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    _configure_detected_share_dialog(monkeypatch, dialog, clicks)
+    monkeypatch.setattr(
+        screen_share,
+        "_wait_for_share_dialog_exit",
+        lambda _dialog, _timeout_ms, _monitor=None: screen_share._ShareDialogPresence.PRESENT,
+    )
+
+    assert screen_share.execute_start_share("Alt+S", 300, 250) is False
+    assert clicks == [(300, 250, 2, 120), (300, 250, 2, 120)]
+
+
+def test_share_dialog_exit_probe_tracks_only_detected_window(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    other = _window("other", x=100, y=100, width=801, height=601)
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: {"other": other})
+
+    assert screen_share._wait_for_share_dialog_exit(dialog, 250) is (
+        screen_share._ShareDialogPresence.ABSENT
+    )
+
+
+def test_share_dialog_exit_probe_reports_same_window_after_timeout(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    times = iter([0.0, 0.3])
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: {"dialog": dialog})
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+
+    assert screen_share._wait_for_share_dialog_exit(dialog, 250) is (
+        screen_share._ShareDialogPresence.PRESENT
+    )
+
+
+def test_share_dialog_exit_probe_fails_safe_when_enumeration_is_unavailable(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: None)
+
+    assert screen_share._wait_for_share_dialog_exit(dialog, 250) is (
+        screen_share._ShareDialogPresence.UNKNOWN
+    )
 
 
 def test_linux_start_share_focuses_zoom_and_restores_previous_window(monkeypatch):

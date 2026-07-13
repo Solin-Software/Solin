@@ -28,6 +28,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import TypeVar
 
@@ -50,6 +51,8 @@ SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
 SHARE_DIALOG_FIXED_DELAY_MS = 500
+SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 250
+SHARE_DIALOG_RETRY_CONFIRMATION_MS = 2000
 MOUSE_INTERFERENCE_DISTANCE_PX = 80
 MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
 
@@ -724,6 +727,12 @@ class _ZoomWindowInfo:
         return self.width * self.height
 
 
+class _ShareDialogPresence(Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+
+
 def _is_candidate_share_dialog(window: _ZoomWindowInfo) -> bool:
     return (
         window.width >= SHARE_DIALOG_MIN_WIDTH
@@ -741,23 +750,24 @@ def _wait_before_share_click(
     delay_ms: int,
     initial_windows: dict[str, _ZoomWindowInfo] | None,
     monitor: _MouseInterferenceMonitor | None = None,
-) -> bool:
+) -> _ZoomWindowInfo | None:
+    """Wait for and return the detected dialog after its safety delay."""
     if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
         _sleep_with_mouse_monitoring(delay_ms, monitor)
-        return True
+        return None
     if initial_windows is None:
         log.warning(
             "execute_start_share: Zoom window detection is unavailable on %s",
             sys.platform,
         )
-        return False
+        return None
     detected = _wait_for_new_zoom_window(initial_windows, monitor)
     if detected is None:
         log.warning(
             "execute_start_share: no new Zoom share dialog detected within %dms",
             SHARE_DIALOG_DETECTION_TIMEOUT_MS,
         )
-        return False
+        return None
 
     log.debug(
         "execute_start_share: detected Zoom dialog %s (%dx%d at %d,%d, owner=%s)",
@@ -769,6 +779,92 @@ def _wait_before_share_click(
         detected.owner,
     )
     _sleep_with_mouse_monitoring(SHARE_DIALOG_DETECTION_SETTLE_MS, monitor)
+    return detected
+
+
+def _wait_for_share_dialog_exit(
+    dialog: _ZoomWindowInfo,
+    timeout_ms: int,
+    monitor: _MouseInterferenceMonitor | None = None,
+) -> _ShareDialogPresence:
+    """Observe only the detected dialog ID until it exits or the timeout elapses."""
+    deadline = time.monotonic() + (timeout_ms / 1000.0)
+    while True:
+        current_windows = _list_zoom_windows()
+        if current_windows is None:
+            return _ShareDialogPresence.UNKNOWN
+        if dialog.window_id not in current_windows:
+            return _ShareDialogPresence.ABSENT
+
+        remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+        if remaining_ms <= 0:
+            return _ShareDialogPresence.PRESENT
+        _sleep_with_mouse_monitoring(
+            min(SHARE_DIALOG_POLL_INTERVAL_MS, remaining_ms),
+            monitor,
+        )
+
+
+def _send_share_target_double_click(
+    x: int,
+    y: int,
+    monitor: _MouseInterferenceMonitor | None,
+) -> bool:
+    def _operation() -> bool:
+        return send_virtual_clicks(x, y, count=2, interval_ms=120)
+
+    if monitor is None:
+        return _operation()
+    return monitor.watch_during(_operation, target=(x, y))
+
+
+def _click_share_target_with_retry(
+    x: int,
+    y: int,
+    dialog: _ZoomWindowInfo | None,
+    monitor: _MouseInterferenceMonitor | None = None,
+) -> bool:
+    """Double-click once, retrying once only while the same dialog remains."""
+    if not _send_share_target_double_click(x, y, monitor):
+        return False
+    if dialog is None:
+        return True
+
+    presence = _wait_for_share_dialog_exit(
+        dialog,
+        SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS,
+        monitor,
+    )
+    if presence is _ShareDialogPresence.ABSENT:
+        return True
+    if presence is _ShareDialogPresence.UNKNOWN:
+        log.warning(
+            "execute_start_share: could not verify whether Zoom accepted the share click"
+        )
+        return True
+
+    log.info(
+        "execute_start_share: Zoom dialog %s remained visible; retrying once",
+        dialog.window_id,
+    )
+    if not _send_share_target_double_click(x, y, monitor):
+        return False
+
+    presence = _wait_for_share_dialog_exit(
+        dialog,
+        SHARE_DIALOG_RETRY_CONFIRMATION_MS,
+        monitor,
+    )
+    if presence is _ShareDialogPresence.PRESENT:
+        log.warning(
+            "execute_start_share: Zoom dialog %s remained visible after the retry",
+            dialog.window_id,
+        )
+        return False
+    if presence is _ShareDialogPresence.UNKNOWN:
+        log.warning(
+            "execute_start_share: could not verify Zoom after the share-click retry"
+        )
     return True
 
 
@@ -1064,19 +1160,20 @@ def execute_start_share(
             return False
 
         if click_configured:
-            if not _wait_before_share_click(delay_ms, initial_windows, monitor):
+            detected_dialog = _wait_before_share_click(delay_ms, initial_windows, monitor)
+            if USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and detected_dialog is None:
                 return False
             if monitor is not None:
                 monitor.check()
-                ok = monitor.watch_during(
-                    lambda: send_virtual_clicks(click_x, click_y, count=2, interval_ms=120),
-                    target=(click_x, click_y),
-                )
-            else:
-                ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
+            ok = _click_share_target_with_retry(
+                click_x,
+                click_y,
+                detected_dialog,
+                monitor,
+            )
             if not ok:
                 log.warning(
-                    "execute_start_share: virtual clicks failed at (%d, %d)",
+                    "execute_start_share: share-target interaction failed at (%d, %d)",
                     click_x,
                     click_y,
                 )
