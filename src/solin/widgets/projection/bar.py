@@ -232,6 +232,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._announce_timer.setInterval(40)
         self._announce_timer.timeout.connect(self._on_announce_gate_expired)
 
+        # ── Automatic Zoom share playback gate ───────────────────────────
+        # Visual videos remain paused and user playback controls stay locked
+        # until the asynchronous share-start attempt has been resolved.
+        self._auto_share_playback_waiting = False
+
         # ── Thumbnail queue para o painel de playlist ─────────────────────
         self._thumb_queue = media_info_queue_factory(self)
         self._panel_populated = False
@@ -714,6 +719,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _sync_protected_media_controls(self) -> None:
         seek_enabled = (
             self._announce_state == "off"
+            and not self._auto_share_playback_waiting
             and not self._playback_protection.locked
         )
         self.seek_slider.setEnabled(seek_enabled)
@@ -722,7 +728,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             if self._playback_protection.locked
             else ""
         )
-        self._sync_fullscreen_announcement_controls()
+        self._sync_fullscreen_media_controls()
         self._update_nav_buttons()
 
     @Slot(bool)
@@ -820,7 +826,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay.set_buffer_progress(*self._last_buffer_progress)
         overlay.set_reconnect_active(self._playback_recovering)
         overlay.set_playback_state(self.media.player.playbackState())
-        self._sync_fullscreen_announcement_controls(overlay)
+        self._sync_fullscreen_media_controls(overlay)
         self._sync_app_fullscreen_navigation()
 
     def _exit_app_fullscreen(self, *, clear_frame: bool = False) -> None:
@@ -859,11 +865,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_slider.setValue(int(round(max(0.0, min(1.0, volume)) * 100)))
 
     def _on_fullscreen_seek_requested(self, value: int) -> None:
-        if self._announce_state != "off":
+        if self._announce_state != "off" or self._auto_share_playback_waiting:
             return
         self.seek_requested.emit(value)
 
-    def _sync_fullscreen_announcement_controls(
+    def _sync_fullscreen_media_controls(
         self,
         overlay: FullscreenVideoOverlay | None = None,
     ) -> None:
@@ -887,6 +893,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _enter_mode(self, mode: str | None) -> None:
         """End mode-specific timer work before changing projected content."""
         self._stop_timer_internals()
+        if mode != "video":
+            self.cancel_auto_share_playback_wait()
         self._mode = mode
 
     def hide_add_to_destination_action(self) -> None:
@@ -896,6 +904,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         return self._obs_scene_is_media
 
     def activate_video(self, title: str, keep_expanded: bool = False, is_audio: bool = False):
+        self.cancel_auto_share_playback_wait()
         self._cancel_announcement_mode()
         self._enter_mode("video")
         self._is_audio = is_audio
@@ -1189,6 +1198,41 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._collapse()
         self._timer_tick.start()
 
+    # ── Automatic share playback gate ─────────────────────────────────────
+
+    def begin_auto_share_playback_wait(self) -> None:
+        """Lock a paused visual video until Zoom share startup is resolved."""
+        self._auto_share_playback_waiting = True
+        self.play_btn.setEnabled(False)
+        self._sync_protected_media_controls()
+
+    def resolve_auto_share_playback_wait(self, success: bool) -> None:
+        """Release the share gate, resuming only successful regular videos."""
+        if not self._auto_share_playback_waiting:
+            return
+        self._auto_share_playback_waiting = False
+
+        if self._announce_state == "gate":
+            # Announcement mode has precedence. Its muted media-time gate must
+            # run before it reaches the user-controlled READY state.
+            self.play_btn.setEnabled(False)
+            self._announce_timer.start()
+            self.media.play()
+        else:
+            self.play_btn.setEnabled(True)
+            if success:
+                self.media.play()
+
+        self._sync_protected_media_controls()
+
+    def cancel_auto_share_playback_wait(self) -> None:
+        """Discard a pending gate without changing playback state."""
+        if not self._auto_share_playback_waiting:
+            return
+        self._auto_share_playback_waiting = False
+        self.play_btn.setEnabled(self._announce_state != "gate")
+        self._sync_protected_media_controls()
+
     # ── Song Announcement Mode ────────────────────────────────────────────
 
     def begin_announcement_mode(self) -> None:
@@ -1205,9 +1249,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
         self._sync_protected_media_controls()
-        self._sync_fullscreen_announcement_controls()
-        # Polls media position; this is media-time, not wall-clock time.
-        self._announce_timer.start()
+        self._sync_fullscreen_media_controls()
+        # Poll media time only while playback can advance. Automatic sharing
+        # starts this timer when its paused startup gate is resolved.
+        if not self._auto_share_playback_waiting:
+            self._announce_timer.start()
 
     def _on_announce_gate_expired(self) -> None:
         """
@@ -1236,9 +1282,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
                     if self._announce_state == "ready" else None,
         )
         # Only play button is re-enabled; slider remains locked
-        self.play_btn.setEnabled(True)
+        self.play_btn.setEnabled(not self._auto_share_playback_waiting)
         self._sync_protected_media_controls()
-        self._sync_fullscreen_announcement_controls()
+        self._sync_fullscreen_media_controls()
 
     def _on_play_btn_clicked(self) -> None:
         """
@@ -1246,6 +1292,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         In READY state: seek to 0, release slider lock, start playback.
         Otherwise: emit toggle_requested as usual.
         """
+        if self._auto_share_playback_waiting:
+            return
         if self._announce_state == "ready":
             self._announce_state = "off"
             if hasattr(self.media, "set_local_switch_deferred"):
@@ -1254,7 +1302,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self.media.seek(0)
             self.media.play()
             self._sync_protected_media_controls()
-            self._sync_fullscreen_announcement_controls()
+            self._sync_fullscreen_media_controls()
             return
         self.toggle_requested.emit()
 
@@ -1270,9 +1318,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         actual_vol = 0.0 if self._muted else self._volume
         self.media.audio_output.setVolume(actual_vol)
         # Restore controls
-        self.play_btn.setEnabled(True)
+        self.play_btn.setEnabled(not self._auto_share_playback_waiting)
         self._sync_protected_media_controls()
-        self._sync_fullscreen_announcement_controls()
+        self._sync_fullscreen_media_controls()
 
     def deactivate(self):
         self._cancel_announcement_mode()

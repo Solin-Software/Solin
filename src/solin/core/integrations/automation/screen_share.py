@@ -51,7 +51,7 @@ SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
 SHARE_DIALOG_FIXED_DELAY_MS = 500
-SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 250
+SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 650
 SHARE_DIALOG_RETRY_CONFIRMATION_MS = 2000
 MOUSE_INTERFERENCE_DISTANCE_PX = 80
 MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
@@ -841,7 +841,7 @@ def _click_share_target_with_retry(
         log.warning(
             "execute_start_share: could not verify whether Zoom accepted the share click"
         )
-        return True
+        return False
 
     log.info(
         "execute_start_share: Zoom dialog %s remained visible; retrying once",
@@ -865,6 +865,7 @@ def _click_share_target_with_retry(
         log.warning(
             "execute_start_share: could not verify Zoom after the share-click retry"
         )
+        return False
     return True
 
 

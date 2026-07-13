@@ -139,7 +139,7 @@ def test_execute_start_share_retries_once_when_same_dialog_remains(monkeypatch):
     ]
 
 
-def test_execute_start_share_does_not_retry_when_dialog_state_is_unknown(monkeypatch):
+def test_execute_start_share_fails_without_retry_when_dialog_state_is_unknown(monkeypatch):
     dialog = _window("dialog", x=100, y=100, width=801, height=601)
     clicks: list[tuple[int, int, int, int]] = []
     _configure_detected_share_dialog(monkeypatch, dialog, clicks)
@@ -149,7 +149,7 @@ def test_execute_start_share_does_not_retry_when_dialog_state_is_unknown(monkeyp
         lambda _dialog, _timeout_ms, _monitor=None: screen_share._ShareDialogPresence.UNKNOWN,
     )
 
-    assert screen_share.execute_start_share("Alt+S", 300, 250) is True
+    assert screen_share.execute_start_share("Alt+S", 300, 250) is False
     assert clicks == [(300, 250, 2, 120)]
 
 
@@ -175,6 +175,31 @@ def test_share_dialog_exit_probe_tracks_only_detected_window(monkeypatch):
     assert screen_share._wait_for_share_dialog_exit(dialog, 250) is (
         screen_share._ShareDialogPresence.ABSENT
     )
+
+
+def test_share_dialog_exit_probe_polls_until_success_before_deadline(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    window_snapshots = iter(
+        [
+            {"dialog": dialog},
+            {"dialog": dialog},
+            {},
+        ]
+    )
+    times = iter([0.0, 0.01, 0.06])
+    sleeps: list[int] = []
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: next(window_snapshots))
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(
+        screen_share,
+        "_sleep_with_mouse_monitoring",
+        lambda duration_ms, _monitor=None: sleeps.append(duration_ms),
+    )
+
+    assert screen_share._wait_for_share_dialog_exit(dialog, 2000) is (
+        screen_share._ShareDialogPresence.ABSENT
+    )
+    assert sleeps == [screen_share.SHARE_DIALOG_POLL_INTERVAL_MS] * 2
 
 
 def test_share_dialog_exit_probe_reports_same_window_after_timeout(monkeypatch):

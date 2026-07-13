@@ -113,6 +113,7 @@ def test_bar_label_only_keeps_hour_field_for_yearly_text_presentation():
 def test_entering_image_mode_stops_timer_before_switching_preview_content():
     bar = ProjectionBar.__new__(ProjectionBar)
     bar._mode = "timer"
+    bar._auto_share_playback_waiting = False
     stopped = []
     bar._stop_timer_internals = lambda: stopped.append(True)
 

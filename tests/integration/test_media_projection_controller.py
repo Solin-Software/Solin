@@ -184,9 +184,13 @@ class _AutoKeyProjectionStub:
 class _ProjectionIntegrationsStub:
     def __init__(self):
         self.statuses = []
+        self.wait_for_auto_share = False
 
     def update_status(self, *args, **kwargs):
         self.statuses.append((args, kwargs))
+
+    def prepare_video_playback_for_auto_share(self):
+        return self.wait_for_auto_share
 
 
 class _ProjectionWindowStub:
@@ -304,6 +308,9 @@ def _controller(window):
             ),
             prepare_video_session=(
                 window._auto_key_projection.prepare_video_session
+            ),
+            prepare_auto_share_playback=(
+                window._projection_integrations.prepare_video_playback_for_auto_share
             ),
         ),
     )
@@ -433,6 +440,29 @@ def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
     assert window.media_ctrl.paused == 0
     assert window._auto_key_projection.prepared == 1
     assert [projection_window.began_video for projection_window in window.windows] == [1, 1]
+
+
+def test_project_video_core_starts_visual_video_paused_while_auto_share_is_pending():
+    window = _WindowStub()
+    window._projection_integrations.wait_for_auto_share = True
+    controller = _controller(window)
+
+    controller.project_video_core("talk.mp4", "Talk")
+
+    assert window.media_ctrl.requests[-1].autoplay is False
+
+
+def test_auto_share_pause_does_not_override_song_announcement_mode():
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    window._projection_integrations.wait_for_auto_share = True
+    controller = _controller(window)
+    controller._next_is_sjjm = True
+
+    controller.project_video_core("song.mp4", "Song")
+
+    assert window.proj_bar.announcement_count == 1
+    assert window.media_ctrl.requests[-1].autoplay is False
 
 
 def test_project_video_core_pauses_sjjm_video_when_announcement_mode_is_disabled():

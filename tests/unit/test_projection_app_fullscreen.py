@@ -108,6 +108,8 @@ def _bar(*, mode="video", audio=False, overlay=None):
     bar._loop = False
     bar._playback_order = projection_bar.ORDER_OFF
     bar._fullscreen_overlay = overlay
+    bar._announce_state = "off"
+    bar._auto_share_playback_waiting = False
     bar.ov_fullscreen_btn = _Button()
     bar.seek_slider = _Slider()
     bar._playback_protection = _Protection()
@@ -266,13 +268,23 @@ def test_fullscreen_seek_respects_song_announcement_lock():
     assert bar.seek_requested.values == [3456]
 
 
+def test_fullscreen_seek_respects_auto_share_playback_wait():
+    bar = _bar(mode="video")
+    bar.seek_requested = _ValueSignal()
+    bar._auto_share_playback_waiting = True
+
+    bar._on_fullscreen_seek_requested(1234)
+
+    assert bar.seek_requested.values == []
+
+
 def test_fullscreen_controls_mirror_announcement_enabled_state():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)
     bar.play_btn = _EnabledControl(enabled=True)
     bar.seek_slider = _EnabledControl(enabled=False)
 
-    bar._sync_fullscreen_announcement_controls()
+    bar._sync_fullscreen_media_controls()
 
     assert overlay.play_enabled == [True]
     assert overlay.seek_enabled == [False]
