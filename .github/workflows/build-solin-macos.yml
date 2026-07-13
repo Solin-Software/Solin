@@ -32,6 +32,7 @@ env:
   MACOSX_DEPLOYMENT_TARGET: "12.0"
   BUILD_DIR: build
   DIST_DIR: dist
+  NUITKA_CACHE_DIR: ${{ github.workspace }}/.cache/nuitka
 
 jobs:
   build:
@@ -59,14 +60,14 @@ jobs:
             ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
             ${{ runner.os }}-pip-
 
-      - name: Cache Nuitka compilation cache
+      - name: Cache Nuitka and C compilation
         uses: actions/cache@v4
         with:
-          path: ~/.cache/Nuitka
-          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          path: .cache/nuitka
+          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
-            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
-            ${{ runner.os }}-nuitka-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-
 
       - name: Read app version
         id: version

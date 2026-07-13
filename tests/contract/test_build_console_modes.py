@@ -43,6 +43,16 @@ def test_macos_build_excludes_foreign_native_webview_binaries():
     assert '--include-data-files="${NATIVE_WEBVIEW_DYLIB}' in workflow
 
 
+def test_macos_build_persists_nuitka_and_c_compilation_cache():
+    workflow = _read(".github/workflows/build-solin-macos.yml")
+
+    assert "NUITKA_CACHE_DIR: ${{ github.workspace }}/.cache/nuitka" in workflow
+    assert "path: .cache/nuitka" in workflow
+    assert "${{ runner.os }}-${{ runner.arch }}-nuitka-" in workflow
+    assert "hashFiles('requirements.txt', 'requirements-dev.txt')" in workflow
+    assert "~/.cache/Nuitka" not in workflow
+
+
 def test_linux_build_uses_shared_script_and_xcb_launcher():
     script = _read("scripts/build_solin.sh")
     workflow = _read(".github/workflows/build-solin-linux.yml")
