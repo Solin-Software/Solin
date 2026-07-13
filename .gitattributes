@@ -1,3 +1,2 @@
 *.sh text eol=lf
-packaging/linux/appimage/AppRun text eol=lf
-packaging/linux/appimage/solin text eol=lf
+packaging/linux/** text eol=lf
