@@ -39,6 +39,22 @@ def test_linux_build_bundles_non_core_xcb_helpers():
     assert "libGL.so.1" not in build_script
 
 
+def test_linux_build_bundles_xdotool_and_its_redistribution_notices():
+    build_script = _read("scripts/build_solin.sh")
+    workflow = _read(".github/workflows/build-solin-linux.yml")
+
+    assert "xdotool_libraries=(" in build_script
+    for library_name in ("libxdo.so.3", "libXtst.so.6", "libXinerama.so.1"):
+        assert library_name in build_script
+
+    assert 'patchelf --set-rpath "\\$ORIGIN/.."' in build_script
+    assert 'export PATH="$APP_DIR/bin${PATH:+:$PATH}"' in build_script
+    assert "/usr/share/doc/xdotool/copyright" in build_script
+    assert "/usr/share/doc/libxtst6/copyright" in build_script
+    assert "/usr/share/doc/libxinerama1/copyright" in build_script
+    assert "xdotool" in workflow
+
+
 def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
     package_script = _read("scripts/package_solin_appimage.sh")
     launcher = _read("packaging/linux/appimage/solin")

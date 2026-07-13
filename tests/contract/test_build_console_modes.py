@@ -39,10 +39,12 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in script
     assert 'rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"' in script
     assert "xcb_helper_libraries=(" in script
-    assert 'cp -Lf "${library_path}" "${DIST_DIR}/${library_name}"' in script
+    assert "xdotool_libraries=(" in script
+    assert 'export PATH="$APP_DIR/bin${PATH:+:$PATH}"' in script
     assert '"${WORK_ROOT}/main.build"' in script
     assert "bash scripts/build_solin.sh" in workflow
     assert "gstreamer1.0-plugins-bad" in workflow
+    assert "xdotool" in workflow
     assert "runs-on: ubuntu-22.04" in workflow
     assert "scripts/package_solin_appimage.sh" in workflow
     assert "*.AppImage.sha256" in workflow

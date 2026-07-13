@@ -52,9 +52,10 @@ with `sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config`.
 For QtMultimedia hardware acceleration and PipeWire integration in minimal Linux
 installations, also install `libva2`, `libva-drm2`, `libva-x11-2`, and
 `pipewire-bin`. WebVTT subtitles and some QtMultimedia video sinks require
-`gstreamer1.0-plugins-bad`. Automatic Zoom sharing on Linux/X11 additionally requires the
-system executable `xdotool` (`sudo apt install xdotool`); it is not a Python
-package and cannot be installed with `pip`.
+`gstreamer1.0-plugins-bad`. When running from source, automatic Zoom sharing on
+Linux/X11 additionally requires the system executable `xdotool`
+(`sudo apt install xdotool`); it is not a Python package and cannot be installed
+with `pip`.
 
 ### Linux standalone build
 
@@ -126,6 +127,12 @@ sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 libsoup-3.0-0
 # Ubuntu 22.04
 sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libsoup-3.0-0
 ```
+
+Automatic Zoom sharing also works without a separate `xdotool` installation:
+the standalone distribution and AppImage carry a private copy with its required
+non-core X11 libraries and redistribution notices. This feature remains limited
+to X11/Xorg (including applications running through XWayland); `xdotool` cannot
+control native Wayland windows.
 
 After downloading the AppImage, make it executable and run it:
 

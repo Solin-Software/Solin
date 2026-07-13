@@ -24,6 +24,26 @@ fail() {
     exit 1
 }
 
+resolve_linked_library() {
+    local binary="$1"
+    local library_name="$2"
+
+    ldd "${binary}" \
+        | awk -v library_name="${library_name}" \
+            '$1 == library_name && $2 == "=>" { print $3; exit }'
+}
+
+stage_linked_library() {
+    local binary="$1"
+    local library_name="$2"
+    local library_path
+
+    library_path="$(resolve_linked_library "${binary}" "${library_name}")"
+    [[ -n "${library_path}" && -f "${library_path}" ]] \
+        || fail "Linux runtime dependency was not found: ${library_name}"
+    cp -Lf "${library_path}" "${DIST_DIR}/${library_name}"
+}
+
 resolve_python() {
     local candidate
     for candidate in \
@@ -59,6 +79,10 @@ for command_name in gcc patchelf readelf; do
     command -v "${command_name}" >/dev/null || fail \
         "${command_name} is required. On Ubuntu run: sudo apt install binutils build-essential patchelf"
 done
+
+XDOTOOL_SOURCE="$(command -v xdotool || true)"
+[[ -n "${XDOTOOL_SOURCE}" ]] || fail \
+    "xdotool is required for packaging. On Ubuntu run: sudo apt install xdotool"
 
 "${PYTHON}" -c "import nuitka, PySide6" >/dev/null 2>&1 || fail \
     "Nuitka and PySide6 are required. Install requirements and run: python -m pip install nuitka ordered-set zstandard"
@@ -168,14 +192,38 @@ xcb_helper_libraries=(
     libxcb-xkb.so.1
 )
 for library_name in "${xcb_helper_libraries[@]}"; do
-    library_path="$(
-        ldd "${QXCB_PLUGIN}" \
-            | awk -v library_name="${library_name}" \
-                '$1 == library_name && $2 == "=>" { print $3; exit }'
-    )"
-    [[ -n "${library_path}" && -f "${library_path}" ]] \
-        || fail "Qt XCB runtime dependency was not found: ${library_name}"
-    cp -Lf "${library_path}" "${DIST_DIR}/${library_name}"
+    stage_linked_library "${QXCB_PLUGIN}" "${library_name}"
+done
+
+# Zoom screen-share automation calls xdotool as an external process. Keep the
+# executable in the private payload and bundle only its non-core X11 libraries;
+# the launcher's private PATH makes it discoverable without modifying the host.
+mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/licenses"
+cp -Lf "${XDOTOOL_SOURCE}" "${DIST_DIR}/bin/xdotool"
+chmod 755 "${DIST_DIR}/bin/xdotool"
+
+xdotool_libraries=(
+    libxdo.so.3
+    libXtst.so.6
+    libXinerama.so.1
+)
+for library_name in "${xdotool_libraries[@]}"; do
+    stage_linked_library "${XDOTOOL_SOURCE}" "${library_name}"
+done
+
+patchelf --set-rpath "\$ORIGIN/.." "${DIST_DIR}/bin/xdotool"
+patchelf --set-rpath "\$ORIGIN" "${DIST_DIR}/libxdo.so.3"
+
+license_sources=(
+    /usr/share/doc/xdotool/copyright
+    /usr/share/doc/libxtst6/copyright
+    /usr/share/doc/libxinerama1/copyright
+)
+for license_source in "${license_sources[@]}"; do
+    [[ -f "${license_source}" ]] \
+        || fail "Required redistribution notice was not found: ${license_source}"
+    cp -f "${license_source}" \
+        "${DIST_DIR}/licenses/$(basename "$(dirname "${license_source}")").txt"
 done
 
 while IFS= read -r plugin; do
@@ -193,10 +241,19 @@ for library_name in "${xcb_helper_libraries[@]}"; do
         || fail "Qt XCB helper was not packaged: ${library_name}"
 done
 
+for library_name in "${xdotool_libraries[@]}"; do
+    packaged_library="$(resolve_linked_library "${DIST_DIR}/bin/xdotool" "${library_name}")"
+    [[ -n "${packaged_library}" ]] \
+        || fail "Bundled xdotool dependency was not resolved: ${library_name}"
+    [[ "$(realpath "${packaged_library}")" == "$(realpath "${DIST_DIR}/${library_name}")" ]] \
+        || fail "Bundled xdotool resolved ${library_name} outside the private payload."
+done
+
 cat > "${DIST_DIR}/run-solin" <<'LAUNCHER'
 #!/bin/sh
 set -eu
 APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export PATH="$APP_DIR/bin${PATH:+:$PATH}"
 export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
 exec "$APP_DIR/Solin.bin" "$@"
 LAUNCHER
