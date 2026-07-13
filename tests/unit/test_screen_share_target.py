@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+from types import SimpleNamespace
 
 from solin.core.integrations.automation import screen_share
 
@@ -198,3 +200,81 @@ def test_linux_click_sequence_uses_one_atomic_xdotool_repeat(monkeypatch):
         ],
         ["/usr/bin/xdotool", "mousemove", "--sync", "40", "60"],
     ]
+
+
+def test_macos_click_sequence_moves_once_and_preserves_click_state(monkeypatch):
+    events: list[tuple[object, ...]] = []
+    monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
+
+    assert screen_share._run_macos_click_sequence(
+        count=2,
+        interval_ms=120,
+        target=(300.0, 250.0),
+        saved_pos=(40.0, 60.0),
+        post_move=lambda point: events.append(("move", point)) or True,
+        post_down=lambda point, state: events.append(("down", point, state)) or True,
+        post_up=lambda point, state: events.append(("up", point, state)) or True,
+    ) is True
+    assert events == [
+        ("move", (300.0, 250.0)),
+        ("down", (300.0, 250.0), 1),
+        ("up", (300.0, 250.0), 1),
+        ("down", (300.0, 250.0), 2),
+        ("up", (300.0, 250.0), 2),
+        ("move", (40.0, 60.0)),
+    ]
+
+
+def test_macos_pyobjc_backend_sets_quartz_click_state(monkeypatch):
+    click_states: list[tuple[int, int]] = []
+
+    def _create_mouse_event(_source, event_type, _point, _button):
+        return {"type": event_type}
+
+    def _set_integer_field(event, _field, value):
+        click_states.append((event["type"], value))
+
+    quartz = SimpleNamespace(
+        AXIsProcessTrusted=lambda: True,
+        CGEventCreate=lambda _source: object(),
+        CGEventGetLocation=lambda _event: (40.0, 60.0),
+        CGEventCreateMouseEvent=_create_mouse_event,
+        CGEventSetIntegerValueField=_set_integer_field,
+        CGEventPost=lambda _tap, _event: None,
+        kCGMouseButtonLeft=0,
+        kCGHIDEventTap=0,
+        kCGEventLeftMouseDown=1,
+        kCGEventLeftMouseUp=2,
+        kCGEventMouseMoved=5,
+        kCGMouseEventClickState=1,
+    )
+    monkeypatch.setitem(sys.modules, "Quartz", quartz)
+    monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
+
+    assert screen_share._clicks_macos_pyobjc(300, 250, 2, 120) is True
+    assert click_states == [(1, 1), (2, 1), (1, 2), (2, 2)]
+
+
+def test_macos_ctypes_backend_sets_quartz_click_state(monkeypatch):
+    click_states: list[tuple[int, int]] = []
+
+    def _create_mouse_event(_source, event_type, _point, _button):
+        return {"type": event_type}
+
+    def _set_integer_field(event, _field, value):
+        click_states.append((event["type"], value))
+
+    app_services = SimpleNamespace(
+        AXIsProcessTrusted=lambda: True,
+        CGEventCreate=lambda _source: object(),
+        CGEventGetLocation=lambda _event: screen_share._CGPOINT(40.0, 60.0),
+        CGEventCreateMouseEvent=_create_mouse_event,
+        CGEventSetIntegerValueField=_set_integer_field,
+        CGEventPost=lambda _tap, _event: None,
+        CFRelease=lambda _event: None,
+    )
+    monkeypatch.setattr(screen_share, "_load_application_services", lambda: app_services)
+    monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
+
+    assert screen_share._clicks_macos_ctypes(300, 250, 2, 120) is True
+    assert click_states == [(1, 1), (2, 1), (1, 2), (2, 2)]

@@ -406,6 +406,12 @@ def _load_application_services():
         ctypes.c_uint32,
     ]
     app_services.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+    app_services.CGEventSetIntegerValueField.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int64,
+    ]
+    app_services.CGEventSetIntegerValueField.restype = None
     app_services.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
     app_services.CGEventPost.restype = None
     app_services.CFRelease.argtypes = [ctypes.c_void_p]
@@ -445,7 +451,11 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
     saved_pos = _point_tuple(Quartz.CGEventGetLocation(current_event))
     target = (float(x), float(y))
 
-    def _post(event_type: int, point: tuple[float, float]) -> bool:
+    def _post(
+        event_type: int,
+        point: tuple[float, float],
+        click_state: int | None = None,
+    ) -> bool:
         event = Quartz.CGEventCreateMouseEvent(
             None,
             event_type,
@@ -454,6 +464,12 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
         )
         if not event:
             return False
+        if click_state is not None:
+            Quartz.CGEventSetIntegerValueField(
+                event,
+                Quartz.kCGMouseEventClickState,
+                click_state,
+            )
         # PyObjC owns the returned Core Foundation reference and releases it
         # when the Python proxy is collected. Manual CFRelease here can double
         # release on supported PyObjC metadata.
@@ -466,8 +482,16 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
         target=target,
         saved_pos=saved_pos,
         post_move=lambda point: _post(Quartz.kCGEventMouseMoved, point),
-        post_down=lambda point: _post(Quartz.kCGEventLeftMouseDown, point),
-        post_up=lambda point: _post(Quartz.kCGEventLeftMouseUp, point),
+        post_down=lambda point, click_state: _post(
+            Quartz.kCGEventLeftMouseDown,
+            point,
+            click_state,
+        ),
+        post_up=lambda point, click_state: _post(
+            Quartz.kCGEventLeftMouseUp,
+            point,
+            click_state,
+        ),
     )
 
 
@@ -495,6 +519,7 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
     K_CG_EVENT_LEFT_MOUSE_UP = 2
     K_CG_EVENT_MOUSE_MOVED = 5
     K_CG_MOUSE_BUTTON_LEFT = 0
+    K_CG_MOUSE_EVENT_CLICK_STATE = 1
 
     current_event = app_services.CGEventCreate(None)
     if not current_event:
@@ -505,7 +530,11 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
 
     target = _CGPOINT(float(x), float(y))
 
-    def _post(event_type: int, point: _CGPOINT) -> bool:
+    def _post(
+        event_type: int,
+        point: _CGPOINT,
+        click_state: int | None = None,
+    ) -> bool:
         event = app_services.CGEventCreateMouseEvent(
             None,
             event_type,
@@ -515,6 +544,12 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
         if not event:
             return False
         try:
+            if click_state is not None:
+                app_services.CGEventSetIntegerValueField(
+                    event,
+                    K_CG_MOUSE_EVENT_CLICK_STATE,
+                    click_state,
+                )
             app_services.CGEventPost(K_CG_HID_EVENT_TAP, event)
             return True
         finally:
@@ -526,8 +561,16 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
         target=target,
         saved_pos=saved_pos,
         post_move=lambda point: _post(K_CG_EVENT_MOUSE_MOVED, point),
-        post_down=lambda point: _post(K_CG_EVENT_LEFT_MOUSE_DOWN, point),
-        post_up=lambda point: _post(K_CG_EVENT_LEFT_MOUSE_UP, point),
+        post_down=lambda point, click_state: _post(
+            K_CG_EVENT_LEFT_MOUSE_DOWN,
+            point,
+            click_state,
+        ),
+        post_up=lambda point, click_state: _post(
+            K_CG_EVENT_LEFT_MOUSE_UP,
+            point,
+            click_state,
+        ),
     )
 
 
@@ -538,30 +581,32 @@ def _run_macos_click_sequence(
     target: _MacPointT,
     saved_pos: _MacPointT,
     post_move: Callable[[_MacPointT], bool],
-    post_down: Callable[[_MacPointT], bool],
-    post_up: Callable[[_MacPointT], bool],
+    post_down: Callable[[_MacPointT, int], bool],
+    post_up: Callable[[_MacPointT, int], bool],
 ) -> bool:
     ok = True
 
-    def _safe_post(callback, point) -> bool:
+    def _safe_post(callback, *args) -> bool:
         try:
-            return bool(callback(point))
+            return bool(callback(*args))
         except Exception as exc:  # noqa: BLE001 - Quartz event callback boundary
             log.warning("macOS mouse event post failed: %s", exc)
             return False
 
     try:
-        for i in range(count):
-            moved = _safe_post(post_move, target)
+        if not _safe_post(post_move, target):
+            return False
+
+        for click_state in range(1, count + 1):
             down_sent = False
             try:
-                down_sent = _safe_post(post_down, target)
+                down_sent = _safe_post(post_down, target, click_state)
                 if down_sent:
                     time.sleep(0.03)
             finally:
-                up_sent = _safe_post(post_up, target)
-            ok = bool(moved and down_sent and up_sent) and ok
-            if i < count - 1:
+                up_sent = _safe_post(post_up, target, click_state)
+            ok = bool(down_sent and up_sent) and ok
+            if click_state < count:
                 time.sleep(interval_ms / 1000.0)
     finally:
         _safe_post(post_move, saved_pos)
