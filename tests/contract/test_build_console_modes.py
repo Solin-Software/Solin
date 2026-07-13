@@ -29,17 +29,14 @@ def test_macos_bundle_keeps_finder_launch_gui_only():
     assert "--macos-app-console-mode=force" not in text
 
 
-def test_macos_build_excludes_foreign_native_webview_binaries():
+def test_macos_build_does_not_discover_foreign_webview_as_extension_module():
     workflow = _read(".github/workflows/build-solin-macos.yml")
+    browser_tab = _read("src/solin/widgets/browser/tab.py")
 
-    for option in (
-        '--noinclude-dlls="native_webview_widget/*.so"',
-        '--noinclude-dlls="native_webview_widget/*.dll"',
-        '--noinclude-data-files="native_webview_widget/*.so"',
-        '--noinclude-data-files="native_webview_widget/*.dll"',
-    ):
-        assert option in workflow
-
+    assert "--include-package=native_webview_widget" not in workflow
+    assert 'native_webview_widget/*.so' not in workflow
+    assert 'native_webview_widget/*.dll' not in workflow
+    assert "from native_webview_widget import" in browser_tab
     assert '--include-data-files="${NATIVE_WEBVIEW_DYLIB}' in workflow
 
 
