@@ -149,6 +149,35 @@ find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep
 find "${QT_LIBRARY_DIR}" -maxdepth 1 -type f -name 'libQt6*.so*' \
     -exec cp -f {} "${DIST_DIR}/" \;
 
+# Qt's XCB platform plugin depends on a small set of helper libraries that are
+# absent from some minimal desktop installations. Bundle only those stable XCB
+# helpers; core X11, OpenGL, libc and graphics-driver libraries remain supplied
+# by the host system, as required for cross-distribution compatibility.
+QXCB_PLUGIN="${DIST_DIR}/PySide6/qt-plugins/platforms/libqxcb.so"
+xcb_helper_libraries=(
+    libxkbcommon-x11.so.0
+    libxcb-cursor.so.0
+    libxcb-icccm.so.4
+    libxcb-util.so.1
+    libxcb-image.so.0
+    libxcb-keysyms.so.1
+    libxcb-randr.so.0
+    libxcb-render-util.so.0
+    libxcb-xfixes.so.0
+    libxcb-shape.so.0
+    libxcb-xkb.so.1
+)
+for library_name in "${xcb_helper_libraries[@]}"; do
+    library_path="$(
+        ldd "${QXCB_PLUGIN}" \
+            | awk -v library_name="${library_name}" \
+                '$1 == library_name && $2 == "=>" { print $3; exit }'
+    )"
+    [[ -n "${library_path}" && -f "${library_path}" ]] \
+        || fail "Qt XCB runtime dependency was not found: ${library_name}"
+    cp -Lf "${library_path}" "${DIST_DIR}/${library_name}"
+done
+
 while IFS= read -r plugin; do
     relative_root="$(realpath --relative-to="$(dirname "${plugin}")" "${DIST_DIR}")"
     patchelf --add-rpath "\$ORIGIN/${relative_root}" "${plugin}"
@@ -158,6 +187,11 @@ while IFS= read -r plugin; do
         fail "Packaged QML plugin has unresolved shared-library dependencies: ${plugin}"
     fi
 done < <(find "${DIST_DIR}/PySide6/qml" -type f -name '*.so' | sort)
+
+for library_name in "${xcb_helper_libraries[@]}"; do
+    [[ -f "${DIST_DIR}/${library_name}" ]] \
+        || fail "Qt XCB helper was not packaged: ${library_name}"
+done
 
 cat > "${DIST_DIR}/run-solin" <<'LAUNCHER'
 #!/bin/sh

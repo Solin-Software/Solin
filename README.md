@@ -114,7 +114,10 @@ remain in the Linux filesystem for better I/O performance.
 
 The AppImage bundles Solin, Python, PySide6 and the required Qt runtime. It
 intentionally uses the distribution's security-maintained WebKitGTK 4.1, GTK 3
-and libsoup 3. On Ubuntu, install the required system runtime with:
+and libsoup 3. Qt's auxiliary XCB libraries are bundled, so users do not need to
+install the usual `libxcb-cursor0`, `libxcb-icccm4`, `libxcb-image0`,
+`libxcb-keysyms1`, `libxcb-render-util0`, `libxkbcommon-x11-0`, and related
+helper packages separately. On Ubuntu, install the required WebKit runtime with:
 
 ```bash
 # Ubuntu 24.04

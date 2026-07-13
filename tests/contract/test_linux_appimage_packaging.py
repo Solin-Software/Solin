@@ -17,6 +17,28 @@ def test_linux_launcher_keeps_dmabuf_renderer_enabled_by_default():
     assert "QT_QPA_PLATFORM" in build_script
 
 
+def test_linux_build_bundles_non_core_xcb_helpers():
+    build_script = _read("scripts/build_solin.sh")
+
+    for library_name in (
+        "libxkbcommon-x11.so.0",
+        "libxcb-cursor.so.0",
+        "libxcb-icccm.so.4",
+        "libxcb-util.so.1",
+        "libxcb-image.so.0",
+        "libxcb-keysyms.so.1",
+        "libxcb-randr.so.0",
+        "libxcb-render-util.so.0",
+        "libxcb-xfixes.so.0",
+        "libxcb-shape.so.0",
+        "libxcb-xkb.so.1",
+    ):
+        assert library_name in build_script
+
+    assert "libX11.so.6" not in build_script
+    assert "libGL.so.1" not in build_script
+
+
 def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
     package_script = _read("scripts/package_solin_appimage.sh")
     launcher = _read("packaging/linux/appimage/solin")

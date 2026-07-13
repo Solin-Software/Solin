@@ -38,6 +38,8 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}" in script
     assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in script
     assert 'rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"' in script
+    assert "xcb_helper_libraries=(" in script
+    assert 'cp -Lf "${library_path}" "${DIST_DIR}/${library_name}"' in script
     assert '"${WORK_ROOT}/main.build"' in script
     assert "bash scripts/build_solin.sh" in workflow
     assert "gstreamer1.0-plugins-bad" in workflow
