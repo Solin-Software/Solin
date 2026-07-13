@@ -4,10 +4,14 @@ import ast
 import platform
 import tomllib
 
+import pytest
+
 from native_webview_widget.abi import (
     EVENTS,
+    NATIVE_VIEW_EXPORT,
     REQUIRED_EXPORTS,
     ZOOM_EXPORTS,
+    native_library_candidates,
     required_exports_for_system,
 )
 from scripts import validate_native_webview
@@ -50,6 +54,7 @@ def test_native_webview_package_uses_src_layout_and_includes_native_binaries():
     assert pyproject["tool"]["setuptools"]["package-data"]["native_webview_widget"] == [
         "*.dll",
         "*.dylib",
+        "libnative_webview_widget.so",
     ]
 
 
@@ -64,6 +69,7 @@ def test_native_webview_event_ids_are_stable():
         "new_window_requested": 7,
         "script_message": 8,
         "zoom_factor_changed": 9,
+        "zoom_factor_requested": 10,
     }
 
 
@@ -72,13 +78,30 @@ def test_zoom_exports_are_required_for_windows_and_optional_for_vendored_macos()
     assert set(ZOOM_EXPORTS).isdisjoint(required_exports_for_system("Darwin"))
 
 
+def test_native_view_export_is_required_only_for_linux_embedding():
+    assert NATIVE_VIEW_EXPORT in required_exports_for_system("Linux")
+    assert NATIVE_VIEW_EXPORT not in required_exports_for_system("Windows")
+    assert NATIVE_VIEW_EXPORT not in required_exports_for_system("Darwin")
+
+
 def test_native_webview_binaries_have_expected_container_headers():
     assert validate_native_webview.validate_python_package(PACKAGE_DIR) == []
     assert validate_native_webview.validate_binary_files(PACKAGE_DIR) == []
 
 
+def test_native_webview_validator_can_require_linux_artifact(tmp_path):
+    errors = validate_native_webview.validate_binary_files(tmp_path, require_linux=True)
+
+    assert any("Missing Linux native webview binary" in error for error in errors)
+
+
 def test_native_webview_current_platform_exports_match_abi_manifest():
-    if platform.system() not in {"Windows", "Darwin"}:
+    system = platform.system()
+    if system not in {"Windows", "Darwin", "Linux"}:
         return
+    if system == "Linux" and not any(
+        path.is_file() for path in native_library_candidates(system, PACKAGE_DIR)
+    ):
+        pytest.skip("Linux native artifact is supplied separately from the source tree.")
 
     assert validate_native_webview.validate_current_platform_exports(PACKAGE_DIR) == []

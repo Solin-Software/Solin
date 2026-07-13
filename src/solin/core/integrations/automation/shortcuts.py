@@ -358,14 +358,14 @@ def _send_chord_linux(modifiers: list[str], key: str) -> bool:
     parts.append(key_name)
     env = os.environ.copy()
     try:
-        subprocess.run(
-            [xdotool, "key", "+".join(parts)],
+        result = subprocess.run(
+            [xdotool, "key", "--clearmodifiers", "+".join(parts)],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=1.0,
             env=env,
         )
-        return True
+        return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False

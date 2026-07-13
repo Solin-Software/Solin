@@ -28,9 +28,17 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import TypeVar
 
+from .linux_zoom_focus import (
+    LinuxZoomFocusSession,
+    acquire_zoom_focus,
+    list_zoom_windows,
+    restore_previous_focus,
+    zoom_has_focus,
+)
 from .shortcuts import send_key_sequence
 
 log = logging.getLogger(__name__)
@@ -43,12 +51,13 @@ SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
 SHARE_DIALOG_FIXED_DELAY_MS = 500
+SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 650
+SHARE_DIALOG_RETRY_CONFIRMATION_MS = 2000
 MOUSE_INTERFERENCE_DISTANCE_PX = 80
 MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
 
 _WINDOWS_ZOOM_PROCESS_NAMES = frozenset({"zoom.exe"})
 _MACOS_ZOOM_OWNER_NAMES = frozenset({"zoom.us", "zoom", "zoom workplace"})
-_LINUX_ZOOM_PROCESS_NAMES = frozenset({"zoom", "zoom.real"})
 
 
 def send_hotkey(shortcut: str) -> bool:
@@ -400,6 +409,12 @@ def _load_application_services():
         ctypes.c_uint32,
     ]
     app_services.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+    app_services.CGEventSetIntegerValueField.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int64,
+    ]
+    app_services.CGEventSetIntegerValueField.restype = None
     app_services.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
     app_services.CGEventPost.restype = None
     app_services.CFRelease.argtypes = [ctypes.c_void_p]
@@ -439,7 +454,11 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
     saved_pos = _point_tuple(Quartz.CGEventGetLocation(current_event))
     target = (float(x), float(y))
 
-    def _post(event_type: int, point: tuple[float, float]) -> bool:
+    def _post(
+        event_type: int,
+        point: tuple[float, float],
+        click_state: int | None = None,
+    ) -> bool:
         event = Quartz.CGEventCreateMouseEvent(
             None,
             event_type,
@@ -448,6 +467,12 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
         )
         if not event:
             return False
+        if click_state is not None:
+            Quartz.CGEventSetIntegerValueField(
+                event,
+                Quartz.kCGMouseEventClickState,
+                click_state,
+            )
         # PyObjC owns the returned Core Foundation reference and releases it
         # when the Python proxy is collected. Manual CFRelease here can double
         # release on supported PyObjC metadata.
@@ -460,8 +485,16 @@ def _clicks_macos_pyobjc(x: int, y: int, count: int, interval_ms: int) -> bool |
         target=target,
         saved_pos=saved_pos,
         post_move=lambda point: _post(Quartz.kCGEventMouseMoved, point),
-        post_down=lambda point: _post(Quartz.kCGEventLeftMouseDown, point),
-        post_up=lambda point: _post(Quartz.kCGEventLeftMouseUp, point),
+        post_down=lambda point, click_state: _post(
+            Quartz.kCGEventLeftMouseDown,
+            point,
+            click_state,
+        ),
+        post_up=lambda point, click_state: _post(
+            Quartz.kCGEventLeftMouseUp,
+            point,
+            click_state,
+        ),
     )
 
 
@@ -489,6 +522,7 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
     K_CG_EVENT_LEFT_MOUSE_UP = 2
     K_CG_EVENT_MOUSE_MOVED = 5
     K_CG_MOUSE_BUTTON_LEFT = 0
+    K_CG_MOUSE_EVENT_CLICK_STATE = 1
 
     current_event = app_services.CGEventCreate(None)
     if not current_event:
@@ -499,7 +533,11 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
 
     target = _CGPOINT(float(x), float(y))
 
-    def _post(event_type: int, point: _CGPOINT) -> bool:
+    def _post(
+        event_type: int,
+        point: _CGPOINT,
+        click_state: int | None = None,
+    ) -> bool:
         event = app_services.CGEventCreateMouseEvent(
             None,
             event_type,
@@ -509,6 +547,12 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
         if not event:
             return False
         try:
+            if click_state is not None:
+                app_services.CGEventSetIntegerValueField(
+                    event,
+                    K_CG_MOUSE_EVENT_CLICK_STATE,
+                    click_state,
+                )
             app_services.CGEventPost(K_CG_HID_EVENT_TAP, event)
             return True
         finally:
@@ -520,8 +564,16 @@ def _clicks_macos_ctypes(x: int, y: int, count: int, interval_ms: int) -> bool:
         target=target,
         saved_pos=saved_pos,
         post_move=lambda point: _post(K_CG_EVENT_MOUSE_MOVED, point),
-        post_down=lambda point: _post(K_CG_EVENT_LEFT_MOUSE_DOWN, point),
-        post_up=lambda point: _post(K_CG_EVENT_LEFT_MOUSE_UP, point),
+        post_down=lambda point, click_state: _post(
+            K_CG_EVENT_LEFT_MOUSE_DOWN,
+            point,
+            click_state,
+        ),
+        post_up=lambda point, click_state: _post(
+            K_CG_EVENT_LEFT_MOUSE_UP,
+            point,
+            click_state,
+        ),
     )
 
 
@@ -532,30 +584,32 @@ def _run_macos_click_sequence(
     target: _MacPointT,
     saved_pos: _MacPointT,
     post_move: Callable[[_MacPointT], bool],
-    post_down: Callable[[_MacPointT], bool],
-    post_up: Callable[[_MacPointT], bool],
+    post_down: Callable[[_MacPointT, int], bool],
+    post_up: Callable[[_MacPointT, int], bool],
 ) -> bool:
     ok = True
 
-    def _safe_post(callback, point) -> bool:
+    def _safe_post(callback, *args) -> bool:
         try:
-            return bool(callback(point))
+            return bool(callback(*args))
         except Exception as exc:  # noqa: BLE001 - Quartz event callback boundary
             log.warning("macOS mouse event post failed: %s", exc)
             return False
 
     try:
-        for i in range(count):
-            moved = _safe_post(post_move, target)
+        if not _safe_post(post_move, target):
+            return False
+
+        for click_state in range(1, count + 1):
             down_sent = False
             try:
-                down_sent = _safe_post(post_down, target)
+                down_sent = _safe_post(post_down, target, click_state)
                 if down_sent:
                     time.sleep(0.03)
             finally:
-                up_sent = _safe_post(post_up, target)
-            ok = bool(moved and down_sent and up_sent) and ok
-            if i < count - 1:
+                up_sent = _safe_post(post_up, target, click_state)
+            ok = bool(down_sent and up_sent) and ok
+            if click_state < count:
                 time.sleep(interval_ms / 1000.0)
     finally:
         _safe_post(post_move, saved_pos)
@@ -602,33 +656,38 @@ def _clicks_linux(x: int, y: int, count: int, interval_ms: int) -> bool:
     if saved_pos is None:
         return False
 
+    repeat_timeout = max(2.0, 1.0 + (count - 1) * interval_ms / 1000.0)
     ok = True
     try:
-        for i in range(count):
-            try:
-                subprocess.run(
-                    [xdotool, "mousemove", "--sync", str(x), str(y)],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=2.0,
-                    env=env,
-                )
-                subprocess.run(
-                    [xdotool, "click", "--clearmodifiers", "1"],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=2.0,
-                    env=env,
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
-                log.warning("xdotool click failed at (%s, %s): %s", x, y, exc)
-                ok = False
-                break
-
-            if i < count - 1:
-                time.sleep(interval_ms / 1000.0)
+        try:
+            subprocess.run(
+                [xdotool, "mousemove", "--sync", str(x), str(y)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=2.0,
+                env=env,
+            )
+            subprocess.run(
+                [
+                    xdotool,
+                    "click",
+                    "--clearmodifiers",
+                    "--repeat",
+                    str(count),
+                    "--delay",
+                    str(interval_ms),
+                    "1",
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=repeat_timeout,
+                env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("xdotool click failed at (%s, %s): %s", x, y, exc)
+            ok = False
     finally:
         try:
             subprocess.run(
@@ -668,6 +727,12 @@ class _ZoomWindowInfo:
         return self.width * self.height
 
 
+class _ShareDialogPresence(Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    UNKNOWN = "unknown"
+
+
 def _is_candidate_share_dialog(window: _ZoomWindowInfo) -> bool:
     return (
         window.width >= SHARE_DIALOG_MIN_WIDTH
@@ -685,23 +750,24 @@ def _wait_before_share_click(
     delay_ms: int,
     initial_windows: dict[str, _ZoomWindowInfo] | None,
     monitor: _MouseInterferenceMonitor | None = None,
-) -> bool:
+) -> _ZoomWindowInfo | None:
+    """Wait for and return the detected dialog after its safety delay."""
     if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
         _sleep_with_mouse_monitoring(delay_ms, monitor)
-        return True
+        return None
     if initial_windows is None:
         log.warning(
             "execute_start_share: Zoom window detection is unavailable on %s",
             sys.platform,
         )
-        return False
+        return None
     detected = _wait_for_new_zoom_window(initial_windows, monitor)
     if detected is None:
         log.warning(
             "execute_start_share: no new Zoom share dialog detected within %dms",
             SHARE_DIALOG_DETECTION_TIMEOUT_MS,
         )
-        return False
+        return None
 
     log.debug(
         "execute_start_share: detected Zoom dialog %s (%dx%d at %d,%d, owner=%s)",
@@ -713,6 +779,93 @@ def _wait_before_share_click(
         detected.owner,
     )
     _sleep_with_mouse_monitoring(SHARE_DIALOG_DETECTION_SETTLE_MS, monitor)
+    return detected
+
+
+def _wait_for_share_dialog_exit(
+    dialog: _ZoomWindowInfo,
+    timeout_ms: int,
+    monitor: _MouseInterferenceMonitor | None = None,
+) -> _ShareDialogPresence:
+    """Observe only the detected dialog ID until it exits or the timeout elapses."""
+    deadline = time.monotonic() + (timeout_ms / 1000.0)
+    while True:
+        current_windows = _list_zoom_windows()
+        if current_windows is None:
+            return _ShareDialogPresence.UNKNOWN
+        if dialog.window_id not in current_windows:
+            return _ShareDialogPresence.ABSENT
+
+        remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+        if remaining_ms <= 0:
+            return _ShareDialogPresence.PRESENT
+        _sleep_with_mouse_monitoring(
+            min(SHARE_DIALOG_POLL_INTERVAL_MS, remaining_ms),
+            monitor,
+        )
+
+
+def _send_share_target_double_click(
+    x: int,
+    y: int,
+    monitor: _MouseInterferenceMonitor | None,
+) -> bool:
+    def _operation() -> bool:
+        return send_virtual_clicks(x, y, count=2, interval_ms=120)
+
+    if monitor is None:
+        return _operation()
+    return monitor.watch_during(_operation, target=(x, y))
+
+
+def _click_share_target_with_retry(
+    x: int,
+    y: int,
+    dialog: _ZoomWindowInfo | None,
+    monitor: _MouseInterferenceMonitor | None = None,
+) -> bool:
+    """Double-click once, retrying once only while the same dialog remains."""
+    if not _send_share_target_double_click(x, y, monitor):
+        return False
+    if dialog is None:
+        return True
+
+    presence = _wait_for_share_dialog_exit(
+        dialog,
+        SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS,
+        monitor,
+    )
+    if presence is _ShareDialogPresence.ABSENT:
+        return True
+    if presence is _ShareDialogPresence.UNKNOWN:
+        log.warning(
+            "execute_start_share: could not verify whether Zoom accepted the share click"
+        )
+        return False
+
+    log.info(
+        "execute_start_share: Zoom dialog %s remained visible; retrying once",
+        dialog.window_id,
+    )
+    if not _send_share_target_double_click(x, y, monitor):
+        return False
+
+    presence = _wait_for_share_dialog_exit(
+        dialog,
+        SHARE_DIALOG_RETRY_CONFIRMATION_MS,
+        monitor,
+    )
+    if presence is _ShareDialogPresence.PRESENT:
+        log.warning(
+            "execute_start_share: Zoom dialog %s remained visible after the retry",
+            dialog.window_id,
+        )
+        return False
+    if presence is _ShareDialogPresence.UNKNOWN:
+        log.warning(
+            "execute_start_share: could not verify Zoom after the share-click retry"
+        )
+        return False
     return True
 
 
@@ -916,113 +1069,30 @@ def _is_macos_zoom_owner(owner_name: str) -> bool:
 
 
 def _list_zoom_windows_linux() -> dict[str, _ZoomWindowInfo] | None:
-    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
-    if session_type == "wayland":
+    linux_windows = list_zoom_windows()
+    if linux_windows is None:
         return None
-
-    xdotool = shutil.which("xdotool")
-    if not xdotool:
-        return None
-
-    env = os.environ.copy()
-    pids = _linux_zoom_pids()
-    if not pids:
-        return {}
-
-    windows: dict[str, _ZoomWindowInfo] = {}
-    for pid, owner in pids.items():
-        try:
-            result = subprocess.run(
-                [xdotool, "search", "--onlyvisible", "--pid", str(pid)],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=1.0,
-                env=env,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-
-        for raw_window_id in result.stdout.splitlines():
-            window_id = raw_window_id.strip()
-            if not window_id:
-                continue
-            geometry = _xdotool_window_geometry(xdotool, window_id, env)
-            if geometry is None:
-                continue
-            x, y, width, height = geometry
-            if width <= 0 or height <= 0:
-                continue
-            windows[window_id] = _ZoomWindowInfo(
-                window_id=window_id,
-                owner=owner,
-                x=x,
-                y=y,
-                width=width,
-                height=height,
-            )
-
-    return windows
-
-
-def _linux_zoom_pids() -> dict[int, str]:
-    pids: dict[int, str] = {}
-    proc_root = Path("/proc")
-    if not proc_root.is_dir():
-        return pids
-
-    for proc_dir in proc_root.iterdir():
-        if not proc_dir.name.isdigit():
-            continue
-        try:
-            comm = (proc_dir / "comm").read_text(encoding="utf-8", errors="ignore").strip()
-            cmdline = (proc_dir / "cmdline").read_bytes().decode(
-                "utf-8", errors="ignore"
-            ).replace("\x00", " ")
-        except OSError:
-            continue
-        owner = comm or cmdline
-        normalized_owner = owner.casefold()
-        normalized_cmdline = cmdline.casefold()
-        if (
-            normalized_owner in _LINUX_ZOOM_PROCESS_NAMES
-            or "/zoom" in normalized_cmdline
-            or "zoom.us" in normalized_cmdline
-        ):
-            pids[int(proc_dir.name)] = owner
-
-    return pids
-
-
-def _xdotool_window_geometry(
-    xdotool: str,
-    window_id: str,
-    env: dict[str, str],
-) -> tuple[int, int, int, int] | None:
-    try:
-        result = subprocess.run(
-            [xdotool, "getwindowgeometry", "--shell", window_id],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=1.0,
-            env=env,
+    return {
+        window_id: _ZoomWindowInfo(
+            window_id=window.window_id,
+            owner=window.owner,
+            x=window.x,
+            y=window.y,
+            width=window.width,
+            height=window.height,
         )
-    except (OSError, subprocess.SubprocessError):
-        return None
+        for window_id, window in linux_windows.items()
+    }
 
-    values = dict(
-        re.findall(r"^(X|Y|WIDTH|HEIGHT)=(-?\d+)$", result.stdout, re.MULTILINE)
-    )
-    try:
-        return (
-            int(values["X"]),
-            int(values["Y"]),
-            int(values["WIDTH"]),
-            int(values["HEIGHT"]),
-        )
-    except (KeyError, ValueError):
+
+def _acquire_linux_zoom_focus() -> LinuxZoomFocusSession | None:
+    if not sys.platform.startswith("linux"):
         return None
+    return acquire_zoom_focus()
+
+
+def _linux_zoom_focus_is_required() -> bool:
+    return sys.platform.startswith("linux")
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1058,44 +1128,62 @@ def execute_start_share(
     if not hotkey:
         return False
 
-    click_configured = click_x >= 0 and click_y >= 0
-    delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
-    monitor = (
-        _MouseInterferenceMonitor(movement_warning)
-        if click_configured else None
-    )
-    initial_windows = (
-        _capture_zoom_windows_before_share_click()
-        if click_configured else {}
-    )
-    if click_configured and USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and initial_windows is None:
-        log.warning(
-            "execute_start_share: Zoom window detection is unavailable on %s",
-            sys.platform,
+    focus_session = _acquire_linux_zoom_focus()
+    if _linux_zoom_focus_is_required() and focus_session is None:
+        log.warning("execute_start_share: a verified Zoom window could not receive focus")
+        return False
+
+    try:
+        click_configured = click_x >= 0 and click_y >= 0
+        delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
+        monitor = (
+            _MouseInterferenceMonitor(movement_warning)
+            if click_configured else None
         )
-        return False
-
-    ok = send_hotkey(hotkey)
-    if not ok:
-        log.warning("execute_start_share: hotkey '%s' failed", hotkey)
-        return False
-
-    if click_configured:
-        if not _wait_before_share_click(delay_ms, initial_windows, monitor):
-            return False
-        if monitor is not None:
-            monitor.check()
-            ok = monitor.watch_during(
-                lambda: send_virtual_clicks(click_x, click_y, count=2, interval_ms=120),
-                target=(click_x, click_y),
+        initial_windows = (
+            _capture_zoom_windows_before_share_click()
+            if click_configured else {}
+        )
+        if click_configured and USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and initial_windows is None:
+            log.warning(
+                "execute_start_share: Zoom window detection is unavailable on %s",
+                sys.platform,
             )
-        else:
-            ok = send_virtual_clicks(click_x, click_y, count=2, interval_ms=120)
-        if not ok:
-            log.warning("execute_start_share: virtual clicks failed at (%d, %d)", click_x, click_y)
             return False
 
-    return True
+        if focus_session is not None and not zoom_has_focus(focus_session):
+            log.warning("execute_start_share: Zoom lost focus before shortcut dispatch")
+            return False
+
+        ok = send_hotkey(hotkey)
+        if not ok:
+            log.warning("execute_start_share: hotkey '%s' failed", hotkey)
+            return False
+
+        if click_configured:
+            detected_dialog = _wait_before_share_click(delay_ms, initial_windows, monitor)
+            if USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and detected_dialog is None:
+                return False
+            if monitor is not None:
+                monitor.check()
+            ok = _click_share_target_with_retry(
+                click_x,
+                click_y,
+                detected_dialog,
+                monitor,
+            )
+            if not ok:
+                log.warning(
+                    "execute_start_share: share-target interaction failed at (%d, %d)",
+                    click_x,
+                    click_y,
+                )
+                return False
+
+        return True
+    finally:
+        if focus_session is not None:
+            restore_previous_focus(focus_session)
 
 
 def execute_stop_share(hotkey: str) -> bool:
@@ -1110,4 +1198,17 @@ def execute_stop_share(hotkey: str) -> bool:
     """
     if not hotkey:
         return False
-    return send_hotkey(hotkey)
+
+    focus_session = _acquire_linux_zoom_focus()
+    if _linux_zoom_focus_is_required() and focus_session is None:
+        log.warning("execute_stop_share: a verified Zoom window could not receive focus")
+        return False
+
+    try:
+        if focus_session is not None and not zoom_has_focus(focus_session):
+            log.warning("execute_stop_share: Zoom lost focus before shortcut dispatch")
+            return False
+        return send_hotkey(hotkey)
+    finally:
+        if focus_session is not None:
+            restore_previous_focus(focus_session)

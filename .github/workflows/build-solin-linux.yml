@@ -1,0 +1,180 @@
+name: Build Solin Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Artifact retention in days
+        required: true
+        type: number
+        default: 5
+      run_packaged_smoke_test:
+        description: Run the packaged application under Xvfb
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solin-linux-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_NAME: Solin
+  PYTHON_VERSION: "3.13.12"
+  DIST_DIR: dist
+
+jobs:
+  build:
+    name: Ubuntu 22.04 x64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build and runtime dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            binutils \
+            build-essential \
+            ccache \
+            desktop-file-utils \
+            patchelf \
+            appstream \
+            file \
+            shellcheck \
+            xdotool \
+            xauth \
+            xvfb \
+            libgtk-3-0 \
+            libwebkit2gtk-4.1-0 \
+            libsoup-3.0-0 \
+            libjavascriptcoregtk-4.1-0 \
+            libva2 \
+            libva-drm2 \
+            libva-x11-2 \
+            pipewire-bin \
+            gstreamer1.0-plugins-bad \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xinerama0 \
+            libxkbcommon-x11-0
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-pip-
+
+      - name: Cache Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-nuitka-
+
+      - name: Cache C compiler output
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ${{ runner.os }}-ccache-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-ccache-
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip install --no-deps -e .
+          python -m pip install --upgrade nuitka ordered-set zstandard
+
+      - name: Quality gate
+        shell: bash
+        run: |
+          python -m ruff check .
+          python -m pyright --pythonpath "$(command -v python)"
+          python -m pytest
+          python scripts/validate_native_webview.py --require-linux
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          version=$(python -c 'from solin.version import __version__; print(__version__)')
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid app version: $version" >&2
+            exit 1
+          fi
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "app_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux standalone
+        shell: bash
+        env:
+          SOLIN_BUILD_DIR: ${{ github.workspace }}/build/linux
+        run: SOLIN_PYTHON="$(command -v python)" bash scripts/build_solin.sh
+
+      - name: Validate Linux packaging scripts
+        shell: bash
+        run: |
+          shellcheck \
+            scripts/build_solin.sh \
+            scripts/package_solin_appimage.sh \
+            packaging/linux/appimage/AppRun \
+            packaging/linux/appimage/solin
+
+      - name: Package AppImage
+        shell: bash
+        env:
+          SOLIN_APPIMAGE_SKIP_BUILD: "1"
+          SOLIN_BUILD_DIR: ${{ github.workspace }}/build/linux
+          SOLIN_APPIMAGE_OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: SOLIN_PYTHON="$(command -v python)" bash scripts/package_solin_appimage.sh
+
+      - name: Run AppImage startup smoke
+        if: ${{ inputs.run_packaged_smoke_test }}
+        shell: bash
+        run: |
+          appimage="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-x86_64.AppImage"
+          set +e
+          timeout --signal=TERM 15s xvfb-run --auto-servernum \
+            --server-args="-screen 0 1280x720x24" \
+            env APPIMAGE_EXTRACT_AND_RUN=1 "$appimage"
+          status=$?
+          set -e
+          if [[ "$status" -ne 124 && "$status" -ne 143 ]]; then
+            echo "Solin AppImage exited unexpectedly with status $status." >&2
+            exit "$status"
+          fi
+          echo "Solin AppImage remained running for the smoke-test window."
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: Solin-${{ steps.version.outputs.app_version }}-x86_64-AppImage
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.sha256
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}

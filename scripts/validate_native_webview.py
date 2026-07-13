@@ -14,6 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from native_webview_widget.abi import (
     ABI_VERSION,
+    LINUX_LIBRARY_NAMES,
     MACOS_LIBRARY_NAMES,
     WINDOWS_LIBRARY_NAME,
     native_library_candidates,
@@ -45,7 +46,11 @@ def validate_python_package(package_dir: Path) -> list[str]:
     return errors
 
 
-def validate_binary_files(package_dir: Path) -> list[str]:
+def validate_binary_files(
+    package_dir: Path,
+    *,
+    require_linux: bool = False,
+) -> list[str]:
     errors: list[str] = []
 
     windows_dll = package_dir / WINDOWS_LIBRARY_NAME
@@ -63,6 +68,13 @@ def validate_binary_files(package_dir: Path) -> list[str]:
     for candidate in macos_candidates:
         if candidate.is_file() and _read_magic(candidate) not in MACHO_MAGICS:
             errors.append(f"macOS native webview binary is not a Mach-O file: {candidate}")
+
+    linux_candidates = [package_dir / name for name in LINUX_LIBRARY_NAMES]
+    if require_linux and not any(path.is_file() for path in linux_candidates):
+        errors.append(f"Missing Linux native webview binary: {linux_candidates[0]}")
+    for candidate in linux_candidates:
+        if candidate.is_file() and _read_magic(candidate) != b"\x7fELF":
+            errors.append(f"Linux native webview binary is not an ELF file: {candidate}")
 
     return errors
 
@@ -100,10 +112,11 @@ def validate_native_webview_package(
     package_dir: Path = PACKAGE_DIR,
     *,
     check_current_platform_exports: bool = True,
+    require_linux: bool = False,
 ) -> list[str]:
     errors = [
         *validate_python_package(package_dir),
-        *validate_binary_files(package_dir),
+        *validate_binary_files(package_dir, require_linux=require_linux),
     ]
     if check_current_platform_exports:
         errors.extend(validate_current_platform_exports(package_dir))
@@ -120,6 +133,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Do not load the current-platform native library to verify exports.",
     )
+    parser.add_argument(
+        "--require-linux",
+        action="store_true",
+        help="Require the vendored Linux sideview shared library.",
+    )
     return parser.parse_args(argv)
 
 
@@ -129,6 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     errors = validate_native_webview_package(
         package_dir,
         check_current_platform_exports=not args.skip_load,
+        require_linux=args.require_linux,
     )
 
     if errors:

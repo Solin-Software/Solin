@@ -648,6 +648,9 @@ class MainWindow(QMainWindow):
                 prepare_video_session=(
                     self._auto_key_projection.prepare_video_session
                 ),
+                prepare_auto_share_playback=(
+                    self._projection_integrations.prepare_video_playback_for_auto_share
+                ),
             ),
         )
         self._projection_stop = ProjectionStopController(

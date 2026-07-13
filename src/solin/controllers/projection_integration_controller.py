@@ -63,6 +63,8 @@ class ProjectionIntegrationController:
         self._session = context.projection_session
         self._obs_scene_session = context.obs_scene_session
         self._auto_share_active = False
+        self._auto_share_start_pending = False
+        self._auto_share_playback_pending = False
         self._auto_share_generation = 0
 
     def update_status(
@@ -146,8 +148,37 @@ class ProjectionIntegrationController:
     def auto_share_configured(self) -> bool:
         return self._context.auto_share_settings.is_configured()
 
+    def prepare_video_playback_for_auto_share(self) -> bool:
+        """Hold a visual video while a required share start is unresolved."""
+        context = self._context
+        should_wait = (
+            not context.auto_share_workers.is_stopped
+            and context.auto_share_settings.is_configured()
+            and self.has_visible_projection_output()
+            and (not self._auto_share_active or self._auto_share_start_pending)
+        )
+        if not should_wait:
+            return False
+
+        self._auto_share_playback_pending = True
+        context.projection_bar.begin_auto_share_playback_wait()
+        return True
+
+    def _resolve_auto_share_playback(self, success: bool) -> None:
+        if not self._auto_share_playback_pending:
+            return
+        self._auto_share_playback_pending = False
+        self._context.projection_bar.resolve_auto_share_playback_wait(success)
+
+    def _cancel_auto_share_playback(self) -> None:
+        if not self._auto_share_playback_pending:
+            return
+        self._auto_share_playback_pending = False
+        self._context.projection_bar.cancel_auto_share_playback_wait()
+
     def sync_zoom_share(self, active: bool | None = None, visual: bool = True) -> None:
         if self._context.auto_share_workers.is_stopped:
+            self._resolve_auto_share_playback(False)
             return
         if active is None:
             active, visual = self.current_projection_activity()
@@ -156,11 +187,15 @@ class ProjectionIntegrationController:
         if not context.auto_share_settings.is_configured():
             self._auto_share_generation += 1
             self._auto_share_active = False
+            self._auto_share_start_pending = False
+            self._resolve_auto_share_playback(False)
             return
 
         hotkey = self.auto_share_hotkey()
         should_share = active and visual and self.has_visible_projection_output()
         if should_share == self._auto_share_active:
+            if not should_share:
+                self._resolve_auto_share_playback(False)
             return
         self._auto_share_generation += 1
         generation = self._auto_share_generation
@@ -169,12 +204,16 @@ class ProjectionIntegrationController:
             click_x, click_y = context.auto_share_settings.click_position()
 
             def _run_start_share():
-                ok = context.start_auto_share(
-                    hotkey,
-                    click_x,
-                    click_y,
-                    movement_warning=context.auto_share_mouse_interference_warning,
-                )
+                try:
+                    ok = context.start_auto_share(
+                        hotkey,
+                        click_x,
+                        click_y,
+                        movement_warning=context.auto_share_mouse_interference_warning,
+                    )
+                except Exception:  # noqa: BLE001 - automation worker boundary
+                    log.exception("Automatic Zoom share start failed unexpectedly")
+                    ok = False
                 if not context.auto_share_workers.is_stopped:
                     try:
                         context.auto_share_finished(generation, True, ok)
@@ -182,8 +221,12 @@ class ProjectionIntegrationController:
                         pass
 
             self._auto_share_active = True
+            self._auto_share_start_pending = True
             self._launch_auto_share_worker("share-start", _run_start_share)
         else:
+            self._auto_share_start_pending = False
+            self._resolve_auto_share_playback(False)
+
             def _run_stop_share():
                 ok = context.stop_auto_share(hotkey)
                 if not context.auto_share_workers.is_stopped:
@@ -202,6 +245,8 @@ class ProjectionIntegrationController:
         """Suppress late callbacks and join owned auto-share workers."""
         self._auto_share_generation += 1
         self._auto_share_active = False
+        self._auto_share_start_pending = False
+        self._cancel_auto_share_playback()
         alive = self._context.auto_share_workers.shutdown(timeout)
         if alive:
             log.warning("Auto-share workers still running during shutdown: %s", alive)
@@ -214,6 +259,9 @@ class ProjectionIntegrationController:
     ) -> None:
         if generation != self._auto_share_generation:
             return
+        if target_active:
+            self._auto_share_start_pending = False
+            self._resolve_auto_share_playback(ok)
         if not ok:
             self._auto_share_active = not target_active
             return

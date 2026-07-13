@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+APPDIR=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
+PAYLOAD_DIR="$APPDIR/usr/lib/solin"
+NATIVE_WEBVIEW="$PAYLOAD_DIR/native_webview_widget/libnative_webview_widget.so"
+
+export PATH="$APPDIR/usr/bin${PATH:+:$PATH}"
+export XDG_DATA_DIRS="$APPDIR/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+if command -v ldd >/dev/null 2>&1 && [ -f "$NATIVE_WEBVIEW" ]; then
+    unresolved=$(ldd "$NATIVE_WEBVIEW" 2>/dev/null | awk '/not found/ { print "  " $1 }')
+    if [ -n "$unresolved" ]; then
+        message="Solin requires WebKitGTK 4.1, GTK 3 and libsoup 3 from the Linux system.
+
+Missing libraries:
+$unresolved
+
+On Ubuntu, install them with:
+24.04: sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 libsoup-3.0-0
+22.04: sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0 libsoup-3.0-0"
+        printf '%s\n' "$message" >&2
+        if command -v zenity >/dev/null 2>&1; then
+            zenity --error --title="Solin" --text="$message" 2>/dev/null || true
+        fi
+        exit 127
+    fi
+fi
+
+exec "$APPDIR/usr/bin/solin" "$@"

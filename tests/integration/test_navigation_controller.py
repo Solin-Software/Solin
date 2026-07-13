@@ -50,11 +50,15 @@ class _ProjectionBarStub:
 class _QuickToolbarStub:
     def __init__(self):
         self.browser_rect_modes = []
+        self.browser_overlay_modes = []
         self.raised = False
         self.repositioned = False
 
     def set_browser_rect_mode(self, active):
         self.browser_rect_modes.append(active)
+
+    def set_browser_overlay_mode(self, active):
+        self.browser_overlay_modes.append(active)
 
     def raise_(self):
         self.raised = True
@@ -90,6 +94,7 @@ def test_switch_page_updates_stack_buttons_projection_bar_and_toolbar():
     assert stack.current_index == 1
     assert [button.active for button in buttons] == [False, True]
     assert projection_bar.collapsed is True
+    assert toolbar.browser_overlay_modes == [True]
     assert toolbar.browser_rect_modes == [True]
     assert toolbar.raised is True
     assert toolbar.repositioned is True

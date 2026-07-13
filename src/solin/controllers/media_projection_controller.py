@@ -71,6 +71,7 @@ class MediaProjectionHandlers:
     stop_browser_tab_projection: Callable[[], None]
     update_projection_status: Callable[..., None]
     prepare_video_session: Callable[[], None]
+    prepare_auto_share_playback: Callable[[], bool]
 
 
 class MediaProjectionController:
@@ -340,11 +341,15 @@ class MediaProjectionController:
             and context.sjjm_announce_mode()
             and not self._item_has_custom_trim(media_item)
         )
-        if announce:
-            context.projection_bar.begin_announcement_mode()
-
         if not is_audio:
             self._handlers.prepare_video_session()
+
+        wait_for_auto_share = (
+            not is_audio
+            and self._handlers.prepare_auto_share_playback()
+        )
+        if announce:
+            context.projection_bar.begin_announcement_mode()
 
         start_paused = (
             not is_audio
@@ -355,7 +360,7 @@ class MediaProjectionController:
             self._playback_request(
                 media_item or {"url": url},
                 source=url,
-                autoplay=not start_paused,
+                autoplay=not (start_paused or wait_for_auto_share),
             )
         )
 

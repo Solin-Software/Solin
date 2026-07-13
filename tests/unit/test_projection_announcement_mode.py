@@ -82,6 +82,7 @@ class _Media:
 def _make_bar(*, muted=False, volume=0.8):
     bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
     bar._announce_state = "off"
+    bar._auto_share_playback_waiting = False
     bar._announce_gate_ms = 3500
     bar._announce_timer = _Timer()
     bar._muted = muted
@@ -192,6 +193,60 @@ def test_play_button_outside_announcement_mode_uses_regular_toggle_signal():
     assert bar.toggle_requested.emitted == 1
     assert bar.media.seeks == []
     assert bar.media.played == 0
+
+
+def test_auto_share_wait_locks_manual_playback_and_seek_controls():
+    bar = _make_bar()
+
+    bar.begin_auto_share_playback_wait()
+    bar._on_play_btn_clicked()
+
+    assert bar._auto_share_playback_waiting is True
+    assert bar.play_btn.enabled is False
+    assert bar.seek_slider.enabled is False
+    assert bar.toggle_requested.emitted == 0
+
+
+def test_successful_auto_share_resumes_regular_video_and_unlocks_controls():
+    bar = _make_bar()
+    bar.begin_auto_share_playback_wait()
+
+    bar.resolve_auto_share_playback_wait(True)
+
+    assert bar._auto_share_playback_waiting is False
+    assert bar.media.played == 1
+    assert bar.play_btn.enabled is True
+    assert bar.seek_slider.enabled is True
+
+
+def test_failed_auto_share_keeps_regular_video_paused_and_unlocks_controls():
+    bar = _make_bar()
+    bar.begin_auto_share_playback_wait()
+
+    bar.resolve_auto_share_playback_wait(False)
+
+    assert bar._auto_share_playback_waiting is False
+    assert bar.media.played == 0
+    assert bar.play_btn.enabled is True
+    assert bar.seek_slider.enabled is True
+
+
+def test_announcement_mode_retains_precedence_after_auto_share_resolution():
+    for success in (True, False):
+        bar = _make_bar()
+        bar.begin_auto_share_playback_wait()
+        bar.begin_announcement_mode()
+
+        assert bar._announce_timer.started == 0
+
+        bar.resolve_auto_share_playback_wait(success)
+
+        assert bar._announce_state == "gate"
+        assert bar._auto_share_playback_waiting is False
+        assert bar._announce_timer.started == 1
+        assert bar.media.played == 1
+        assert bar.play_btn.enabled is False
+        assert bar.seek_slider.enabled is False
 
 
 def test_cancel_announcement_mode_restores_volume_controls_and_deferred_switch():

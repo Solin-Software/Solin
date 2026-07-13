@@ -341,6 +341,68 @@ def stage_windows_qt_quick_libraries(output_dir: Path) -> list[Path]:
     return staged
 
 
+def linux_shared_library_dependencies(binary: Path) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["readelf", "-d", str(binary)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            "readelf was not found. Install binutils before staging Linux Qt libraries."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(f"Could not inspect Linux shared library dependencies: {binary}") from exc
+
+    return re.findall(r"Shared library: \[([^]]+)]", result.stdout)
+
+
+def stage_linux_qt_quick_libraries(output_dir: Path, qml_runtime_dir: Path) -> list[Path]:
+    source_root = find_qt_library_dir(["libQt6Core.so*"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for old_library in output_dir.glob("libQt6*.so*"):
+        old_library.unlink()
+
+    pending = sorted(qml_runtime_dir.rglob("*.so"))
+    inspected: set[Path] = set()
+    staged: dict[str, Path] = {}
+
+    while pending:
+        binary = pending.pop()
+        binary = binary.resolve()
+        if binary in inspected:
+            continue
+        inspected.add(binary)
+
+        for dependency in linux_shared_library_dependencies(binary):
+            if not dependency.startswith("libQt6") or ".so" not in dependency:
+                continue
+            if dependency in staged:
+                continue
+
+            source = source_root / dependency
+            if not source.is_file():
+                raise SystemExit(
+                    f"Required Linux Qt runtime library was not found: {source} "
+                    f"(needed by {binary})"
+                )
+
+            target = output_dir / dependency
+            shutil.copy2(source, target)
+            staged[dependency] = target
+            pending.append(source)
+
+    if sys.platform.startswith("linux") and not staged:
+        raise SystemExit(
+            f"No Linux Qt runtime libraries were required by QML plugins in {qml_runtime_dir}."
+        )
+
+    return [staged[name] for name in sorted(staged)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate PySide6 QML bytecode cache files.")
     parser.add_argument("--source-dir", type=Path, required=True)
@@ -371,8 +433,20 @@ def main() -> int:
             print(f"  {path.relative_to(args.qt_qml_output_dir.resolve())}")
 
     if args.qt_library_output_dir:
-        staged = stage_windows_qt_quick_libraries(args.qt_library_output_dir.resolve())
-        print(f"Staged {len(staged)} Qt Quick runtime DLL(s) in {args.qt_library_output_dir}")
+        if sys.platform.startswith("linux"):
+            if not args.qt_qml_output_dir:
+                raise SystemExit(
+                    "--qt-qml-output-dir is required with --qt-library-output-dir on Linux."
+                )
+            staged = stage_linux_qt_quick_libraries(
+                args.qt_library_output_dir.resolve(),
+                args.qt_qml_output_dir.resolve(),
+            )
+            artifact_kind = "Linux Qt runtime library file(s)"
+        else:
+            staged = stage_windows_qt_quick_libraries(args.qt_library_output_dir.resolve())
+            artifact_kind = "Qt Quick runtime DLL(s)"
+        print(f"Staged {len(staged)} {artifact_kind} in {args.qt_library_output_dir}")
         for path in staged:
             print(f"  {path.name}")
 

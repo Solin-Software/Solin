@@ -303,6 +303,9 @@ class MainWindowUiController:
 
         bottom_bar, projection_bar = self._build_bottom_bar(right_col)
         projection_bar_ref["value"] = projection_bar
+        projection_bar.expanded_changed.connect(
+            lazy_pages.set_browser_native_views_occluded
+        )
         right_layout.addWidget(bottom_bar)
 
         root.addWidget(right_col, stretch=1)
@@ -313,6 +316,9 @@ class MainWindowUiController:
             pages.settings_widget,
         )
         quick_toolbar_ref["value"] = quick_toolbar
+        projection_bar.expanded_changed.connect(
+            quick_toolbar.set_projection_overlay_active
+        )
         self._prime_native_cursor_hosts(right_col, stack)
         right_col.installEventFilter(context.event_filter)
 

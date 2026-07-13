@@ -27,3 +27,24 @@ def test_macos_bundle_keeps_finder_launch_gui_only():
     assert "--macos-create-app-bundle" in text
     assert "--macos-app-console-mode=disable" in text
     assert "--macos-app-console-mode=force" not in text
+
+
+def test_linux_build_uses_shared_script_and_xcb_launcher():
+    script = _read("scripts/build_solin.sh")
+    workflow = _read(".github/workflows/build-solin-linux.yml")
+
+    assert "libnative_webview_widget.so" in script
+    assert "scripts/validate_native_webview.py --require-linux" in script
+    assert "QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}" in script
+    assert "WEBKIT_DISABLE_DMABUF_RENDERER" not in script
+    assert 'rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"' in script
+    assert "xcb_helper_libraries=(" in script
+    assert "xdotool_libraries=(" in script
+    assert 'export PATH="$APP_DIR/bin${PATH:+:$PATH}"' in script
+    assert '"${WORK_ROOT}/main.build"' in script
+    assert "bash scripts/build_solin.sh" in workflow
+    assert "gstreamer1.0-plugins-bad" in workflow
+    assert "xdotool" in workflow
+    assert "runs-on: ubuntu-22.04" in workflow
+    assert "scripts/package_solin_appimage.sh" in workflow
+    assert "*.AppImage.sha256" in workflow

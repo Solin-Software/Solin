@@ -59,9 +59,21 @@ class _ObsServiceStub:
 class _ProjectionBarStub:
     def __init__(self):
         self.obs_scene_states = []
+        self.auto_share_waits = 0
+        self.auto_share_resolutions = []
+        self.auto_share_cancellations = 0
 
     def set_obs_scene_is_media(self, active):
         self.obs_scene_states.append(active)
+
+    def begin_auto_share_playback_wait(self):
+        self.auto_share_waits += 1
+
+    def resolve_auto_share_playback_wait(self, success):
+        self.auto_share_resolutions.append(success)
+
+    def cancel_auto_share_playback_wait(self):
+        self.auto_share_cancellations += 1
 
 
 class _AutoKeyProjectionStub:
@@ -246,6 +258,74 @@ def test_auto_share_uses_injected_share_actions():
     controller.sync_zoom_share(active=False, visual=True)
     assert window.share_stopped.wait(1)
     assert window.stopped_shares == ["Alt+S"]
+    controller.cleanup()
+
+
+def test_visual_video_waits_for_pending_auto_share_and_resumes_on_success():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+    )
+    controller = _controller(window)
+
+    assert controller.prepare_video_playback_for_auto_share() is True
+    assert window.proj_bar.auto_share_waits == 1
+
+    controller.sync_zoom_share(active=True, visual=True)
+    generation = controller._auto_share_generation
+    controller.on_auto_share_finished(generation, True, True)
+
+    assert window.proj_bar.auto_share_resolutions == [True]
+    assert controller._auto_share_start_pending is False
+    controller.cleanup()
+
+
+def test_failed_auto_share_releases_video_without_successful_resume():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+    )
+    controller = _controller(window)
+
+    assert controller.prepare_video_playback_for_auto_share() is True
+    controller.sync_zoom_share(active=True, visual=True)
+    generation = controller._auto_share_generation
+    controller.on_auto_share_finished(generation, True, False)
+
+    assert window.proj_bar.auto_share_resolutions == [False]
+    assert controller._auto_share_active is False
+    controller.cleanup()
+
+
+def test_video_does_not_wait_when_auto_share_is_already_confirmed():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+    )
+    controller = _controller(window)
+    controller._auto_share_active = True
+    controller._auto_share_start_pending = False
+
+    assert controller.prepare_video_playback_for_auto_share() is False
+    assert window.proj_bar.auto_share_waits == 0
+    controller.cleanup()
+
+
+def test_new_video_waits_while_existing_auto_share_start_is_pending():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+    )
+    controller = _controller(window)
+    controller._auto_share_active = True
+    controller._auto_share_start_pending = True
+
+    assert controller.prepare_video_playback_for_auto_share() is True
+    assert window.proj_bar.auto_share_waits == 1
     controller.cleanup()
 
 

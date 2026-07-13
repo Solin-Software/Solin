@@ -17,6 +17,7 @@ from .abi import (
     EVENT_SCRIPT_MESSAGE,
     EVENT_TITLE_CHANGED,
     EVENT_ZOOM_FACTOR_CHANGED,
+    EVENT_ZOOM_FACTOR_REQUESTED,
     native_library_candidates,
 )
 
@@ -106,10 +107,20 @@ class NativeBackend:
     EVENT_NEW_WINDOW_REQUESTED = EVENT_NEW_WINDOW_REQUESTED
     EVENT_SCRIPT_MESSAGE = EVENT_SCRIPT_MESSAGE
     EVENT_ZOOM_FACTOR_CHANGED = EVENT_ZOOM_FACTOR_CHANGED
+    EVENT_ZOOM_FACTOR_REQUESTED = EVENT_ZOOM_FACTOR_REQUESTED
 
     def __init__(self) -> None:
         self._system = platform.system()
-        self._lib = ctypes.CDLL(str(self._resolve_library()))
+        library_path = self._resolve_library()
+        try:
+            self._lib = ctypes.CDLL(str(library_path))
+        except OSError as exc:
+            hint = ""
+            if self._system == "Linux":
+                hint = " Install the WebKitGTK 4.1 and GTK 3 runtime libraries."
+            raise NativeWebViewError(
+                f"Failed to load native webview library {library_path}: {exc}.{hint}"
+            ) from exc
         self._callback_type = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
         self._policy_callback_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p)
         self._capture_callback_type = ctypes.CFUNCTYPE(
@@ -133,6 +144,10 @@ class NativeBackend:
     @property
     def zoom_supported(self) -> bool:
         return self._zoom_supported
+
+    @property
+    def uses_foreign_window(self) -> bool:
+        return self._system == "Linux"
 
     def create(self, parent_handle: int, options: NativeOptions, callback: EventCallback) -> int:
         native_options, keepalive = self._build_options(options)
@@ -196,6 +211,11 @@ class NativeBackend:
         self._policy_callbacks.pop(int(handle), None)
         self._capture_callbacks.pop(int(handle), None)
         self._lib.nwv_destroy(ctypes.c_void_p(handle))
+
+    def native_view(self, handle: int) -> int:
+        if not self.uses_foreign_window or not handle:
+            return 0
+        return int(self._lib.nwv_get_native_view(ctypes.c_void_p(handle)))
 
     def resize(self, handle: int, width: int, height: int) -> None:
         if handle:
@@ -309,6 +329,9 @@ class NativeBackend:
     def _configure_signatures(self) -> None:
         self._lib.nwv_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         self._lib.nwv_create.restype = ctypes.c_void_p
+        if self.uses_foreign_window:
+            self._lib.nwv_get_native_view.argtypes = [ctypes.c_void_p]
+            self._lib.nwv_get_native_view.restype = ctypes.c_size_t
         self._lib.nwv_destroy.argtypes = [ctypes.c_void_p]
         self._lib.nwv_set_event_callback.argtypes = [ctypes.c_void_p, self._callback_type, ctypes.c_void_p]
         self._lib.nwv_set_policy_callback.argtypes = [ctypes.c_void_p, self._policy_callback_type, ctypes.c_void_p]
@@ -380,7 +403,9 @@ class NativeBackend:
         package_dir = Path(__file__).resolve().parent
         candidates = native_library_candidates(self._system, package_dir)
         if not candidates:
-            raise NativeWebViewError("native-webview-widget currently supports Windows and macOS only.")
+            raise NativeWebViewError(
+                "native-webview-widget supports Windows, macOS, and Linux only."
+            )
 
         for candidate in candidates:
             if candidate.exists():
