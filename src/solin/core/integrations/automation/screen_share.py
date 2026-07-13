@@ -608,33 +608,38 @@ def _clicks_linux(x: int, y: int, count: int, interval_ms: int) -> bool:
     if saved_pos is None:
         return False
 
+    repeat_timeout = max(2.0, 1.0 + (count - 1) * interval_ms / 1000.0)
     ok = True
     try:
-        for i in range(count):
-            try:
-                subprocess.run(
-                    [xdotool, "mousemove", "--sync", str(x), str(y)],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=2.0,
-                    env=env,
-                )
-                subprocess.run(
-                    [xdotool, "click", "--clearmodifiers", "1"],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=2.0,
-                    env=env,
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
-                log.warning("xdotool click failed at (%s, %s): %s", x, y, exc)
-                ok = False
-                break
-
-            if i < count - 1:
-                time.sleep(interval_ms / 1000.0)
+        try:
+            subprocess.run(
+                [xdotool, "mousemove", "--sync", str(x), str(y)],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=2.0,
+                env=env,
+            )
+            subprocess.run(
+                [
+                    xdotool,
+                    "click",
+                    "--clearmodifiers",
+                    "--repeat",
+                    str(count),
+                    "--delay",
+                    str(interval_ms),
+                    "1",
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=repeat_timeout,
+                env=env,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("xdotool click failed at (%s, %s): %s", x, y, exc)
+            ok = False
     finally:
         try:
             subprocess.run(

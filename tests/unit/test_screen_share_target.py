@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 from solin.core.integrations.automation import screen_share
 
 
@@ -163,3 +165,36 @@ def test_linux_start_share_restores_focus_when_zoom_loses_focus(monkeypatch):
 
     assert screen_share.execute_start_share("Alt+S") is False
     assert events == ["restore"]
+
+
+def test_linux_click_sequence_uses_one_atomic_xdotool_repeat(monkeypatch):
+    commands: list[list[str]] = []
+    monkeypatch.setattr(screen_share.shutil, "which", lambda _name: "/usr/bin/xdotool")
+    monkeypatch.setattr(screen_share.os, "environ", {"XDG_SESSION_TYPE": "x11"})
+    monkeypatch.setattr(
+        screen_share,
+        "_xdotool_position",
+        lambda _xdotool, _env: (40, 60),
+    )
+
+    def _run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(screen_share.subprocess, "run", _run)
+
+    assert screen_share._clicks_linux(300, 250, count=2, interval_ms=120) is True
+    assert commands == [
+        ["/usr/bin/xdotool", "mousemove", "--sync", "300", "250"],
+        [
+            "/usr/bin/xdotool",
+            "click",
+            "--clearmodifiers",
+            "--repeat",
+            "2",
+            "--delay",
+            "120",
+            "1",
+        ],
+        ["/usr/bin/xdotool", "mousemove", "--sync", "40", "60"],
+    ]
