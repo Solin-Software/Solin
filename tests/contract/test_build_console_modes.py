@@ -29,6 +29,20 @@ def test_macos_bundle_keeps_finder_launch_gui_only():
     assert "--macos-app-console-mode=force" not in text
 
 
+def test_macos_build_excludes_foreign_native_webview_binaries():
+    workflow = _read(".github/workflows/build-solin-macos.yml")
+
+    for option in (
+        '--noinclude-dlls="native_webview_widget/*.so"',
+        '--noinclude-dlls="native_webview_widget/*.dll"',
+        '--noinclude-data-files="native_webview_widget/*.so"',
+        '--noinclude-data-files="native_webview_widget/*.dll"',
+    ):
+        assert option in workflow
+
+    assert '--include-data-files="${NATIVE_WEBVIEW_DYLIB}' in workflow
+
+
 def test_linux_build_uses_shared_script_and_xcb_launcher():
     script = _read("scripts/build_solin.sh")
     workflow = _read(".github/workflows/build-solin-linux.yml")
