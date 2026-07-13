@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -21,8 +21,16 @@ class CropOverlay(QWidget):
     _PEN_W = QPen(QColor(255, 255, 255, 230), 2, Qt.PenStyle.DashLine)
     _PEN_O = QPen(QColor(0, 0, 0, 100), 1, Qt.PenStyle.SolidLine)
     _MIN_DRAG = 8
+    _GEOMETRY_EVENT_TYPES = frozenset(
+        {
+            QEvent.Type.Move,
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.WindowStateChange,
+        }
+    )
 
-    def __init__(self, parent: QWidget, toggle_btn: QWidget | None = None):
+    def __init__(self, parent: QWidget):
         flags = (
             Qt.WindowType.Tool
             | Qt.WindowType.FramelessWindowHint
@@ -30,6 +38,7 @@ class CropOverlay(QWidget):
         )
         super().__init__(None, flags)
         self._target = parent
+        self._geometry_sources: tuple[QWidget, ...] = ()
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
@@ -41,23 +50,51 @@ class CropOverlay(QWidget):
         self._cur_x = self._cur_y = 0
         self._dragging = False
         self._has_sel = False
-        self._toggle_btn = toggle_btn
+        self._refresh_geometry_sources()
         self._sync_geometry()
         self.raise_()
         self.show()
         self.activateWindow()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+    def _refresh_geometry_sources(self) -> None:
+        for widget in self._geometry_sources:
+            try:
+                widget.removeEventFilter(self)
+            except RuntimeError:
+                pass
 
-    def _sync_geometry(self):
+        sources: list[QWidget] = []
+        widget: QWidget | None = self._target
+        while widget is not None:
+            sources.append(widget)
+            widget = widget.parentWidget()
+
+        self._geometry_sources = tuple(sources)
+        for widget in self._geometry_sources:
+            widget.installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            event.type() in self._GEOMETRY_EVENT_TYPES
+            and any(watched is widget for widget in self._geometry_sources)
+        ):
+            self._sync_geometry()
+        return super().eventFilter(watched, event)
+
+    def _sync_geometry(self) -> None:
         if self._target:
-            top_left = self._target.mapToGlobal(self._target.rect().topLeft())
+            try:
+                target_rect = self._target.rect()
+                top_left = self._target.mapToGlobal(target_rect.topLeft())
+                width = target_rect.width()
+                height = target_rect.height()
+            except RuntimeError:
+                return
             self.setGeometry(
                 top_left.x(),
                 top_left.y(),
-                self._target.width(),
-                self._target.height(),
+                width,
+                height,
             )
 
     def paintEvent(self, _event):

@@ -1320,15 +1320,6 @@ class BrowserWidget(
 
     # ── Recorte de região ──────────────────────────────────────────────────────
 
-    # JS injetado sob demanda ao clicar no botão de recorte.
-    # Cria um overlay de seleção por cima da página com:
-    #   • 4 painéis escuros ao redor da seleção (efeito "buraco")
-    #   • Borda tracejada animada na seleção
-    #   • Cancelamento via ESC / clique sem arrastar / blur da aba
-    # Legacy JS crop overlay removed: crop selection is handled by CropOverlay
-    # and capture is performed by NativeWebView.capture_region().
-    _CROP_JS = ""
-
     def _on_crop_toggled(self, checked: bool):
         if checked:
             self._start_crop_mode()
@@ -1358,29 +1349,13 @@ class BrowserWidget(
         self._update_crop_btn_visual(True)
 
         # Cria overlay Qt sobre o view — funciona com HTML, PDF ou qualquer conteúdo
-        overlay = CropOverlay(tab.view, toggle_btn=self.crop_btn)
+        overlay = CropOverlay(tab.view)
         overlay.crop_confirmed.connect(self._on_crop_selected)
         overlay.crop_cancelled.connect(self._on_crop_cancelled)
         overlay.crop_confirmed.connect(lambda *_: overlay.deleteLater())
         overlay.crop_cancelled.connect(overlay.deleteLater)
         self._crop_overlay = overlay
         overlay.setFocus(Qt.FocusReason.OtherFocusReason)
-
-        # Sincroniza geometria se o view for redimensionado durante o crop
-        tab.view.installEventFilter(self)
-
-    def _inject_crop_overlay(self, tab):
-        pass  # substituído por _start_crop_mode com overlay Qt
-
-    def eventFilter(self, obj, event):
-        """Mantém o overlay de crop sincronizado com o tamanho do view."""
-        from PySide6.QtCore import QEvent
-        if (event.type() in (QEvent.Type.Resize, QEvent.Type.Move)
-                and hasattr(self, '_crop_overlay')
-                and self._crop_overlay
-                and not self._crop_overlay.isHidden()):
-            self._crop_overlay._sync_geometry()
-        return super().eventFilter(obj, event)
 
     def _cancel_crop_mode(self):
         """Remove o overlay Qt e cancela o modo de recorte."""
