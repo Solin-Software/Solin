@@ -25,7 +25,18 @@ def _window(
     )
 
 
+def _bypass_linux_zoom_focus(monkeypatch) -> None:
+    """Isolate share sequencing tests from the Linux window-manager boundary."""
+    monkeypatch.setattr(screen_share, "_acquire_linux_zoom_focus", lambda: None)
+    monkeypatch.setattr(
+        screen_share,
+        "_linux_zoom_focus_is_required",
+        lambda: False,
+    )
+
+
 def _configure_detected_share_dialog(monkeypatch, dialog, clicks) -> None:
+    _bypass_linux_zoom_focus(monkeypatch)
     monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: {})
     monkeypatch.setattr(
         screen_share,
@@ -61,6 +72,7 @@ def test_execute_start_share_warns_once_when_mouse_moves_during_wait(monkeypatch
         calls["windows"] += 1
         return {"dialog": dialog} if calls["windows"] == 2 else {}
 
+    _bypass_linux_zoom_focus(monkeypatch)
     monkeypatch.setattr(screen_share, "_list_zoom_windows", _list_windows)
     monkeypatch.setattr(screen_share, "_cursor_position", lambda: next(positions, (140, 10)))
     monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
@@ -83,6 +95,7 @@ def test_execute_start_share_warns_once_when_mouse_moves_during_wait(monkeypatch
 def test_execute_start_share_without_target_sends_hotkey_only(monkeypatch):
     sent_hotkeys: list[str] = []
     clicks: list[tuple[int, int, int, int]] = []
+    _bypass_linux_zoom_focus(monkeypatch)
     monkeypatch.setattr(
         screen_share,
         "send_hotkey",
