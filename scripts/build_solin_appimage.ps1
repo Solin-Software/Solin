@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($Distribution)) {
-    $Distribution = "Ubuntu-24.04"
+    $Distribution = "Ubuntu-22.04"
 }
 
 Write-Host "Building Solin AppImage with WSL distribution $Distribution..."

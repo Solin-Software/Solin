@@ -93,6 +93,7 @@ def test_windows_wrapper_delegates_to_wsl_and_propagates_failures():
     assert "build_solin_appimage.ps1" in batch_wrapper
     assert "exit /b %ERRORLEVEL%" in batch_wrapper
     assert '"--distribution", $Distribution' in powershell_wrapper
+    assert '$Distribution = "Ubuntu-22.04"' in powershell_wrapper
     assert '"--cd", $ProjectRoot' in powershell_wrapper
     assert "SOLIN_APPIMAGE_SKIP_BUILD=1" in powershell_wrapper
     assert "$LASTEXITCODE -ne 0" in powershell_wrapper
