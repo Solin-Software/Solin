@@ -45,14 +45,13 @@ log = logging.getLogger(__name__)
 _MacPointT = TypeVar("_MacPointT")
 
 SHARE_DIALOG_DETECTION_TIMEOUT_MS = 5000
-SHARE_DIALOG_DETECTION_SETTLE_MS = 500
+SHARE_DIALOG_INTERACTION_DELAY_MS = 900
 SHARE_DIALOG_POLL_INTERVAL_MS = 50
 SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
-SHARE_DIALOG_FIXED_DELAY_MS = 500
-SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 650
-SHARE_DIALOG_RETRY_CONFIRMATION_MS = 2000
+SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 900
+SHARE_DIALOG_RETRY_CONFIRMATION_MS = 1100
 MOUSE_INTERFERENCE_DISTANCE_PX = 80
 MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
 
@@ -726,6 +725,12 @@ class _ZoomWindowInfo:
     def area(self) -> int:
         return self.width * self.height
 
+    def contains(self, x: int, y: int) -> bool:
+        return (
+            self.x <= x < self.x + self.width
+            and self.y <= y < self.y + self.height
+        )
+
 
 class _ShareDialogPresence(Enum):
     PRESENT = "present"
@@ -749,9 +754,10 @@ def _capture_zoom_windows_before_share_click() -> dict[str, _ZoomWindowInfo] | N
 def _wait_before_share_click(
     delay_ms: int,
     initial_windows: dict[str, _ZoomWindowInfo] | None,
+    target: tuple[int, int],
     monitor: _MouseInterferenceMonitor | None = None,
 ) -> _ZoomWindowInfo | None:
-    """Wait for and return the detected dialog after its safety delay."""
+    """Wait for a detected dialog to remain usable through its safety delay."""
     if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
         _sleep_with_mouse_monitoring(delay_ms, monitor)
         return None
@@ -778,8 +784,44 @@ def _wait_before_share_click(
         detected.y,
         detected.owner,
     )
-    _sleep_with_mouse_monitoring(SHARE_DIALOG_DETECTION_SETTLE_MS, monitor)
-    return detected
+    _sleep_with_mouse_monitoring(delay_ms, monitor)
+    return _current_safe_share_dialog(detected, *target)
+
+
+def _current_safe_share_dialog(
+    dialog: _ZoomWindowInfo,
+    target_x: int,
+    target_y: int,
+) -> _ZoomWindowInfo | None:
+    """Return the current dialog only while it still owns the click geometry."""
+    current_windows = _list_zoom_windows()
+    if current_windows is None:
+        log.warning(
+            "execute_start_share: could not verify Zoom immediately before clicking"
+        )
+        return None
+
+    current = current_windows.get(dialog.window_id)
+    if current is None or not _is_candidate_share_dialog(current):
+        log.warning(
+            "execute_start_share: detected Zoom dialog %s is no longer available",
+            dialog.window_id,
+        )
+        return None
+    if not current.contains(target_x, target_y):
+        log.warning(
+            "execute_start_share: target (%d, %d) is outside Zoom dialog %s "
+            "(%dx%d at %d,%d)",
+            target_x,
+            target_y,
+            current.window_id,
+            current.width,
+            current.height,
+            current.x,
+            current.y,
+        )
+        return None
+    return current
 
 
 def _wait_for_share_dialog_exit(
@@ -825,6 +867,10 @@ def _click_share_target_with_retry(
     monitor: _MouseInterferenceMonitor | None = None,
 ) -> bool:
     """Double-click once, retrying once only while the same dialog remains."""
+    if dialog is not None:
+        dialog = _current_safe_share_dialog(dialog, x, y)
+        if dialog is None:
+            return False
     if not _send_share_target_double_click(x, y, monitor):
         return False
     if dialog is None:
@@ -847,6 +893,9 @@ def _click_share_target_with_retry(
         "execute_start_share: Zoom dialog %s remained visible; retrying once",
         dialog.window_id,
     )
+    dialog = _current_safe_share_dialog(dialog, x, y)
+    if dialog is None:
+        return False
     if not _send_share_target_double_click(x, y, monitor):
         return False
 
@@ -1117,8 +1166,8 @@ def execute_start_share(
         hotkey: Keyboard shortcut to toggle share (e.g. 'Alt+S').
         click_x: Screen X for target click (-1 = skip clicks).
         click_y: Screen Y for target click (-1 = skip clicks).
-        delay_ms: Fixed-delay milliseconds to wait between hotkey and clicks.
-            Uses SHARE_DIALOG_FIXED_DELAY_MS when omitted.
+        delay_ms: Safety delay after dialog detection and before interaction.
+            Uses SHARE_DIALOG_INTERACTION_DELAY_MS when omitted.
         movement_warning: Optional callback invoked once if the cursor moves
             enough to risk competing with the automated share-target click.
 
@@ -1135,7 +1184,11 @@ def execute_start_share(
 
     try:
         click_configured = click_x >= 0 and click_y >= 0
-        delay_ms = SHARE_DIALOG_FIXED_DELAY_MS if delay_ms is None else delay_ms
+        delay_ms = (
+            SHARE_DIALOG_INTERACTION_DELAY_MS
+            if delay_ms is None
+            else max(0, int(delay_ms))
+        )
         monitor = (
             _MouseInterferenceMonitor(movement_warning)
             if click_configured else None
@@ -1161,7 +1214,12 @@ def execute_start_share(
             return False
 
         if click_configured:
-            detected_dialog = _wait_before_share_click(delay_ms, initial_windows, monitor)
+            detected_dialog = _wait_before_share_click(
+                delay_ms,
+                initial_windows,
+                (click_x, click_y),
+                monitor,
+            )
             if USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK and detected_dialog is None:
                 return False
             if monitor is not None:

@@ -35,6 +35,12 @@ class StartAutoShare(Protocol):
     ) -> bool: ...
 
 
+class DesktopAutomationInteractionGuard(Protocol):
+    def acquire_automation_lock(self, owner: str) -> None: ...
+
+    def release_automation_lock(self, owner: str) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ProjectionIntegrationContext:
     """Dependencies for synchronizing projection with external integrations."""
@@ -47,6 +53,7 @@ class ProjectionIntegrationContext:
     obs_settings: Any
     auto_share_settings: Any
     projection_bar: Any
+    interaction_guard: DesktopAutomationInteractionGuard
     auto_share_finished: Callable[[int, bool, bool], None]
     start_auto_share: StartAutoShare
     stop_auto_share: Callable[[str], bool]
@@ -66,6 +73,7 @@ class ProjectionIntegrationController:
         self._auto_share_start_pending = False
         self._auto_share_playback_pending = False
         self._auto_share_generation = 0
+        self._auto_share_interaction_locks: set[str] = set()
 
     def update_status(
         self,
@@ -176,6 +184,27 @@ class ProjectionIntegrationController:
         self._auto_share_playback_pending = False
         self._context.projection_bar.cancel_auto_share_playback_wait()
 
+    @staticmethod
+    def _auto_share_lock_owner(generation: int) -> str:
+        return f"zoom-auto-share:{generation}"
+
+    def _acquire_auto_share_interaction_lock(self, generation: int) -> None:
+        owner = self._auto_share_lock_owner(generation)
+        self._context.interaction_guard.acquire_automation_lock(owner)
+        self._auto_share_interaction_locks.add(owner)
+
+    def _release_auto_share_interaction_lock(self, generation: int) -> None:
+        owner = self._auto_share_lock_owner(generation)
+        if owner not in self._auto_share_interaction_locks:
+            return
+        self._auto_share_interaction_locks.remove(owner)
+        self._context.interaction_guard.release_automation_lock(owner)
+
+    def _release_all_auto_share_interaction_locks(self) -> None:
+        for owner in tuple(self._auto_share_interaction_locks):
+            self._context.interaction_guard.release_automation_lock(owner)
+        self._auto_share_interaction_locks.clear()
+
     def sync_zoom_share(self, active: bool | None = None, visual: bool = True) -> None:
         if self._context.auto_share_workers.is_stopped:
             self._resolve_auto_share_playback(False)
@@ -202,6 +231,7 @@ class ProjectionIntegrationController:
 
         if should_share:
             click_x, click_y = context.auto_share_settings.click_position()
+            self._acquire_auto_share_interaction_lock(generation)
 
             def _run_start_share():
                 try:
@@ -222,7 +252,14 @@ class ProjectionIntegrationController:
 
             self._auto_share_active = True
             self._auto_share_start_pending = True
-            self._launch_auto_share_worker("share-start", _run_start_share)
+            try:
+                self._launch_auto_share_worker("share-start", _run_start_share)
+            except Exception:  # noqa: BLE001 - worker-pool lifecycle boundary
+                log.exception("Could not launch automatic Zoom share start")
+                self._release_auto_share_interaction_lock(generation)
+                self._auto_share_active = False
+                self._auto_share_start_pending = False
+                self._resolve_auto_share_playback(False)
         else:
             self._auto_share_start_pending = False
             self._resolve_auto_share_playback(False)
@@ -248,6 +285,7 @@ class ProjectionIntegrationController:
         self._auto_share_start_pending = False
         self._cancel_auto_share_playback()
         alive = self._context.auto_share_workers.shutdown(timeout)
+        self._release_all_auto_share_interaction_locks()
         if alive:
             log.warning("Auto-share workers still running during shutdown: %s", alive)
 
@@ -257,6 +295,7 @@ class ProjectionIntegrationController:
         target_active: bool,
         ok: bool,
     ) -> None:
+        self._release_auto_share_interaction_lock(generation)
         if generation != self._auto_share_generation:
             return
         if target_active:
