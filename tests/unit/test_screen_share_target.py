@@ -78,7 +78,8 @@ def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
 
 def test_auto_share_uses_conservative_interaction_delays() -> None:
     assert screen_share.SHARE_DIALOG_INTERACTION_DELAY_MS == 900
-    assert screen_share.SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS == 750
+    assert screen_share.SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS == 900
+    assert screen_share.SHARE_DIALOG_RETRY_CONFIRMATION_MS == 1100
 
 
 def test_execute_start_share_rejects_target_outside_detected_dialog(monkeypatch):
