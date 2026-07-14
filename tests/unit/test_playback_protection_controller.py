@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+import pytest
+from PySide6.QtCore import QEvent, QObject, Signal, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from solin.controllers.playback_protection_controller import (
     PlaybackProtectionController,
@@ -91,3 +94,81 @@ def test_disabling_protection_unlocks_current_playback_immediately() -> None:
     assert controller.locked is False
     assert controller.request_seek(750) is True
     assert media.seeks == [750]
+
+
+def test_automation_lock_is_mandatory_while_playback_protection_is_disabled() -> None:
+    settings = _Settings()
+    media = _Media()
+    controller = PlaybackProtectionController(settings, media)
+    locked_changes: list[bool] = []
+    controller.lockedChanged.connect(
+        lambda: locked_changes.append(controller.locked)
+    )
+
+    controller.acquire_automation_lock("zoom-share:1")
+
+    assert controller.enabled is False
+    assert controller.automation_locked is True
+    assert controller.locked is True
+    assert controller.allow_manual_projection_change() is False
+    assert controller.request_seek(500) is False
+    assert controller.eventFilter(
+        media,
+        QEvent(QEvent.Type.MouseButtonPress),
+    ) is True
+    assert controller.eventFilter(
+        media,
+        QEvent(QEvent.Type.MouseButtonRelease),
+    ) is True
+    assert controller.eventFilter(
+        media,
+        QEvent(QEvent.Type.MouseButtonDblClick),
+    ) is True
+    assert controller.eventFilter(media, QEvent(QEvent.Type.MouseMove)) is False
+
+    controller.release_automation_lock("zoom-share:1")
+
+    assert controller.automation_locked is False
+    assert controller.locked is False
+    assert controller.allow_manual_projection_change() is True
+    assert locked_changes == [True, False]
+
+
+def test_automation_locks_are_owner_scoped_and_idempotent() -> None:
+    controller = PlaybackProtectionController(_Settings(), _Media())
+
+    controller.acquire_automation_lock("zoom-share:1")
+    controller.acquire_automation_lock("zoom-share:1")
+    controller.acquire_automation_lock("zoom-share:2")
+    controller.release_automation_lock("zoom-share:1")
+
+    assert controller.automation_locked is True
+    assert controller.locked is True
+
+    controller.release_automation_lock("zoom-share:2")
+
+    assert controller.automation_locked is False
+    assert controller.locked is False
+
+
+def test_automation_lock_consumes_clicks_at_the_application_boundary() -> None:
+    application = QApplication.instance()
+    if application is None:
+        application = QApplication([])
+    elif not isinstance(application, QApplication):
+        pytest.skip("Application-wide pointer filtering requires QApplication")
+
+    controller = PlaybackProtectionController(_Settings(), _Media())
+    button = QPushButton("Target")
+    clicks: list[bool] = []
+    button.clicked.connect(lambda: clicks.append(True))
+    button.show()
+
+    controller.acquire_automation_lock("zoom-share:1")
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert clicks == []
+
+    controller.release_automation_lock("zoom-share:1")
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert clicks == [True]
+    button.close()

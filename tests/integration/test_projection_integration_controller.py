@@ -76,6 +76,18 @@ class _ProjectionBarStub:
         self.auto_share_cancellations += 1
 
 
+class _PlaybackProtectionStub:
+    def __init__(self):
+        self.owners: set[str] = set()
+        self.locked_during_share_start: list[bool] = []
+
+    def acquire_automation_lock(self, owner: str) -> None:
+        self.owners.add(owner)
+
+    def release_automation_lock(self, owner: str) -> None:
+        self.owners.discard(owner)
+
+
 class _AutoKeyProjectionStub:
     def __init__(self):
         self.visual_states = []
@@ -92,6 +104,7 @@ class _WindowStub:
         self._obs_service = _ObsServiceStub(obs_connected, "Camera")
         self.obs_scene_session = ObsSceneSession()
         self.proj_bar = _ProjectionBarStub()
+        self.playback_protection = _PlaybackProtectionStub()
         self._auto_key_projection = _AutoKeyProjectionStub()
         self._visible = visible
         self.started_shares = []
@@ -106,6 +119,9 @@ class _WindowStub:
         return [_ProjectionWindowStub(self._visible)]
 
     def start_auto_share(self, hotkey, click_x, click_y, *, movement_warning=None):
+        self.playback_protection.locked_during_share_start.append(
+            bool(self.playback_protection.owners)
+        )
         self.started_shares.append((hotkey, click_x, click_y))
         if movement_warning is not None:
             movement_warning()
@@ -132,6 +148,7 @@ def _controller(window):
             obs_settings=window._obs_settings,
             auto_share_settings=window._auto_share_settings,
             projection_bar=window.proj_bar,
+            interaction_guard=window.playback_protection,
             auto_share_finished=lambda *_args: None,
             start_auto_share=window.start_auto_share,
             stop_auto_share=window.stop_auto_share,
@@ -253,12 +270,14 @@ def test_auto_share_uses_injected_share_actions():
     controller.sync_zoom_share(active=True, visual=True)
     assert window.share_started.wait(1)
     assert window.started_shares == [("Alt+S", 300, 250)]
+    assert window.playback_protection.locked_during_share_start == [True]
     assert window.mouse_interference_warnings == 1
 
     controller.sync_zoom_share(active=False, visual=True)
     assert window.share_stopped.wait(1)
     assert window.stopped_shares == ["Alt+S"]
     controller.cleanup()
+    assert window.playback_protection.owners == set()
 
 
 def test_visual_video_waits_for_pending_auto_share_and_resumes_on_success():
@@ -278,6 +297,7 @@ def test_visual_video_waits_for_pending_auto_share_and_resumes_on_success():
 
     assert window.proj_bar.auto_share_resolutions == [True]
     assert controller._auto_share_start_pending is False
+    assert window.playback_protection.owners == set()
     controller.cleanup()
 
 
@@ -296,6 +316,7 @@ def test_failed_auto_share_releases_video_without_successful_resume():
 
     assert window.proj_bar.auto_share_resolutions == [False]
     assert controller._auto_share_active is False
+    assert window.playback_protection.owners == set()
     controller.cleanup()
 
 
@@ -334,10 +355,35 @@ def test_auto_share_ignores_stale_worker_result():
     controller = _controller(window)
     controller._auto_share_generation = 2
     controller._auto_share_active = False
+    controller._acquire_auto_share_interaction_lock(1)
 
     controller.on_auto_share_finished(1, True, True)
 
     assert controller._auto_share_active is False
+    assert window.playback_protection.owners == set()
+
+
+def test_auto_share_releases_interaction_lock_when_worker_launch_fails():
+    window = _WindowStub(visible=True)
+    window._auto_share_settings = _AutoShareSettingsStub(
+        enabled=True,
+        hotkey="Alt+S",
+    )
+    controller = _controller(window)
+
+    def _reject_worker(_name, _target):
+        raise RuntimeError("worker pool stopped")
+
+    controller._launch_auto_share_worker = _reject_worker
+
+    assert controller.prepare_video_playback_for_auto_share() is True
+    controller.sync_zoom_share(active=True, visual=True)
+
+    assert window.playback_protection.owners == set()
+    assert window.proj_bar.auto_share_resolutions == [False]
+    assert controller._auto_share_active is False
+    assert controller._auto_share_start_pending is False
+    controller.cleanup()
 
 
 def test_auto_share_failed_stop_restores_active_state():
@@ -354,6 +400,7 @@ def test_auto_share_failed_stop_restores_active_state():
 def test_cleanup_joins_owned_auto_share_workers():
     window = _WindowStub()
     controller = _controller(window)
+    controller._acquire_auto_share_interaction_lock(1)
     release = threading.Event()
     started = threading.Event()
 
@@ -369,6 +416,7 @@ def test_cleanup_joins_owned_auto_share_workers():
 
     assert window.auto_share_workers.is_stopped
     assert window.auto_share_workers.active_count == 0
+    assert window.playback_protection.owners == set()
 
 
 def test_raise_visible_projection_windows_uses_injected_focus_action():

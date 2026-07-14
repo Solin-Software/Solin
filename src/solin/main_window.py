@@ -603,6 +603,7 @@ class MainWindow(QMainWindow):
                 obs_settings=self._obs_settings,
                 auto_share_settings=self._auto_share_settings,
                 projection_bar=self.proj_bar,
+                interaction_guard=self.playback_protection,
                 auto_share_finished=self._auto_share_finished.emit,
                 start_auto_share=execute_start_share,
                 stop_auto_share=execute_stop_share,
