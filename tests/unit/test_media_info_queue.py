@@ -29,6 +29,19 @@ def test_scheduler_limits_concurrency_and_deduplicates_indices():
     assert scheduler.active == {1: second, 2: third}
 
 
+def test_scheduler_preserves_duration_requirement_on_job() -> None:
+    scheduler = MediaInfoScheduler()
+
+    job = scheduler.enqueue(
+        0,
+        "clip.mp4",
+        "video",
+        require_duration=True,
+    )
+
+    assert job.require_duration is True
+
+
 def test_clear_rejects_results_from_an_older_generation():
     scheduler = MediaInfoScheduler()
     old_job = scheduler.enqueue(0, "old.mp4", "video")

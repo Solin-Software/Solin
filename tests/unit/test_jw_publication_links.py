@@ -74,6 +74,7 @@ def test_select_pub_media_file_prefers_highest_video_label() -> None:
                     {
                         "label": "720p",
                         "title": "Best Video",
+                        "duration": 12.5,
                         "file": {"url": "https://example.test/video-720.mp4"},
                         "images": {"sm": {"url": "https://example.test/thumb.jpg"}},
                     },
@@ -94,6 +95,52 @@ def test_select_pub_media_file_prefers_highest_video_label() -> None:
     assert media_file.title == "Best Video"
     assert media_file.thumbnail_url == "https://example.test/thumb.jpg"
     assert media_file.label == "720p"
+    assert media_file.duration_ticks == 125_000_000
+
+
+def test_select_pub_media_file_uses_nested_file_duration_fallback() -> None:
+    data = {
+        "files": {
+            "T": {
+                "MP4": [
+                    {
+                        "file": {
+                            "url": "https://example.test/video.mp4",
+                            "duration": "3.25",
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    media_file = select_pub_media_file(data, "T", VIDEO_FORMATS)
+
+    assert media_file is not None
+    assert media_file.duration_ticks == 32_500_000
+
+
+def test_select_pub_media_file_falls_back_after_invalid_item_duration() -> None:
+    data = {
+        "files": {
+            "T": {
+                "MP4": [
+                    {
+                        "duration": 0,
+                        "file": {
+                            "url": "https://example.test/video.mp4",
+                            "duration": 4.5,
+                        },
+                    }
+                ]
+            }
+        }
+    }
+
+    media_file = select_pub_media_file(data, "T", VIDEO_FORMATS)
+
+    assert media_file is not None
+    assert media_file.duration_ticks == 45_000_000
 
 
 def test_build_pub_media_url_encodes_query_params() -> None:

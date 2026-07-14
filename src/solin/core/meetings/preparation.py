@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum, IntEnum
@@ -26,12 +27,51 @@ from .tree_store import (
     MeetingTreeStore,
     make_meeting_tree_key,
 )
-from .tree_types import Node, iter_nodes
+from .tree_types import Node
 
 if TYPE_CHECKING:
     from .publications import JwpubService
 
 log = logging.getLogger(__name__)
+
+
+def _iter_media_with_download_eligibility(
+    nodes: list[Node],
+    *,
+    inside_subsection: bool = False,
+) -> Iterator[tuple[Node, bool]]:
+    """Walk media with its automatic-download decision and ancestor context."""
+    for node in nodes:
+        node_type = node.get("type")
+        nested_in_subsection = inside_subsection or node_type == "subsection"
+        if node_type == "media":
+            yield node, not (
+                nested_in_subsection and bool(node.get("meeting_generated"))
+            )
+        children = node.get("children") or []
+        if isinstance(children, list):
+            yield from _iter_media_with_download_eligibility(
+                children,
+                inside_subsection=nested_in_subsection,
+            )
+
+
+def _automatic_download_urls(nodes: list[Node]) -> set[str]:
+    return {
+        url
+        for node, eligible in _iter_media_with_download_eligibility(nodes)
+        if eligible
+        if (url := _remote_media_url(node))
+    }
+
+
+def _remote_media_url(node: Node) -> str:
+    resolved = str(node.get("resolved_url") or "")
+    if resolved.startswith(("http://", "https://")):
+        return resolved
+    ref = node.get("media_ref") or {}
+    file_path = str(ref.get("file_path") or "") if isinstance(ref, dict) else ""
+    return file_path if file_path.startswith(("http://", "https://")) else ""
 
 
 class MeetingPreparationPriority(IntEnum):
@@ -461,9 +501,9 @@ class MeetingPreparationService(QObject):
     ) -> None:
         ready_urls: set[str] = set()
         pending = job.pending_by_tree.setdefault(snapshot.tree_key, set())
-        for node in iter_nodes(snapshot.nodes):
-            if node.get("type") != "media":
-                continue
+        for node, automatic_download in _iter_media_with_download_eligibility(
+            snapshot.nodes
+        ):
             url = self._remote_url(node)
             ref = node.get("media_ref") or {}
             has_jw_identity = isinstance(ref, dict) and bool(
@@ -474,12 +514,15 @@ class MeetingPreparationService(QObject):
                 if isinstance(ref, dict) and has_jw_identity
                 else ()
             )
-            if url:
+            if url and automatic_download:
                 ready_urls.add(url)
             if url and (
-                self._cache_manager.is_cached(url)
-                or not has_jw_identity
+                not has_jw_identity
                 or signature in job.resolved_signatures
+                or (
+                    self._cache_manager.is_cached(url)
+                    and self._has_duration_metadata(node)
+                )
             ):
                 continue
             if not isinstance(ref, dict) or not has_jw_identity:
@@ -502,12 +545,23 @@ class MeetingPreparationService(QObject):
 
     @staticmethod
     def _remote_url(node: Node) -> str:
-        resolved = str(node.get("resolved_url") or "")
-        if resolved.startswith(("http://", "https://")):
-            return resolved
+        return _remote_media_url(node)
+
+    @staticmethod
+    def _has_duration_metadata(node: Node) -> bool:
+        media_type = str(node.get("media_type") or "").lower()
         ref = node.get("media_ref") or {}
-        file_path = str(ref.get("file_path") or "") if isinstance(ref, dict) else ""
-        return file_path if file_path.startswith(("http://", "https://")) else ""
+        mime_type = (
+            str(ref.get("mime_type") or "").lower()
+            if isinstance(ref, dict)
+            else ""
+        )
+        if media_type == "image" or mime_type.startswith("image/"):
+            return True
+        try:
+            return int(node.get("base_duration_ticks") or 0) > 0
+        except (TypeError, ValueError):
+            return False
 
     @staticmethod
     def _resolution_signature(
@@ -625,6 +679,10 @@ class MeetingPreparationService(QObject):
         url = str(result.get("url") or "")
         title = str(result.get("title") or "")
         thumbnail = str(result.get("thumbnail") or "")
+        try:
+            duration_ticks = max(0, int(result.get("duration_ticks") or 0))
+        except (TypeError, ValueError):
+            duration_ticks = 0
         touched: set[tuple[MeetingPreparationKey, str, str]] = set()
         for target in pending.targets:
             job = self._jobs.get(target.key)
@@ -641,6 +699,8 @@ class MeetingPreparationService(QObject):
                     patch["media_ref_label"] = title
                 if thumbnail:
                     patch["thumbnail_url"] = thumbnail
+                if duration_ticks:
+                    patch["base_duration_ticks"] = duration_ticks
                 job.patches_by_tree.setdefault(target.tree_key, {})[target.node_id] = (
                     target.identity,
                     patch,
@@ -663,7 +723,7 @@ class MeetingPreparationService(QObject):
                 continue
             if snapshot is not None:
                 self.tree_changed.emit(key, pub_type, snapshot)
-                self._prefetch_urls(job, {self._remote_url(node) for node in iter_nodes(snapshot.nodes)})
+                self._prefetch_urls(job, _automatic_download_urls(snapshot.nodes))
             self._emit_states(key)
         self._dispatch_resolution()
 

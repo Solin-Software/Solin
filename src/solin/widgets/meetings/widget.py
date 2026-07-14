@@ -83,6 +83,9 @@ from .visuals import (
 from .week_nav import WeekNavBar, WeekPicker
 from ...ui.media_info import MediaInfoQueue
 
+
+_POST_FRAME_TASK_FALLBACK_MS = 500
+
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder import WatchedFolderWatcher
@@ -183,6 +186,8 @@ class StudyDetailView(QWidget):
         self._watched_folder = watched_folder
         self._qml_pointer_depth = 0
         self._disposed = False
+        self._post_frame_tasks_pending = False
+        self._post_frame_window = None
         self.setAcceptDrops(True)
         self._build()
 
@@ -210,6 +215,12 @@ class StudyDetailView(QWidget):
             self.controller.storageSaved.connect(self._meeting_tree_saved_handler)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
         self.controller.set_sync_root(self._watched_folder)
+        loaded_snapshot = self.controller.load_saved_tree(
+            self._saved_snapshot,
+            start_media_requests=False,
+        )
+        if loaded_snapshot is not None:
+            self._saved_snapshot = loaded_snapshot
 
         self.catalog_bridge = JWMediaCatalogBridge(
             self._jw_catalog_service_factory,
@@ -242,12 +253,49 @@ class StudyDetailView(QWidget):
         )
         self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
-        loaded_snapshot = self.controller.load_saved_tree(self._saved_snapshot)
-        if loaded_snapshot is not None:
-            self._saved_snapshot = loaded_snapshot
+        self._schedule_post_frame_tasks()
+        self._sync_catalog_placement()
+
+    def _schedule_post_frame_tasks(self) -> None:
+        if self._disposed or self._post_frame_tasks_pending:
+            return
+        self._post_frame_tasks_pending = True
+        self._post_frame_window = self.qml_widget.quickWindow()
+        if self._post_frame_window is not None:
+            self._post_frame_window.frameSwapped.connect(
+                self._on_first_detail_frame
+            )
+            self.qml_widget.update()
+        QTimer.singleShot(
+            _POST_FRAME_TASK_FALLBACK_MS,
+            self._run_post_frame_tasks,
+        )
+
+    def _on_first_detail_frame(self) -> None:
+        self._disconnect_post_frame_signal()
+        QTimer.singleShot(0, self._run_post_frame_tasks)
+
+    def _disconnect_post_frame_signal(self) -> None:
+        window = self._post_frame_window
+        self._post_frame_window = None
+        if window is None:
+            return
+        try:
+            window.frameSwapped.disconnect(self._on_first_detail_frame)
+        except (RuntimeError, TypeError):
+            log_ignored_exception(
+                __name__,
+                "Could not disconnect meeting detail frame callback",
+            )
+
+    def _run_post_frame_tasks(self) -> None:
+        if self._disposed or not self._post_frame_tasks_pending:
+            return
+        self._post_frame_tasks_pending = False
+        self._disconnect_post_frame_signal()
+        self.controller.start_media_enrichment()
         if self._watched_folder:
             self.controller.inject_linked_folder_media(self._watched_folder)
-        self._sync_catalog_placement()
 
     def update_snapshot(self, snapshot: MeetingTreeSnapshot) -> None:
         if self._disposed or snapshot.pub_type != self._pub:
@@ -257,12 +305,14 @@ class StudyDetailView(QWidget):
             and snapshot.revision <= self._saved_snapshot.revision
         ):
             return
-        loaded_snapshot = self.controller.load_saved_tree(snapshot)
+        loaded_snapshot = self.controller.load_saved_tree(
+            snapshot,
+            start_media_requests=False,
+        )
         if loaded_snapshot is None:
             return
         self._saved_snapshot = loaded_snapshot
-        if self._watched_folder:
-            self.controller.inject_linked_folder_media(self._watched_folder)
+        self._schedule_post_frame_tasks()
         self._sync_catalog_placement()
 
     def _sync_catalog_placement(self):
@@ -389,6 +439,8 @@ class StudyDetailView(QWidget):
         if self._disposed:
             return
         self._disposed = True
+        self._post_frame_tasks_pending = False
+        self._disconnect_post_frame_signal()
         if hasattr(self, "controller"):
             self.controller.cleanup()
         if hasattr(self, "catalog_bridge"):

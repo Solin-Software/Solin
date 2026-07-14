@@ -79,6 +79,7 @@ def test_resolve_meeting_video_returns_simple_result(monkeypatch):
                 url="https://example.test/song.mp4",
                 title="Song",
                 thumbnail_url="https://example.test/thumb.jpg",
+                duration_ticks=123_000_000,
             )
 
     monkeypatch.setattr(publication_archive, "_PUBLICATION_MEDIA_RESOLVER", Resolver())
@@ -87,4 +88,5 @@ def test_resolve_meeting_video_returns_simple_result(monkeypatch):
         "url": "https://example.test/song.mp4",
         "title": "Song",
         "thumbnail": "https://example.test/thumb.jpg",
+        "duration_ticks": 123_000_000,
     }

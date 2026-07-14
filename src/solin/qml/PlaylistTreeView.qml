@@ -59,10 +59,22 @@ Item {
     property var pendingCloudPatches: ({})
     property var pendingImageFramingPatches: ({})
 
-    MediaTrimDialog {
-        id: mediaTrimDialog
-        controller: root.playlistController
-        previewAudioEnabled: !root.playbackProtectionLocked
+    Loader {
+        id: mediaTrimLoader
+        active: false
+        property var pendingNode: null
+        onLoaded: {
+            if (pendingNode) {
+                item.openFor(pendingNode)
+                pendingNode = null
+            }
+        }
+        sourceComponent: Component {
+            MediaTrimDialog {
+                controller: root.playlistController
+                previewAudioEnabled: !root.playbackProtectionLocked
+            }
+        }
     }
 
     function picon(name, size, colorHex) {
@@ -71,6 +83,15 @@ Item {
 
     function iconHex(colorValue) {
         return String(colorValue).replace("#", "")
+    }
+
+    function openMediaTrim(node) {
+        if (mediaTrimLoader.item) {
+            mediaTrimLoader.item.openFor(node)
+            return
+        }
+        mediaTrimLoader.pendingNode = node
+        mediaTrimLoader.active = true
     }
 
     function alphaColor(colorValue, alphaValue) {
@@ -2051,7 +2072,7 @@ Item {
                                                  && !mediaRoot.isMissing
                                         text: qsTranslate("MediaTrimDialog", "Start and end times")
                                         icon.source: root.picon("media_trim", 13, root.iconHex(root.textMuted))
-                                        onTriggered: mediaTrimDialog.openFor(mediaRoot.node)
+                                        onTriggered: root.openMediaTrim(mediaRoot.node)
                                         contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                                         background: MenuBg { hovered: parent.hovered }
                                     }

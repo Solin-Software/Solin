@@ -346,6 +346,33 @@ def test_controller_load_saved_tree_uses_snapshot_nodes_without_saving_canonical
     assert controller.stateChanged.calls == 1
 
 
+def test_controller_can_defer_media_enrichment_until_detail_is_visible() -> None:
+    enrichment_calls: list[str] = []
+    controller = SimpleNamespace(
+        _refresh_sync_availability=lambda: None,
+        _load_sync_record=lambda: None,
+        _candidate_sync_folder=lambda: "",
+        _linked_folder_availability_signature=lambda: (),
+        _start_media_requests=lambda: enrichment_calls.append("started"),
+        _meeting_folder_pending_sources=set(),
+        chromeChanged=_Signal(),
+        syncStateChanged=_Signal(),
+        stateChanged=_Signal(),
+    )
+
+    MeetingTreeController.load_saved_tree(
+        controller,
+        _snapshot("wt"),
+        start_media_requests=False,
+    )
+
+    assert enrichment_calls == []
+
+    MeetingTreeController.start_media_enrichment(controller)
+
+    assert enrichment_calls == ["started"]
+
+
 def test_controller_flushes_pending_framing_and_reloads_latest_revision(tmp_path) -> None:
     store = MeetingTreeStore(tmp_path / "meeting_trees.json")
     incoming = store.save(

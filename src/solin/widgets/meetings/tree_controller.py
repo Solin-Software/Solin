@@ -28,6 +28,7 @@ from PySide6.QtCore import (
     QCoreApplication,
     QTimer,
     QUrl,
+    Qt,
     Signal,
     Slot,
 )
@@ -143,7 +144,7 @@ if TYPE_CHECKING:
     from ...core.rendering.document_conversion import DocumentConversionService
 
 _BIG_INDEX = 2**31 - 1
-_LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS = (150, 350, 750, 1_500, 3_000)
+_DERIVED_MEDIA_SAVE_DEBOUNCE_MS = 200
 _SYNC_SAVE_DEBOUNCE_MS = 180
 _SYNC_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
 _SYNC_SAVE_RETRY_BUDGET_SECONDS = 60.0
@@ -178,15 +179,16 @@ def _reset_media_request_queue(controller: Any) -> None:
     queue = getattr(controller, "_media_request_queue", None)
     if queue is not None:
         queue.clear()
-    retry_timer = getattr(controller, "_local_image_thumb_retry_timer", None)
-    if retry_timer is not None:
-        retry_timer.stop()
-    retry_due = getattr(controller, "_local_image_thumb_retry_due", None)
-    if retry_due is not None:
-        retry_due.clear()
-    retry_attempts = getattr(controller, "_local_image_thumb_retry_attempts", None)
-    if retry_attempts is not None:
-        retry_attempts.clear()
+    info_queue = getattr(controller, "_info_queue", None)
+    clear_info = getattr(info_queue, "clear", None)
+    if callable(clear_info):
+        clear_info()
+    requests = getattr(controller, "_info_request_by_token", None)
+    if requests is not None:
+        requests.clear()
+    active = getattr(controller, "_active_info_requests", None)
+    if active is not None:
+        active.clear()
 
 
 def _emit_controller_state_changed(controller: Any) -> None:
@@ -338,7 +340,7 @@ class MeetingTreeController(QObject):
         self._info_queue = media_info_queue_factory(self)
         self._info_queue.info_ready.connect(self._on_info_ready)
         self._info_queue.duration_ready.connect(self._on_duration_ready)
-        self._token_to_node_id: dict[int, str] = {}
+        self._info_request_by_token: dict[int, tuple[str, str]] = {}
         self._active_info_requests: set[tuple[str, str]] = set()
         self._next_token = 1
         self._resolve_to_node_id: dict[str, str] = {}
@@ -349,12 +351,17 @@ class MeetingTreeController(QObject):
         self._media_request_timer.setSingleShot(True)
         self._media_request_timer.setInterval(0)
         self._media_request_timer.timeout.connect(self._drain_media_request_queue)
-        self._local_image_thumb_retry_due: dict[str, float] = {}
-        self._local_image_thumb_retry_attempts: dict[str, int] = {}
-        self._local_image_thumb_retry_timer = QTimer(self)
-        self._local_image_thumb_retry_timer.setSingleShot(True)
-        self._local_image_thumb_retry_timer.timeout.connect(
-            self._drain_local_image_thumb_retries
+        self._derived_media_patches: dict[
+            str,
+            tuple[tuple, dict[str, Any]],
+        ] = {}
+        self._derived_media_save_timer = QTimer(self)
+        self._derived_media_save_timer.setSingleShot(True)
+        self._derived_media_save_timer.setInterval(
+            _DERIVED_MEDIA_SAVE_DEBOUNCE_MS
+        )
+        self._derived_media_save_timer.timeout.connect(
+            self._flush_derived_media_patches
         )
         self._image_framing_save_pending = False
         self._image_framing_save_timer = QTimer(self)
@@ -495,9 +502,13 @@ class MeetingTreeController(QObject):
     def load_saved_tree(
         self,
         snapshot: MeetingTreeSnapshot,
+        *,
+        start_media_requests: bool = True,
     ) -> MeetingTreeSnapshot | None:
         """Load an already persisted meeting tree without building empty canonical data."""
         if not MeetingTreeController._flush_image_framing_save(self):
+            return None
+        if not MeetingTreeController._flush_derived_media_patches(self):
             return None
         store = getattr(self, "_store", None)
         latest_lookup = getattr(store, "snapshot", None)
@@ -572,12 +583,17 @@ class MeetingTreeController(QObject):
             self._nodes = clone_nodes(snapshot.nodes)
         self._meeting_folder_pending_sources.clear()
         self._linked_folder_availability = self._linked_folder_availability_signature()
-        self._start_media_requests()
+        if start_media_requests:
+            MeetingTreeController.start_media_enrichment(self)
         self.chromeChanged.emit()
         self.syncStateChanged.emit()
         _emit_controller_state_changed(self)
         persisted = latest_lookup(self._tree_key) if callable(latest_lookup) else None
         return persisted or snapshot
+
+    def start_media_enrichment(self) -> None:
+        """Start local-only presentation metadata work after the detail is visible."""
+        self._start_media_requests()
 
     def load_memorial(self, md: MemorialData) -> None:
         canonical = self._builder.build_memorial(md)
@@ -1174,6 +1190,7 @@ class MeetingTreeController(QObject):
 
     def cleanup(self) -> None:
         self._flush_image_framing_save()
+        self._flush_derived_media_patches()
         self._sync_save_timer.stop()
         final_saves: list[Future[MeetingSyncRecord]] = []
         for request in self._pending_sync_saves.values():
@@ -2195,6 +2212,12 @@ class MeetingTreeController(QObject):
             log_ignored_exception(__name__, "Could not save meeting tree local cache")
             self.storageSaveFailed.emit(self._tree_key, str(exc))
             return False
+        derived_timer = getattr(self, "_derived_media_save_timer", None)
+        if derived_timer is not None:
+            derived_timer.stop()
+        derived_patches = getattr(self, "_derived_media_patches", None)
+        if derived_patches is not None:
+            derived_patches.clear()
         self.storageSaved.emit(self._tree_key)
         return True
 
@@ -2726,6 +2749,17 @@ class MeetingTreeController(QObject):
         node["thumbnail_local_path"] = os.fspath(path)
         return os.fspath(path)
 
+    @staticmethod
+    def _bounded_thumbnail(pixmap: QPixmap) -> QPixmap:
+        if pixmap.width() <= 400 and pixmap.height() <= 225:
+            return pixmap
+        return pixmap.scaled(
+            400,
+            225,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+
     def _thumb_source_for(self, item_id: str) -> str:
         node = self._find_node(item_id)
         version = self._thumb_versions.get(item_id, 0)
@@ -2743,7 +2777,15 @@ class MeetingTreeController(QObject):
         media_type = (node or {}).get("media_type") or self._media_type_from_ref(ref)
         if media_type != "image":
             return ""
-        return _local_file_url(self._url_for_node(node))
+        return _local_file_url(self._local_media_path(node))
+
+    def _local_media_path(self, node: Node | None) -> str:
+        url = self._url_for_node(node)
+        if not url:
+            return ""
+        if MediaCacheManager.is_remote(url):
+            return self._media_cache_manager.cached_path(url) or ""
+        return url if os.path.exists(url) else ""
 
     def _url_for_node_id(self, node_id: str) -> str:
         node = self._find_node(node_id)
@@ -2791,57 +2833,13 @@ class MeetingTreeController(QObject):
             self._media_request_timer.start()
 
     def _drain_media_request_queue(self) -> None:
-        batch_size = 24
+        batch_size = 2
         for _ in range(min(batch_size, len(self._media_request_queue))):
             self._start_media_request(self._media_request_queue.popleft())
         if self._media_request_queue:
             self._media_request_timer.start()
         else:
             self._media_request_timer.stop()
-
-    def _schedule_local_image_thumb_retry(self, item_id: str) -> None:
-        if not item_id or item_id in self._local_image_thumb_retry_due:
-            return
-        attempt = self._local_image_thumb_retry_attempts.get(item_id, 0)
-        if attempt >= len(_LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS):
-            return
-        delay_ms = _LOCAL_IMAGE_THUMB_RETRY_DELAYS_MS[attempt]
-        self._local_image_thumb_retry_attempts[item_id] = attempt + 1
-        self._local_image_thumb_retry_due[item_id] = (
-            time.monotonic() + (delay_ms / 1000.0)
-        )
-        self._arm_local_image_thumb_retry_timer()
-
-    def _clear_local_image_thumb_retry(self, item_id: str) -> None:
-        self._local_image_thumb_retry_due.pop(item_id, None)
-        self._local_image_thumb_retry_attempts.pop(item_id, None)
-
-    def _arm_local_image_thumb_retry_timer(self) -> None:
-        if not self._local_image_thumb_retry_due:
-            self._local_image_thumb_retry_timer.stop()
-            return
-        now = time.monotonic()
-        next_due = min(self._local_image_thumb_retry_due.values())
-        delay_ms = max(0, int((next_due - now) * 1000))
-        self._local_image_thumb_retry_timer.start(delay_ms)
-
-    def _drain_local_image_thumb_retries(self) -> None:
-        if not self._local_image_thumb_retry_due:
-            return
-        now = time.monotonic()
-        ready = [
-            item_id
-            for item_id, due in self._local_image_thumb_retry_due.items()
-            if due <= now
-        ]
-        for item_id in ready:
-            self._local_image_thumb_retry_due.pop(item_id, None)
-            node = self._find_node(item_id)
-            if not node or self._has_local_thumbnail(node):
-                self._clear_local_image_thumb_retry(item_id)
-                continue
-            self._start_media_request(node)
-        self._arm_local_image_thumb_retry_timer()
 
     def _start_media_request(self, node: Node) -> None:
         item_id = node.get("id", "")
@@ -2850,32 +2848,26 @@ class MeetingTreeController(QObject):
         ref = node.get("media_ref") or {}
         media_type = node.get("media_type") or self._media_type_from_ref(ref)
         url = self._url_for_node(node)
+        local_path = self._local_media_path(node)
         has_thumb = self._has_local_thumbnail(node)
         has_duration = media_type == "image" or self._duration_ticks(node) > 0
 
-        if media_type == "image" and url and os.path.exists(url):
-            if not has_thumb:
-                pix = QPixmap(url)
-                if not pix.isNull():
-                    self._thumb_cache[item_id] = pix
-                    self._save_thumbnail_for_node(node, pix)
-                    self._thumb_versions[item_id] = self._thumb_versions.get(item_id, 0) + 1
-                    self._save()
-                    self._clear_local_image_thumb_retry(item_id)
-                    self._emit_media_changed(item_id)
-                else:
-                    self._schedule_local_image_thumb_retry(item_id)
+        if media_type == "image":
+            if local_path:
+                self._emit_media_changed(item_id)
+            if url:
+                self._emit_cloud_for_node(item_id)
             return
 
         if url:
-            thumb_url = str(node.get("thumbnail_url") or "")
-            if not has_thumb and thumb_url:
-                self._queue_info(item_id, thumb_url, "image", purpose="thumb")
-            if not has_thumb and not thumb_url:
-                self._queue_info(item_id, url, media_type, purpose="metadata")
-            elif not has_duration:
-                self._queue_info(item_id, url, media_type, purpose="metadata")
             self._emit_cloud_for_node(item_id)
+            if local_path and (not has_thumb or not has_duration):
+                self._queue_info(
+                    item_id,
+                    local_path,
+                    media_type,
+                    purpose="metadata",
+                )
             return
 
         if (
@@ -2899,7 +2891,7 @@ class MeetingTreeController(QObject):
             return
         token = self._next_token
         self._next_token += 1
-        self._token_to_node_id[token] = item_id
+        self._info_request_by_token[token] = request_key
         self._active_info_requests.add(request_key)
         self._info_queue.request(
             token,
@@ -2932,35 +2924,51 @@ class MeetingTreeController(QObject):
                 node.pop("thumbnail_local_path", None)
                 node.pop("thumbnail_cache_key", None)
             node["thumbnail_url"] = thumb_url
-        target = thumb_url or url
-        if target:
-            media_type = "image" if thumb_url else (node.get("media_type") or "video")
-            purpose = "thumb" if thumb_url else "metadata"
-            self._queue_info(item_id, target, media_type, purpose=purpose)
-        if url and not self._duration_ticks(node) and target != url:
-            self._queue_info(item_id, url, node.get("media_type") or "video", purpose="metadata")
         self._save()
         self._emit_media_changed(item_id)
         self._emit_cloud_for_node(item_id)
+        self._start_media_requests([node])
 
     @Slot(int, object, str)
     def _on_info_ready(self, token: int, pixmap: QPixmap, title: str):
-        item_id = self._token_to_node_id.get(token, "")
+        request_key = self._info_request_by_token.pop(token, None)
+        if request_key is None:
+            return
+        self._active_info_requests.discard(request_key)
+        item_id, _purpose = request_key
         if not item_id:
             return
         node = self._find_node(item_id)
         if not node:
             return
+        patch: dict[str, Any] = {}
         if pixmap and not pixmap.isNull():
-            self._thumb_cache[item_id] = pixmap
-            self._save_thumbnail_for_node(node, pixmap)
-            self._thumb_versions[item_id] = self._thumb_versions.get(item_id, 0) + 1
-        if title and self._should_accept_resolved_title(node):
+            thumbnail = self._bounded_thumbnail(pixmap)
+            self._thumb_cache[item_id] = thumbnail
+            if path := self._save_thumbnail_for_node(node, thumbnail):
+                patch["thumbnail_local_path"] = path
+                patch["thumbnail_cache_key"] = str(
+                    node.get("thumbnail_cache_key") or ""
+                )
+                self._thumb_versions[item_id] = (
+                    self._thumb_versions.get(item_id, 0) + 1
+                )
+        if (
+            title
+            and self._should_accept_resolved_title(node)
+            and str(node.get("title") or "") != title
+        ):
             node["title"] = title
             node["auto_title"] = False
             node.setdefault("media_ref", {})["label"] = title
-        self._save()
-        self._emit_media_changed(item_id)
+            patch.update({
+                "title": title,
+                "auto_title": False,
+                "media_ref_label": title,
+            })
+        if patch:
+            self._queue_derived_media_patch(node, patch)
+            self._emit_media_changed(item_id)
 
     def _should_accept_resolved_title(self, node: Node) -> bool:
         return should_accept_resolved_media_title(
@@ -2970,22 +2978,71 @@ class MeetingTreeController(QObject):
 
     @Slot(int, int)
     def _on_duration_ready(self, token: int, duration_ms: int):
-        item_id = self._token_to_node_id.get(token, "")
+        request_key = self._info_request_by_token.get(token)
+        item_id = request_key[0] if request_key is not None else ""
         if not item_id or duration_ms <= 0:
             return
         node = self._find_node(item_id)
         if not node:
             return
         ticks = int(duration_ms) * 10_000
-        if node.get("base_duration_ticks"):
+        if self._duration_ticks(node) > 0:
             return
         node["base_duration_ticks"] = ticks
-        self._save()
+        self._queue_derived_media_patch(node, {"base_duration_ticks": ticks})
         self._emit_media_changed(item_id)
+
+    def _queue_derived_media_patch(
+        self,
+        node: Node,
+        patch: dict[str, Any],
+    ) -> None:
+        item_id = str(node.get("id") or "")
+        if not item_id or not patch:
+            return
+        identity = media_identity_signature(node)
+        current = self._derived_media_patches.get(item_id)
+        merged = dict(current[1]) if current and current[0] == identity else {}
+        merged.update(patch)
+        self._derived_media_patches[item_id] = (identity, merged)
+        self._derived_media_save_timer.start()
+
+    def _flush_derived_media_patches(self) -> bool:
+        timer = getattr(self, "_derived_media_save_timer", None)
+        if timer is not None:
+            timer.stop()
+        pending = getattr(self, "_derived_media_patches", None)
+        if not getattr(self, "_tree_key", "") or not pending:
+            return True
+        patches = pending
+        self._derived_media_patches = {}
+        try:
+            self._store.patch_media_batch(self._tree_key, patches)
+        except (OSError, UnicodeError, ValueError) as exc:
+            for item_id, entry in patches.items():
+                current = self._derived_media_patches.get(item_id)
+                if current is None or current[0] != entry[0]:
+                    self._derived_media_patches[item_id] = entry
+                    continue
+                merged = dict(entry[1])
+                merged.update(current[1])
+                self._derived_media_patches[item_id] = (entry[0], merged)
+            if timer is not None:
+                timer.start()
+            self.storageSaveFailed.emit(self._tree_key, str(exc))
+            return False
+        return True
 
     @Slot(str)
     def _on_cache_changed(self, url: str):
+        self._cloud_progress_by_url.pop(url, None)
         self._emit_cloud_for_url(url)
+        matching_nodes = [
+            node
+            for node in iter_nodes(self._nodes)
+            if node.get("type") == "media" and self._url_for_node(node) == url
+        ]
+        self._start_media_requests(matching_nodes)
 
     @Slot(str)
     def _on_cache_removed(self, path: str):

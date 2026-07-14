@@ -560,6 +560,7 @@ class MediaInfoExtractor(QObject):
     _TIMEOUT_MS    = 10_000
     _SEEK_WAIT_MS  =    800
     _COVER_WAIT_MS =    400
+    _DURATION_WAIT_MS = 750
 
     def __init__(self, index: int, url: str, parent=None):
         super().__init__(parent)
@@ -569,6 +570,9 @@ class MediaInfoExtractor(QObject):
         self._seek_confirmed = False
         self._done           = False
         self._cover_emitted  = False
+        self._duration_emitted = False
+        self._require_duration = False
+        self._pending_cover: QPixmap | None = None
         self._pending_frame: QPixmap | None = None
         self._meta_title: str = ""          # título lido dos metadados
 
@@ -592,11 +596,16 @@ class MediaInfoExtractor(QObject):
 
         self._t_cover = QTimer(self); self._t_cover.setSingleShot(True)
         self._t_cover.timeout.connect(self._emit_pending_frame)
+        self._t_duration = QTimer(self); self._t_duration.setSingleShot(True)
+        self._t_duration.timeout.connect(self._emit_pending_cover)
 
         src = (QUrl(url) if url.startswith(("http://", "https://"))
                else QUrl.fromLocalFile(url))
         self._player.setSource(src)
         self._player.play()
+
+    def set_require_duration(self, required: bool) -> None:
+        self._require_duration = bool(required)
 
     # ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -627,20 +636,49 @@ class MediaInfoExtractor(QObject):
                 pixmap = value
             if pixmap:
                 self._cover_emitted = True
-                self._done = True
                 self._pending_frame = None
-                self.info_ready.emit(self._index, pixmap, self._meta_title)
-                QTimer.singleShot(0, self._finish)
+                self._emit_duration_if_available(self._player.duration())
+                if self._require_duration and not self._duration_emitted:
+                    self._pending_cover = pixmap
+                    self._t_duration.start(self._DURATION_WAIT_MS)
+                else:
+                    self._complete_info(pixmap)
                 return
 
     def _on_duration(self, dur_ms: int):
-        if self._cover_emitted or self._done:
+        if self._done:
             return
         if dur_ms > 0 and self._seek_target < 0:
             self._t_seek.stop()
-            self.duration_ready.emit(self._index, dur_ms)
+            self._emit_duration_if_available(dur_ms)
+            if self._pending_cover is not None:
+                self._emit_pending_cover()
+                return
+            if self._cover_emitted:
+                return
             self._seek_target = max(2_000, min(dur_ms * 5 // 100, 10_000))
             self._player.setPosition(self._seek_target)
+
+    def _emit_duration_if_available(self, duration_ms: int) -> None:
+        if duration_ms <= 0 or self._duration_emitted:
+            return
+        self._duration_emitted = True
+        self.duration_ready.emit(self._index, duration_ms)
+
+    def _complete_info(self, pixmap: QPixmap) -> None:
+        if self._done:
+            return
+        self._done = True
+        self.info_ready.emit(self._index, pixmap, self._meta_title)
+        QTimer.singleShot(0, self._finish)
+
+    def _emit_pending_cover(self) -> None:
+        pixmap = self._pending_cover
+        self._pending_cover = None
+        if pixmap is None or pixmap.isNull():
+            return
+        self._emit_duration_if_available(self._player.duration())
+        self._complete_info(pixmap)
 
     def _on_position(self, pos_ms: int):
         if self._seek_confirmed or self._seek_target < 0:
@@ -669,6 +707,7 @@ class MediaInfoExtractor(QObject):
             return
         px = self._pending_frame
         self._pending_frame = None
+        self._emit_duration_if_available(self._player.duration())
         self._done = True
         self._finish()
         if px and not px.isNull():
@@ -682,15 +721,23 @@ class MediaInfoExtractor(QObject):
 
     def _on_error(self, _err, _msg):
         if not self._done:
+            if self._pending_cover is not None:
+                self._emit_pending_cover()
+                return
             self._done = True
             self._pending_frame = None
+            self._emit_duration_if_available(self._player.duration())
             self._finish()
             self.thumbnail_failed.emit(self._index)
 
     def _on_timeout(self):
         if not self._done:
+            if self._pending_cover is not None:
+                self._emit_pending_cover()
+                return
             self._done = True
             self._pending_frame = None
+            self._emit_duration_if_available(self._player.duration())
             self._finish()
             self.thumbnail_failed.emit(self._index)
 
@@ -699,10 +746,12 @@ class MediaInfoExtractor(QObject):
             return
         self._done = True
         self._pending_frame = None
+        self._pending_cover = None
         self._finish()
 
     def _finish(self):
         self._t_global.stop(); self._t_seek.stop(); self._t_cover.stop()
+        self._t_duration.stop()
         self._player.stop()
         self._player.setSource(QUrl())
         self.deleteLater()
@@ -985,6 +1034,9 @@ class MediaInfoQueue(QObject):
     Gerencia a extração de thumbnail + título em fila, com no máximo
     _MAX_CONCURRENT extratores simultâneos.
 
+    ``info_ready`` encerra a requisição. Quando houver duração disponível,
+    ``duration_ready`` é sempre emitido antes desse sinal terminal.
+
     Sinal principal:
       info_ready(index, pixmap, title)
         - pixmap válido = thumbnail encontrada
@@ -1145,7 +1197,12 @@ class MediaInfoQueue(QObject):
                     )
                 return
             if is_remote:
-                self._enqueue(index, url, media_type)
+                self._enqueue(
+                    index,
+                    url,
+                    media_type,
+                    require_duration=require_duration,
+                )
                 self._pump()
                 return
             self._cache[index] = (QPixmap(), "")
@@ -1172,12 +1229,22 @@ class MediaInfoQueue(QObject):
         if is_remote:
             cached_path = completed_cached_path(url, self._media_cache_dir)
             target = cached_path if cached_path else url
-            self._enqueue(index, target, media_type)
+            self._enqueue(
+                index,
+                target,
+                media_type,
+                require_duration=require_duration,
+            )
             self._pump()
             return
 
         # ── Local (vídeo ou áudio sem cover nos bytes) → fila ───────────────
-        self._enqueue(index, url, media_type)
+        self._enqueue(
+            index,
+            url,
+            media_type,
+            require_duration=require_duration,
+        )
         self._pump()
 
     def feed_live_frame(self, index: int, pixmap: QPixmap) -> bool:
@@ -1245,8 +1312,20 @@ class MediaInfoQueue(QObject):
 
     # ── Interno ───────────────────────────────────────────────────────────────
 
-    def _enqueue(self, index: int, url: str, media_type: str) -> None:
-        self._scheduler.enqueue(index, url, media_type)
+    def _enqueue(
+        self,
+        index: int,
+        url: str,
+        media_type: str,
+        *,
+        require_duration: bool = False,
+    ) -> None:
+        self._scheduler.enqueue(
+            index,
+            url,
+            media_type,
+            require_duration=require_duration,
+        )
 
     def _emit_info_later(
         self,
@@ -1316,7 +1395,11 @@ class MediaInfoQueue(QObject):
             )
             self._save_to_disk_cache(job.url, QPixmap(), "")
             self._cache[job.index] = (QPixmap(), "")
+            self.info_ready.emit(job.index, QPixmap(), "")
             return
+        configure_duration = getattr(ex, "set_require_duration", None)
+        if callable(configure_duration):
+            configure_duration(job.require_duration)
         self._extractors[job.index] = ex
         extractor_signals = cast(Any, ex)
         extractor_signals.info_ready.connect(
@@ -1399,6 +1482,7 @@ class MediaInfoQueue(QObject):
             self._duration_cache.get(index, 0),
         )
         self._cache[index] = (QPixmap(), "")
+        self.info_ready.emit(index, QPixmap(), "")
         self._pump()
 
 

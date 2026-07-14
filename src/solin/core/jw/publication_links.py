@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,7 @@ class PubMediaFile:
     checksum: str = ""
     thumbnail_url: str = ""
     label: str = ""
+    duration_ticks: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +230,21 @@ def _pub_media_file_from_item(data: dict, item: dict) -> PubMediaFile | None:
         checksum=checksum,
         thumbnail_url=thumbnail_url,
         label=label,
+        duration_ticks=_media_duration_ticks(item, file_obj),
     )
+
+
+def _media_duration_ticks(item: dict, file_obj: dict) -> int:
+    for raw_duration in (item.get("duration"), file_obj.get("duration")):
+        if raw_duration is None or isinstance(raw_duration, bool):
+            continue
+        try:
+            seconds = float(raw_duration)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(seconds) and seconds > 0:
+            return round(seconds * 10_000_000)
+    return 0
 
 
 def _thumbnail_url(images: dict) -> str:

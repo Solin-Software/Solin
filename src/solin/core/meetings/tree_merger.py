@@ -25,6 +25,7 @@ _DURABLE_MEDIA_FIELDS = (
 _CANONICAL_RESOLUTION_FIELDS = (
     "resolved_url",
     "thumbnail_url",
+    "base_duration_ticks",
 )
 _MEDIA_IDENTITY_FIELDS = (
     "multimedia_id",
@@ -72,7 +73,11 @@ def merge_persisted_meeting_trees(
 
 
 class _PersistedManualNodeMerger:
-    _RESOLUTION_FIELDS = ("resolved_url", "thumbnail_url")
+    _RESOLUTION_FIELDS = (
+        "resolved_url",
+        "thumbnail_url",
+        "base_duration_ticks",
+    )
 
     def __init__(self, target: list[Node]) -> None:
         self._target = target
