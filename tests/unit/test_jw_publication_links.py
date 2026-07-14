@@ -74,6 +74,7 @@ def test_select_pub_media_file_prefers_highest_video_label() -> None:
                     {
                         "label": "720p",
                         "title": "Best Video",
+                        "duration": 12.5,
                         "file": {"url": "https://example.test/video-720.mp4"},
                         "images": {"sm": {"url": "https://example.test/thumb.jpg"}},
                     },
@@ -94,6 +95,52 @@ def test_select_pub_media_file_prefers_highest_video_label() -> None:
     assert media_file.title == "Best Video"
     assert media_file.thumbnail_url == "https://example.test/thumb.jpg"
     assert media_file.label == "720p"
+    assert media_file.duration_ticks == 125_000_000
+
+
+def test_select_pub_media_file_uses_nested_file_duration_fallback() -> None:
+    data = {
+        "files": {
+            "T": {
+                "MP4": [
+                    {
+                        "file": {
+                            "url": "https://example.test/video.mp4",
+                            "duration": "3.25",
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
+    media_file = select_pub_media_file(data, "T", VIDEO_FORMATS)
+
+    assert media_file is not None
+    assert media_file.duration_ticks == 32_500_000
+
+
+def test_select_pub_media_file_falls_back_after_invalid_item_duration() -> None:
+    data = {
+        "files": {
+            "T": {
+                "MP4": [
+                    {
+                        "duration": 0,
+                        "file": {
+                            "url": "https://example.test/video.mp4",
+                            "duration": 4.5,
+                        },
+                    }
+                ]
+            }
+        }
+    }
+
+    media_file = select_pub_media_file(data, "T", VIDEO_FORMATS)
+
+    assert media_file is not None
+    assert media_file.duration_ticks == 45_000_000
 
 
 def test_build_pub_media_url_encodes_query_params() -> None:
@@ -118,6 +165,9 @@ def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch
                         {
                             "title": "Resolved",
                             "file": {"url": "https://example.test/video.mp4"},
+                            "images": {
+                                "sm": {"url": "https://example.test/thumb.jpg"}
+                            },
                         }
                     ]
                 }
@@ -142,6 +192,105 @@ def test_resolve_publication_video_link_uses_publication_identifiers(monkeypatch
             "issue": 202605,
         }
     ]
+
+
+def test_resolve_publication_video_link_enriches_missing_catalog_thumbnail(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        publication_links,
+        "fetch_pub_media_json",
+        lambda _params: {
+            "files": {
+                "T": {
+                    "MP4": [{
+                        "title": "122. Vamos continuar firmes!",
+                        "duration": 185.194667,
+                        "file": {"url": "https://example.test/song.mp4"},
+                    }]
+                }
+            }
+        },
+    )
+    mediator_calls = []
+
+    def resolve_mediator(pub, track, issue, document_id, language):
+        mediator_calls.append((pub, track, issue, document_id, language))
+        return {
+            "title": "122. Vamos continuar firmes!",
+            "images": {
+                "wss": {
+                    "sm": "https://example.test/song-sm.jpg",
+                    "lg": "https://example.test/song-lg.jpg",
+                }
+            },
+        }
+
+    monkeypatch.setattr(
+        publication_links,
+        "resolve_mediator_media_item",
+        resolve_mediator,
+    )
+
+    media_file = resolve_publication_video_link("sjjm", 122, 0, 0, "T")
+
+    assert media_file is not None
+    assert media_file.thumbnail_url == "https://example.test/song-sm.jpg"
+    assert media_file.duration_ticks == 1_851_946_670
+    assert mediator_calls == [("sjjm", 122, 0, 0, "T")]
+
+
+def test_resolve_mediator_media_item_uses_targeted_natural_key(monkeypatch) -> None:
+    calls = []
+
+    def get_json(url, *, timeout, headers):
+        calls.append((url, timeout, headers))
+        return {"media": [{"naturalKey": "pub-sjjm_T_122_VIDEO"}]}
+
+    monkeypatch.setattr(publication_links, "get_json", get_json)
+
+    media_item = publication_links.resolve_mediator_media_item(
+        "sjjm",
+        122,
+        0,
+        0,
+        "T",
+    )
+
+    assert media_item == {"naturalKey": "pub-sjjm_T_122_VIDEO"}
+    assert calls == [
+        (
+            "https://b.jw-cdn.org/apis/mediator/v1/media-items/"
+            "T/pub-sjjm_122_VIDEO",
+            publication_links.DEFAULT_TIMEOUT,
+            {"User-Agent": publication_links.DEFAULT_USER_AGENT},
+        )
+    ]
+
+
+def test_mediator_media_item_ids_share_issue_and_format_normalization() -> None:
+    assert list(
+        publication_links.mediator_media_item_ids(
+            "mwbv",
+            2,
+            20260500,
+            0,
+        )
+    ) == [
+        "pub-mwbv_202605_2_VIDEO",
+        "pub-mwbv_202605_x_VIDEO",
+        "pub-mwbv_202605_0_VIDEO",
+        "pub-mwbv_202605_1_VIDEO",
+    ]
+    assert next(
+        publication_links.mediator_media_item_ids(
+            "",
+            0,
+            None,
+            12345,
+            "audio",
+        )
+    ) == "docid-12345_0_AUDIO"
 
 
 def test_resolve_publication_video_link_normalizes_sign_language_song(monkeypatch) -> None:
@@ -210,6 +359,9 @@ def test_publication_media_resolver_resolves_video_request(monkeypatch) -> None:
                         {
                             "title": "Resolved",
                             "file": {"url": "https://example.test/video.mp4"},
+                            "images": {
+                                "sm": {"url": "https://example.test/thumb.jpg"}
+                            },
                         }
                     ]
                 }

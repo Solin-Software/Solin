@@ -20,6 +20,7 @@ class MediaInfoJob:
     index: int
     url: str
     media_type: str
+    require_duration: bool = False
 
 
 class MediaInfoScheduler:
@@ -50,7 +51,14 @@ class MediaInfoScheduler:
             and version.revision == self.index_revisions.get(version.index, 0)
         )
 
-    def enqueue(self, index: int, url: str, media_type: str) -> MediaInfoJob:
+    def enqueue(
+        self,
+        index: int,
+        url: str,
+        media_type: str,
+        *,
+        require_duration: bool = False,
+    ) -> MediaInfoJob:
         active = self.active.get(index)
         if active is not None:
             return active
@@ -64,6 +72,7 @@ class MediaInfoScheduler:
             index=index,
             url=url,
             media_type=media_type,
+            require_duration=require_duration,
         )
         self.pending.append(job)
         return job

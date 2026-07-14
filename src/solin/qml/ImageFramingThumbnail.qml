@@ -93,6 +93,14 @@ Item {
         && Math.abs(framingZoom - 1.0) > 0.000001
         && (maxPanX() > 0.000001 || maxPanY() > 0.000001)
 
+    function fittedSource(sourceValue) {
+        if (sourceValue === "")
+            return ""
+        if (sourceValue.indexOf("image://playlistthumbs/") === 0)
+            return sourceValue + "/fit"
+        return sourceValue
+    }
+
     function validNumber(value) {
         return typeof value === "number" && isFinite(value)
     }
@@ -231,7 +239,7 @@ Item {
 
         Image {
             id: sourceImage
-            source: root.imageSource === "" ? "" : root.imageSource + "/fit"
+            source: root.fittedSource(root.imageSource)
             sourceSize.width: 200
             sourceSize.height: 113
             asynchronous: true

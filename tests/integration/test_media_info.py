@@ -177,12 +177,17 @@ def test_media_info_queue_extracts_missing_duration_even_when_info_is_cached(
             self.info_ready = _Signal()
             self.thumbnail_failed = _Signal()
             self.duration_ready = _Signal()
+            self.require_duration = False
 
-    created: list[int] = []
+        def set_require_duration(self, required):
+            self.require_duration = required
+
+    created: list[_Extractor] = []
 
     def _factory(index, _url, _media_type, _worker_pool, _parent):
-        created.append(index)
-        return _Extractor(index)
+        extractor = _Extractor(index)
+        created.append(extractor)
+        return extractor
 
     monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
     queue = _media_info_queue(tmp_path)
@@ -190,7 +195,8 @@ def test_media_info_queue_extracts_missing_duration_even_when_info_is_cached(
 
     queue.request(7, str(tmp_path / "clip.mp4"), require_duration=True)
 
-    assert created == [7]
+    assert [extractor.index for extractor in created] == [7]
+    assert created[0].require_duration is True
     assert queue._scheduler.is_scheduled(7)
 
 
@@ -241,6 +247,10 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     monkeypatch.setattr(media_info_module, "_create_extractor", _factory)
     monkeypatch.setattr(media_info_module, "QPixmap", _NullPixmap)
     queue = _media_info_queue(tmp_path)
+    terminal_results: list[int] = []
+    queue.info_ready.connect(
+        lambda index, _pixmap, _title: terminal_results.append(index)
+    )
     queue._scheduler.enqueue(0, "failed.mp4", "video")
     queue._scheduler.enqueue(1, "second.mp4", "video")
     queue._scheduler.enqueue(2, "third.mp4", "video")
@@ -248,6 +258,7 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     queue._pump()
 
     assert created == [1, 2]
+    assert terminal_results == [0]
     assert set(queue._scheduler.active) == {1, 2}
     assert not queue._scheduler.pending
 

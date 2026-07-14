@@ -74,7 +74,7 @@ def resolve_meeting_video(
 
     Sign-language songbooks use ``sjj`` instead of the music edition ``sjjm``.
     """
-    result = {"url": "", "title": "", "thumbnail": ""}
+    result = {"url": "", "title": "", "thumbnail": "", "duration_ticks": 0}
     try:
         media_file = _PUBLICATION_MEDIA_RESOLVER.resolve_video(
             PublicationMediaRequest(
@@ -90,6 +90,7 @@ def resolve_meeting_video(
             result["url"] = media_file.url
             result["title"] = media_file.title
             result["thumbnail"] = media_file.thumbnail_url
+            result["duration_ticks"] = media_file.duration_ticks
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         log.debug("Could not parse resolved video metadata", exc_info=True)
     return result

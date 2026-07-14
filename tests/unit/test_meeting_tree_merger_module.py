@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from solin.core.meetings.tree_merger import MeetingTreeMerger, media_identity_signature
+from solin.core.meetings.tree_merger import (
+    MeetingTreeMerger,
+    media_identity_signature,
+    merge_persisted_meeting_trees,
+)
 
 
 def test_meeting_tree_merger_lives_in_core_module():
@@ -104,3 +108,47 @@ def test_merger_drops_prepared_framing_when_media_identity_changes() -> None:
     merged = MeetingTreeMerger(canonical).merge(saved)
 
     assert "image_framing" not in merged[0]
+
+
+def test_portable_merge_keeps_fresh_prepared_duration_for_official_media() -> None:
+    prepared = [{
+        "id": "official-local",
+        "type": "media",
+        "meeting_generated": True,
+        "meeting_source_key": "media:official",
+        "media_ref": {"key_symbol": "mwbv", "track": 1},
+        "base_duration_ticks": 120_000_000,
+        "children": [],
+    }]
+    portable = [{
+        **prepared[0],
+        "id": "official-portable",
+        "base_duration_ticks": 60_000_000,
+        "start_trim_ticks": 10_000,
+    }]
+
+    merged = merge_persisted_meeting_trees(prepared, portable)
+
+    assert merged[0]["base_duration_ticks"] == 120_000_000
+    assert merged[0]["start_trim_ticks"] == 10_000
+
+
+def test_portable_merge_keeps_fresh_prepared_duration_for_manual_media() -> None:
+    prepared = [{
+        "id": "manual",
+        "type": "media",
+        "meeting_generated": False,
+        "media_ref": {"file_path": "clip.mp4", "mime_type": "video/mp4"},
+        "base_duration_ticks": 120_000_000,
+        "children": [],
+    }]
+    portable = [{
+        **prepared[0],
+        "base_duration_ticks": 60_000_000,
+        "end_trim_ticks": 10_000,
+    }]
+
+    merged = merge_persisted_meeting_trees(prepared, portable)
+
+    assert merged[0]["base_duration_ticks"] == 120_000_000
+    assert merged[0]["end_trim_ticks"] == 10_000

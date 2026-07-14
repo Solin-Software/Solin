@@ -38,6 +38,8 @@ from solin.core.foundation.constants import (
 )
 from solin.core.network.http import HttpDecodeError, HttpError, get_json, stream_get
 
+from .publication_links import mediator_media_item_ids
+
 log = logging.getLogger(__name__)
 
 _USER_AGENT = "Solin/1.0"
@@ -680,7 +682,13 @@ def _fetch_media_item(
     track: str,
     cache_paths: JWMediaCatalogCachePaths,
 ) -> dict[str, Any] | None:
-    for item_id in _media_item_ids(query, track):
+    for item_id in mediator_media_item_ids(
+        query.pub or "",
+        track,
+        query.issue,
+        query.docid,
+        _publication_type(query.fileformat),
+    ):
         url = (
             f"{_MEDIATOR_BASE_URL}/v1/media-items/"
             f"{urllib.parse.quote(query.language, safe='')}/"
@@ -703,28 +711,6 @@ def _fetch_media_item(
     return None
 
 
-def _media_item_ids(query: JWMediaQuery, track: str) -> Iterable[str]:
-    source = f"pub-{query.pub}" if query.pub else f"docid-{query.docid}"
-    issue = _normalize_issue(query.issue)
-    media_type = _publication_type(query.fileformat)
-    primary_parts = [
-        source,
-        issue if query.pub and issue else None,
-        track if track not in ("", "None") else None,
-        media_type,
-    ]
-    primary = "_".join(str(part) for part in primary_parts if part is not None)
-    yield primary
-
-    # Some mediator entries use "x", 0, or 1 when pub-media did not expose a
-    # conventional track.  This mirrors the resilient M3 lookup strategy.
-    for fallback_track in ("x", "0", "1"):
-        parts = [source, issue if query.pub and issue else None, fallback_track, media_type]
-        candidate = "_".join(str(part) for part in parts if part is not None)
-        if candidate != primary:
-            yield candidate
-
-
 def _publication_type(fileformat: str) -> str:
     fmt = (fileformat or "").upper()
     if "MP4" in fmt or "M4V" in fmt:
@@ -732,13 +718,6 @@ def _publication_type(fileformat: str) -> str:
     if "MP3" in fmt:
         return "AUDIO"
     return "VIDEO"
-
-
-def _normalize_issue(issue: int | str | None) -> str:
-    if issue in (None, "", 0, "0"):
-        return ""
-    raw = str(issue)
-    return re.sub(r"(\d{6})00$", r"\1", raw)
 
 
 def _parse_pub_media_links(

@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import logging
+import math
+import re
 import urllib.parse
-from dataclasses import dataclass
+from collections.abc import Iterator
+from dataclasses import dataclass, replace
 from typing import Any
 
-from solin.core.network.http import HttpError, get_json
+from solin.core.network.http import HttpError, HttpStatusError, get_json
 
 log = logging.getLogger(__name__)
 
 PUB_MEDIA_URL = "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
+MEDIATOR_MEDIA_ITEM_URL = (
+    "https://b.jw-cdn.org/apis/mediator/v1/media-items/{language}/{item_id}"
+)
 DEFAULT_USER_AGENT = "Mozilla/5.0"
 DEFAULT_TIMEOUT = 20
 VIDEO_FORMATS = ("MP4", "M4V", "mp4", "m4v")
@@ -22,6 +28,7 @@ class PubMediaFile:
     checksum: str = ""
     thumbnail_url: str = ""
     label: str = ""
+    duration_ticks: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,12 +192,103 @@ def resolve_publication_video_link(
     data = fetch_pub_media_json(params)
     if not data:
         return None
-    return select_pub_media_file(
+    media_file = select_pub_media_file(
         data,
         language,
         VIDEO_FORMATS,
         prefer_highest_label=True,
     )
+    if media_file is None or media_file.thumbnail_url:
+        return media_file
+
+    media_item = resolve_mediator_media_item(
+        publication_symbol,
+        track_number,
+        issue_number,
+        document_id,
+        language,
+    )
+    if media_item is None:
+        return media_file
+    return replace(
+        media_file,
+        title=media_file.title or str(media_item.get("title") or ""),
+        thumbnail_url=_thumbnail_url(media_item.get("images") or {}),
+        duration_ticks=(
+            media_file.duration_ticks
+            or _media_duration_ticks(media_item, {})
+        ),
+    )
+
+
+def resolve_mediator_media_item(
+    publication_symbol: str,
+    track: int,
+    issue: int,
+    document_id: int,
+    language: str,
+) -> dict[str, Any] | None:
+    """Return the first matching targeted Mediator item, when available."""
+    for item_id in mediator_media_item_ids(
+        publication_symbol,
+        track,
+        issue,
+        document_id,
+    ):
+        url = MEDIATOR_MEDIA_ITEM_URL.format(
+            language=urllib.parse.quote(language, safe=""),
+            item_id=urllib.parse.quote(item_id, safe=""),
+        )
+        try:
+            data = get_json(
+                url,
+                timeout=DEFAULT_TIMEOUT,
+                headers={"User-Agent": DEFAULT_USER_AGENT},
+            )
+        except HttpStatusError as exc:
+            log.debug("GET %s -> %s", url, exc)
+            if exc.status_code != 404:
+                return None
+            continue
+        except HttpError as exc:
+            log.debug("GET %s -> %s", url, exc)
+            return None
+        media = data.get("media") if isinstance(data, dict) else None
+        if not isinstance(media, list) or not media:
+            continue
+        first = media[0]
+        if isinstance(first, dict):
+            return first
+    return None
+
+
+def mediator_media_item_ids(
+    publication_symbol: str,
+    track: int | str,
+    issue: int | str | None,
+    document_id: int | str | None,
+    media_type: str = "VIDEO",
+) -> Iterator[str]:
+    source = (
+        f"pub-{publication_symbol}"
+        if publication_symbol
+        else f"docid-{document_id}"
+    )
+    normalized_issue = re.sub(r"(\d{6})00$", r"\1", str(issue)) if issue else ""
+    tracks = (str(track), "x", "0", "1")
+    seen: set[str] = set()
+    for candidate_track in tracks:
+        parts = [
+            source,
+            normalized_issue if publication_symbol and normalized_issue else "",
+            candidate_track,
+            str(media_type or "VIDEO").upper(),
+        ]
+        item_id = "_".join(part for part in parts if part)
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        yield item_id
 
 
 def _dedupe_nonempty(values: tuple[str, ...]) -> tuple[str, ...]:
@@ -228,21 +326,43 @@ def _pub_media_file_from_item(data: dict, item: dict) -> PubMediaFile | None:
         checksum=checksum,
         thumbnail_url=thumbnail_url,
         label=label,
+        duration_ticks=_media_duration_ticks(item, file_obj),
     )
 
 
-def _thumbnail_url(images: dict) -> str:
-    for size in ("sm", "md", "lg"):
-        direct = images.get(size, {})
-        if isinstance(direct, dict) and direct.get("url"):
-            return str(direct["url"])
+def _media_duration_ticks(item: dict, file_obj: dict) -> int:
+    for raw_duration in (item.get("duration"), file_obj.get("duration")):
+        if raw_duration is None or isinstance(raw_duration, bool):
+            continue
+        try:
+            seconds = float(raw_duration)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(seconds) and seconds > 0:
+            return round(seconds * 10_000_000)
+    return 0
 
-    for shape in ("sqr", "wss", "lsr"):
+
+def _thumbnail_url(images: dict) -> str:
+    if not isinstance(images, dict):
+        return ""
+
+    def image_url(value: object) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict) and value.get("url"):
+            return str(value["url"])
+        return ""
+
+    for size in ("sm", "md", "lg"):
+        if direct := image_url(images.get(size)):
+            return direct
+
+    for shape in ("wss", "lsr", "sqr", "pnr"):
         section = images.get(shape, {})
         if not isinstance(section, dict):
             continue
-        for size in ("sm", "md", "lg"):
-            candidate = section.get(size, {})
-            if isinstance(candidate, dict) and candidate.get("url"):
-                return str(candidate["url"])
+        for size in ("sm", "md", "lg", "xl"):
+            if candidate := image_url(section.get(size)):
+                return candidate
     return ""

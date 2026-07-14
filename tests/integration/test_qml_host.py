@@ -532,6 +532,9 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     assert trim_action is not None
     assert trim_action.property("text") == "Tempos de início e fim"
 
+    assert root.findChild(QObject, "mediaTrimDialog") is None
+    root.openMediaTrim(nodes[0])
+    QTest.qWait(1)
     trim_dialog = root.findChild(QObject, "mediaTrimDialog")
     assert trim_dialog is not None
     trim_timeline = trim_dialog.findChild(QObject, "trimTimeline")
@@ -710,6 +713,33 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False
+
+
+def test_image_framing_thumbnail_loads_a_local_file_source(tmp_path) -> None:
+    portrait = QPixmap(90, 160)
+    portrait.fill(QColor("red"))
+    source_path = tmp_path / "portrait.png"
+    assert portrait.save(str(source_path), "PNG")
+
+    widget = QQuickWidget()
+    widget.resize(100, 56)
+    configure_qml_host(
+        widget,
+        type_name="ImageFramingThumbnail",
+        clear_color="#000000",
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("imageSource", source_path.as_uri())
+    root.setProperty("sourceAspectRatio", 9 / 16)
+    widget.show()
+
+    for _attempt in range(20):
+        if root.property("imageReady"):
+            break
+        QTest.qWait(20)
+
+    assert root.property("imageReady") is True
 
 
 def test_image_framing_thumbnail_projection_frame_covers_fixed_viewport() -> None:

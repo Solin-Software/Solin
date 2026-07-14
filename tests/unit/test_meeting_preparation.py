@@ -12,6 +12,7 @@ from solin.core.meetings.preparation import (
     MeetingPreparationPriority,
     MeetingPreparationRequest,
     MeetingPreparationService,
+    _automatic_download_urls,
 )
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.meetings.tree_types import clone_nodes, iter_nodes
@@ -77,6 +78,7 @@ class _ImmediateResolver(QObject):
                 "url": "https://cdn.example/meeting.mp4",
                 "title": "Resolved title",
                 "thumbnail": "https://cdn.example/meeting.jpg",
+                "duration_ticks": 123_000_000,
             },
         )
 
@@ -195,7 +197,156 @@ def test_tree_and_resolved_urls_are_committed_before_prefetch(monkeypatch, tmp_p
         assert snapshot is not None
         media = next(node for node in iter_nodes(snapshot.nodes) if node.get("type") == "media")
         assert media["resolved_url"] == "https://cdn.example/meeting.mp4"
+        assert media["base_duration_ticks"] == 123_000_000
         assert cache.prefetch_calls[0][0] == ["https://cdn.example/meeting.mp4"]
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_automatic_download_preserves_subsection_ancestry_policy() -> None:
+    shared_url = "https://cdn.example/shared.mp4"
+    manual_url = "https://cdn.example/manual.mp4"
+    excluded_url = "https://cdn.example/subsection-only.mp4"
+    nodes = [
+        {
+            "id": "direct-official",
+            "type": "media",
+            "meeting_generated": True,
+            "resolved_url": shared_url,
+            "children": [],
+        },
+        {
+            "id": "subsection",
+            "type": "subsection",
+            "children": [
+                {
+                    "id": "nested-official-shared",
+                    "type": "media",
+                    "meeting_generated": True,
+                    "resolved_url": shared_url,
+                    "children": [],
+                },
+                {
+                    "id": "nested-official-only",
+                    "type": "media",
+                    "meeting_generated": True,
+                    "resolved_url": excluded_url,
+                    "children": [],
+                },
+                {
+                    "id": "nested-manual",
+                    "type": "media",
+                    "meeting_generated": False,
+                    "resolved_url": manual_url,
+                    "children": [],
+                },
+            ],
+        },
+    ]
+
+    assert _automatic_download_urls(nodes) == {shared_url, manual_url}
+
+
+def test_resolved_official_subsection_media_is_persisted_without_prefetch(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, _publication, store, cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    tree_key = "mwb:2026-05-25:T:20260500"
+    store.save(
+        tree_key,
+        [{
+            "id": "subsection",
+            "type": "subsection",
+            "children": [{
+                "id": "nested-official",
+                "type": "media",
+                "meeting_generated": True,
+                "meeting_source_key": "media:cbs:official",
+                "media_type": "video",
+                "media_ref": {
+                    "key_symbol": "mwbv",
+                    "track": 1,
+                    "mime_type": "video/mp4",
+                },
+                "children": [],
+            }],
+        }],
+        "hash",
+    )
+    try:
+        service.ensure_week(
+            MeetingPreparationRequest(key=key, download_media=True)
+        )
+
+        _spin_until(
+            lambda: bool(
+                (snapshot := store.snapshot(tree_key))
+                and next(
+                    node
+                    for node in iter_nodes(snapshot.nodes)
+                    if node.get("id") == "nested-official"
+                ).get("resolved_url")
+            )
+        )
+
+        snapshot = store.snapshot(tree_key)
+        assert snapshot is not None
+        media = next(
+            node
+            for node in iter_nodes(snapshot.nodes)
+            if node.get("id") == "nested-official"
+        )
+        assert media["resolved_url"] == "https://cdn.example/meeting.mp4"
+        assert media["thumbnail_url"] == "https://cdn.example/meeting.jpg"
+        assert media["base_duration_ticks"] == 123_000_000
+        assert cache.prefetch_calls == []
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_cached_media_missing_duration_is_enriched_without_opening_detail(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, _publication, store, cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    tree_key = "mwb:2026-05-25:T:20260500"
+    store.save(
+        tree_key,
+        [{
+            "id": "official",
+            "type": "media",
+            "meeting_generated": True,
+            "meeting_source_key": "media:mwb:official",
+            "media_type": "video",
+            "resolved_url": "https://cdn.example/meeting.mp4",
+            "media_ref": {
+                "key_symbol": "mwbv",
+                "track": 1,
+                "mime_type": "video/mp4",
+            },
+            "children": [],
+        }],
+        "hash",
+    )
+    cache.is_cached = lambda _url: True
+    try:
+        service.ensure_week(
+            MeetingPreparationRequest(key=key, download_media=True)
+        )
+
+        _spin_until(
+            lambda: bool(
+                (snapshot := store.snapshot(tree_key))
+                and next(iter_nodes(snapshot.nodes)).get("base_duration_ticks")
+            )
+        )
+
+        snapshot = store.snapshot(tree_key)
+        assert snapshot is not None
+        assert next(iter_nodes(snapshot.nodes))["base_duration_ticks"] == 123_000_000
     finally:
         service.shutdown(wait_ms=1000)
 

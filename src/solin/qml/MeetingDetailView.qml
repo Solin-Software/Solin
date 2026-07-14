@@ -55,6 +55,14 @@ Rectangle {
             controller.pointerExit()
     }
 
+    function openLazyModal(loader) {
+        if (loader.item) {
+            loader.item.open()
+            return
+        }
+        loader.active = true
+    }
+
     function getIndexAt(rootY) {
         var local = meetingTree.mapFromItem(root, 0, rootY)
         var index = meetingTree.getIndexAt(local.y)
@@ -164,7 +172,7 @@ Rectangle {
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Search JW.org...")
                             icon.source: root.picon("media_video", 13, root.iconHex(root.textMuted))
-                            onTriggered: jwCatalogModal.open()
+                            onTriggered: root.openLazyModal(jwCatalogLoader)
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
                         }
@@ -172,7 +180,7 @@ Rectangle {
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Add Song...")
                             icon.source: root.picon("media_audio", 13, root.iconHex(root.textMuted))
-                            onTriggered: jwSongsModal.open()
+                            onTriggered: root.openLazyModal(jwSongsLoader)
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
                         }
@@ -224,16 +232,30 @@ Rectangle {
         }
     }
 
-    JWMediaCatalogModal {
-        id: jwCatalogModal
+    Loader {
+        id: jwCatalogLoader
         anchors.fill: parent
         z: 1000
+        active: false
+        onLoaded: item.open()
+        sourceComponent: Component {
+            JWMediaCatalogModal {
+                anchors.fill: parent
+            }
+        }
     }
 
-    JWSongsModal {
-        id: jwSongsModal
+    Loader {
+        id: jwSongsLoader
         anchors.fill: parent
         z: 1001
+        active: false
+        onLoaded: item.open()
+        sourceComponent: Component {
+            JWSongsModal {
+                anchors.fill: parent
+            }
+        }
     }
 
     component HeaderButton: Rectangle {
