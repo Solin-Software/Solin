@@ -980,6 +980,45 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
 
         self.assertEqual(cloud_updates, ["video-node"])
 
+    def test_remote_uncached_media_fetches_known_thumbnail_without_probing_media(self):
+        class FakeController:
+            pass
+
+        thumbnail_url = "https://cdn.example/video.jpg"
+        node = {
+            "id": "video-node",
+            "type": "media",
+            "media_type": "video",
+            "resolved_url": "https://cdn.example/video.mp4",
+            "thumbnail_url": thumbnail_url,
+            "media_ref": {"mime_type": "video/mp4"},
+        }
+        controller = FakeController()
+        controller._local_media_path = lambda _node: ""
+        controller._url_for_node = lambda target: target["resolved_url"]
+        controller._has_local_thumbnail = lambda _node: False
+        controller._duration_ticks = lambda _node: 123_000_000
+        controller._media_type_from_ref = lambda _ref: "video"
+        requests: list[tuple[tuple, dict]] = []
+        controller._queue_info = lambda *args, **kwargs: requests.append(
+            (args, kwargs)
+        )
+        cloud_updates: list[str] = []
+        controller._emit_cloud_for_node = cloud_updates.append
+
+        MeetingTreeController._start_media_request(controller, node)
+
+        self.assertEqual(
+            requests,
+            [
+                (
+                    ("video-node", thumbnail_url, "image"),
+                    {"purpose": "thumb"},
+                )
+            ],
+        )
+        self.assertEqual(cloud_updates, ["video-node"])
+
 
 class MeetingTreeControllerEditingTests(unittest.TestCase):
     class _Signal:

@@ -2868,6 +2868,15 @@ class MeetingTreeController(QObject):
                     media_type,
                     purpose="metadata",
                 )
+            elif not has_thumb:
+                thumbnail_url = str(node.get("thumbnail_url") or "")
+                if thumbnail_url:
+                    self._queue_info(
+                        item_id,
+                        thumbnail_url,
+                        "image",
+                        purpose="thumb",
+                    )
             return
 
         if (

@@ -299,6 +299,7 @@ def test_resolved_official_subsection_media_is_persisted_without_prefetch(
             if node.get("id") == "nested-official"
         )
         assert media["resolved_url"] == "https://cdn.example/meeting.mp4"
+        assert media["thumbnail_url"] == "https://cdn.example/meeting.jpg"
         assert media["base_duration_ticks"] == 123_000_000
         assert cache.prefetch_calls == []
     finally:
