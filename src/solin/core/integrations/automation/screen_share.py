@@ -51,6 +51,7 @@ SHARE_DIALOG_POLL_INTERVAL_MS = 50
 SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
+REJECTED_SHARE_DIALOG_WINDOW_CLASSES = frozenset({"monitornumberindicatorwnd"})
 SHARE_DIALOG_TARGET_READY_TIMEOUT_MS = 2000
 SHARE_DIALOG_TARGET_READY_STABLE_SAMPLES = 3
 SHARE_DIALOG_TARGET_READY_POLL_INTERVAL_MS = 50
@@ -739,6 +740,7 @@ class _ZoomWindowInfo:
     width: int
     height: int
     pid: int = 0
+    window_class: str = ""
 
     @property
     def area(self) -> int:
@@ -765,7 +767,8 @@ class _ClickTargetOwnership(Enum):
 
 def _is_candidate_share_dialog(window: _ZoomWindowInfo) -> bool:
     return (
-        window.width >= SHARE_DIALOG_MIN_WIDTH
+        window.window_class.casefold() not in REJECTED_SHARE_DIALOG_WINDOW_CLASSES
+        and window.width >= SHARE_DIALOG_MIN_WIDTH
         and window.height >= SHARE_DIALOG_MIN_HEIGHT
     )
 
@@ -792,7 +795,7 @@ def _wait_before_share_click(
             sys.platform,
         )
         return None
-    detected = _wait_for_new_zoom_window(initial_windows, monitor)
+    detected = _wait_for_new_zoom_window(initial_windows, target, monitor)
     if detected is None:
         log.warning(
             "execute_start_share: no new Zoom share dialog detected within %dms",
@@ -1002,6 +1005,7 @@ def _click_share_target_with_retry(
 
 def _wait_for_new_zoom_window(
     initial_windows: dict[str, _ZoomWindowInfo],
+    target: tuple[int, int],
     monitor: _MouseInterferenceMonitor | None = None,
 ) -> _ZoomWindowInfo | None:
     deadline = time.monotonic() + (SHARE_DIALOG_DETECTION_TIMEOUT_MS / 1000.0)
@@ -1018,13 +1022,46 @@ def _wait_for_new_zoom_window(
             current_windows[window_id]
             for window_id in set(current_windows) - initial_ids
             if _is_candidate_share_dialog(current_windows[window_id])
+            and current_windows[window_id].contains(*target)
         ]
         if candidates:
-            return max(candidates, key=lambda window: window.area)
+            receiving_dialog, verification_available = (
+                _select_click_receiving_dialog(candidates, *target)
+            )
+            if not verification_available:
+                log.warning(
+                    "execute_start_share: native click-target verification is "
+                    "unavailable during Zoom dialog detection"
+                )
+                return None
+            if receiving_dialog is not None:
+                return receiving_dialog
 
         _sleep_with_mouse_monitoring(SHARE_DIALOG_POLL_INTERVAL_MS, monitor)
 
     return None
+
+
+def _select_click_receiving_dialog(
+    candidates: list[_ZoomWindowInfo],
+    target_x: int,
+    target_y: int,
+) -> tuple[_ZoomWindowInfo | None, bool]:
+    """Select the most specific new Zoom window that owns the target point."""
+    matches: list[_ZoomWindowInfo] = []
+    for candidate in candidates:
+        ownership = _click_target_ownership(candidate, target_x, target_y)
+        if ownership is _ClickTargetOwnership.UNKNOWN:
+            return None, False
+        if ownership is _ClickTargetOwnership.ZOOM:
+            matches.append(candidate)
+    if not matches:
+        return None, True
+
+    # Win32 and X11 match the exact native root. macOS Accessibility exposes
+    # the receiving process, so the smallest matching bounds identify the most
+    # specific new Zoom surface without relying on localized window titles.
+    return min(matches, key=lambda window: (window.area, window.window_id)), True
 
 
 def _click_target_ownership(
@@ -1163,6 +1200,12 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
         ctypes.POINTER(ctypes.wintypes.RECT),
     ]
     user32.GetWindowRect.restype = ctypes.wintypes.BOOL
+    user32.GetClassNameW.argtypes = [
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.LPWSTR,
+        ctypes.c_int,
+    ]
+    user32.GetClassNameW.restype = ctypes.c_int
 
     def _callback(hwnd, _lparam):
         if not user32.IsWindow(hwnd) or not user32.IsWindowVisible(hwnd):
@@ -1182,6 +1225,9 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
             if width <= 0 or height <= 0:
                 return True
 
+            class_buffer = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, class_buffer, len(class_buffer))
+
             window_id = str(int(hwnd))
             windows[window_id] = _ZoomWindowInfo(
                 window_id=window_id,
@@ -1191,6 +1237,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
                 width=width,
                 height=height,
                 pid=process_id,
+                window_class=class_buffer.value,
             )
         except Exception as exc:  # noqa: BLE001 - Win32 enumeration callback boundary
             log.debug("Skipping Win32 window during Zoom enumeration: %s", exc)
