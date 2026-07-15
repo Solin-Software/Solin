@@ -23,6 +23,7 @@ def _window(
     width: int,
     height: int,
     pid: int = 0,
+    window_class: str = "",
 ) -> screen_share._ZoomWindowInfo:
     return screen_share._ZoomWindowInfo(
         window_id=window_id,
@@ -32,6 +33,7 @@ def _window(
         width=width,
         height=height,
         pid=pid,
+        window_class=window_class,
     )
 
 
@@ -58,7 +60,7 @@ def _configure_detected_share_dialog(monkeypatch, dialog, clicks) -> None:
     monkeypatch.setattr(
         screen_share,
         "_wait_for_new_zoom_window",
-        lambda _initial, _monitor=None: dialog,
+        lambda _initial, _target, _monitor=None: dialog,
     )
     monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
     monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
@@ -98,6 +100,179 @@ def test_auto_share_uses_conservative_interaction_delays() -> None:
     assert screen_share.SHARE_DIALOG_TARGET_READY_STABLE_SAMPLES == 3
 
 
+def test_share_dialog_candidate_rejects_monitor_number_indicator() -> None:
+    indicator = _window(
+        "indicator",
+        x=0,
+        y=0,
+        width=1920,
+        height=1080,
+        window_class="MonitorNumberIndicatorWnd",
+    )
+    dialog = _window(
+        "dialog",
+        x=410,
+        y=136,
+        width=1100,
+        height=760,
+        window_class="ZPShareEntranceClass",
+    )
+
+    assert screen_share._is_candidate_share_dialog(indicator) is False
+    assert screen_share._is_candidate_share_dialog(dialog) is True
+
+
+def test_new_dialog_detection_ignores_multimonitor_indicators(monkeypatch):
+    existing = _window("meeting", x=0, y=150, width=989, height=757)
+    primary_indicator = _window(
+        "primary-indicator",
+        x=0,
+        y=0,
+        width=1920,
+        height=1080,
+        window_class="MonitorNumberIndicatorWnd",
+    )
+    secondary_indicator = _window(
+        "secondary-indicator",
+        x=1920,
+        y=0,
+        width=1024,
+        height=768,
+        window_class="MonitorNumberIndicatorWnd",
+    )
+    dialog = _window(
+        "dialog",
+        x=410,
+        y=136,
+        width=1100,
+        height=760,
+        window_class="ZPShareEntranceClass",
+    )
+    snapshots = iter(
+        [
+            {
+                existing.window_id: existing,
+                primary_indicator.window_id: primary_indicator,
+                secondary_indicator.window_id: secondary_indicator,
+            },
+            {
+                existing.window_id: existing,
+                primary_indicator.window_id: primary_indicator,
+                secondary_indicator.window_id: secondary_indicator,
+                dialog.window_id: dialog,
+            },
+        ]
+    )
+    times = iter([0.0, 0.01, 0.02])
+    probed: list[str] = []
+    sleeps: list[int] = []
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: next(snapshots))
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda candidate, _x, _y: (
+            probed.append(candidate.window_id)
+            or screen_share._ClickTargetOwnership.ZOOM
+        ),
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_sleep_with_mouse_monitoring",
+        lambda duration_ms, _monitor=None: sleeps.append(duration_ms),
+    )
+
+    assert screen_share._wait_for_new_zoom_window(
+        {existing.window_id: existing},
+        (770, 539),
+    ) is dialog
+    assert probed == [dialog.window_id]
+    assert sleeps == [screen_share.SHARE_DIALOG_POLL_INTERVAL_MS]
+
+
+def test_new_dialog_detection_waits_for_the_window_that_owns_target(monkeypatch):
+    existing = _window("meeting", x=0, y=150, width=989, height=757)
+    unrelated_zoom_window = _window(
+        "unrelated",
+        x=0,
+        y=0,
+        width=1920,
+        height=1080,
+    )
+    dialog = _window("dialog", x=410, y=136, width=1100, height=760)
+    snapshots = iter(
+        [
+            {
+                existing.window_id: existing,
+                unrelated_zoom_window.window_id: unrelated_zoom_window,
+            },
+            {
+                existing.window_id: existing,
+                unrelated_zoom_window.window_id: unrelated_zoom_window,
+                dialog.window_id: dialog,
+            },
+        ]
+    )
+    times = iter([0.0, 0.01, 0.02])
+    monkeypatch.setattr(screen_share, "_list_zoom_windows", lambda: next(snapshots))
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda candidate, _x, _y: (
+            screen_share._ClickTargetOwnership.ZOOM
+            if candidate is dialog
+            else screen_share._ClickTargetOwnership.OTHER
+        ),
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_sleep_with_mouse_monitoring",
+        lambda _duration_ms, _monitor=None: None,
+    )
+
+    assert screen_share._wait_for_new_zoom_window(
+        {existing.window_id: existing},
+        (770, 539),
+    ) is dialog
+
+
+def test_macos_receiving_dialog_uses_most_specific_new_zoom_bounds(
+    monkeypatch,
+):
+    indicator = _window(
+        "indicator",
+        x=0,
+        y=0,
+        width=1920,
+        height=1080,
+        pid=42,
+    )
+    dialog = _window(
+        "dialog",
+        x=410,
+        y=136,
+        width=1100,
+        height=760,
+        pid=42,
+    )
+    monkeypatch.setattr(screen_share.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        screen_share,
+        "_macos_accessibility_pid_at_point",
+        lambda _x, _y: 42,
+    )
+
+    match, available = screen_share._select_click_receiving_dialog(
+        [indicator, dialog],
+        770,
+        539,
+    )
+
+    assert available is True
+    assert match is dialog
+
+
 def test_execute_start_share_rejects_target_outside_detected_dialog(monkeypatch):
     dialog = _window("dialog", x=100, y=100, width=801, height=601)
     clicks: list[tuple[int, int, int, int]] = []
@@ -115,7 +290,7 @@ def test_execute_start_share_rechecks_dialog_after_safety_delay(monkeypatch):
     monkeypatch.setattr(
         screen_share,
         "_wait_for_new_zoom_window",
-        lambda _initial, _monitor=None: dialog,
+        lambda _initial, _target, _monitor=None: dialog,
     )
     monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
     monkeypatch.setattr(
