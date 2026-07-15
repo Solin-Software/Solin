@@ -36,6 +36,7 @@ from .linux_zoom_focus import (
     LinuxZoomFocusSession,
     acquire_zoom_focus,
     list_zoom_windows,
+    point_is_owned_by_window,
     restore_previous_focus,
     zoom_has_focus,
 )
@@ -45,12 +46,15 @@ log = logging.getLogger(__name__)
 _MacPointT = TypeVar("_MacPointT")
 
 SHARE_DIALOG_DETECTION_TIMEOUT_MS = 5000
-SHARE_DIALOG_INTERACTION_DELAY_MS = 900
+SHARE_DIALOG_INTERACTION_DELAY_MS = 550
 SHARE_DIALOG_POLL_INTERVAL_MS = 50
 SHARE_DIALOG_MIN_WIDTH = 600
 SHARE_DIALOG_MIN_HEIGHT = 400
 USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK = True
-SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 900
+SHARE_DIALOG_TARGET_READY_TIMEOUT_MS = 2000
+SHARE_DIALOG_TARGET_READY_STABLE_SAMPLES = 3
+SHARE_DIALOG_TARGET_READY_POLL_INTERVAL_MS = 50
+SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS = 450
 SHARE_DIALOG_RETRY_CONFIRMATION_MS = 1100
 MOUSE_INTERFERENCE_DISTANCE_PX = 80
 MOUSE_INTERFERENCE_POLL_INTERVAL_MS = 25
@@ -397,6 +401,20 @@ def _load_application_services():
 
     app_services.AXIsProcessTrusted.argtypes = []
     app_services.AXIsProcessTrusted.restype = ctypes.c_bool
+    app_services.AXUIElementCreateSystemWide.argtypes = []
+    app_services.AXUIElementCreateSystemWide.restype = ctypes.c_void_p
+    app_services.AXUIElementCopyElementAtPosition.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    app_services.AXUIElementCopyElementAtPosition.restype = ctypes.c_int32
+    app_services.AXUIElementGetPid.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int32),
+    ]
+    app_services.AXUIElementGetPid.restype = ctypes.c_int32
     app_services.CGEventCreate.argtypes = [ctypes.c_void_p]
     app_services.CGEventCreate.restype = ctypes.c_void_p
     app_services.CGEventGetLocation.argtypes = [ctypes.c_void_p]
@@ -720,6 +738,7 @@ class _ZoomWindowInfo:
     y: int
     width: int
     height: int
+    pid: int = 0
 
     @property
     def area(self) -> int:
@@ -735,6 +754,12 @@ class _ZoomWindowInfo:
 class _ShareDialogPresence(Enum):
     PRESENT = "present"
     ABSENT = "absent"
+    UNKNOWN = "unknown"
+
+
+class _ClickTargetOwnership(Enum):
+    ZOOM = "zoom"
+    OTHER = "other"
     UNKNOWN = "unknown"
 
 
@@ -757,7 +782,7 @@ def _wait_before_share_click(
     target: tuple[int, int],
     monitor: _MouseInterferenceMonitor | None = None,
 ) -> _ZoomWindowInfo | None:
-    """Wait for a detected dialog to remain usable through its safety delay."""
+    """Wait for the dialog content and stable native ownership of its target."""
     if not USE_ZOOM_WINDOW_DETECTION_BEFORE_CLICK:
         _sleep_with_mouse_monitoring(delay_ms, monitor)
         return None
@@ -785,7 +810,52 @@ def _wait_before_share_click(
         detected.owner,
     )
     _sleep_with_mouse_monitoring(delay_ms, monitor)
-    return _current_safe_share_dialog(detected, *target)
+    return _wait_for_zoom_click_target(detected, *target, monitor)
+
+
+def _wait_for_zoom_click_target(
+    dialog: _ZoomWindowInfo,
+    target_x: int,
+    target_y: int,
+    monitor: _MouseInterferenceMonitor | None = None,
+) -> _ZoomWindowInfo | None:
+    """Wait until native hit-testing reports the Zoom dialog consistently."""
+    deadline = time.monotonic() + (SHARE_DIALOG_TARGET_READY_TIMEOUT_MS / 1000.0)
+    stable_samples = 0
+    current = dialog
+    while True:
+        current = _current_safe_share_dialog(current, target_x, target_y)
+        if current is None:
+            return None
+
+        ownership = _click_target_ownership(current, target_x, target_y)
+        if ownership is _ClickTargetOwnership.UNKNOWN:
+            log.warning(
+                "execute_start_share: native click-target verification is unavailable"
+            )
+            return None
+        if ownership is _ClickTargetOwnership.ZOOM:
+            stable_samples += 1
+            if stable_samples >= SHARE_DIALOG_TARGET_READY_STABLE_SAMPLES:
+                return current
+        else:
+            stable_samples = 0
+
+        remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+        if remaining_ms <= 0:
+            log.warning(
+                "execute_start_share: Zoom dialog %s did not become the click "
+                "recipient at (%d, %d) within %dms",
+                current.window_id,
+                target_x,
+                target_y,
+                SHARE_DIALOG_TARGET_READY_TIMEOUT_MS,
+            )
+            return None
+        _sleep_with_mouse_monitoring(
+            min(SHARE_DIALOG_TARGET_READY_POLL_INTERVAL_MS, remaining_ms),
+            monitor,
+        )
 
 
 def _current_safe_share_dialog(
@@ -793,7 +863,7 @@ def _current_safe_share_dialog(
     target_x: int,
     target_y: int,
 ) -> _ZoomWindowInfo | None:
-    """Return the current dialog only while it still owns the click geometry."""
+    """Return the current dialog while it still contains the click geometry."""
     current_windows = _list_zoom_windows()
     if current_windows is None:
         log.warning(
@@ -850,8 +920,20 @@ def _wait_for_share_dialog_exit(
 def _send_share_target_double_click(
     x: int,
     y: int,
+    dialog: _ZoomWindowInfo | None,
     monitor: _MouseInterferenceMonitor | None,
 ) -> bool:
+    if dialog is not None:
+        ownership = _click_target_ownership(dialog, x, y)
+        if ownership is not _ClickTargetOwnership.ZOOM:
+            log.warning(
+                "execute_start_share: Zoom no longer owns target (%d, %d) "
+                "immediately before clicking",
+                x,
+                y,
+            )
+            return False
+
     def _operation() -> bool:
         return send_virtual_clicks(x, y, count=2, interval_ms=120)
 
@@ -871,7 +953,7 @@ def _click_share_target_with_retry(
         dialog = _current_safe_share_dialog(dialog, x, y)
         if dialog is None:
             return False
-    if not _send_share_target_double_click(x, y, monitor):
+    if not _send_share_target_double_click(x, y, dialog, monitor):
         return False
     if dialog is None:
         return True
@@ -896,7 +978,7 @@ def _click_share_target_with_retry(
     dialog = _current_safe_share_dialog(dialog, x, y)
     if dialog is None:
         return False
-    if not _send_share_target_double_click(x, y, monitor):
+    if not _send_share_target_double_click(x, y, dialog, monitor):
         return False
 
     presence = _wait_for_share_dialog_exit(
@@ -945,6 +1027,110 @@ def _wait_for_new_zoom_window(
     return None
 
 
+def _click_target_ownership(
+    dialog: _ZoomWindowInfo,
+    target_x: int,
+    target_y: int,
+) -> _ClickTargetOwnership:
+    if sys.platform == "win32":
+        return _click_target_ownership_win32(dialog, target_x, target_y)
+    if sys.platform == "darwin":
+        return _click_target_ownership_macos(dialog, target_x, target_y)
+    if sys.platform.startswith("linux"):
+        owned = point_is_owned_by_window(dialog.window_id, target_x, target_y)
+        if owned is None:
+            return _ClickTargetOwnership.UNKNOWN
+        return (
+            _ClickTargetOwnership.ZOOM
+            if owned
+            else _ClickTargetOwnership.OTHER
+        )
+    return _ClickTargetOwnership.UNKNOWN
+
+
+def _click_target_ownership_win32(
+    dialog: _ZoomWindowInfo,
+    target_x: int,
+    target_y: int,
+) -> _ClickTargetOwnership:
+    try:
+        expected_root = int(dialog.window_id)
+    except (TypeError, ValueError):
+        return _ClickTargetOwnership.UNKNOWN
+    if expected_root <= 0:
+        return _ClickTargetOwnership.UNKNOWN
+
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        user32.WindowFromPoint.argtypes = [_POINT]
+        user32.WindowFromPoint.restype = ctypes.wintypes.HWND
+        user32.GetAncestor.argtypes = [
+            ctypes.wintypes.HWND,
+            ctypes.wintypes.UINT,
+        ]
+        user32.GetAncestor.restype = ctypes.wintypes.HWND
+        recipient = user32.WindowFromPoint(_POINT(target_x, target_y))
+        if not recipient:
+            return _ClickTargetOwnership.OTHER
+        root = user32.GetAncestor(recipient, 2) or recipient  # GA_ROOT
+        return (
+            _ClickTargetOwnership.ZOOM
+            if int(root) == expected_root
+            else _ClickTargetOwnership.OTHER
+        )
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        log.debug("Win32 click-target verification failed: %s", exc)
+        return _ClickTargetOwnership.UNKNOWN
+
+
+def _click_target_ownership_macos(
+    dialog: _ZoomWindowInfo,
+    target_x: int,
+    target_y: int,
+) -> _ClickTargetOwnership:
+    if dialog.pid <= 0:
+        return _ClickTargetOwnership.UNKNOWN
+    recipient_pid = _macos_accessibility_pid_at_point(target_x, target_y)
+    if recipient_pid is None:
+        return _ClickTargetOwnership.UNKNOWN
+    return (
+        _ClickTargetOwnership.ZOOM
+        if recipient_pid == dialog.pid
+        else _ClickTargetOwnership.OTHER
+    )
+
+
+def _macos_accessibility_pid_at_point(x: int, y: int) -> int | None:
+    """Return the PID selected by macOS accessibility hit-testing."""
+    app_services = _load_application_services()
+    if app_services is None or not app_services.AXIsProcessTrusted():
+        return None
+
+    system_wide = app_services.AXUIElementCreateSystemWide()
+    if not system_wide:
+        return None
+    element = ctypes.c_void_p()
+    try:
+        error = app_services.AXUIElementCopyElementAtPosition(
+            system_wide,
+            float(x),
+            float(y),
+            ctypes.byref(element),
+        )
+        if error != 0 or not element.value:
+            return 0
+        pid = ctypes.c_int32()
+        error = app_services.AXUIElementGetPid(element, ctypes.byref(pid))
+        return int(pid.value) if error == 0 and pid.value > 0 else 0
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        log.debug("macOS accessibility hit-testing failed: %s", exc)
+        return None
+    finally:
+        if element.value:
+            app_services.CFRelease(element.value)
+        app_services.CFRelease(system_wide)
+
+
 def _list_zoom_windows() -> dict[str, _ZoomWindowInfo] | None:
     if sys.platform == "win32":
         return _list_zoom_windows_win32()
@@ -984,7 +1170,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
         try:
             if user32.IsIconic(hwnd):
                 return True
-            process_name = _win32_process_name_for_window(hwnd)
+            process_id, process_name = _win32_process_identity_for_window(hwnd)
             if process_name.lower() not in _WINDOWS_ZOOM_PROCESS_NAMES:
                 return True
 
@@ -1004,6 +1190,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
                 y=int(rect.top),
                 width=width,
                 height=height,
+                pid=process_id,
             )
         except Exception as exc:  # noqa: BLE001 - Win32 enumeration callback boundary
             log.debug("Skipping Win32 window during Zoom enumeration: %s", exc)
@@ -1020,7 +1207,7 @@ def _list_zoom_windows_win32() -> dict[str, _ZoomWindowInfo] | None:
     return windows
 
 
-def _win32_process_name_for_window(hwnd) -> str:
+def _win32_process_identity_for_window(hwnd) -> tuple[int, str]:
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
@@ -1042,11 +1229,11 @@ def _win32_process_name_for_window(hwnd) -> str:
     pid = ctypes.wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if not pid.value:
-        return ""
+        return 0, ""
 
     handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
     if not handle:
-        return ""
+        return int(pid.value), ""
 
     try:
         size = ctypes.wintypes.DWORD(32768)
@@ -1061,11 +1248,11 @@ def _win32_process_name_for_window(hwnd) -> str:
             ]
             query.restype = ctypes.wintypes.BOOL
         if query is not None and query(handle, 0, buffer, ctypes.byref(size)):
-            return Path(buffer.value).name
+            return int(pid.value), Path(buffer.value).name
     finally:
         kernel32.CloseHandle(handle)
 
-    return ""
+    return int(pid.value), ""
 
 
 def _list_zoom_windows_macos() -> dict[str, _ZoomWindowInfo] | None:
@@ -1105,6 +1292,7 @@ def _list_zoom_windows_macos() -> dict[str, _ZoomWindowInfo] | None:
                 y=int(bounds.get("Y", 0)),
                 width=width,
                 height=height,
+                pid=int(raw.get("kCGWindowOwnerPID", 0)),
             )
         except (TypeError, ValueError):
             continue
@@ -1129,6 +1317,7 @@ def _list_zoom_windows_linux() -> dict[str, _ZoomWindowInfo] | None:
             y=window.y,
             width=window.width,
             height=window.height,
+            pid=window.pid,
         )
         for window_id, window in linux_windows.items()
     }

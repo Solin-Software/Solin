@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 import subprocess
 
@@ -93,6 +94,120 @@ def test_list_zoom_windows_rejects_native_wayland(monkeypatch):
     )
 
     assert linux_zoom_focus.list_zoom_windows() is None
+
+
+class _X11Probe:
+    def __init__(
+        self,
+        *,
+        point_child: int,
+        parents: dict[int, int],
+        protocol_error: bool = False,
+    ):
+        self.point_child = point_child
+        self.parents = parents
+        self.protocol_error = protocol_error
+        self.closed: list[int] = []
+        self.error_handler = None
+
+    def XOpenDisplay(self, _name):
+        return 10
+
+    def XDefaultRootWindow(self, _display):
+        return 1
+
+    def XTranslateCoordinates(
+        self,
+        _display,
+        _source,
+        _destination,
+        _x,
+        _y,
+        translated_x,
+        translated_y,
+        child,
+    ):
+        translated_x._obj.value = 0
+        translated_y._obj.value = 0
+        child._obj.value = self.point_child
+        return 1
+
+    def XQueryTree(
+        self,
+        _display,
+        window_id,
+        root,
+        parent,
+        _children,
+        child_count,
+    ):
+        root._obj.value = 1
+        parent._obj.value = self.parents[int(window_id)]
+        child_count._obj.value = 0
+        return 1
+
+    def XSetErrorHandler(self, handler):
+        previous = self.error_handler
+        self.error_handler = handler
+        return previous
+
+    def XSync(self, display, _discard):
+        if self.protocol_error:
+            handler_type = ctypes.CFUNCTYPE(
+                ctypes.c_int,
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+            )
+            handler_type(self.error_handler.value)(display, None)
+        return 0
+
+    def XFree(self, _pointer):
+        return 0
+
+    def XCloseDisplay(self, display):
+        self.closed.append(display)
+        return 0
+
+
+def test_point_is_owned_by_window_matches_the_x11_root_child(monkeypatch):
+    probe = _X11Probe(point_child=400, parents={200: 400, 400: 1})
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+    monkeypatch.setattr(linux_zoom_focus, "_load_x11", lambda: probe)
+
+    assert linux_zoom_focus.point_is_owned_by_window("200", 300, 250) is True
+    assert probe.closed == [10]
+
+
+def test_point_is_owned_by_window_rejects_an_occluding_x11_window(monkeypatch):
+    probe = _X11Probe(point_child=500, parents={200: 400, 400: 1})
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+    monkeypatch.setattr(linux_zoom_focus, "_load_x11", lambda: probe)
+
+    assert linux_zoom_focus.point_is_owned_by_window("200", 300, 250) is False
+
+
+def test_point_is_owned_by_window_fails_closed_on_x11_protocol_error(monkeypatch):
+    probe = _X11Probe(
+        point_child=400,
+        parents={200: 400, 400: 1},
+        protocol_error=True,
+    )
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+    monkeypatch.setattr(linux_zoom_focus, "_load_x11", lambda: probe)
+
+    assert linux_zoom_focus.point_is_owned_by_window("200", 300, 250) is None
+    assert probe.error_handler is None
+
+
+def test_point_is_owned_by_window_is_unavailable_on_wayland(monkeypatch):
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setattr(
+        linux_zoom_focus,
+        "_load_x11",
+        lambda: (_ for _ in ()).throw(AssertionError("must not load X11")),
+    )
+
+    assert linux_zoom_focus.point_is_owned_by_window("200", 300, 250) is None
 
 
 def test_acquire_zoom_focus_activates_largest_window_and_verifies_owner(monkeypatch):

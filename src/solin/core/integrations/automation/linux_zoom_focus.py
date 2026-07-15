@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 
 log = logging.getLogger(__name__)
 
 _ZOOM_EXECUTABLE_NAMES = frozenset({"zoom", "zoom.real"})
 _XDOTOOL_QUERY_TIMEOUT_SECONDS = 1.0
 _XDOTOOL_ACTIVATION_TIMEOUT_SECONDS = 3.0
+_X11_PARENT_TRAVERSAL_LIMIT = 64
+_X11_ERROR_HANDLER_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,178 @@ def list_zoom_windows() -> dict[str, LinuxZoomWindow] | None:
             )
 
     return windows
+
+
+def point_is_owned_by_window(window_id: str, x: int, y: int) -> bool | None:
+    """Return whether an X11 click at the point targets the window's root child."""
+    if os.environ.get("XDG_SESSION_TYPE", "").casefold() == "wayland":
+        return None
+    try:
+        expected_window = int(window_id)
+    except (TypeError, ValueError):
+        return None
+    if expected_window <= 0:
+        return None
+
+    x11 = _load_x11()
+    if x11 is None:
+        return None
+    display = x11.XOpenDisplay(None)
+    if not display:
+        return None
+    try:
+        with _X11_ERROR_HANDLER_LOCK:
+            return _point_is_owned_by_window_x11(
+                x11,
+                display,
+                expected_window,
+                int(x),
+                int(y),
+            )
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        log.debug("Could not hit-test the X11 Zoom target: %s", exc)
+        return None
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def _point_is_owned_by_window_x11(
+    x11,
+    display,
+    expected_window: int,
+    x: int,
+    y: int,
+) -> bool | None:
+    """Run an X11 hit-test while trapping a disappearing-window race."""
+    protocol_error = False
+    error_handler_type = ctypes.CFUNCTYPE(
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    )
+
+    @error_handler_type
+    def _record_protocol_error(_display, _error_event):
+        nonlocal protocol_error
+        protocol_error = True
+        return 0
+
+    previous_handler = x11.XSetErrorHandler(
+        ctypes.cast(_record_protocol_error, ctypes.c_void_p)
+    )
+    result: bool | None = None
+    try:
+        root = int(x11.XDefaultRootWindow(display))
+        if root > 0:
+            child = ctypes.c_ulong()
+            translated_x = ctypes.c_int()
+            translated_y = ctypes.c_int()
+            translated = x11.XTranslateCoordinates(
+                display,
+                root,
+                root,
+                x,
+                y,
+                ctypes.byref(translated_x),
+                ctypes.byref(translated_y),
+                ctypes.byref(child),
+            )
+            if translated and not child.value:
+                result = False
+            elif translated:
+                expected_root_child = _x11_root_child_for_window(
+                    x11,
+                    display,
+                    root,
+                    expected_window,
+                )
+                if expected_root_child is not None:
+                    result = int(child.value) == expected_root_child
+    finally:
+        try:
+            x11.XSync(display, False)
+        finally:
+            x11.XSetErrorHandler(previous_handler)
+    return None if protocol_error else result
+
+
+def _load_x11():
+    path = ctypes.util.find_library("X11")
+    if not path:
+        return None
+    try:
+        x11 = ctypes.CDLL(path)
+    except OSError as exc:
+        log.debug("libX11 is unavailable for Zoom target hit-testing: %s", exc)
+        return None
+
+    window = ctypes.c_ulong
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XDefaultRootWindow.restype = window
+    x11.XTranslateCoordinates.argtypes = [
+        ctypes.c_void_p,
+        window,
+        window,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(window),
+    ]
+    x11.XTranslateCoordinates.restype = ctypes.c_int
+    x11.XQueryTree.argtypes = [
+        ctypes.c_void_p,
+        window,
+        ctypes.POINTER(window),
+        ctypes.POINTER(window),
+        ctypes.POINTER(ctypes.POINTER(window)),
+        ctypes.POINTER(ctypes.c_uint),
+    ]
+    x11.XQueryTree.restype = ctypes.c_int
+    x11.XSetErrorHandler.argtypes = [ctypes.c_void_p]
+    x11.XSetErrorHandler.restype = ctypes.c_void_p
+    x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    x11.XSync.restype = ctypes.c_int
+    x11.XFree.argtypes = [ctypes.c_void_p]
+    x11.XFree.restype = ctypes.c_int
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.restype = ctypes.c_int
+    return x11
+
+
+def _x11_root_child_for_window(
+    x11,
+    display,
+    root: int,
+    window_id: int,
+) -> int | None:
+    current = window_id
+    for _level in range(_X11_PARENT_TRAVERSAL_LIMIT):
+        root_return = ctypes.c_ulong()
+        parent_return = ctypes.c_ulong()
+        children_return = ctypes.POINTER(ctypes.c_ulong)()
+        child_count = ctypes.c_uint()
+        queried = x11.XQueryTree(
+            display,
+            current,
+            ctypes.byref(root_return),
+            ctypes.byref(parent_return),
+            ctypes.byref(children_return),
+            ctypes.byref(child_count),
+        )
+        if children_return:
+            x11.XFree(ctypes.cast(children_return, ctypes.c_void_p))
+        if not queried:
+            return None
+        parent = int(parent_return.value)
+        if parent == root:
+            return current
+        if parent <= 0 or parent == current:
+            return None
+        current = parent
+    return None
 
 
 def acquire_zoom_focus() -> LinuxZoomFocusSession | None:
