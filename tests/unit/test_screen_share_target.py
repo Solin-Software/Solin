@@ -7,6 +7,14 @@ from types import SimpleNamespace
 from solin.core.integrations.automation import screen_share
 
 
+class _NativeCall:
+    def __init__(self, implementation):
+        self._implementation = implementation
+
+    def __call__(self, *args):
+        return self._implementation(*args)
+
+
 def _window(
     window_id: str,
     *,
@@ -14,6 +22,7 @@ def _window(
     y: int,
     width: int,
     height: int,
+    pid: int = 0,
 ) -> screen_share._ZoomWindowInfo:
     return screen_share._ZoomWindowInfo(
         window_id=window_id,
@@ -22,6 +31,7 @@ def _window(
         y=y,
         width=width,
         height=height,
+        pid=pid,
     )
 
 
@@ -54,6 +64,11 @@ def _configure_detected_share_dialog(monkeypatch, dialog, clicks) -> None:
     monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
         screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.ZOOM,
+    )
+    monkeypatch.setattr(
+        screen_share,
         "send_virtual_clicks",
         lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
         or True,
@@ -77,9 +92,10 @@ def test_execute_start_share_clicks_absolute_configured_position(monkeypatch):
 
 
 def test_auto_share_uses_conservative_interaction_delays() -> None:
-    assert screen_share.SHARE_DIALOG_INTERACTION_DELAY_MS == 900
-    assert screen_share.SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS == 900
+    assert screen_share.SHARE_DIALOG_INTERACTION_DELAY_MS == 550
+    assert screen_share.SHARE_DIALOG_FIRST_CLICK_CONFIRMATION_MS == 450
     assert screen_share.SHARE_DIALOG_RETRY_CONFIRMATION_MS == 1100
+    assert screen_share.SHARE_DIALOG_TARGET_READY_STABLE_SAMPLES == 3
 
 
 def test_execute_start_share_rejects_target_outside_detected_dialog(monkeypatch):
@@ -102,6 +118,11 @@ def test_execute_start_share_rechecks_dialog_after_safety_delay(monkeypatch):
         lambda _initial, _monitor=None: dialog,
     )
     monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.ZOOM,
+    )
     monkeypatch.setattr(screen_share.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
         screen_share,
@@ -133,6 +154,11 @@ def test_execute_start_share_warns_once_when_mouse_moves_during_wait(monkeypatch
         lambda _milliseconds, monitor=None: monitor.check() if monitor else None,
     )
     monkeypatch.setattr(screen_share, "send_hotkey", lambda _hotkey: True)
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.ZOOM,
+    )
     monkeypatch.setattr(
         screen_share,
         "send_virtual_clicks",
@@ -265,9 +291,243 @@ def test_retry_revalidates_dialog_before_second_click(monkeypatch):
         lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
         or True,
     )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.ZOOM,
+    )
 
     assert screen_share._click_share_target_with_retry(300, 250, dialog) is False
     assert clicks == [(300, 250, 2, 120)]
+
+
+def test_target_readiness_requires_three_consecutive_zoom_samples(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    ownership = iter(
+        [
+            screen_share._ClickTargetOwnership.OTHER,
+            screen_share._ClickTargetOwnership.ZOOM,
+            screen_share._ClickTargetOwnership.ZOOM,
+            screen_share._ClickTargetOwnership.ZOOM,
+        ]
+    )
+    times = iter([0.0, 0.01, 0.02, 0.03])
+    sleeps: list[int] = []
+    monkeypatch.setattr(
+        screen_share,
+        "_current_safe_share_dialog",
+        lambda current, _x, _y: current,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: next(ownership),
+    )
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(
+        screen_share,
+        "_sleep_with_mouse_monitoring",
+        lambda duration_ms, _monitor=None: sleeps.append(duration_ms),
+    )
+
+    assert screen_share._wait_for_zoom_click_target(dialog, 300, 250) is dialog
+    assert sleeps == [screen_share.SHARE_DIALOG_TARGET_READY_POLL_INTERVAL_MS] * 3
+
+
+def test_target_readiness_times_out_while_another_window_owns_the_point(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    times = iter([0.0, 2.0])
+    monkeypatch.setattr(
+        screen_share,
+        "_current_safe_share_dialog",
+        lambda current, _x, _y: current,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.OTHER,
+    )
+    monkeypatch.setattr(screen_share.time, "monotonic", lambda: next(times))
+
+    assert screen_share._wait_for_zoom_click_target(dialog, 300, 250) is None
+
+
+def test_target_readiness_fails_closed_when_native_probe_is_unavailable(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    sleeps: list[int] = []
+    monkeypatch.setattr(
+        screen_share,
+        "_current_safe_share_dialog",
+        lambda current, _x, _y: current,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.UNKNOWN,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_sleep_with_mouse_monitoring",
+        lambda duration_ms, _monitor=None: sleeps.append(duration_ms),
+    )
+
+    assert screen_share._wait_for_zoom_click_target(dialog, 300, 250) is None
+    assert sleeps == []
+
+
+def test_first_click_is_suppressed_if_zoom_loses_target_ownership(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    monkeypatch.setattr(
+        screen_share,
+        "_current_safe_share_dialog",
+        lambda current, _x, _y: current,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: screen_share._ClickTargetOwnership.OTHER,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
+        or True,
+    )
+
+    assert screen_share._click_share_target_with_retry(300, 250, dialog) is False
+    assert clicks == []
+
+
+def test_retry_is_suppressed_if_zoom_loses_target_ownership(monkeypatch):
+    dialog = _window("dialog", x=100, y=100, width=801, height=601)
+    clicks: list[tuple[int, int, int, int]] = []
+    ownership = iter(
+        [
+            screen_share._ClickTargetOwnership.ZOOM,
+            screen_share._ClickTargetOwnership.OTHER,
+        ]
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_current_safe_share_dialog",
+        lambda current, _x, _y: current,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_click_target_ownership",
+        lambda _dialog, _x, _y: next(ownership),
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_wait_for_share_dialog_exit",
+        lambda _dialog, _timeout_ms, _monitor=None: (
+            screen_share._ShareDialogPresence.PRESENT
+        ),
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "send_virtual_clicks",
+        lambda x, y, count, interval_ms: clicks.append((x, y, count, interval_ms))
+        or True,
+    )
+
+    assert screen_share._click_share_target_with_retry(300, 250, dialog) is False
+    assert clicks == [(300, 250, 2, 120)]
+
+
+def test_win32_target_probe_requires_the_exact_detected_root_window(monkeypatch):
+    roots = {222: 111, 333: 999}
+    recipient = {"value": 222}
+    user32 = SimpleNamespace(
+        WindowFromPoint=_NativeCall(lambda _point: recipient["value"]),
+        GetAncestor=_NativeCall(lambda hwnd, _flag: roots[hwnd]),
+    )
+    monkeypatch.setattr(
+        screen_share.ctypes,
+        "WinDLL",
+        lambda _name, use_last_error=True: user32,
+    )
+    dialog = _window("111", x=100, y=100, width=801, height=601)
+
+    assert screen_share._click_target_ownership_win32(dialog, 300, 250) is (
+        screen_share._ClickTargetOwnership.ZOOM
+    )
+
+    recipient["value"] = 333
+    assert screen_share._click_target_ownership_win32(dialog, 300, 250) is (
+        screen_share._ClickTargetOwnership.OTHER
+    )
+
+
+def test_macos_target_probe_uses_accessibility_hit_test_pid(monkeypatch):
+    dialog = _window(
+        "111",
+        x=100,
+        y=100,
+        width=801,
+        height=601,
+        pid=42,
+    )
+    recipient = {"pid": 42}
+    monkeypatch.setattr(
+        screen_share,
+        "_macos_accessibility_pid_at_point",
+        lambda _x, _y: recipient["pid"],
+    )
+
+    assert screen_share._click_target_ownership_macos(dialog, 300, 250) is (
+        screen_share._ClickTargetOwnership.ZOOM
+    )
+
+    recipient["pid"] = 99
+    assert screen_share._click_target_ownership_macos(dialog, 300, 250) is (
+        screen_share._ClickTargetOwnership.OTHER
+    )
+
+
+def test_macos_accessibility_probe_returns_topmost_element_pid(monkeypatch):
+    releases: list[int] = []
+
+    def _copy_element(_system, _x, _y, element_pointer):
+        element_pointer._obj.value = 200
+        return 0
+
+    def _get_pid(_element, pid_pointer):
+        pid_pointer._obj.value = 42
+        return 0
+
+    app_services = SimpleNamespace(
+        AXIsProcessTrusted=lambda: True,
+        AXUIElementCreateSystemWide=lambda: 100,
+        AXUIElementCopyElementAtPosition=_copy_element,
+        AXUIElementGetPid=_get_pid,
+        CFRelease=releases.append,
+    )
+    monkeypatch.setattr(
+        screen_share,
+        "_load_application_services",
+        lambda: app_services,
+    )
+
+    assert screen_share._macos_accessibility_pid_at_point(300, 250) == 42
+    assert releases == [200, 100]
+
+
+def test_linux_target_probe_dispatches_to_x11_window_verifier(monkeypatch):
+    dialog = _window("111", x=100, y=100, width=801, height=601)
+    calls: list[tuple[str, int, int]] = []
+    monkeypatch.setattr(screen_share.sys, "platform", "linux")
+    monkeypatch.setattr(
+        screen_share,
+        "point_is_owned_by_window",
+        lambda window_id, x, y: calls.append((window_id, x, y)) or True,
+    )
+
+    assert screen_share._click_target_ownership(dialog, 300, 250) is (
+        screen_share._ClickTargetOwnership.ZOOM
+    )
+    assert calls == [("111", 300, 250)]
 
 
 def test_share_dialog_exit_probe_tracks_only_detected_window(monkeypatch):
