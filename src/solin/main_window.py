@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
         )
 
         self.setWindowTitle(self.tr("Solin"))
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(635, 600)
         self._window_state = WindowStateController(
             WindowStateContext(
                 minimum_width=self.minimumWidth,
