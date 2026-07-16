@@ -25,6 +25,38 @@ The importable application package lives under `src/solin`. Use the installed
 `solin` GUI entry point after editable installation, or `python main.py` as the
 thin local launcher during development.
 
+## Local Remote Control
+
+Solin can expose a profile-scoped, installable remote-control web app on one
+selected private network interface. The service is disabled by default and uses
+the fixed address `https://<selected-ip>:8765/remote/`; it never binds to every
+interface and should not be forwarded through a router or exposed to the public
+Internet.
+
+To enable it, open Solin settings, select the private LAN interface, save a
+username and a password with at least 12 characters, then turn on **Remote
+control**. Playlists, linked folders, stored meeting trees, now-playing state,
+transport controls, seek, volume and stop remain synchronized with the desktop.
+The remote catalog is read-only: filesystem paths, media URLs and editing or
+reordering operations are never exposed.
+
+The first device setup requires trusting Solin's local certificate authority so
+the browser can treat the PWA as a secure, installable app. Open the remote URL,
+expand **Prepare installation on this device**, download the certificate, and
+verify its SHA-256 fingerprint against the value shown in Solin settings before
+trusting it. On iPhone or iPad, enable the installed root under **Settings ›
+General › About › Certificate Trust Settings**. On Android, install it as a CA
+certificate from the device security settings. Reopen the URL afterward and use
+the browser's install or Add to Home Screen action.
+
+The generated authority is private to this Solin installation and constrained
+to the selected IPv4 address. Its private key never leaves the desktop. Changing
+the selected IP rotates the authority and requires trusting the new certificate.
+Authentication uses profile-local scrypt password hashes, bounded login rate
+limits, server-side sessions, `Secure`/`HttpOnly`/`SameSite=Strict` cookies,
+per-session CSRF tokens, exact Host/Origin checks, and an HTTPS WebSocket with
+revisioned recovery and idempotent commands.
+
 ### Linux native webview
 
 Solin's embedded browser uses WebKitGTK 4.1 with GTK 3 and libsoup 3 on Linux.

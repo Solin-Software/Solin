@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 class ShutdownServices:
     """Long-lived services stopped by the main-window shutdown boundary."""
 
+    remote_control: Any | None
     remote_services: Any | None
     download_notifications: Any | None
     playback_notifications: Any | None
@@ -51,6 +52,7 @@ class ShutdownController:
         self._dependencies = dependencies
 
     def shutdown(self) -> None:
+        self.stop_remote_control()
         self.close_projection_targets()
         self.stop_remote_services()
         self.stop_notifications()
@@ -61,6 +63,11 @@ class ShutdownController:
         self.cleanup_jwl_temp_files()
         self.save_window_state()
         self.cleanup_lazy_pages()
+
+    def stop_remote_control(self) -> None:
+        remote_control = self._dependencies.services.remote_control
+        if remote_control is not None:
+            remote_control.stop()
 
     def close_projection_targets(self) -> None:
         dependencies = self._dependencies

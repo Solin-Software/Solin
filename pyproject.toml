@@ -9,6 +9,8 @@ description = "Desktop control surface for media, meetings, projection, OBS, and
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp==3.14.1",
+    "cryptography==49.0.0",
     "ephem==4.2.1",
     "fonttools==4.62.1",
     "packaging==26.0",
@@ -38,6 +40,10 @@ where = ["src"]
 [tool.setuptools.package-data]
 solin = [
     "qml/*.qml",
+    "resources/remote_control/*",
+    "resources/remote_control/icons/*",
+    "resources/remote_control/scripts/*",
+    "resources/remote_control/styles/*",
     "resources/assets/*.icns",
     "resources/assets/*.ico",
     "resources/translations/*.qm",
@@ -91,6 +97,7 @@ include = [
     "src/solin/core/playlists",
     "src/solin/core/projection",
     "src/solin/core/profiles",
+    "src/solin/core/remote_control",
     "src/solin/core/timer",
     "src/solin/core/windowing",
     "src/native_webview_widget",

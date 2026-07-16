@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+import logging
 from typing import Any, Protocol
 
 from solin.core.projection.monitor_allocation import (
@@ -13,6 +14,7 @@ from solin.core.projection.monitor_allocation import (
 
 
 ProjectionState = dict[str, Any]
+log = logging.getLogger(__name__)
 
 
 class MonitorAllocation(Protocol):
@@ -55,6 +57,9 @@ class ProjectionSession:
     ) -> None:
         self._allocation = allocation
         self._state: ProjectionState = idle_projection_state()
+        self._revision = 0
+        self._session_id = 0
+        self._listeners: set[Callable[[], None]] = set()
         self._idle_media_path = ""
         self._tab_projection_active = False
         self._media_hidden_screen_names = set(media_hidden_screen_names)
@@ -69,11 +74,46 @@ class ProjectionSession:
     def state_type(self) -> str:
         return str(self._state.get("type", "idle"))
 
+    @property
+    def revision(self) -> int:
+        return self._revision
+
+    @property
+    def session_id(self) -> int:
+        """Monotonic identity of the active projection, excluding state updates."""
+        return self._session_id
+
     def set_state(self, state: Mapping[str, Any]) -> None:
         self._state = dict(state)
+        self._session_id += 1
+        self._publish_changed()
+
+    def update_state(self, **changes: Any) -> None:
+        if not changes or all(self._state.get(key) == value for key, value in changes.items()):
+            return
+        self._state.update(changes)
+        self._publish_changed()
 
     def reset_state(self) -> None:
         self._state = idle_projection_state()
+        self._session_id += 1
+        self._publish_changed()
+
+    def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
+        self._listeners.add(listener)
+
+        def unsubscribe() -> None:
+            self._listeners.discard(listener)
+
+        return unsubscribe
+
+    def _publish_changed(self) -> None:
+        self._revision += 1
+        for listener in tuple(self._listeners):
+            try:
+                listener()
+            except Exception:  # noqa: BLE001 - projection observer boundary
+                log.warning("Projection state listener failed", exc_info=True)
 
     @property
     def idle_media_path(self) -> str:
@@ -87,7 +127,11 @@ class ProjectionSession:
         return self._tab_projection_active
 
     def set_tab_projection_active(self, active: bool) -> None:
-        self._tab_projection_active = bool(active)
+        normalized = bool(active)
+        if normalized == self._tab_projection_active:
+            return
+        self._tab_projection_active = normalized
+        self._publish_changed()
 
     def all_windows(self) -> list[Any]:
         windows = list(self.projection_windows)

@@ -66,12 +66,15 @@ class TimerThemeController:
         )
         self._session.set_state({
             "type": "timer",
+            "title": context.translate("Timer"),
             "target_dt": target_dt,
             "total": total,
             "presentation": presentation.value,
         })
 
     def on_timer_update_proj(self, remaining: int, total: int) -> None:
+        if self._session.state_type == "timer":
+            self._session.update_state(remaining=remaining, total=total)
         for projection_window in self._context.projection_windows():
             projection_window.update_timer(remaining, total)
 
@@ -101,6 +104,7 @@ class TimerThemeController:
         )
         self._session.set_state({
             "type": "sermon_theme",
+            "title": short,
             "text": text,
             "subtitle": subtitle,
             "transform": (1.0, 0.0, 0.0),

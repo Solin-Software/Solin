@@ -124,6 +124,19 @@ class MediaController(QObject):
     def stream_persist(self) -> bool:
         return self._session.stream_persist
 
+    @property
+    def session_id(self) -> int:
+        """Monotonic identifier for the currently loaded playback source."""
+        return self._session.session_id
+
+    @property
+    def volume(self) -> float:
+        return self.audio_output.volume()
+
+    @property
+    def is_recovering(self) -> bool:
+        return self._stream_recovering
+
     # ── Playback público ──────────────────────────────────────────────────
 
     def start_playback(self, request: MediaPlaybackRequest) -> None:

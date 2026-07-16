@@ -1842,6 +1842,9 @@ class MeetingTreeController(QObject):
                 start_trim_ticks=self._trim_ticks(node, "start_trim_ticks"),
                 end_trim_ticks=self._trim_ticks(node, "end_trim_ticks"),
                 base_duration_ticks=self._trim_ticks(node, "base_duration_ticks"),
+                origin_kind="meeting",
+                origin_container_id=self._tree_key,
+                origin_item_id=item_id,
             )
         )
 

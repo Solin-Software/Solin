@@ -27,6 +27,9 @@ class MeetingMedia:
     start_trim_ticks: int = 0
     end_trim_ticks: int = 0
     base_duration_ticks: int = 0
+    origin_kind: str = ""
+    origin_container_id: str = ""
+    origin_item_id: str = ""
 
 
 @dataclass(slots=True)

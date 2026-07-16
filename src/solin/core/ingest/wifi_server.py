@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 _INACTIVITY_SECS: int = 15 * 60          # 15 minutos
 _POLL_INTERVAL_MS: int = 30_000          # checa inatividade a cada 30 s
-_PORT_RANGE: tuple[int, int] = (8765, 8865)
+_PORT_RANGE: tuple[int, int] = (8766, 8865)
 
 _UPLOAD_THEME_KEYS = frozenset(
     {
@@ -516,7 +516,7 @@ class WifiReceiveServer(QObject):
 
         port = _find_free_port(*_PORT_RANGE)
         if port is None:
-            self.error_occurred.emit("Nenhuma porta disponível em 8765-8864.")
+            self.error_occurred.emit("Nenhuma porta disponível em 8766-8864.")
             return False
 
         self._token = uuid.uuid4().hex[:12]   # token curto mas suficientemente aleatório

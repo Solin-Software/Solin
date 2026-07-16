@@ -770,6 +770,17 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def current_media_title(self) -> str:
         return (self.proj_title.text() or "").strip()
 
+    @property
+    def projection_mode(self) -> str | None:
+        return self._mode
+
+    @property
+    def volume_percent(self) -> int:
+        return max(0, min(100, int(round(self._volume * 100))))
+
+    def set_volume_percent(self, value: int) -> None:
+        self.vol_slider.setValue(max(0, min(100, int(value))))
+
     def is_visual_media_active(self) -> bool:
         return self._mode == "image" or (self._mode == "video" and not self._is_audio)
 

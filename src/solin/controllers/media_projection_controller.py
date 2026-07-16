@@ -59,9 +59,7 @@ class MediaProjectionContext:
     sjjm_announce_mode: Callable[[], bool]
     start_videos_paused: Callable[[], bool]
     playback_protection: Any
-    projection_aspect_ratio_provider: Callable[[], Any] = (
-        _default_projection_aspect_ratio
-    )
+    projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,10 +127,16 @@ class MediaProjectionController:
             title = item.get("title") or item.get("label") or "Media"
             media_type = item.get("type") or item.get("media_type") or "video"
             if media_type == "image" and url and os.path.exists(url):
+                origin_item = {
+                    "url": url,
+                    "title": title,
+                    "type": media_type,
+                    **self._meeting_origin_fields(item),
+                }
                 self._project_image_path(
                     title,
                     url,
-                    playlist=[],
+                    playlist=[origin_item],
                     image_framing=item.get("image_framing"),
                     user_initiated=False,
                 )
@@ -144,6 +148,7 @@ class MediaProjectionController:
                     "start_trim_ticks": item.get("start_trim_ticks"),
                     "end_trim_ticks": item.get("end_trim_ticks"),
                     "base_duration_ticks": item.get("base_duration_ticks"),
+                    **self._meeting_origin_fields(item),
                 }
                 self.project_video(url, title, [playlist_item], None)
             return
@@ -152,10 +157,16 @@ class MediaProjectionController:
         title = re.sub(r"<[^>]+>", "", item.label or item.caption or "Media").strip()
 
         if "image" in mime and item.file_path and os.path.exists(item.file_path):
+            origin_item = {
+                "url": item.file_path,
+                "title": title,
+                "type": "image",
+                **self._meeting_origin_fields(item),
+            }
             self._project_image_path(
                 title,
                 item.file_path,
-                playlist=[],
+                playlist=[origin_item],
                 image_framing=getattr(item, "image_framing", None),
                 user_initiated=False,
             )
@@ -165,8 +176,7 @@ class MediaProjectionController:
             return
 
         if item.file_path and (
-            item.file_path.startswith(("http://", "https://"))
-            or os.path.exists(item.file_path)
+            item.file_path.startswith(("http://", "https://")) or os.path.exists(item.file_path)
         ):
             if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
                 self._next_is_sjjm = True
@@ -178,6 +188,7 @@ class MediaProjectionController:
                 "start_trim_ticks": getattr(item, "start_trim_ticks", None),
                 "end_trim_ticks": getattr(item, "end_trim_ticks", None),
                 "base_duration_ticks": getattr(item, "base_duration_ticks", None),
+                **self._meeting_origin_fields(item),
             }
             self.project_video(
                 item.file_path,
@@ -273,9 +284,7 @@ class MediaProjectionController:
             if current_ext not in AUDIO_EXTS:
                 for projection_window in context.projection_windows():
                     projection_window.begin_video()
-            context.media_controller.start_playback(
-                self._playback_request(current, autoplay=True)
-            )
+            context.media_controller.start_playback(self._playback_request(current, autoplay=True))
             return
 
         if media_type == "image":
@@ -344,18 +353,11 @@ class MediaProjectionController:
         if not is_audio:
             self._handlers.prepare_video_session()
 
-        wait_for_auto_share = (
-            not is_audio
-            and self._handlers.prepare_auto_share_playback()
-        )
+        wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback()
         if announce:
             context.projection_bar.begin_announcement_mode()
 
-        start_paused = (
-            not is_audio
-            and not announce
-            and context.start_videos_paused()
-        )
+        start_paused = not is_audio and not announce and context.start_videos_paused()
         context.media_controller.start_playback(
             self._playback_request(
                 media_item or {"url": url},
@@ -364,7 +366,14 @@ class MediaProjectionController:
             )
         )
 
-        self._session.set_state({"type": "video", "is_audio": is_audio})
+        self._session.set_state(
+            {
+                "type": "video",
+                "is_audio": is_audio,
+                "title": title,
+                "origin": self._projection_origin(media_item),
+            }
+        )
         self._handlers.update_projection_status(
             True,
             title,
@@ -393,6 +402,7 @@ class MediaProjectionController:
             context.projection_bar.activate_image(live_tab_title)
             context.projection_bar.hide_add_to_destination_action()
             context.projection_bar.set_live_tab_mode(True)
+            self._session.set_state({"type": "browser", "title": live_tab_title})
             if not ALLOW_ZOOM_PAN_ON_LIVE_TAB:
                 context.projection_bar.preview_content.set_image_mode(False)
             self._handlers.update_projection_status(
@@ -434,7 +444,7 @@ class MediaProjectionController:
         # both projected images and the sermon-theme slide.
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            state["transform"] = (zoom, norm_x, norm_y)
+            self._session.update_state(transform=(zoom, norm_x, norm_y))
         if sync_preview:
             self._context.projection_bar.set_projected_image_transform(
                 ImageTransform(zoom, norm_x, norm_y)
@@ -450,7 +460,7 @@ class MediaProjectionController:
     def on_image_reset_transform(self) -> None:
         state = self._session.state
         if state.get("type") in _TRANSFORMABLE_STATES:
-            state["transform"] = _IDENTITY_TRANSFORM
+            self._session.update_state(transform=_IDENTITY_TRANSFORM)
         for projection_window in self._context.projection_windows():
             projection_window.set_image_transform(*_IDENTITY_TRANSFORM)
 
@@ -479,6 +489,8 @@ class MediaProjectionController:
         projection_bar = self._context.projection_bar
         if projection_bar.is_video_mode() and title:
             projection_bar.set_projected_title(title)
+            if self._session.state_type == "video":
+                self._session.update_state(title=title)
 
     def distribute_frame(self, frame) -> None:
         context = self._context
@@ -617,6 +629,7 @@ class MediaProjectionController:
                 "start_trim_ticks": getattr(item, "start_trim_ticks", None),
                 "end_trim_ticks": getattr(item, "end_trim_ticks", None),
                 "base_duration_ticks": getattr(item, "base_duration_ticks", None),
+                **self._meeting_origin_fields(item),
             }
             self.project_video(url, display_title, [playlist_item], None)
             return
@@ -624,9 +637,21 @@ class MediaProjectionController:
         QMessageBox.information(
             self._context.dialog_parent,
             "Meetings",
-            f"Could not resolve video URL for: {title}\n"
-            "Check your internet connection.",
+            f"Could not resolve video URL for: {title}\nCheck your internet connection.",
         )
+
+    @staticmethod
+    def _meeting_origin_fields(item: object) -> dict[str, str]:
+        def value(name: str) -> object:
+            if isinstance(item, dict):
+                return item.get(name)
+            return getattr(item, name, "")
+
+        return {
+            "origin_kind": str(value("origin_kind") or "meeting"),
+            "origin_container_id": str(value("origin_container_id") or ""),
+            "origin_item_id": str(value("origin_item_id") or ""),
+        }
 
     def _project_image_path(
         self,
@@ -711,6 +736,10 @@ class MediaProjectionController:
         self._session.set_state(
             {
                 "type": "image",
+                "title": title,
+                "origin": self._projection_origin(
+                    playlist[index or 0] if playlist and 0 <= (index or 0) < len(playlist) else None
+                ),
                 "data": data,
                 "transform": (
                     initial_transform.zoom,
@@ -732,9 +761,22 @@ class MediaProjectionController:
         )
 
     def _allow_manual_projection_change(self, *, notify: bool = True) -> bool:
-        return self._context.playback_protection.allow_manual_projection_change(
-            notify=notify
-        )
+        return self._context.playback_protection.allow_manual_projection_change(notify=notify)
+
+    @staticmethod
+    def _projection_origin(item: dict[str, Any] | None) -> dict[str, str] | None:
+        if not item:
+            return None
+        kind = str(item.get("origin_kind") or "")
+        container_id = str(item.get("origin_container_id") or "")
+        item_id = str(item.get("origin_item_id") or item.get("id") or "")
+        if not kind or not item_id:
+            return None
+        return {
+            "kind": kind,
+            "container_id": container_id,
+            "item_id": item_id,
+        }
 
     def _update_active_image_framing(
         self,
@@ -748,8 +790,7 @@ class MediaProjectionController:
             return False
 
         current_transform = (
-            image_transform_from_values(state.get("transform"))
-            or IDENTITY_IMAGE_TRANSFORM
+            image_transform_from_values(state.get("transform")) or IDENTITY_IMAGE_TRANSFORM
         )
         if image_transforms_equal(current_transform, target_transform):
             return False

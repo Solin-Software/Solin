@@ -143,6 +143,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     ]
     assert window.projection_session.state == {
         "type": "timer",
+        "title": "Timer",
         "target_dt": target_dt,
         "total": 42,
         "presentation": MediaCountdownPresentation.YEARLY_TEXT.value,
@@ -171,6 +172,7 @@ def test_timer_projection_is_rejected_without_side_effects_when_locked():
 def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
     window = _WindowStub()
     controller = _controller(window)
+    window.projection_session.set_state({"type": "timer", "title": "Timer"})
 
     controller.on_timer_update_proj(7, 30)
     controller.on_timer_blink_proj(True)
@@ -183,6 +185,12 @@ def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():
         [True],
         [True],
     ]
+    assert window.projection_session.state == {
+        "type": "timer",
+        "title": "Timer",
+        "remaining": 7,
+        "total": 30,
+    }
 
 
 def test_project_sermon_theme_renders_preview_and_updates_projection_state():
@@ -202,6 +210,7 @@ def test_project_sermon_theme_renders_preview_and_updates_projection_state():
     assert window.proj_bar.images == [(text[:28] + "…", b"preview")]
     assert window.projection_session.state == {
         "type": "sermon_theme",
+        "title": text[:28] + "…",
         "text": text,
         "subtitle": "PUBLIC TALK",
         "transform": (1.0, 0.0, 0.0),

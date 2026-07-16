@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import threading
+from collections.abc import Callable
 
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.storage.json_repository import JsonFileRepository
@@ -19,6 +21,8 @@ class PlaylistRepository:
 
     def __init__(self, path: str | Path) -> None:
         self._json = JsonFileRepository(path)
+        self._listener_lock = threading.RLock()
+        self._listeners: set[Callable[[], None]] = set()
 
     @classmethod
     def from_paths(cls, paths: PlaylistStoragePaths) -> "PlaylistRepository":
@@ -54,6 +58,28 @@ class PlaylistRepository:
             self._json.write({"playlists": playlists})
         except (OSError, UnicodeError, TypeError, ValueError):
             log_ignored_exception(__name__, "Could not save playlists file")
+            return
+        self._publish_changed()
+
+    def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Subscribe to successful atomic writes and return an unsubscribe callback."""
+        with self._listener_lock:
+            self._listeners.add(listener)
+
+        def unsubscribe() -> None:
+            with self._listener_lock:
+                self._listeners.discard(listener)
+
+        return unsubscribe
+
+    def _publish_changed(self) -> None:
+        with self._listener_lock:
+            listeners = tuple(self._listeners)
+        for listener in listeners:
+            try:
+                listener()
+            except Exception:  # noqa: BLE001 - repository observer boundary
+                log_ignored_exception(__name__, "Playlist change listener failed")
 
 
 class PendingDeletionRepository:

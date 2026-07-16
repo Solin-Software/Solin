@@ -66,6 +66,19 @@ class ProjectionPlaylistMixin:
             return self._playlist[self._playlist_index]
         return None
 
+    @property
+    def playlist_index(self) -> int:
+        return self._playlist_index
+
+    def can_navigate_previous(self) -> bool:
+        return not self._playback_protection.locked and self._playlist_index > 0
+
+    def can_navigate_next(self) -> bool:
+        return (
+            not self._playback_protection.locked
+            and self._playlist_index < len(self._playlist) - 1
+        )
+
     def set_playlist_index(self, index: int) -> None:
         if not 0 <= index < len(self._playlist):
             return
@@ -115,23 +128,33 @@ class ProjectionPlaylistMixin:
         if refresh_options is not None:
             refresh_options()
 
-    def _on_prev_clicked(self):
+    def navigate_previous(self) -> bool:
         if not self._playback_protection.allow_manual_projection_change():
-            return
+            return False
         if self._playlist_index > 0:
             self._playlist_index -= 1
             self._played_indices.add(self._playlist_index)
             self._update_nav_buttons()
             self.playlist_navigate.emit(self._playlist_index)
+            return True
+        return False
 
-    def _on_next_clicked(self):
+    def navigate_next(self) -> bool:
         if not self._playback_protection.allow_manual_projection_change():
-            return
+            return False
         if self._playlist_index < len(self._playlist) - 1:
             self._playlist_index += 1
             self._played_indices.add(self._playlist_index)
             self._update_nav_buttons()
             self.playlist_navigate.emit(self._playlist_index)
+            return True
+        return False
+
+    def _on_prev_clicked(self):
+        ProjectionPlaylistMixin.navigate_previous(self)
+
+    def _on_next_clicked(self):
+        ProjectionPlaylistMixin.navigate_next(self)
 
     def _toggle_playlist_panel(self):
         if self.playlist_panel.is_open():

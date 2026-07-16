@@ -108,6 +108,8 @@ class MainWindowUiContext:
     browser_settings: Any
     meeting_schedule_settings: Any
     watched_folder_settings: Any
+    remote_control_settings: Any
+    remote_control_credentials: Any
     yeartext_settings: Any
     yeartext_service_factory: Callable[[QObject], Any]
     font_manager: Any
@@ -417,6 +419,8 @@ class MainWindowUiController:
             playback_protection=context.playback_protection,
             meeting_schedule_settings=context.meeting_schedule_settings,
             watched_folder_settings=context.watched_folder_settings,
+            remote_control_settings=context.remote_control_settings,
+            remote_control_credentials=context.remote_control_credentials,
             yeartext_settings=context.yeartext_settings,
             yeartext_service_factory=context.yeartext_service_factory,
             auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,

@@ -545,7 +545,7 @@
 <context>
     <name>BrowserNavigationMixin</name>
     <message>
-        <location filename="../../widgets/browser/navigation.py" line="+67"/>
+        <location filename="../../widgets/browser/navigation.py" line="+68"/>
         <location line="+151"/>
         <source>New tab</source>
         <translation>Nova aba</translation>
@@ -597,7 +597,7 @@
 <context>
     <name>BrowserWidget</name>
     <message>
-        <location filename="../../widgets/browser/widget.py" line="+1465"/>
+        <location filename="../../widgets/browser/widget.py" line="+1449"/>
         <source>Back (Alt+←)</source>
         <translation>Voltar (Alt+←)</translation>
     </message>
@@ -617,8 +617,8 @@
         <translation>Cole ou digite uma URL…</translation>
     </message>
     <message>
-        <location line="-417"/>
-        <location line="+420"/>
+        <location line="-392"/>
+        <location line="+395"/>
         <source>Project this tab live</source>
         <translation>Projetar esta aba ao vivo</translation>
     </message>
@@ -628,13 +628,13 @@
         <translation>Projetar região da página</translation>
     </message>
     <message>
-        <location line="-311"/>
-        <location line="+314"/>
+        <location line="-286"/>
+        <location line="+289"/>
         <source>Cursor spotlight (presentation mode)</source>
         <translation>Destaque do cursor (modo de apresentação)</translation>
     </message>
     <message>
-        <location line="-376"/>
+        <location line="-351"/>
         <source>Return browser to normal size ({ratio} active)</source>
         <translation>Restaurar o tamanho normal do navegador (proporção {ratio} ativa)</translation>
     </message>
@@ -649,19 +649,19 @@
         <translation>Ajustar o navegador à tela de projeção ({ratio})</translation>
     </message>
     <message>
-        <location line="+354"/>
+        <location line="+329"/>
         <source>New tab (Ctrl+T)</source>
         <translation>Nova aba (Ctrl+T)</translation>
     </message>
     <message>
-        <location line="-422"/>
-        <location line="+425"/>
+        <location line="-397"/>
+        <location line="+400"/>
         <source>Stop tab projection</source>
         <translation>Parar projeção da aba</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+317"/>
+        <location line="-287"/>
+        <location line="+292"/>
         <source>Disable cursor spotlight</source>
         <translation>Desativar destaque do cursor</translation>
     </message>
@@ -850,7 +850,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1854"/>
+        <location filename="../../qml/PlaylistTreeView.qml" line="+1875"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + rolagem para ampliar · Arraste para mover</translation>
     </message>
@@ -1039,12 +1039,12 @@
     <name>MainWindow</name>
     <message>
         <location filename="../../controllers/main_window_nav.py" line="+9"/>
-        <location filename="../../main_window.py" line="+321"/>
+        <location filename="../../main_window.py" line="+328"/>
         <source>Solin</source>
         <translation>Solin</translation>
     </message>
     <message>
-        <location filename="../../main_window.py" line="+692"/>
+        <location filename="../../main_window.py" line="+684"/>
         <source>Pause playback before changing the projected content.</source>
         <translation>Pause a reprodução antes de alterar o conteúdo projetado.</translation>
     </message>
@@ -1812,7 +1812,7 @@
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+136"/>
+        <location filename="../../qml/MeetingDetailView.qml" line="+144"/>
         <source>Turn off meeting sync</source>
         <translation>Desativar sincronização da reunião</translation>
     </message>
@@ -3386,7 +3386,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ProjectableWebView</name>
     <message>
-        <location filename="../../widgets/browser/tab.py" line="+150"/>
+        <location filename="../../widgets/browser/tab.py" line="+154"/>
         <source>Project image</source>
         <translation>Projetar imagem</translation>
     </message>
@@ -3414,96 +3414,96 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>ProjectionBar</name>
     <message>
-        <location filename="../../widgets/projection/bar.py" line="+383"/>
-        <location line="+1046"/>
+        <location filename="../../widgets/projection/bar.py" line="+388"/>
+        <location line="+1100"/>
         <source>Playing offline</source>
         <translation>Reproduzindo offline</translation>
     </message>
     <message>
-        <location line="-1022"/>
-        <location line="+1009"/>
+        <location line="-1076"/>
+        <location line="+1063"/>
         <source>Pause/Resume</source>
         <translation>Pausar/Retomar</translation>
     </message>
     <message>
-        <location line="-1005"/>
-        <location line="+1009"/>
+        <location line="-1059"/>
+        <location line="+1063"/>
         <source>Previous</source>
         <translation>Anterior</translation>
     </message>
     <message>
-        <location line="-1008"/>
-        <location line="+1009"/>
+        <location line="-1062"/>
+        <location line="+1063"/>
         <location line="+134"/>
         <source>Next</source>
         <translation>Próximo</translation>
     </message>
     <message>
-        <location line="-1135"/>
-        <location line="+997"/>
+        <location line="-1189"/>
+        <location line="+1051"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="-985"/>
-        <location line="+986"/>
+        <location line="-1039"/>
+        <location line="+1040"/>
         <source>Playback options</source>
         <translation>Opções de reprodução</translation>
     </message>
     <message>
-        <location line="-979"/>
+        <location line="-1033"/>
         <source>Toggle OBS scene</source>
         <translation>Alternar cena do OBS</translation>
     </message>
     <message>
         <location line="+16"/>
-        <location line="+964"/>
+        <location line="+1018"/>
         <source>Stop projection</source>
         <translation>Parar projeção</translation>
     </message>
     <message>
-        <location line="-906"/>
-        <location line="+909"/>
+        <location line="-960"/>
+        <location line="+963"/>
         <source>Minimize</source>
         <translation>Minimizar</translation>
     </message>
     <message>
-        <location line="-898"/>
-        <location line="+899"/>
+        <location line="-952"/>
+        <location line="+953"/>
         <source>Show playlist</source>
         <translation>Mostrar playlist</translation>
     </message>
     <message>
-        <location line="-892"/>
-        <location line="+894"/>
+        <location line="-946"/>
+        <location line="+948"/>
         <source>Add to…</source>
         <translation>Adicionar a…</translation>
     </message>
     <message>
-        <location line="-886"/>
-        <location line="+885"/>
+        <location line="-940"/>
+        <location line="+939"/>
         <source>Open as temporary playlist</source>
         <translation>Abrir como playlist temporária</translation>
     </message>
     <message>
-        <location line="-876"/>
-        <location line="+878"/>
+        <location line="-930"/>
+        <location line="+932"/>
         <source>Set as idle screen</source>
         <translation>Definir como tela de descanso</translation>
     </message>
     <message>
-        <location line="-871"/>
-        <location line="+872"/>
+        <location line="-925"/>
+        <location line="+926"/>
         <source>Fullscreen</source>
         <translation>Tela cheia</translation>
     </message>
     <message>
-        <location line="-706"/>
+        <location line="-759"/>
         <source>Pause playback to seek.</source>
         <translation>Pause a reprodução para avançar ou retroceder.</translation>
     </message>
     <message>
-        <location line="+263"/>
+        <location line="+277"/>
         <source>Projected image</source>
         <translation>Imagem projetada</translation>
     </message>
@@ -3518,7 +3518,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cronômetro →</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="+215"/>
         <location line="+85"/>
         <source>Hide media from OBS</source>
         <translation>Ocultar mídia do OBS</translation>
@@ -3567,7 +3567,7 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>QuickAccessToolbar</name>
     <message>
-        <location filename="../../widgets/quick_access_toolbar.py" line="+405"/>
+        <location filename="../../widgets/quick_access_toolbar.py" line="+463"/>
         <location line="+8"/>
         <source>Background Song</source>
         <translation>Cântico de fundo</translation>
@@ -3609,6 +3609,185 @@ Esta ação não pode ser desfeita.</translation>
         <location line="+1"/>
         <source>Expand toolbar</source>
         <translation>Expandir barra de ferramentas</translation>
+    </message>
+</context>
+<context>
+    <name>RemoteControlController</name>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="+235"/>
+        <source>Remote control could not stop cleanly.</source>
+        <translation>Não foi possível encerrar o controle remoto corretamente.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Remote control is disabled.</source>
+        <translation>Controle remoto desativado.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Save access credentials to start remote control.</source>
+        <translation>Salve as credenciais de acesso para iniciar o controle remoto.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Select a private network to start remote control.</source>
+        <translation>Selecione uma rede privada para iniciar o controle remoto.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The selected network is not currently available.</source>
+        <translation>A rede selecionada não está disponível no momento.</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Remote control could not start on the selected network.</source>
+        <translation>Não foi possível iniciar o controle remoto na rede selecionada.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+626"/>
+        <source>Secure remote control is running.</source>
+        <translation>Controle remoto seguro em execução.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Remote control is not running.</source>
+        <translation>O controle remoto não está em execução.</translation>
+    </message>
+</context>
+<context>
+    <name>RemoteControlSectionMixin</name>
+    <message>
+        <location filename="../../widgets/settings/remote_control_section.py" line="+48"/>
+        <location line="+306"/>
+        <source>Remote control</source>
+        <translation>Controle remoto</translation>
+    </message>
+    <message>
+        <location line="-305"/>
+        <location line="+307"/>
+        <source>Control Solin securely from another device on this local network.</source>
+        <translation>Controle o Solin com segurança usando outro dispositivo nesta rede local.</translation>
+    </message>
+    <message>
+        <location line="-291"/>
+        <location line="+293"/>
+        <source>Network interface</source>
+        <translation>Interface de rede</translation>
+    </message>
+    <message>
+        <location line="-281"/>
+        <location line="+282"/>
+        <source>Access credentials</source>
+        <translation>Credenciais de acesso</translation>
+    </message>
+    <message>
+        <location line="-273"/>
+        <location line="+274"/>
+        <source>Username</source>
+        <translation>Nome de usuário</translation>
+    </message>
+    <message>
+        <location line="-269"/>
+        <location line="+270"/>
+        <source>New password</source>
+        <translation>Nova senha</translation>
+    </message>
+    <message>
+        <location line="-265"/>
+        <location line="+266"/>
+        <source>Confirm password</source>
+        <translation>Confirmar senha</translation>
+    </message>
+    <message>
+        <location line="-253"/>
+        <location line="+255"/>
+        <source>Use at least 12 characters. Credentials belong only to this profile.</source>
+        <translation>Use pelo menos 12 caracteres. As credenciais pertencem somente a este perfil.</translation>
+    </message>
+    <message>
+        <location line="-250"/>
+        <location line="+252"/>
+        <source>Save credentials</source>
+        <translation>Salvar credenciais</translation>
+    </message>
+    <message>
+        <location line="-228"/>
+        <location line="+229"/>
+        <source>Copy address</source>
+        <translation>Copiar endereço</translation>
+    </message>
+    <message>
+        <location line="-208"/>
+        <location line="+137"/>
+        <source>No connected controllers</source>
+        <translation>Nenhum controlador conectado</translation>
+    </message>
+    <message>
+        <location line="-134"/>
+        <location line="+206"/>
+        <source>Disconnect all</source>
+        <translation>Desconectar todos</translation>
+    </message>
+    <message>
+        <location line="-182"/>
+        <source>Select a private network…</source>
+        <translation>Selecione uma rede privada…</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Choose a network and save credentials before enabling remote control.</source>
+        <translation>Escolha uma rede e salve as credenciais antes de ativar o controle remoto.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>The passwords do not match.</source>
+        <translation>As senhas não coincidem.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Enter a new password to save.</source>
+        <translation>Insira uma nova senha para salvar.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Check the username and use a password with at least 12 characters.</source>
+        <translation>Verifique o nome de usuário e use uma senha com pelo menos 12 caracteres.</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>No network selected</source>
+        <translation>Nenhuma rede selecionada</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Starting secure remote control…</source>
+        <translation>Iniciando controle remoto seguro…</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Ready to enable.</source>
+        <translation>Pronto para ativar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Configuration required.</source>
+        <translation>Configuração necessária.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Certificate authority SHA-256: %1</source>
+        <translation>Autoridade certificadora SHA-256: %1</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>%1 connected controller</source>
+        <translation>%1 controlador conectado</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>%1 connected controllers</source>
+        <translation>%1 controladores conectados</translation>
     </message>
 </context>
 <context>
@@ -3714,19 +3893,19 @@ Esta ação não pode ser desfeita.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../widgets/settings_widget.py" line="+168"/>
-        <location line="+144"/>
+        <location filename="../../widgets/settings_widget.py" line="+181"/>
+        <location line="+156"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
     <message>
-        <location line="-84"/>
-        <location line="+91"/>
+        <location line="-85"/>
+        <location line="+93"/>
         <source>Annual Text</source>
         <translation>Texto Anual</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+110"/>
         <source>Scripture:</source>
         <translation>Escritura:</translation>
     </message>
@@ -3746,18 +3925,18 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Ex: Mateus 5:3.</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-108"/>
         <source>Auto-download on play</source>
         <translation>Download automático ao reproduzir</translation>
     </message>
     <message>
-        <location line="-128"/>
-        <location line="+118"/>
+        <location line="-141"/>
+        <location line="+130"/>
         <source>Meetings</source>
         <translation>Reuniões</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Auto-download weekly study</source>
         <translation>Baixar automaticamente o estudo da semana</translation>
     </message>
@@ -3767,26 +3946,26 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Modo de anúncio de cânticos</translation>
     </message>
     <message>
-        <location line="-148"/>
-        <location line="+128"/>
+        <location line="-161"/>
+        <location line="+140"/>
         <source>Language</source>
         <translation>Idioma</translation>
     </message>
     <message>
-        <location line="-122"/>
-        <location line="+123"/>
+        <location line="-134"/>
+        <location line="+135"/>
         <source>Media</source>
         <translation>Mídia</translation>
     </message>
     <message>
-        <location line="-111"/>
-        <location line="+113"/>
+        <location line="-123"/>
+        <location line="+125"/>
         <source>Folders</source>
         <translation>Pastas</translation>
     </message>
     <message>
-        <location line="-107"/>
-        <location line="+108"/>
+        <location line="-108"/>
+        <location line="+110"/>
         <source>Integrations</source>
         <translation>Integrações</translation>
     </message>
@@ -3801,13 +3980,13 @@ Esta ação não pode ser desfeita.</translation>
         <translation>JW Media</translation>
     </message>
     <message>
-        <location line="-89"/>
-        <location line="+86"/>
+        <location line="-91"/>
+        <location line="+88"/>
         <source>Screens</source>
         <translation>Telas</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+86"/>
         <source>Audio controls and attendance count during meetings.</source>
         <translation>Controles de áudio e contagem de assistência durante as reuniões.</translation>
     </message>
@@ -3905,13 +4084,13 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Cena da janela de mídia</translation>
     </message>
     <message>
-        <location line="-128"/>
-        <location line="+79"/>
+        <location line="-131"/>
+        <location line="+81"/>
         <source>About</source>
         <translation>Sobre</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+116"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Aplicativo de Áudio &amp; Vídeo para reuniões do Salão do Reino.</translation>
     </message>
@@ -3936,12 +4115,18 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Atualizar</translation>
     </message>
     <message>
-        <location line="-98"/>
+        <location line="-99"/>
         <source>Downloads the playing media for offline use.</source>
         <translation>Baixa a mídia em reprodução para uso off-line.</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-129"/>
+        <location line="+118"/>
+        <source>Remote access</source>
+        <translation>Acesso remoto</translation>
+    </message>
+    <message>
+        <location line="-30"/>
         <source>Dark</source>
         <translation>Escuro</translation>
     </message>
@@ -3951,7 +4136,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Claro</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+43"/>
         <source>Downloads this week’s and next week’s meeting media.</source>
         <translation>Baixa as mídias das reuniões desta semana e da próxima.</translation>
     </message>
@@ -3996,7 +4181,7 @@ Esta ação não pode ser desfeita.</translation>
         <translation>Pasta de sincronização (Dropbox, OneDrive, etc.) exibida como playlist.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Choose…</source>
         <translation>Escolher…</translation>
     </message>

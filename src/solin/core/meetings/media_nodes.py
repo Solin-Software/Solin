@@ -67,6 +67,9 @@ def meeting_media_from_ref(
     start_trim_ticks: int = 0,
     end_trim_ticks: int = 0,
     base_duration_ticks: int = 0,
+    origin_kind: str = "",
+    origin_container_id: str = "",
+    origin_item_id: str = "",
 ) -> MeetingMedia:
     return MeetingMedia(
         multimedia_id=int_or_zero(ref.get("multimedia_id")),
@@ -86,6 +89,9 @@ def meeting_media_from_ref(
         start_trim_ticks=start_trim_ticks,
         end_trim_ticks=end_trim_ticks,
         base_duration_ticks=base_duration_ticks,
+        origin_kind=origin_kind,
+        origin_container_id=origin_container_id,
+        origin_item_id=origin_item_id,
     )
 
 

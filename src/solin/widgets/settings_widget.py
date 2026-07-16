@@ -27,6 +27,8 @@ from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
+from ..core.remote_control.security import RemoteControlCredentialsStore
+from ..core.remote_control.settings import RemoteControlSettingsStore
 from ..core.foundation.settings_store import ProfileAppSettingsStore
 from ..styles.theme import available_themes, current_theme, normalize_theme_id
 from ..ui.controls import NoScrollComboBox
@@ -39,6 +41,7 @@ from .settings.layout_helpers import SettingsLayoutMixin
 from .settings.media_section import MediaSectionMixin
 from .settings.meeting_schedule_section import MeetingScheduleSectionMixin
 from .settings.obs_section import ObsSectionMixin
+from .settings.remote_control_section import RemoteControlSectionMixin
 from .settings.screens_section import ScreensSectionMixin
 from .settings.shared import SettingsToggleSwitch
 from .settings.watched_folder_section import WatchedFolderSectionMixin
@@ -60,6 +63,7 @@ class SettingsWidget(
     LanguageSectionMixin,
     MeetingScheduleSectionMixin,
     MediaSectionMixin,
+    RemoteControlSectionMixin,
     ObsSectionMixin,
     CameraSectionMixin,
     ZoomSectionMixin,
@@ -81,6 +85,9 @@ class SettingsWidget(
     meetings_auto_download_toggled = Signal(bool)
     meeting_schedule_changed = Signal()
     theme_changed = Signal(str)
+    remote_control_settings_changed = Signal()
+    remote_control_credentials_changed = Signal()
+    remote_control_revoke_requested = Signal()
 
     def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
                  obs_service: OBSWebSocketService | None = None,
@@ -97,6 +104,8 @@ class SettingsWidget(
                  watched_folder_settings: WatchedFolderSettingsStore,
                  yeartext_settings: YeartextSettingsStore,
                  background_song_settings: BackgroundSongSettingsStore,
+                 remote_control_settings: RemoteControlSettingsStore,
+                 remote_control_credentials: RemoteControlCredentialsStore,
                  yeartext_service_factory: Callable[[QObject], YeartextService],
                  auto_share_accessibility_trusted: Callable[[], bool],
                  parent=None):
@@ -118,6 +127,8 @@ class SettingsWidget(
         self._watched_folder_settings = watched_folder_settings
         self._yeartext_settings = yeartext_settings
         self._background_song_settings = background_song_settings
+        self._remote_control_settings = remote_control_settings
+        self._remote_control_credentials = remote_control_credentials
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._theme_persistent_connections: set[str] = set()
         self._init_yearly_text_section()
@@ -130,6 +141,8 @@ class SettingsWidget(
     def showEvent(self, event):
         super().showEvent(event)
         self._refresh_autoshare_accessibility_status()
+        self._populate_remote_interfaces()
+        self._refresh_remote_configuration_status()
 
     # ── build UI ───────────────────────────────────────────────────────────
 
@@ -206,6 +219,17 @@ class SettingsWidget(
         lay.addWidget(self._build_watched_folder_card())
         lay.addSpacing(20)
 
+        # Remote control
+        lay.addWidget(
+            self._section_title(
+                self.tr("Remote access"),
+                "_remote_control_section_title",
+            )
+        )
+        lay.addSpacing(8)
+        lay.addWidget(self._build_remote_control_card())
+        lay.addSpacing(20)
+
         # Integrations
         lay.addWidget(self._section_title(self.tr("Integrations"), "_integrations_section_title"))
         lay.addSpacing(8)
@@ -256,6 +280,7 @@ class SettingsWidget(
             "_apply_auto_share_theme",
             "_apply_auto_keys_theme",
             "_apply_watched_folder_theme",
+            "_apply_remote_control_theme",
             "_apply_about_theme",
             "_apply_zoom_theme",
             "_apply_meeting_schedule_theme",
@@ -315,6 +340,7 @@ class SettingsWidget(
         self._media_section_title.setText(self.tr("Media").upper())
         self._meetings_section_title.setText(self.tr("Meetings").upper())
         self._folders_section_title.setText(self.tr("Folders").upper())
+        self._remote_control_section_title.setText(self.tr("Remote access").upper())
         self._integrations_section_title.setText(self.tr("Integrations").upper())
         self._yearly_section_title.setText(self.tr("Annual Text").upper())
         self._screens_section_title.setText(self.tr("Screens").upper())
@@ -353,6 +379,7 @@ class SettingsWidget(
             self.tr("Sync folder (Dropbox, OneDrive, etc.) shown as playlists.")
         )
         self._sync_watched_folder_path_label()
+        self._retranslate_remote_control()
         self._watched_folder_pick_btn.setText(self.tr("Choose\u2026"))
         self._obs_header_lbl.setText(self.tr("OBS Studio"))
         self._obs_header_desc.setText(

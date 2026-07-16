@@ -135,6 +135,7 @@ fi
     --include-package=ephem \
     --include-package-data=pyqttoast \
     --include-data-dir=src/solin/resources/assets=solin/resources/assets \
+    --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
     --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
     --include-data-dir="${QML_APP_DIR}=solin/qml/Solin" \
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \

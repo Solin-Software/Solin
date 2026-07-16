@@ -12,6 +12,9 @@ class SettingsKey:
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"
     APP_THEME: Final = "theme"
+    REMOTE_CONTROL_ENABLED: Final = "remote_control/enabled"
+    REMOTE_CONTROL_NETWORK_SELECTION: Final = "remote_control/network_selection"
+    REMOTE_CONTROL_CREDENTIALS: Final = "remote_control/credentials"
     MEDIA_LANGUAGE_CODE: Final = "media_language_code"
     LEGACY_JW_LANGUAGE: Final = "jw_language"
 

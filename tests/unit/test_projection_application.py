@@ -49,6 +49,33 @@ def test_projection_session_owns_state_windows_and_idle_media() -> None:
     assert session.state == {"type": "idle"}
 
 
+def test_projection_session_publishes_versioned_snapshots() -> None:
+    session = ProjectionSession()
+    revisions: list[int] = []
+    unsubscribe = session.subscribe(lambda: revisions.append(session.revision))
+
+    session.set_state({"type": "video", "title": "Welcome"})
+    session.update_state(title="Updated")
+    session.update_state(title="Updated")
+    unsubscribe()
+    session.reset_state()
+
+    assert revisions == [1, 2]
+    assert session.revision == 3
+
+
+def test_projection_session_identity_excludes_incremental_state_updates() -> None:
+    session = ProjectionSession()
+
+    session.set_state({"type": "timer", "remaining": 10})
+    active_session_id = session.session_id
+    session.update_state(remaining=9)
+
+    assert session.session_id == active_session_id
+    session.reset_state()
+    assert session.session_id == active_session_id + 1
+
+
 def test_projection_session_fallback_media_visibility_without_allocation() -> None:
     screen = _Screen("DISPLAY2")
     session = ProjectionSession(media_hidden_screen_names={"DISPLAY2"})

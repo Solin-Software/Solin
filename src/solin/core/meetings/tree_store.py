@@ -10,6 +10,7 @@ import copy
 import json
 import logging
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path, PureWindowsPath
@@ -107,6 +108,7 @@ class MeetingTreeStore:
         self._json = JsonFileRepository(path)
         self._lock = threading.RLock()
         self._data: dict[str, Any] | None = None
+        self._listeners: set[Callable[[], None]] = set()
 
     @property
     def path(self) -> Path:
@@ -287,45 +289,18 @@ class MeetingTreeStore:
         source_checksum: str | None = None,
     ) -> MeetingTreeSnapshot:
         with self._lock:
-            data = copy.deepcopy(self._runtime_data())
-            trees = data.setdefault("trees", {})
-            existing = trees.get(tree_key)
-            existing_overview = (
-                existing.get("overview")
-                if isinstance(existing, dict) and isinstance(existing.get("overview"), dict)
-                else None
+            snapshot = self._save_locked(
+                tree_key,
+                nodes,
+                canonical_hash,
+                deleted_source_keys,
+                linked_folder_files,
+                meeting_folder_imports,
+                overview,
+                source_checksum=source_checksum,
             )
-            revision = (
-                _int_or_default(existing.get("revision"), 0) + 1
-                if isinstance(existing, dict)
-                else 1
-            )
-            record: dict[str, Any] = {
-                "deleted_source_keys": sorted(deleted_source_keys or set()),
-                "last_canonical_hash": canonical_hash,
-                "nodes": clone_nodes(nodes),
-                "revision": revision,
-            }
-            if source_checksum is not None:
-                record["source_checksum"] = str(source_checksum)
-            elif isinstance(existing, dict) and existing.get("source_checksum"):
-                record["source_checksum"] = str(existing["source_checksum"])
-            if overview is not None:
-                record["overview"] = overview.to_record()
-            elif existing_overview is not None:
-                record["overview"] = existing_overview
-            if linked_folder_files:
-                record["linked_folder_files"] = dict(linked_folder_files)
-            if meeting_folder_imports:
-                record["meeting_folder_imports"] = copy.deepcopy(
-                    meeting_folder_imports
-                )
-            trees[tree_key] = record
-            self._write(data)
-            snapshot = _snapshot_from_record(tree_key, record)
-            if snapshot is None:
-                raise ValueError(f"Could not materialize meeting tree '{tree_key}'.")
-            return snapshot
+        self._publish_changed()
+        return snapshot
 
     def reconcile(
         self,
@@ -350,7 +325,7 @@ class MeetingTreeStore:
             merged = MeetingTreeMerger(canonical, deleted_source_keys).merge(
                 saved.nodes if saved is not None else None
             )
-            return self.save(
+            snapshot = self._save_locked(
                 tree_key,
                 merged,
                 canonical_hash,
@@ -368,6 +343,8 @@ class MeetingTreeStore:
                     else (saved.source_checksum if saved is not None else "")
                 ),
             )
+        self._publish_changed()
+        return snapshot
 
     def patch_media_batch(
         self,
@@ -414,7 +391,7 @@ class MeetingTreeStore:
                         changed = True
             if not changed:
                 return current
-            return self.save(
+            snapshot = self._save_locked(
                 tree_key,
                 current.nodes,
                 current.canonical_hash,
@@ -424,6 +401,8 @@ class MeetingTreeStore:
                 current.overview,
                 source_checksum=current.source_checksum,
             )
+        self._publish_changed()
+        return snapshot
 
     def remove_old_trees(self, keep: set[str]) -> None:
         if not keep:
@@ -438,11 +417,83 @@ class MeetingTreeStore:
                     changed = True
             if changed:
                 self._write(data)
+        if changed:
+            self._publish_changed()
+
+    def _save_locked(
+        self,
+        tree_key: str,
+        nodes: list[Node],
+        canonical_hash: str,
+        deleted_source_keys: set[str] | None,
+        linked_folder_files: dict[str, str] | None,
+        meeting_folder_imports: dict[str, dict[str, Any]] | None,
+        overview: MeetingTreeOverview | None,
+        *,
+        source_checksum: str | None,
+    ) -> MeetingTreeSnapshot:
+        data = copy.deepcopy(self._runtime_data())
+        trees = data.setdefault("trees", {})
+        existing = trees.get(tree_key)
+        existing_overview = (
+            existing.get("overview")
+            if isinstance(existing, dict) and isinstance(existing.get("overview"), dict)
+            else None
+        )
+        revision = (
+            _int_or_default(existing.get("revision"), 0) + 1
+            if isinstance(existing, dict)
+            else 1
+        )
+        record: dict[str, Any] = {
+            "deleted_source_keys": sorted(deleted_source_keys or set()),
+            "last_canonical_hash": canonical_hash,
+            "nodes": clone_nodes(nodes),
+            "revision": revision,
+        }
+        if source_checksum is not None:
+            record["source_checksum"] = str(source_checksum)
+        elif isinstance(existing, dict) and existing.get("source_checksum"):
+            record["source_checksum"] = str(existing["source_checksum"])
+        if overview is not None:
+            record["overview"] = overview.to_record()
+        elif existing_overview is not None:
+            record["overview"] = existing_overview
+        if linked_folder_files:
+            record["linked_folder_files"] = dict(linked_folder_files)
+        if meeting_folder_imports:
+            record["meeting_folder_imports"] = copy.deepcopy(meeting_folder_imports)
+        trees[tree_key] = record
+        self._write(data)
+        snapshot = _snapshot_from_record(tree_key, record)
+        if snapshot is None:
+            raise ValueError(f"Could not materialize meeting tree '{tree_key}'.")
+        return snapshot
 
     def _write(self, data: dict[str, Any]) -> None:
         normalized = self._normalize(data)
         self._json.write(data, sort_keys=True, trailing_newline=True)
         self._data = copy.deepcopy(normalized)
+
+    def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Subscribe to successful persisted tree changes."""
+        with self._lock:
+            self._listeners.add(listener)
+
+        def unsubscribe() -> None:
+            with self._lock:
+                self._listeners.discard(listener)
+
+        return unsubscribe
+
+    def _publish_changed(self) -> None:
+        with self._lock:
+            listeners = tuple(self._listeners)
+        for listener in listeners:
+            try:
+                listener()
+            except Exception:  # noqa: BLE001 - repository observer boundary
+                log.warning("Meeting tree change listener failed", exc_info=True)
 
 
 def _stored_file_name(value: str) -> str:

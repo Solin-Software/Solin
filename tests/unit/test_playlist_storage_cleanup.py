@@ -29,6 +29,30 @@ def test_playlist_storage_roundtrips_playlists(tmp_path):
     assert repository.load() == [{"id": "p1", "name": "Playlist", "items": []}]
 
 
+def test_playlist_storage_publishes_successful_changes(tmp_path):
+    repository = PlaylistRepository(tmp_path / "playlists.json")
+    notifications: list[str] = []
+    unsubscribe = repository.subscribe(lambda: notifications.append("changed"))
+
+    repository.save([{"id": "p1", "name": "First", "items": []}])
+    unsubscribe()
+    repository.save([{"id": "p2", "name": "Second", "items": []}])
+
+    assert notifications == ["changed"]
+
+
+def test_meeting_tree_store_publishes_successful_changes(tmp_path):
+    store = MeetingTreeStore(tmp_path / "meeting_trees.json")
+    notifications: list[str] = []
+    unsubscribe = store.subscribe(lambda: notifications.append("changed"))
+
+    store.save("mwb:2026-07-13:T:20260700", [], "hash")
+    unsubscribe()
+    store.save("wt:2026-07-13:T:20260700", [], "hash")
+
+    assert notifications == ["changed"]
+
+
 def test_playlist_storage_roundtrips_pending_deletions(tmp_path):
     pending_file = tmp_path / "pending.json"
     storage_paths = PlaylistStoragePaths(

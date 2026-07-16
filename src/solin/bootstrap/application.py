@@ -53,6 +53,8 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.network.browser_settings import BrowserSettingsStore
     from solin.core.projection.monitor_allocation import MonitorAllocationStore
     from solin.core.remote.notification_settings import NotificationSettingsStore
+    from solin.core.remote_control.security import RemoteControlCredentialsStore
+    from solin.core.remote_control.settings import RemoteControlSettingsStore
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
     return MainWindowProfileSettings(
@@ -84,6 +86,10 @@ def _build_main_window_profile_settings(profile_settings):
             profile_settings
         ),
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
+        remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
+        remote_control_credentials=RemoteControlCredentialsStore.create(
+            profile_settings.app_settings()
+        ),
     )
 
 

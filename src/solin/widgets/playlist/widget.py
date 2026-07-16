@@ -1629,6 +1629,7 @@ class PlaylistWidget(QWidget):
         self._list_view.refresh_watched()
         if self._stack.currentIndex() == 1 and self._edit_view._is_watched:
             self._edit_view.refresh_watched_folder()
+        self._watched_folder_playlist_store.notify_external_change()
 
     def _on_subfolder_changed(self, path: str) -> None:
         """Mudança em subpasta específica — debounced."""
@@ -1646,6 +1647,7 @@ class PlaylistWidget(QWidget):
                 and self._edit_view._watched_path == self._wf_pending_sub_path):
             self._edit_view.refresh_watched_folder()
         self._wf_pending_sub_path = ""
+        self._watched_folder_playlist_store.notify_external_change()
 
     # ── Temp playlist ──────────────────────────────────────────────────────
 
@@ -1678,6 +1680,19 @@ class PlaylistWidget(QWidget):
         url   = item.get("url", "")
         title = item.get("title", "")
         pl = [dict(playlist_item) for playlist_item in items]
+        source = getattr(self._edit_view, "_pl", None) or {}
+        container_id = str(source.get("id") or "")
+        origin_kind = (
+            "temporary"
+            if getattr(self._edit_view, "_is_temp", False)
+            else "playlist"
+        )
+        if getattr(self._edit_view, "_is_watched", False):
+            origin_kind = "linked_folder" if container_id else "temporary"
+        for playlist_item in pl:
+            playlist_item["origin_kind"] = origin_kind
+            playlist_item["origin_container_id"] = container_id
+            playlist_item["origin_item_id"] = str(playlist_item.get("id") or "")
         self.project_video_signal.emit(url, title, pl, order)
 
     # ── API pública ────────────────────────────────────────────────────────

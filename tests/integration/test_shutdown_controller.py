@@ -85,6 +85,7 @@ def _dependencies(events=None):
         projection_session=_ProjectionSession(events),
         timer_output=_Recorder(events, "timer"),
         services=ShutdownServices(
+            remote_control=_Recorder(events, "remote-control"),
             remote_services=_Recorder(events, "remote"),
             download_notifications=_Recorder(events, "downloads"),
             playback_notifications=_Recorder(events, "playback-notifications"),
@@ -166,6 +167,7 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
     ShutdownController(dependencies).shutdown()
 
     assert events == [
+        "remote-control.stop",
         "projection",
         "floating",
         "timer.close_all",

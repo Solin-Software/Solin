@@ -5,6 +5,7 @@ from solin.controllers.media_projection_controller import (
     MediaProjectionController,
     MediaProjectionHandlers,
 )
+from solin.core.meetings.models import MeetingMedia
 from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
 
@@ -300,15 +301,9 @@ def _controller(window):
             playback_protection=window.playback_protection,
         ),
         MediaProjectionHandlers(
-            stop_browser_tab_projection=(
-                window._navigation.stop_browser_tab_projection
-            ),
-            update_projection_status=(
-                window._projection_integrations.update_status
-            ),
-            prepare_video_session=(
-                window._auto_key_projection.prepare_video_session
-            ),
+            stop_browser_tab_projection=(window._navigation.stop_browser_tab_projection),
+            update_projection_status=(window._projection_integrations.update_status),
+            prepare_video_session=(window._auto_key_projection.prepare_video_session),
             prepare_auto_share_playback=(
                 window._projection_integrations.prepare_video_playback_for_auto_share
             ),
@@ -322,13 +317,16 @@ def test_project_video_classifies_audio_and_updates_status():
 
     controller.project_video("song.mp3", "Song")
 
-    assert window.proj_bar.playlists == [
-        ([{"url": "song.mp3", "title": "Song"}], None, False)
-    ]
+    assert window.proj_bar.playlists == [([{"url": "song.mp3", "title": "Song"}], None, False)]
     assert window.proj_bar.videos == [("Song", False, True)]
     assert [projection_window.began_video for projection_window in window.windows] == [0, 0]
     assert window.media_ctrl.played == ["song.mp3"]
-    assert window.projection_session.state == {"type": "video", "is_audio": True}
+    assert window.projection_session.state == {
+        "type": "video",
+        "is_audio": True,
+        "title": "Song",
+        "origin": None,
+    }
     assert window._projection_integrations.statuses == [
         ((True, "Song"), {"visual": False, "auto_keys_media": False})
     ]
@@ -355,6 +353,36 @@ def test_project_video_snapshots_custom_times_into_playback_request():
     assert request.trim.end_trim_ticks == 30_000_000
 
 
+def test_resolved_meeting_video_preserves_catalog_origin_in_projection_queue():
+    window = _WindowStub()
+    window.meeting_service.resolved = {
+        "url": "https://media.example.test/song.mp4",
+        "title": "34. Andarei em integridade",
+    }
+    controller = _controller(window)
+    item = MeetingMedia(
+        mime_type="video/mp4",
+        label="34. Andarei em integridade",
+        key_symbol="sjjm",
+        track=34,
+        origin_kind="meeting",
+        origin_container_id="mwb:2026-07-13:T:20260700",
+        origin_item_id="song-34",
+    )
+
+    controller.on_meeting_media_project(item)
+
+    projected = window.proj_bar.playlists[-1][0][0]
+    assert projected["origin_kind"] == "meeting"
+    assert projected["origin_container_id"] == "mwb:2026-07-13:T:20260700"
+    assert projected["origin_item_id"] == "song-34"
+    assert window.projection_session.state["origin"] == {
+        "kind": "meeting",
+        "container_id": "mwb:2026-07-13:T:20260700",
+        "item_id": "song-34",
+    }
+
+
 def test_manual_projection_is_rejected_before_any_state_changes_when_locked():
     window = _WindowStub()
     window.playback_protection.locked = True
@@ -376,9 +404,7 @@ def test_automatic_advance_bypasses_manual_playback_protection():
     window.playback_protection.locked = True
     controller = _controller(window)
 
-    controller.project_next_auto(
-        {"url": "automatic.mp4", "title": "Automatic", "type": "video"}
-    )
+    controller.project_next_auto({"url": "automatic.mp4", "title": "Automatic", "type": "video"})
 
     assert window.playback_protection.blocked == 0
     assert window.media_ctrl.played == ["automatic.mp4"]
@@ -549,6 +575,8 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
     ]
     assert window.projection_session.state == {
         "type": "image",
+        "title": "Slide",
+        "origin": None,
         "data": b"image-data",
         "transform": (1.0, 0.0, 0.0),
     }
@@ -567,12 +595,14 @@ def test_prepared_image_framing_is_applied_instantly_and_saved_in_session(tmp_pa
         "norm_x": 0.2,
         "norm_y": 0.0,
     }
-    playlist = [{
-        "url": str(image_path),
-        "title": "Prepared",
-        "type": "image",
-        "image_framing": framing,
-    }]
+    playlist = [
+        {
+            "url": str(image_path),
+            "title": "Prepared",
+            "type": "image",
+            "image_framing": framing,
+        }
+    ]
 
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
 
@@ -593,17 +623,19 @@ def test_reprojecting_same_image_animates_only_changed_prepared_framing(tmp_path
     image = QImage(1600, 900, QImage.Format.Format_ARGB32)
     image.fill(QColor("#ffffff"))
     assert image.save(str(image_path))
-    playlist = [{
-        "url": str(image_path),
-        "title": "Prepared",
-        "type": "image",
-        "image_framing": {
-            "version": 1,
-            "zoom": 1.5,
-            "norm_x": 0.2,
-            "norm_y": 0.0,
-        },
-    }]
+    playlist = [
+        {
+            "url": str(image_path),
+            "title": "Prepared",
+            "type": "image",
+            "image_framing": {
+                "version": 1,
+                "zoom": 1.5,
+                "norm_x": 0.2,
+                "norm_y": 0.0,
+            },
+        }
+    ]
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
 
     playlist[0]["image_framing"] = {
@@ -643,12 +675,14 @@ def test_reprojecting_same_image_with_same_framing_reloads_normally(tmp_path):
         "norm_x": 0.2,
         "norm_y": 0.0,
     }
-    playlist = [{
-        "url": str(image_path),
-        "title": "Prepared",
-        "type": "image",
-        "image_framing": framing,
-    }]
+    playlist = [
+        {
+            "url": str(image_path),
+            "title": "Prepared",
+            "type": "image",
+            "image_framing": framing,
+        }
+    ]
 
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
@@ -668,11 +702,13 @@ def test_unchanged_framing_skips_image_content_comparison():
     window = _WindowStub()
     controller = _controller(window)
     transform = ImageTransform(1.5, 0.2, 0.0)
-    window.projection_session.set_state({
-        "type": "image",
-        "data": _UncomparableBytes(b"active-image"),
-        "transform": (transform.zoom, transform.norm_x, transform.norm_y),
-    })
+    window.projection_session.set_state(
+        {
+            "type": "image",
+            "data": _UncomparableBytes(b"active-image"),
+            "transform": (transform.zoom, transform.norm_x, transform.norm_y),
+        }
+    )
 
     assert not controller._update_active_image_framing(
         b"different-image",
@@ -687,17 +723,19 @@ def test_reprojecting_changed_image_content_reloads_normally(tmp_path):
     image = QImage(1600, 900, QImage.Format.Format_ARGB32)
     image.fill(QColor("#ffffff"))
     assert image.save(str(image_path))
-    playlist = [{
-        "url": str(image_path),
-        "title": "Prepared",
-        "type": "image",
-        "image_framing": {
-            "version": 1,
-            "zoom": 1.5,
-            "norm_x": 0.2,
-            "norm_y": 0.0,
-        },
-    }]
+    playlist = [
+        {
+            "url": str(image_path),
+            "title": "Prepared",
+            "type": "image",
+            "image_framing": {
+                "version": 1,
+                "zoom": 1.5,
+                "norm_x": 0.2,
+                "norm_y": 0.0,
+            },
+        }
+    ]
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
 
     image.fill(QColor("#000000"))
@@ -725,17 +763,19 @@ def test_reprojecting_same_image_without_framing_animates_back_to_identity(tmp_p
     image = QImage(1600, 900, QImage.Format.Format_ARGB32)
     image.fill(QColor("#ffffff"))
     assert image.save(str(image_path))
-    playlist = [{
-        "url": str(image_path),
-        "title": "Prepared",
-        "type": "image",
-        "image_framing": {
-            "version": 1,
-            "zoom": 1.5,
-            "norm_x": 0.2,
-            "norm_y": 0.0,
-        },
-    }]
+    playlist = [
+        {
+            "url": str(image_path),
+            "title": "Prepared",
+            "type": "image",
+            "image_framing": {
+                "version": 1,
+                "zoom": 1.5,
+                "norm_x": 0.2,
+                "norm_y": 0.0,
+            },
+        }
+    ]
     controller.on_playlist_project(str(image_path), "Prepared", playlist, "")
 
     playlist[0].pop("image_framing")
@@ -759,17 +799,19 @@ def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):
     image.fill(QColor("#ffffff"))
     assert image.save(str(image_path))
 
-    controller.project_next_auto({
-        "url": str(image_path),
-        "title": "Next",
-        "type": "image",
-        "image_framing": {
-            "version": 1,
-            "zoom": 1.5,
-            "norm_x": -0.2,
-            "norm_y": 0.0,
-        },
-    })
+    controller.project_next_auto(
+        {
+            "url": str(image_path),
+            "title": "Next",
+            "type": "image",
+            "image_framing": {
+                "version": 1,
+                "zoom": 1.5,
+                "norm_x": -0.2,
+                "norm_y": 0.0,
+            },
+        }
+    )
 
     assert window.projection_session.state["transform"] == (1.5, -0.2, 0.0)
 
@@ -849,12 +891,14 @@ def test_instant_image_transform_is_persisted_without_animation():
 def test_sermon_theme_transform_is_persisted_in_projection_state():
     window = _WindowStub()
     controller = _controller(window)
-    window.projection_session.set_state({
-        "type": "sermon_theme",
-        "text": "t",
-        "subtitle": "s",
-        "transform": (1.0, 0.0, 0.0),
-    })
+    window.projection_session.set_state(
+        {
+            "type": "sermon_theme",
+            "text": "t",
+            "subtitle": "s",
+            "transform": (1.0, 0.0, 0.0),
+        }
+    )
 
     controller.on_image_apply_transform(1.4, 0.0, 0.1)
 

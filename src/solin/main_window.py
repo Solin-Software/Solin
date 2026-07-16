@@ -68,6 +68,13 @@ from .controllers.projection_window_controller import (
     ProjectionWindowContext,
     ProjectionWindowController,
 )
+from .controllers.remote_control_controller import (
+    RemoteControlController,
+    RemoteControlDependencies,
+)
+from .controllers.remote_media_thumbnail_extractor import (
+    RemoteMediaThumbnailExtractor,
+)
 from .controllers.shutdown_controller import (
     ShutdownController,
     ShutdownDependencies,
@@ -205,6 +212,9 @@ class MainWindow(QMainWindow):
         self.playlist_repository = playlist_repository
         self.meeting_tree_store = meeting_tree_store
         self.meeting_linked_folder_sync = meeting_linked_folder_sync
+        self._watched_folder_playlist_store = watched_folder_playlist_store
+        self._playlist_thumbnail_store = playlist_thumbnail_store
+        self._meeting_thumbnail_store = meeting_thumbnail_store
         self.timer_session = timer_session
         self.active_profile = active_profile
         self._app_settings = profile_settings_bundle.app
@@ -218,6 +228,8 @@ class MainWindow(QMainWindow):
         self._projection_playback_settings = profile_settings_bundle.projection_playback
         self._meeting_schedule_settings = profile_settings_bundle.meeting_schedule
         self._watched_folder_settings = profile_settings_bundle.watched_folder
+        self._remote_control_settings = profile_settings_bundle.remote_control
+        self._remote_control_credentials = profile_settings_bundle.remote_control_credentials
         self._yeartext_settings = profile_settings_bundle.yeartext
         self._background_song_settings = profile_settings_bundle.background_song
         self.screen_mgr = ScreenManager(self)
@@ -393,6 +405,8 @@ class MainWindow(QMainWindow):
                 browser_settings=self._browser_settings,
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
+                remote_control_settings=self._remote_control_settings,
+                remote_control_credentials=self._remote_control_credentials,
                 yeartext_settings=self._yeartext_settings,
                 yeartext_service_factory=service_factories.yeartext,
                 font_manager=self.font_manager,
@@ -785,6 +799,36 @@ class MainWindow(QMainWindow):
         )
         self._signal_connections.connect_signals()
 
+        self._remote_media_thumbnail_extractor = RemoteMediaThumbnailExtractor(
+            media_info_queue_factory,
+            self,
+        )
+        self._remote_control = RemoteControlController(
+            RemoteControlDependencies(
+                runtime_paths=self.runtime_paths,
+                active_profile_id=self.active_profile.id,
+                active_profile_name=self.active_profile.name,
+                active_profile_locale=self.lang.current_code.replace("_", "-"),
+                settings=self._remote_control_settings,
+                credentials=self._remote_control_credentials,
+                playlist_repository=self.playlist_repository,
+                meeting_tree_store=self.meeting_tree_store,
+                watched_folder_settings=self._watched_folder_settings,
+                watched_folder_playlist_store=self._watched_folder_playlist_store,
+                playlist_thumbnail_store=self._playlist_thumbnail_store,
+                meeting_thumbnail_store=self._meeting_thumbnail_store,
+                media_thumbnail_extractor=self._remote_media_thumbnail_extractor,
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                media_projection=self._media_projection,
+                projection_stop=self._projection_stop,
+                playback_protection=self.playback_protection,
+                settings_widget=self.settings_widget,
+            ),
+            self,
+        )
+
         self._bootstrap_controller = MainWindowBootstrapController(
             MainWindowStartupDependencies(
                 projection_session=self.projection_session,
@@ -810,11 +854,13 @@ class MainWindow(QMainWindow):
         self._monitor_popup = startup_resources.monitor_popup
         self._ipc_controller = startup_resources.ipc_controller
         self._remote_services = startup_resources.remote_services
+        self._remote_control.start()
         self._shutdown_controller = ShutdownController(
             ShutdownDependencies(
                 projection_session=self.projection_session,
                 timer_output=self.timer_output,
                 services=ShutdownServices(
+                    remote_control=self._remote_control,
                     remote_services=self._remote_services,
                     download_notifications=self._media_download_notifications,
                     playback_notifications=self._media_playback_notifications,
