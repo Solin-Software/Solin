@@ -40,6 +40,11 @@ transport controls, seek, volume and stop remain synchronized with the desktop.
 The remote catalog is read-only: filesystem paths, media URLs and editing or
 reordering operations are never exposed.
 
+The web interface follows the active Solin interface language. Language changes
+are published live to connected browsers, and canonical generated meeting
+section titles are resolved from their semantic section codes. Titles edited by
+the user are always preserved verbatim.
+
 The first device setup requires trusting Solin's local certificate authority so
 the browser can treat the PWA as a secure, installable app. Open the remote URL,
 expand **Prepare installation on this device**, download the certificate, and

@@ -1,11 +1,13 @@
 import { ApiError, EventStream, RemoteApi, newCommandId } from "./api.js";
 import { formatDuration } from "./format.js";
+import { applyLocalization, initializeLocalization, t } from "./i18n.js";
 import { setupPwa } from "./pwa.js";
 import { Renderer, announce, showToast } from "./renderer.js";
 import { Store, applyBootstrap } from "./state.js";
 
-const store = new Store();
 const api = new RemoteApi();
+await initializeLocalization(() => api.localization());
+const store = new Store();
 const renderer = new Renderer(store);
 let lastNonZeroVolume = 100;
 let recoveryPromise = null;
@@ -23,7 +25,7 @@ const pwa = setupPwa({
   onInstallAvailable: (available) => {
     document.getElementById("install-button").hidden = !available;
   },
-  onInstalled: () => showToast("Solin instalado neste dispositivo.", "success"),
+  onInstalled: () => showToast(t("notification.installed"), "success"),
   onError: () => {
     // Installation support is progressive; remote control remains fully available.
   },
@@ -100,7 +102,7 @@ async function handleLogin(event) {
   errorNode.hidden = true;
 
   if (!username || !password) {
-    errorNode.textContent = "Informe o usuário e a senha.";
+    errorNode.textContent = t("login.required");
     errorNode.hidden = false;
     (!username ? form.elements.username : form.elements.password).focus();
     return;
@@ -126,10 +128,11 @@ async function activateLoginSession(bootstrap) {
     catalogRevision: bootstrap.catalogRevision ?? 0,
     collections: [],
   };
+  applyLocalization(bootstrap.profile);
   applyBootstrap(store, { ...bootstrap, catalog: provisionalCatalog });
   store.update({ catalogStatus: "loading" });
   eventStream.connect({ immediate: true });
-  announce("Login concluído. Controle remoto conectado.");
+  announce(t("login.success"));
 
   try {
     const catalog = await api.catalog();
@@ -144,9 +147,9 @@ async function activateLoginSession(bootstrap) {
     if (store.state.catalogStatus !== "ready") {
       store.update({
         catalogStatus: "error",
-        catalogError: error instanceof Error ? error.message : "Falha de conexão.",
+        catalogError: error instanceof Error ? error.message : t("connection.failure"),
       });
-      showToast("A biblioteca será atualizada quando a conexão voltar.", "info");
+      showToast(t("connection.libraryRecovery"), "info");
     }
   }
   return true;
@@ -155,19 +158,24 @@ async function activateLoginSession(bootstrap) {
 function setLoginBusy(busy) {
   const submit = document.getElementById("login-submit");
   submit.disabled = busy;
-  submit.querySelector(".button-label").textContent = busy ? "Entrando…" : "Entrar";
+  submit.querySelector(".button-label").textContent = t(
+    busy ? "login.signingIn" : "login.signIn",
+  );
   submit.querySelector(".button-spinner").hidden = !busy;
 }
 
 function loginErrorMessage(error) {
-  if (!(error instanceof ApiError)) return "Não foi possível entrar.";
+  if (!(error instanceof ApiError)) return t("login.failed");
   if (error.status === 401 || error.code === "invalid_credentials") {
-    return "Usuário ou senha incorretos.";
+    return t("login.invalidCredentials");
   }
   if (error.status === 429 || error.code === "rate_limited") {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente.";
+    return t("login.rateLimited");
   }
-  return error.message;
+  if (new Set(["network", "timeout", "invalid_response"]).has(error.code)) {
+    return error.message;
+  }
+  return t("login.failed");
 }
 
 function togglePassword() {
@@ -176,7 +184,7 @@ function togglePassword() {
   const show = input.type === "password";
   input.type = show ? "text" : "password";
   button.setAttribute("aria-pressed", String(show));
-  button.setAttribute("aria-label", show ? "Ocultar senha" : "Mostrar senha");
+  button.setAttribute("aria-label", t(show ? "login.hidePassword" : "login.showPassword"));
   button
     .querySelector("use")
     ?.setAttribute("href", show ? "#icon-eye-off" : "#icon-eye");
@@ -190,7 +198,7 @@ async function handleLogout() {
     await api.logout();
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 401)) {
-      showToast("A sessão local foi encerrada neste dispositivo.", "info");
+      showToast(t("notification.localSessionEnded"), "info");
     }
   } finally {
     showLogin({ expired: false });
@@ -221,6 +229,7 @@ async function doRecover({ initial }) {
   try {
     const bootstrap = await api.bootstrap();
     const catalog = await api.catalog();
+    applyLocalization(bootstrap.profile);
     applyBootstrap(store, { ...bootstrap, catalog });
     eventStream.connect({ immediate: true });
     return true;
@@ -236,7 +245,7 @@ async function doRecover({ initial }) {
     store.update({
       connection: navigator.onLine ? "reconnecting" : "offline",
       catalogStatus: store.state.catalog.collections.length ? "ready" : "error",
-      catalogError: error instanceof Error ? error.message : "Falha de conexão.",
+      catalogError: error instanceof Error ? error.message : t("connection.failure"),
     });
     return false;
   }
@@ -250,9 +259,9 @@ function showLogin({ expired }) {
   store.update({ view: "login", connection: navigator.onLine ? "connecting" : "offline" });
   if (expired) {
     const error = document.getElementById("login-error");
-    error.textContent = "Sua sessão expirou. Entre novamente.";
+    error.textContent = t("login.sessionExpired");
     error.hidden = false;
-    announce("Sua sessão expirou.");
+    announce(t("login.sessionExpiredAnnouncement"));
   }
 }
 
@@ -336,7 +345,7 @@ async function sendCommand(fields) {
     if (result === null) return;
     if (!result.ok) {
       const remoteError = result.error ?? {};
-      throw new ApiError(remoteError.message || "O comando não foi concluído.", {
+      throw new ApiError(remoteError.message || t("command.notCompleted"), {
         code: remoteError.code || "failed",
         retryable: Boolean(remoteError.retryable),
       });
@@ -348,15 +357,15 @@ async function sendCommand(fields) {
     }
     const code = error instanceof ApiError ? error.code : "failed";
     if (code === "catalog_stale" || code === "playback_stale") {
-      showToast("O estado do Solin mudou. Atualizando…", "info");
+      showToast(t("command.stateChanged"), "info");
       await recover();
     } else if (code === "blocked") {
-      showToast(error.message || "Este controle está protegido no Solin.", "error");
+      showToast(t("command.protected"), "error");
     } else if (code === "unavailable" || code === "not_found") {
-      showToast("Esta mídia não está mais disponível.", "error");
+      showToast(t("command.unavailable"), "error");
       await recover();
     } else {
-      showToast(error instanceof Error ? error.message : "Falha ao enviar o comando.", "error");
+      showToast(t("command.sendFailed"), "error");
     }
   } finally {
     setCommandPending(type, false);
@@ -371,7 +380,7 @@ async function postCommandWithAuthenticationRecovery(command) {
     const recovered = await recover();
     if (store.state.view !== "app") return null;
     if (!recovered) {
-      throw new ApiError("Não foi possível confirmar sua sessão.", {
+      throw new ApiError(t("command.sessionConfirmFailed"), {
         code: "network",
         retryable: true,
       });
@@ -427,6 +436,7 @@ function handleRemoteEvent(message) {
     }
   } else if (message.type === "profile.snapshot") {
     const profile = message.payload ?? {};
+    applyLocalization(profile);
     store.update((current) => ({
       profile: {
         displayName: profile.name || current.profile.displayName,
@@ -450,7 +460,7 @@ function applyWebsocketBaselineEvent(message) {
     showLogin({ expired: true });
     return;
   }
-  if (!new Set(["catalog.snapshot", "playback.snapshot"]).has(message.type)) return;
+  if (!new Set(["catalog.snapshot", "playback.snapshot", "profile.snapshot"]).has(message.type)) return;
   const baseline = websocketBaseline;
   if (!baseline) return;
   if (
@@ -467,12 +477,19 @@ function applyWebsocketBaselineEvent(message) {
     baseline.sequence = Math.max(baseline.sequence ?? message.sequence, message.sequence);
   }
   if (message.type === "catalog.snapshot") baseline.catalog = message.payload;
-  else baseline.playback = message.payload;
+  else if (message.type === "playback.snapshot") baseline.playback = message.payload;
+  else baseline.profile = message.payload;
 
-  if (!baseline.catalog || !baseline.playback) return;
+  if (!baseline.catalog || !baseline.playback || !baseline.profile) return;
   window.clearTimeout(websocketBaselineTimer);
   websocketBaseline = null;
+  applyLocalization(baseline.profile);
   store.update({
+    profile: {
+      displayName: baseline.profile.name || store.state.profile.displayName,
+      locale: baseline.profile.locale || store.state.profile.locale,
+      theme: baseline.profile.theme === "light" ? "light" : "dark",
+    },
     catalog: baseline.catalog,
     playback: baseline.playback,
     eventSequence: baseline.sequence,
@@ -489,6 +506,7 @@ function beginWebsocketBaseline() {
     sequence: null,
     catalog: null,
     playback: null,
+    profile: null,
   };
   websocketBaselineTimer = window.setTimeout(() => {
     clearWebsocketBaseline();

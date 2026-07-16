@@ -42,10 +42,10 @@ from solin.core.meetings.tree_merger import (
     merge_persisted_meeting_trees,
 )
 from solin.core.meetings.tree_types import iter_nodes
+from solin.core.i18n.meeting_sections import display_meeting_section_title
 from tests._paths import FIXTURES_DIR
 from solin.widgets.meetings.tree_controller import (
     MeetingTreeController,
-    _display_section_title,
 )
 
 
@@ -237,10 +237,10 @@ class MeetingSectionTitleTests(unittest.TestCase):
         }
 
         with patch(
-            "solin.widgets.meetings.tree_controller._translate_section_title",
+            "solin.core.i18n.meeting_sections.translate_meeting_section_title",
             return_value="Nossa Vida Cristã",
         ) as translate:
-            title = _display_section_title(node)
+            title = display_meeting_section_title(node)
 
         self.assertEqual(title, "Nossa Vida Cristã")
         translate.assert_called_once_with("LIVING AS CHRISTIANS")
@@ -254,7 +254,7 @@ class MeetingSectionTitleTests(unittest.TestCase):
             "user_title_override": True,
         }
 
-        self.assertEqual(_display_section_title(node), "Minha seção")
+        self.assertEqual(display_meeting_section_title(node), "Minha seção")
 
 
 class MeetingTreeBuilderTests(unittest.TestCase):
@@ -1090,7 +1090,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         ])
 
         with patch(
-            "solin.widgets.meetings.tree_controller._display_section_title",
+            "solin.widgets.meetings.tree_controller.display_meeting_section_title",
             return_value="Nossa Vida Cristã",
         ):
             result = MeetingTreeController.placement_playlist_ref(controller)

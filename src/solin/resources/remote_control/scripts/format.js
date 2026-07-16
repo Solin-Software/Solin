@@ -1,18 +1,20 @@
-const MEDIA_LABELS = Object.freeze({
-  video: "Vídeo",
-  audio: "Áudio",
-  image: "Imagem",
-  document: "Documento",
-  browser: "Navegador",
-  announcement: "Anúncio",
-  screen: "Tela",
-  unknown: "Mídia",
+import { currentLocale, t } from "./i18n.js";
+
+const MEDIA_LABEL_KEYS = Object.freeze({
+  video: "media.video",
+  audio: "media.audio",
+  image: "media.image",
+  document: "media.document",
+  browser: "media.browser",
+  announcement: "media.announcement",
+  screen: "media.screen",
+  unknown: "media.unknown",
 });
 
-const GROUP_LABELS = Object.freeze({
-  section: "Seção",
-  subsection: "Subseção",
-  group: "Grupo",
+const GROUP_LABEL_KEYS = Object.freeze({
+  section: "group.section",
+  subsection: "group.subsection",
+  group: "group.group",
 });
 
 export function formatDuration(milliseconds) {
@@ -27,17 +29,17 @@ export function formatDuration(milliseconds) {
 }
 
 export function mediaLabel(mediaKind) {
-  return MEDIA_LABELS[mediaKind] ?? MEDIA_LABELS.unknown;
+  return t(MEDIA_LABEL_KEYS[mediaKind] ?? MEDIA_LABEL_KEYS.unknown);
 }
 
 export function groupLabel(kind) {
-  return GROUP_LABELS[kind] ?? "Seção";
+  return t(GROUP_LABEL_KEYS[kind] ?? GROUP_LABEL_KEYS.section);
 }
 
 export function collectionLabel(kind) {
-  if (kind === "meeting") return "Reunião";
-  if (kind === "linked_folder") return "Pasta vinculada";
-  return "Playlist";
+  if (kind === "meeting") return t("collection.meeting");
+  if (kind === "linked_folder") return t("collection.linkedFolder");
+  return t("collection.playlist");
 }
 
 const WEEK_RANGE_FORMATTERS = new Map();
@@ -45,8 +47,8 @@ const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
 const WEEK_MILLISECONDS = 7 * DAY_MILLISECONDS;
 
 function localeKey(locale) {
-  const requested = String(locale || "pt-BR");
-  let key = "pt-BR";
+  const requested = String(locale || currentLocale());
+  let key = "en";
   try {
     key = Intl.DateTimeFormat.supportedLocalesOf([requested])[0] || key;
   } catch (error) {
@@ -108,32 +110,32 @@ export function meetingWeekRelation(weekStart, currentWeekStart) {
   const current = parseIsoDate(currentWeekStart);
   if (!week || !current) return "";
   const offset = Math.round((week.getTime() - current.getTime()) / WEEK_MILLISECONDS);
-  if (offset === 0) return "Esta semana";
-  if (offset === 1) return "Próxima semana";
-  if (offset === -1) return "Semana passada";
-  if (offset > 1) return `Em ${offset} semanas`;
-  return `Há ${Math.abs(offset)} semanas`;
+  if (offset === 0) return t("week.this");
+  if (offset === 1) return t("week.next");
+  if (offset === -1) return t("week.previous");
+  if (offset > 1) return t("week.in", { count: offset });
+  return t("week.ago", { count: Math.abs(offset) });
 }
 
 export function meetingTypeLabel(meetingType) {
-  const labels = {
-    midweek: "Reunião do meio de semana",
-    weekend: "Reunião do fim de semana",
-    memorial: "Celebração",
-    other: "Reunião",
+  const keys = {
+    midweek: "meeting.midweek",
+    weekend: "meeting.weekend",
+    memorial: "meeting.memorial",
+    other: "meeting.other",
   };
-  return labels[meetingType] ?? labels.other;
+  return t(keys[meetingType] ?? keys.other);
 }
 
 export function meetingCollectionTitle(collection) {
-  if (collection?.meetingType === "midweek") return "Vida e Ministério";
+  if (collection?.meetingType === "midweek") return t("meeting.midweekTitle");
   if (collection?.meetingType === "weekend") {
-    return collection.title || "Estudo de A Sentinela";
+    return collection.title || t("meeting.weekendTitle");
   }
   if (collection?.meetingType === "memorial") {
-    return collection.title || "Celebração";
+    return collection.title || t("meeting.memorial");
   }
-  return collection?.title || "Reunião";
+  return collection?.title || t("meeting.other");
 }
 
 export function countMedia(nodes) {

@@ -5,10 +5,12 @@ from datetime import date
 import json
 from typing import Any
 import uuid
+from unittest.mock import patch
 
 import pytest
 
 from solin.core.media.formats import MediaKind
+from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.core.meetings.models import MeetingMedia
 from solin.core.meetings.tree_store import (
     MeetingTreeOverview,
@@ -219,6 +221,33 @@ def _meeting_snapshot() -> MeetingTreeSnapshot:
         ),
         revision=3,
     )
+
+
+def test_meeting_catalog_localizes_only_canonical_generated_section_titles() -> None:
+    snapshot = _meeting_snapshot()
+    section = snapshot.nodes[0]
+    section.update(
+        {
+            "title": "TREASURES FROM GOD'S WORD",
+            "meeting_generated": True,
+            "section_code": "tgw",
+        }
+    )
+    catalog = RemoteCatalog(
+        _PlaylistSource([]),
+        [snapshot],
+        meeting_group_title_resolver=display_meeting_section_title,
+    )
+
+    with patch(
+        "solin.core.i18n.meeting_sections.translate_meeting_section_title",
+        return_value="Treasures translated",
+    ):
+        assert catalog.snapshot().collections[0].nodes[0].title == "Treasures translated"
+
+    section["title"] = "My custom section"
+    section["user_title_override"] = True
+    assert catalog.snapshot().collections[0].nodes[0].title == "My custom section"
 
 
 def test_playlist_catalog_preserves_visual_hierarchy_and_slot_order() -> None:

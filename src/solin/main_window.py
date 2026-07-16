@@ -808,7 +808,7 @@ class MainWindow(QMainWindow):
                 runtime_paths=self.runtime_paths,
                 active_profile_id=self.active_profile.id,
                 active_profile_name=self.active_profile.name,
-                active_profile_locale=self.lang.current_code.replace("_", "-"),
+                active_profile_locale=lambda: self.lang.current_code,
                 settings=self._remote_control_settings,
                 credentials=self._remote_control_credentials,
                 playlist_repository=self.playlist_repository,
@@ -828,6 +828,7 @@ class MainWindow(QMainWindow):
             ),
             self,
         )
+        self.lang.language_changed.connect(self._remote_control.on_language_changed)
 
         self._bootstrap_controller = MainWindowBootstrapController(
             MainWindowStartupDependencies(

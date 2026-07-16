@@ -161,7 +161,7 @@ def test_remote_control_navigation_prioritizes_meetings_and_uses_canonical_icons
     assert "Intl.DateTimeFormat" in formatter
     assert "formatRange" in formatter
     assert "meetingWeekGroups" in renderer
-    assert 'text: "Esta semana"' in renderer
+    assert 'text: t("library.currentWeek")' in renderer
     assert "marker-number" not in renderer
     assert "collectionThumbnailUrl(collection)" in renderer
     assert 'classList.add("library-icon--cover")' in renderer
@@ -200,6 +200,25 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "trust-certificate.cer" not in cached
     assert "/remote/api/" in service_worker
     assert 'request.mode === "navigate"' in service_worker
+
+
+def test_remote_control_ui_uses_complete_keyed_localization_catalog() -> None:
+    messages = json.loads((PWA_ROOT / "messages.en.json").read_text(encoding="utf-8"))
+    html = (PWA_ROOT / "index.html").read_text(encoding="utf-8")
+    scripts = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((PWA_ROOT / "scripts").glob("*.js"))
+    )
+
+    static_keys = set(re.findall(r'data-i18n(?:-aria-label)?="([A-Za-z0-9.]+)"', html))
+    direct_keys = set(re.findall(r'\bt\("([A-Za-z0-9.]+)"', scripts))
+    plural_bases = set(re.findall(r'\btp\("([A-Za-z0-9.]+)"', scripts))
+
+    assert static_keys | direct_keys <= set(messages)
+    for base in plural_bases:
+        assert {f"{base}.one", f"{base}.other"} <= set(messages)
+    assert 'lang="en"' in html
+    assert "pt-BR" not in html
+    assert not re.search(r"[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]", scripts)
 
 
 def test_remote_control_scripts_never_persist_secrets_or_inject_markup() -> None:

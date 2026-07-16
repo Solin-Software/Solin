@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 import uuid
+from unittest.mock import patch
 
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
@@ -220,7 +221,7 @@ def _controller(tmp_path: Path, playlists: list[dict[str, Any]]):
             runtime_paths=SimpleNamespace(data_dir=tmp_path),
             active_profile_id="profile-1",
             active_profile_name="Main hall",
-            active_profile_locale="en",
+            active_profile_locale=lambda: "en",
             settings=SimpleNamespace(
                 enabled=lambda: False,
                 network_selection=lambda: None,
@@ -254,6 +255,31 @@ def test_catalog_revision_stays_aligned_when_initial_public_catalog_is_empty(
     controller._refresh_catalog()
 
     assert controller.state.catalog_revision == 1
+    controller.stop()
+
+
+def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    events: list[str] = []
+    controller._server = SimpleNamespace(
+        publish_profile=lambda: events.append("profile"),
+        publish_snapshot=lambda: events.append("catalog"),
+    )
+    localization = {
+        "locale": "pt-BR",
+        "messages": {"app.remoteControl": "Controle remoto"},
+    }
+
+    with patch(
+        "solin.controllers.remote_control_controller.remote_control_localization",
+        return_value=localization,
+    ) as build_localization:
+        controller.on_language_changed("pt_BR")
+
+    build_localization.assert_called_once_with("pt_BR")
+    assert controller._localization_payload() == localization
+    assert events == ["profile", "catalog"]
+    controller._server = None
     controller.stop()
 
 

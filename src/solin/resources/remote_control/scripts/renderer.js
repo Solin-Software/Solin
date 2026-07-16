@@ -14,6 +14,7 @@ import {
   thumbnailUrl,
   toneClass,
 } from "./format.js";
+import { currentLocale, t, tp } from "./i18n.js";
 import { meetingWeekGroups, selectedCollection, visibleCollections } from "./state.js";
 
 const byId = (id) => document.getElementById(id);
@@ -137,7 +138,8 @@ export class Renderer {
       state.playback !== previous?.playback ||
       state.connection !== previous?.connection ||
       pendingChanged ||
-      catalogChanged
+      catalogChanged ||
+      profileChanged
     ) {
       this.#renderPlayer(state);
     }
@@ -157,24 +159,24 @@ export class Renderer {
     if (state.profile === previous?.profile) return;
     const theme = state.profile.theme === "light" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
-    document.documentElement.lang = state.profile.locale || "pt-BR";
+    document.documentElement.lang = state.profile.locale || currentLocale();
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     themeMeta?.setAttribute("content", theme === "light" ? "#e8edf3" : "#0d1117");
-    byId("profile-name").textContent = state.profile.displayName || "Controle remoto";
+    byId("profile-name").textContent = state.profile.displayName || t("app.remoteControl");
   }
 
   #renderConnection(state, previous) {
     if (state.connection === previous?.connection && state.view === previous?.view) return;
     const labels = {
-      connecting: "Conectando…",
-      syncing: "Sincronizando…",
-      online: "Conectado",
-      reconnecting: "Reconectando…",
-      offline: "Sem conexão",
+      connecting: "connection.connecting",
+      syncing: "connection.syncing",
+      online: "connection.online",
+      reconnecting: "connection.reconnecting",
+      offline: "connection.offline",
     };
     const chip = byId("connection-chip");
     chip.dataset.state = state.connection;
-    byId("connection-label").textContent = labels[state.connection] ?? labels.connecting;
+    byId("connection-label").textContent = t(labels[state.connection] ?? labels.connecting);
     const reconnecting = state.connection === "reconnecting" || state.connection === "offline";
     byId("reconnect-banner").hidden = !reconnecting || state.view !== "app";
     byId("login-offline").hidden =
@@ -199,20 +201,22 @@ export class Renderer {
     const meetings = state.catalog.collections.filter(
       (collection) => collection.kind === "meeting",
     ).length;
-    this.#setCount("playlists-count", playlists, "playlists");
-    this.#setCount("meetings-count", meetings, "reuniões");
+    this.#setCount("playlists-count", playlists, "count.playlist");
+    this.#setCount("meetings-count", meetings, "count.meeting");
 
     const isMeetings = state.activeTab === "meetings";
-    byId("library-eyebrow").textContent = isMeetings ? "REUNIÕES" : "PLAYLISTS";
+    byId("library-eyebrow").textContent = t(
+      isMeetings ? "library.meetingsEyebrow" : "library.playlistsEyebrow",
+    );
     byId("library-heading").textContent = isMeetings
-      ? "Escolha uma reunião"
-      : "Escolha uma playlist";
+      ? t("library.chooseMeeting")
+      : t("library.choosePlaylist");
   }
 
-  #setCount(id, value, label) {
+  #setCount(id, value, messageKey) {
     const node = byId(id);
     node.textContent = String(value);
-    node.setAttribute("aria-label", `${value} ${label}`);
+    node.setAttribute("aria-label", tp(messageKey, value));
   }
 
   #applyMobilePanelState(state) {
@@ -238,10 +242,10 @@ export class Renderer {
       this.libraryContent.replaceChildren(
         this.#stateMessage({
           type: "error",
-          title: "Não foi possível carregar",
-          detail: state.catalogError || "Tente atualizar a biblioteca.",
+          title: t("library.loadFailed"),
+          detail: state.catalogError || t("library.loadFailedDetail"),
           action: "retry-catalog",
-          actionLabel: "Tentar novamente",
+          actionLabel: t("library.retry"),
         }),
       );
       return;
@@ -252,10 +256,10 @@ export class Renderer {
       const meetingTab = state.activeTab === "meetings";
       this.libraryContent.replaceChildren(
         this.#stateMessage({
-          title: meetingTab ? "Nenhuma reunião disponível" : "Nenhuma playlist disponível",
+          title: t(meetingTab ? "library.noMeetings" : "library.noPlaylists"),
           detail: meetingTab
-            ? "Quando houver reuniões no Solin, elas aparecerão aqui automaticamente."
-            : "Quando houver playlists no Solin, elas aparecerão aqui automaticamente.",
+            ? t("library.noMeetingsDetail")
+            : t("library.noPlaylistsDetail"),
         }),
       );
       return;
@@ -283,15 +287,20 @@ export class Renderer {
       wrapper.append(this.#meetingWeek(groups.current, state, { current: true }));
     }
     if (groups.future.length > 0) {
-      wrapper.append(this.#meetingPeriod("Próximas semanas", groups.future, state));
+      wrapper.append(
+        this.#meetingPeriod("library.nextWeeks", "future", groups.future, state),
+      );
     }
     if (groups.past.length > 0) {
-      wrapper.append(this.#meetingPeriod("Semanas anteriores", groups.past, state));
+      wrapper.append(
+        this.#meetingPeriod("library.previousWeeks", "past", groups.past, state),
+      );
     }
     if (groups.unclassified.length > 0) {
       wrapper.append(
         this.#meetingPeriod(
-          "Outras reuniões",
+          "library.otherMeetings",
+          "other",
           [{ weekStart: null, collections: groups.unclassified }],
           state,
         ),
@@ -300,15 +309,18 @@ export class Renderer {
     return wrapper;
   }
 
-  #meetingPeriod(title, groups, state) {
-    const slug = title.toLocaleLowerCase("pt-BR").replace(/[^a-z]+/g, "-");
+  #meetingPeriod(titleKey, slug, groups, state) {
     const headingId = `meeting-period-${slug}`;
     const section = element("section", {
       className: "meeting-period",
       attrs: { "aria-labelledby": headingId },
     });
     section.append(
-      element("h3", { className: "meeting-period-title", text: title, attrs: { id: headingId } }),
+      element("h3", {
+        className: "meeting-period-title",
+        text: t(titleKey),
+        attrs: { id: headingId },
+      }),
     );
     for (const group of groups) {
       section.append(this.#meetingWeek(group, state, { headingTag: "h4" }));
@@ -330,19 +342,24 @@ export class Renderer {
         className: "meeting-week-range",
         text: group.weekStart
           ? formatMeetingWeekRange(group.weekStart, state.profile.locale)
-          : "Semana não identificada",
+          : t("library.unknownWeek"),
         attrs: { id: headingId },
       }),
     );
     if (current) {
-      header.append(element("span", { className: "meeting-current-badge", text: "Esta semana" }));
+      header.append(
+        element("span", {
+          className: "meeting-current-badge",
+          text: t("library.currentWeek"),
+        }),
+      );
     }
     section.append(header);
     if (group.collections.length === 0) {
       section.append(
         element("p", {
           className: "meeting-week-empty",
-          text: "Nenhuma reunião disponível nesta semana.",
+          text: t("library.noMeetingThisWeek"),
         }),
       );
       return section;
@@ -379,7 +396,7 @@ export class Renderer {
     const isMeeting = collection.kind === "meeting";
     const title = isMeeting
       ? meetingCollectionTitle(collection)
-      : collection.title || "Sem título";
+      : collection.title || t("library.untitled");
     const subtitle = isMeeting
       ? meetingTypeLabel(collection.meetingType)
       : collection.subtitle || collectionLabel(collection.kind);
@@ -395,7 +412,7 @@ export class Renderer {
       copy,
       element("span", {
         className: "library-meta",
-        text: `${count} ${count === 1 ? "item" : "itens"}`,
+        text: tp("count.item", count),
       }),
     );
     item.append(button);
@@ -409,8 +426,12 @@ export class Renderer {
       this.treeContent.replaceChildren(
         this.#stateMessage({
           type: "placeholder",
-          title: state.activeTab === "meetings" ? "Escolha uma reunião" : "Escolha uma playlist",
-          detail: "A estrutura completa será exibida aqui, sem alterar o conteúdo do Solin.",
+          title: t(
+            state.activeTab === "meetings"
+              ? "library.chooseMeeting"
+              : "library.choosePlaylist",
+          ),
+          detail: t("library.selectDetail"),
         }),
       );
       return;
@@ -421,7 +442,7 @@ export class Renderer {
     byId("tree-heading").textContent =
       collection.kind === "meeting"
         ? meetingCollectionTitle(collection)
-        : collection.title || "Sem título";
+        : collection.title || t("library.untitled");
     if (collection.kind === "meeting") {
       const relation = meetingWeekRelation(
         collection.weekStart,
@@ -433,13 +454,13 @@ export class Renderer {
       byId("tree-subtitle").textContent = collection.subtitle || "";
     }
     const count = countMedia(collection.nodes);
-    byId("tree-item-count").textContent = `${count} ${count === 1 ? "mídia" : "mídias"}`;
+    byId("tree-item-count").textContent = tp("count.media", count);
 
     if (collection.nodes.length === 0) {
       this.treeContent.replaceChildren(
         this.#stateMessage({
-          title: "Esta coleção está vazia",
-          detail: "As alterações feitas no Solin aparecerão aqui automaticamente.",
+          title: t("library.empty"),
+          detail: t("library.emptyDetail"),
         }),
       );
       return;
@@ -483,7 +504,10 @@ export class Renderer {
     const summary = element("summary", { className: "tree-group-summary" });
     const copy = element("span", { className: "group-title-wrap" });
     copy.append(
-      element("span", { className: "group-title", text: node.title || "Sem título" }),
+      element("span", {
+        className: "group-title",
+        text: node.title || t("library.untitled"),
+      }),
       element("span", { className: "group-kind", text: groupLabel(node.kind) }),
     );
     const count = countMedia(node.children);
@@ -492,7 +516,7 @@ export class Renderer {
       element("span", {
         className: "group-count",
         text: String(count),
-        attrs: { "aria-label": `${count} mídias` },
+        attrs: { "aria-label": tp("count.media", count) },
       }),
     );
     const children = element("ul", { className: "tree-children" });
@@ -503,7 +527,7 @@ export class Renderer {
 
   #markerRow(node) {
     const row = element("div", { className: "marker-row" });
-    row.append(element("span", { text: node.title || "Marcador" }));
+    row.append(element("span", { text: node.title || t("group.marker") }));
     return row;
   }
 
@@ -523,8 +547,8 @@ export class Renderer {
         disabled: disabled ? "" : null,
         "data-current": String(current),
         "aria-label": current
-          ? `${node.title}, em reprodução`
-          : `Reproduzir ${node.title || "mídia"}`,
+          ? t("media.playing", { title: node.title || t("media.unknown") })
+          : t("media.play", { title: node.title || t("media.unknown") }),
       },
       dataset: {
         action: "play-media",
@@ -545,7 +569,12 @@ export class Renderer {
       thumbnail.append(mediaPlaceholder(node.mediaKind));
     }
     const copy = element("span", { className: "media-copy" });
-    copy.append(element("span", { className: "media-name", text: node.title || "Sem título" }));
+    copy.append(
+      element("span", {
+        className: "media-name",
+        text: node.title || t("library.untitled"),
+      }),
+    );
     const detail = element("span", { className: "media-detail" });
     detail.append(element("span", { className: "media-kind", text: mediaLabel(node.mediaKind) }));
     if (node.durationMs > 0) {
@@ -556,7 +585,7 @@ export class Renderer {
         document.createTextNode("•"),
         element("span", {
           className: "media-unavailable",
-          text: node.unavailableReason || "Indisponível",
+          text: t("media.unavailable"),
         }),
       );
     }
@@ -579,12 +608,16 @@ export class Renderer {
 
     dock.dataset.mode = mode;
     dock.setAttribute("aria-busy", String(playback.state === "loading"));
-    byId("now-playing-title").textContent = active ? "AGORA REPRODUZINDO" : "PROJEÇÃO";
+    byId("now-playing-title").textContent = t(
+      active ? "player.nowPlaying" : "player.projection",
+    );
 
-    byId("media-title").textContent = active ? playback.title || "Mídia sem título" : "Nada em reprodução";
+    byId("media-title").textContent = active
+      ? playback.title || t("player.untitled")
+      : t("player.nothingPlaying");
     byId("media-context").textContent = active
       ? this.#playbackContext(state)
-      : "Nenhuma mídia está sendo projetada";
+      : t("player.nothingProjected");
 
     const canPause = playback.state === "playing" && capabilities.pause;
     const canResume = playback.state === "paused" && capabilities.resume;
@@ -593,7 +626,7 @@ export class Renderer {
     const showPlayPause = active && (canPause || canResume);
     const showNext = showQueueNavigation;
     const playPause = byId("play-pause-button");
-    playPause.setAttribute("aria-label", canPause ? "Pausar" : "Continuar");
+    playPause.setAttribute("aria-label", t(canPause ? "player.pause" : "player.resume"));
     byId("play-pause-icon").className = `css-icon css-icon--${canPause ? "pause" : "play"}`;
 
     this.#control(
@@ -625,7 +658,13 @@ export class Renderer {
     seek.max = String(duration);
     if (document.activeElement !== seek) seek.value = String(position);
     seek.disabled = !seekEnabled;
-    seek.setAttribute("aria-valuetext", `${formatDuration(position)} de ${formatDuration(duration)}`);
+    seek.setAttribute(
+      "aria-valuetext",
+      t("player.positionOf", {
+        position: formatDuration(position),
+        duration: formatDuration(duration),
+      }),
+    );
     byId("elapsed-time").textContent = formatDuration(position);
     byId("duration-time").textContent = formatDuration(duration);
 
@@ -640,7 +679,10 @@ export class Renderer {
     byId("volume-value").textContent = `${volume}%`;
     const mute = byId("mute-button");
     mute.disabled = volumeSlider.disabled;
-    mute.setAttribute("aria-label", volume === 0 ? "Restaurar volume" : "Silenciar");
+    mute.setAttribute(
+      "aria-label",
+      t(volume === 0 ? "player.restoreVolume" : "player.mute"),
+    );
     const volumeIcon = volume === 0 ? "volume-mute" : volume < 50 ? "volume-low" : "volume-high";
     setUiIcon("volume-icon", volumeIcon);
 
@@ -668,8 +710,8 @@ export class Renderer {
   }
 
   #playbackContext(state) {
-    if (state.playback.state === "error" && state.playback.error?.message) {
-      return state.playback.error.message;
+    if (state.playback.state === "error" && state.playback.error) {
+      return t("player.mediaError");
     }
     const origin = state.playback.origin;
     const collection = state.catalog.collections.find((item) => item.id === origin?.collectionId);
@@ -678,7 +720,7 @@ export class Renderer {
         ? meetingCollectionTitle(collection)
         : collection.title;
     }
-    if (origin?.source === "temporary") return "Conteúdo temporário do Solin";
+    if (origin?.source === "temporary") return t("media.temporary");
     return mediaLabel(state.playback.mediaKind);
   }
 
@@ -712,7 +754,10 @@ export class Renderer {
   }
 
   #skeletonList() {
-    const wrapper = element("div", { className: "skeleton-list", attrs: { "aria-label": "Carregando" } });
+    const wrapper = element("div", {
+      className: "skeleton-list",
+      attrs: { "aria-label": t("state.loading") },
+    });
     for (let index = 0; index < 5; index += 1) {
       wrapper.append(element("div", { className: "skeleton-item", attrs: { "aria-hidden": "true" } }));
     }

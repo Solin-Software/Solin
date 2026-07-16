@@ -75,6 +75,7 @@ class MediaAvailability:
 
 AvailabilityResolver: TypeAlias = Callable[[CatalogKind, str, Mapping[str, Any]], MediaAvailability]
 ThumbnailIdResolver: TypeAlias = Callable[[CatalogKind, str, Mapping[str, Any]], str | None]
+MeetingGroupTitleResolver: TypeAlias = Callable[[Mapping[str, Any]], str]
 
 
 class CatalogResolutionCode(StrEnum):
@@ -147,6 +148,7 @@ class RemoteCatalog:
         linked_playlist_source: _PlaylistSource | Callable[[], Sequence[dict]] | None = None,
         availability_resolver: AvailabilityResolver | None = None,
         thumbnail_id_resolver: ThumbnailIdResolver | None = None,
+        meeting_group_title_resolver: MeetingGroupTitleResolver | None = None,
     ) -> None:
         self._playlist_source = playlist_source
         self._linked_playlist_source = linked_playlist_source
@@ -158,6 +160,7 @@ class RemoteCatalog:
         )
         self._availability_resolver = availability_resolver
         self._thumbnail_id_resolver = thumbnail_id_resolver
+        self._meeting_group_title_resolver = meeting_group_title_resolver
         self._lock = threading.RLock()
         self._revision = 0
         self._fingerprint: str | None = None
@@ -644,13 +647,16 @@ class RemoteCatalog:
             for child in _object_list(raw.get("children"), "meeting node children")
         )
         hue = _valid_int(raw.get("color_hue"), 215)
+        title = raw.get("text") if kind is CatalogNodeKind.MARKER else raw.get("title")
+        if (
+            kind in (CatalogNodeKind.SECTION, CatalogNodeKind.SUBSECTION)
+            and self._meeting_group_title_resolver is not None
+        ):
+            title = self._meeting_group_title_resolver(raw)
         return CatalogNode(
             id=node_id,
             kind=kind,
-            title=public_title(
-                raw.get("text") if kind is CatalogNodeKind.MARKER else raw.get("title"),
-                node_id,
-            ),
+            title=public_title(title, node_id),
             children=children,
             color=(accent_from_hue(hue % 360) if kind is not CatalogNodeKind.MARKER else None),
             collapsed=(

@@ -1,8 +1,9 @@
-const CACHE_NAME = "solin-remote-shell-v9";
+const CACHE_NAME = "solin-remote-shell-v10";
 const SHELL_RESOURCES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./messages.en.json",
   "./styles/tokens.css",
   "./styles/base.css",
   "./styles/layout.css",
@@ -10,6 +11,7 @@ const SHELL_RESOURCES = [
   "./scripts/api.js",
   "./scripts/app.js",
   "./scripts/format.js",
+  "./scripts/i18n.js",
   "./scripts/pwa.js",
   "./scripts/renderer.js",
   "./scripts/state.js",

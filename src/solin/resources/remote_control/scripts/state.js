@@ -1,3 +1,5 @@
+import { currentLocale } from "./i18n.js";
+
 const EMPTY_PLAYBACK = Object.freeze({
   playbackRevision: 0,
   playbackSessionId: null,
@@ -25,8 +27,8 @@ export function createInitialState() {
     eventSequence: null,
     currentMeetingWeekStart: null,
     profile: {
-      displayName: "Controle remoto",
-      locale: "pt-BR",
+      displayName: "",
+      locale: currentLocale(),
       theme: "dark",
     },
     catalog: {
@@ -94,8 +96,8 @@ export function applyBootstrap(store, bootstrap) {
     currentMeetingWeekStart:
       bootstrap.currentMeetingWeekStart || state.currentMeetingWeekStart,
     profile: {
-      displayName: profile.name || "Controle remoto",
-      locale: profile.locale || "pt-BR",
+      displayName: profile.name || "",
+      locale: profile.locale || currentLocale(),
       theme: profile.theme === "light" ? "light" : "dark",
     },
     catalog,

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -25,7 +25,7 @@
     <script type="module" src="./scripts/app.js"></script>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+    <a class="skip-link" href="#main-content" data-i18n="app.skipToContent">Skip to content</a>
 
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <defs>
@@ -102,7 +102,7 @@
     <div id="boot-view" class="boot-view" aria-live="polite">
       <img class="boot-logo" src="./icons/icon-192.png" alt="" width="72" height="72">
       <div class="spinner" aria-hidden="true"></div>
-      <p>Conectando ao Solin…</p>
+      <p data-i18n="boot.connecting">Connecting to Solin…</p>
     </div>
 
     <main id="login-view" class="login-view" hidden>
@@ -110,20 +110,20 @@
         <div class="brand-lockup brand-lockup--login">
           <img src="./icons/icon-192.png" alt="" width="64" height="64">
           <div>
-            <p class="eyebrow">CONTROLE REMOTO</p>
+            <p class="eyebrow" data-i18n="login.eyebrow">REMOTE CONTROL</p>
             <h1 id="login-title">Solin</h1>
           </div>
         </div>
-        <p class="login-intro">
-          Entre para controlar a projeção deste Solin na rede local.
+        <p class="login-intro" data-i18n="login.intro">
+          Sign in to control this Solin projection on the local network.
         </p>
         <div id="login-offline" class="notice notice--warning" role="status" hidden>
           <span class="notice-icon" aria-hidden="true">!</span>
-          <span>Sem conexão com o Solin. Confira a rede e tente novamente.</span>
+          <span data-i18n="login.offline">Solin is unreachable. Check the network and try again.</span>
         </div>
         <form id="login-form" class="login-form" novalidate>
           <div class="field">
-            <label for="username">Usuário</label>
+            <label for="username" data-i18n="login.username">Username</label>
             <input
               id="username"
               name="username"
@@ -136,7 +136,7 @@
             >
           </div>
           <div class="field">
-            <label for="password">Senha</label>
+            <label for="password" data-i18n="login.password">Password</label>
             <div class="password-field">
               <input
                 id="password"
@@ -151,7 +151,8 @@
                 id="toggle-password"
                 class="icon-button icon-button--inside"
                 type="button"
-                aria-label="Mostrar senha"
+                aria-label="Show password"
+                data-i18n-aria-label="login.showPassword"
                 aria-pressed="false"
               >
                 <svg class="ui-icon" aria-hidden="true" focusable="false">
@@ -162,7 +163,7 @@
           </div>
           <p id="login-error" class="form-error" role="alert" hidden></p>
           <button id="login-submit" class="button button--primary button--full" type="submit">
-            <span class="button-label">Entrar</span>
+            <span class="button-label" data-i18n="login.signIn">Sign in</span>
             <span class="button-spinner spinner spinner--small" aria-hidden="true" hidden></span>
           </button>
         </form>
@@ -170,27 +171,26 @@
           <svg class="ui-icon" aria-hidden="true" focusable="false">
             <use href="#icon-shield"></use>
           </svg>
-          Conexão protegida e limitada à sua rede local
+          <span data-i18n="login.localProtection">Protected connection limited to your local network</span>
         </p>
         <details class="certificate-help">
-          <summary>Preparar a instalação neste dispositivo</summary>
+          <summary data-i18n="login.prepareInstallation">Prepare installation on this device</summary>
           <div class="certificate-help-content">
-            <p>
-              Para habilitar o modo app, baixe e confie na autoridade local deste Solin.
-              Antes de instalar, compare a impressão SHA-256 com a exibida nas configurações
-              do Solin.
+            <p data-i18n="login.certificateHelp">
+              To enable app mode, download and trust this Solin local authority. Before
+              installing it, compare the SHA-256 fingerprint with the one shown in Solin settings.
             </p>
             <a
               class="button button--secondary button--compact button--full"
               href="./trust-certificate.cer"
               download="solin-remote-authority.cer"
             >
-              Baixar certificado deste Solin
+              <span data-i18n="login.downloadCertificate">Download this Solin certificate</span>
             </a>
-            <p class="certificate-platform-note">
-              No iPhone ou iPad, instale o perfil e ative a confiança em Ajustes › Geral ›
-              Sobre › Ajustes de Confiança. No Android, instale o arquivo como certificado
-              de CA nas configurações de segurança. Depois, reabra este endereço.
+            <p class="certificate-platform-note" data-i18n="login.platformHelp">
+              On iPhone or iPad, install the profile and enable trust in Settings › General ›
+              About › Certificate Trust Settings. On Android, install the file as a CA
+              certificate in security settings. Then reopen this address.
             </p>
           </div>
         </details>
@@ -203,20 +203,20 @@
           <img src="./icons/icon-192.png" alt="" width="40" height="40">
           <div class="brand-copy">
             <span class="brand-name">Solin</span>
-            <span id="profile-name" class="brand-subtitle">Controle remoto</span>
+            <span id="profile-name" class="brand-subtitle" data-i18n="app.remoteControl">Remote control</span>
           </div>
         </div>
 
         <div class="topbar-actions">
           <div id="connection-chip" class="connection-chip" role="status">
             <span class="status-dot" aria-hidden="true"></span>
-            <span id="connection-label">Conectando…</span>
+            <span id="connection-label" data-i18n="connection.connecting">Connecting…</span>
           </div>
-          <button id="install-button" class="button button--secondary button--compact" type="button" aria-label="Instalar Solin" hidden>
+          <button id="install-button" class="button button--secondary button--compact" type="button" aria-label="Install Solin" data-i18n-aria-label="app.installSolin" hidden>
             <span class="css-icon css-icon--install" aria-hidden="true"></span>
-            <span class="desktop-label">Instalar app</span>
+            <span class="desktop-label" data-i18n="app.installApp">Install app</span>
           </button>
-          <button id="logout-button" class="icon-button" type="button" aria-label="Sair">
+          <button id="logout-button" class="icon-button" type="button" aria-label="Sign out" data-i18n-aria-label="app.signOut">
             <svg class="ui-icon" aria-hidden="true" focusable="false">
               <use href="#icon-logout"></use>
             </svg>
@@ -226,16 +226,16 @@
 
       <div id="reconnect-banner" class="reconnect-banner" role="status" hidden>
         <div>
-          <strong>Reconectando ao Solin…</strong>
-          <span>Os controles serão liberados assim que a conexão voltar.</span>
+          <strong data-i18n="connection.reconnectingTitle">Reconnecting to Solin…</strong>
+          <span data-i18n="connection.reconnectingDetail">Controls will be enabled as soon as the connection returns.</span>
         </div>
         <button id="retry-connection" class="button button--ghost button--compact" type="button">
-          Tentar agora
+          <span data-i18n="connection.retryNow">Try now</span>
         </button>
       </div>
 
-      <nav class="primary-tabs" aria-label="Biblioteca">
-        <div class="tab-list" role="tablist" aria-label="Conteúdo do Solin">
+      <nav class="primary-tabs" aria-label="Library" data-i18n-aria-label="app.library">
+        <div class="tab-list" role="tablist" aria-label="Solin content" data-i18n-aria-label="app.solinContent">
           <button
             id="meetings-tab"
             class="tab-button"
@@ -248,8 +248,8 @@
             <svg class="ui-icon" aria-hidden="true" focusable="false">
               <use href="#icon-nav-meetings"></use>
             </svg>
-            Reuniões
-            <span id="meetings-count" class="tab-count" aria-label="0 reuniões">0</span>
+            <span data-i18n="nav.meetings">Meetings</span>
+            <span id="meetings-count" class="tab-count" aria-label="0 meetings">0</span>
           </button>
           <button
             id="playlists-tab"
@@ -264,7 +264,7 @@
             <svg class="ui-icon" aria-hidden="true" focusable="false">
               <use href="#icon-nav-playlist"></use>
             </svg>
-            Playlists
+            <span data-i18n="nav.playlists">Playlists</span>
             <span id="playlists-count" class="tab-count" aria-label="0 playlists">0</span>
           </button>
         </div>
@@ -280,10 +280,10 @@
         >
           <div class="panel-heading">
             <div>
-              <p id="library-eyebrow" class="eyebrow">REUNIÕES</p>
-              <h2 id="library-heading">Escolha uma reunião</h2>
+              <p id="library-eyebrow" class="eyebrow" data-i18n="library.meetingsEyebrow">MEETINGS</p>
+              <h2 id="library-heading" data-i18n="library.chooseMeeting">Choose a meeting</h2>
             </div>
-            <button id="refresh-library" class="icon-button icon-button--small" type="button" aria-label="Atualizar biblioteca">
+            <button id="refresh-library" class="icon-button icon-button--small" type="button" aria-label="Refresh library" data-i18n-aria-label="library.refresh">
               <span class="css-icon css-icon--refresh" aria-hidden="true"></span>
             </button>
           </div>
@@ -292,7 +292,7 @@
 
         <section id="tree-panel" class="tree-panel" aria-labelledby="tree-heading">
           <div id="tree-toolbar" class="tree-toolbar" hidden>
-            <button id="mobile-back" class="icon-button mobile-back" type="button" aria-label="Voltar para a lista">
+            <button id="mobile-back" class="icon-button mobile-back" type="button" aria-label="Back to the list" data-i18n-aria-label="library.back">
               <span class="css-icon css-icon--back" aria-hidden="true"></span>
             </button>
             <div class="tree-title-wrap">
@@ -314,27 +314,27 @@
             </svg>
           </div>
           <div class="now-playing-copy" aria-live="polite" aria-atomic="true">
-            <p id="now-playing-title" class="eyebrow">PROJEÇÃO</p>
-            <strong id="media-title" class="media-title">Nada em reprodução</strong>
-            <span id="media-context" class="media-context">Nenhuma mídia está sendo projetada</span>
+            <p id="now-playing-title" class="eyebrow" data-i18n="player.projection">PROJECTION</p>
+            <strong id="media-title" class="media-title" data-i18n="player.nothingPlaying">Nothing playing</strong>
+            <span id="media-context" class="media-context" data-i18n="player.nothingProjected">No media is being projected</span>
           </div>
         </div>
 
         <div id="transport" class="transport" hidden>
-          <div id="transport-buttons" class="transport-buttons" role="group" aria-label="Controles de reprodução">
-            <button id="previous-button" class="icon-button transport-button" type="button" aria-label="Anterior" disabled>
+          <div id="transport-buttons" class="transport-buttons" role="group" aria-label="Playback controls" data-i18n-aria-label="player.controls">
+            <button id="previous-button" class="icon-button transport-button" type="button" aria-label="Previous" data-i18n-aria-label="player.previous" disabled>
               <span class="css-icon css-icon--previous" aria-hidden="true"></span>
             </button>
-            <button id="play-pause-button" class="icon-button transport-button transport-button--primary" type="button" aria-label="Reproduzir" disabled>
+            <button id="play-pause-button" class="icon-button transport-button transport-button--primary" type="button" aria-label="Play" data-i18n-aria-label="player.play" disabled>
               <span id="play-pause-icon" class="css-icon css-icon--play" aria-hidden="true"></span>
             </button>
-            <button id="next-button" class="icon-button transport-button" type="button" aria-label="Próxima" disabled>
+            <button id="next-button" class="icon-button transport-button" type="button" aria-label="Next" data-i18n-aria-label="player.next" disabled>
               <span class="css-icon css-icon--next" aria-hidden="true"></span>
             </button>
           </div>
           <div id="timeline" class="timeline">
             <span id="elapsed-time" class="time-label">0:00</span>
-            <label class="visually-hidden" for="seek-control">Posição da mídia</label>
+            <label class="visually-hidden" for="seek-control" data-i18n="player.position">Media position</label>
             <input id="seek-control" class="range-control" type="range" min="0" max="0" value="0" step="250" disabled>
             <span id="duration-time" class="time-label">0:00</span>
           </div>
@@ -342,18 +342,18 @@
 
         <div id="dock-actions" class="dock-actions" hidden>
           <div id="volume-control" class="volume-control" hidden>
-            <button id="mute-button" class="icon-button icon-button--small" type="button" aria-label="Silenciar" disabled>
+            <button id="mute-button" class="icon-button icon-button--small" type="button" aria-label="Mute" data-i18n-aria-label="player.mute" disabled>
               <svg id="volume-icon" class="ui-icon" aria-hidden="true" focusable="false">
                 <use href="#icon-volume-high"></use>
               </svg>
             </button>
-            <label class="visually-hidden" for="volume-slider">Volume</label>
+            <label class="visually-hidden" for="volume-slider" data-i18n="player.volume">Volume</label>
             <input id="volume-slider" class="range-control range-control--volume" type="range" min="0" max="100" value="100" step="1" disabled>
             <span id="volume-value" class="volume-value">100%</span>
           </div>
           <button id="stop-button" class="button button--danger button--compact" type="button" disabled>
             <span class="css-icon css-icon--stop" aria-hidden="true"></span>
-            Parar
+            <span data-i18n="player.stop">Stop</span>
           </button>
         </div>
       </section>
@@ -364,8 +364,8 @@
 
     <noscript>
       <main class="noscript-card">
-        <h1>JavaScript necessário</h1>
-        <p>Ative o JavaScript para usar o controle remoto do Solin.</p>
+        <h1>JavaScript required</h1>
+        <p>Enable JavaScript to use Solin remote control.</p>
       </main>
     </noscript>
   </body>

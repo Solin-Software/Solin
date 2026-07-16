@@ -21,6 +21,7 @@ from .contracts import (
     CommandErrorCode,
     CommandResult,
     JsonObject,
+    JsonValue,
     RemoteCommand,
     parse_projection_command,
 )
@@ -82,6 +83,7 @@ _STATIC_CONTENT_TYPES: Final = {
 CommandHandler = Callable[[RemoteCommand], Awaitable[CommandError | None]]
 ThumbnailHandler = Callable[[str, str, str], Awaitable[bytes | None]]
 CollectionThumbnailHandler = Callable[[str, str], Awaitable[bytes | None]]
+LocalizationProvider = Callable[[], JsonObject]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,12 +95,12 @@ class RemoteControlServerDependencies:
     rate_limiter: LoginRateLimiter
     assets_directory: Path
     command_handler: CommandHandler
+    localization_provider: LocalizationProvider
     thumbnail_handler: ThumbnailHandler | None = None
     collection_thumbnail_handler: CollectionThumbnailHandler | None = None
     session_count_changed: Callable[[int], None] | None = None
     profile_id: str = ""
     profile_name: str = ""
-    profile_locale: str = "pt-BR"
     meeting_week_start: Callable[[], date] = current_monday
 
 
@@ -183,6 +185,14 @@ class RemoteControlHttpApplication:
             )
         if not events:
             return
+        await self._broadcast(events)
+
+    async def publish_profile(self) -> None:
+        if not self._websockets:
+            return
+        await self._broadcast([self._event("profile.snapshot", self._profile_payload())])
+
+    async def _broadcast(self, events: list[JsonObject]) -> None:
         sockets = tuple(self._websockets)
         deliveries = await asyncio.gather(
             *(self._send_many(socket, events) for socket in sockets),
@@ -258,6 +268,7 @@ class RemoteControlHttpApplication:
 
     def _configure_routes(self) -> None:
         prefix = REMOTE_CONTROL_PREFIX
+        self._app.router.add_get(f"{prefix}/api/localization", self._localization)
         self._app.router.add_post(f"{prefix}/api/auth/login", self._login)
         self._app.router.add_post(f"{prefix}/api/logout", self._logout)
         self._app.router.add_get(f"{prefix}/api/bootstrap", self._bootstrap)
@@ -296,6 +307,10 @@ class RemoteControlHttpApplication:
                 "Content-Disposition": ('attachment; filename="solin-remote-authority.cer"'),
             },
         )
+
+    async def _localization(self, request: web.Request) -> web.Response:
+        del request
+        return self._json_response(self._localization_payload())
 
     async def _asset(self, request: web.Request) -> web.StreamResponse:
         requested = request.match_info.get("asset", "")
@@ -599,6 +614,13 @@ class RemoteControlHttpApplication:
                         snapshot=snapshot,
                         sequence=baseline_sequence,
                     ),
+                    self._event(
+                        "profile.snapshot",
+                        self._profile_payload(),
+                        advance=False,
+                        snapshot=snapshot,
+                        sequence=baseline_sequence,
+                    ),
                 ),
             )
             heartbeat_task = asyncio.create_task(self._heartbeat(socket, session_token))
@@ -724,15 +746,33 @@ class RemoteControlHttpApplication:
             "csrfToken": csrf_token,
             "principal": principal or self._dependencies.credentials.configured_username(),
             "currentMeetingWeekStart": self._current_meeting_week_start(),
-            "profile": {
-                "id": self._dependencies.profile_id,
-                "name": self._dependencies.profile_name,
-                "locale": self._dependencies.profile_locale,
-            },
+            "profile": self._profile_payload(),
             "catalogRevision": snapshot.catalog_revision,
             "playbackRevision": snapshot.playback_revision,
             "playback": snapshot.playback.to_dict(),
         }
+
+    def _profile_payload(self) -> JsonObject:
+        return {
+            "id": self._dependencies.profile_id,
+            "name": self._dependencies.profile_name,
+            **self._localization_payload(),
+        }
+
+    def _localization_payload(self) -> JsonObject:
+        payload = self._dependencies.localization_provider()
+        locale = payload.get("locale")
+        raw_messages = payload.get("messages")
+        if not isinstance(locale, str) or not locale:
+            raise TypeError("localization_provider must return a locale string")
+        if not isinstance(raw_messages, dict):
+            raise TypeError("localization_provider must return a messages object")
+        messages: dict[str, JsonValue] = {}
+        for key, value in raw_messages.items():
+            if not isinstance(key, str) or not key or not isinstance(value, str):
+                raise TypeError("localization messages must contain string keys and values")
+            messages[key] = value
+        return {"locale": locale, "messages": messages}
 
     def _current_meeting_week_start(self) -> str:
         value = self._dependencies.meeting_week_start()
@@ -862,6 +902,13 @@ class RemoteControlServer:
         if loop is None or application is None or not loop.is_running():
             return
         asyncio.run_coroutine_threadsafe(application.publish_snapshot(), loop)
+
+    def publish_profile(self) -> None:
+        loop = self._loop
+        application = self._application
+        if loop is None or application is None or not loop.is_running():
+            return
+        asyncio.run_coroutine_threadsafe(application.publish_profile(), loop)
 
     def stop(self, *, timeout_seconds: float = 8.0) -> None:
         with self._lock:

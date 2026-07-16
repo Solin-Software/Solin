@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 const API_ROOT = "/remote/api";
 const REQUEST_TIMEOUT_MS = 15_000;
 const HEARTBEAT_TIMEOUT_MS = 55_000;
@@ -28,6 +30,10 @@ export class RemoteApi {
     });
     this.#captureCsrf(response);
     return response;
+  }
+
+  async localization() {
+    return this.#request("/localization", { csrf: false });
   }
 
   async logout() {
@@ -84,7 +90,7 @@ export class RemoteApi {
       const payload = await readJson(response);
       if (!response.ok) {
         const error = payload?.error ?? {};
-        throw new ApiError(error.message || statusMessage(response.status), {
+        throw new ApiError(statusMessage(response.status), {
           status: response.status,
           code: error.code || statusCode(response.status),
           retryable: Boolean(error.retryable),
@@ -98,8 +104,8 @@ export class RemoteApi {
       const timedOut = error instanceof DOMException && error.name === "AbortError";
       throw new ApiError(
         timedOut
-          ? "O Solin demorou para responder."
-          : "Não foi possível conectar ao Solin.",
+          ? t("api.timeout")
+          : t("api.unreachable"),
         { code: timedOut ? "timeout" : "network", retryable: true },
       );
     } finally {
@@ -124,7 +130,7 @@ async function readJson(response) {
         },
       };
     }
-    throw new ApiError("O Solin enviou uma resposta inválida.", {
+    throw new ApiError(t("api.invalidResponse"), {
       status: response.status,
       code: "invalid_response",
     });
@@ -132,7 +138,7 @@ async function readJson(response) {
   try {
     return await response.json();
   } catch {
-    throw new ApiError("O Solin enviou uma resposta incompleta.", {
+    throw new ApiError(t("api.incompleteResponse"), {
       status: response.status,
       code: "invalid_response",
     });
@@ -147,10 +153,10 @@ function statusCode(status) {
 }
 
 function statusMessage(status) {
-  if (status === 401) return "Sua sessão expirou. Entre novamente.";
-  if (status === 403) return "Esta ação não foi autorizada.";
-  if (status === 429) return "Muitas tentativas. Aguarde um pouco.";
-  return "O Solin não conseguiu concluir a solicitação.";
+  if (status === 401) return t("api.unauthorized");
+  if (status === 403) return t("api.forbidden");
+  if (status === 429) return t("api.rateLimited");
+  return t("api.requestFailed");
 }
 
 export class EventStream {

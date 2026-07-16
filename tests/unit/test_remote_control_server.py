@@ -119,6 +119,7 @@ async def _harness(
     command_handler: Any | None = None,
     thumbnail_handler: Any | None = None,
     collection_thumbnail_handler: Any | None = None,
+    localization_provider: Any | None = None,
 ) -> _Harness:
     assets = tmp_path / "assets"
     assets.mkdir()
@@ -155,12 +156,18 @@ async def _harness(
             rate_limiter=LoginRateLimiter(),
             assets_directory=assets,
             command_handler=execute_command,
+            localization_provider=localization_provider
+            or (
+                lambda: {
+                    "locale": "pt-BR",
+                    "messages": {"app.remoteControl": "Controle remoto"},
+                }
+            ),
             thumbnail_handler=thumbnail_handler,
             collection_thumbnail_handler=collection_thumbnail_handler,
             session_count_changed=session_counts.append,
             profile_id="profile-1",
             profile_name="Sala principal",
-            profile_locale="pt-BR",
             meeting_week_start=lambda: date(2026, 7, 13),
         ),
         allowed_origin=_ORIGIN,
@@ -219,6 +226,71 @@ def test_static_shell_has_strict_security_headers(tmp_path: Path) -> None:
             assert certificate.headers["Content-Type"] == "application/pkix-cert"
             assert certificate.headers["Cache-Control"] == "no-store"
             assert "attachment" in certificate.headers["Content-Disposition"]
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_localization_is_public_no_store_and_does_not_expose_profile(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        try:
+            response = await harness.client.get(
+                "/remote/api/localization",
+                headers={"Host": _HOST},
+            )
+            payload = await response.json()
+
+            assert response.status == 200
+            assert response.headers["Cache-Control"] == "no-store"
+            assert payload == {
+                "locale": "pt-BR",
+                "messages": {"app.remoteControl": "Controle remoto"},
+            }
+            assert "profile" not in payload
+            assert "name" not in payload
+            assert "id" not in payload
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_profile_snapshot_publishes_updated_localization(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        localization = {
+            "locale": "en",
+            "messages": {"app.remoteControl": "Remote control"},
+        }
+        harness = await _harness(
+            tmp_path,
+            localization_provider=lambda: localization,
+        )
+        try:
+            headers = await _authenticated_headers(harness)
+            socket = await harness.client.ws_connect(
+                "/remote/api/ws",
+                headers=headers,
+            )
+            for _event in range(3):
+                await socket.receive_json()
+
+            localization = {
+                "locale": "pt-BR",
+                "messages": {"app.remoteControl": "Controle remoto"},
+            }
+            await harness.application.publish_profile()
+            event = await socket.receive_json()
+
+            assert event["type"] == "profile.snapshot"
+            assert event["sequence"] == 1
+            assert event["payload"] == {
+                "id": "profile-1",
+                "name": "Sala principal",
+                **localization,
+            }
+            await socket.close()
         finally:
             await harness.client.close()
 
@@ -292,6 +364,9 @@ def test_login_bootstrap_and_idempotent_command_flow(tmp_path: Path) -> None:
             assert bootstrap_payload["csrfToken"] == csrf_token
             assert bootstrap_payload["profile"]["name"] == "Sala principal"
             assert bootstrap_payload["profile"]["locale"] == "pt-BR"
+            assert bootstrap_payload["profile"]["messages"] == {
+                "app.remoteControl": "Controle remoto"
+            }
             assert bootstrap_payload["currentMeetingWeekStart"] == "2026-07-13"
 
             command_id = str(uuid.uuid4())
@@ -382,12 +457,19 @@ def test_websocket_baseline_is_atomic_and_multiple_clients_keep_one_sequence(
             )
             first_catalog = await first.receive_json()
             first_playback = await first.receive_json()
+            first_profile = await first.receive_json()
 
-            assert [first_catalog["type"], first_playback["type"]] == [
+            assert [first_catalog["type"], first_playback["type"], first_profile["type"]] == [
                 "catalog.snapshot",
                 "playback.snapshot",
+                "profile.snapshot",
             ]
-            assert first_catalog["sequence"] == first_playback["sequence"] == 0
+            assert (
+                first_catalog["sequence"]
+                == first_playback["sequence"]
+                == first_profile["sequence"]
+                == 0
+            )
             assert first_catalog["catalogRevision"] == 1
             assert first_catalog["payload"]["catalogRevision"] == 1
             assert first_playback["payload"]["playbackRevision"] == 0
@@ -409,7 +491,13 @@ def test_websocket_baseline_is_atomic_and_multiple_clients_keep_one_sequence(
             )
             second_catalog = await second.receive_json()
             second_playback = await second.receive_json()
-            assert second_catalog["sequence"] == second_playback["sequence"] == 1
+            second_profile = await second.receive_json()
+            assert (
+                second_catalog["sequence"]
+                == second_playback["sequence"]
+                == second_profile["sequence"]
+                == 1
+            )
 
             harness.state.update_catalog((), change_token="third-revision")
             await harness.application.publish_snapshot()
@@ -450,6 +538,7 @@ def test_logout_revokes_every_websocket_using_that_session(tmp_path: Path) -> No
                 "/remote/api/ws",
                 headers=session_headers,
             )
+            await websocket.receive_json()
             await websocket.receive_json()
             await websocket.receive_json()
 
@@ -751,6 +840,7 @@ def test_websocket_limits_and_binary_messages_fail_closed(tmp_path: Path) -> Non
                 )
                 await socket.receive_json()
                 await socket.receive_json()
+                await socket.receive_json()
                 sockets.append(socket)
 
             with pytest.raises(WSServerHandshakeError) as limit_error:
@@ -791,6 +881,7 @@ def test_global_websocket_limit_is_enforced_across_sessions(tmp_path: Path) -> N
                         "/remote/api/ws",
                         headers=headers,
                     )
+                    await socket.receive_json()
                     await socket.receive_json()
                     await socket.receive_json()
                     sockets.append(socket)
@@ -882,6 +973,7 @@ def test_expired_websocket_session_publishes_updated_session_count(
                     "Cookie": f"{SESSION_COOKIE_NAME}={session.session_token}",
                 },
             )
+            await socket.receive_json()
             await socket.receive_json()
             await socket.receive_json()
 

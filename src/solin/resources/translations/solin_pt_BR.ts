@@ -5643,4 +5643,144 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
 {path}</translation>
     </message>
 </context>
+<context>
+    <name>_RemoteControlWeb</name>
+    <message><source>Solin Remote</source><translation>Solin Remoto</translation></message>
+    <message><source>Remote control</source><translation>Controle remoto</translation></message>
+    <message><source>Skip to content</source><translation>Pular para o conteúdo</translation></message>
+    <message><source>Install Solin</source><translation>Instalar o Solin</translation></message>
+    <message><source>Install app</source><translation>Instalar app</translation></message>
+    <message><source>Sign out</source><translation>Sair</translation></message>
+    <message><source>Library</source><translation>Biblioteca</translation></message>
+    <message><source>Solin content</source><translation>Conteúdo do Solin</translation></message>
+    <message><source>JavaScript required</source><translation>JavaScript necessário</translation></message>
+    <message><source>Enable JavaScript to use Solin remote control.</source><translation>Ative o JavaScript para usar o controle remoto do Solin.</translation></message>
+    <message><source>Connecting to Solin…</source><translation>Conectando ao Solin…</translation></message>
+    <message><source>REMOTE CONTROL</source><translation>CONTROLE REMOTO</translation></message>
+    <message><source>Sign in to control this Solin projection on the local network.</source><translation>Entre para controlar a projeção deste Solin na rede local.</translation></message>
+    <message><source>Solin is unreachable. Check the network and try again.</source><translation>Sem conexão com o Solin. Confira a rede e tente novamente.</translation></message>
+    <message><source>Username</source><translation>Usuário</translation></message>
+    <message><source>Password</source><translation>Senha</translation></message>
+    <message><source>Show password</source><translation>Mostrar senha</translation></message>
+    <message><source>Hide password</source><translation>Ocultar senha</translation></message>
+    <message><source>Sign in</source><translation>Entrar</translation></message>
+    <message><source>Signing in…</source><translation>Entrando…</translation></message>
+    <message><source>Protected connection limited to your local network</source><translation>Conexão protegida e limitada à sua rede local</translation></message>
+    <message><source>Prepare installation on this device</source><translation>Preparar a instalação neste dispositivo</translation></message>
+    <message><source>To enable app mode, download and trust this Solin local authority. Before installing it, compare the SHA-256 fingerprint with the one shown in Solin settings.</source><translation>Para habilitar o modo app, baixe e confie na autoridade local deste Solin. Antes de instalar, compare a impressão SHA-256 com a exibida nas configurações do Solin.</translation></message>
+    <message><source>Download this Solin certificate</source><translation>Baixar certificado deste Solin</translation></message>
+    <message><source>On iPhone or iPad, install the profile and enable trust in Settings › General › About › Certificate Trust Settings. On Android, install the file as a CA certificate in security settings. Then reopen this address.</source><translation>No iPhone ou iPad, instale o perfil e ative a confiança em Ajustes › Geral › Sobre › Ajustes de Confiança. No Android, instale o arquivo como certificado de CA nas configurações de segurança. Depois, reabra este endereço.</translation></message>
+    <message><source>Enter your username and password.</source><translation>Informe o usuário e a senha.</translation></message>
+    <message><source>Signed in. Remote control connected.</source><translation>Login concluído. Controle remoto conectado.</translation></message>
+    <message><source>Could not sign in.</source><translation>Não foi possível entrar.</translation></message>
+    <message><source>Incorrect username or password.</source><translation>Usuário ou senha incorretos.</translation></message>
+    <message><source>Too many attempts. Wait a moment and try again.</source><translation>Muitas tentativas. Aguarde um pouco e tente novamente.</translation></message>
+    <message><source>Your session expired. Sign in again.</source><translation>Sua sessão expirou. Entre novamente.</translation></message>
+    <message><source>Your session expired.</source><translation>Sua sessão expirou.</translation></message>
+    <message><source>Connecting…</source><translation>Conectando…</translation></message>
+    <message><source>Synchronizing…</source><translation>Sincronizando…</translation></message>
+    <message><source>Connected</source><translation>Conectado</translation></message>
+    <message><source>Reconnecting…</source><translation>Reconectando…</translation></message>
+    <message><source>Offline</source><translation>Sem conexão</translation></message>
+    <message><source>Reconnecting to Solin…</source><translation>Reconectando ao Solin…</translation></message>
+    <message><source>Controls will be enabled as soon as the connection returns.</source><translation>Os controles serão liberados assim que a conexão voltar.</translation></message>
+    <message><source>Try now</source><translation>Tentar agora</translation></message>
+    <message><source>Connection failed.</source><translation>Falha de conexão.</translation></message>
+    <message><source>The library will be updated when the connection returns.</source><translation>A biblioteca será atualizada quando a conexão voltar.</translation></message>
+    <message><source>Meetings</source><translation>Reuniões</translation></message>
+    <message><source>Playlists</source><translation>Playlists</translation></message>
+    <message><source>MEETINGS</source><translation>REUNIÕES</translation></message>
+    <message><source>PLAYLISTS</source><translation>PLAYLISTS</translation></message>
+    <message><source>Choose a meeting</source><translation>Escolha uma reunião</translation></message>
+    <message><source>Choose a playlist</source><translation>Escolha uma playlist</translation></message>
+    <message><source>Refresh library</source><translation>Atualizar biblioteca</translation></message>
+    <message><source>Back to the list</source><translation>Voltar para a lista</translation></message>
+    <message><source>Could not load</source><translation>Não foi possível carregar</translation></message>
+    <message><source>Try refreshing the library.</source><translation>Tente atualizar a biblioteca.</translation></message>
+    <message><source>Try again</source><translation>Tentar novamente</translation></message>
+    <message><source>No meetings available</source><translation>Nenhuma reunião disponível</translation></message>
+    <message><source>No playlists available</source><translation>Nenhuma playlist disponível</translation></message>
+    <message><source>Meetings added to Solin will appear here automatically.</source><translation>Quando houver reuniões no Solin, elas aparecerão aqui automaticamente.</translation></message>
+    <message><source>Playlists added to Solin will appear here automatically.</source><translation>Quando houver playlists no Solin, elas aparecerão aqui automaticamente.</translation></message>
+    <message><source>Upcoming weeks</source><translation>Próximas semanas</translation></message>
+    <message><source>Previous weeks</source><translation>Semanas anteriores</translation></message>
+    <message><source>Other meetings</source><translation>Outras reuniões</translation></message>
+    <message><source>Unidentified week</source><translation>Semana não identificada</translation></message>
+    <message><source>This week</source><translation>Esta semana</translation></message>
+    <message><source>No meeting is available this week.</source><translation>Nenhuma reunião disponível nesta semana.</translation></message>
+    <message><source>Untitled</source><translation>Sem título</translation></message>
+    <message><source>The complete structure will appear here without changing Solin content.</source><translation>A estrutura completa será exibida aqui, sem alterar o conteúdo do Solin.</translation></message>
+    <message><source>This collection is empty</source><translation>Esta coleção está vazia</translation></message>
+    <message><source>Changes made in Solin will appear here automatically.</source><translation>As alterações feitas no Solin aparecerão aqui automaticamente.</translation></message>
+    <message><source>{count} meeting</source><translation>{count} reunião</translation></message>
+    <message><source>{count} meetings</source><translation>{count} reuniões</translation></message>
+    <message><source>{count} playlist</source><translation>{count} playlist</translation></message>
+    <message><source>{count} playlists</source><translation>{count} playlists</translation></message>
+    <message><source>{count} item</source><translation>{count} item</translation></message>
+    <message><source>{count} items</source><translation>{count} itens</translation></message>
+    <message><source>{count} media item</source><translation>{count} mídia</translation></message>
+    <message><source>{count} media items</source><translation>{count} mídias</translation></message>
+    <message><source>Video</source><translation>Vídeo</translation></message>
+    <message><source>Audio</source><translation>Áudio</translation></message>
+    <message><source>Image</source><translation>Imagem</translation></message>
+    <message><source>Document</source><translation>Documento</translation></message>
+    <message><source>Browser</source><translation>Navegador</translation></message>
+    <message><source>Announcement</source><translation>Anúncio</translation></message>
+    <message><source>Screen</source><translation>Tela</translation></message>
+    <message><source>Media</source><translation>Mídia</translation></message>
+    <message><source>Unavailable</source><translation>Indisponível</translation></message>
+    <message><source>Temporary Solin content</source><translation>Conteúdo temporário do Solin</translation></message>
+    <message><source>Play {title}</source><translation>Reproduzir {title}</translation></message>
+    <message><source>{title}, playing</source><translation>{title}, em reprodução</translation></message>
+    <message><source>Section</source><translation>Seção</translation></message>
+    <message><source>Subsection</source><translation>Subseção</translation></message>
+    <message><source>Group</source><translation>Grupo</translation></message>
+    <message><source>Marker</source><translation>Marcador</translation></message>
+    <message><source>Meeting</source><translation>Reunião</translation></message>
+    <message><source>Linked folder</source><translation>Pasta vinculada</translation></message>
+    <message><source>Playlist</source><translation>Playlist</translation></message>
+    <message><source>Next week</source><translation>Próxima semana</translation></message>
+    <message><source>Last week</source><translation>Semana passada</translation></message>
+    <message><source>In {count} weeks</source><translation>Em {count} semanas</translation></message>
+    <message><source>{count} weeks ago</source><translation>Há {count} semanas</translation></message>
+    <message><source>Midweek meeting</source><translation>Reunião do meio de semana</translation></message>
+    <message><source>Weekend meeting</source><translation>Reunião do fim de semana</translation></message>
+    <message><source>Memorial</source><translation>Celebração</translation></message>
+    <message><source>Life and Ministry</source><translation>Vida e Ministério</translation></message>
+    <message><source>Watchtower Study</source><translation>Estudo de A Sentinela</translation></message>
+    <message><source>PROJECTION</source><translation>PROJEÇÃO</translation></message>
+    <message><source>NOW PLAYING</source><translation>AGORA REPRODUZINDO</translation></message>
+    <message><source>Nothing playing</source><translation>Nada em reprodução</translation></message>
+    <message><source>No media is being projected</source><translation>Nenhuma mídia está sendo projetada</translation></message>
+    <message><source>Untitled media</source><translation>Mídia sem título</translation></message>
+    <message><source>The media could not be played.</source><translation>Não foi possível reproduzir a mídia.</translation></message>
+    <message><source>Playback controls</source><translation>Controles de reprodução</translation></message>
+    <message><source>Previous</source><translation>Anterior</translation></message>
+    <message><source>Play</source><translation>Reproduzir</translation></message>
+    <message><source>Next</source><translation>Próxima</translation></message>
+    <message><source>Pause</source><translation>Pausar</translation></message>
+    <message><source>Resume</source><translation>Continuar</translation></message>
+    <message><source>Media position</source><translation>Posição da mídia</translation></message>
+    <message><source>{position} of {duration}</source><translation>{position} de {duration}</translation></message>
+    <message><source>Mute</source><translation>Silenciar</translation></message>
+    <message><source>Restore volume</source><translation>Restaurar volume</translation></message>
+    <message><source>Volume</source><translation>Volume</translation></message>
+    <message><source>Stop</source><translation>Parar</translation></message>
+    <message><source>Loading</source><translation>Carregando</translation></message>
+    <message><source>Solin was installed on this device.</source><translation>O Solin foi instalado neste dispositivo.</translation></message>
+    <message><source>The local session was ended on this device.</source><translation>A sessão local foi encerrada neste dispositivo.</translation></message>
+    <message><source>The command was not completed.</source><translation>O comando não foi concluído.</translation></message>
+    <message><source>Solin state changed. Updating…</source><translation>O estado do Solin mudou. Atualizando…</translation></message>
+    <message><source>This control is protected in Solin.</source><translation>Este controle está protegido no Solin.</translation></message>
+    <message><source>This media is no longer available.</source><translation>Esta mídia não está mais disponível.</translation></message>
+    <message><source>Could not send the command.</source><translation>Falha ao enviar o comando.</translation></message>
+    <message><source>Could not confirm your session.</source><translation>Não foi possível confirmar sua sessão.</translation></message>
+    <message><source>Solin took too long to respond.</source><translation>O Solin demorou para responder.</translation></message>
+    <message><source>Could not connect to Solin.</source><translation>Não foi possível conectar ao Solin.</translation></message>
+    <message><source>Solin sent an invalid response.</source><translation>O Solin enviou uma resposta inválida.</translation></message>
+    <message><source>Solin sent an incomplete response.</source><translation>O Solin enviou uma resposta incompleta.</translation></message>
+    <message><source>This action was not authorized.</source><translation>Esta ação não foi autorizada.</translation></message>
+    <message><source>Too many attempts. Wait a moment.</source><translation>Muitas tentativas. Aguarde um pouco.</translation></message>
+    <message><source>Solin could not complete the request.</source><translation>O Solin não conseguiu concluir a solicitação.</translation></message>
+</context>
 </TS>

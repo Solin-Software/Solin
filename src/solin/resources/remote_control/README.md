@@ -26,8 +26,9 @@ thumbnails, or other runtime data.
 
 ## Local certificate trust
 
-`GET /remote/trust-certificate.cer` is the only unauthenticated dynamic download
-besides the static shell. It returns the public DER certificate for Solin's
+`GET /remote/trust-certificate.cer` is the only unauthenticated dynamic file
+download besides the static shell (the localization read model returns JSON).
+It returns the public DER certificate for Solin's
 installation-local authority with `Cache-Control: no-store`; no private key is
 ever exposed. The authority has `pathLenConstraint=0` and a critical IP
 `nameConstraints` extension limited to the selected address as a `/32`. It signs
@@ -76,6 +77,15 @@ username.
 
 ## Read models
 
+### `GET /remote/api/localization`
+
+This is the only unauthenticated JSON endpoint. It returns only the active BCP
+47 locale and the translated `_RemoteControlWeb` message map needed by the login
+screen. It never includes profile identity, credentials, session data, or other
+runtime state, and is always served with `Cache-Control: no-store`. English
+sources live in `messages.en.json`; the desktop resolves them through the active
+Qt `.qm` catalog before publishing them.
+
 ### `GET /remote/api/bootstrap`
 
 ```json
@@ -90,6 +100,9 @@ username.
     "id": "main-hall",
     "name": "Salão principal",
     "locale": "pt-BR",
+    "messages": {
+      "app.remoteControl": "Controle remoto"
+    },
     "theme": "dark"
   },
   "catalogRevision": 17,
@@ -99,7 +112,8 @@ username.
 ```
 
 `locale` is the active Solin interface language converted from its locale
-metadata to a BCP 47 browser tag (`pt_BR` becomes `pt-BR`).
+code to a BCP 47 browser tag (`pt_BR` becomes `pt-BR`). `messages` comes from
+the same installed `QTranslator` used by the desktop, not from locale metadata.
 `currentMeetingWeekStart` is the Solin-authoritative Monday for the current
 meeting week and is refreshed in WebSocket heartbeats. `theme` may be omitted
 while the desktop adapter is using the PWA default (`dark`) and accepts only
@@ -160,6 +174,9 @@ metadata. Section and subsection nodes carry the same authoritative `collapsed`
 state used by Solin's native meeting/playlist tree. The PWA uses it as the
 initial state, preserves local expansion across playback-only renders, and
 reconciles it whenever a newer catalog snapshot arrives.
+Canonical generated meeting section/subsection titles are resolved from
+`section_code` (or the legacy `meeting_source_key`) through the active Qt
+translator. Non-generated and user-overridden titles remain untouched.
 
 ### `GET /remote/api/playback`
 
@@ -302,8 +319,8 @@ recovery instead of an optimistic merge.
 
 ## WebSocket synchronization
 
-`GET /remote/api/ws` authenticates with the same cookie. The server sends an
-initial catalog snapshot and playback snapshot, then revisioned events:
+`GET /remote/api/ws` authenticates with the same cookie. The server sends
+initial catalog, playback, and profile snapshots, then revisioned events:
 
 ```json
 {
@@ -319,10 +336,12 @@ initial catalog snapshot and playback snapshot, then revisioned events:
 Event types are `catalog.snapshot`, `playback.snapshot`, `profile.snapshot`,
 `session.revoked`, and `heartbeat`. Heartbeats repeat
 `currentMeetingWeekStart`, allowing an open PWA to cross into a new week without
-using the phone clock as its authority. The two initial snapshots may share the
-current bootstrap sequence. They form one authoritative baseline and are both
+using the phone clock as its authority. The three initial snapshots may share
+the current bootstrap sequence. They form one authoritative baseline and are all
 applied before controls become available; contiguity checks begin only after
-that baseline. Subsequent state events increase the sequence monotonically. The
+that baseline. Language changes publish a profile snapshot before a localized
+catalog snapshot, so translated UI chrome and semantic section titles change as
+one ordered stream. Subsequent state events increase the sequence monotonically. The
 server sends a heartbeat at most every 25 seconds. After 55 seconds without any
 frame, the client closes the socket and reconnects with exponential backoff and
 jitter.

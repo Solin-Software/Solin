@@ -59,6 +59,10 @@ from ...core.i18n.strings import (
     tr_offline_downloading,
     tr_offline_downloading_progress,
 )
+from ...core.i18n.meeting_sections import (
+    display_meeting_section_title,
+    translate_meeting_section_title,
+)
 from ...core.ingest.manifest import (
     ManifestError,
     ManifestWriteError,
@@ -114,7 +118,6 @@ from ...core.meetings.tree_store import (
     MeetingTreeStore,
 )
 from ...core.meetings.thumbnails import meeting_thumb_storage_id
-from ...core.meetings.section_meta import SECTION_META
 from ...core.meetings.tree_types import Node, clone_nodes, count_media, iter_nodes, new_node_id
 from ...core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
@@ -209,25 +212,6 @@ def _tr(context: str, source: str) -> str:
 _PLAYLIST_EDIT_CONTEXT = "PlaylistEditView"
 
 
-def _translate_section_title(source: str) -> str:
-    context = "SermonThemeWidget" if source == "PUBLIC TALK" else "_Section"
-    return _tr(context, source)
-
-
-def _display_section_title(node: Node) -> str:
-    title = str(node.get("title") or "")
-    if (
-        node.get("type") not in ("section", "subsection")
-        or not node.get("meeting_generated")
-        or node.get("user_title_override")
-    ):
-        return title
-    source_key = str(node.get("meeting_source_key") or "")
-    section_code = str(node.get("section_code") or source_key.rsplit(":", 1)[-1])
-    source = SECTION_META.get(section_code, ("", 0))[0]
-    return _translate_section_title(source) if source else title
-
-
 def _has_jw_media_identity(ref: dict[str, Any]) -> bool:
     return bool(str(ref.get("key_symbol") or "").strip() or ref.get("meps_doc_id"))
 
@@ -307,7 +291,7 @@ class MeetingTreeController(QObject):
             or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
         self._builder = MeetingTreeBuilder(
-            section_title=_translate_section_title,
+            section_title=translate_meeting_section_title,
             media_fallback_title=lambda: _tr("_MediaRow", "Media"),
         )
         self._sync_service = linked_folder_sync
@@ -452,7 +436,7 @@ class MeetingTreeController(QObject):
     def placement_playlist_ref(self) -> MeetingCatalogPlaylistRef:
         return build_meeting_catalog_playlist_ref(
             self._nodes,
-            section_title=_display_section_title,
+            section_title=display_meeting_section_title,
         )
 
     def add_external_media_items(
@@ -2567,7 +2551,7 @@ class MeetingTreeController(QObject):
         colors = section_colors(hue, current_theme_scheme())
         return {
             "id": str(node.get("id", "")),
-            "title": _display_section_title(node),
+            "title": display_meeting_section_title(node),
             "color": colors["accent"],
             "textColor": colors["text"],
             "badgeBg": colors["badge"],
@@ -2604,7 +2588,7 @@ class MeetingTreeController(QObject):
             return {
                 "id": node.get("id", ""),
                 "type": node_type,
-                "title": _display_section_title(node),
+                "title": display_meeting_section_title(node),
                 "color": colors["accent"],
                 "textColor": colors["text"],
                 "badgeBg": colors["badge"],

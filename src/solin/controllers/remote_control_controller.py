@@ -15,6 +15,8 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QMediaPlayer
 
 from ..core.foundation.resources import application_resource_path
+from ..core.i18n.meeting_sections import display_meeting_section_title
+from ..core.i18n.remote_control import remote_control_localization
 from ..core.media.formats import MediaKind
 from ..core.meetings.thumbnails import meeting_thumb_storage_id
 from ..core.remote_control.catalog import (
@@ -30,6 +32,7 @@ from ..core.remote_control.contracts import (
     CatalogKind,
     CommandError,
     CommandErrorCode,
+    JsonObject,
     NextCommand,
     PauseCommand,
     PlaybackCapabilities,
@@ -89,7 +92,7 @@ class RemoteControlDependencies:
     runtime_paths: Any
     active_profile_id: str
     active_profile_name: str
-    active_profile_locale: str
+    active_profile_locale: Callable[[], str]
     settings: Any
     credentials: Any
     playlist_repository: Any
@@ -183,6 +186,7 @@ class RemoteControlController(QObject):
             tuple[float, bytes],
         ] = OrderedDict()
         self._last_media_error = ""
+        self._localization = remote_control_localization(dependencies.active_profile_locale())
         self._unsubscribers: list[Callable[[], None]] = []
         self._bridge = _QtCommandBridge(self._execute_command, self)
         self._catalog = RemoteCatalog(
@@ -191,6 +195,7 @@ class RemoteControlController(QObject):
             linked_playlist_source=self._load_linked_playlists,
             availability_resolver=self._media_availability,
             thumbnail_id_resolver=self._thumbnail_id,
+            meeting_group_title_resolver=display_meeting_section_title,
         )
         self._playback_timer = QTimer(self)
         self._playback_timer.setSingleShot(True)
@@ -282,12 +287,12 @@ class RemoteControlController(QObject):
                     rate_limiter=self._rate_limiter,
                     assets_directory=application_resource_path("remote_control"),
                     command_handler=self._bridge.execute,
+                    localization_provider=self._localization_payload,
                     thumbnail_handler=self._load_thumbnail,
                     collection_thumbnail_handler=self._load_collection_thumbnail,
                     session_count_changed=self.session_count_reported.emit,
                     profile_id=self._dependencies.active_profile_id,
                     profile_name=self._dependencies.active_profile_name,
-                    profile_locale=self._dependencies.active_profile_locale,
                 )
             )
             server.start(
@@ -389,6 +394,22 @@ class RemoteControlController(QObject):
             return
         if self._state.catalog_revision != previous_revision:
             self._publish_snapshot()
+
+    @Slot(str)
+    def on_language_changed(self, locale_code: str) -> None:
+        """Publish the newly installed Qt locale and rebuild localized catalog titles."""
+
+        self._localization = remote_control_localization(locale_code)
+        if self._server is not None:
+            self._server.publish_profile()
+        self._refresh_catalog()
+
+    def _localization_payload(self) -> JsonObject:
+        messages = self._localization.get("messages")
+        return {
+            "locale": str(self._localization.get("locale") or "en"),
+            "messages": dict(messages) if isinstance(messages, dict) else {},
+        }
 
     @Slot()
     def _schedule_playback_refresh(self) -> None:
