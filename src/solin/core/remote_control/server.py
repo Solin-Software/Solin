@@ -336,7 +336,7 @@ class RemoteControlHttpApplication:
         elif candidate.suffix.lower() == ".html":
             response.headers["Cache-Control"] = "no-store"
         else:
-            response.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     async def _login(self, request: web.Request) -> web.Response:

@@ -9,6 +9,9 @@ projection state remains authoritative in the desktop process.
 Serve this directory below `/remote/`, with `index.html` for both `/remote/` and
 `/remote/index.html`. `service-worker.js` must be served with
 `Service-Worker-Allowed: /remote/` and revalidation enabled.
+Static shell assets use HTTP revalidation rather than freshness windows; the
+versioned Service Worker cache is the offline source of truth and always reloads
+the shell from the server while installing a replacement worker.
 
 The HTTP server is responsible for the security policy that cannot be enforced
 reliably by markup alone, especially:

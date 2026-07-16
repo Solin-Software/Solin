@@ -32,7 +32,12 @@ export function setupPwa({ onInstallAvailable, onInstalled, onError }) {
       window.location.reload();
     });
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js", { scope: "/remote/" }).catch(onError);
+      navigator.serviceWorker
+        .register("./service-worker.js", {
+          scope: "/remote/",
+          updateViaCache: "none",
+        })
+        .catch(onError);
     }, { once: true });
   }
 

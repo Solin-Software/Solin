@@ -648,10 +648,19 @@
 .tree-root,
 .tree-children {
   display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 9px;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.tree-root > li,
+.tree-children > li {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tree-children {
@@ -663,6 +672,8 @@
   --section-accent: var(--accent);
   --section-surface: var(--surface-card);
   --section-border: var(--border-muted);
+  min-width: 0;
+  max-width: 100%;
   overflow: clip;
   border: 1px solid var(--section-border);
   border-left: 3px solid var(--section-accent);
@@ -676,6 +687,8 @@
 
 .tree-group-summary {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   min-height: 58px;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
@@ -762,6 +775,8 @@
 .media-row {
   display: grid;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 64px;
   grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
@@ -859,6 +874,8 @@
 
 .marker-row {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   min-height: 38px;
   grid-template-columns: 5px minmax(0, 1fr);
   align-items: center;

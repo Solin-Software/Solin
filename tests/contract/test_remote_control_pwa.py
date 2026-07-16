@@ -183,6 +183,7 @@ def test_remote_control_navigation_prioritizes_meetings_and_uses_canonical_icons
 
 def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     service_worker = (PWA_ROOT / "service-worker.js").read_text(encoding="utf-8")
+    pwa = (PWA_ROOT / "scripts" / "pwa.js").read_text(encoding="utf-8")
     match = re.search(
         r"const SHELL_RESOURCES = \[(?P<resources>.*?)\];",
         service_worker,
@@ -200,6 +201,53 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "trust-certificate.cer" not in cached
     assert "/remote/api/" in service_worker
     assert 'request.mode === "navigate"' in service_worker
+    assert 'cache: "reload"' in service_worker
+    assert 'updateViaCache: "none"' in pwa
+
+
+def test_remote_control_tree_constrains_long_content_on_narrow_screens() -> None:
+    layout = (PWA_ROOT / "styles" / "layout.css").read_text(encoding="utf-8")
+    components = (PWA_ROOT / "styles" / "components.css").read_text(encoding="utf-8")
+
+    panel_rule = re.search(
+        r"\.library-panel,\s*\.tree-panel\s*\{(?P<body>.*?)\}",
+        layout,
+        flags=re.DOTALL,
+    )
+    assert panel_rule is not None
+    assert "grid-template-columns: minmax(0, 1fr);" in panel_rule.group("body")
+
+    mobile_title_rules = re.findall(
+        r"\.tree-title-wrap h2\s*\{(?P<body>.*?)\}",
+        layout,
+        flags=re.DOTALL,
+    )
+    assert any(
+        "overflow-wrap: anywhere;" in rule
+        and "white-space: normal;" in rule
+        and "-webkit-line-clamp: 2;" in rule
+        for rule in mobile_title_rules
+    )
+
+    list_items = re.search(
+        r"\.tree-root > li,\s*\.tree-children > li\s*\{(?P<body>.*?)\}",
+        components,
+        flags=re.DOTALL,
+    )
+    assert list_items is not None
+    assert "min-width: 0;" in list_items.group("body")
+    assert "max-width: 100%;" in list_items.group("body")
+
+    for selector in (".tree-group", ".tree-group-summary", ".media-row", ".marker-row"):
+        rules = re.findall(
+            rf"{re.escape(selector)}\s*\{{(?P<body>.*?)\}}",
+            components,
+            flags=re.DOTALL,
+        )
+        assert any(
+            "min-width: 0;" in rule and "max-width: 100%;" in rule
+            for rule in rules
+        )
 
 
 def test_remote_control_ui_uses_complete_keyed_localization_catalog() -> None:

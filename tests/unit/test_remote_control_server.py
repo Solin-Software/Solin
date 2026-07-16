@@ -125,6 +125,7 @@ async def _harness(
     assets.mkdir()
     (assets / "index.html").write_text("<!doctype html><title>Remote</title>", "utf-8")
     (assets / "app.js").write_text("", "utf-8")
+    (assets / "service-worker.js").write_text("", "utf-8")
 
     hasher = ScryptPasswordHasher(
         ScryptParameters(n=1_024, r=8, p=1, max_memory_bytes=8 * 1024 * 1024)
@@ -216,6 +217,21 @@ def test_static_shell_has_strict_security_headers(tmp_path: Path) -> None:
             assert response.headers["Content-Security-Policy"].startswith("default-src 'self'")
             assert response.headers["X-Frame-Options"] == "DENY"
             assert response.headers["Cache-Control"] == "no-store"
+
+            script = await harness.client.get(
+                "/remote/app.js",
+                headers={"Host": _HOST},
+            )
+            assert script.status == 200
+            assert script.headers["Cache-Control"] == "no-cache"
+
+            service_worker = await harness.client.get(
+                "/remote/service-worker.js",
+                headers={"Host": _HOST},
+            )
+            assert service_worker.status == 200
+            assert service_worker.headers["Cache-Control"] == "no-cache"
+            assert service_worker.headers["Service-Worker-Allowed"] == "/remote/"
 
             certificate = await harness.client.get(
                 "/remote/trust-certificate.cer",

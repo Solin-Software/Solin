@@ -1,4 +1,4 @@
-const CACHE_NAME = "solin-remote-shell-v10";
+const CACHE_NAME = "solin-remote-shell-v11";
 const SHELL_RESOURCES = [
   "./",
   "./index.html",
@@ -27,7 +27,16 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(SHELL_RESOURCES))
+      .then((cache) =>
+        cache.addAll(
+          SHELL_RESOURCES.map(
+            (path) =>
+              new Request(new URL(path, self.registration.scope), {
+                cache: "reload",
+              }),
+          ),
+        ),
+      )
       .then(() => self.skipWaiting()),
   );
 });
@@ -36,7 +45,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
+      .then((names) =>
+        Promise.all(
+          names
+            .filter((name) => name !== CACHE_NAME)
+            .map((name) => caches.delete(name)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
