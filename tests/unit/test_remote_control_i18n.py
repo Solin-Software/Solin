@@ -77,3 +77,36 @@ def test_remote_localization_reuses_existing_solin_vocabulary() -> None:
     assert isinstance(messages, dict)
     assert messages["nav.meetings"] == "Reuniones"
     assert messages["library.chooseMeeting"] == "Elegir una reunión"
+
+
+def test_every_non_english_catalog_compiles_the_new_remote_control_copy() -> None:
+    app = QCoreApplication.instance() or QCoreApplication([])
+    translation_root = application_translation_root()
+    locale_codes = sorted(
+        path.stem for path in (translation_root / "locales").glob("*.json") if path.stem != "en"
+    )
+
+    assert len(locale_codes) == 17
+    for locale_code in locale_codes:
+        translator = QTranslator(app)
+        assert translator.load(str(translation_root / f"solin_{locale_code}.qm")), locale_code
+        app.installTranslator(translator)
+        try:
+            install_detail = QCoreApplication.translate(
+                "_RemoteControlWeb",
+                "Install Solin Remote on this device for quick access from your home screen.",
+            )
+            password_hint = QCoreApplication.translate(
+                "RemoteControlSectionMixin",
+                "Use at least %1 characters. Credentials belong only to this profile.",
+            )
+        finally:
+            app.removeTranslator(translator)
+
+        assert install_detail != (
+            "Install Solin Remote on this device for quick access from your home screen."
+        ), locale_code
+        assert password_hint != (
+            "Use at least %1 characters. Credentials belong only to this profile."
+        ), locale_code
+        assert "%1" in password_hint, locale_code
