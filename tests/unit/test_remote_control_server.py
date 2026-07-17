@@ -331,8 +331,7 @@ def test_profile_snapshot_publishes_updated_localization(tmp_path: Path) -> None
                 "/remote/api/ws",
                 headers=headers,
             )
-            for _event in range(3):
-                await socket.receive_json()
+            await socket.receive_json()
 
             localization = {
                 "locale": "pt-BR",
@@ -513,24 +512,14 @@ def test_websocket_baseline_is_atomic_and_multiple_clients_keep_one_sequence(
                 "/remote/api/ws",
                 headers=websocket_headers,
             )
-            first_catalog = await first.receive_json()
-            first_playback = await first.receive_json()
-            first_profile = await first.receive_json()
+            first_snapshot = await first.receive_json()
 
-            assert [first_catalog["type"], first_playback["type"], first_profile["type"]] == [
-                "catalog.snapshot",
-                "playback.snapshot",
-                "profile.snapshot",
-            ]
-            assert (
-                first_catalog["sequence"]
-                == first_playback["sequence"]
-                == first_profile["sequence"]
-                == 0
-            )
-            assert first_catalog["catalogRevision"] == 1
-            assert first_catalog["payload"]["catalogRevision"] == 1
-            assert first_playback["payload"]["playbackRevision"] == 0
+            assert first_snapshot["type"] == "session.snapshot"
+            assert first_snapshot["sequence"] == 0
+            assert first_snapshot["catalogRevision"] == 1
+            assert first_snapshot["payload"]["catalog"]["catalogRevision"] == 1
+            assert first_snapshot["payload"]["playback"]["playbackRevision"] == 0
+            assert first_snapshot["payload"]["profile"]["name"] == "Sala principal"
 
             await harness.application.publish_snapshot()
             with pytest.raises(TimeoutError):
@@ -547,15 +536,9 @@ def test_websocket_baseline_is_atomic_and_multiple_clients_keep_one_sequence(
                 "/remote/api/ws",
                 headers=websocket_headers,
             )
-            second_catalog = await second.receive_json()
-            second_playback = await second.receive_json()
-            second_profile = await second.receive_json()
-            assert (
-                second_catalog["sequence"]
-                == second_playback["sequence"]
-                == second_profile["sequence"]
-                == 1
-            )
+            second_snapshot = await second.receive_json()
+            assert second_snapshot["type"] == "session.snapshot"
+            assert second_snapshot["sequence"] == 1
 
             harness.state.update_catalog((), change_token="third-revision")
             await harness.application.publish_snapshot()
@@ -596,8 +579,6 @@ def test_logout_revokes_every_websocket_using_that_session(tmp_path: Path) -> No
                 "/remote/api/ws",
                 headers=session_headers,
             )
-            await websocket.receive_json()
-            await websocket.receive_json()
             await websocket.receive_json()
 
             logout = await harness.client.post(
@@ -897,8 +878,6 @@ def test_websocket_limits_and_binary_messages_fail_closed(tmp_path: Path) -> Non
                     headers=headers,
                 )
                 await socket.receive_json()
-                await socket.receive_json()
-                await socket.receive_json()
                 sockets.append(socket)
 
             with pytest.raises(WSServerHandshakeError) as limit_error:
@@ -939,8 +918,6 @@ def test_global_websocket_limit_is_enforced_across_sessions(tmp_path: Path) -> N
                         "/remote/api/ws",
                         headers=headers,
                     )
-                    await socket.receive_json()
-                    await socket.receive_json()
                     await socket.receive_json()
                     sockets.append(socket)
 
@@ -1074,8 +1051,7 @@ def test_desktop_can_revoke_one_or_all_sessions_without_restarting_server(
                 },
             )
             for socket in (first_socket, second_socket):
-                for _event in range(3):
-                    await socket.receive_json()
+                await socket.receive_json()
 
             inventory = harness.session_inventories[-1]
             assert {item.management_id for item in inventory} == {
@@ -1136,8 +1112,6 @@ def test_expired_websocket_session_publishes_updated_session_count(
                     "Cookie": f"{SESSION_COOKIE_NAME}={session.session_token}",
                 },
             )
-            await socket.receive_json()
-            await socket.receive_json()
             await socket.receive_json()
 
             clock.value = 10

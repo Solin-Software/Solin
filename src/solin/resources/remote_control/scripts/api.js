@@ -227,9 +227,7 @@ export class EventStream {
       this.#armHeartbeat(generation);
       try {
         const message = JSON.parse(event.data);
-        if (message?.type !== "heartbeat") {
-          this.onEvent(message);
-        }
+        this.onEvent(message);
       } catch {
         socket.close(1002, "Invalid event payload");
       }

@@ -16,8 +16,7 @@ const store = new Store();
 const renderer = new Renderer(store);
 let lastNonZeroVolume = 100;
 let recoveryPromise = null;
-let websocketBaseline = null;
-let websocketBaselineTimer = 0;
+let websocketSyncTimer = 0;
 
 store.subscribe((state, previous) => renderer.render(state, previous));
 
@@ -267,7 +266,7 @@ async function doRecover({ initial }) {
 }
 
 function showLogin({ expired, reason = "" }) {
-  clearWebsocketBaseline();
+  clearWebsocketSync();
   eventStream.close();
   api.clearSecrets();
   store.reset();
@@ -425,8 +424,8 @@ function handleRemoteEvent(message) {
   if (!message || typeof message !== "object" || typeof message.type !== "string") {
     return;
   }
-  if (websocketBaseline) {
-    applyWebsocketBaselineEvent(message);
+  if (message.type === "session.snapshot") {
+    applyWebsocketSessionSnapshot(message);
     return;
   }
   const state = store.state;
@@ -478,69 +477,43 @@ function handleRemoteEvent(message) {
   }
 }
 
-function applyWebsocketBaselineEvent(message) {
-  if (message.type === "session.revoked") {
-    showLogin({ expired: true, reason: message.payload?.reason });
+function applyWebsocketSessionSnapshot(message) {
+  const snapshot = message.payload;
+  if (!snapshot?.catalog || !snapshot.playback || !snapshot.profile) {
+    eventStream.reconnectNow();
     return;
   }
-  if (!new Set(["catalog.snapshot", "playback.snapshot", "profile.snapshot"]).has(message.type)) return;
-  const baseline = websocketBaseline;
-  if (!baseline) return;
-  if (
-    message.serverInstanceId &&
-    store.state.serverInstanceId &&
-    message.serverInstanceId !== store.state.serverInstanceId
-  ) {
-    clearWebsocketBaseline();
-    recover();
-    return;
-  }
-  baseline.serverInstanceId = message.serverInstanceId || baseline.serverInstanceId;
-  if (Number.isInteger(message.sequence)) {
-    baseline.sequence = Math.max(baseline.sequence ?? message.sequence, message.sequence);
-  }
-  if (message.type === "catalog.snapshot") baseline.catalog = message.payload;
-  else if (message.type === "playback.snapshot") baseline.playback = message.payload;
-  else baseline.profile = message.payload;
-
-  if (!baseline.catalog || !baseline.playback || !baseline.profile) return;
-  window.clearTimeout(websocketBaselineTimer);
-  websocketBaseline = null;
-  applyLocalization(baseline.profile);
+  clearWebsocketSync();
+  applyLocalization(snapshot.profile);
   store.update({
     profile: {
-      displayName: baseline.profile.name || store.state.profile.displayName,
-      locale: baseline.profile.locale || store.state.profile.locale,
-      theme: baseline.profile.theme === "light" ? "light" : "dark",
+      displayName: snapshot.profile.name || store.state.profile.displayName,
+      locale: snapshot.profile.locale || store.state.profile.locale,
+      theme: snapshot.profile.theme === "light" ? "light" : "dark",
     },
-    catalog: baseline.catalog,
-    playback: baseline.playback,
-    eventSequence: baseline.sequence,
+    serverInstanceId: message.serverInstanceId || store.state.serverInstanceId,
+    eventSequence: Number.isInteger(message.sequence) ? message.sequence : store.state.eventSequence,
+    currentMeetingWeekStart:
+      snapshot.currentMeetingWeekStart || store.state.currentMeetingWeekStart,
+    catalog: snapshot.catalog,
+    playback: snapshot.playback,
     connection: "online",
     catalogStatus: "ready",
     catalogError: null,
   });
 }
 
-function beginWebsocketBaseline() {
-  clearWebsocketBaseline();
-  websocketBaseline = {
-    serverInstanceId: null,
-    sequence: null,
-    catalog: null,
-    playback: null,
-    profile: null,
-  };
-  websocketBaselineTimer = window.setTimeout(() => {
-    clearWebsocketBaseline();
+function beginWebsocketSync() {
+  clearWebsocketSync();
+  websocketSyncTimer = window.setTimeout(() => {
+    clearWebsocketSync();
     recover();
   }, 10_000);
 }
 
-function clearWebsocketBaseline() {
-  window.clearTimeout(websocketBaselineTimer);
-  websocketBaselineTimer = 0;
-  websocketBaseline = null;
+function clearWebsocketSync() {
+  window.clearTimeout(websocketSyncTimer);
+  websocketSyncTimer = 0;
 }
 
 function handleConnectionStatus(status) {
@@ -549,14 +522,14 @@ function handleConnectionStatus(status) {
     return;
   }
   if (status === "authentication-check") {
-    clearWebsocketBaseline();
+    clearWebsocketSync();
     recover();
     return;
   }
   if (status === "syncing") {
-    beginWebsocketBaseline();
+    beginWebsocketSync();
   } else if (status === "reconnecting" || status === "offline") {
-    clearWebsocketBaseline();
+    clearWebsocketSync();
   }
   if (store.state.view === "app") {
     store.update({ connection: status });

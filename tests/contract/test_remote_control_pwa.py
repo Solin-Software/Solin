@@ -209,6 +209,17 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "window.location.reload()" in pwa
 
 
+def test_remote_control_connection_uses_an_atomic_session_snapshot() -> None:
+    app = (PWA_ROOT / "scripts" / "app.js").read_text(encoding="utf-8")
+    api = (PWA_ROOT / "scripts" / "api.js").read_text(encoding="utf-8")
+
+    assert 'message.type === "session.snapshot"' in app
+    assert "applyWebsocketSessionSnapshot(message)" in app
+    assert 'connection: "online"' in app
+    assert 'message?.type !== "heartbeat"' not in api
+    assert "this.onEvent(message)" in api
+
+
 def test_remote_control_setup_is_a_dedicated_three_step_onboarding_flow() -> None:
     document = _document()
     html = (PWA_ROOT / "index.html").read_text(encoding="utf-8")

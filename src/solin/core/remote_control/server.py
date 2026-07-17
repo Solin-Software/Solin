@@ -146,6 +146,7 @@ class RemoteControlHttpApplication:
         self._websocket_sessions: dict[web.WebSocketResponse, str] = {}
         self._websocket_reservations: dict[str, int] = {}
         self._websocket_reservation_count = 0
+        self._publication_lock = asyncio.Lock()
         self._command_tasks: set[asyncio.Task[CommandResult]] = set()
         self._login_hash_tasks: set[asyncio.Task[bool]] = set()
         self._login_hash_slots = asyncio.Semaphore(_MAX_LOGIN_HASHES)
@@ -164,36 +165,38 @@ class RemoteControlHttpApplication:
         return self._app
 
     async def publish_snapshot(self) -> None:
-        if not self._websockets:
-            return
-        snapshot = self._dependencies.state.snapshot()
-        events: list[JsonObject] = []
-        if snapshot.catalog_revision != self._last_catalog_revision:
-            self._last_catalog_revision = snapshot.catalog_revision
-            events.append(
-                self._event(
-                    "catalog.snapshot",
-                    snapshot.catalog.to_dict(),
-                    snapshot=snapshot,
+        async with self._publication_lock:
+            if not self._websockets:
+                return
+            snapshot = self._dependencies.state.snapshot()
+            events: list[JsonObject] = []
+            if snapshot.catalog_revision != self._last_catalog_revision:
+                self._last_catalog_revision = snapshot.catalog_revision
+                events.append(
+                    self._event(
+                        "catalog.snapshot",
+                        snapshot.catalog.to_dict(),
+                        snapshot=snapshot,
+                    )
                 )
-            )
-        if snapshot.playback_revision != self._last_playback_revision:
-            self._last_playback_revision = snapshot.playback_revision
-            events.append(
-                self._event(
-                    "playback.snapshot",
-                    snapshot.playback.to_dict(),
-                    snapshot=snapshot,
+            if snapshot.playback_revision != self._last_playback_revision:
+                self._last_playback_revision = snapshot.playback_revision
+                events.append(
+                    self._event(
+                        "playback.snapshot",
+                        snapshot.playback.to_dict(),
+                        snapshot=snapshot,
+                    )
                 )
-            )
-        if not events:
-            return
-        await self._broadcast(events)
+            if not events:
+                return
+            await self._broadcast(events)
 
     async def publish_profile(self) -> None:
-        if not self._websockets:
-            return
-        await self._broadcast([self._event("profile.snapshot", self._profile_payload())])
+        async with self._publication_lock:
+            if not self._websockets:
+                return
+            await self._broadcast([self._event("profile.snapshot", self._profile_payload())])
 
     async def _broadcast(self, events: list[JsonObject]) -> None:
         sockets = tuple(self._websockets)
@@ -585,49 +588,39 @@ class RemoteControlHttpApplication:
             await socket.prepare(request)
         finally:
             self._release_websocket_reservation(session_token)
-        first_socket = not self._websockets
-        self._websockets[socket] = asyncio.Lock()
-        self._websocket_sessions[socket] = session_token
-        self._publish_session_inventory()
         heartbeat_task: asyncio.Task[None] | None = None
         try:
-            snapshot = self._dependencies.state.snapshot()
-            if first_socket:
-                self._last_catalog_revision = max(
-                    self._last_catalog_revision,
-                    snapshot.catalog_revision,
+            async with self._publication_lock:
+                first_socket = not self._websockets
+                self._websockets[socket] = asyncio.Lock()
+                self._websocket_sessions[socket] = session_token
+                self._publish_session_inventory()
+                snapshot = self._dependencies.state.snapshot()
+                if first_socket:
+                    self._last_catalog_revision = max(
+                        self._last_catalog_revision,
+                        snapshot.catalog_revision,
+                    )
+                    self._last_playback_revision = max(
+                        self._last_playback_revision,
+                        snapshot.playback_revision,
+                    )
+                baseline_sequence = self._event_sequence
+                await self._send(
+                    socket,
+                    self._event(
+                        "session.snapshot",
+                        {
+                            "catalog": snapshot.catalog.to_dict(),
+                            "playback": snapshot.playback.to_dict(),
+                            "profile": self._profile_payload(),
+                            "currentMeetingWeekStart": self._current_meeting_week_start(),
+                        },
+                        advance=False,
+                        snapshot=snapshot,
+                        sequence=baseline_sequence,
+                    ),
                 )
-                self._last_playback_revision = max(
-                    self._last_playback_revision,
-                    snapshot.playback_revision,
-                )
-            baseline_sequence = self._event_sequence
-            await self._send_many(
-                socket,
-                (
-                    self._event(
-                        "catalog.snapshot",
-                        snapshot.catalog.to_dict(),
-                        advance=False,
-                        snapshot=snapshot,
-                        sequence=baseline_sequence,
-                    ),
-                    self._event(
-                        "playback.snapshot",
-                        snapshot.playback.to_dict(),
-                        advance=False,
-                        snapshot=snapshot,
-                        sequence=baseline_sequence,
-                    ),
-                    self._event(
-                        "profile.snapshot",
-                        self._profile_payload(),
-                        advance=False,
-                        snapshot=snapshot,
-                        sequence=baseline_sequence,
-                    ),
-                ),
-            )
             heartbeat_task = asyncio.create_task(self._heartbeat(socket, session_token))
             async for message in socket:
                 if message.type in (WSMsgType.TEXT, WSMsgType.BINARY):
