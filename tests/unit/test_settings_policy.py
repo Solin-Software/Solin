@@ -49,6 +49,7 @@ EXPECTED_SETTINGS_KEYS = {
     "REMOTE_CONTROL_ENABLED": "remote_control/enabled",
     "REMOTE_CONTROL_NETWORK_SELECTION": "remote_control/network_selection",
     "REMOTE_CONTROL_CREDENTIALS": "remote_control/credentials",
+    "REMOTE_CONTROL_ONBOARDING_SEEN": "remote_control/onboarding_seen",
     "WATCHED_FOLDER_PATH": "watched_folder/path",
     "YEARLY_QUOTE": "yearly_quote",
     "YEARLY_REFERENCE": "yearly_ref",
@@ -152,10 +153,7 @@ def test_deleting_profile_clears_every_profile_scoped_settings_app(monkeypatch, 
     assert manager.delete_profile("removed") is True
 
     profile_org = f"{QSETTINGS_PROFILE_ORG_PREFIX}removed"
-    assert cleared == [
-        (profile_org, application)
-        for application in QSETTINGS_PROFILE_SCOPED_APPS
-    ]
+    assert cleared == [(profile_org, application) for application in QSETTINGS_PROFILE_SCOPED_APPS]
 
 
 def _profile_app_settings_for(profile_id: str) -> ProfileAppSettingsStore:

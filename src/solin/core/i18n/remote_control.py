@@ -85,16 +85,100 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Sign in"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signing in…"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Protected connection limited to your local network"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Prepare installation on this device"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up this device"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "SECURE SETUP"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up Solin Remote"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Back to sign in"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
-        "To enable app mode, download and trust this Solin local authority. Before installing it, compare the SHA-256 fingerprint with the one shown in Solin settings.",
+        "Trust this Solin once, then install the web app for quick, secure access on your local network.",
     ),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Download this Solin certificate"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
-        "On iPhone or iPad, install the profile and enable trust in Settings › General › About › Certificate Trust Settings. On Android, install the file as a CA certificate in security settings. Then reopen this address.",
+        "Setup information is unavailable. Keep Solin open and check this device's network.",
     ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Trust this Solin"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "The certificate protects your password and remote commands. Compare the short code below with the one shown in Solin before installing it.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Verification code"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Show full SHA-256 fingerprint"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Download Solin certificate"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Android"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Open Settings and search for “CA certificate”.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Choose Install a certificate › CA certificate, select solin-remote-root.cer from your downloads, and confirm with your device lock.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Approve Android's security notice only after the verification code matches Solin.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Menu names can vary by manufacturer. Opening the downloaded file directly may only redirect you to Settings.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "iPhone or iPad"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Download the certificate in Safari, open Settings, and tap Profile Downloaded. If it is not shown, open General › VPN & Device Management.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb", "Tap Install and follow the confirmation prompts."
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Open General › About › Certificate Trust Settings and enable full trust for Solin Remote Root.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Install the downloaded file as a trusted certificate authority for this device.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Reopen the secure address"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Fully close and reopen the browser. The privacy warning should no longer appear.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "If Chrome still shows the warning after the CA certificate is installed, restart Android once and reopen the address.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "On iPhone or iPad, return to Safari after enabling full trust and reopen the address.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install the app"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Install Solin Remote to open it without the browser address bar.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Remote"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "In Chrome, open the ⋮ menu, choose Add to Home screen, then choose Install rather than Add shortcut.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "In Safari, tap Share › Add to Home Screen, enable Open as Web App, then tap Add.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Use your browser menu and choose Install app or Add to Home Screen.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Continue to sign in"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "This device was disconnected in Solin. Sign in again to reconnect.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "All remote devices were disconnected in Solin. Sign in again to reconnect.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "A new sign-in replaced this session."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enter your username and password."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signed in. Remote control connected."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Could not sign in."),

@@ -66,25 +66,13 @@ def _build_main_window_profile_settings(profile_settings):
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         camera=CameraSettingsStore.for_profile_settings(profile_settings),
-        projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(
-            profile_settings
-        ),
-        meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(
-            profile_settings
-        ),
-        watched_folder=WatchedFolderSettingsStore.for_profile_settings(
-            profile_settings
-        ),
+        projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
+        meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
+        watched_folder=WatchedFolderSettingsStore.for_profile_settings(profile_settings),
         yeartext=YeartextSettingsStore.for_profile_settings(profile_settings),
-        background_song=BackgroundSongSettingsStore.for_profile_settings(
-            profile_settings
-        ),
-        monitor_allocation=MonitorAllocationStore.for_profile_settings(
-            profile_settings
-        ),
-        window_geometry=WindowGeometrySettingsStore.for_profile_settings(
-            profile_settings
-        ),
+        background_song=BackgroundSongSettingsStore.for_profile_settings(profile_settings),
+        monitor_allocation=MonitorAllocationStore.for_profile_settings(profile_settings),
+        window_geometry=WindowGeometrySettingsStore.for_profile_settings(profile_settings),
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
         remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
         remote_control_credentials=RemoteControlCredentialsStore.create(
@@ -247,7 +235,7 @@ def _launch_main_window(
     from solin.core.ingest.watched_folder import WatchedFolderWatcher
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
     from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
-    from solin.core.ingest.qr_generation import QrGenerationSessionFactory
+    from solin.ui.qr_generation import QrGenerationSessionFactory
     from solin.core.ingest.wifi_server import WifiReceiveServer
     from solin.core.playlists.cleanup import PlaylistCleanupQueue
     from solin.core.playlists.storage import (
@@ -263,9 +251,7 @@ def _launch_main_window(
         pending_deletions_file=profile_paths.pending_deletions_file,
     )
     playlist_repository = PlaylistRepository.from_paths(playlist_storage_paths)
-    pending_deletion_repository = PendingDeletionRepository.from_paths(
-        playlist_storage_paths
-    )
+    pending_deletion_repository = PendingDeletionRepository.from_paths(playlist_storage_paths)
 
     def queue_pending_deletion(path: str) -> None:
         try:
@@ -292,6 +278,7 @@ def _launch_main_window(
         pptx_pages_dir=profile_paths.pptx_pages_dir,
         docx_pages_dir=profile_paths.docx_pages_dir,
     )
+
     def jw_catalog_service_factory(parent):
         return JWMediaCatalogService(jw_catalog_cache_paths, parent)
 
@@ -307,9 +294,7 @@ def _launch_main_window(
     )
     watched_folder_file_store = WatchedFolderFileStore()
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
-    main_window_profile_settings = _build_main_window_profile_settings(
-        profile_settings
-    )
+    main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     meeting_linked_folder_sync = MeetingLinkedFolderSync(
         _meeting_weekday_resolver(main_window_profile_settings.meeting_schedule)
     )
@@ -321,9 +306,7 @@ def _launch_main_window(
         installation_settings,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
-    background_media_controller = media.create_playback(
-        main_window_profile_settings.media
-    )
+    background_media_controller = media.create_playback(main_window_profile_settings.media)
     window = MainWindow(
         lang_manager,
         runtime_paths,
@@ -457,6 +440,7 @@ def main():
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
     from PySide6.QtGui import QSurfaceFormat
+
     fmt = QSurfaceFormat()
     fmt.setAlphaBufferSize(8)
     QSurfaceFormat.setDefaultFormat(fmt)
@@ -486,6 +470,7 @@ def main():
     icon_path = application_asset_path("icon.ico")
     if icon_path.is_file():
         from PySide6.QtGui import QIcon
+
         app.setWindowIcon(QIcon(str(icon_path)))
 
     # ── Argumentos da linha de comando ────────────────────────────────────────
@@ -499,16 +484,13 @@ def main():
     lang_manager = LanguageManager(
         global_settings=container.global_settings,
         jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json",
-        jw_language_settings_store_factory=(
-            container.jw_language_settings_store_factory
-        ),
+        jw_language_settings_store_factory=(container.jw_language_settings_store_factory),
     )
     container.lifecycle.register_cleanup(lang_manager.shutdown)
 
     # ── CSV do Zoom: janela standalone ────────────────────────────────────────
     csv_args = [
-        a for a in file_args
-        if os.path.isfile(a) and os.path.splitext(a)[1].lower() == ".csv"
+        a for a in file_args if os.path.isfile(a) and os.path.splitext(a)[1].lower() == ".csv"
     ]
     if csv_args:
         sys.exit(_run_zoom_poll_standalone(app, csv_args[0], lang_manager))
@@ -525,9 +507,11 @@ def main():
 
     # ── Primeira instância — limpezas ─────────────────────────────────────────
     from solin.core.remote.patch_installer import cleanup_pending_patch
+
     cleanup_pending_patch(container.installation_settings)
 
     from solin.core.media.download_storage import cleanup_orphan_temps, cleanup_incomplete_cache
+
     cleanup_orphan_temps()
     cleanup_incomplete_cache(container.runtime_paths.media_cache_dir)
 
@@ -546,6 +530,7 @@ def main():
         screen.resize(960, 640)
 
         from PySide6.QtGui import QGuiApplication
+
         geo = QGuiApplication.primaryScreen().availableGeometry()
         screen.move(
             geo.center().x() - screen.width() // 2,
@@ -601,6 +586,7 @@ def main():
 
         # Centra na tela
         from PySide6.QtGui import QGuiApplication
+
         geo = QGuiApplication.primaryScreen().availableGeometry()
         screen.move(
             geo.center().x() - screen.width() // 2,

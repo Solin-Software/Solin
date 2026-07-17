@@ -1,4 +1,4 @@
-"""Generation-aware Qt adapter for Wi-Fi QR rendering."""
+"""Generation-aware Qt adapter for reusable QR rendering."""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import logging
 
 from PySide6.QtCore import QObject, QThread, Signal
 
+from solin.core.foundation.qr_codes import generate_qr_png
 from solin.core.foundation.qt_threads import stop_owned_qthread
-from solin.core.ingest.qr_codes import generate_qr_png
+
 
 log = logging.getLogger(__name__)
 
@@ -16,16 +17,16 @@ class QrGenerationThread(QThread):
     completed = Signal(int, bytes)
     failed = Signal(int)
 
-    def __init__(self, generation: int, url: str, parent=None) -> None:
+    def __init__(self, generation: int, value: str, parent=None) -> None:
         super().__init__(parent)
         self._generation = generation
-        self._url = url
+        self._value = value
 
     def run(self) -> None:
         try:
-            png_data = generate_qr_png(self._url)
+            png_data = generate_qr_png(self._value)
         except Exception:  # noqa: BLE001 - qrcode/Pillow codec boundary
-            log.exception("Could not generate Wi-Fi QR code")
+            log.exception("Could not generate QR code")
             if not self.isInterruptionRequested():
                 self.failed.emit(self._generation)
             return
@@ -45,11 +46,11 @@ class QrGenerationSession(QObject):
         self._threads: list[QrGenerationThread] = []
         self._closed = False
 
-    def start(self, url: str) -> bool:
-        if self._closed or not url:
+    def start(self, value: str) -> bool:
+        if self._closed or not value:
             return False
         self.cancel()
-        thread = QrGenerationThread(self._generation, url, self)
+        thread = QrGenerationThread(self._generation, value, self)
         self._threads.append(thread)
         thread.completed.connect(self._on_completed)
         thread.failed.connect(self._on_failed)
@@ -75,7 +76,7 @@ class QrGenerationSession(QObject):
                 thread,
                 wait_ms=2_000,
                 logger=log,
-                label="Wi-Fi QR generation",
+                label="QR generation",
             )
             if stopped:
                 self._discard(thread)

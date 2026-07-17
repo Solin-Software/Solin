@@ -29,19 +29,22 @@ thumbnails, or other runtime data.
 
 ## Local certificate trust
 
-`GET /remote/trust-certificate.cer` is the only unauthenticated dynamic file
-download besides the static shell (the localization read model returns JSON).
-It returns the public DER certificate for Solin's
-installation-local authority with `Cache-Control: no-store`; no private key is
-ever exposed. The authority has `pathLenConstraint=0` and a critical IP
-`nameConstraints` extension limited to the selected address as a `/32`. It signs
-the leaf HTTPS certificate for that exact IP.
+`GET /remote/trust-certificate.cer` returns the public DER certificate for
+Solin's installation-local Root CA with `Cache-Control: no-store`; no private
+key is ever exposed. The ten-year root has `pathLenConstraint=1` and signs a
+three-year issuing CA with `pathLenConstraint=0` and critical `nameConstraints`
+limited to private RFC 1918 networks. That constrained issuer signs only the
+short-lived HTTPS leaf for the currently selected private IPv4 address.
 
-Users must compare the authority SHA-256 fingerprint with the value displayed in
-desktop settings before trusting it. Trust is a one-device setup step required
-for browsers to provide a reliable secure context for Service Worker and PWA
-installation. Selecting another IP rotates both the constrained authority and
-the server certificate, so devices must explicitly trust the replacement.
+Users compare the short verification code, or the full Root CA SHA-256
+fingerprint under advanced details, with the value displayed by the native setup
+assistant before trusting it. Trust is a one-device setup step required for
+browsers to provide a reliable secure context for Service Worker and PWA
+installation. Selecting another IP or renewing the 90-day leaf replaces only
+the server identity. The stable Root CA remains trusted, and the live TLS context
+is reloaded without stopping the listener or revoking sessions. A root security
+expiry or unrecoverable private-key loss is surfaced explicitly and is the
+exceptional case that requires a replacement.
 
 ## Authentication
 
@@ -80,14 +83,16 @@ username.
 
 ## Read models
 
-### `GET /remote/api/localization`
+### `GET /remote/api/setup`
 
-This is the only unauthenticated JSON endpoint. It returns only the active BCP
-47 locale and the translated `_RemoteControlWeb` message map needed by the login
-screen. It never includes profile identity, credentials, session data, or other
-runtime state, and is always served with `Cache-Control: no-store`. English
-sources live in `messages.en.json`; the desktop resolves them through the active
-Qt `.qm` catalog before publishing them.
+This is the only unauthenticated JSON endpoint. It returns the active BCP 47
+locale and translated `_RemoteControlWeb` message map used by login/setup, plus
+the public TLS setup model: installation ID, Root CA SHA-256 fingerprint, short
+verification code, certificate-download route, and root expiry. It never
+includes profile identity, credentials, session data, private keys, or runtime
+catalog/playback state, and is always served with `Cache-Control: no-store`.
+English sources live in `messages.en.json`; the desktop resolves them through
+the active Qt `.qm` catalog before publishing them.
 
 ### `GET /remote/api/bootstrap`
 
@@ -105,8 +110,7 @@ Qt `.qm` catalog before publishing them.
     "locale": "pt-BR",
     "messages": {
       "app.remoteControl": "Controle remoto"
-    },
-    "theme": "dark"
+    }
   },
   "catalogRevision": 17,
   "playbackRevision": 91,
@@ -118,9 +122,7 @@ Qt `.qm` catalog before publishing them.
 code to a BCP 47 browser tag (`pt_BR` becomes `pt-BR`). `messages` comes from
 the same installed `QTranslator` used by the desktop, not from locale metadata.
 `currentMeetingWeekStart` is the Solin-authoritative Monday for the current
-meeting week and is refreshed in WebSocket heartbeats. `theme` may be omitted
-while the desktop adapter is using the PWA default (`dark`) and accepts only
-`dark` or `light`.
+meeting week and is refreshed in WebSocket heartbeats.
 
 ### `GET /remote/api/catalog`
 

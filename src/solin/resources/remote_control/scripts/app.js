@@ -3,10 +3,15 @@ import { formatDuration } from "./format.js";
 import { applyLocalization, initializeLocalization, t } from "./i18n.js";
 import { setupPwa } from "./pwa.js";
 import { Renderer, announce, showToast } from "./renderer.js";
+import { initializeSetup, isSetupRoute } from "./setup.js";
 import { Store, applyBootstrap } from "./state.js";
 
 const api = new RemoteApi();
-await initializeLocalization(() => api.localization());
+let publicSetup = null;
+await initializeLocalization(async () => {
+  publicSetup = await api.setup();
+  return publicSetup;
+});
 const store = new Store();
 const renderer = new Renderer(store);
 let lastNonZeroVolume = 100;
@@ -21,18 +26,28 @@ const eventStream = new EventStream({
   onStatus: handleConnectionStatus,
 });
 
+let setupPage = null;
 const pwa = setupPwa({
   onInstallAvailable: (available) => {
     document.getElementById("install-button").hidden = !available;
+    setupPage?.setInstallAvailable(available);
   },
-  onInstalled: () => showToast(t("notification.installed"), "success"),
+  onInstalled: () => {
+    setupPage?.markInstalled();
+    showToast(t("notification.installed"), "success");
+  },
   onError: () => {
     // Installation support is progressive; remote control remains fully available.
   },
 });
+setupPage = initializeSetup({ payload: publicSetup, pwa });
 
-bindStaticEvents();
-recover({ initial: true });
+if (isSetupRoute()) {
+  setupPage.show();
+} else {
+  bindStaticEvents();
+  recover({ initial: true });
+}
 
 function bindStaticEvents() {
   document.getElementById("login-form").addEventListener("submit", handleLogin);
@@ -251,18 +266,26 @@ async function doRecover({ initial }) {
   }
 }
 
-function showLogin({ expired }) {
+function showLogin({ expired, reason = "" }) {
   clearWebsocketBaseline();
   eventStream.close();
   api.clearSecrets();
   store.reset();
   store.update({ view: "login", connection: navigator.onLine ? "connecting" : "offline" });
   if (expired) {
+    const message = sessionEndMessage(reason);
     const error = document.getElementById("login-error");
-    error.textContent = t("login.sessionExpired");
+    error.textContent = message;
     error.hidden = false;
-    announce(t("login.sessionExpiredAnnouncement"));
+    announce(message);
   }
+}
+
+function sessionEndMessage(reason) {
+  if (reason === "revoked_device") return t("session.disconnectedDevice");
+  if (reason === "revoked_all") return t("session.disconnectedAll");
+  if (reason === "signed_in_again") return t("session.signedInAgain");
+  return t("login.sessionExpired");
 }
 
 function focusSelectedCollection() {
@@ -451,13 +474,13 @@ function handleRemoteEvent(message) {
   ) {
     store.update({ currentMeetingWeekStart: message.currentMeetingWeekStart });
   } else if (message.type === "session.revoked") {
-    showLogin({ expired: true });
+    showLogin({ expired: true, reason: message.payload?.reason });
   }
 }
 
 function applyWebsocketBaselineEvent(message) {
   if (message.type === "session.revoked") {
-    showLogin({ expired: true });
+    showLogin({ expired: true, reason: message.payload?.reason });
     return;
   }
   if (!new Set(["catalog.snapshot", "playback.snapshot", "profile.snapshot"]).has(message.type)) return;

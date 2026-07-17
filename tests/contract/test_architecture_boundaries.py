@@ -615,7 +615,7 @@ def test_wifi_widget_does_not_own_qr_generation_workers():
 
 
 def test_qr_code_generation_policy_has_no_framework_dependencies():
-    path = PROJECT_ROOT / "src" / "solin" / "core" / "ingest" / "qr_codes.py"
+    path = PROJECT_ROOT / "src" / "solin" / "core" / "foundation" / "qr_codes.py"
     violations: list[str] = []
 
     for node in _imports(path):

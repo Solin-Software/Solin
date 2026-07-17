@@ -1,7 +1,7 @@
 from PySide6.QtCore import QCoreApplication
 
-from solin.core.ingest import qr_generation
-from solin.core.ingest.qr_codes import generate_qr_png
+from solin.core.foundation.qr_codes import generate_qr_png
+from solin.ui import qr_generation
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
 

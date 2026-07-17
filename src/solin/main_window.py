@@ -135,7 +135,7 @@ if TYPE_CHECKING:
     from .core.ingest.watched_folder_files import WatchedFolderFileStore
     from .core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from .core.ingest.wifi_server import WifiReceiveServer
-    from .core.ingest.qr_generation import QrGenerationSessionFactory
+    from .ui.qr_generation import QrGenerationSessionFactory
     from .core.jw.clip_fetch import ClipFetchThreadFactory
     from .core.jw.catalog_service import JWMediaCatalogService
     from .core.jw.jwpub_import_thread import JwpubImportThreadFactory
@@ -149,6 +149,7 @@ if TYPE_CHECKING:
     from .ui.media_info import MediaInfoQueue, MediaInfoService
 
 # ── MainWindow ────────────────────────────────────────────────────────────────
+
 
 class MainWindow(QMainWindow):
     _auto_share_finished = Signal(int, bool, bool)
@@ -251,9 +252,7 @@ class MainWindow(QMainWindow):
             self._auto_key_settings,
             self,
         )
-        self._profile_switch = ProfileSwitchController(
-            self.switch_profile_requested.emit
-        )
+        self._profile_switch = ProfileSwitchController(self.switch_profile_requested.emit)
         self._projection_targets = ProjectionWindowController(
             ProjectionWindowContext(
                 session=self.projection_session,
@@ -262,13 +261,9 @@ class MainWindow(QMainWindow):
                 sync_projection_integrations=(
                     lambda: self._projection_integrations.sync_projection_integrations()
                 ),
-                sync_obs_scene=lambda active: (
-                    self._projection_integrations.sync_obs_scene(active)
-                ),
+                sync_obs_scene=lambda active: self._projection_integrations.sync_obs_scene(active),
                 yearly_text=self._current_yearly_projection_text,
-                set_projection_screen_count=(
-                    lambda count: self.proj_bar.set_screen_count(count)
-                ),
+                set_projection_screen_count=(lambda count: self.proj_bar.set_screen_count(count)),
                 set_toolbar_screen_count=(
                     lambda count: self._quick_toolbar.set_screen_count(count)
                 ),
@@ -411,9 +406,7 @@ class MainWindow(QMainWindow):
                 yeartext_service_factory=service_factories.yeartext,
                 font_manager=self.font_manager,
                 yearly_projection_text=self._current_yearly_projection_text,
-                auto_share_accessibility_trusted=lambda: bool(
-                    macos_accessibility_trusted()
-                ),
+                auto_share_accessibility_trusted=lambda: bool(macos_accessibility_trusted()),
                 background_song_settings=self._background_song_settings,
                 projection_playback_settings=self._projection_playback_settings,
                 window_geometry_settings=profile_settings_bundle.window_geometry,
@@ -442,17 +435,13 @@ class MainWindow(QMainWindow):
                 watched_folder_watcher_factory=watched_folder_watcher_factory,
                 playlist_cleanup_queue_factory=playlist_cleanup_queue_factory,
                 jw_catalog_service_factory=jw_catalog_service_factory,
-                jw_catalog_thumbnail_session_factory=(
-                    jw_catalog_thumbnail_session_factory
-                ),
+                jw_catalog_thumbnail_session_factory=(jw_catalog_thumbnail_session_factory),
                 jw_songs_store=self.jw_songs_store,
                 jwpub_service_factory=service_factories.jwpub,
                 memorial_service_factory=service_factories.memorial,
             ),
             MainWindowUiHandlers(
-                project_image=lambda data: self._media_projection.project_image_bytes(
-                    data
-                ),
+                project_image=lambda data: self._media_projection.project_image_bytes(data),
                 project_video=lambda url, title, playlist, playback_order: (
                     self._media_projection.project_video(
                         url,
@@ -462,9 +451,7 @@ class MainWindow(QMainWindow):
                     )
                 ),
                 stop_projection=lambda: self._projection_stop.stop_projection(),
-                project_tab_frame=lambda frame: (
-                    self._media_projection.project_tab_frame(frame)
-                ),
+                project_tab_frame=lambda frame: self._media_projection.project_tab_frame(frame),
                 browser_media_destination=lambda url, title, kind, can_play: (
                     self._route_browser_destination(
                         url,
@@ -494,29 +481,19 @@ class MainWindow(QMainWindow):
                         original_name,
                     )
                 ),
-                wifi_add_all=lambda items: (
-                    self._wifi_media_controller.on_wifi_add_all(items)
+                wifi_add_all=lambda items: self._wifi_media_controller.on_wifi_add_all(items),
+                wifi_play=lambda path, title: self._wifi_media_controller.on_wifi_request_play(
+                    path, title
                 ),
-                wifi_play=lambda path, title: (
-                    self._wifi_media_controller.on_wifi_request_play(path, title)
-                ),
-                monitor_manager_requested=(
-                    self._projection_targets.on_monitor_manager_requested
-                ),
+                monitor_manager_requested=(self._projection_targets.on_monitor_manager_requested),
                 quick_obs_scene_change=lambda scene_name: (
                     self._live_integrations.on_quick_obs_scene_change(scene_name)
                 ),
                 quick_obs_return_scene_change=lambda scene_name: (
-                    self._live_integrations.on_quick_obs_return_scene_change(
-                        scene_name
-                    )
+                    self._live_integrations.on_quick_obs_return_scene_change(scene_name)
                 ),
-                project_obs_stream=lambda: (
-                    self._live_integrations.project_obs_ndi_stream()
-                ),
-                project_camera_stream=lambda: (
-                    self._live_integrations.project_camera_stream()
-                ),
+                project_obs_stream=lambda: self._live_integrations.project_obs_ndi_stream(),
+                project_camera_stream=lambda: self._live_integrations.project_camera_stream(),
                 camera_selection_changed=lambda option: (
                     self._live_integrations.on_camera_selection_changed(option)
                 ),
@@ -558,17 +535,15 @@ class MainWindow(QMainWindow):
         self._wifi_media_controller = WifiMediaController(
             WifiMediaContext(
                 destination_controller=self._media_destinations,
-                wifi_receive_widget=lambda: (
-                    self._lazy_pages.wifi_receive_widget
-                ),
+                wifi_receive_widget=lambda: self._lazy_pages.wifi_receive_widget,
                 translate=self.tr,
             ),
             WifiMediaHandlers(
-                play_cached_media=lambda *args, **kwargs: (
-                    self._media_projection.on_cache_play(*args, **kwargs)
+                play_cached_media=lambda *args, **kwargs: self._media_projection.on_cache_play(
+                    *args, **kwargs
                 ),
-                project_video=lambda *args, **kwargs: (
-                    self._media_projection.project_video(*args, **kwargs)
+                project_video=lambda *args, **kwargs: self._media_projection.project_video(
+                    *args, **kwargs
                 ),
             ),
         )
@@ -591,9 +566,7 @@ class MainWindow(QMainWindow):
                 ),
                 expand_projection_overlay=self.proj_bar.expand_overlay,
                 send_to_temp_playlist=self._playlist_imports.send_to_temp_playlist,
-                open_pdf_temp_playlist=(
-                    self.playlist_widget.open_pdf_as_temp_playlist
-                ),
+                open_pdf_temp_playlist=(self.playlist_widget.open_pdf_as_temp_playlist),
                 open_named_temp_playlist=lambda items, name: (
                     self.playlist_widget.open_temp_playlist(
                         items,
@@ -601,9 +574,7 @@ class MainWindow(QMainWindow):
                         name=name,
                     )
                 ),
-                append_temp_playlist_items=(
-                    self.playlist_widget.append_temp_playlist_items
-                ),
+                append_temp_playlist_items=(self.playlist_widget.append_temp_playlist_items),
             ),
         )
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
@@ -654,15 +625,9 @@ class MainWindow(QMainWindow):
                 ),
             ),
             MediaProjectionHandlers(
-                stop_browser_tab_projection=(
-                    self._navigation.stop_browser_tab_projection
-                ),
-                update_projection_status=(
-                    self._projection_integrations.update_status
-                ),
-                prepare_video_session=(
-                    self._auto_key_projection.prepare_video_session
-                ),
+                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
+                update_projection_status=(self._projection_integrations.update_status),
+                prepare_video_session=(self._auto_key_projection.prepare_video_session),
                 prepare_auto_share_playback=(
                     self._projection_integrations.prepare_video_playback_for_auto_share
                 ),
@@ -676,19 +641,13 @@ class MainWindow(QMainWindow):
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
                 projection_windows=self.projection_session.all_windows,
-                auto_share_configured=(
-                    self._projection_integrations.auto_share_configured
-                ),
+                auto_share_configured=(self._projection_integrations.auto_share_configured),
             ),
             ProjectionStopHandlers(
-                stop_browser_tab_projection=(
-                    self._navigation.stop_browser_tab_projection
-                ),
-                update_projection_status=(
-                    self._projection_integrations.update_status
-                ),
-                set_obs_stream_active=lambda active: (
-                    self._live_integrations.set_obs_stream_active(active)
+                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
+                update_projection_status=(self._projection_integrations.update_status),
+                set_obs_stream_active=lambda active: self._live_integrations.set_obs_stream_active(
+                    active
                 ),
                 set_camera_stream_active=lambda active: (
                     self._live_integrations.set_camera_stream_active(active)
@@ -723,12 +682,8 @@ class MainWindow(QMainWindow):
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
-                stop_browser_tab_projection=(
-                    self._navigation.stop_browser_tab_projection
-                ),
-                update_projection_status=(
-                    self._projection_integrations.update_status
-                ),
+                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
+                update_projection_status=(self._projection_integrations.update_status),
             ),
         )
         self._timer_theme_controller = TimerThemeController(
@@ -743,12 +698,8 @@ class MainWindow(QMainWindow):
                 playback_protection=self.playback_protection,
             ),
             TimerThemeHandlers(
-                stop_browser_tab_projection=(
-                    self._navigation.stop_browser_tab_projection
-                ),
-                update_projection_status=(
-                    self._projection_integrations.update_status
-                ),
+                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
+                update_projection_status=(self._projection_integrations.update_status),
             ),
         )
         self._language_controller = LanguageController(
@@ -827,6 +778,21 @@ class MainWindow(QMainWindow):
                 settings_widget=self.settings_widget,
             ),
             self,
+        )
+        self._remote_control.runtime_status_reported.connect(
+            self._quick_toolbar.set_remote_control_status
+        )
+        self._remote_control.session_inventory_reported.connect(
+            self._quick_toolbar.set_remote_sessions
+        )
+        self._remote_control.session_revocation_reported.connect(
+            self._quick_toolbar.set_remote_session_revocation_result
+        )
+        self._quick_toolbar.remote_session_disconnect_requested.connect(
+            self._remote_control.revoke_session
+        )
+        self._quick_toolbar.remote_sessions_disconnect_all_requested.connect(
+            self._remote_control.revoke_sessions
         )
         self.lang.language_changed.connect(self._remote_control.on_language_changed)
 
@@ -911,9 +877,8 @@ class MainWindow(QMainWindow):
             kind=kind,
             can_play=can_play,
         )
-        needs_preparation = (
-            kind in {"pdf", "jwpub", "jwlplaylist"}
-            or (kind == "image" and url.startswith(("http://", "https://")))
+        needs_preparation = kind in {"pdf", "jwpub", "jwlplaylist"} or (
+            kind == "image" and url.startswith(("http://", "https://"))
         )
 
         def prepare(ready, failed) -> None:
@@ -1076,7 +1041,9 @@ class MainWindow(QMainWindow):
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()
 
-    def _project_video_core(self, url: str, title: str, keep_expanded: bool = False, is_audio: bool = False):
+    def _project_video_core(
+        self, url: str, title: str, keep_expanded: bool = False, is_audio: bool = False
+    ):
         self._media_projection.project_video_core(
             url,
             title,
@@ -1115,9 +1082,13 @@ class MainWindow(QMainWindow):
     def open_media_files(self, paths: list):
         self._open_media_controller.open_media_files(paths)
 
-    def _project_media_at_index(self, playlist: list, index: int = 0,
-                                keep_expanded: bool = False,
-                                playback_order: str | None = None):
+    def _project_media_at_index(
+        self,
+        playlist: list,
+        index: int = 0,
+        keep_expanded: bool = False,
+        playback_order: str | None = None,
+    ):
         self._media_projection.project_media_at_index(
             playlist,
             index=index,

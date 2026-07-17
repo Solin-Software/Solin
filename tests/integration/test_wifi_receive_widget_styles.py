@@ -26,7 +26,7 @@ from solin.ui.media_info import MediaInfoQueue, MediaInfoService
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
 from solin.core.rendering.document_conversion import DocumentConversionService
-from solin.core.ingest.qr_generation import QrGenerationSessionFactory
+from solin.ui.qr_generation import QrGenerationSessionFactory
 from solin.core.ingest.wifi_server import WifiReceiveServer
 from solin.widgets.wifi_receive_widget import WifiReceiveWidget
 

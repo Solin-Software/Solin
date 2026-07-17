@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from ipaddress import IPv4Address, IPv4Network, ip_address
+import json
 import os
 from pathlib import Path
-import tempfile
 import threading
 from typing import Final
 
@@ -16,17 +18,34 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+from solin.core.storage.binary_files import write_bytes_atomic
 
-_PRIVATE_LAN_NETWORKS: Final = (
+
+PRIVATE_LAN_NETWORKS: Final = (
     IPv4Network("10.0.0.0/8"),
     IPv4Network("172.16.0.0/12"),
     IPv4Network("192.168.0.0/16"),
 )
-DEFAULT_CERTIFICATE_VALIDITY: Final = timedelta(days=397)
+DEFAULT_CERTIFICATE_VALIDITY: Final = timedelta(days=90)
 DEFAULT_RENEW_BEFORE: Final = timedelta(days=30)
-DEFAULT_AUTHORITY_VALIDITY: Final = timedelta(days=3650)
-DEFAULT_AUTHORITY_RENEW_BEFORE: Final = timedelta(days=180)
+DEFAULT_ISSUER_VALIDITY: Final = timedelta(days=3 * 365)
+DEFAULT_ISSUER_RENEW_BEFORE: Final = timedelta(days=180)
+DEFAULT_ROOT_VALIDITY: Final = timedelta(days=10 * 365)
+DEFAULT_ROOT_WARNING_BEFORE: Final = timedelta(days=365)
 _CLOCK_SKEW_TOLERANCE: Final = timedelta(minutes=5)
+_MANIFEST_VERSION: Final = 3
+
+
+class TLSProvisioningState(StrEnum):
+    HEALTHY = "healthy"
+    LEAF_RENEWED = "leaf_renewed"
+    ISSUER_ROTATED = "issuer_rotated"
+    ROOT_CREATED = "root_created"
+    ROOT_ROTATION_REQUIRED = "root_rotation_required"
+
+
+class TrustAnchorRotationRequiredError(RuntimeError):
+    """Raised when an installed Root CA cannot be recovered safely."""
 
 
 def parse_private_lan_ipv4(value: str | IPv4Address) -> IPv4Address:
@@ -35,7 +54,7 @@ def parse_private_lan_ipv4(value: str | IPv4Address) -> IPv4Address:
     except ValueError as error:
         raise ValueError("A valid private LAN IPv4 address is required") from error
     if not isinstance(address, IPv4Address) or not any(
-        address in network for network in _PRIVATE_LAN_NETWORKS
+        address in network for network in PRIVATE_LAN_NETWORKS
     ):
         raise ValueError("A private RFC 1918 IPv4 address is required")
     if address.is_unspecified or address.is_loopback or address.is_multicast:
@@ -47,19 +66,38 @@ def parse_private_lan_ipv4(value: str | IPv4Address) -> IPv4Address:
 class TLSIdentity:
     certificate_path: Path
     private_key_path: Path
-    authority_certificate_path: Path
+    root_certificate_path: Path
+    issuer_certificate_path: Path
     ipv4_address: IPv4Address
-    fingerprint_sha256: str
-    authority_fingerprint_sha256: str
-    not_valid_after: datetime
+    installation_id: str
+    leaf_fingerprint_sha256: str
+    trust_anchor_fingerprint_sha256: str
+    leaf_not_valid_after: datetime
+    renew_at: datetime
+    root_not_valid_after: datetime
+    provisioning_state: TLSProvisioningState
 
-    def authority_certificate_der(self) -> bytes:
-        certificate = x509.load_pem_x509_certificate(self.authority_certificate_path.read_bytes())
+    def trust_certificate_der(self) -> bytes:
+        certificate = x509.load_pem_x509_certificate(self.root_certificate_path.read_bytes())
         return certificate.public_bytes(serialization.Encoding.DER)
 
 
+@dataclass(frozen=True, slots=True)
+class _Manifest:
+    def to_bytes(self) -> bytes:
+        return (
+            json.dumps(
+                {"version": _MANIFEST_VERSION},
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            + b"\n"
+        )
+
+
 class TLSCertificateStore:
-    """Persist an IP-scoped local authority and its HTTPS server identity."""
+    """Persist one installation-local trust hierarchy and an IP-specific TLS leaf."""
 
     def __init__(
         self,
@@ -68,118 +106,293 @@ class TLSCertificateStore:
         clock: Callable[[], datetime] | None = None,
         validity: timedelta = DEFAULT_CERTIFICATE_VALIDITY,
         renew_before: timedelta = DEFAULT_RENEW_BEFORE,
-        authority_validity: timedelta = DEFAULT_AUTHORITY_VALIDITY,
-        authority_renew_before: timedelta = DEFAULT_AUTHORITY_RENEW_BEFORE,
+        issuer_validity: timedelta = DEFAULT_ISSUER_VALIDITY,
+        issuer_renew_before: timedelta = DEFAULT_ISSUER_RENEW_BEFORE,
+        root_validity: timedelta = DEFAULT_ROOT_VALIDITY,
+        root_warning_before: timedelta = DEFAULT_ROOT_WARNING_BEFORE,
     ) -> None:
         if validity <= timedelta(0):
             raise ValueError("Certificate validity must be positive")
         if renew_before < timedelta(0) or renew_before >= validity:
-            raise ValueError("Certificate renewal window must be non-negative and below validity")
-        if authority_validity <= timedelta(0):
-            raise ValueError("Authority validity must be positive")
-        if authority_validity <= validity:
-            raise ValueError("Authority validity must exceed server certificate validity")
-        if authority_renew_before < timedelta(0) or authority_renew_before >= authority_validity:
-            raise ValueError("Authority renewal window must be non-negative and below validity")
+            raise ValueError("Certificate renewal window must be below validity")
+        if issuer_validity <= validity:
+            raise ValueError("Issuer validity must exceed leaf validity")
+        if issuer_renew_before < timedelta(0) or issuer_renew_before >= issuer_validity:
+            raise ValueError("Issuer renewal window must be below validity")
+        if root_validity <= issuer_validity:
+            raise ValueError("Root validity must exceed issuer validity")
+        if root_warning_before < timedelta(0) or root_warning_before >= root_validity:
+            raise ValueError("Root warning window must be below validity")
+
         self._directory = Path(directory).resolve()
-        self._certificate_path = self._directory / "remote-control-cert.pem"
-        self._private_key_path = self._directory / "remote-control-key.pem"
-        self._authority_certificate_path = self._directory / "remote-control-authority-cert.pem"
-        self._authority_private_key_path = self._directory / "remote-control-authority-key.pem"
+        self._manifest_path = self._directory / "remote-control-tls.json"
+        self._lock_path = self._directory / ".remote-control-tls.lock"
+        self._root_certificate_path = self._directory / "remote-control-root-cert.pem"
+        self._root_backup_path = self._directory / "remote-control-root-cert.backup.pem"
+        self._root_private_key_path = self._directory / "remote-control-root-key.pem"
+        self._root_private_key_backup_path = self._directory / "remote-control-root-key.backup.pem"
+        self._issuer_certificate_path = self._directory / "remote-control-issuer-cert.pem"
+        self._issuer_private_key_path = self._directory / "remote-control-issuer-key.pem"
+        self._leaf_certificate_path = self._directory / "remote-control-leaf-cert.pem"
+        self._chain_path = self._directory / "remote-control-chain.pem"
+        self._leaf_private_key_path = self._directory / "remote-control-leaf-key.pem"
+        self._legacy_authority_certificate_path = (
+            self._directory / "remote-control-authority-cert.pem"
+        )
+        self._legacy_authority_private_key_path = (
+            self._directory / "remote-control-authority-key.pem"
+        )
+        self._legacy_leaf_certificate_path = self._directory / "remote-control-cert.pem"
+        self._legacy_leaf_private_key_path = self._directory / "remote-control-key.pem"
         self._clock = clock or (lambda: datetime.now(UTC))
         self._validity = validity
         self._renew_before = renew_before
-        self._authority_validity = authority_validity
-        self._authority_renew_before = authority_renew_before
-        self._lock = threading.Lock()
+        self._issuer_validity = issuer_validity
+        self._issuer_renew_before = issuer_renew_before
+        self._root_validity = root_validity
+        self._root_warning_before = root_warning_before
+        self._thread_lock = threading.Lock()
 
     @property
     def certificate_path(self) -> Path:
-        return self._certificate_path
+        return self._chain_path
 
     @property
     def private_key_path(self) -> Path:
-        return self._private_key_path
+        return self._leaf_private_key_path
 
     @property
-    def authority_certificate_path(self) -> Path:
-        return self._authority_certificate_path
+    def root_certificate_path(self) -> Path:
+        return self._root_certificate_path
 
     def load_or_create(self, ipv4_address: str | IPv4Address) -> TLSIdentity:
         address = parse_private_lan_ipv4(ipv4_address)
-        with self._lock:
-            now = self._now()
+        with self._thread_lock:
             self._prepare_directory()
-            authority_private_key = self._load_private_key(self._authority_private_key_path)
-            authority_certificate = self._load_certificate(self._authority_certificate_path)
-            authority_changed = (
-                authority_private_key is None
-                or authority_certificate is None
-                or not self._is_authority_usable(
-                    authority_certificate,
-                    authority_private_key,
-                    address,
-                    now,
-                )
+            with self._interprocess_lock():
+                return self._load_or_create_locked(address)
+
+    def renewal_due(self, identity: TLSIdentity) -> bool:
+        return self._now() >= identity.renew_at
+
+    def _load_or_create_locked(self, address: IPv4Address) -> TLSIdentity:
+        now = self._now()
+        hierarchy_artifacts_present = any(
+            path.exists()
+            for path in (
+                self._manifest_path,
+                self._root_certificate_path,
+                self._root_backup_path,
+                self._root_private_key_path,
+                self._root_private_key_backup_path,
+                self._issuer_certificate_path,
+                self._issuer_private_key_path,
+                self._leaf_certificate_path,
+                self._leaf_private_key_path,
+                self._chain_path,
             )
-            if authority_changed:
-                authority_private_key = ec.generate_private_key(ec.SECP256R1())
-                authority_certificate = self._issue_authority(
-                    authority_private_key,
-                    address,
-                    now,
-                )
-                self._write_private_key(
-                    self._authority_private_key_path,
-                    authority_private_key,
-                )
-                self._write_certificate(
-                    self._authority_certificate_path,
-                    authority_certificate,
-                )
-            assert authority_private_key is not None
-            assert authority_certificate is not None
+        )
+        manifest = self._load_manifest()
+        if manifest is None:
+            manifest = _Manifest()
 
-            private_key = self._load_private_key(self._private_key_path)
-            if private_key is None:
-                private_key = ec.generate_private_key(ec.SECP256R1())
-                self._write_private_key(self._private_key_path, private_key)
+        root_key = self._load_private_key(self._root_private_key_path)
+        if root_key is None:
+            root_key = self._load_private_key(self._root_private_key_backup_path)
+            if root_key is not None:
+                self._write_private_key(self._root_private_key_path, root_key)
+        root_certificate = self._load_certificate(self._root_certificate_path)
+        if root_certificate is None:
+            backup = self._load_certificate(self._root_backup_path)
+            if backup is not None:
+                root_certificate = backup
+                self._write_certificate(self._root_certificate_path, backup)
 
-            certificate = self._load_certificate(self._certificate_path)
-            if certificate is None or not self._is_usable(
-                certificate,
-                private_key,
-                authority_certificate,
-                address,
+        root_created = False
+        if root_certificate is None and root_key is None and not hierarchy_artifacts_present:
+            root_key = ec.generate_private_key(ec.SECP256R1())
+            installation_id = _installation_id(root_key.public_key())
+            root_certificate = self._issue_root(root_key, installation_id, now)
+            self._write_private_key(self._root_private_key_path, root_key)
+            self._write_private_key(self._root_private_key_backup_path, root_key)
+            self._write_certificate(self._root_certificate_path, root_certificate)
+            self._write_certificate(self._root_backup_path, root_certificate)
+            root_created = True
+        elif root_certificate is None or root_key is None:
+            raise TrustAnchorRotationRequiredError(
+                "The installed Solin Remote Root CA cannot be recovered safely"
+            )
+        else:
+            root_public_key = root_certificate.public_key()
+            if not isinstance(root_public_key, ec.EllipticCurvePublicKey):
+                raise TrustAnchorRotationRequiredError(
+                    "The installed Solin Remote Root CA is not supported"
+                )
+            installation_id = _installation_id(root_public_key)
+            if not self._is_root_usable(
+                root_certificate,
+                root_key,
+                installation_id,
                 now,
             ):
-                certificate = self._issue(
-                    private_key,
-                    authority_private_key,
-                    authority_certificate,
-                    address,
-                    now,
+                raise TrustAnchorRotationRequiredError(
+                    "The installed Solin Remote Root CA cannot be recovered safely"
                 )
-                self._write_certificate(self._certificate_path, certificate)
+            backup_key = self._load_private_key(self._root_private_key_backup_path)
+            if backup_key is None or _public_key_bytes(
+                backup_key.public_key()
+            ) != _public_key_bytes(root_key.public_key()):
+                self._write_private_key(self._root_private_key_backup_path, root_key)
+            backup_certificate = self._load_certificate(self._root_backup_path)
+            if backup_certificate is None or backup_certificate.fingerprint(
+                hashes.SHA256()
+            ) != root_certificate.fingerprint(hashes.SHA256()):
+                self._write_certificate(self._root_backup_path, root_certificate)
 
-            return TLSIdentity(
-                certificate_path=self._certificate_path,
-                private_key_path=self._private_key_path,
-                authority_certificate_path=self._authority_certificate_path,
-                ipv4_address=address,
-                fingerprint_sha256=_format_fingerprint(certificate),
-                authority_fingerprint_sha256=_format_fingerprint(authority_certificate),
-                not_valid_after=certificate.not_valid_after_utc,
+        installation_id = _installation_id(root_key.public_key())
+
+        issuer_key = self._load_private_key(self._issuer_private_key_path)
+        issuer_certificate = self._load_certificate(self._issuer_certificate_path)
+        issuer_rotated = (
+            issuer_key is None
+            or issuer_certificate is None
+            or not self._is_issuer_usable(
+                issuer_certificate,
+                issuer_key,
+                root_certificate,
+                installation_id,
+                now,
             )
+        )
+        if issuer_rotated:
+            issuer_key = ec.generate_private_key(ec.SECP256R1())
+            issuer_certificate = self._issue_issuer(
+                issuer_key,
+                root_key,
+                root_certificate,
+                installation_id,
+                now,
+            )
+            self._write_private_key(self._issuer_private_key_path, issuer_key)
+            self._write_certificate(self._issuer_certificate_path, issuer_certificate)
+        assert issuer_key is not None
+        assert issuer_certificate is not None
+
+        leaf_key = self._load_private_key(self._leaf_private_key_path)
+        leaf_certificate = self._load_certificate(self._leaf_certificate_path)
+        leaf_renewed = (
+            leaf_key is None
+            or leaf_certificate is None
+            or not self._is_leaf_usable(
+                leaf_certificate,
+                leaf_key,
+                issuer_certificate,
+                address,
+                now,
+            )
+        )
+        if leaf_renewed:
+            leaf_key = ec.generate_private_key(ec.SECP256R1())
+            leaf_certificate = self._issue_leaf(
+                leaf_key,
+                issuer_key,
+                issuer_certificate,
+                address,
+                now,
+            )
+            self._write_private_key(self._leaf_private_key_path, leaf_key)
+            self._write_certificate(self._leaf_certificate_path, leaf_certificate)
+        assert leaf_key is not None
+        assert leaf_certificate is not None
+
+        self._write_chain(leaf_certificate, issuer_certificate)
+        self._write_manifest(manifest)
+        if any(
+            path.exists()
+            for path in (
+                self._legacy_authority_certificate_path,
+                self._legacy_authority_private_key_path,
+                self._legacy_leaf_certificate_path,
+                self._legacy_leaf_private_key_path,
+            )
+        ):
+            self._remove_legacy_files()
+
+        state = TLSProvisioningState.HEALTHY
+        if root_created:
+            state = TLSProvisioningState.ROOT_CREATED
+        elif issuer_rotated:
+            state = TLSProvisioningState.ISSUER_ROTATED
+        elif leaf_renewed:
+            state = TLSProvisioningState.LEAF_RENEWED
+        if root_certificate.not_valid_after_utc - now <= self._root_warning_before:
+            state = TLSProvisioningState.ROOT_ROTATION_REQUIRED
+
+        return TLSIdentity(
+            certificate_path=self._chain_path,
+            private_key_path=self._leaf_private_key_path,
+            root_certificate_path=self._root_certificate_path,
+            issuer_certificate_path=self._issuer_certificate_path,
+            ipv4_address=address,
+            installation_id=installation_id,
+            leaf_fingerprint_sha256=_format_fingerprint(leaf_certificate),
+            trust_anchor_fingerprint_sha256=_format_fingerprint(root_certificate),
+            leaf_not_valid_after=leaf_certificate.not_valid_after_utc,
+            renew_at=leaf_certificate.not_valid_after_utc - self._renew_before,
+            root_not_valid_after=root_certificate.not_valid_after_utc,
+            provisioning_state=state,
+        )
 
     def _prepare_directory(self) -> None:
         self._directory.mkdir(parents=True, exist_ok=True)
         if os.name != "nt":
             self._directory.chmod(0o700)
 
+    @contextmanager
+    def _interprocess_lock(self) -> Iterator[None]:
+        descriptor = os.open(self._lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
+
+    def _load_manifest(self) -> _Manifest | None:
+        try:
+            payload = json.loads(self._manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict) or payload.get("version") != _MANIFEST_VERSION:
+            return None
+        return _Manifest()
+
+    def _write_manifest(self, manifest: _Manifest) -> None:
+        write_bytes_atomic(self._manifest_path, manifest.to_bytes(), mode=0o600)
+
     @staticmethod
     def _load_private_key(path: Path) -> ec.EllipticCurvePrivateKey | None:
-        if path.is_symlink():
+        if path.is_symlink() or (path.exists() and not path.is_file()):
             return None
         try:
             raw = path.read_bytes()
@@ -187,8 +400,7 @@ class TLSCertificateStore:
         except (OSError, ValueError, TypeError):
             return None
         if not isinstance(key, ec.EllipticCurvePrivateKey) or not isinstance(
-            key.curve,
-            ec.SECP256R1,
+            key.curve, ec.SECP256R1
         ):
             return None
         if os.name != "nt":
@@ -197,62 +409,86 @@ class TLSCertificateStore:
 
     @staticmethod
     def _load_certificate(path: Path) -> x509.Certificate | None:
-        if path.is_symlink():
+        if path.is_symlink() or (path.exists() and not path.is_file()):
             return None
         try:
             return x509.load_pem_x509_certificate(path.read_bytes())
         except (OSError, ValueError):
             return None
 
-    def _is_authority_usable(
+    def _is_root_usable(
         self,
         certificate: x509.Certificate,
         private_key: ec.EllipticCurvePrivateKey,
-        address: IPv4Address,
+        installation_id: str,
+        now: datetime,
+    ) -> bool:
+        if certificate.not_valid_before_utc > now or certificate.not_valid_after_utc <= now:
+            return False
+        try:
+            basic = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+            usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+        except x509.ExtensionNotFound:
+            return False
+        if basic != x509.BasicConstraints(ca=True, path_length=1):
+            return False
+        if not usage.key_cert_sign or usage.crl_sign or usage.digital_signature:
+            return False
+        subject = _root_subject(installation_id)
+        if certificate.subject != subject or certificate.issuer != subject:
+            return False
+        public_key = certificate.public_key()
+        return (
+            isinstance(public_key, ec.EllipticCurvePublicKey)
+            and _public_key_bytes(public_key) == _public_key_bytes(private_key.public_key())
+            and _signature_is_valid(certificate, public_key)
+        )
+
+    def _is_issuer_usable(
+        self,
+        certificate: x509.Certificate,
+        private_key: ec.EllipticCurvePrivateKey,
+        root_certificate: x509.Certificate,
+        installation_id: str,
         now: datetime,
     ) -> bool:
         if certificate.not_valid_before_utc > now:
             return False
-        authority_renewal_window = max(
-            self._authority_renew_before,
-            self._validity + _CLOCK_SKEW_TOLERANCE,
-        )
-        if certificate.not_valid_after_utc - now <= authority_renewal_window:
+        if certificate.not_valid_after_utc - now <= self._issuer_renew_before:
             return False
         try:
-            basic_constraints = certificate.extensions.get_extension_for_class(
-                x509.BasicConstraints
-            ).value
-            key_usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
-            name_constraints = certificate.extensions.get_extension_for_class(
-                x509.NameConstraints
-            ).value
+            basic = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+            usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+            constraints = certificate.extensions.get_extension_for_class(x509.NameConstraints).value
+            eku = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
         except x509.ExtensionNotFound:
             return False
-        expected_scope = IPv4Network(f"{address}/32")
-        if basic_constraints != x509.BasicConstraints(ca=True, path_length=0):
+        if basic != x509.BasicConstraints(ca=True, path_length=0):
             return False
-        if not key_usage.key_cert_sign or not key_usage.crl_sign or key_usage.digital_signature:
+        if not usage.key_cert_sign or usage.crl_sign or usage.digital_signature:
             return False
-        if name_constraints.permitted_subtrees != [x509.IPAddress(expected_scope)]:
+        if constraints != _name_constraints(installation_id):
             return False
-        if name_constraints.excluded_subtrees is not None:
+        if eku != x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]):
             return False
-        subject = _authority_subject(address)
-        if certificate.subject != subject or certificate.issuer != subject:
+        if certificate.subject != _issuer_subject(installation_id):
             return False
-        certificate_public_key = certificate.public_key()
-        if not isinstance(certificate_public_key, ec.EllipticCurvePublicKey):
+        if certificate.issuer != root_certificate.subject:
             return False
-        if _public_key_bytes(certificate_public_key) != _public_key_bytes(private_key.public_key()):
-            return False
-        return _signature_is_valid(certificate, certificate_public_key)
+        public_key = certificate.public_key()
+        root_public_key = root_certificate.public_key()
+        return (
+            isinstance(public_key, ec.EllipticCurvePublicKey)
+            and isinstance(root_public_key, ec.EllipticCurvePublicKey)
+            and _public_key_bytes(public_key) == _public_key_bytes(private_key.public_key())
+            and _signature_is_valid(certificate, root_public_key)
+        )
 
-    def _is_usable(
+    def _is_leaf_usable(
         self,
         certificate: x509.Certificate,
         private_key: ec.EllipticCurvePrivateKey,
-        authority_certificate: x509.Certificate,
+        issuer_certificate: x509.Certificate,
         address: IPv4Address,
         now: datetime,
     ) -> bool:
@@ -261,47 +497,46 @@ class TLSCertificateStore:
         if certificate.not_valid_after_utc - now <= self._renew_before:
             return False
         try:
-            san = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-            addresses = san.get_values_for_type(x509.IPAddress)
-            basic_constraints = certificate.extensions.get_extension_for_class(
-                x509.BasicConstraints
-            ).value
-            extended_key_usage = certificate.extensions.get_extension_for_class(
-                x509.ExtendedKeyUsage
-            ).value
-            key_usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+            san_extension = certificate.extensions.get_extension_for_class(
+                x509.SubjectAlternativeName
+            )
+            basic = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+            usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+            eku = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
         except x509.ExtensionNotFound:
             return False
-        if addresses != [address]:
+        if san_extension.critical:
             return False
-        if basic_constraints.ca or ExtendedKeyUsageOID.SERVER_AUTH not in extended_key_usage:
+        if san_extension.value.get_values_for_type(x509.IPAddress) != [address]:
             return False
-        if not key_usage.digital_signature or key_usage.key_cert_sign or key_usage.crl_sign:
+        if len(san_extension.value) != 1:
             return False
-        if certificate.subject != _certificate_subject():
+        if certificate.subject != _leaf_subject():
             return False
-        if certificate.issuer != authority_certificate.subject:
+        if basic != x509.BasicConstraints(ca=False, path_length=None):
             return False
+        if not usage.digital_signature or usage.key_cert_sign or usage.crl_sign:
+            return False
+        if eku != x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]):
+            return False
+        if certificate.issuer != issuer_certificate.subject:
+            return False
+        public_key = certificate.public_key()
+        issuer_public_key = issuer_certificate.public_key()
+        return (
+            isinstance(public_key, ec.EllipticCurvePublicKey)
+            and isinstance(issuer_public_key, ec.EllipticCurvePublicKey)
+            and _public_key_bytes(public_key) == _public_key_bytes(private_key.public_key())
+            and _signature_is_valid(certificate, issuer_public_key)
+        )
 
-        certificate_public_key = certificate.public_key()
-        if not isinstance(certificate_public_key, ec.EllipticCurvePublicKey):
-            return False
-        if _public_key_bytes(certificate_public_key) != _public_key_bytes(private_key.public_key()):
-            return False
-        authority_public_key = authority_certificate.public_key()
-        if not isinstance(authority_public_key, ec.EllipticCurvePublicKey):
-            return False
-        if not _signature_is_valid(certificate, authority_public_key):
-            return False
-        return True
-
-    def _issue_authority(
+    def _issue_root(
         self,
         private_key: ec.EllipticCurvePrivateKey,
-        address: IPv4Address,
+        installation_id: str,
         now: datetime,
     ) -> x509.Certificate:
-        subject = _authority_subject(address)
+        subject = _root_subject(installation_id)
         return (
             x509.CertificateBuilder()
             .subject_name(subject)
@@ -309,53 +544,69 @@ class TLSCertificateStore:
             .public_key(private_key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - _CLOCK_SKEW_TOLERANCE)
-            .not_valid_after(now + self._authority_validity)
-            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-            .add_extension(
-                x509.NameConstraints(
-                    permitted_subtrees=[x509.IPAddress(IPv4Network(f"{address}/32"))],
-                    excluded_subtrees=None,
-                ),
-                critical=True,
-            )
-            .add_extension(
-                x509.KeyUsage(
-                    digital_signature=False,
-                    content_commitment=False,
-                    key_encipherment=False,
-                    data_encipherment=False,
-                    key_agreement=False,
-                    key_cert_sign=True,
-                    crl_sign=True,
-                    encipher_only=False,
-                    decipher_only=False,
-                ),
-                critical=True,
-            )
+            .not_valid_after(now + self._root_validity)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=1), critical=True)
+            .add_extension(_ca_key_usage(), critical=True)
             .add_extension(
                 x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+                critical=False,
+            )
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(private_key.public_key()),
                 critical=False,
             )
             .sign(private_key, hashes.SHA256())
         )
 
-    def _issue(
+    def _issue_issuer(
         self,
         private_key: ec.EllipticCurvePrivateKey,
-        authority_private_key: ec.EllipticCurvePrivateKey,
-        authority_certificate: x509.Certificate,
-        address: IPv4Address,
+        root_key: ec.EllipticCurvePrivateKey,
+        root_certificate: x509.Certificate,
+        installation_id: str,
         now: datetime,
     ) -> x509.Certificate:
-        subject = _certificate_subject()
+        not_valid_after = min(now + self._issuer_validity, root_certificate.not_valid_after_utc)
         return (
             x509.CertificateBuilder()
-            .subject_name(subject)
-            .issuer_name(authority_certificate.subject)
+            .subject_name(_issuer_subject(installation_id))
+            .issuer_name(root_certificate.subject)
             .public_key(private_key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - _CLOCK_SKEW_TOLERANCE)
-            .not_valid_after(now + self._validity)
+            .not_valid_after(not_valid_after)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(_name_constraints(installation_id), critical=True)
+            .add_extension(_ca_key_usage(), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+                critical=False,
+            )
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(root_key.public_key()),
+                critical=False,
+            )
+            .sign(root_key, hashes.SHA256())
+        )
+
+    def _issue_leaf(
+        self,
+        private_key: ec.EllipticCurvePrivateKey,
+        issuer_key: ec.EllipticCurvePrivateKey,
+        issuer_certificate: x509.Certificate,
+        address: IPv4Address,
+        now: datetime,
+    ) -> x509.Certificate:
+        not_valid_after = min(now + self._validity, issuer_certificate.not_valid_after_utc)
+        return (
+            x509.CertificateBuilder()
+            .subject_name(_leaf_subject())
+            .issuer_name(issuer_certificate.subject)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - _CLOCK_SKEW_TOLERANCE)
+            .not_valid_after(not_valid_after)
             .add_extension(x509.SubjectAlternativeName([x509.IPAddress(address)]), critical=False)
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
             .add_extension(
@@ -372,42 +623,57 @@ class TLSCertificateStore:
                 ),
                 critical=True,
             )
-            .add_extension(
-                x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]),
-                critical=False,
-            )
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
             .add_extension(
                 x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
                 critical=False,
             )
             .add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                    authority_private_key.public_key()
-                ),
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()),
                 critical=False,
             )
-            .sign(authority_private_key, hashes.SHA256())
+            .sign(issuer_key, hashes.SHA256())
         )
 
     @staticmethod
-    def _write_private_key(
-        path: Path,
-        private_key: ec.EllipticCurvePrivateKey,
-    ) -> None:
-        raw = private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
+    def _write_private_key(path: Path, private_key: ec.EllipticCurvePrivateKey) -> None:
+        write_bytes_atomic(
+            path,
+            private_key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            ),
+            mode=0o600,
         )
-        _atomic_write(path, raw, mode=0o600)
 
     @staticmethod
     def _write_certificate(path: Path, certificate: x509.Certificate) -> None:
-        _atomic_write(
+        write_bytes_atomic(
             path,
             certificate.public_bytes(serialization.Encoding.PEM),
             mode=0o644,
         )
+
+    def _write_chain(self, leaf: x509.Certificate, issuer: x509.Certificate) -> None:
+        write_bytes_atomic(
+            self._chain_path,
+            leaf.public_bytes(serialization.Encoding.PEM)
+            + issuer.public_bytes(serialization.Encoding.PEM),
+            mode=0o644,
+        )
+
+    def _remove_legacy_files(self) -> None:
+        for path in (
+            self._legacy_authority_certificate_path,
+            self._legacy_authority_private_key_path,
+            self._legacy_leaf_certificate_path,
+            self._legacy_leaf_private_key_path,
+        ):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -416,14 +682,42 @@ class TLSCertificateStore:
         return now.astimezone(UTC)
 
 
-def _public_key_bytes(key: ec.EllipticCurvePublicKey) -> bytes:
-    return key.public_bytes(
-        serialization.Encoding.DER,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
+def verification_code(fingerprint: str) -> str:
+    compact = "".join(
+        character for character in fingerprint.upper() if character in "0123456789ABCDEF"
+    )
+    if len(compact) < 16:
+        return ""
+    return " · ".join(compact[index : index + 4] for index in range(0, 16, 4))
+
+
+def _installation_id(public_key: ec.EllipticCurvePublicKey) -> str:
+    digest = hashes.Hash(hashes.SHA256())
+    digest.update(_public_key_bytes(public_key))
+    return digest.finalize()[:16].hex()
+
+
+def _root_subject(installation_id: str) -> x509.Name:
+    return x509.Name(
+        [
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Solin"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Local Remote Control"),
+            x509.NameAttribute(NameOID.COMMON_NAME, f"Solin Remote Root {installation_id[:12]}"),
+        ]
     )
 
 
-def _certificate_subject() -> x509.Name:
+def _issuer_subject(installation_id: str) -> x509.Name:
+    return x509.Name(
+        [
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Solin"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Local Remote Control"),
+            x509.NameAttribute(NameOID.COMMON_NAME, f"Solin Remote Issuer {installation_id[:12]}"),
+        ]
+    )
+
+
+def _leaf_subject() -> x509.Name:
     return x509.Name(
         [
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Solin"),
@@ -432,15 +726,34 @@ def _certificate_subject() -> x509.Name:
     )
 
 
-def _authority_subject(address: IPv4Address) -> x509.Name:
-    return x509.Name(
-        [
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Solin"),
-            x509.NameAttribute(
-                NameOID.COMMON_NAME,
-                f"Solin Remote Control CA ({address})",
-            ),
-        ]
+def _name_constraints(installation_id: str) -> x509.NameConstraints:
+    return x509.NameConstraints(
+        permitted_subtrees=[
+            *(x509.IPAddress(network) for network in PRIVATE_LAN_NETWORKS),
+            x509.DNSName(f".{installation_id}.remote.solin.invalid"),
+        ],
+        excluded_subtrees=None,
+    )
+
+
+def _ca_key_usage() -> x509.KeyUsage:
+    return x509.KeyUsage(
+        digital_signature=False,
+        content_commitment=False,
+        key_encipherment=False,
+        data_encipherment=False,
+        key_agreement=False,
+        key_cert_sign=True,
+        crl_sign=False,
+        encipher_only=False,
+        decipher_only=False,
+    )
+
+
+def _public_key_bytes(key: ec.EllipticCurvePublicKey) -> bytes:
+    return key.public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
 
@@ -465,20 +778,3 @@ def _signature_is_valid(
 def _format_fingerprint(certificate: x509.Certificate) -> str:
     raw = certificate.fingerprint(hashes.SHA256()).hex().upper()
     return ":".join(raw[index : index + 2] for index in range(0, len(raw), 2))
-
-
-def _atomic_write(path: Path, payload: bytes, *, mode: int) -> None:
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary_path = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "wb") as file:
-            file.write(payload)
-            file.flush()
-            os.fsync(file.fileno())
-        os.chmod(temporary_path, mode)
-        os.replace(temporary_path, path)
-    finally:
-        try:
-            temporary_path.unlink(missing_ok=True)
-        except OSError:
-            pass  # Best effort only after the atomic replace/write path has already failed.

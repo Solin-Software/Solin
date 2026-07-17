@@ -22,6 +22,10 @@ from ...core.remote_control.security import (
 from ...core.remote_control.settings import REMOTE_CONTROL_PORT
 from ...styles.icons import ICON_SHIELD
 from ...ui.controls import NoScrollComboBox
+from ..remote_control_setup_dialog import (
+    RemoteControlSetupDialog,
+    RemoteControlSetupPresentation,
+)
 from .shared import (
     SETTINGS_ACCENT,
     SETTINGS_BORDER,
@@ -74,9 +78,30 @@ class RemoteControlSectionMixin:
         self._remote_interface_combo.currentIndexChanged.connect(self._on_remote_interface_selected)
         configuration_layout.addWidget(self._remote_interface_combo)
 
+        credentials_header = QHBoxLayout()
+        credentials_header.setSpacing(8)
         self._remote_credentials_label = QLabel(self.tr("Access credentials"))
         self._bind_theme_style(self._remote_credentials_label, self._remote_field_label_style)
-        configuration_layout.addWidget(self._remote_credentials_label)
+        credentials_header.addWidget(self._remote_credentials_label)
+        self._remote_credentials_summary = QLabel()
+        self._bind_theme_style(self._remote_credentials_summary, self._remote_hint_style)
+        credentials_header.addWidget(self._remote_credentials_summary, 1)
+        self._remote_change_credentials_btn = QPushButton()
+        self._remote_change_credentials_btn.setFixedHeight(26)
+        self._remote_change_credentials_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._bind_theme_style(
+            self._remote_change_credentials_btn,
+            settings_compact_secondary_button_stylesheet,
+        )
+        self._remote_change_credentials_btn.clicked.connect(self._toggle_remote_credentials_editor)
+        credentials_header.addWidget(self._remote_change_credentials_btn)
+        configuration_layout.addLayout(credentials_header)
+
+        self._remote_credentials_editor = QFrame(configuration)
+        self._remote_credentials_editor.setStyleSheet("background: transparent; border: none;")
+        credentials_editor_layout = QVBoxLayout(self._remote_credentials_editor)
+        credentials_editor_layout.setContentsMargins(0, 0, 0, 0)
+        credentials_editor_layout.setSpacing(8)
 
         credential_row = QHBoxLayout()
         credential_row.setSpacing(8)
@@ -100,8 +125,9 @@ class RemoteControlSectionMixin:
             self._remote_password_edit,
             self._remote_password_confirm_edit,
         ):
+            field.setMinimumHeight(34)
             self._bind_theme_style(field, self._remote_field_style)
-        configuration_layout.addLayout(credential_row)
+        credentials_editor_layout.addLayout(credential_row)
 
         credential_actions = QHBoxLayout()
         credential_actions.setSpacing(8)
@@ -120,7 +146,12 @@ class RemoteControlSectionMixin:
         )
         self._remote_save_credentials_btn.clicked.connect(self._save_remote_credentials)
         credential_actions.addWidget(self._remote_save_credentials_btn)
-        configuration_layout.addLayout(credential_actions)
+        credentials_editor_layout.addLayout(credential_actions)
+        configuration_layout.addWidget(self._remote_credentials_editor)
+        self._remote_credentials_editor.setHidden(
+            self._remote_control_credentials.has_credentials()
+        )
+        self._sync_remote_credentials_editor()
 
         self._remote_status_label = QLabel()
         self._remote_status_label.setWordWrap(True)
@@ -136,7 +167,7 @@ class RemoteControlSectionMixin:
         self._bind_theme_style(self._remote_endpoint_label, self._remote_endpoint_style)
         endpoint_row.addWidget(self._remote_endpoint_label, 1)
         self._remote_copy_url_btn = QPushButton(self.tr("Copy address"))
-        self._remote_copy_url_btn.setFixedHeight(28)
+        self._remote_copy_url_btn.setMinimumHeight(34)
         self._remote_copy_url_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._bind_theme_style(
             self._remote_copy_url_btn,
@@ -144,35 +175,17 @@ class RemoteControlSectionMixin:
         )
         self._remote_copy_url_btn.clicked.connect(self._copy_remote_url)
         endpoint_row.addWidget(self._remote_copy_url_btn)
-        configuration_layout.addLayout(endpoint_row)
-
-        self._remote_fingerprint_label = QLabel()
-        self._remote_fingerprint_label.setWordWrap(True)
-        self._remote_fingerprint_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self._bind_theme_style(self._remote_fingerprint_label, self._remote_hint_style)
-        configuration_layout.addWidget(self._remote_fingerprint_label)
-
-        sessions_row = QHBoxLayout()
-        self._remote_active_sessions = 0
-        self._remote_sessions_label = QLabel(self.tr("No connected controllers"))
-        self._bind_theme_style(self._remote_sessions_label, self._remote_hint_style)
-        sessions_row.addWidget(self._remote_sessions_label, 1)
-        self._remote_revoke_btn = QPushButton(self.tr("Disconnect all"))
-        self._remote_revoke_btn.setFixedHeight(28)
-        self._remote_revoke_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._remote_setup_btn = QPushButton(self.tr("Set up a device"))
+        self._remote_setup_btn.setMinimumHeight(34)
+        self._remote_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._bind_theme_style(
-            self._remote_revoke_btn,
-            lambda: settings_compact_secondary_button_stylesheet(
-                hover_text_color=str(SETTINGS_DANGER),
-                hover_border_color=str(SETTINGS_DANGER),
-                include_disabled=True,
-            ),
+            self._remote_setup_btn,
+            settings_picker_primary_button_stylesheet,
         )
-        self._remote_revoke_btn.clicked.connect(self.remote_control_revoke_requested.emit)
-        sessions_row.addWidget(self._remote_revoke_btn)
-        configuration_layout.addLayout(sessions_row)
+        self._remote_setup_btn.clicked.connect(self._open_remote_setup)
+        self._remote_setup_btn.setEnabled(False)
+        endpoint_row.addWidget(self._remote_setup_btn)
+        configuration_layout.addLayout(endpoint_row)
 
         layout.addWidget(configuration)
         self._refresh_remote_configuration_status()
@@ -216,6 +229,9 @@ class RemoteControlSectionMixin:
                 "error",
             )
             return
+        self._remote_setup_pending_auto_open = bool(
+            enabled and not self._remote_control_settings.onboarding_seen()
+        )
         self._remote_control_settings.set_enabled(enabled)
         self._refresh_remote_configuration_status()
         self.remote_control_settings_changed.emit()
@@ -241,8 +257,40 @@ class RemoteControlSectionMixin:
         self._remote_password_edit.clear()
         self._remote_password_confirm_edit.clear()
         self._remote_username_edit.setText(self._remote_control_credentials.configured_username())
+        self._remote_credentials_editor.hide()
+        self._sync_remote_credentials_editor()
         self._refresh_remote_configuration_status()
         self.remote_control_credentials_changed.emit()
+
+    def _toggle_remote_credentials_editor(self) -> None:
+        visible = self._remote_credentials_editor.isHidden()
+        self._remote_credentials_editor.setVisible(visible)
+        if not visible:
+            self._remote_username_edit.setText(
+                self._remote_control_credentials.configured_username()
+            )
+            self._remote_password_edit.clear()
+            self._remote_password_confirm_edit.clear()
+        elif self._remote_password_edit.isVisible():
+            self._remote_password_edit.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._sync_remote_credentials_editor()
+
+    def _sync_remote_credentials_editor(self) -> None:
+        configured = self._remote_control_credentials.has_credentials()
+        username = self._remote_control_credentials.configured_username()
+        self._remote_credentials_summary.setText(
+            self.tr("Configured as %1").replace("%1", username)
+            if configured
+            else self.tr("Not configured")
+        )
+        self._remote_change_credentials_btn.setVisible(configured)
+        self._remote_change_credentials_btn.setText(
+            self.tr("Cancel")
+            if not self._remote_credentials_editor.isHidden()
+            else self.tr("Change")
+        )
+        if not configured:
+            self._remote_credentials_editor.show()
 
     def _remote_configuration_is_valid(self) -> bool:
         selection_key = str(self._remote_interface_combo.currentData() or "")
@@ -274,30 +322,42 @@ class RemoteControlSectionMixin:
         running: bool,
         message: str,
         fingerprint: str = "",
-        active_sessions: int = 0,
+        access_url: str = "",
+        setup_url: str = "",
+        verification_code: str = "",
+        certificate_der: bytes = b"",
         status: str | None = None,
     ) -> None:
         self._set_remote_status(message, "running" if running else (status or "error"))
-        self._remote_fingerprint_label.setText(
-            self.tr("Certificate authority SHA-256: %1").replace("%1", fingerprint)
-            if fingerprint
-            else ""
+        presentation = RemoteControlSetupPresentation(
+            access_url=access_url,
+            setup_url=setup_url,
+            verification_code=verification_code,
+            fingerprint_sha256=fingerprint,
+            certificate_der=certificate_der,
         )
-        self._remote_active_sessions = active_sessions
-        self._update_remote_sessions_label()
-        self._remote_revoke_btn.setEnabled(active_sessions > 0)
+        self._remote_setup_presentation = presentation if presentation.ready else None
+        self._remote_setup_btn.setEnabled(running and presentation.ready)
+        if running and presentation.ready and self._remote_setup_pending_auto_open:
+            self._remote_setup_pending_auto_open = False
+            self._open_remote_setup()
 
-    def _update_remote_sessions_label(self) -> None:
-        if self._remote_active_sessions == 1:
-            message = self.tr("%1 connected controller")
-        elif self._remote_active_sessions > 1:
-            message = self.tr("%1 connected controllers")
-        else:
-            self._remote_sessions_label.setText(self.tr("No connected controllers"))
+    def _open_remote_setup(self) -> None:
+        presentation = self._remote_setup_presentation
+        if presentation is None or self._remote_setup_dialog is not None:
             return
-        self._remote_sessions_label.setText(
-            message.replace("%1", str(self._remote_active_sessions))
+        dialog = RemoteControlSetupDialog(
+            presentation,
+            self._qr_generation_session_factory,
+            self,
         )
+        self._remote_setup_dialog = dialog
+        dialog.destroyed.connect(lambda: setattr(self, "_remote_setup_dialog", None))
+        dialog.accepted.connect(self._complete_remote_setup)
+        dialog.show()
+
+    def _complete_remote_setup(self) -> None:
+        self._remote_control_settings.mark_onboarding_seen()
 
     def _set_remote_status(self, message: str, status: str) -> None:
         self._remote_status_label.setText(message)
@@ -364,8 +424,8 @@ class RemoteControlSectionMixin:
             self.tr("Use at least 12 characters. Credentials belong only to this profile.")
         )
         self._remote_save_credentials_btn.setText(self.tr("Save credentials"))
+        self._sync_remote_credentials_editor()
         self._remote_copy_url_btn.setText(self.tr("Copy address"))
-        self._remote_revoke_btn.setText(self.tr("Disconnect all"))
-        self._update_remote_sessions_label()
+        self._remote_setup_btn.setText(self.tr("Set up a device"))
         self._populate_remote_interfaces()
         self._refresh_remote_configuration_status()

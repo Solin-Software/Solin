@@ -4,10 +4,12 @@ import asyncio
 from io import BytesIO
 import json
 from pathlib import Path
+import time
 from types import SimpleNamespace
 from typing import Any
 import uuid
 from unittest.mock import patch
+from datetime import timedelta
 
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
@@ -33,6 +35,7 @@ from solin.core.remote_control.contracts import (
     ProjectionSource,
     RemoteMediaKind,
 )
+from solin.core.remote_control.certificates import TLSCertificateStore
 from solin.core.remote_control.state import ProjectionCommandSession
 from solin.core.remote_control.thumbnails import render_media_placeholder_thumbnail
 
@@ -652,6 +655,89 @@ def test_failed_server_stop_keeps_lifecycle_ownership(tmp_path: Path) -> None:
     assert controller._stop_server() is False
     assert controller._server is server
     assert controller._tls_identity is identity
+
+    controller._server = None
+    controller._tls_identity = None
+    controller.stop()
+
+
+def test_tls_renewal_reloads_live_context_without_revoking_sessions_or_stopping_server(
+    tmp_path: Path,
+) -> None:
+    store = TLSCertificateStore(tmp_path / "tls")
+    previous = store.load_or_create("192.168.1.20")
+    renewal_store = TLSCertificateStore(
+        tmp_path / "tls",
+        clock=lambda: previous.renew_at + timedelta(seconds=1),
+    )
+    renewed = renewal_store.load_or_create("192.168.1.20")
+    controller, *_ = _controller(tmp_path, [])
+
+    class _Server:
+        is_running = True
+        binding = SimpleNamespace(url="https://192.168.1.20:8765/remote/")
+
+        def __init__(self) -> None:
+            self.reloaded = []
+            self.stop_called = False
+
+        def reload_tls(self, identity) -> None:
+            self.reloaded.append(identity)
+
+        def stop(self) -> None:
+            self.stop_called = True
+
+    server = _Server()
+    controller._server = server
+    controller._tls_identity = previous
+    controller._tls_store = SimpleNamespace(
+        load_or_create=lambda _address: renewed,
+    )
+
+    controller._renew_tls()
+
+    assert server.reloaded == [renewed]
+    assert server.stop_called is False
+    assert controller._server is server
+    assert controller._tls_identity is renewed
+    assert controller._sessions.generation == 0
+
+    controller._server = None
+    controller._tls_identity = None
+    controller.stop()
+
+
+def test_failed_tls_hot_reload_keeps_running_identity_and_backs_off(tmp_path: Path) -> None:
+    store = TLSCertificateStore(tmp_path / "tls")
+    previous = store.load_or_create("192.168.1.20")
+    renewal_store = TLSCertificateStore(
+        tmp_path / "tls",
+        clock=lambda: previous.renew_at + timedelta(seconds=1),
+    )
+    renewed = renewal_store.load_or_create("192.168.1.20")
+    controller, *_ = _controller(tmp_path, [])
+
+    class _Server:
+        is_running = True
+        binding = SimpleNamespace(url="https://192.168.1.20:8765/remote/")
+
+        @staticmethod
+        def reload_tls(_identity) -> None:
+            raise RuntimeError("synthetic reload failure")
+
+    server = _Server()
+    controller._server = server
+    controller._tls_identity = previous
+    controller._tls_store = SimpleNamespace(
+        load_or_create=lambda _address: renewed,
+    )
+
+    before = time.monotonic()
+    controller._renew_tls()
+
+    assert controller._server is server
+    assert controller._tls_identity is previous
+    assert controller._next_tls_renewal_attempt_at >= before + 299
 
     controller._server = None
     controller._tls_identity = None

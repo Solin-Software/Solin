@@ -4,11 +4,18 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QScrollArea,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QFrame,
+    QScrollArea,
 )
 from PySide6.QtCore import (
-    Qt, Signal, QEvent, QObject,
+    Qt,
+    Signal,
+    QEvent,
+    QObject,
 )
 
 from ..core.i18n.manager import LanguageManager
@@ -51,7 +58,7 @@ import sys
 
 if TYPE_CHECKING:
     from ..core.jw.yeartext import YeartextService
-
+    from ..ui.qr_generation import QrGenerationSessionFactory
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -74,10 +81,10 @@ class SettingsWidget(
     SettingsLayoutMixin,
     QWidget,
 ):
-    language_changed       = Signal(str)
-    yearly_text_changed    = Signal(str, str, str)
+    language_changed = Signal(str)
+    yearly_text_changed = Signal(str, str, str)
     watched_folder_changed = Signal(str)
-    zoom_enabled_toggled   = Signal(bool)
+    zoom_enabled_toggled = Signal(bool)
     zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
     camera_enabled_toggled = Signal(bool)
@@ -87,33 +94,38 @@ class SettingsWidget(
     theme_changed = Signal(str)
     remote_control_settings_changed = Signal()
     remote_control_credentials_changed = Signal()
-    remote_control_revoke_requested = Signal()
 
-    def __init__(self, lang_manager: LanguageManager, screen_manager: ScreenManager,
-                 obs_service: OBSWebSocketService | None = None,
-                 ndi_service: NDIReceiverService | None = None, *,
-                 app_settings: ProfileAppSettingsStore,
-                 obs_settings: OBSSettingsStore,
-                 zoom_settings: ZoomSettingsStore,
-                 auto_share_settings: AutoShareSettingsStore,
-                 camera_settings: CameraSettingsStore,
-                 auto_key_settings: AutoKeySettingsStore,
-                 media_settings: MediaSettingsStore,
-                 playback_protection,
-                 meeting_schedule_settings: MeetingScheduleSettingsStore,
-                 watched_folder_settings: WatchedFolderSettingsStore,
-                 yeartext_settings: YeartextSettingsStore,
-                 background_song_settings: BackgroundSongSettingsStore,
-                 remote_control_settings: RemoteControlSettingsStore,
-                 remote_control_credentials: RemoteControlCredentialsStore,
-                 yeartext_service_factory: Callable[[QObject], YeartextService],
-                 auto_share_accessibility_trusted: Callable[[], bool],
-                 parent=None):
+    def __init__(
+        self,
+        lang_manager: LanguageManager,
+        screen_manager: ScreenManager,
+        obs_service: OBSWebSocketService | None = None,
+        ndi_service: NDIReceiverService | None = None,
+        *,
+        app_settings: ProfileAppSettingsStore,
+        obs_settings: OBSSettingsStore,
+        zoom_settings: ZoomSettingsStore,
+        auto_share_settings: AutoShareSettingsStore,
+        camera_settings: CameraSettingsStore,
+        auto_key_settings: AutoKeySettingsStore,
+        media_settings: MediaSettingsStore,
+        playback_protection,
+        meeting_schedule_settings: MeetingScheduleSettingsStore,
+        watched_folder_settings: WatchedFolderSettingsStore,
+        yeartext_settings: YeartextSettingsStore,
+        background_song_settings: BackgroundSongSettingsStore,
+        remote_control_settings: RemoteControlSettingsStore,
+        remote_control_credentials: RemoteControlCredentialsStore,
+        qr_generation_session_factory: QrGenerationSessionFactory,
+        yeartext_service_factory: Callable[[QObject], YeartextService],
+        auto_share_accessibility_trusted: Callable[[], bool],
+        parent=None,
+    ):
         super().__init__(parent)
-        self.lang       = lang_manager
+        self.lang = lang_manager
         self.screen_mgr = screen_manager
-        self._obs       = obs_service
-        self._ndi       = ndi_service
+        self._obs = obs_service
+        self._ndi = ndi_service
         self._app_settings = app_settings
         self._yeartext_service_factory = yeartext_service_factory
         self._obs_settings = obs_settings
@@ -129,6 +141,10 @@ class SettingsWidget(
         self._background_song_settings = background_song_settings
         self._remote_control_settings = remote_control_settings
         self._remote_control_credentials = remote_control_credentials
+        self._qr_generation_session_factory = qr_generation_session_factory
+        self._remote_setup_pending_auto_open = False
+        self._remote_setup_presentation = None
+        self._remote_setup_dialog = None
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._theme_persistent_connections: set[str] = set()
         self._init_yearly_text_section()
@@ -350,9 +366,7 @@ class SettingsWidget(
         self._refresh_lang_row()
         self._refresh_media_lang_row()
         self._auto_dl_label.setText(self.tr("Auto-download on play"))
-        self._auto_dl_desc.setText(
-            self.tr("Downloads the playing media for offline use.")
-        )
+        self._auto_dl_desc.setText(self.tr("Downloads the playing media for offline use."))
         self._meetings_dl_label.setText(self.tr("Auto-download weekly study"))
         self._meetings_dl_desc.setText(
             self.tr("Downloads this week\u2019s and next week\u2019s meeting media.")
@@ -382,23 +396,18 @@ class SettingsWidget(
         self._retranslate_remote_control()
         self._watched_folder_pick_btn.setText(self.tr("Choose\u2026"))
         self._obs_header_lbl.setText(self.tr("OBS Studio"))
-        self._obs_header_desc.setText(
-            self.tr("Automatically switches scenes during projection")
-        )
+        self._obs_header_desc.setText(self.tr("Automatically switches scenes during projection"))
         self._obs_port_lbl.setText(self.tr("WebSocket Port"))
         self._obs_pwd_lbl.setText(self.tr("Password (optional)"))
-        self._obs_pwd_edit.setPlaceholderText(
-            self.tr("Leave blank if no password is set")
-        )
+        self._obs_pwd_edit.setPlaceholderText(self.tr("Leave blank if no password is set"))
         self._obs_default_lbl.setText(self.tr("Default scene (idle)"))
-        self._obs_default_hint.setText(
-            self.tr("Scene shown when nothing is being projected.")
-        )
+        self._obs_default_hint.setText(self.tr("Scene shown when nothing is being projected."))
         self._obs_media_lbl.setText(self.tr("Media window scene"))
-        self._obs_media_hint.setText(self.tr(
-            "Scene that captures the projection monitor. "
-            "Activated when content is displayed."
-        ))
+        self._obs_media_hint.setText(
+            self.tr(
+                "Scene that captures the projection monitor. Activated when content is displayed."
+            )
+        )
         self._obs_stream_title_lbl.setText(self.tr("Program stream (NDI)"))
         self._obs_stream_desc_lbl.setText(
             self.tr("Receive the DistroAV/NDI output from OBS as a live projection.")
@@ -411,9 +420,7 @@ class SettingsWidget(
         if self._obs:
             self._sync_obs_ui_state(self._obs.state, "")
         self._camera_label.setText(self.tr("Camera"))
-        self._camera_desc.setText(
-            self.tr("Shows a camera button in the live tools toolbar.")
-        )
+        self._camera_desc.setText(self.tr("Shows a camera button in the live tools toolbar."))
         self._auto_keys_header_lbl.setText(self.tr("Automatic Shortcuts"))
         self._auto_keys_header_desc.setText(
             self.tr("Sends keyboard shortcuts when visual media changes state.")
@@ -429,12 +436,18 @@ class SettingsWidget(
         if sys.platform == "win32":
             if hasattr(self, "_zoom_enabled_label"):
                 self._zoom_enabled_label.setText(self.tr("Zoom Meetings"))
-                self._zoom_enabled_desc.setText(self.tr("Audio controls and attendance count during meetings."))
+                self._zoom_enabled_desc.setText(
+                    self.tr("Audio controls and attendance count during meetings.")
+                )
         if hasattr(self, "_autoshare_label"):
             self._autoshare_label.setText(self.tr("Auto Screen Share"))
-            self._autoshare_desc.setText(self.tr("Automatically shares screen via hotkeys when projecting media."))
+            self._autoshare_desc.setText(
+                self.tr("Automatically shares screen via hotkeys when projecting media.")
+            )
             self._autoshare_hotkey_lbl.setText(self.tr("Share hotkey"))
-            self._autoshare_hotkey_hint.setText(self.tr("Uses Zoom's single start/stop screen-share shortcut."))
+            self._autoshare_hotkey_hint.setText(
+                self.tr("Uses Zoom's single start/stop screen-share shortcut.")
+            )
             self._autoshare_hotkey_btn.setToolTip(self.tr("Edit"))
             self._autoshare_pos_title.setText(self.tr("Share target"))
             self._autoshare_pos_desc.setText(
@@ -447,9 +460,7 @@ class SettingsWidget(
             self._refresh_autoshare_hotkey_label()
             self._refresh_autoshare_position_label()
             self._refresh_autoshare_accessibility_status()
-        self._yearly_hint_lbl.setText(
-            self.tr("Text shown on the projection screen when idle.")
-        )
+        self._yearly_hint_lbl.setText(self.tr("Text shown on the projection screen when idle."))
         self._yt_refresh_btn.setText(self.tr("Update"))
         self._update_manual_toggle_label()
         self._yearly_quote_lbl.setText(self.tr("Scripture:"))
@@ -459,15 +470,14 @@ class SettingsWidget(
         self._yearly_ref_lbl.setText(self.tr("Bible reference:"))
         self._yearly_ref_edit.setPlaceholderText(self.tr("E.g.: Matthew 5:3."))
         self._yearly_save_btn.setText(self.tr("Save changes"))
-        self._about_desc_lbl.setText(
-            self.tr("Audio & Video app for Kingdom Hall meetings.")
+        self._about_desc_lbl.setText(self.tr("Audio & Video app for Kingdom Hall meetings."))
+        self._disclaimer_lbl.setText(
+            self.tr(
+                "This app is independent and is not affiliated with or endorsed by "
+                "the Watch Tower Bible and Tract Society of Pennsylvania or any of "
+                "its associated organizations."
+            )
         )
-        self._disclaimer_lbl.setText(self.tr(
-            "This app is independent and is not affiliated with or endorsed by "
-            "the Watch Tower Bible and Tract Society of Pennsylvania or any of "
-            "its associated organizations."
-        ))
         self._link_site_btn.setText(self.tr("Official Website"))
         self._link_changelog_btn.setText(self.tr("Changelog"))
         self._refresh_screens()
-

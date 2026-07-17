@@ -16,6 +16,7 @@ Sinais públicos:
   request_add_to_destination(path, title)
   request_add_all_to_destination(items: list[received_media_entry])
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -25,8 +26,15 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, Signal, Slot, QObject, QTimer, QSize, QEvent
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QStackedWidget, QApplication, QScrollArea,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QStackedWidget,
+    QApplication,
+    QScrollArea,
     QGridLayout,
 )
 
@@ -49,7 +57,7 @@ from ..styles.theme import PALETTE, palette_token, qss_rgba
 from ..ui.media_info import MediaInfoService
 
 if TYPE_CHECKING:
-    from ..core.ingest.qr_generation import QrGenerationSessionFactory
+    from ..ui.qr_generation import QrGenerationSessionFactory
     from ..core.ingest.wifi_server import WifiReceiveServer
     from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ..core.media.profile_store import ProfileMediaStore
@@ -78,8 +86,8 @@ _ERR_BORDER = palette_token("danger_border")
 _ERR_HOVER = palette_token("danger_surface_hover")
 _WHITE = palette_token("white")
 
-_CARD_W  = 148
-_CARD_H  = 168
+_CARD_W = 148
+_CARD_H = 168
 _THUMB_H = 96
 _QR_SIZE = 160
 
@@ -92,40 +100,40 @@ _I_WIFI = (
     '<path d="M1.42 9a16 16 0 0 1 21.16 0"/>'
     '<path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>'
     '<line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3" stroke-linecap="round"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_COPY = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<rect x="9" y="9" width="13" height="13" rx="2"/>'
     '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_STOP = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<rect x="3" y="3" width="18" height="18" rx="2"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_CHECK = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>'
     '<polyline points="22 4 12 14.01 9 11.01"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_PLAY = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<circle cx="12" cy="12" r="10"/>'
     '<polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_PLUS = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_LIST = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -135,21 +143,21 @@ _I_LIST = (
     '<line x1="3" y1="6" x2="3.01" y2="6" stroke-width="3"/>'
     '<line x1="3" y1="12" x2="3.01" y2="12" stroke-width="3"/>'
     '<line x1="3" y1="18" x2="3.01" y2="18" stroke-width="3"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_VIDEO = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<rect x="2" y="3" width="20" height="14" rx="2"/>'
     '<polygon points="8,7 16,10 8,13" fill="currentColor" stroke="none"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_AUDIO = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
     '<path d="M9 18V5l12-2v13"/>'
     '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_IMAGE = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -157,7 +165,7 @@ _I_IMAGE = (
     '<rect x="3" y="3" width="18" height="18" rx="2"/>'
     '<circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>'
     '<polyline points="21,15 16,10 5,21"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_PDF = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -167,7 +175,7 @@ _I_PDF = (
     '<line x1="16" y1="13" x2="8" y2="13"/>'
     '<line x1="16" y1="17" x2="8" y2="17"/>'
     '<polyline points="10 9 9 9 8 9"/>'
-    '</svg>'
+    "</svg>"
 )
 _I_PLAYLIST = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -176,7 +184,7 @@ _I_PLAYLIST = (
     '<polyline points="14 2 14 8 20 8"/>'
     '<line x1="12" y1="18" x2="12" y2="12"/>'
     '<line x1="9" y1="15" x2="15" y2="15"/>'
-    '</svg>'
+    "</svg>"
 )
 
 
@@ -185,27 +193,37 @@ def _file_media_type(path: str) -> str:
     media_kind = media_kind_from_path(path)
     if media_kind is not MediaKind.UNKNOWN:
         return media_kind.value
-    if ext in PDF_EXTS:   return "pdf"
-    if ext in PLAYLIST_EXTS:   return "playlist"
+    if ext in PDF_EXTS:
+        return "pdf"
+    if ext in PLAYLIST_EXTS:
+        return "playlist"
     return "image"
 
 
 def _type_meta(path: str) -> tuple[str, str]:
     """Returns (icon_svg, accent_color) based on file type."""
     t = _file_media_type(path)
-    if t == "video":    return _I_VIDEO,    PALETTE.accent_text
-    if t == "audio":    return _I_AUDIO,    PALETTE.accent_alt
-    if t == "pdf":      return _I_PDF,      PALETTE.warning_text
-    if t == "playlist": return _I_PLAYLIST, PALETTE.success
+    if t == "video":
+        return _I_VIDEO, PALETTE.accent_text
+    if t == "audio":
+        return _I_AUDIO, PALETTE.accent_alt
+    if t == "pdf":
+        return _I_PDF, PALETTE.warning_text
+    if t == "playlist":
+        return _I_PLAYLIST, PALETTE.success
     return _I_IMAGE, PALETTE.success
 
 
 def _rounded_pixmap(src: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
     """Scale + crop to w×h with rounded corners."""
-    scaled = src.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                        Qt.TransformationMode.SmoothTransformation)
+    scaled = src.scaled(
+        w,
+        h,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
     # Center-crop
-    x = (scaled.width()  - w) // 2
+    x = (scaled.width() - w) // 2
     y = (scaled.height() - h) // 2
     cropped = scaled.copy(x, y, w, h)
     # Apply rounded mask
@@ -223,8 +241,10 @@ def _rounded_pixmap(src: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
 
 # ── Clickable frame (URL field) ───────────────────────────────────────────────
 
+
 class _ClickableFrame(QFrame):
     """QFrame que emite clicked() ao ser clicado em qualquer ponto."""
+
     clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -249,18 +269,19 @@ def _is_playable(path: str) -> bool:
 
 # ── Thumbnail clicável com overlay de play ────────────────────────────────────
 
+
 class _ThumbArea(QWidget):
     """
     Área de thumbnail que exibe um overlay de play ao hover (para mídia playável).
     Emite clicked() quando pressionado com o botão esquerdo.
     """
+
     clicked = Signal()
 
     _OVERLAY_SIZE = 34
-    _OVERLAY_BG   = qss_rgba(PALETTE.black, 0.71)
+    _OVERLAY_BG = qss_rgba(PALETTE.black, 0.71)
 
-    def __init__(self, w: int, h: int, playable: bool,
-                 parent: QWidget | None = None) -> None:
+    def __init__(self, w: int, h: int, playable: bool, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedSize(w, h)
         self._playable = playable
@@ -280,9 +301,7 @@ class _ThumbArea(QWidget):
             self._overlay.move((w - oz) // 2, (h - oz) // 2)
             self._overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            self._overlay.setStyleSheet(
-                f"background:{self._OVERLAY_BG};border-radius:{oz // 2}px;"
-            )
+            self._overlay.setStyleSheet(f"background:{self._OVERLAY_BG};border-radius:{oz // 2}px;")
             self._overlay.setPixmap(make_icon(_I_PLAY, 18, _WHITE).pixmap(18, 18))
             self._overlay.hide()
         else:
@@ -315,16 +334,24 @@ class _ThumbArea(QWidget):
 
 # ── Media card ────────────────────────────────────────────────────────────────
 
+
 class _MediaCard(QFrame):
     """Card individual com thumbnail, nome, botão de playlist e play ao clicar."""
-    add_to_destination = Signal(str, str, str)   # path, title, orig_name
-    play_requested  = Signal(str, str)         # path, title
 
-    def __init__(self, path: str, title: str, lang: LanguageManager,
-                 parent: QWidget | None = None, orig_name: str = "") -> None:
+    add_to_destination = Signal(str, str, str)  # path, title, orig_name
+    play_requested = Signal(str, str)  # path, title
+
+    def __init__(
+        self,
+        path: str,
+        title: str,
+        lang: LanguageManager,
+        parent: QWidget | None = None,
+        orig_name: str = "",
+    ) -> None:
         super().__init__(parent)
-        self._path      = path
-        self._title     = title
+        self._path = path
+        self._title = title
         self._orig_name = orig_name or Path(path).name
         self._has_custom_thumbnail = False
         self._type_badge: QLabel | None = None
@@ -341,7 +368,7 @@ class _MediaCard(QFrame):
         # ── Área de thumbnail (clicável para playable, inerte para outros) ─
         playable = _is_playable(path)
         self._thumb_area = _ThumbArea(_CARD_W, _THUMB_H, playable=playable, parent=self)
-        self._thumb_lbl  = self._thumb_area.label
+        self._thumb_lbl = self._thumb_area.label
         self._thumb_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._set_placeholder()
         if playable:
@@ -375,8 +402,7 @@ class _MediaCard(QFrame):
         self._name_lbl = QLabel(short)
         self._name_lbl.setToolTip(title)
         self._name_lbl.setStyleSheet(
-            f"background:transparent;color:{_TEXT2};font-size:10px;"
-            "font-weight:500;border:none;"
+            f"background:transparent;color:{_TEXT2};font-size:10px;font-weight:500;border:none;"
         )
         self._name_lbl.setWordWrap(False)
         name = self._name_lbl
@@ -394,11 +420,13 @@ class _MediaCard(QFrame):
             "border-radius:5px;}"
             f"QPushButton:hover{{background:{PALETTE.accent_muted};border-color:{_ACCENT};}}"
         )
-        pl_btn.clicked.connect(lambda: self.add_to_destination.emit(
-            self._path,
-            self._title,
-            self._orig_name,
-        ))
+        pl_btn.clicked.connect(
+            lambda: self.add_to_destination.emit(
+                self._path,
+                self._title,
+                self._orig_name,
+            )
+        )
 
         bot.addWidget(name, stretch=1)
         bot.addWidget(pl_btn)
@@ -472,8 +500,7 @@ class _MediaCard(QFrame):
             self._style_type_badge(badge_color)
             self._type_badge.adjustSize()
         self._name_lbl.setStyleSheet(
-            f"background:transparent;color:{_TEXT2};font-size:10px;"
-            "font-weight:500;border:none;"
+            f"background:transparent;color:{_TEXT2};font-size:10px;font-weight:500;border:none;"
         )
         if self._playlist_btn is not None:
             self._playlist_btn.setIcon(make_icon(_I_PLUS, 11, _MUTED))
@@ -487,9 +514,13 @@ class _MediaCard(QFrame):
 
 def _rounded_pixmap_top(src: QPixmap, w: int, h: int, radius: int = 12) -> QPixmap:
     """Scale + crop to w×h com arredondamento só nos cantos superiores."""
-    scaled = src.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                        Qt.TransformationMode.SmoothTransformation)
-    x = (scaled.width()  - w) // 2
+    scaled = src.scaled(
+        w,
+        h,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = (scaled.width() - w) // 2
     y = (scaled.height() - h) // 2
     cropped = scaled.copy(x, y, w, h)
     result = QPixmap(w, h)
@@ -514,11 +545,12 @@ def _rounded_pixmap_top(src: QPixmap, w: int, h: int, radius: int = 12) -> QPixm
 
 # ── Widget principal ──────────────────────────────────────────────────────────
 
+
 class WifiReceiveWidget(QWidget):
-    media_received              = Signal(str, str)
+    media_received = Signal(str, str)
     request_add_to_destination = Signal(str, str, str)
     request_add_all_to_destination = Signal(list)
-    request_play                = Signal(str, str)         # path, title
+    request_play = Signal(str, str)  # path, title
 
     def __init__(
         self,
@@ -534,8 +566,8 @@ class WifiReceiveWidget(QWidget):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._lang            = lang
-        self._notifications   = notifications
+        self._lang = lang
+        self._notifications = notifications
         self._document_conversion_service = document_conversion_service
         self._profile_media_store = profile_media_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
@@ -543,11 +575,11 @@ class WifiReceiveWidget(QWidget):
             parent=self,
         )
         self._server = wifi_receive_server_factory(self)
-        self._session_url     = ""
+        self._session_url = ""
         self._received_files: list[dict] = []
-        self._cards:          list[_MediaCard] = []
+        self._cards: list[_MediaCard] = []
         self._thumb_service = media_info_service_factory(self)
-        self._wifi_tmp_files: set[str] = set()   # temp files criados por PDF/JWL expansion
+        self._wifi_tmp_files: set[str] = set()  # temp files criados por PDF/JWL expansion
 
         self._server.server_started.connect(self._on_server_started)
         self._server.server_stopped.connect(self._on_server_stopped)
@@ -574,8 +606,8 @@ class WifiReceiveWidget(QWidget):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background:{_BG};")
         self._stack.addWidget(self._make_starting_page())  # 0
-        self._stack.addWidget(self._make_active_page())    # 1
-        self._stack.addWidget(self._make_idle_page())      # 2
+        self._stack.addWidget(self._make_active_page())  # 1
+        self._stack.addWidget(self._make_idle_page())  # 2
         self._stack.setCurrentIndex(2)
         root.addWidget(self._stack, stretch=1)
 
@@ -584,12 +616,11 @@ class WifiReceiveWidget(QWidget):
     def _make_header(self) -> QFrame:
         hdr = QFrame()
         self._header_frame = hdr
-        hdr.setStyleSheet(
-            f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
-        )
+        hdr.setStyleSheet(f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}")
         hdr.setFixedHeight(54)
         lay = QHBoxLayout(hdr)
-        lay.setContentsMargins(20, 0, 20, 0); lay.setSpacing(10)
+        lay.setContentsMargins(20, 0, 20, 0)
+        lay.setSpacing(10)
 
         ico = QLabel()
         self._header_icon_lbl = ico
@@ -609,13 +640,14 @@ class WifiReceiveWidget(QWidget):
     # ── Página 0: iniciando ────────────────────────────────────────────────
 
     def _make_starting_page(self) -> QWidget:
-        w = QWidget(); self._starting_page = w; w.setStyleSheet(f"background:{_BG};")
-        lay = QVBoxLayout(w); lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        w = QWidget()
+        self._starting_page = w
+        w.setStyleSheet(f"background:{_BG};")
+        lay = QVBoxLayout(w)
+        lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._starting_lbl = QLabel(self.tr("Starting server…"))
         self._starting_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._starting_lbl.setStyleSheet(
-            f"color:{_MUTED};font-size:13px;background:transparent;"
-        )
+        self._starting_lbl.setStyleSheet(f"color:{_MUTED};font-size:13px;background:transparent;")
         lay.addWidget(self._starting_lbl)
         return w
 
@@ -623,24 +655,25 @@ class WifiReceiveWidget(QWidget):
 
     def _make_active_page(self) -> QWidget:
         """Zona superior (QR + URL + stop) + zona inferior (grid de cards)."""
-        w = QWidget(); self._active_page = w; w.setStyleSheet(f"background:{_BG};")
-        root = QVBoxLayout(w); root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
+        w = QWidget()
+        self._active_page = w
+        w.setStyleSheet(f"background:{_BG};")
+        root = QVBoxLayout(w)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
         # ── Barra superior do servidor ────────────────────────────────────
         bar = QFrame()
         self._server_bar = bar
-        bar.setStyleSheet(
-            f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}"
-        )
+        bar.setStyleSheet(f"QFrame{{background:{_SURFACE};border-bottom:1px solid {_BORDER};}}")
         bar_lay = QHBoxLayout(bar)
-        bar_lay.setContentsMargins(20, 12, 20, 12); bar_lay.setSpacing(16)
+        bar_lay.setContentsMargins(20, 12, 20, 12)
+        bar_lay.setSpacing(16)
 
         # QR
         qr_frame = QFrame()
         self._qr_frame = qr_frame
-        qr_frame.setStyleSheet(
-            f"QFrame{{background:{_WHITE};border-radius:10px;padding:6px;}}"
-        )
+        qr_frame.setStyleSheet(f"QFrame{{background:{_WHITE};border-radius:10px;padding:6px;}}")
         qr_frame.setFixedSize(_QR_SIZE + 14, _QR_SIZE + 14)
         qr_inner = QVBoxLayout(qr_frame)
         qr_inner.setContentsMargins(0, 0, 0, 0)
@@ -654,10 +687,16 @@ class WifiReceiveWidget(QWidget):
         bar_lay.addWidget(qr_frame)
 
         # Info direita
-        info = QVBoxLayout(); info.setSpacing(8); info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        info = QVBoxLayout()
+        info.setSpacing(8)
+        info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # Instrução
-        self._instruction_lbl = QLabel(self.tr("Scan the QR code with your phone.\nBoth devices must be on the same Wi-Fi network."))
+        self._instruction_lbl = QLabel(
+            self.tr(
+                "Scan the QR code with your phone.\nBoth devices must be on the same Wi-Fi network."
+            )
+        )
         self._instruction_lbl.setWordWrap(True)
         self._instruction_lbl.setStyleSheet(
             f"background:transparent;color:{_TEXT2};font-size:12px;line-height:1.5;"
@@ -672,7 +711,8 @@ class WifiReceiveWidget(QWidget):
             f"QFrame#UrlFrame{{background:{_BG};border-radius:8px;border:1px solid {_BORDER};}}"
         )
         url_lay = QHBoxLayout(self._url_frame)
-        url_lay.setContentsMargins(10, 7, 6, 7); url_lay.setSpacing(6)
+        url_lay.setContentsMargins(10, 7, 6, 7)
+        url_lay.setSpacing(6)
         self._url_lbl = QLabel("—")
         self._url_lbl.setStyleSheet(
             f"background:transparent;border:none;color:{_ACCENT};"
@@ -699,11 +739,11 @@ class WifiReceiveWidget(QWidget):
         info.addWidget(self._url_frame)
 
         # Dica inatividade
-        self._inact_lbl = QLabel(self.tr("The server stops automatically after 15 minutes outside this screen."))
-        self._inact_lbl.setWordWrap(True)
-        self._inact_lbl.setStyleSheet(
-            f"background:transparent;color:{_MUTED2};font-size:9px;"
+        self._inact_lbl = QLabel(
+            self.tr("The server stops automatically after 15 minutes outside this screen.")
         )
+        self._inact_lbl.setWordWrap(True)
+        self._inact_lbl.setStyleSheet(f"background:transparent;color:{_MUTED2};font-size:9px;")
         info.addWidget(self._inact_lbl)
 
         info.addStretch()
@@ -731,7 +771,8 @@ class WifiReceiveWidget(QWidget):
         self._media_header = media_hdr
         media_hdr.setStyleSheet(f"background:{_BG};")
         mh_lay = QHBoxLayout(media_hdr)
-        mh_lay.setContentsMargins(20, 12, 20, 8); mh_lay.setSpacing(8)
+        mh_lay.setContentsMargins(20, 12, 20, 8)
+        mh_lay.setSpacing(8)
 
         self._section_lbl = QLabel(self.tr("Received media"))
         self._section_lbl.setStyleSheet(
@@ -797,7 +838,7 @@ class WifiReceiveWidget(QWidget):
             f"color:{_MUTED2};font-size:12px;background:transparent;padding:32px 0;"
         )
         ph_lay.addWidget(self._placeholder)
-        self._content_stack.addWidget(ph_page)   # índice 0
+        self._content_stack.addWidget(ph_page)  # índice 0
 
         # Página 1 do stack: grid de cards
         self._grid_container = QWidget()
@@ -817,10 +858,13 @@ class WifiReceiveWidget(QWidget):
 
     def _make_idle_page(self) -> QWidget:
         """Tela centrada, tela inteira, servidor parado."""
-        w = QWidget(); self._idle_page = w; w.setStyleSheet(f"background:{_BG};")
+        w = QWidget()
+        self._idle_page = w
+        w.setStyleSheet(f"background:{_BG};")
         lay = QVBoxLayout(w)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.setContentsMargins(40, 0, 40, 0); lay.setSpacing(0)
+        lay.setContentsMargins(40, 0, 40, 0)
+        lay.setSpacing(0)
 
         # Ícone grande
         ico = QLabel()
@@ -841,12 +885,15 @@ class WifiReceiveWidget(QWidget):
 
         lay.addSpacing(8)
 
-        self._idle_subtitle = QLabel(self.tr("Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."))
+        self._idle_subtitle = QLabel(
+            self.tr(
+                "Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."
+            )
+        )
         self._idle_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._idle_subtitle.setWordWrap(True)
         self._idle_subtitle.setStyleSheet(
-            f"background:transparent;font-size:12px;color:{_MUTED};"
-            "max-width:340px;"
+            f"background:transparent;font-size:12px;color:{_MUTED};max-width:340px;"
         )
         lay.addWidget(self._idle_subtitle)
 
@@ -906,9 +953,7 @@ class WifiReceiveWidget(QWidget):
             self._copy_btn.setStyleSheet(
                 "QPushButton{background:transparent;border:none;border-radius:5px;}"
             )
-            self._inact_lbl.setStyleSheet(
-                f"background:transparent;color:{_MUTED2};font-size:9px;"
-            )
+            self._inact_lbl.setStyleSheet(f"background:transparent;color:{_MUTED2};font-size:9px;")
             self._stop_btn.setIcon(make_icon(_I_STOP, 12, _ERR))
             self._stop_btn.setStyleSheet(
                 f"QPushButton{{background:{_ERR_SURFACE};border:1px solid {_ERR_BORDER};"
@@ -951,8 +996,7 @@ class WifiReceiveWidget(QWidget):
                 f"background:transparent;font-size:18px;font-weight:700;color:{_TEXT};"
             )
             self._idle_subtitle.setStyleSheet(
-                f"background:transparent;font-size:12px;color:{_MUTED};"
-                "max-width:340px;"
+                f"background:transparent;font-size:12px;color:{_MUTED};max-width:340px;"
             )
             self._start_btn.setIcon(make_icon(_I_PLAY, 16, _WHITE))
             self._start_btn.setStyleSheet(
@@ -971,12 +1015,12 @@ class WifiReceiveWidget(QWidget):
 
     def _build_html_labels(self) -> dict[str, str]:
         return {
-            "title":     self.tr("Send Media"),
-            "subtitle":  self.tr("Select or drag photos, videos or audio files"),
+            "title": self.tr("Send Media"),
+            "subtitle": self.tr("Select or drag photos, videos or audio files"),
             "btn_label": self.tr("Send media"),
             "drop_hint": self.tr("Drag files here"),
-            "success":   self.tr("✓ File sent!"),
-            "error":     self.tr("Upload error"),
+            "success": self.tr("✓ File sent!"),
+            "error": self.tr("Upload error"),
         }
 
     def _build_html_theme(self) -> dict[str, str]:
@@ -1018,7 +1062,11 @@ class WifiReceiveWidget(QWidget):
         self._session_url = ""
         self._cancel_qr_generation()
         self.clear_all_received()
-        self._idle_subtitle.setText(self.tr("Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."))
+        self._idle_subtitle.setText(
+            self.tr(
+                "Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."
+            )
+        )
         self._stack.setCurrentIndex(2)
 
     @Slot(str, str)
@@ -1071,7 +1119,9 @@ class WifiReceiveWidget(QWidget):
         if not hasattr(self, "_pdf_threads"):
             self._pdf_threads: list = []
         self._pdf_threads.append(thread)
-        thread.finished.connect(lambda t=thread: self._pdf_threads.remove(t) if t in self._pdf_threads else None)
+        thread.finished.connect(
+            lambda t=thread: self._pdf_threads.remove(t) if t in self._pdf_threads else None
+        )
         thread.start()
 
     def _on_pdf_pages_ready(self, pages: list, pdf_stem: str, orig_name: str) -> None:
@@ -1080,7 +1130,9 @@ class WifiReceiveWidget(QWidget):
         n = len(pages)
         for i, page_path in enumerate(pages):
             title = f"{pdf_stem} — p. {i + 1}"
-            self._received_files.append({"path": page_path, "title": title, "orig_name": title + ".jpg"})
+            self._received_files.append(
+                {"path": page_path, "title": title, "orig_name": title + ".jpg"}
+            )
             self._add_card(page_path, title, orig_name=title + ".jpg")
         short_name = orig_name if len(orig_name) <= 28 else orig_name[:26] + "…"
         self._notifications.success(f"{short_name}  ({n} p.)")
@@ -1107,23 +1159,24 @@ class WifiReceiveWidget(QWidget):
             self._jwpub_threads: list = []
         self._jwpub_threads.append(thread)
         thread.finished.connect(
-            lambda t=thread: self._jwpub_threads.remove(t)
-            if t in self._jwpub_threads else None
+            lambda t=thread: self._jwpub_threads.remove(t) if t in self._jwpub_threads else None
         )
 
         @thread.items_ready.connect
         def _on_ready(items: list, file_stem: str):
             added = 0
             for raw in items:
-                item_path  = raw.get("url", "")
+                item_path = raw.get("url", "")
                 item_title = raw.get("title", file_stem)
                 if not item_path:
                     continue
-                self._received_files.append({
-                    "path":      item_path,
-                    "title":     item_title,
-                    "orig_name": item_title,
-                })
+                self._received_files.append(
+                    {
+                        "path": item_path,
+                        "title": item_title,
+                        "orig_name": item_title,
+                    }
+                )
                 self._add_card(item_path, item_title, orig_name=item_title)
                 added += 1
             if added:
@@ -1152,9 +1205,7 @@ class WifiReceiveWidget(QWidget):
                 fallback_lang_code=fallback_lang,
             )
         except (zipfile.BadZipFile, OSError, ValueError) as exc:
-            self._notifications.error(
-                f"Erro ao ler playlist: {Path(orig_name).name}\n{exc}"
-            )
+            self._notifications.error(f"Erro ao ler playlist: {Path(orig_name).name}\n{exc}")
             return
 
         def _save_embedded(
@@ -1201,9 +1252,7 @@ class WifiReceiveWidget(QWidget):
         if result.items:
             self._notifications.success(f"{pl_name}  ({len(result.items)} itens)")
         if result.skipped_titles:
-            self._notifications.warning(
-                f"{len(result.skipped_titles)} item(ns) não resolvido(s)"
-            )
+            self._notifications.warning(f"{len(result.skipped_titles)} item(ns) não resolvido(s)")
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
@@ -1227,7 +1276,7 @@ class WifiReceiveWidget(QWidget):
     def _cols(self) -> int:
         """Calcula colunas baseado na largura disponível."""
         w = self._grid_container.width() or self.width()
-        usable = max(w - 40, _CARD_W)   # 40 = margens
+        usable = max(w - 40, _CARD_W)  # 40 = margens
         return max(1, usable // (_CARD_W + 12))
 
     def _add_card(self, path: str, title: str, orig_name: str = "") -> None:
@@ -1243,8 +1292,8 @@ class WifiReceiveWidget(QWidget):
 
         # Posição no grid
         cols = self._cols()
-        row  = n // cols
-        col  = n %  cols
+        row = n // cols
+        col = n % cols
         self._grid_layout.addWidget(card, row, col)
 
         # Solicita thumbnail (não para tipos que não são mídia direta)
@@ -1349,11 +1398,13 @@ class WifiReceiveWidget(QWidget):
     # ═══════════════════════════════════════════════════════════════════════
 
     def _set_qr_placeholder(self) -> None:
-        ph = QPixmap(_QR_SIZE, _QR_SIZE); ph.fill(Qt.GlobalColor.white)
+        ph = QPixmap(_QR_SIZE, _QR_SIZE)
+        ph.fill(Qt.GlobalColor.white)
         self._qr_lbl.setPixmap(ph)
 
     def _copy_url(self) -> None:
-        if not self._session_url: return
+        if not self._session_url:
+            return
         QApplication.clipboard().setText(self._session_url)
         self._copy_btn.setIcon(make_icon(_I_CHECK, 13, _OK))
         # Flash sutil: só o texto do link escurece levemente e volta
@@ -1361,13 +1412,14 @@ class WifiReceiveWidget(QWidget):
             f"background:transparent;border:none;color:{_ACCENT_PRESSED};"
             "font-size:10px;font-family:monospace;"
         )
-        QTimer.singleShot(350, lambda: self._url_lbl.setStyleSheet(
-            f"background:transparent;border:none;color:{_ACCENT};"
-            "font-size:10px;font-family:monospace;"
-        ))
-        QTimer.singleShot(1800, lambda: self._copy_btn.setIcon(
-            make_icon(_I_COPY, 13, _MUTED)
-        ))
+        QTimer.singleShot(
+            350,
+            lambda: self._url_lbl.setStyleSheet(
+                f"background:transparent;border:none;color:{_ACCENT};"
+                "font-size:10px;font-family:monospace;"
+            ),
+        )
+        QTimer.singleShot(1800, lambda: self._copy_btn.setIcon(make_icon(_I_COPY, 13, _MUTED)))
 
     # ── QR ────────────────────────────────────────────────────────────────
 
@@ -1448,11 +1500,21 @@ class WifiReceiveWidget(QWidget):
     def retranslateUi(self) -> None:
         self._header_title.setText(self.tr("Receive via Wi-Fi"))
         self._starting_lbl.setText(self.tr("Starting server…"))
-        self._instruction_lbl.setText(self.tr("Scan the QR code with your phone.\nBoth devices must be on the same Wi-Fi network."))
-        self._inact_lbl.setText(self.tr("The server stops automatically after 15 minutes outside this screen."))
+        self._instruction_lbl.setText(
+            self.tr(
+                "Scan the QR code with your phone.\nBoth devices must be on the same Wi-Fi network."
+            )
+        )
+        self._inact_lbl.setText(
+            self.tr("The server stops automatically after 15 minutes outside this screen.")
+        )
         self._stop_btn.setText(self.tr("  Stop server"))
         self._idle_title.setText(self.tr("Receive media via Wi-Fi"))
-        self._idle_subtitle.setText(self.tr("Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."))
+        self._idle_subtitle.setText(
+            self.tr(
+                "Connect to the same Wi-Fi and open the link on your phone to send photos, videos or audio."
+            )
+        )
         self._start_btn.setText(self.tr("  Start server"))
         self._copy_btn.setToolTip(self.tr("Copy link"))
         self._section_lbl.setText(self.tr("Received media"))

@@ -1,4 +1,4 @@
-const CACHE_NAME = "solin-remote-shell-v11";
+const CACHE_NAME = "solin-remote-shell-v13";
 const SHELL_RESOURCES = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const SHELL_RESOURCES = [
   "./scripts/i18n.js",
   "./scripts/pwa.js",
   "./scripts/renderer.js",
+  "./scripts/setup.js",
   "./scripts/state.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -70,19 +71,21 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(networkFirstNavigation(request));
   } else if (SHELL_URLS.has(url.href)) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirstShellResource(request));
   }
 });
 
-async function cacheFirst(request) {
+async function networkFirstShellResource(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok && response.type === "basic") {
-    await cache.put(request, response.clone());
+  try {
+    const response = await fetch(request, { cache: "no-cache" });
+    if (response.ok && response.type === "basic") {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return (await cache.match(request)) || Response.error();
   }
-  return response;
 }
 
 async function networkFirstNavigation(request) {

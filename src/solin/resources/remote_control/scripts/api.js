@@ -27,13 +27,14 @@ export class RemoteApi {
       method: "POST",
       body: { username, password },
       csrf: false,
+      clientMode: currentDisplayMode(),
     });
     this.#captureCsrf(response);
     return response;
   }
 
-  async localization() {
-    return this.#request("/localization", { csrf: false });
+  async setup() {
+    return this.#request("/setup", { csrf: false });
   }
 
   async logout() {
@@ -64,7 +65,7 @@ export class RemoteApi {
     }
   }
 
-  async #request(path, { method = "GET", body, csrf = true } = {}) {
+  async #request(path, { method = "GET", body, csrf = true, clientMode = "" } = {}) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const headers = { Accept: "application/json" };
@@ -74,6 +75,9 @@ export class RemoteApi {
     }
     if (csrf && method !== "GET" && this.#csrfToken) {
       headers["X-CSRF-Token"] = this.#csrfToken;
+    }
+    if (clientMode) {
+      headers["X-Solin-Display-Mode"] = clientMode;
     }
 
     try {
@@ -112,6 +116,12 @@ export class RemoteApi {
       window.clearTimeout(timeout);
     }
   }
+}
+
+function currentDisplayMode() {
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+  return standalone ? "standalone" : "browser";
 }
 
 async function readJson(response) {

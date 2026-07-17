@@ -7,6 +7,7 @@ from pathlib import Path
 import threading
 from typing import Any, cast
 import uuid
+from unittest.mock import patch
 
 from aiohttp import WSServerHandshakeError, web
 from aiohttp.test_utils import TestClient, TestServer
@@ -14,10 +15,12 @@ import pytest
 
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.remote_control import server as server_module
+from solin.core.remote_control.certificates import TLSCertificateStore
 from solin.core.remote_control.contracts import CommandError, RemoteCommand
 from solin.core.remote_control.security import (
     InMemorySessionStore,
     LoginRateLimiter,
+    RemoteSessionInfo,
     RemoteControlCredentialsStore,
     ScryptParameters,
     ScryptPasswordHasher,
@@ -25,6 +28,7 @@ from solin.core.remote_control.security import (
 from solin.core.remote_control.server import (
     SESSION_COOKIE_NAME,
     RemoteControlHttpApplication,
+    RemoteControlServer,
     RemoteControlServerDependencies,
 )
 from solin.core.remote_control.state import (
@@ -35,6 +39,24 @@ from solin.core.remote_control.state import (
 
 _ORIGIN = "https://192.168.1.10:8765"
 _HOST = "192.168.1.10:8765"
+
+
+def test_tls_hot_reload_validates_candidate_before_mutating_live_context(tmp_path: Path) -> None:
+    identity = TLSCertificateStore(tmp_path / "tls").load_or_create("192.168.1.10")
+
+    class _LiveContext:
+        def __init__(self) -> None:
+            self.loaded: tuple[str, str] | None = None
+
+        def load_cert_chain(self, *, certfile: str, keyfile: str) -> None:
+            self.loaded = (certfile, keyfile)
+
+    context = _LiveContext()
+    with patch.object(server_module, "_build_ssl_context") as validate:
+        asyncio.run(RemoteControlServer._reload_tls_identity(cast(Any, context), identity))
+
+    validate.assert_called_once_with(identity)
+    assert context.loaded == (str(identity.certificate_path), str(identity.private_key_path))
 
 
 class _MemorySettings:
@@ -108,7 +130,7 @@ class _Harness:
     state: RemoteControlStateStore
     sessions: InMemorySessionStore
     command_session: ProjectionCommandSession
-    session_counts: list[int]
+    session_inventories: list[tuple[RemoteSessionInfo, ...]]
 
 
 async def _harness(
@@ -119,7 +141,7 @@ async def _harness(
     command_handler: Any | None = None,
     thumbnail_handler: Any | None = None,
     collection_thumbnail_handler: Any | None = None,
-    localization_provider: Any | None = None,
+    setup_provider: Any | None = None,
 ) -> _Harness:
     assets = tmp_path / "assets"
     assets.mkdir()
@@ -140,7 +162,7 @@ async def _harness(
     session_store = sessions or InMemorySessionStore()
     command_session = ProjectionCommandSession(state)
     commands: list[RemoteCommand] = []
-    session_counts: list[int] = []
+    session_inventories: list[tuple[RemoteSessionInfo, ...]] = []
 
     async def execute(command: RemoteCommand) -> CommandError | None:
         commands.append(command)
@@ -157,16 +179,23 @@ async def _harness(
             rate_limiter=LoginRateLimiter(),
             assets_directory=assets,
             command_handler=execute_command,
-            localization_provider=localization_provider
+            setup_provider=setup_provider
             or (
                 lambda: {
                     "locale": "pt-BR",
                     "messages": {"app.remoteControl": "Controle remoto"},
+                    "tls": {
+                        "installationId": "installation-1",
+                        "authoritySha256": "AA:BB:CC:DD",
+                        "verificationCode": "AABB · CCDD",
+                        "authorityCertificateUrl": "/remote/trust-certificate.cer",
+                        "authorityNotValidAfter": "2036-07-16T12:00:00+00:00",
+                    },
                 }
             ),
             thumbnail_handler=thumbnail_handler,
             collection_thumbnail_handler=collection_thumbnail_handler,
-            session_count_changed=session_counts.append,
+            session_inventory_changed=session_inventories.append,
             profile_id="profile-1",
             profile_name="Sala principal",
             meeting_week_start=lambda: date(2026, 7, 13),
@@ -183,7 +212,7 @@ async def _harness(
         state,
         session_store,
         command_session,
-        session_counts,
+        session_inventories,
     )
 
 
@@ -248,25 +277,31 @@ def test_static_shell_has_strict_security_headers(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
-def test_localization_is_public_no_store_and_does_not_expose_profile(tmp_path: Path) -> None:
+def test_setup_is_public_no_store_and_does_not_expose_profile(tmp_path: Path) -> None:
     async def scenario() -> None:
         harness = await _harness(tmp_path)
         try:
             response = await harness.client.get(
-                "/remote/api/localization",
+                "/remote/api/setup",
                 headers={"Host": _HOST},
             )
             payload = await response.json()
 
             assert response.status == 200
             assert response.headers["Cache-Control"] == "no-store"
-            assert payload == {
-                "locale": "pt-BR",
-                "messages": {"app.remoteControl": "Controle remoto"},
-            }
+            assert payload["locale"] == "pt-BR"
+            assert payload["messages"] == {"app.remoteControl": "Controle remoto"}
+            assert payload["tls"]["installationId"] == "installation-1"
+            assert payload["tls"]["authorityCertificateUrl"] == ("/remote/trust-certificate.cer")
             assert "profile" not in payload
             assert "name" not in payload
             assert "id" not in payload
+
+            removed_endpoint = await harness.client.get(
+                "/remote/api/localization",
+                headers={"Host": _HOST},
+            )
+            assert removed_endpoint.status == 404
         finally:
             await harness.client.close()
 
@@ -278,10 +313,17 @@ def test_profile_snapshot_publishes_updated_localization(tmp_path: Path) -> None
         localization = {
             "locale": "en",
             "messages": {"app.remoteControl": "Remote control"},
+            "tls": {
+                "installationId": "installation-1",
+                "authoritySha256": "AA:BB:CC:DD",
+                "verificationCode": "AABB · CCDD",
+                "authorityCertificateUrl": "/remote/trust-certificate.cer",
+                "authorityNotValidAfter": "2036-07-16T12:00:00+00:00",
+            },
         }
         harness = await _harness(
             tmp_path,
-            localization_provider=lambda: localization,
+            setup_provider=lambda: localization,
         )
         try:
             headers = await _authenticated_headers(harness)
@@ -966,6 +1008,111 @@ def test_websocket_snapshot_fanout_sends_to_clients_concurrently(
     asyncio.run(scenario())
 
 
+def test_login_publishes_safe_client_metadata_for_desktop_inventory(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        try:
+            response = await harness.client.post(
+                "/remote/api/auth/login",
+                headers={
+                    "Host": _HOST,
+                    "Origin": _ORIGIN,
+                    "User-Agent": (
+                        "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 "
+                        "Chrome/130.0 Mobile Safari/537.36"
+                    ),
+                    "X-Solin-Display-Mode": "standalone",
+                },
+                json={
+                    "username": "operator",
+                    "password": "correct horse battery staple",
+                },
+            )
+
+            assert response.status == 200
+            inventory = harness.session_inventories[-1]
+            assert len(inventory) == 1
+            session = inventory[0]
+            assert session.browser == "Chrome"
+            assert session.platform == "Android"
+            assert session.client_mode == "standalone"
+            assert session.remote_address
+            assert session.connected_socket_count == 0
+            assert not hasattr(session, "session_token")
+            assert not hasattr(session, "csrf_token")
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_desktop_can_revoke_one_or_all_sessions_without_restarting_server(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        sessions = InMemorySessionStore()
+        first = sessions.create("operator", browser="Chrome", platform="Android")
+        second = sessions.create("operator", browser="Safari", platform="iPhone")
+        harness = await _harness(tmp_path, sessions=sessions)
+        first_socket = None
+        second_socket = None
+        try:
+            first_socket = await harness.client.ws_connect(
+                "/remote/api/ws",
+                headers={
+                    "Host": _HOST,
+                    "Origin": _ORIGIN,
+                    "Cookie": f"{SESSION_COOKIE_NAME}={first.session_token}",
+                },
+            )
+            second_socket = await harness.client.ws_connect(
+                "/remote/api/ws",
+                headers={
+                    "Host": _HOST,
+                    "Origin": _ORIGIN,
+                    "Cookie": f"{SESSION_COOKIE_NAME}={second.session_token}",
+                },
+            )
+            for socket in (first_socket, second_socket):
+                for _event in range(3):
+                    await socket.receive_json()
+
+            inventory = harness.session_inventories[-1]
+            assert {item.management_id for item in inventory} == {
+                first.management_id,
+                second.management_id,
+            }
+            assert all(item.connected_socket_count == 1 for item in inventory)
+            server_instance = harness.state.server_instance_id
+
+            assert await harness.application.revoke_session(first.management_id) is True
+            revoked_event = await first_socket.receive_json()
+            assert revoked_event["type"] == "session.revoked"
+            assert revoked_event["payload"] == {"reason": "revoked_device"}
+            assert sessions.resolve(first.session_token) is None
+            assert sessions.resolve(second.session_token) is not None
+            assert harness.state.server_instance_id == server_instance
+            assert [item.management_id for item in harness.session_inventories[-1]] == [
+                second.management_id
+            ]
+
+            assert await harness.application.revoke_all_sessions() == 1
+            revoked_all_event = await second_socket.receive_json()
+            assert revoked_all_event["type"] == "session.revoked"
+            assert revoked_all_event["payload"] == {"reason": "revoked_all"}
+            assert sessions.active_sessions() == ()
+            assert harness.state.server_instance_id == server_instance
+            assert harness.session_inventories[-1] == ()
+        finally:
+            if first_socket is not None:
+                await first_socket.close()
+            if second_socket is not None:
+                await second_socket.close()
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
 def test_expired_websocket_session_publishes_updated_session_count(
     tmp_path: Path,
     monkeypatch,
@@ -997,7 +1144,7 @@ def test_expired_websocket_session_publishes_updated_session_count(
             await asyncio.wait_for(socket.receive(), timeout=1)
 
             assert socket.close_code == 4401
-            assert harness.session_counts[-1] == 0
+            assert harness.session_inventories[-1] == ()
         finally:
             await harness.client.close()
 

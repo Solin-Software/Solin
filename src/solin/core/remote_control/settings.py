@@ -113,6 +113,21 @@ class RemoteControlSettingsStore:
             bool(enabled),
         )
 
+    def onboarding_seen(self) -> bool:
+        return bool(
+            self.profile_settings.settings.value(
+                SettingsKey.REMOTE_CONTROL_ONBOARDING_SEEN,
+                False,
+                bool,
+            )
+        )
+
+    def mark_onboarding_seen(self) -> None:
+        self.profile_settings.settings.set_value(
+            SettingsKey.REMOTE_CONTROL_ONBOARDING_SEEN,
+            True,
+        )
+
     def network_selection(self) -> NetworkInterfaceSelection | None:
         raw = self.profile_settings.settings.string(SettingsKey.REMOTE_CONTROL_NETWORK_SELECTION)
         return NetworkInterfaceSelection.deserialize(raw) if raw else None

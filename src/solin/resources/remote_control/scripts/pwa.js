@@ -1,15 +1,21 @@
 export function setupPwa({ onInstallAvailable, onInstalled, onError }) {
   let installPrompt = null;
+  let installAvailable = false;
+
+  const publishInstallAvailability = (available) => {
+    installAvailable = available;
+    onInstallAvailable(available);
+  };
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     installPrompt = event;
-    onInstallAvailable(true);
+    publishInstallAvailability(true);
   });
 
   window.addEventListener("appinstalled", () => {
     installPrompt = null;
-    onInstallAvailable(false);
+    publishInstallAvailability(false);
     onInstalled();
   });
 
@@ -17,12 +23,13 @@ export function setupPwa({ onInstallAvailable, onInstalled, onError }) {
     if (!installPrompt) return false;
     const prompt = installPrompt;
     installPrompt = null;
-    onInstallAvailable(false);
+    publishInstallAvailability(false);
     await prompt.prompt();
     const result = await prompt.userChoice;
     return result.outcome === "accepted";
   };
 
+  let serviceWorkerReady = Promise.resolve(null);
   if ("serviceWorker" in navigator && isSecureContext) {
     const replacingController = Boolean(navigator.serviceWorker.controller);
     let reloadingForUpdate = false;
@@ -31,15 +38,29 @@ export function setupPwa({ onInstallAvailable, onInstalled, onError }) {
       reloadingForUpdate = true;
       window.location.reload();
     });
-    window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./service-worker.js", {
+    serviceWorkerReady = navigator.serviceWorker
+      .register("./service-worker.js", {
           scope: "/remote/",
           updateViaCache: "none",
         })
-        .catch(onError);
-    }, { once: true });
+      .then(() => navigator.serviceWorker.ready)
+      .catch((error) => {
+        onError(error);
+        return null;
+      });
   }
 
-  return { install };
+  return {
+    install,
+    isInstallAvailable: () => installAvailable,
+    isStandalone: () => isStandalone(),
+    serviceWorkerReady,
+  };
+}
+
+function isStandalone() {
+  return Boolean(
+    window.matchMedia?.("(display-mode: standalone)").matches
+      || window.navigator.standalone === true,
+  );
 }

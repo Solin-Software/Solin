@@ -45,22 +45,50 @@ are published live to connected browsers, and canonical generated meeting
 section titles are resolved from their semantic section codes. Titles edited by
 the user are always preserved verbatim.
 
-The first device setup requires trusting Solin's local certificate authority so
-the browser can treat the PWA as a secure, installable app. Open the remote URL,
-expand **Prepare installation on this device**, download the certificate, and
-verify its SHA-256 fingerprint against the value shown in Solin settings before
-trusting it. On iPhone or iPad, enable the installed root under **Settings ›
-General › About › Certificate Trust Settings**. On Android, install it as a CA
-certificate from the device security settings. Reopen the URL afterward and use
-the browser's install or Add to Home Screen action.
+The first device setup requires trusting Solin's local Root CA so the browser
+can verify HTTPS and install the remote interface as a standalone PWA. After
+remote control starts for the first time, Solin opens a focused **Set up a
+device** assistant. It remains available beside the remote address in settings.
+Scan its QR code, compare the short verification code shown by Solin with the
+one shown on the device, then follow the platform-specific three-step guide:
 
-The generated authority is private to this Solin installation and constrained
-to the selected IPv4 address. Its private key never leaves the desktop. Changing
-the selected IP rotates the authority and requires trusting the new certificate.
+1. download and trust the Root CA;
+2. close and reopen the browser (some Android devices require a restart before
+   the new trust is visible);
+3. install the Solin PWA instead of creating a browser shortcut.
+
+On Android, search the device settings for **CA certificate**, choose **Install
+a certificate › CA certificate**, and select the downloaded `.cer` file; menu
+names can vary by manufacturer. On iPhone or iPad, download with Safari, install
+the profile through **Settings › Profile Downloaded** (or **General › VPN &
+Device Management**), then enable the root under **General › About › Certificate
+Trust Settings**. Bypassing the browser warning only opens that first visit;
+installing the Root CA provides persistent identity verification and the secure
+context required for reliable PWA installation.
+
+The Root CA is private to this Solin installation and valid for ten years. Its
+private key never leaves the desktop, and the issuing hierarchy beneath it is
+constrained to private LAN addresses. Solin issues short-lived,
+address-specific server certificates beneath that constrained issuing CA and
+renews them without stopping the service or dropping signed-in devices.
+Changing the selected private IPv4 address rotates only the server certificate,
+so already configured devices do not need to trust another Root CA. An expired
+Root CA or unrecoverable loss of its private key is the exceptional case that
+requires a replacement; Solin fails closed instead of silently changing device
+trust.
+
+The floating toolbar shows a remote-control indicator while the feature is
+enabled. Its popup distinguishes signed-in devices from devices with a live
+connection, shows browser, platform, address, and recent activity, and can
+disconnect one device or every device. Revoking a session requires that device
+to sign in again and never interrupts the current projection.
+
 Authentication uses profile-local scrypt password hashes, bounded login rate
 limits, server-side sessions, `Secure`/`HttpOnly`/`SameSite=Strict` cookies,
 per-session CSRF tokens, exact Host/Origin checks, and an HTTPS WebSocket with
-revisioned recovery and idempotent commands.
+revisioned recovery and idempotent commands. Static PWA resources are updated
+network-first and activate with an automatic one-time reload, so normal product
+updates do not require a manual hard refresh.
 
 ### Linux native webview
 

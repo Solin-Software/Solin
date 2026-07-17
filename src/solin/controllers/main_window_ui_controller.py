@@ -305,9 +305,7 @@ class MainWindowUiController:
 
         bottom_bar, projection_bar = self._build_bottom_bar(right_col)
         projection_bar_ref["value"] = projection_bar
-        projection_bar.expanded_changed.connect(
-            lazy_pages.set_browser_native_views_occluded
-        )
+        projection_bar.expanded_changed.connect(lazy_pages.set_browser_native_views_occluded)
         right_layout.addWidget(bottom_bar)
 
         root.addWidget(right_col, stretch=1)
@@ -318,9 +316,7 @@ class MainWindowUiController:
             pages.settings_widget,
         )
         quick_toolbar_ref["value"] = quick_toolbar
-        projection_bar.expanded_changed.connect(
-            quick_toolbar.set_projection_overlay_active
-        )
+        projection_bar.expanded_changed.connect(quick_toolbar.set_projection_overlay_active)
         self._prime_native_cursor_hosts(right_col, stack)
         right_col.installEventFilter(context.event_filter)
 
@@ -365,15 +361,9 @@ class MainWindowUiController:
                 cache_scan_session_factory=context.cache_scan_session_factory,
                 qr_generation_session_factory=context.qr_generation_session_factory,
                 wifi_receive_server_factory=context.wifi_receive_server_factory,
-                browser_download_service_factory=(
-                    self._browser_download_service_factory
-                ),
-                browser_image_fetch_service_factory=(
-                    self._browser_image_fetch_service_factory
-                ),
-                projection_aspect_ratio_provider=(
-                    context.projection_aspect_ratio_provider
-                ),
+                browser_download_service_factory=(self._browser_download_service_factory),
+                browser_image_fetch_service_factory=(self._browser_image_fetch_service_factory),
+                projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
                 media_info_service_factory=self._media_info_service_factory,
             ),
             LazyPageHandlers(
@@ -421,6 +411,7 @@ class MainWindowUiController:
             watched_folder_settings=context.watched_folder_settings,
             remote_control_settings=context.remote_control_settings,
             remote_control_credentials=context.remote_control_credentials,
+            qr_generation_session_factory=context.qr_generation_session_factory,
             yeartext_settings=context.yeartext_settings,
             yeartext_service_factory=context.yeartext_service_factory,
             auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,
@@ -464,14 +455,10 @@ class MainWindowUiController:
             playlist_cleanup_queue_factory=context.playlist_cleanup_queue_factory,
             media_cache_manager=context.media_cache_manager,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
-            jw_catalog_thumbnail_session_factory=(
-                context.jw_catalog_thumbnail_session_factory
-            ),
+            jw_catalog_thumbnail_session_factory=(context.jw_catalog_thumbnail_session_factory),
             jw_songs_store=context.jw_songs_store,
             media_info_queue_factory=self._media_info_queue_factory,
-            projection_aspect_ratio_provider=(
-                context.projection_aspect_ratio_provider
-            ),
+            projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
             parent=context.parent,
         )
         meeting_publication_service = context.jwpub_service_factory(context.parent)
@@ -496,9 +483,7 @@ class MainWindowUiController:
             runtime_paths=context.runtime_paths,
             cache_manager=context.media_cache_manager,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
-            jw_catalog_thumbnail_session_factory=(
-                context.jw_catalog_thumbnail_session_factory
-            ),
+            jw_catalog_thumbnail_session_factory=(context.jw_catalog_thumbnail_session_factory),
             jw_songs_store=context.jw_songs_store,
             media_settings=context.media_settings,
             meeting_linked_folder_sync=context.meeting_linked_folder_sync,
@@ -506,9 +491,7 @@ class MainWindowUiController:
             preparation_service=meeting_preparation_service,
             memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,
-            projection_aspect_ratio_provider=(
-                context.projection_aspect_ratio_provider
-            ),
+            projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
             parent=context.parent,
         )
         meetings_widget.set_watched_folder(watched_folder)
@@ -556,14 +539,11 @@ class MainWindowUiController:
         title_label = QLabel(context.translate(SIDEBAR_TITLE_SOURCE))
         title_label.setObjectName("SectionTitle")
         title_label.setStyleSheet(
-            "background: transparent; font-size: 14px; font-weight: 700; "
-            "padding: 4px 8px 2px 8px;"
+            "background: transparent; font-size: 14px; font-weight: 700; padding: 4px 8px 2px 8px;"
         )
         subtitle_label = QLabel(context.translate(SIDEBAR_SUBTITLE_SOURCE))
         subtitle_label.setObjectName("SectionSubtitle")
-        subtitle_label.setStyleSheet(
-            "background: transparent; padding: 0 8px 0 8px;"
-        )
+        subtitle_label.setStyleSheet("background: transparent; padding: 0 8px 0 8px;")
 
         profile_avatar_button = self._build_sidebar_header(
             title_label,
@@ -640,9 +620,7 @@ class MainWindowUiController:
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-        projection_bar.setStyleSheet(
-            "QFrame#StatusBar { border: none; background: transparent; }"
-        )
+        projection_bar.setStyleSheet("QFrame#StatusBar { border: none; background: transparent; }")
         layout.addWidget(projection_bar)
         return bar, projection_bar
 
@@ -695,12 +673,8 @@ class MainWindowUiController:
             self._context.active_profile_name,
             profile_id=self._context.active_profile_id,
         )
-        profile_avatar_button.setToolTip(
-            self._context.translate(SWITCH_PROFILE_SOURCE)
-        )
-        profile_avatar_button.clicked.connect(
-            self._handlers.profile_switch_requested
-        )
+        profile_avatar_button.setToolTip(self._context.translate(SWITCH_PROFILE_SOURCE))
+        profile_avatar_button.clicked.connect(self._handlers.profile_switch_requested)
         return profile_avatar_button
 
     @staticmethod

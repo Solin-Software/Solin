@@ -53,6 +53,7 @@ EXPECTED_SETTINGS_KEYS = {
     "REMOTE_CONTROL_ENABLED": "remote_control/enabled",
     "REMOTE_CONTROL_NETWORK_SELECTION": "remote_control/network_selection",
     "REMOTE_CONTROL_CREDENTIALS": "remote_control/credentials",
+    "REMOTE_CONTROL_ONBOARDING_SEEN": "remote_control/onboarding_seen",
     "MEDIA_LANGUAGE_CODE": "media_language_code",
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_WIDTH": "size/width",
@@ -111,9 +112,7 @@ EXPECTED_SETTINGS_KEYS = {
 
 def _isolated_global_settings() -> GlobalSettingsStore:
     organization = f"SolinTest_{uuid.uuid4().hex}"
-    return GlobalSettingsStore(
-        SettingsStore.for_namespace(organization, QSETTINGS_GLOBAL_APP)
-    )
+    return GlobalSettingsStore(SettingsStore.for_namespace(organization, QSETTINGS_GLOBAL_APP))
 
 
 def _profile_app_settings_for(profile_id: str) -> ProfileAppSettingsStore:
@@ -146,15 +145,13 @@ def test_qsettings_identity_and_namespaces_are_stable() -> None:
     )
     assert QSETTINGS_GLOBAL_APP == "GlobalApp"
     assert QSETTINGS_GLOBAL_APP not in QSETTINGS_PROFILE_SCOPED_APPS
-    assert f"{QSETTINGS_PROFILE_ORG_PREFIX}main_hall" == (
-        f"{expected_qt_identity}_main_hall"
-    )
+    assert f"{QSETTINGS_PROFILE_ORG_PREFIX}main_hall" == (f"{expected_qt_identity}_main_hall")
 
 
 def test_windows_installer_qsettings_cleanup_tracks_current_namespaces() -> None:
-    setup_iss = (
-        PROJECT_ROOT / "packaging" / "windows" / "installer" / "setup.iss"
-    ).read_text(encoding="utf-8")
+    setup_iss = (PROJECT_ROOT / "packaging" / "windows" / "installer" / "setup.iss").read_text(
+        encoding="utf-8"
+    )
     current_apps = {
         QSETTINGS_PREFS_APP,
         QSETTINGS_APP_APP,
@@ -216,9 +213,7 @@ def test_profile_registry_and_directory_layout_are_stable(
         profile_id="main_hall",
     )
     assert runtime.settings == ProfileSettings.for_profile_id("main_hall")
-    assert runtime.paths.playlists_file == (
-        tmp_path / "profiles" / "main_hall" / "playlists.json"
-    )
+    assert runtime.paths.playlists_file == (tmp_path / "profiles" / "main_hall" / "playlists.json")
     assert runtime.paths.meeting_trees_file == (
         tmp_path / "profiles" / "main_hall" / "meeting_trees.json"
     )
@@ -229,21 +224,13 @@ def test_profile_registry_and_directory_layout_are_stable(
     assert runtime.paths.images_dir == tmp_path / "profiles" / "main_hall" / "images"
     assert runtime.paths.embedded_dir == tmp_path / "profiles" / "main_hall" / "embedded"
     assert runtime.paths.profile_cache_dir == cache_dir / "profiles" / "main_hall"
-    assert runtime.paths.thumb_cache_dir == (
-        cache_dir / "profiles" / "main_hall" / "thumbs"
-    )
+    assert runtime.paths.thumb_cache_dir == (cache_dir / "profiles" / "main_hall" / "thumbs")
     assert runtime.paths.meeting_thumb_cache_dir == (
         cache_dir / "profiles" / "main_hall" / "meeting_thumbs"
     )
-    assert runtime.paths.pdf_pages_dir == (
-        cache_dir / "profiles" / "main_hall" / "pdf_pages"
-    )
-    assert runtime.paths.pptx_pages_dir == (
-        cache_dir / "profiles" / "main_hall" / "pptx_pages"
-    )
-    assert runtime.paths.docx_pages_dir == (
-        cache_dir / "profiles" / "main_hall" / "docx_pages"
-    )
+    assert runtime.paths.pdf_pages_dir == (cache_dir / "profiles" / "main_hall" / "pdf_pages")
+    assert runtime.paths.pptx_pages_dir == (cache_dir / "profiles" / "main_hall" / "pptx_pages")
+    assert runtime.paths.docx_pages_dir == (cache_dir / "profiles" / "main_hall" / "docx_pages")
     assert runtime.paths.native_webview_data_dir == (
         tmp_path / "NativeWebView" / "sessions" / "solin_session_main_hall"
     )
@@ -311,12 +298,8 @@ def test_legacy_file_copy_preserves_sources_until_cleanup(tmp_path: Path) -> Non
 
     assert (tmp_path / "playlists.json").is_file()
     assert (images / "logo.png").is_file()
-    assert (
-        tmp_path / "profiles" / "main_hall" / "playlists.json"
-    ).is_file()
-    assert (
-        tmp_path / "profiles" / "main_hall" / "images" / "logo.png"
-    ).is_file()
+    assert (tmp_path / "profiles" / "main_hall" / "playlists.json").is_file()
+    assert (tmp_path / "profiles" / "main_hall" / "images" / "logo.png").is_file()
 
     storage.cleanup_legacy_data()
 
@@ -372,9 +355,7 @@ def test_production_code_has_no_active_profile_settings_module_alias() -> None:
     offenders = [
         path
         for path in Path("src/solin").rglob("*.py")
-        if "from solin.core.profiles import settings as" in path.read_text(
-            encoding="utf-8"
-        )
+        if "from solin.core.profiles import settings as" in path.read_text(encoding="utf-8")
     ]
 
     assert offenders == []
@@ -418,9 +399,7 @@ def test_internal_playlist_file_and_item_schema_are_stable(
 
     repository.save([playlist])
 
-    assert json.loads(playlists_file.read_text(encoding="utf-8")) == {
-        "playlists": [playlist]
-    }
+    assert json.loads(playlists_file.read_text(encoding="utf-8")) == {"playlists": [playlist]}
     assert repository.load() == [playlist]
     assert set(item) == {
         "id",
@@ -456,9 +435,7 @@ def test_jwlplaylist_extension_and_sqlite_schema_are_stable() -> None:
         user_version = connection.execute("PRAGMA user_version").fetchone()
         table_names = {
             row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
     finally:
         connection.close()

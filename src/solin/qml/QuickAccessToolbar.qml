@@ -26,6 +26,7 @@ Item {
     readonly property color toolbarPressed: appTheme.hoverStrong
     readonly property color accent: appTheme.accent
     readonly property color success: appTheme.success
+    readonly property color warning: appTheme.warning
     readonly property color iconMuted: appTheme.textDim
     readonly property color iconSecondary: appTheme.textMuted
 
@@ -245,6 +246,67 @@ Item {
                     onEntered: root.beginButtonHover(zoomMA, bridge.zoomTooltip)
                     onExited: root.endButtonHover()
                     onClicked: bridge.onZoomClicked()
+                }
+            }
+
+            // ── Remote control ───────────────────────────────────────
+            Item {
+                id: remoteControlButton
+                visible: bridge.remoteControlVisible
+                width: 30; height: 30
+                activeFocusOnTab: visible
+                Accessible.role: Accessible.Button
+                Accessible.name: bridge.remoteControlTooltip
+                Keys.onReturnPressed: bridge.onRemoteControlClicked()
+                Keys.onEnterPressed: bridge.onRemoteControlClicked()
+                Keys.onSpacePressed: bridge.onRemoteControlClicked()
+
+                Rectangle {
+                    anchors.fill: parent; radius: 15
+                    color: remoteControlMA.pressed
+                           ? root.toolbarPressed
+                           : remoteControlMA.containsMouse || remoteControlButton.activeFocus
+                             ? root.toolbarHover : "transparent"
+                    border.width: remoteControlButton.activeFocus ? 1 : 0
+                    border.color: root.accent
+                }
+                Image {
+                    anchors.centerIn: parent
+                    source: "image://icons/remote_control/14/" + bridge.remoteControlIconColor
+                    sourceSize: Qt.size(14, 14)
+                    cache: false
+                }
+                Rectangle {
+                    visible: bridge.remoteControlBadge !== ""
+                    x: 17; y: 0
+                    width: 13; height: 13; radius: 6.5
+                    color: root.accent
+                    border.width: 1
+                    border.color: root.toolbarSurface
+                    Text {
+                        anchors.centerIn: parent
+                        text: bridge.remoteControlBadge
+                        color: appTheme.textOnAccent
+                        font.pixelSize: 8
+                        font.weight: Font.DemiBold
+                    }
+                }
+                Rectangle {
+                    visible: bridge.remoteControlBadge === "" && bridge.remoteControlWarning
+                    x: 22; y: 2; width: 7; height: 7; radius: 3.5
+                    color: root.warning
+                    border.width: 1
+                    border.color: root.toolbarSurface
+                }
+                MouseArea {
+                    id: remoteControlMA; anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.beginButtonHover(remoteControlMA, bridge.remoteControlTooltip)
+                    onExited: root.endButtonHover()
+                    onClicked: {
+                        remoteControlButton.forceActiveFocus()
+                        bridge.onRemoteControlClicked()
+                    }
                 }
             }
 

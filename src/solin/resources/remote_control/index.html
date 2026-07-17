@@ -173,27 +173,129 @@
           </svg>
           <span data-i18n="login.localProtection">Protected connection limited to your local network</span>
         </p>
-        <details class="certificate-help">
-          <summary data-i18n="login.prepareInstallation">Prepare installation on this device</summary>
-          <div class="certificate-help-content">
-            <p data-i18n="login.certificateHelp">
-              To enable app mode, download and trust this Solin local authority. Before
-              installing it, compare the SHA-256 fingerprint with the one shown in Solin settings.
-            </p>
-            <a
-              class="button button--secondary button--compact button--full"
-              href="./trust-certificate.cer"
-              download="solin-remote-authority.cer"
-            >
-              <span data-i18n="login.downloadCertificate">Download this Solin certificate</span>
-            </a>
-            <p class="certificate-platform-note" data-i18n="login.platformHelp">
-              On iPhone or iPad, install the profile and enable trust in Settings › General ›
-              About › Certificate Trust Settings. On Android, install the file as a CA
-              certificate in security settings. Then reopen this address.
-            </p>
+        <a class="login-setup-link" href="?setup=1" data-i18n="login.setUpDevice">
+          Set up this device
+        </a>
+      </section>
+    </main>
+
+    <main id="setup-view" class="setup-view" hidden>
+      <section class="setup-card" aria-labelledby="setup-title">
+        <header class="setup-header">
+          <div class="brand-lockup">
+            <img src="./icons/icon-192.png" alt="" width="48" height="48">
+            <div>
+              <p class="eyebrow" data-i18n="setup.eyebrow">SECURE SETUP</p>
+              <h1 id="setup-title" data-i18n="setup.title">Set up Solin Remote</h1>
+            </div>
           </div>
-        </details>
+          <a class="icon-button setup-close" href="/remote/" aria-label="Back to sign in" data-i18n-aria-label="setup.backToSignIn">
+            <span class="css-icon css-icon--close" aria-hidden="true"></span>
+          </a>
+        </header>
+
+        <p class="setup-intro" data-i18n="setup.intro">
+          Trust this Solin once, then install the web app for quick, secure access on your local network.
+        </p>
+
+        <div id="setup-unavailable" class="notice notice--warning" role="status" hidden>
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <span data-i18n="setup.unavailable">Setup information is unavailable. Keep Solin open and check this device's network.</span>
+        </div>
+
+        <ol id="setup-steps" class="setup-steps">
+          <li class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">1</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.trustTitle">Trust this Solin</h2>
+              <p data-i18n="setup.trustDetail">
+                The certificate protects your password and remote commands. Compare the short code below with the one shown in Solin before installing it.
+              </p>
+              <div class="verification-card">
+                <span data-i18n="setup.verificationCode">Verification code</span>
+                <strong id="setup-verification-code">—</strong>
+                <details>
+                  <summary data-i18n="setup.fullFingerprint">Show full SHA-256 fingerprint</summary>
+                  <code id="setup-fingerprint">—</code>
+                </details>
+              </div>
+              <a
+                id="setup-certificate-link"
+                class="button button--primary button--full"
+                href="./trust-certificate.cer"
+                download="solin-remote-root.cer"
+              >
+                <span class="css-icon css-icon--download" aria-hidden="true"></span>
+                <span data-i18n="setup.downloadCertificate">Download Solin certificate</span>
+              </a>
+              <div class="setup-platform-guide" data-platform-help="android" hidden>
+                <strong data-i18n="setup.androidLabel">Android</strong>
+                <ol class="setup-mini-steps">
+                  <li data-i18n="setup.androidTrustSettings">Open Settings and search for “CA certificate”.</li>
+                  <li data-i18n="setup.androidTrustInstall">Choose Install a certificate › CA certificate, select solin-remote-root.cer from your downloads, and confirm with your device lock.</li>
+                  <li data-i18n="setup.androidTrustConfirm">Approve Android's security notice only after the verification code matches Solin.</li>
+                </ol>
+                <p class="setup-platform-note" data-i18n="setup.androidTrustVariation">Menu names can vary by manufacturer. Opening the downloaded file directly may only redirect you to Settings.</p>
+              </div>
+              <div class="setup-platform-guide" data-platform-help="apple" hidden>
+                <strong data-i18n="setup.appleLabel">iPhone or iPad</strong>
+                <ol class="setup-mini-steps">
+                  <li data-i18n="setup.appleTrustDownload">Download the certificate in Safari, open Settings, and tap Profile Downloaded. If it is not shown, open General › VPN &amp; Device Management.</li>
+                  <li data-i18n="setup.appleTrustInstall">Tap Install and follow the confirmation prompts.</li>
+                  <li data-i18n="setup.appleTrustEnable">Open General › About › Certificate Trust Settings and enable full trust for Solin Remote Root.</li>
+                </ol>
+              </div>
+              <p class="setup-platform-note" data-platform-help="generic" data-i18n="setup.genericTrust">
+                Install the downloaded file as a trusted certificate authority for this device.
+              </p>
+            </div>
+          </li>
+
+          <li class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">2</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.reopenTitle">Reopen the secure address</h2>
+              <p data-i18n="setup.reopenDetail">
+                Fully close and reopen the browser. The privacy warning should no longer appear.
+              </p>
+              <p class="setup-platform-note" data-platform-help="android" hidden data-i18n="setup.androidRestart">
+                If Chrome still shows the warning after the CA certificate is installed, restart Android once and reopen the address.
+              </p>
+              <p class="setup-platform-note" data-platform-help="apple" hidden data-i18n="setup.appleReopen">
+                On iPhone or iPad, return to Safari after enabling full trust and reopen the address.
+              </p>
+            </div>
+          </li>
+
+          <li id="setup-install-step" class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">3</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.installTitle">Install the app</h2>
+              <p id="setup-install-help" data-i18n="setup.installDetail">
+                Install Solin Remote to open it without the browser address bar.
+              </p>
+              <button id="setup-install-button" class="button button--secondary button--full" type="button" hidden>
+                <span class="css-icon css-icon--install" aria-hidden="true"></span>
+                <span data-i18n="setup.installApp">Install Solin Remote</span>
+              </button>
+              <p class="setup-platform-note" data-install-manual data-platform-help="android" hidden data-i18n="setup.installManualAndroid">
+                In Chrome, open the ⋮ menu, choose Add to Home screen, then choose Install rather than Add shortcut.
+              </p>
+              <p class="setup-platform-note" data-install-manual data-platform-help="apple" hidden data-i18n="setup.installManualApple">
+                In Safari, tap Share › Add to Home Screen, enable Open as Web App, then tap Add.
+              </p>
+              <p class="setup-platform-note" data-install-manual data-platform-help="generic" data-i18n="setup.installManual">
+                Use your browser menu and choose Install app or Add to Home Screen.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="setup-actions">
+          <a class="button button--primary button--full" href="/remote/" data-i18n="setup.continueToSignIn">
+            Continue to sign in
+          </a>
+        </div>
       </section>
     </main>
 

@@ -202,7 +202,55 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "/remote/api/" in service_worker
     assert 'request.mode === "navigate"' in service_worker
     assert 'cache: "reload"' in service_worker
+    assert "networkFirstShellResource" in service_worker
+    assert 'fetch(request, { cache: "no-cache" })' in service_worker
     assert 'updateViaCache: "none"' in pwa
+    assert 'navigator.serviceWorker.addEventListener("controllerchange"' in pwa
+    assert "window.location.reload()" in pwa
+
+
+def test_remote_control_setup_is_a_dedicated_three_step_onboarding_flow() -> None:
+    document = _document()
+    html = (PWA_ROOT / "index.html").read_text(encoding="utf-8")
+    setup = (PWA_ROOT / "scripts" / "setup.js").read_text(encoding="utf-8")
+    api = (PWA_ROOT / "scripts" / "api.js").read_text(encoding="utf-8")
+    ids = {attributes["id"] for _tag, attributes in document.elements if attributes.get("id")}
+
+    assert {
+        "setup-view",
+        "setup-steps",
+        "setup-certificate-link",
+        "setup-verification-code",
+        "setup-fingerprint",
+        "setup-install-button",
+    } <= ids
+    assert html.count('class="setup-step"') == 3
+    assert 'href="?setup=1"' in html
+    assert html.index('id="login-view"') < html.index('id="setup-view"')
+    login_html = html[html.index('id="login-view"') : html.index('id="setup-view"')]
+    assert "setup-certificate-link" not in login_html
+    assert 'get("setup") === "1"' in setup
+    assert 'return this.#request("/setup", { csrf: false })' in api
+    assert "/localization" not in api
+    assert 'data-platform-help="android"' in html
+    assert 'data-platform-help="apple"' in html
+    assert "setup-installed" not in ids
+    assert "setup.installed" not in json.loads(
+        (PWA_ROOT / "messages.en.json").read_text(encoding="utf-8")
+    )
+    assert "navigator.maxTouchPoints > 1" in setup
+    assert 'setAttribute("aria-disabled", "true")' in setup
+    assert 'toggleAttribute("aria-disabled"' not in setup
+
+    setup_view_rules = re.findall(
+        r"\.setup-view\s*\{(?P<body>.*?)\}",
+        (PWA_ROOT / "styles" / "layout.css").read_text(encoding="utf-8"),
+        flags=re.DOTALL,
+    )
+    assert any(
+        "height: 100dvh;" in rule and "overflow-y: auto;" in rule
+        for rule in setup_view_rules
+    )
 
 
 def test_remote_control_tree_constrains_long_content_on_narrow_screens() -> None:
@@ -244,10 +292,7 @@ def test_remote_control_tree_constrains_long_content_on_narrow_screens() -> None
             components,
             flags=re.DOTALL,
         )
-        assert any(
-            "min-width: 0;" in rule and "max-width: 100%;" in rule
-            for rule in rules
-        )
+        assert any("min-width: 0;" in rule and "max-width: 100%;" in rule for rule in rules)
 
 
 def test_remote_control_ui_uses_complete_keyed_localization_catalog() -> None:

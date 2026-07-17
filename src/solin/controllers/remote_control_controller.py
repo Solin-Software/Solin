@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
+from concurrent.futures import Future
 from dataclasses import dataclass
 import logging
 import os
@@ -27,7 +28,11 @@ from ..core.remote_control.catalog import (
     ResolvedMeetingPlay,
     ResolvedPlaylistPlay,
 )
-from ..core.remote_control.certificates import TLSCertificateStore, TLSIdentity
+from ..core.remote_control.certificates import (
+    TLSCertificateStore,
+    TLSIdentity,
+    verification_code,
+)
 from ..core.remote_control.contracts import (
     CatalogKind,
     CommandError,
@@ -167,7 +172,9 @@ class RemoteControlController(QObject):
 
     catalog_invalidated = Signal()
     playback_invalidated = Signal()
-    session_count_reported = Signal(int)
+    session_inventory_reported = Signal(object)
+    runtime_status_reported = Signal(bool, bool, str)
+    session_revocation_reported = Signal(str, bool)
 
     def __init__(self, dependencies: RemoteControlDependencies, parent: QObject) -> None:
         super().__init__(parent)
@@ -175,8 +182,12 @@ class RemoteControlController(QObject):
         self._state = RemoteControlStateStore()
         self._sessions = InMemorySessionStore()
         self._rate_limiter = LoginRateLimiter()
+        self._tls_store = TLSCertificateStore(
+            Path(self._dependencies.runtime_paths.data_dir) / "remote_control" / "tls"
+        )
         self._server: RemoteControlServer | None = None
         self._tls_identity: TLSIdentity | None = None
+        self._next_tls_renewal_attempt_at = 0.0
         self._thumbnail_tasks: dict[
             ThumbnailRequestKey,
             asyncio.Task[bytes | None],
@@ -207,7 +218,6 @@ class RemoteControlController(QObject):
 
         self.catalog_invalidated.connect(self._refresh_catalog)
         self.playback_invalidated.connect(self._schedule_playback_refresh)
-        self.session_count_reported.connect(self._on_session_count)
         self._connect_publishers()
 
     @property
@@ -229,6 +239,7 @@ class RemoteControlController(QObject):
         self._playback_timer.stop()
         self._sessions.revoke_all()
         self._stop_server()
+        self.session_inventory_reported.emit(())
         self._dependencies.media_thumbnail_extractor.shutdown()
         while self._unsubscribers:
             self._unsubscribers.pop()()
@@ -242,7 +253,7 @@ class RemoteControlController(QObject):
                 message=self.tr("Remote control could not stop cleanly."),
             )
             return
-        self.session_count_reported.emit(0)
+        self.session_inventory_reported.emit(())
         settings = self._dependencies.settings
         if not settings.enabled():
             self._show_runtime_status(
@@ -273,35 +284,8 @@ class RemoteControlController(QObject):
             return
 
         try:
-            identity = TLSCertificateStore(
-                Path(self._dependencies.runtime_paths.data_dir) / "remote_control" / "tls"
-            ).load_or_create(interface.ipv4_address)
-            self._state.rotate_server_instance()
-            command_session = ProjectionCommandSession(self._state)
-            server = RemoteControlServer(
-                RemoteControlServerDependencies(
-                    state=self._state,
-                    command_session=command_session,
-                    credentials=self._dependencies.credentials,
-                    sessions=self._sessions,
-                    rate_limiter=self._rate_limiter,
-                    assets_directory=application_resource_path("remote_control"),
-                    command_handler=self._bridge.execute,
-                    localization_provider=self._localization_payload,
-                    thumbnail_handler=self._load_thumbnail,
-                    collection_thumbnail_handler=self._load_collection_thumbnail,
-                    session_count_changed=self.session_count_reported.emit,
-                    profile_id=self._dependencies.active_profile_id,
-                    profile_name=self._dependencies.active_profile_name,
-                )
-            )
-            server.start(
-                RemoteControlServerBinding(
-                    host=str(interface.ipv4_address),
-                    port=REMOTE_CONTROL_PORT,
-                    tls_identity=identity,
-                )
-            )
+            identity = self._tls_store.load_or_create(interface.ipv4_address)
+            server = self._start_server(identity)
         except Exception:  # noqa: BLE001 - service lifecycle boundary
             log.exception("Could not start local remote control")
             self._show_runtime_status(
@@ -311,10 +295,80 @@ class RemoteControlController(QObject):
             return
         self._server = server
         self._tls_identity = identity
+        self._next_tls_renewal_attempt_at = 0.0
         self._show_runtime_status(
             running=True,
             message=self.tr("Secure remote control is running."),
         )
+
+    def _start_server(self, identity: TLSIdentity) -> RemoteControlServer:
+        self._state.rotate_server_instance()
+        server = RemoteControlServer(
+            RemoteControlServerDependencies(
+                state=self._state,
+                command_session=ProjectionCommandSession(self._state),
+                credentials=self._dependencies.credentials,
+                sessions=self._sessions,
+                rate_limiter=self._rate_limiter,
+                assets_directory=application_resource_path("remote_control"),
+                command_handler=self._bridge.execute,
+                setup_provider=lambda current=identity: self._setup_payload(current),
+                thumbnail_handler=self._load_thumbnail,
+                collection_thumbnail_handler=self._load_collection_thumbnail,
+                session_inventory_changed=self.session_inventory_reported.emit,
+                profile_id=self._dependencies.active_profile_id,
+                profile_name=self._dependencies.active_profile_name,
+            )
+        )
+        server.start(
+            RemoteControlServerBinding(
+                host=str(identity.ipv4_address),
+                port=REMOTE_CONTROL_PORT,
+                tls_identity=identity,
+            )
+        )
+        return server
+
+    def _renew_tls(self) -> None:
+        previous = self._tls_identity
+        server = self._server
+        if previous is None or server is None:
+            return
+        try:
+            renewed = self._tls_store.load_or_create(previous.ipv4_address)
+            if renewed.leaf_fingerprint_sha256 == previous.leaf_fingerprint_sha256:
+                self._next_tls_renewal_attempt_at = 0.0
+                return
+            server.reload_tls(renewed)
+        except Exception:  # noqa: BLE001 - controlled TLS lifecycle boundary
+            log.exception("Could not renew the local remote-control certificate")
+            self._next_tls_renewal_attempt_at = time.monotonic() + 300.0
+            self._show_runtime_status(
+                running=self.is_running,
+                message=self.tr(
+                    "Secure remote control is running. Certificate renewal will retry "
+                    "automatically."
+                ),
+            )
+            return
+        self._tls_identity = renewed
+        self._next_tls_renewal_attempt_at = 0.0
+        self._show_runtime_status(
+            running=True,
+            message=self.tr("Secure remote control is running."),
+        )
+
+    def _setup_payload(self, identity: TLSIdentity) -> JsonObject:
+        return {
+            **self._localization_payload(),
+            "tls": {
+                "installationId": identity.installation_id,
+                "authoritySha256": identity.trust_anchor_fingerprint_sha256,
+                "verificationCode": verification_code(identity.trust_anchor_fingerprint_sha256),
+                "authorityCertificateUrl": "/remote/trust-certificate.cer",
+                "authorityNotValidAfter": identity.root_not_valid_after.isoformat(),
+            },
+        }
 
     @Slot()
     def _reconcile_runtime(self) -> None:
@@ -329,6 +383,15 @@ class RemoteControlController(QObject):
         )
         if interface_available != self.is_running:
             self.reconfigure()
+            return
+        if (
+            interface_available
+            and self.is_running
+            and self._tls_identity is not None
+            and time.monotonic() >= self._next_tls_renewal_attempt_at
+            and self._tls_store.renewal_due(self._tls_identity)
+        ):
+            self._renew_tls()
 
     @staticmethod
     def _resolve_selected_interface(
@@ -345,9 +408,46 @@ class RemoteControlController(QObject):
 
     @Slot()
     def revoke_sessions(self) -> None:
-        self._sessions.revoke_all()
-        self.session_count_reported.emit(0)
-        self.reconfigure()
+        server = self._server
+        if server is None:
+            self._sessions.revoke_all()
+            self.session_inventory_reported.emit(())
+            return
+        future = server.revoke_all_sessions()
+        if future is None:
+            self.session_revocation_reported.emit("", False)
+            return
+        future.add_done_callback(lambda result: self._report_revocation("", result))
+
+    @Slot(str)
+    def revoke_session(self, management_id: str) -> None:
+        server = self._server
+        if server is None:
+            self.session_revocation_reported.emit(management_id, False)
+            return
+        future = server.revoke_session(management_id)
+        if future is None:
+            self.session_revocation_reported.emit(management_id, False)
+            return
+        future.add_done_callback(
+            lambda result, session_id=management_id: self._report_revocation(
+                session_id,
+                result,
+            )
+        )
+
+    def _report_revocation(
+        self,
+        management_id: str,
+        result: Future[bool] | Future[int],
+    ) -> None:
+        try:
+            value = result.result()
+            succeeded = bool(value) if management_id else isinstance(value, int)
+        except Exception:  # noqa: BLE001 - cross-thread future boundary
+            log.exception("Could not revoke remote-control session(s)")
+            succeeded = False
+        self.session_revocation_reported.emit(management_id, succeeded)
 
     def _connect_publishers(self) -> None:
         dependencies = self._dependencies
@@ -377,7 +477,6 @@ class RemoteControlController(QObject):
         dependencies.settings_widget.remote_control_credentials_changed.connect(
             self.credentials_changed
         )
-        dependencies.settings_widget.remote_control_revoke_requested.connect(self.revoke_sessions)
         dependencies.settings_widget.watched_folder_changed.connect(self.catalog_invalidated.emit)
 
     @Slot()
@@ -985,35 +1084,31 @@ class RemoteControlController(QObject):
                 return found
         return None
 
-    @Slot(int)
-    def _on_session_count(self, count: int) -> None:
-        self._show_runtime_status(
-            running=self.is_running,
-            message=(
-                self.tr("Secure remote control is running.")
-                if self.is_running
-                else self.tr("Remote control is not running.")
-            ),
-            active_sessions=count,
-        )
-
     def _show_runtime_status(
         self,
         *,
         running: bool,
         message: str,
-        active_sessions: int | None = None,
         status: str | None = None,
     ) -> None:
+        self.runtime_status_reported.emit(
+            self._dependencies.settings.enabled(),
+            running,
+            message,
+        )
+        identity = self._tls_identity
+        binding = self._server.binding if self._server is not None else None
+        access_url = binding.url if binding is not None and running else ""
         self._dependencies.settings_widget.set_remote_control_runtime_status(
             running=running,
             message=message,
-            fingerprint=(
-                self._tls_identity.authority_fingerprint_sha256 if self._tls_identity else ""
+            fingerprint=identity.trust_anchor_fingerprint_sha256 if identity else "",
+            access_url=access_url,
+            setup_url=f"{access_url}?setup=1" if access_url else "",
+            verification_code=(
+                verification_code(identity.trust_anchor_fingerprint_sha256) if identity else ""
             ),
-            active_sessions=(
-                self._sessions.active_count() if active_sessions is None else active_sessions
-            ),
+            certificate_der=(identity.trust_certificate_der() if identity and running else b""),
             status=status,
         )
 

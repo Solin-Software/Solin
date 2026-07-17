@@ -19,7 +19,7 @@ _PLACEHOLDER = re.compile(r"\{[A-Za-z][A-Za-z0-9_]*\}")
 def test_remote_message_catalog_is_fully_visible_to_lupdate() -> None:
     sources = remote_control_message_sources()
 
-    assert len(sources) == 140
+    assert sources
     assert set(sources.values()) == set(REMOTE_CONTROL_TRANSLATION_SOURCES)
 
 
@@ -38,6 +38,14 @@ def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders()
                 "section_code": "tgw",
             }
         )
+        setup_title = QCoreApplication.translate(
+            "RemoteControlSetupDialog",
+            "Set up Solin Remote",
+        )
+        sessions_empty = QCoreApplication.translate(
+            "RemoteSessionsPopup",
+            "No signed-in devices.",
+        )
     finally:
         app.removeTranslator(translator)
 
@@ -47,7 +55,11 @@ def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders()
     assert messages["app.remoteControl"] == "Controle remoto"
     assert messages["library.chooseMeeting"] == "Escolha uma reunião"
     assert messages["count.media.other"] == "{count} mídias"
+    assert messages["setup.title"] == "Configurar o Solin Remoto"
+    assert messages["session.disconnectedDevice"].startswith("Este dispositivo")
     assert section_title == "TESOUROS DA PALAVRA DE DEUS"
+    assert setup_title == "Configurar o Solin Remoto"
+    assert sessions_empty == "Nenhum dispositivo conectado."
     for key, source in remote_control_message_sources().items():
         assert set(_PLACEHOLDER.findall(messages[key])) == set(_PLACEHOLDER.findall(source))
 

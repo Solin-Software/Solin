@@ -25,6 +25,7 @@ from solin.core.integrations.automation.settings import (
     OBSSettingsStore,
 )
 from solin.core.integrations.camera_options import CameraOption
+from solin.core.remote_control.security import RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.macos_layer import apply_corner_radius
 from solin.ui.background_song_status import translate_background_song_status
@@ -39,6 +40,7 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.camera_popup import CameraPopup
 from solin.widgets.obs_scene_popup import OBSScenePopup
+from solin.widgets.remote_sessions_popup import RemoteSessionsPopup
 from solin.widgets.zoom_panel import ZoomPanel
 
 
@@ -147,6 +149,8 @@ class QuickAccessToolbar(QQuickWidget):
     obs_camera_stream_requested = Signal()
     camera_stream_requested = Signal()
     camera_selection_changed = Signal(object)
+    remote_session_disconnect_requested = Signal(str)
+    remote_sessions_disconnect_all_requested = Signal()
 
     def __init__(
         self,
@@ -172,6 +176,10 @@ class QuickAccessToolbar(QQuickWidget):
         self._zoom_connected = False
         self._camera_enabled = False
         self._camera_stream_active = False
+        self._remote_enabled = False
+        self._remote_running = False
+        self._remote_runtime_message = ""
+        self._remote_sessions: tuple[RemoteSessionInfo, ...] = ()
         self._qml_pointer_depth = 0
         self._anchor_parent = parent
         self._anchor_window = parent.window() if parent is not None else None
@@ -206,6 +214,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._bridge.obsClicked.connect(self._on_obs_clicked)
         self._bridge.zoomClicked.connect(self._on_zoom_clicked)
         self._bridge.cameraClicked.connect(self._on_camera_clicked)
+        self._bridge.remoteControlClicked.connect(self._on_remote_control_clicked)
         self._bridge.minimizeToggled.connect(self._toggle_minimize)
         self._bridge.pointerEntered.connect(self._begin_qml_pointer_cursor)
         self._bridge.pointerExited.connect(self._end_qml_pointer_cursor)
@@ -232,7 +241,8 @@ class QuickAccessToolbar(QQuickWidget):
         # ── Background Song Popup ────────────────────────────────────────
         self._background_song_panel = (
             BackgroundSongPopup(background_song_service, self)
-            if background_song_service is not None else None
+            if background_song_service is not None
+            else None
         )
         if self._background_song is not None:
             self._background_song.enabled_changed.connect(
@@ -252,9 +262,7 @@ class QuickAccessToolbar(QQuickWidget):
         # ── Zoom Panel (native QWidget popup) ─────────────────────────────
         self._zoom_panel = ZoomPanel(self)
         if self._zoom:
-            self._zoom_panel.open_audio_requested.connect(
-                self._zoom.request_open_audio_for_all
-            )
+            self._zoom_panel.open_audio_requested.connect(self._zoom.request_open_audio_for_all)
 
         # ── OBS Scene Popup ───────────────────────────────────────────────
         self._scene_popup = OBSScenePopup(self)
@@ -266,12 +274,19 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── Camera Panel ──────────────────────────────────────────────────
         self._camera_panel = (
-            CameraPopup(camera_service, self._camera_settings, self)
-            if camera_service else None
+            CameraPopup(camera_service, self._camera_settings, self) if camera_service else None
         )
         if self._camera_panel:
             self._camera_panel.stream_requested.connect(self.camera_stream_requested)
             self._camera_panel.camera_changed.connect(self.camera_selection_changed)
+
+        self._remote_sessions_popup = RemoteSessionsPopup(self)
+        self._remote_sessions_popup.disconnect_requested.connect(
+            self.remote_session_disconnect_requested
+        )
+        self._remote_sessions_popup.disconnect_all_requested.connect(
+            self.remote_sessions_disconnect_all_requested
+        )
 
         # ── Slide animation ───────────────────────────────────────────────
         # Windows animates position only (fixed-size widget). macOS animates
@@ -454,6 +469,73 @@ class QuickAccessToolbar(QQuickWidget):
             self._camera_panel.set_stream_active(active)
         self._scene_popup.set_camera_stream_active(active)
 
+    def set_remote_control_status(
+        self,
+        enabled: bool,
+        running: bool,
+        message: str,
+    ) -> None:
+        self._remote_enabled = bool(enabled)
+        self._remote_running = bool(running)
+        self._remote_runtime_message = str(message or "")
+        self._bridge.set_remote_control_visible(self._remote_enabled)
+        self._remote_sessions_popup.set_runtime_state(
+            self._remote_enabled,
+            self._remote_running,
+            self._remote_runtime_message,
+        )
+        if not self._remote_enabled and self._remote_sessions_popup.isVisible():
+            self._remote_sessions_popup.close()
+        self._sync_remote_control_state()
+        self._reposition()
+
+    def set_remote_sessions(self, sessions: object) -> None:
+        self._remote_sessions = (
+            tuple(session for session in sessions if isinstance(session, RemoteSessionInfo))
+            if isinstance(sessions, (tuple, list))
+            else ()
+        )
+        self._remote_sessions_popup.set_sessions(self._remote_sessions)
+        self._sync_remote_control_state()
+
+    def set_remote_session_revocation_result(
+        self,
+        management_id: str,
+        succeeded: bool,
+    ) -> None:
+        self._remote_sessions_popup.set_revocation_result(
+            management_id,
+            succeeded,
+        )
+
+    def _sync_remote_control_state(self) -> None:
+        session_count = len(self._remote_sessions)
+        connected = any(
+            int(getattr(session, "connected_socket_count", 0) or 0) > 0
+            for session in self._remote_sessions
+        )
+        color = (
+            PALETTE.accent
+            if connected
+            else PALETTE.text_secondary
+            if session_count
+            else PALETTE.text_muted
+        )
+        self._bridge.set_remote_control_icon_color(_icon_hex(color))
+        self._bridge.set_remote_control_badge(str(session_count) if session_count else "")
+        self._bridge.set_remote_control_warning(self._remote_enabled and not self._remote_running)
+        if not self._remote_running:
+            tooltip = self.tr("Remote control unavailable")
+        elif session_count == 1:
+            tooltip = self.tr("Remote control · 1 signed-in device")
+        elif session_count > 1:
+            tooltip = self.tr("Remote control · %1 signed-in devices").replace(
+                "%1", str(session_count)
+            )
+        else:
+            tooltip = self.tr("Remote control · no signed-in devices")
+        self._bridge.set_remote_control_tooltip(tooltip)
+
     def _sync_background_song_state(self):
         service = self._background_song
         visible = bool(service is not None and service.is_enabled)
@@ -528,7 +610,9 @@ class QuickAccessToolbar(QQuickWidget):
         self._scene_popup.apply_theme()
         if self._camera_panel is not None:
             self._camera_panel.apply_theme()
+        self._remote_sessions_popup.apply_theme()
         self._sync_background_song_state()
+        self._sync_remote_control_state()
         self._bridge.stateChanged.emit()
 
     def set_browser_rect_mode(self, enabled: bool):
@@ -563,10 +647,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._browser_surface_should_be_visible = not self.isHidden()
             self.hide()
             self._browser_overlay_mode = True
-            if (
-                self._browser_surface_should_be_visible
-                and not self._projection_overlay_active
-            ):
+            if self._browser_surface_should_be_visible and not self._projection_overlay_active:
                 self._ensure_transient_parent()
                 browser_surface.show()
                 self._ensure_transient_parent()
@@ -669,9 +750,7 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _update_separator(self):
         visible = (
-            self._bridge._obs_visible
-            or self._bridge._zoom_visible
-            or self._bridge._camera_visible
+            self._bridge._obs_visible or self._bridge._zoom_visible or self._bridge._camera_visible
         )
         self._bridge.set_separator_visible(visible)
 
@@ -687,6 +766,8 @@ class QuickAccessToolbar(QQuickWidget):
         if self._bridge._camera_visible:
             items.append(30)
         if self._bridge._zoom_visible:
+            items.append(30)
+        if self._bridge._remote_control_visible:
             items.append(30)
         items.append(22)  # minimize chevron
         # 6 px left margin + 6 px right margin + 3 px spacing between items
@@ -811,9 +892,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._slide_anim.setTargetObject(surface)
             self._slide_anim.setStartValue(surface.pos())
             self._slide_anim.setEndValue(self._anchor_point(target_x, base_y))
-            self._slide_anim.finished.connect(
-                self._on_min_done, Qt.ConnectionType.UniqueConnection
-            )
+            self._slide_anim.finished.connect(self._on_min_done, Qt.ConnectionType.UniqueConnection)
             self._slide_anim.start()
 
     def _on_min_done(self):
@@ -890,10 +969,17 @@ class QuickAccessToolbar(QQuickWidget):
             return
         self._camera_panel.show_above(self._active_surface())
 
+    def _on_remote_control_clicked(self) -> None:
+        hide_themed_tooltip()
+        if not self._remote_enabled:
+            return
+        self._remote_sessions_popup.show_above(self._active_surface())
+
     # ── i18n ──────────────────────────────────────────────────────────────
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self._bridge.update_translations()
             self._sync_background_song_state()
+            self._sync_remote_control_state()
         super().changeEvent(event)

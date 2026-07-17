@@ -215,6 +215,44 @@ def test_session_limit_revoke_and_revoke_all_are_deterministic() -> None:
     assert sessions.resolve(second.session_token) is None
 
 
+def test_session_inventory_uses_non_secret_management_ids_and_sanitized_metadata() -> None:
+    tokens = iter(("bearer-secret", "csrf-secret"))
+    monotonic = _Clock(10.0)
+    wall = _Clock(1_721_130_400.0)
+    sessions = InMemorySessionStore(
+        clock=monotonic,
+        wall_clock=wall,
+        token_factory=lambda: next(tokens),
+        management_id_factory=lambda: "management-public",
+    )
+
+    credentials = sessions.create(
+        "operator",
+        browser="Chrome\nInjected",
+        platform="Android",
+        client_mode="standalone",
+        remote_address="192.168.1.45",
+    )
+    snapshot = sessions.active_sessions()[0]
+
+    assert credentials.management_id == "management-public"
+    assert len({credentials.management_id, credentials.session_token, credentials.csrf_token}) == 3
+    assert snapshot.management_id == credentials.management_id
+    assert snapshot.browser == "ChromeInjected"
+    assert snapshot.platform == "Android"
+    assert snapshot.client_mode == "standalone"
+    assert snapshot.remote_address == "192.168.1.45"
+    assert snapshot.created_at_utc == wall.value
+    assert snapshot.last_activity_at_utc == wall.value
+    assert not hasattr(snapshot, "session_token")
+    assert not hasattr(snapshot, "csrf_token")
+
+    generation = sessions.generation
+    assert sessions.revoke_management_id(credentials.management_id) == (credentials.session_token)
+    assert sessions.generation == generation
+    assert sessions.active_sessions() == ()
+
+
 def test_revoke_all_invalidates_session_creation_reserved_by_inflight_login() -> None:
     tokens = iter(("session-one", "csrf-one"))
     sessions = InMemorySessionStore(token_factory=lambda: next(tokens))
@@ -271,12 +309,16 @@ def test_remote_control_settings_are_profile_scoped_disabled_by_default_and_fixe
     assert REMOTE_CONTROL_PORT == 8765
     assert store.snapshot().enabled is False
     assert store.snapshot().network_selection is None
+    assert store.onboarding_seen() is False
 
     store.set_enabled(True)
 
     assert store.enabled() is True
     assert settings.values == {SettingsKey.REMOTE_CONTROL_ENABLED: True}
     assert all("port" not in key for key in settings.values)
+
+    store.mark_onboarding_seen()
+    assert store.onboarding_seen() is True
 
 
 def test_remote_control_network_selection_is_atomic_versioned_and_validated() -> None:

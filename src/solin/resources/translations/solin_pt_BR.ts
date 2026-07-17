@@ -3572,6 +3572,10 @@ Esta ação não pode ser desfeita.</translation>
         <source>Background Song</source>
         <translation>Cântico de fundo</translation>
     </message>
+    <message><source>Remote control unavailable</source><translation>Controle remoto indisponível</translation></message>
+    <message><source>Remote control · 1 signed-in device</source><translation>Controle remoto · 1 dispositivo conectado</translation></message>
+    <message><source>Remote control · %1 signed-in devices</source><translation>Controle remoto · %1 dispositivos conectados</translation></message>
+    <message><source>Remote control · no signed-in devices</source><translation>Controle remoto · nenhum dispositivo conectado</translation></message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -3600,6 +3604,7 @@ Esta ação não pode ser desfeita.</translation>
         <source>Camera</source>
         <translation>Câmera</translation>
     </message>
+    <message><source>Remote control</source><translation>Controle remoto</translation></message>
     <message>
         <location line="+1"/>
         <source>Minimize</source>
@@ -3654,6 +3659,7 @@ Esta ação não pode ser desfeita.</translation>
         <source>Remote control is not running.</source>
         <translation>O controle remoto não está em execução.</translation>
     </message>
+    <message><source>Secure remote control is running. Certificate renewal will retry automatically.</source><translation>O controle remoto seguro está em execução. A renovação do certificado será tentada novamente de forma automática.</translation></message>
 </context>
 <context>
     <name>RemoteControlSectionMixin</name>
@@ -3717,18 +3723,11 @@ Esta ação não pode ser desfeita.</translation>
         <source>Copy address</source>
         <translation>Copiar endereço</translation>
     </message>
-    <message>
-        <location line="-208"/>
-        <location line="+137"/>
-        <source>No connected controllers</source>
-        <translation>Nenhum controlador conectado</translation>
-    </message>
-    <message>
-        <location line="-134"/>
-        <location line="+206"/>
-        <source>Disconnect all</source>
-        <translation>Desconectar todos</translation>
-    </message>
+    <message><source>Set up a device</source><translation>Configurar dispositivo</translation></message>
+    <message><source>Configured as %1</source><translation>Configurado como %1</translation></message>
+    <message><source>Not configured</source><translation>Não configurado</translation></message>
+    <message><source>Change</source><translation>Alterar</translation></message>
+    <message><source>Cancel</source><translation>Cancelar</translation></message>
     <message>
         <location line="-182"/>
         <source>Select a private network…</source>
@@ -3773,21 +3772,6 @@ Esta ação não pode ser desfeita.</translation>
         <location line="+2"/>
         <source>Configuration required.</source>
         <translation>Configuração necessária.</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <source>Certificate authority SHA-256: %1</source>
-        <translation>Autoridade certificadora SHA-256: %1</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>%1 connected controller</source>
-        <translation>%1 controlador conectado</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>%1 connected controllers</source>
-        <translation>%1 controladores conectados</translation>
     </message>
 </context>
 <context>
@@ -5644,6 +5628,62 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
     </message>
 </context>
 <context>
+    <name>RemoteControlSetupDialog</name>
+    <message><source>Set up a device</source><translation>Configurar dispositivo</translation></message>
+    <message><source>Set up Solin Remote</source><translation>Configurar o Solin Remoto</translation></message>
+    <message><source>Scan once to open the secure setup on your phone or tablet.</source><translation>Escaneie uma vez para abrir a configuração segura no celular ou tablet.</translation></message>
+    <message><source>Generating QR code…</source><translation>Gerando código QR…</translation></message>
+    <message><source>1  Scan the QR code</source><translation>1  Escaneie o código QR</translation></message>
+    <message><source>Keep Solin open and connect both devices to the same local network. The guide explains the certificate and app installation.</source><translation>Mantenha o Solin aberto e conecte os dois dispositivos à mesma rede local. O guia explica o certificado e a instalação do app.</translation></message>
+    <message><source>On the first opening, the browser may show a privacy warning. Confirm that the local address matches, choose Advanced or Show Details, and continue only to this address. The warning disappears after the certificate is trusted.</source><translation>Na primeira abertura, o navegador pode mostrar um aviso de privacidade. Confirme se o endereço local é o mesmo, escolha Avançado ou Mostrar Detalhes e continue somente para esse endereço. O aviso desaparece depois que o certificado é considerado confiável.</translation></message>
+    <message><source>Copy setup address</source><translation>Copiar endereço de configuração</translation></message>
+    <message><source>VERIFICATION CODE</source><translation>CÓDIGO DE VERIFICAÇÃO</translation></message>
+    <message><source>Compare this code on the device before installing the certificate.</source><translation>Compare este código no dispositivo antes de instalar o certificado.</translation></message>
+    <message><source>Show full SHA-256 fingerprint</source><translation>Mostrar impressão digital SHA-256 completa</translation></message>
+    <message><source>Save certificate…</source><translation>Salvar certificado…</translation></message>
+    <message><source>Done</source><translation>Concluir</translation></message>
+    <message><source>Could not generate the QR code. Copy the address instead.</source><translation>Não foi possível gerar o código QR. Copie o endereço.</translation></message>
+    <message><source>Save Solin certificate</source><translation>Salvar certificado do Solin</translation></message>
+    <message><source>Certificate files (*.cer)</source><translation>Arquivos de certificado (*.cer)</translation></message>
+    <message><source>Could not save certificate</source><translation>Não foi possível salvar o certificado</translation></message>
+    <message><source>Choose another location and try again.</source><translation>Escolha outro local e tente novamente.</translation></message>
+</context>
+<context>
+    <name>RemoteSessionsPopup</name>
+    <message><source>Remote control</source><translation>Controle remoto</translation></message>
+    <message><source>Disconnect all devices</source><translation>Desconectar todos os dispositivos</translation></message>
+    <message><source>Disconnect every device? They will need to sign in again. Projection will continue.</source><translation>Desconectar todos os dispositivos? Será necessário entrar novamente. A projeção continuará.</translation></message>
+    <message><source>Cancel</source><translation>Cancelar</translation></message>
+    <message><source>Disconnect all</source><translation>Desconectar todos</translation></message>
+    <message><source>Could not disconnect all devices. Try again.</source><translation>Não foi possível desconectar todos os dispositivos. Tente novamente.</translation></message>
+    <message><source>Disabled</source><translation>Desativado</translation></message>
+    <message><source>Active on the local network</source><translation>Ativo na rede local</translation></message>
+    <message><source>Unavailable</source><translation>Indisponível</translation></message>
+    <message><source>Remote control is not running.</source><translation>O controle remoto não está em execução.</translation></message>
+    <message><source>No signed-in devices. Solin is ready for a device to connect.</source><translation>Nenhum dispositivo conectado. O Solin está pronto para receber uma conexão.</translation></message>
+    <message><source>No signed-in devices.</source><translation>Nenhum dispositivo conectado.</translation></message>
+    <message><source>Disconnecting…</source><translation>Desconectando…</translation></message>
+</context>
+<context>
+    <name>_RemoteSessionRow</name>
+    <message><source>Connected now</source><translation>Conectado agora</translation></message>
+    <message><source>Signed in</source><translation>Sessão ativa</translation></message>
+    <message><source>Local network</source><translation>Rede local</translation></message>
+    <message><source>Disconnect</source><translation>Desconectar</translation></message>
+    <message><source>Disconnect this device?</source><translation>Desconectar este dispositivo?</translation></message>
+    <message><source>Cancel</source><translation>Cancelar</translation></message>
+    <message><source>Disconnecting…</source><translation>Desconectando…</translation></message>
+    <message><source>Could not disconnect this device. Try again.</source><translation>Não foi possível desconectar este dispositivo. Tente novamente.</translation></message>
+    <message><source>Remote device</source><translation>Dispositivo remoto</translation></message>
+    <message><source>%1 on %2</source><translation>%1 no %2</translation></message>
+    <message><source>Solin app · %1</source><translation>App Solin · %1</translation></message>
+    <message><source>Activity unknown</source><translation>Atividade desconhecida</translation></message>
+    <message><source>Active now</source><translation>Ativo agora</translation></message>
+    <message><source>Active %1 min ago</source><translation>Ativo há %1 min</translation></message>
+    <message><source>Active %1 h ago</source><translation>Ativo há %1 h</translation></message>
+    <message><source>Active %1 d ago</source><translation>Ativo há %1 d</translation></message>
+</context>
+<context>
     <name>_RemoteControlWeb</name>
     <message><source>Solin Remote</source><translation>Solin Remoto</translation></message>
     <message><source>Remote control</source><translation>Controle remoto</translation></message>
@@ -5666,10 +5706,41 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
     <message><source>Sign in</source><translation>Entrar</translation></message>
     <message><source>Signing in…</source><translation>Entrando…</translation></message>
     <message><source>Protected connection limited to your local network</source><translation>Conexão protegida e limitada à sua rede local</translation></message>
-    <message><source>Prepare installation on this device</source><translation>Preparar a instalação neste dispositivo</translation></message>
-    <message><source>To enable app mode, download and trust this Solin local authority. Before installing it, compare the SHA-256 fingerprint with the one shown in Solin settings.</source><translation>Para habilitar o modo app, baixe e confie na autoridade local deste Solin. Antes de instalar, compare a impressão SHA-256 com a exibida nas configurações do Solin.</translation></message>
-    <message><source>Download this Solin certificate</source><translation>Baixar certificado deste Solin</translation></message>
-    <message><source>On iPhone or iPad, install the profile and enable trust in Settings › General › About › Certificate Trust Settings. On Android, install the file as a CA certificate in security settings. Then reopen this address.</source><translation>No iPhone ou iPad, instale o perfil e ative a confiança em Ajustes › Geral › Sobre › Ajustes de Confiança. No Android, instale o arquivo como certificado de CA nas configurações de segurança. Depois, reabra este endereço.</translation></message>
+    <message><source>Set up this device</source><translation>Configurar este dispositivo</translation></message>
+    <message><source>SECURE SETUP</source><translation>CONFIGURAÇÃO SEGURA</translation></message>
+    <message><source>Set up Solin Remote</source><translation>Configurar o Solin Remoto</translation></message>
+    <message><source>Back to sign in</source><translation>Voltar para o login</translation></message>
+    <message><source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source><translation>Confie neste Solin uma única vez e depois instale o app para ter acesso rápido e seguro na rede local.</translation></message>
+    <message><source>Setup information is unavailable. Keep Solin open and check this device's network.</source><translation>As informações de configuração estão indisponíveis. Mantenha o Solin aberto e verifique a rede deste dispositivo.</translation></message>
+    <message><source>Trust this Solin</source><translation>Confiar neste Solin</translation></message>
+    <message><source>The certificate protects your password and remote commands. Compare the short code below with the one shown in Solin before installing it.</source><translation>O certificado protege sua senha e os comandos remotos. Compare o código curto abaixo com o exibido no Solin antes de instalá-lo.</translation></message>
+    <message><source>Verification code</source><translation>Código de verificação</translation></message>
+    <message><source>Show full SHA-256 fingerprint</source><translation>Mostrar impressão digital SHA-256 completa</translation></message>
+    <message><source>Download Solin certificate</source><translation>Baixar certificado do Solin</translation></message>
+    <message><source>Android</source><translation>Android</translation></message>
+    <message><source>Open Settings and search for “CA certificate”.</source><translation>Abra as Configurações e pesquise por “Certificado de CA”.</translation></message>
+    <message><source>Choose Install a certificate › CA certificate, select solin-remote-root.cer from your downloads, and confirm with your device lock.</source><translation>Escolha Instalar certificado › Certificado de CA, selecione solin-remote-root.cer nos downloads e confirme com o bloqueio do dispositivo.</translation></message>
+    <message><source>Approve Android's security notice only after the verification code matches Solin.</source><translation>Aprove o aviso de segurança do Android somente depois que o código de verificação coincidir com o do Solin.</translation></message>
+    <message><source>Menu names can vary by manufacturer. Opening the downloaded file directly may only redirect you to Settings.</source><translation>Os nomes dos menus podem variar conforme o fabricante. Abrir o arquivo baixado diretamente pode apenas redirecionar você para as Configurações.</translation></message>
+    <message><source>iPhone or iPad</source><translation>iPhone ou iPad</translation></message>
+    <message><source>Download the certificate in Safari, open Settings, and tap Profile Downloaded. If it is not shown, open General › VPN &amp; Device Management.</source><translation>Baixe o certificado no Safari, abra Ajustes e toque em Perfil Baixado. Se a opção não aparecer, abra Geral › VPN e Gerenciamento de Dispositivo.</translation></message>
+    <message><source>Tap Install and follow the confirmation prompts.</source><translation>Toque em Instalar e siga as confirmações.</translation></message>
+    <message><source>Open General › About › Certificate Trust Settings and enable full trust for Solin Remote Root.</source><translation>Abra Geral › Sobre › Ajustes de Confiança de Certificados e ative a confiança total para Solin Remote Root.</translation></message>
+    <message><source>Install the downloaded file as a trusted certificate authority for this device.</source><translation>Instale o arquivo baixado como uma autoridade certificadora confiável neste dispositivo.</translation></message>
+    <message><source>Reopen the secure address</source><translation>Reabrir o endereço seguro</translation></message>
+    <message><source>Fully close and reopen the browser. The privacy warning should no longer appear.</source><translation>Feche completamente e abra novamente o navegador. O aviso de privacidade não deverá mais aparecer.</translation></message>
+    <message><source>If Chrome still shows the warning after the CA certificate is installed, restart Android once and reopen the address.</source><translation>Se o Chrome continuar mostrando o aviso depois da instalação do certificado de CA, reinicie o Android uma vez e reabra o endereço.</translation></message>
+    <message><source>On iPhone or iPad, return to Safari after enabling full trust and reopen the address.</source><translation>No iPhone ou iPad, volte ao Safari depois de ativar a confiança total e reabra o endereço.</translation></message>
+    <message><source>Install the app</source><translation>Instalar o app</translation></message>
+    <message><source>Install Solin Remote to open it without the browser address bar.</source><translation>Instale o Solin Remoto para abri-lo sem a barra de endereço do navegador.</translation></message>
+    <message><source>Install Solin Remote</source><translation>Instalar o Solin Remoto</translation></message>
+    <message><source>In Chrome, open the ⋮ menu, choose Add to Home screen, then choose Install rather than Add shortcut.</source><translation>No Chrome, abra o menu ⋮, escolha Adicionar à tela inicial e depois escolha Instalar em vez de Adicionar atalho.</translation></message>
+    <message><source>In Safari, tap Share › Add to Home Screen, enable Open as Web App, then tap Add.</source><translation>No Safari, toque em Compartilhar › Adicionar à Tela de Início, ative Abrir como App da Web e toque em Adicionar.</translation></message>
+    <message><source>Use your browser menu and choose Install app or Add to Home Screen.</source><translation>Use o menu do navegador e escolha Instalar app ou Adicionar à tela inicial.</translation></message>
+    <message><source>Continue to sign in</source><translation>Continuar para o login</translation></message>
+    <message><source>This device was disconnected in Solin. Sign in again to reconnect.</source><translation>Este dispositivo foi desconectado no Solin. Entre novamente para reconectar.</translation></message>
+    <message><source>All remote devices were disconnected in Solin. Sign in again to reconnect.</source><translation>Todos os dispositivos remotos foram desconectados no Solin. Entre novamente para reconectar.</translation></message>
+    <message><source>A new sign-in replaced this session.</source><translation>Um novo login substituiu esta sessão.</translation></message>
     <message><source>Enter your username and password.</source><translation>Informe o usuário e a senha.</translation></message>
     <message><source>Signed in. Remote control connected.</source><translation>Login concluído. Controle remoto conectado.</translation></message>
     <message><source>Could not sign in.</source><translation>Não foi possível entrar.</translation></message>

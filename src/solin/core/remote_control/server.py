@@ -11,6 +11,7 @@ import re
 import ssl
 import threading
 from typing import Final
+from concurrent.futures import Future
 
 from aiohttp import WSMsgType, web
 
@@ -29,6 +30,7 @@ from .security import (
     DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS,
     InMemorySessionStore,
     LoginRateLimiter,
+    RemoteSessionInfo,
     RemoteControlCredentialsStore,
     SessionGenerationChangedError,
     SessionLimitReachedError,
@@ -83,7 +85,8 @@ _STATIC_CONTENT_TYPES: Final = {
 CommandHandler = Callable[[RemoteCommand], Awaitable[CommandError | None]]
 ThumbnailHandler = Callable[[str, str, str], Awaitable[bytes | None]]
 CollectionThumbnailHandler = Callable[[str, str], Awaitable[bytes | None]]
-LocalizationProvider = Callable[[], JsonObject]
+SetupProvider = Callable[[], JsonObject]
+SessionInventoryCallback = Callable[[tuple[RemoteSessionInfo, ...]], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,10 +98,10 @@ class RemoteControlServerDependencies:
     rate_limiter: LoginRateLimiter
     assets_directory: Path
     command_handler: CommandHandler
-    localization_provider: LocalizationProvider
+    setup_provider: SetupProvider
     thumbnail_handler: ThumbnailHandler | None = None
     collection_thumbnail_handler: CollectionThumbnailHandler | None = None
-    session_count_changed: Callable[[int], None] | None = None
+    session_inventory_changed: SessionInventoryCallback | None = None
     profile_id: str = ""
     profile_name: str = ""
     meeting_week_start: Callable[[], date] = current_monday
@@ -268,7 +271,7 @@ class RemoteControlHttpApplication:
 
     def _configure_routes(self) -> None:
         prefix = REMOTE_CONTROL_PREFIX
-        self._app.router.add_get(f"{prefix}/api/localization", self._localization)
+        self._app.router.add_get(f"{prefix}/api/setup", self._setup)
         self._app.router.add_post(f"{prefix}/api/auth/login", self._login)
         self._app.router.add_post(f"{prefix}/api/logout", self._logout)
         self._app.router.add_get(f"{prefix}/api/bootstrap", self._bootstrap)
@@ -304,13 +307,13 @@ class RemoteControlHttpApplication:
             content_type="application/pkix-cert",
             headers={
                 "Cache-Control": "no-store",
-                "Content-Disposition": ('attachment; filename="solin-remote-authority.cer"'),
+                "Content-Disposition": ('attachment; filename="solin-remote-root.cer"'),
             },
         )
 
-    async def _localization(self, request: web.Request) -> web.Response:
+    async def _setup(self, request: web.Request) -> web.Response:
         del request
-        return self._json_response(self._localization_payload())
+        return self._json_response(self._setup_payload())
 
     async def _asset(self, request: web.Request) -> web.StreamResponse:
         requested = request.match_info.get("asset", "")
@@ -363,17 +366,18 @@ class RemoteControlHttpApplication:
         self._dependencies.rate_limiter.reset_identity(client_address, username)
         existing_token = request.cookies.get(SESSION_COOKIE_NAME, "")
         if existing_token and self._dependencies.sessions.revoke(existing_token):
-            await self._close_session_websockets(existing_token)
+            await self._close_session_websockets(existing_token, "signed_in_again")
         try:
             session_credentials = self._dependencies.sessions.create(
                 self._dependencies.credentials.configured_username(),
+                **_client_metadata(request),
                 expected_generation=session_generation,
             )
         except SessionGenerationChangedError as error:
             raise web.HTTPUnauthorized(text="Invalid username or password") from error
         except SessionLimitReachedError as error:
             raise web.HTTPServiceUnavailable(text="Session limit reached") from error
-        self._publish_session_count()
+        self._publish_session_inventory()
 
         response = self._json_response(
             {
@@ -425,8 +429,8 @@ class RemoteControlHttpApplication:
     async def _logout(self, request: web.Request) -> web.Response:
         token = self._authorize_mutation(request)
         self._dependencies.sessions.revoke(token)
-        await self._close_session_websockets(token)
-        self._publish_session_count()
+        await self._close_session_websockets(token, "signed_out")
+        self._publish_session_inventory()
         response = self._json_response({"ok": True})
         response.del_cookie(SESSION_COOKIE_NAME, path="/", secure=True, httponly=True)
         return response
@@ -584,6 +588,7 @@ class RemoteControlHttpApplication:
         first_socket = not self._websockets
         self._websockets[socket] = asyncio.Lock()
         self._websocket_sessions[socket] = session_token
+        self._publish_session_inventory()
         heartbeat_task: asyncio.Task[None] | None = None
         try:
             snapshot = self._dependencies.state.snapshot()
@@ -638,6 +643,7 @@ class RemoteControlHttpApplication:
                 await asyncio.gather(heartbeat_task, return_exceptions=True)
             self._websockets.pop(socket, None)
             self._websocket_sessions.pop(socket, None)
+            self._publish_session_inventory()
         return socket
 
     def _reserve_websocket(self, session_token: str) -> None:
@@ -663,13 +669,13 @@ class RemoteControlHttpApplication:
             self._websocket_reservation_count - 1,
         )
 
-    async def _close_session_websockets(self, session_token: str) -> None:
+    async def _close_session_websockets(self, session_token: str, reason: str) -> None:
         sockets = [
             socket for socket, token in self._websocket_sessions.items() if token == session_token
         ]
         if not sockets:
             return
-        event = self._event("session.revoked", {}, advance=False)
+        event = self._event("session.revoked", {"reason": reason}, advance=False)
         for socket in sockets:
             try:
                 await self._send(socket, event)
@@ -685,7 +691,7 @@ class RemoteControlHttpApplication:
     ) -> None:
         while not socket.closed:
             await asyncio.sleep(_WEBSOCKET_HEARTBEAT_SECONDS)
-            self._publish_expired_session_count()
+            self._publish_expired_sessions()
             if self._dependencies.sessions.resolve(session_token) is None:
                 await socket.close(code=4401, message=b"Session expired")
                 return
@@ -760,17 +766,42 @@ class RemoteControlHttpApplication:
         }
 
     def _localization_payload(self) -> JsonObject:
-        payload = self._dependencies.localization_provider()
+        return self._validated_localization_payload(self._dependencies.setup_provider())
+
+    def _setup_payload(self) -> JsonObject:
+        payload = self._dependencies.setup_provider()
+        localization = self._validated_localization_payload(payload)
+        raw_tls = payload.get("tls")
+        if not isinstance(raw_tls, dict):
+            raise TypeError("setup_provider must return a TLS object")
+        tls: dict[str, JsonValue] = {}
+        for key in (
+            "installationId",
+            "authoritySha256",
+            "verificationCode",
+            "authorityCertificateUrl",
+            "authorityNotValidAfter",
+        ):
+            value = raw_tls.get(key)
+            if not isinstance(value, str) or not value:
+                raise TypeError(f"setup TLS field {key!r} must be a non-empty string")
+            tls[key] = value
+        return {**localization, "tls": tls}
+
+    @staticmethod
+    def _validated_localization_payload(payload: object) -> JsonObject:
+        if not isinstance(payload, dict):
+            raise TypeError("setup_provider must return an object")
         locale = payload.get("locale")
         raw_messages = payload.get("messages")
         if not isinstance(locale, str) or not locale:
-            raise TypeError("localization_provider must return a locale string")
+            raise TypeError("setup_provider must return a locale string")
         if not isinstance(raw_messages, dict):
-            raise TypeError("localization_provider must return a messages object")
+            raise TypeError("setup_provider must return a messages object")
         messages: dict[str, JsonValue] = {}
         for key, value in raw_messages.items():
             if not isinstance(key, str) or not key or not isinstance(value, str):
-                raise TypeError("localization messages must contain string keys and values")
+                raise TypeError("setup messages must contain string keys and values")
             messages[key] = value
         return {"locale": locale, "messages": messages}
 
@@ -780,10 +811,43 @@ class RemoteControlHttpApplication:
             raise TypeError("meeting_week_start must return a date")
         return value.isoformat()
 
-    def _publish_session_count(self) -> None:
-        callback = self._dependencies.session_count_changed
-        if callback is not None:
-            callback(self._dependencies.sessions.active_count())
+    def _publish_session_inventory(self) -> None:
+        callback = self._dependencies.session_inventory_changed
+        if callback is None:
+            return
+        socket_counts: dict[str, int] = {}
+        for token in self._websocket_sessions.values():
+            snapshot = self._dependencies.sessions.resolve(token)
+            if snapshot is not None:
+                socket_counts[snapshot.management_id] = (
+                    socket_counts.get(snapshot.management_id, 0) + 1
+                )
+        inventory = tuple(
+            RemoteSessionInfo(
+                management_id=snapshot.management_id,
+                principal=snapshot.principal,
+                browser=snapshot.browser,
+                platform=snapshot.platform,
+                client_mode=snapshot.client_mode,
+                remote_address=snapshot.remote_address,
+                created_at_utc=snapshot.created_at_utc,
+                last_activity_at_utc=snapshot.last_activity_at_utc,
+                connected_socket_count=socket_counts.get(snapshot.management_id, 0),
+            )
+            for snapshot in self._dependencies.sessions.active_sessions()
+        )
+        callback(
+            tuple(
+                sorted(
+                    inventory,
+                    key=lambda item: (
+                        -int(item.connected_socket_count > 0),
+                        -item.last_activity_at_utc,
+                        item.management_id,
+                    ),
+                )
+            )
+        )
 
     def _require_same_origin(self, request: web.Request) -> None:
         origin = request.headers.get("Origin", "").rstrip("/")
@@ -792,23 +856,40 @@ class RemoteControlHttpApplication:
 
     def _require_session(self, request: web.Request) -> str:
         token = request.cookies.get(SESSION_COOKIE_NAME, "")
-        self._publish_expired_session_count()
+        self._publish_expired_sessions()
         if not token or self._dependencies.sessions.resolve(token) is None:
             raise web.HTTPUnauthorized()
         return token
 
     def _authorize_mutation(self, request: web.Request) -> str:
         self._require_same_origin(request)
-        self._publish_expired_session_count()
+        self._publish_expired_sessions()
         token = request.cookies.get(SESSION_COOKIE_NAME, "")
         csrf_token = request.headers.get("X-CSRF-Token", "")
         if not token or self._dependencies.sessions.authorize_mutation(token, csrf_token) is None:
             raise web.HTTPForbidden(text="Invalid session or CSRF token")
         return token
 
-    def _publish_expired_session_count(self) -> None:
+    def _publish_expired_sessions(self) -> None:
         if self._dependencies.sessions.purge_expired():
-            self._publish_session_count()
+            self._publish_session_inventory()
+
+    async def revoke_session(self, management_id: str) -> bool:
+        token = self._dependencies.sessions.revoke_management_id(management_id)
+        if token is None:
+            self._publish_session_inventory()
+            return False
+        await self._close_session_websockets(token, "revoked_device")
+        self._publish_session_inventory()
+        return True
+
+    async def revoke_all_sessions(self) -> int:
+        tokens = tuple(set(self._websocket_sessions.values()))
+        revoked = self._dependencies.sessions.revoke_all()
+        for token in tokens:
+            await self._close_session_websockets(token, "revoked_all")
+        self._publish_session_inventory()
+        return revoked
 
     @staticmethod
     async def _strict_json(
@@ -858,6 +939,7 @@ class RemoteControlServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._application: RemoteControlHttpApplication | None = None
         self._runner: web.AppRunner | None = None
+        self._ssl_context: ssl.SSLContext | None = None
         self._started = threading.Event()
         self._start_error: BaseException | None = None
         self._binding: RemoteControlServerBinding | None = None
@@ -910,6 +992,40 @@ class RemoteControlServer:
             return
         asyncio.run_coroutine_threadsafe(application.publish_profile(), loop)
 
+    def revoke_session(self, management_id: str) -> Future[bool] | None:
+        loop = self._loop
+        application = self._application
+        if loop is None or application is None or not loop.is_running():
+            return None
+        return asyncio.run_coroutine_threadsafe(
+            application.revoke_session(management_id),
+            loop,
+        )
+
+    def revoke_all_sessions(self) -> Future[int] | None:
+        loop = self._loop
+        application = self._application
+        if loop is None or application is None or not loop.is_running():
+            return None
+        return asyncio.run_coroutine_threadsafe(application.revoke_all_sessions(), loop)
+
+    def reload_tls(self, identity: TLSIdentity, *, timeout_seconds: float = 8.0) -> None:
+        """Replace the leaf certificate without interrupting clients or sessions."""
+
+        loop = self._loop
+        context = self._ssl_context
+        if loop is None or context is None or not loop.is_running():
+            raise RuntimeError("Remote-control server is not running")
+        future = asyncio.run_coroutine_threadsafe(
+            self._reload_tls_identity(context, identity),
+            loop,
+        )
+        try:
+            future.result(timeout_seconds)
+        except TimeoutError:
+            future.cancel()
+            raise TimeoutError("Timed out reloading the remote-control certificate") from None
+
     def stop(self, *, timeout_seconds: float = 8.0) -> None:
         with self._lock:
             thread = self._thread
@@ -955,7 +1071,7 @@ class RemoteControlServer:
         application = RemoteControlHttpApplication(
             self._dependencies,
             allowed_origin=binding.origin,
-            trust_certificate_der=binding.tls_identity.authority_certificate_der(),
+            trust_certificate_der=binding.tls_identity.trust_certificate_der(),
         )
         runner = web.AppRunner(
             application.app,
@@ -964,6 +1080,7 @@ class RemoteControlServer:
         )
         await runner.setup()
         ssl_context = _build_ssl_context(binding.tls_identity)
+        self._ssl_context = ssl_context
         site = web.TCPSite(
             runner,
             binding.host,
@@ -979,6 +1096,21 @@ class RemoteControlServer:
         runner = self._runner
         if runner is not None:
             await runner.cleanup()
+        self._ssl_context = None
+
+    @staticmethod
+    async def _reload_tls_identity(
+        context: ssl.SSLContext,
+        identity: TLSIdentity,
+    ) -> None:
+        # Validate the complete candidate in isolation before mutating the
+        # listener's live context. Existing TLS connections keep their current
+        # session while subsequent handshakes receive the renewed certificate.
+        _build_ssl_context(identity)
+        context.load_cert_chain(
+            certfile=str(identity.certificate_path),
+            keyfile=str(identity.private_key_path),
+        )
 
 
 def _build_ssl_context(identity: TLSIdentity) -> ssl.SSLContext:
@@ -990,3 +1122,43 @@ def _build_ssl_context(identity: TLSIdentity) -> ssl.SSLContext:
         keyfile=str(identity.private_key_path),
     )
     return context
+
+
+def _client_metadata(request: web.Request) -> dict[str, str]:
+    user_agent = request.headers.get("User-Agent", "")[:512]
+    browser = ""
+    for marker, name in (
+        ("EdgA/", "Edge"),
+        ("EdgiOS/", "Edge"),
+        ("Edg/", "Edge"),
+        ("CriOS/", "Chrome"),
+        ("Chrome/", "Chrome"),
+        ("FxiOS/", "Firefox"),
+        ("Firefox/", "Firefox"),
+        ("Safari/", "Safari"),
+    ):
+        if marker in user_agent:
+            browser = name
+            break
+    platform = ""
+    for marker, name in (
+        ("Android", "Android"),
+        ("iPhone", "iPhone"),
+        ("iPad", "iPad"),
+        ("Windows", "Windows"),
+        ("Macintosh", "macOS"),
+        ("Linux", "Linux"),
+    ):
+        if marker in user_agent:
+            platform = name
+            break
+    return {
+        "browser": browser,
+        "platform": platform,
+        "client_mode": (
+            "standalone"
+            if request.headers.get("X-Solin-Display-Mode", "").casefold() == "standalone"
+            else "browser"
+        ),
+        "remote_address": request.remote or "",
+    }

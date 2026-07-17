@@ -320,23 +320,51 @@ class RemoteControlCredentialsStore:
 class SessionCredentials:
     session_token: str
     csrf_token: str
+    management_id: str
 
 
 @dataclass(frozen=True, slots=True)
 class SessionSnapshot:
+    management_id: str
     principal: str
+    browser: str
+    platform: str
+    client_mode: str
+    remote_address: str
     created_at: float
     last_activity_at: float
+    created_at_utc: float
+    last_activity_at_utc: float
     absolute_expires_at: float
     idle_expires_at: float
 
 
+@dataclass(frozen=True, slots=True)
+class RemoteSessionInfo:
+    management_id: str
+    principal: str
+    browser: str
+    platform: str
+    client_mode: str
+    remote_address: str
+    created_at_utc: float
+    last_activity_at_utc: float
+    connected_socket_count: int
+
+
 @dataclass(slots=True)
 class _Session:
+    management_id: str
     principal: str
     csrf_token: str
+    browser: str
+    platform: str
+    client_mode: str
+    remote_address: str
     created_at: float
     last_activity_at: float
+    created_at_utc: float
+    last_activity_at_utc: float
 
 
 class InMemorySessionStore:
@@ -349,7 +377,9 @@ class InMemorySessionStore:
         idle_ttl_seconds: float = DEFAULT_SESSION_IDLE_TTL_SECONDS,
         max_sessions: int = DEFAULT_MAX_SESSIONS,
         clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], float] = time.time,
         token_factory: Callable[[], str] | None = None,
+        management_id_factory: Callable[[], str] | None = None,
     ) -> None:
         if not math.isfinite(absolute_ttl_seconds) or absolute_ttl_seconds <= 0:
             raise ValueError("Absolute session TTL must be positive and finite")
@@ -361,7 +391,9 @@ class InMemorySessionStore:
         self._idle_ttl_seconds = float(idle_ttl_seconds)
         self._max_sessions = max_sessions
         self._clock = clock
+        self._wall_clock = wall_clock
         self._token_factory = token_factory or (lambda: secrets.token_urlsafe(32))
+        self._management_id_factory = management_id_factory or (lambda: secrets.token_urlsafe(12))
         self._sessions: dict[str, _Session] = {}
         self._generation = 0
         self._dummy_csrf_token = secrets.token_urlsafe(32)
@@ -376,6 +408,10 @@ class InMemorySessionStore:
         self,
         principal: str,
         *,
+        browser: str = "",
+        platform: str = "",
+        client_mode: str = "browser",
+        remote_address: str = "",
         expected_generation: int | None = None,
     ) -> SessionCredentials:
         if not principal:
@@ -395,8 +431,22 @@ class InMemorySessionStore:
             csrf_token = self._token_factory()
             if not csrf_token:
                 raise ValueError("Token factory returned an empty CSRF token")
-            self._sessions[session_token] = _Session(principal, csrf_token, now, now)
-            return SessionCredentials(session_token, csrf_token)
+            management_id = self._unique_management_id_locked()
+            now_utc = self._wall_now()
+            self._sessions[session_token] = _Session(
+                management_id=management_id,
+                principal=principal,
+                csrf_token=csrf_token,
+                browser=_bounded_session_text(browser, 32),
+                platform=_bounded_session_text(platform, 32),
+                client_mode=("standalone" if client_mode == "standalone" else "browser"),
+                remote_address=_bounded_session_text(remote_address, 64),
+                created_at=now,
+                last_activity_at=now,
+                created_at_utc=now_utc,
+                last_activity_at_utc=now_utc,
+            )
+            return SessionCredentials(session_token, csrf_token, management_id)
 
     def resolve(self, session_token: str) -> SessionSnapshot | None:
         """Authenticate a session without extending its idle deadline."""
@@ -431,6 +481,7 @@ class InMemorySessionStore:
                 return None
             if touch:
                 session.last_activity_at = now
+                session.last_activity_at_utc = self._wall_now()
             return self._snapshot(session)
 
     def touch(self, session_token: str) -> SessionSnapshot | None:
@@ -440,11 +491,28 @@ class InMemorySessionStore:
             if session is None:
                 return None
             session.last_activity_at = now
+            session.last_activity_at_utc = self._wall_now()
             return self._snapshot(session)
 
     def revoke(self, session_token: str) -> bool:
         with self._lock:
             return self._sessions.pop(session_token, None) is not None
+
+    def revoke_management_id(self, management_id: str) -> str | None:
+        """Revoke one session by its non-secret management identity."""
+
+        with self._lock:
+            token = next(
+                (
+                    candidate
+                    for candidate, session in self._sessions.items()
+                    if session.management_id == management_id
+                ),
+                None,
+            )
+            if token is not None:
+                self._sessions.pop(token, None)
+            return token
 
     def revoke_all(self) -> int:
         with self._lock:
@@ -458,6 +526,20 @@ class InMemorySessionStore:
             self._purge_expired_locked(self._now())
             return len(self._sessions)
 
+    def active_sessions(self) -> tuple[SessionSnapshot, ...]:
+        with self._lock:
+            self._purge_expired_locked(self._now())
+            snapshots = [self._snapshot(session) for session in self._sessions.values()]
+        return tuple(
+            sorted(
+                snapshots,
+                key=lambda snapshot: (
+                    -snapshot.last_activity_at,
+                    snapshot.management_id,
+                ),
+            )
+        )
+
     def purge_expired(self) -> int:
         with self._lock:
             return self._purge_expired_locked(self._now())
@@ -468,6 +550,14 @@ class InMemorySessionStore:
             if token and token not in self._sessions:
                 return token
         raise RuntimeError("Token factory failed to produce a unique non-empty session token")
+
+    def _unique_management_id_locked(self) -> str:
+        existing = {session.management_id for session in self._sessions.values()}
+        for _attempt in range(16):
+            management_id = self._management_id_factory()
+            if management_id and management_id not in existing:
+                return management_id
+        raise RuntimeError("Management ID factory failed to produce a unique non-empty value")
 
     def _live_session_locked(self, token: str, now: float) -> _Session | None:
         session = self._sessions.get(token)
@@ -494,9 +584,16 @@ class InMemorySessionStore:
 
     def _snapshot(self, session: _Session) -> SessionSnapshot:
         return SessionSnapshot(
+            management_id=session.management_id,
             principal=session.principal,
+            browser=session.browser,
+            platform=session.platform,
+            client_mode=session.client_mode,
+            remote_address=session.remote_address,
             created_at=session.created_at,
             last_activity_at=session.last_activity_at,
+            created_at_utc=session.created_at_utc,
+            last_activity_at_utc=session.last_activity_at_utc,
             absolute_expires_at=session.created_at + self._absolute_ttl_seconds,
             idle_expires_at=session.last_activity_at + self._idle_ttl_seconds,
         )
@@ -506,6 +603,16 @@ class InMemorySessionStore:
         if not math.isfinite(now):
             raise ValueError("Session clock must return a finite value")
         return now
+
+    def _wall_now(self) -> float:
+        now = float(self._wall_clock())
+        if not math.isfinite(now):
+            raise ValueError("Session wall clock must return a finite value")
+        return now
+
+
+def _bounded_session_text(value: str, maximum: int) -> str:
+    return "".join(character for character in str(value or "") if character.isprintable())[:maximum]
 
 
 @dataclass(frozen=True, slots=True)

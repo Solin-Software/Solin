@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QStackedWidget, QWidget
 
 if TYPE_CHECKING:
     from solin.core.foundation.runtime_paths import ProfilePaths
-    from solin.core.ingest.qr_generation import QrGenerationSessionFactory
+    from solin.ui.qr_generation import QrGenerationSessionFactory
     from solin.core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from solin.core.media.browser_downloads import BrowserDownloadService
     from solin.core.media.cache import MediaCacheManager
@@ -214,9 +214,7 @@ class LazyPageController:
         browser.stop_projection_signal.connect(handlers.stop_projection)
         browser.project_tab_pixmap_signal.connect(handlers.project_tab_frame)
         browser.stop_tab_projection_signal.connect(handlers.stop_projection)
-        browser.media_destination_signal.connect(
-            handlers.browser_media_destination
-        )
+        browser.media_destination_signal.connect(handlers.browser_media_destination)
         self._browser_signals_connected = True
 
     def _project_browser_video(self, url: str, title: str) -> None:
