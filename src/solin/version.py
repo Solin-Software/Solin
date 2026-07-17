@@ -1,4 +1,4 @@
 """Solin release version."""
 
-VERSION = "26.23.5.0"
+VERSION = "26.24.0.0"
 __version__ = VERSION
