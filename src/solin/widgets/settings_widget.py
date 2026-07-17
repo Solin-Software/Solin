@@ -145,6 +145,9 @@ class SettingsWidget(
         self._remote_setup_pending_auto_open = False
         self._remote_setup_presentation = None
         self._remote_setup_dialog = None
+        self._remote_runtime_status_known = False
+        self._remote_runtime_message = ""
+        self._remote_runtime_status_kind = "pending"
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._theme_persistent_connections: set[str] = set()
         self._init_yearly_text_section()

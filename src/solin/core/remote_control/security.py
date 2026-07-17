@@ -22,7 +22,7 @@ from solin.core.foundation.settings_store import ProfileAppSettingsStore
 
 USERNAME_MIN_LENGTH: Final = 3
 USERNAME_MAX_LENGTH: Final = 64
-PASSWORD_MIN_LENGTH: Final = 12
+PASSWORD_MIN_LENGTH: Final = 6
 PASSWORD_MAX_LENGTH: Final = 128
 DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS: Final = 12 * 60 * 60
 DEFAULT_SESSION_IDLE_TTL_SECONDS: Final = 2 * 60 * 60

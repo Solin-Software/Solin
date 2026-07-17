@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QFrame,
@@ -22,15 +22,17 @@ from solin.styles.theme import PALETTE, qss_rgba
 
 class _RemoteSessionRow(QFrame):
     disconnect_requested = Signal(str)
+    geometry_changed = Signal()
 
     def __init__(self, session: RemoteSessionInfo, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.session = session
         self.setObjectName("RemoteSessionRow")
+        self.setMinimumHeight(88)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 10, 10)
-        root.setSpacing(7)
+        root.setContentsMargins(14, 12, 12, 12)
+        root.setSpacing(8)
 
         summary = QHBoxLayout()
         summary.setSpacing(10)
@@ -105,6 +107,7 @@ class _RemoteSessionRow(QFrame):
             self._feedback.show()
         elif not bool(self._feedback.property("error")):
             self._feedback.hide()
+        self._notify_geometry_changed()
 
     def show_error(self) -> None:
         self._disconnect.setEnabled(True)
@@ -113,20 +116,27 @@ class _RemoteSessionRow(QFrame):
         self._feedback.show()
         self.style().unpolish(self._feedback)
         self.style().polish(self._feedback)
+        self._notify_geometry_changed()
 
     def _show_confirmation(self) -> None:
         self._disconnect.hide()
         self._feedback.hide()
         self._confirmation.show()
+        self._notify_geometry_changed()
 
     def _cancel_confirmation(self) -> None:
         self._confirmation.hide()
         self._disconnect.show()
+        self._notify_geometry_changed()
 
     def _confirm_disconnect(self) -> None:
         self._disconnect.show()
         self.set_pending(True)
         self.disconnect_requested.emit(self.session.management_id)
+
+    def _notify_geometry_changed(self) -> None:
+        self.updateGeometry()
+        self.geometry_changed.emit()
 
     def _session_label(self) -> str:
         browser = self.session.browser or self.tr("Remote device")
@@ -162,8 +172,10 @@ class RemoteSessionsPopup(QWidget):
     disconnect_requested = Signal(str)
     disconnect_all_requested = Signal()
 
-    _WIDTH = 352
-    _MAX_LIST_HEIGHT = 276
+    _WIDTH = 392
+    _MAX_LIST_HEIGHT = 348
+    _SCREEN_MARGIN = 8
+    _ANCHOR_GAP = 10
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
@@ -179,8 +191,11 @@ class RemoteSessionsPopup(QWidget):
         self._pending_ids: set[str] = set()
         self._failed_ids: set[str] = set()
         self._disconnect_all_pending = False
+        self._anchor_rect: QRect | None = None
+        self._available_rect: QRect | None = None
 
         opacity = QGraphicsOpacityEffect(self)
+        opacity.setOpacity(1.0)
         self.setGraphicsEffect(opacity)
         self._opacity = opacity
         self._fade = QPropertyAnimation(opacity, b"opacity", self)
@@ -201,13 +216,13 @@ class RemoteSessionsPopup(QWidget):
         self._card = QFrame()
         self._card.setObjectName("RemoteSessionsCard")
         card = QVBoxLayout(self._card)
-        card.setContentsMargins(16, 15, 16, 14)
-        card.setSpacing(11)
+        card.setContentsMargins(18, 17, 18, 16)
+        card.setSpacing(13)
 
         header = QHBoxLayout()
-        header.setSpacing(9)
+        header.setSpacing(10)
         self._header_icon = QLabel()
-        self._header_icon.setFixedSize(17, 17)
+        self._header_icon.setFixedSize(20, 20)
         header.addWidget(self._header_icon)
         title_copy = QVBoxLayout()
         title_copy.setSpacing(0)
@@ -220,8 +235,9 @@ class RemoteSessionsPopup(QWidget):
         header.addLayout(title_copy, 1)
         self._count = QLabel()
         self._count.setObjectName("RemoteSessionsCount")
+        self._count.setFixedSize(24, 24)
         self._count.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        header.addWidget(self._count)
+        header.addWidget(self._count, alignment=Qt.AlignmentFlag.AlignVCenter)
         card.addLayout(header)
 
         self._runtime = QLabel()
@@ -250,8 +266,8 @@ class RemoteSessionsPopup(QWidget):
 
         self._footer = QWidget()
         footer_layout = QVBoxLayout(self._footer)
-        footer_layout.setContentsMargins(0, 2, 0, 0)
-        footer_layout.setSpacing(7)
+        footer_layout.setContentsMargins(0, 3, 0, 0)
+        footer_layout.setSpacing(8)
         self._disconnect_all = QPushButton(self.tr("Disconnect all devices"))
         self._disconnect_all.setObjectName("RemoteSessionsDisconnectAll")
         self._disconnect_all.setProperty("destructive", True)
@@ -334,23 +350,32 @@ class RemoteSessionsPopup(QWidget):
         else:
             self._global_feedback.hide()
         self._render_footer()
+        self._sync_geometry()
 
     def show_above(self, anchor: QWidget) -> None:
-        self._render()
-        self.adjustSize()
-        anchor_rect = anchor.rect()
-        anchor_center = anchor.mapToGlobal(anchor_rect.center())
+        anchor_top_left = anchor.mapToGlobal(anchor.rect().topLeft())
+        self._anchor_rect = QRect(
+            anchor_top_left.x(),
+            anchor_top_left.y(),
+            anchor.width(),
+            anchor.height(),
+        )
+        anchor_center = self._anchor_rect.center()
         screen = QGuiApplication.screenAt(anchor_center) or QGuiApplication.primaryScreen()
-        available = screen.availableGeometry() if screen is not None else None
-        x = anchor_center.x() - self.width() // 2
-        y = anchor.mapToGlobal(anchor_rect.topLeft()).y() - self.height() - 10
-        if available is not None:
-            x = max(available.left() + 8, min(x, available.right() - self.width() - 8))
-            if y < available.top() + 8:
-                y = anchor.mapToGlobal(anchor_rect.bottomLeft()).y() + 10
-        self.move(x, y)
+        self._available_rect = screen.availableGeometry() if screen is not None else None
+
+        self._fade.stop()
         self._opacity.setOpacity(0.0)
+        self._render()
+        self.ensurePolished()
+        self._sync_geometry()
         self.show()
+        QTimer.singleShot(0, self._finish_show)
+
+    def _finish_show(self) -> None:
+        if not self.isVisible():
+            return
+        self._sync_geometry()
         self.raise_()
         self.activateWindow()
         self._fade.stop()
@@ -358,22 +383,69 @@ class RemoteSessionsPopup(QWidget):
         self._fade.setEndValue(1.0)
         self._fade.start()
 
+    def _sync_geometry(self) -> None:
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16_777_215)
+        card_layout = self._card.layout()
+        if card_layout is not None:
+            card_layout.activate()
+        root_layout = self.layout()
+        if root_layout is not None:
+            root_layout.activate()
+        self.setFixedSize(self._WIDTH, max(1, self.sizeHint().height()))
+
+        if self._anchor_rect is None:
+            return
+        x, y = self._popup_position(
+            self._anchor_rect,
+            self._available_rect,
+            self.width(),
+            self.height(),
+        )
+        self.move(x, y)
+
+    @classmethod
+    def _popup_position(
+        cls,
+        anchor: QRect,
+        available: QRect | None,
+        width: int,
+        height: int,
+    ) -> tuple[int, int]:
+        x = anchor.center().x() - width // 2
+        y_above = anchor.top() - height - cls._ANCHOR_GAP
+        y_below = anchor.bottom() + cls._ANCHOR_GAP + 1
+        y = y_above
+        if available is None:
+            return x, y
+
+        left = available.left() + cls._SCREEN_MARGIN
+        right = available.right() - cls._SCREEN_MARGIN
+        top = available.top() + cls._SCREEN_MARGIN
+        bottom = available.bottom() - cls._SCREEN_MARGIN
+        x = max(left, min(x, right - width + 1))
+        if y_above < top and y_below + height - 1 <= bottom:
+            y = y_below
+        else:
+            y = max(top, min(y_above, bottom - height + 1))
+        return x, y
+
     def apply_theme(self) -> None:
         self._header_icon.setPixmap(
-            make_icon(ICON_REMOTE_CONTROL, 17, PALETTE.accent).pixmap(17, 17)
+            make_icon(ICON_REMOTE_CONTROL, 20, PALETTE.accent).pixmap(20, 20)
         )
         self.setStyleSheet(
             f"""
             QFrame#RemoteSessionsCard {{
-                background: {qss_rgba(PALETTE.surface_overlay, 0.98)};
-                border: 1px solid {PALETTE.border}; border-radius: 16px;
+                background: {PALETTE.surface};
+                border: 1px solid {qss_rgba(PALETTE.border, 0.85)}; border-radius: 16px;
             }}
             QWidget {{ background: transparent; color: {PALETTE.text_secondary}; }}
-            QLabel#RemoteSessionsTitle {{ color: {PALETTE.text_primary}; font-size: 13px; font-weight: 700; }}
+            QLabel#RemoteSessionsTitle {{ color: {PALETTE.text_primary}; font-size: 14px; font-weight: 700; }}
             QLabel#RemoteSessionsSummary {{ color: {PALETTE.text_muted}; font-size: 10px; }}
             QLabel#RemoteSessionsCount {{
-                min-width: 22px; min-height: 22px; color: {PALETTE.accent_text_hover};
-                background: {PALETTE.accent_muted}; border-radius: 11px;
+                min-width: 24px; min-height: 24px; color: {PALETTE.accent_text_hover};
+                background: {PALETTE.accent_muted}; border-radius: 12px;
                 font-size: 10px; font-weight: 700;
             }}
             QLabel#RemoteSessionsRuntime {{
@@ -385,19 +457,30 @@ class RemoteSessionsPopup(QWidget):
                 background: {PALETTE.surface_card}; border: 1px solid {PALETTE.border_muted};
                 border-radius: 10px;
             }}
-            QLabel#RemoteSessionDevice {{ color: {PALETTE.text_primary}; font-size: 11px; font-weight: 650; }}
-            QLabel#RemoteSessionConnected {{ color: {PALETTE.success}; font-size: 9px; font-weight: 700; }}
-            QLabel#RemoteSessionSignedIn {{ color: {PALETTE.text_muted}; font-size: 9px; font-weight: 650; }}
-            QLabel#RemoteSessionMetadata {{ color: {PALETTE.text_dim}; font-size: 9px; }}
+            QLabel#RemoteSessionDevice {{ color: {PALETTE.text_primary}; font-size: 12px; font-weight: 650; }}
+            QLabel#RemoteSessionConnected {{ color: {PALETTE.success}; font-size: 10px; font-weight: 700; }}
+            QLabel#RemoteSessionSignedIn {{ color: {PALETTE.text_muted}; font-size: 10px; font-weight: 650; }}
+            QLabel#RemoteSessionMetadata {{ color: {PALETTE.text_dim}; font-size: 10px; }}
             QLabel#RemoteSessionPrompt {{ color: {PALETTE.text_secondary}; font-size: 10px; }}
             QLabel#RemoteSessionError {{ color: {PALETTE.text_muted}; font-size: 9px; }}
             QLabel#RemoteSessionError[error="true"] {{ color: {PALETTE.danger_text}; }}
             QLabel#RemoteSessionsEmpty {{ color: {PALETTE.text_muted}; font-size: 11px; padding: 18px 10px; }}
             QScrollArea#RemoteSessionsScroll {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{
+                width: 3px; background: transparent; margin: 4px 0 4px 2px;
+            }}
+            QScrollBar::handle:vertical {{
+                min-height: 20px; border-radius: 1px;
+                background: {qss_rgba(PALETTE.text_faint, 0.30)};
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {qss_rgba(PALETTE.text_faint, 0.50)};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QPushButton {{
-                min-height: 27px; padding: 0 9px; color: {PALETTE.text_secondary};
+                min-height: 30px; padding: 0 10px; color: {PALETTE.text_secondary};
                 background: {PALETTE.surface}; border: 1px solid {PALETTE.border};
-                border-radius: 7px; font-size: 9px; font-weight: 600;
+                border-radius: 8px; font-size: 10px; font-weight: 600;
             }}
             QPushButton:hover {{ border-color: {PALETTE.accent_alt}; color: {PALETTE.text_primary}; }}
             QPushButton[destructive="true"] {{ color: {PALETTE.danger_text}; }}
@@ -432,7 +515,7 @@ class RemoteSessionsPopup(QWidget):
             )
         self._footer.setVisible(has_sessions)
         self._render_footer()
-        self.adjustSize()
+        self._sync_geometry()
 
     def _rebuild_rows(self) -> None:
         while self._list_layout.count():
@@ -443,14 +526,22 @@ class RemoteSessionsPopup(QWidget):
         for session in self._sessions:
             row = _RemoteSessionRow(session, self._list)
             row.disconnect_requested.connect(self._request_disconnect)
+            row.geometry_changed.connect(self._reflow_rows)
             row.set_pending(session.management_id in self._pending_ids)
             if session.management_id in self._failed_ids:
                 row.show_error()
             self._rows[session.management_id] = row
             self._list_layout.addWidget(row)
         self._list_layout.addStretch()
-        rows_height = min(self._MAX_LIST_HEIGHT, max(0, len(self._sessions) * 78))
+        self._reflow_rows()
+
+    def _reflow_rows(self) -> None:
+        self._list_layout.activate()
+        row_heights = sum(max(88, row.sizeHint().height()) for row in self._rows.values())
+        row_spacing = max(0, len(self._rows) - 1) * self._list_layout.spacing()
+        rows_height = min(self._MAX_LIST_HEIGHT, row_heights + row_spacing)
         self._scroll.setFixedHeight(rows_height)
+        self._sync_geometry()
 
     def _render_footer(self) -> None:
         self._disconnect_all.setEnabled(bool(self._sessions) and not self._disconnect_all_pending)
@@ -475,18 +566,19 @@ class RemoteSessionsPopup(QWidget):
         self._disconnect_all.hide()
         self._global_feedback.hide()
         self._disconnect_all_confirmation.show()
-        self.adjustSize()
+        self._sync_geometry()
 
     def _cancel_disconnect_all(self) -> None:
         self._disconnect_all_confirmation.hide()
         self._disconnect_all.show()
-        self.adjustSize()
+        self._sync_geometry()
 
     def _confirm_disconnect_all(self) -> None:
         self._disconnect_all_pending = True
         self._disconnect_all_confirmation.hide()
         self._disconnect_all.show()
         self._render_footer()
+        self._sync_geometry()
         self.disconnect_all_requested.emit()
 
     def _refresh_activity_labels(self) -> None:

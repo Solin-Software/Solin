@@ -16,12 +16,14 @@ from ...core.remote_control.network import (
     discover_lan_interfaces,
 )
 from ...core.remote_control.security import (
+    PASSWORD_MIN_LENGTH,
     PasswordValidationError,
     UsernameValidationError,
 )
 from ...core.remote_control.settings import REMOTE_CONTROL_PORT
-from ...styles.icons import ICON_SHIELD
-from ...ui.controls import NoScrollComboBox
+from ...styles.icons import ICON_CHECK, ICON_COPY, ICON_REMOTE_CONTROL, make_icon
+from ...styles.theme import PALETTE
+from ...ui.controls import ButtonConfirmationFeedback, NoScrollComboBox
 from ..remote_control_setup_dialog import (
     RemoteControlSetupDialog,
     RemoteControlSetupPresentation,
@@ -48,7 +50,7 @@ class RemoteControlSectionMixin:
     def _build_remote_control_card(self):
         card, layout = self._card()
         enabled_row, toggle, title, description = self._toggle_row(
-            ICON_SHIELD,
+            ICON_REMOTE_CONTROL,
             self.tr("Remote control"),
             self.tr("Control Solin securely from another device on this local network."),
             self._remote_control_settings.enabled(),
@@ -132,7 +134,9 @@ class RemoteControlSectionMixin:
         credential_actions = QHBoxLayout()
         credential_actions.setSpacing(8)
         self._remote_password_hint = QLabel(
-            self.tr("Use at least 12 characters. Credentials belong only to this profile.")
+            self.tr("Use at least %1 characters. Credentials belong only to this profile.").replace(
+                "%1", str(PASSWORD_MIN_LENGTH)
+            )
         )
         self._remote_password_hint.setWordWrap(True)
         self._bind_theme_style(self._remote_password_hint, self._remote_hint_style)
@@ -171,8 +175,14 @@ class RemoteControlSectionMixin:
         self._remote_copy_url_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._bind_theme_style(
             self._remote_copy_url_btn,
-            settings_compact_secondary_button_stylesheet,
+            self._remote_copy_button_style,
         )
+        self._remote_copy_feedback = ButtonConfirmationFeedback(
+            self._remote_copy_url_btn,
+            idle_icon=lambda: make_icon(ICON_COPY, 14, SETTINGS_TEXT_SECONDARY),
+            confirmed_icon=lambda: make_icon(ICON_CHECK, 14, SETTINGS_SUCCESS),
+        )
+        self._add_theme_binding(self._remote_copy_feedback.apply_theme)
         self._remote_copy_url_btn.clicked.connect(self._copy_remote_url)
         endpoint_row.addWidget(self._remote_copy_url_btn)
         self._remote_setup_btn = QPushButton(self.tr("Set up a device"))
@@ -218,6 +228,7 @@ class RemoteControlSectionMixin:
                 interface.identifier,
                 interface.ipv4_address,
             )
+        self._invalidate_remote_runtime_status()
         self._refresh_remote_configuration_status()
         self.remote_control_settings_changed.emit()
 
@@ -233,6 +244,7 @@ class RemoteControlSectionMixin:
             enabled and not self._remote_control_settings.onboarding_seen()
         )
         self._remote_control_settings.set_enabled(enabled)
+        self._invalidate_remote_runtime_status()
         self._refresh_remote_configuration_status()
         self.remote_control_settings_changed.emit()
 
@@ -250,7 +262,9 @@ class RemoteControlSectionMixin:
             self._remote_control_credentials.set_credentials(username, password)
         except (UsernameValidationError, PasswordValidationError):
             self._set_remote_status(
-                self.tr("Check the username and use a password with at least 12 characters."),
+                self.tr(
+                    "Check the username and use a password with at least %1 characters."
+                ).replace("%1", str(PASSWORD_MIN_LENGTH)),
                 "error",
             )
             return
@@ -259,6 +273,7 @@ class RemoteControlSectionMixin:
         self._remote_username_edit.setText(self._remote_control_credentials.configured_username())
         self._remote_credentials_editor.hide()
         self._sync_remote_credentials_editor()
+        self._invalidate_remote_runtime_status()
         self._refresh_remote_configuration_status()
         self.remote_control_credentials_changed.emit()
 
@@ -310,11 +325,22 @@ class RemoteControlSectionMixin:
         self._remote_endpoint_label.setText(url or self.tr("No network selected"))
         self._remote_copy_url_btn.setEnabled(bool(url))
         if self._remote_control_settings.enabled() and self._remote_configuration_is_valid():
-            self._set_remote_status(self.tr("Starting secure remote control…"), "pending")
+            if self._remote_runtime_status_known:
+                self._set_remote_status(
+                    self._remote_runtime_message,
+                    self._remote_runtime_status_kind,
+                )
+            else:
+                self._set_remote_status(self.tr("Starting secure remote control…"), "pending")
         elif self._remote_configuration_is_valid():
             self._set_remote_status(self.tr("Ready to enable."), "ready")
         else:
             self._set_remote_status(self.tr("Configuration required."), "pending")
+
+    def _invalidate_remote_runtime_status(self) -> None:
+        self._remote_runtime_status_known = False
+        self._remote_runtime_message = ""
+        self._remote_runtime_status_kind = "pending"
 
     def set_remote_control_runtime_status(
         self,
@@ -328,7 +354,11 @@ class RemoteControlSectionMixin:
         certificate_der: bytes = b"",
         status: str | None = None,
     ) -> None:
-        self._set_remote_status(message, "running" if running else (status or "error"))
+        resolved_status = "running" if running else (status or "error")
+        self._remote_runtime_status_known = True
+        self._remote_runtime_message = message
+        self._remote_runtime_status_kind = resolved_status
+        self._set_remote_status(message, resolved_status)
         presentation = RemoteControlSetupPresentation(
             access_url=access_url,
             setup_url=setup_url,
@@ -368,6 +398,7 @@ class RemoteControlSectionMixin:
         url = self._remote_endpoint_label.text()
         if url.startswith("https://"):
             QGuiApplication.clipboard().setText(url)
+            self._remote_copy_feedback.confirm()
 
     def _apply_remote_control_theme(self) -> None:
         self._remote_status_label.setStyleSheet(self._remote_status_style())
@@ -376,6 +407,16 @@ class RemoteControlSectionMixin:
         return (
             f"font-size: 11px; font-weight: 600; color: {SETTINGS_TEXT_SECONDARY};"
             " background: transparent; border: none;"
+        )
+
+    def _remote_copy_button_style(self) -> str:
+        return settings_compact_secondary_button_stylesheet() + (
+            f'QPushButton[confirmed="true"] {{ color: {SETTINGS_SUCCESS};'
+            f" border-color: {PALETTE.success_border};"
+            f" background: {PALETTE.success_surface}; }}"
+            f'QPushButton[confirmed="true"]:hover {{ color: {SETTINGS_SUCCESS};'
+            f" border-color: {PALETTE.success_border};"
+            f" background: {PALETTE.success_surface}; }}"
         )
 
     def _remote_field_style(self) -> str:
@@ -421,7 +462,9 @@ class RemoteControlSectionMixin:
         self._remote_password_edit.setPlaceholderText(self.tr("New password"))
         self._remote_password_confirm_edit.setPlaceholderText(self.tr("Confirm password"))
         self._remote_password_hint.setText(
-            self.tr("Use at least 12 characters. Credentials belong only to this profile.")
+            self.tr("Use at least %1 characters. Credentials belong only to this profile.").replace(
+                "%1", str(PASSWORD_MIN_LENGTH)
+            )
         )
         self._remote_save_credentials_btn.setText(self.tr("Save credentials"))
         self._sync_remote_credentials_editor()

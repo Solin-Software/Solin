@@ -210,6 +210,8 @@ _ICON_NAMES = frozenset(
         "ICON_PACKAGE",
         "ICON_KEYBOARD",
         "ICON_CROSSHAIR",
+        "ICON_COPY",
+        "ICON_CHECK",
         "ICON_SHIELD",
         "ICON_REMOTE_CONTROL",
         "ICON_SHARE_SCREEN",
@@ -1073,6 +1075,19 @@ def _build_icon_svg(name: str) -> str:
             '<line x1="18" y1="12" x2="22" y2="12"/>'
             "</svg>"
         )
+    elif name == "ICON_COPY":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+            ' stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/>'
+            '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>'
+        )
+    elif name == "ICON_CHECK":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'
+            ' stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg>'
+        )
     elif name == "ICON_SHIELD":
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
@@ -1084,9 +1099,9 @@ def _build_icon_svg(name: str) -> str:
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
             ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
-            ' stroke-linejoin="round"><rect x="3" y="2" width="12" height="20" rx="2"/>'
-            '<path d="M7 18h4"/><path d="M18 8a4 4 0 0 1 0 8"/>'
-            '<path d="M20.5 5.5a7.5 7.5 0 0 1 0 13"/></svg>'
+            ' stroke-linejoin="round"><rect x="3" y="2" width="11" height="20" rx="2"/>'
+            '<path d="M6.5 18h4"/><path d="M15.75 9.5a2.5 2.5 0 0 1 0 5"/>'
+            '<path d="M17 7a4 5 0 0 1 0 10"/></svg>'
         )
     elif name == "ICON_SHARE_SCREEN":
         return (

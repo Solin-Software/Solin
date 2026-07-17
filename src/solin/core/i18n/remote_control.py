@@ -127,9 +127,7 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
         "_RemoteControlWeb",
         "Download the certificate in Safari, open Settings, and tap Profile Downloaded. If it is not shown, open General › VPN & Device Management.",
     ),
-    QT_TRANSLATE_NOOP(
-        "_RemoteControlWeb", "Tap Install and follow the confirmation prompts."
-    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Tap Install and follow the confirmation prompts."),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
         "Open General › About › Certificate Trust Settings and enable full trust for Solin Remote Root.",
@@ -151,12 +149,11 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
         "_RemoteControlWeb",
         "On iPhone or iPad, return to Safari after enabling full trust and reopen the address.",
     ),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install the app"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Remote"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
-        "Install Solin Remote to open it without the browser address bar.",
+        "Install Solin Remote on this device for quick access from your home screen.",
     ),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Remote"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
         "In Chrome, open the ⋮ menu, choose Add to Home screen, then choose Install rather than Add shortcut.",

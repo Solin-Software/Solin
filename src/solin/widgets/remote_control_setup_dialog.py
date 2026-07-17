@@ -20,8 +20,15 @@ from PySide6.QtWidgets import (
 )
 
 from solin.core.storage.binary_files import write_bytes_atomic
-from solin.styles.icons import ICON_CLOUD_DOWNLOAD, ICON_SHIELD, make_icon
+from solin.styles.icons import (
+    ICON_CHECK,
+    ICON_CLOUD_DOWNLOAD,
+    ICON_COPY,
+    ICON_SHIELD,
+    make_icon,
+)
 from solin.styles.theme import PALETTE
+from solin.ui.controls import ButtonConfirmationFeedback
 from solin.ui.qr_generation import QrGenerationSessionFactory
 
 
@@ -156,10 +163,16 @@ class RemoteControlSetupDialog(QDialog):
         url_label.setWordWrap(True)
         instructions.addWidget(url_label)
 
-        copy_url = QPushButton(self.tr("Copy setup address"))
-        copy_url.clicked.connect(self._copy_setup_url)
-        copy_url.setCursor(Qt.CursorShape.PointingHandCursor)
-        instructions.addWidget(copy_url)
+        self._copy_url = QPushButton(self.tr("Copy setup address"))
+        self._copy_url.setObjectName("SetupCopyAddress")
+        self._copy_url.clicked.connect(self._copy_setup_url)
+        self._copy_url.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_feedback = ButtonConfirmationFeedback(
+            self._copy_url,
+            idle_icon=lambda: make_icon(ICON_COPY, 14, PALETTE.text_secondary),
+            confirmed_icon=lambda: make_icon(ICON_CHECK, 14, PALETTE.success),
+        )
+        instructions.addWidget(self._copy_url)
         instructions.addStretch()
         connection_layout.addLayout(instructions, 1)
         body_layout.addWidget(connection)
@@ -203,9 +216,7 @@ class RemoteControlSetupDialog(QDialog):
         advanced_toggle.toggled.connect(self._toggle_fingerprint)
         verification_layout.addWidget(advanced_toggle)
 
-        self._fingerprint = QLabel(
-            _fingerprint_display_text(self._presentation.fingerprint_sha256)
-        )
+        self._fingerprint = QLabel(_fingerprint_display_text(self._presentation.fingerprint_sha256))
         self._fingerprint.setObjectName("SetupFingerprint")
         self._fingerprint.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._fingerprint.setWordWrap(True)
@@ -286,6 +297,14 @@ class RemoteControlSetupDialog(QDialog):
                 border-radius: 8px; font-weight: 600;
             }}
             QPushButton:hover {{ border-color: {PALETTE.accent_alt}; color: {PALETTE.text_primary}; }}
+            QPushButton[confirmed="true"] {{
+                color: {PALETTE.success}; background: {PALETTE.success_surface};
+                border-color: {PALETTE.success_border};
+            }}
+            QPushButton[confirmed="true"]:hover {{
+                color: {PALETTE.success}; background: {PALETTE.success_surface};
+                border-color: {PALETTE.success_border};
+            }}
             QPushButton#SetupPrimaryButton {{
                 background: {PALETTE.accent}; color: {PALETTE.text_on_accent};
                 border-color: {PALETTE.accent}; min-width: 86px;
@@ -319,6 +338,7 @@ class RemoteControlSetupDialog(QDialog):
 
     def _copy_setup_url(self) -> None:
         QGuiApplication.clipboard().setText(self._presentation.setup_url)
+        self._copy_feedback.confirm()
 
     def _toggle_fingerprint(self, visible: bool) -> None:
         toggle = self.sender()

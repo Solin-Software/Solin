@@ -9,6 +9,7 @@ from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.remote_control.security import (
     DEFAULT_SCRYPT_PARAMETERS,
+    PASSWORD_MIN_LENGTH,
     PASSWORD_MAX_LENGTH,
     InMemorySessionStore,
     LoginRateLimiter,
@@ -78,12 +79,14 @@ def _credentials_store() -> tuple[RemoteControlCredentialsStore, _MemorySettings
 def test_username_and_password_validation_preserve_clear_contracts() -> None:
     assert normalize_username("  Control.Room_1 ") == "control.room_1"
     assert validate_password(" correct horse battery staple ") == (" correct horse battery staple ")
+    assert PASSWORD_MIN_LENGTH == 6
+    assert validate_password("123456") == "123456"
 
     for invalid in ("ab", "has spaces", "álvaro", "-operator", "operator!"):
         with pytest.raises(UsernameValidationError):
             normalize_username(invalid)
 
-    for invalid_password in ("too-short", "valid-length\n", "x" * (PASSWORD_MAX_LENGTH + 1)):
+    for invalid_password in ("12345", "valid-length\n", "x" * (PASSWORD_MAX_LENGTH + 1)):
         with pytest.raises(PasswordValidationError):
             validate_password(invalid_password)
 
