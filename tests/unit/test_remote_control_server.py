@@ -556,6 +556,29 @@ def test_websocket_baseline_is_atomic_and_multiple_clients_keep_one_sequence(
     asyncio.run(scenario())
 
 
+def test_server_shutdown_does_not_wait_for_connected_websocket_grace_period(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        try:
+            headers = await _authenticated_headers(harness)
+            socket = await harness.client.ws_connect(
+                "/remote/api/ws",
+                headers=headers,
+            )
+            await socket.receive_json()
+
+            await asyncio.wait_for(harness.client.server.close(), timeout=1.0)
+            await asyncio.wait_for(socket.receive(), timeout=1.0)
+
+            assert socket.closed
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
 def test_logout_revokes_every_websocket_using_that_session(tmp_path: Path) -> None:
     async def scenario() -> None:
         harness = await _harness(tmp_path)

@@ -13,7 +13,7 @@ import threading
 from typing import Final
 from concurrent.futures import Future
 
-from aiohttp import WSMsgType, web
+from aiohttp import WSCloseCode, WSMsgType, web
 
 from ..meetings.meeting_weeks import current_monday
 from .certificates import TLSIdentity
@@ -57,6 +57,7 @@ _MAX_LOGIN_HASHES: Final = 2
 _MAX_WEBSOCKETS: Final = 32
 _MAX_WEBSOCKETS_PER_SESSION: Final = 4
 _WEBSOCKET_HEARTBEAT_SECONDS: Final = 20.0
+_WEBSOCKET_CLOSE_TIMEOUT_SECONDS: Final = 0.25
 _OPAQUE_ROUTE_ID: Final = re.compile(r"[A-Za-z0-9._~:-]{1,512}\Z")
 _SECURITY_HEADERS: Final = {
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -157,6 +158,7 @@ class RemoteControlHttpApplication:
             client_max_size=_MAX_COMMAND_BODY_BYTES,
             middlewares=[self._security_headers_middleware],
         )
+        self._app.on_shutdown.append(self._shutdown_websockets)
         self._app.on_shutdown.append(self._shutdown_background_tasks)
         self._configure_routes()
 
@@ -558,6 +560,19 @@ class RemoteControlHttpApplication:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
+    async def _shutdown_websockets(self, _app: web.Application) -> None:
+        await asyncio.gather(
+            *(
+                socket.close(
+                    code=WSCloseCode.GOING_AWAY,
+                    message=b"Server shutting down",
+                    drain=False,
+                )
+                for socket in tuple(self._websockets)
+            ),
+            return_exceptions=True,
+        )
+
     async def _shutdown_background_tasks(self, _app: web.Application) -> None:
         login_hash_tasks = tuple(self._login_hash_tasks)
         if login_hash_tasks:
@@ -579,6 +594,7 @@ class RemoteControlHttpApplication:
         session_token = self._require_session(request)
         self._reserve_websocket(session_token)
         socket = web.WebSocketResponse(
+            timeout=_WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
             heartbeat=_WEBSOCKET_HEARTBEAT_SECONDS,
             receive_timeout=65.0,
             max_msg_size=1_024,
