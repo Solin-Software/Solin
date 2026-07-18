@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 import hashlib
 import json
@@ -18,6 +18,7 @@ import re
 import threading
 from types import MappingProxyType
 from typing import Any, Protocol, TypeAlias
+import uuid
 
 from solin.core.media.duration import effective_duration_ticks
 from solin.core.media.formats import MediaKind, media_kind_from_mime, media_kind_from_path
@@ -394,7 +395,10 @@ class RemoteCatalog:
                 CatalogResolutionCode.INVALID_CATALOG,
                 "Meeting catalog entries must be tree snapshots.",
             )
-        return tuple(sorted(snapshots, key=_meeting_sort_key))
+        return tuple(
+            _with_unique_meeting_node_ids(snapshot)
+            for snapshot in sorted(snapshots, key=_meeting_sort_key)
+        )
 
     def _playlist_collection(
         self,
@@ -954,6 +958,49 @@ def _find_node(nodes: list[dict[str, Any]], node_id: str) -> dict[str, Any] | No
             if found is not None:
                 return found
     return None
+
+
+def _with_unique_meeting_node_ids(snapshot: MeetingTreeSnapshot) -> MeetingTreeSnapshot:
+    """Return a remote-only tree whose node IDs are unique and deterministic.
+
+    Persisted meeting trees predate the remote catalog's global node-ID
+    invariant. Repeated media can therefore legitimately carry the same stable
+    source ID. Keep the first occurrence unchanged for compatibility and assign
+    later occurrences a path-derived UUID. The persisted tree is never mutated.
+    """
+
+    nodes = deepcopy(snapshot.nodes)
+    seen: set[str] = set()
+
+    def visit(values: list[dict[str, Any]], path: tuple[int, ...]) -> None:
+        for index, node in enumerate(values):
+            node_path = (*path, index)
+            node_id = node.get("id")
+            if isinstance(node_id, str) and node_id:
+                public_id = node_id
+                attempt = 0
+                while public_id in seen:
+                    attempt += 1
+                    public_id = str(
+                        uuid.uuid5(
+                            uuid.NAMESPACE_URL,
+                            (
+                                "solin:remote-meeting-node:"
+                                f"{snapshot.tree_key}:{node_id}:"
+                                f"{'.'.join(map(str, node_path))}:{attempt}"
+                            ),
+                        )
+                    )
+                if public_id != node_id:
+                    node["id"] = public_id
+                seen.add(public_id)
+
+            children = node.get("children")
+            if isinstance(children, list):
+                visit(children, node_path)
+
+    visit(nodes, ())
+    return replace(snapshot, nodes=nodes)
 
 
 def _walk_catalog_nodes(nodes: tuple[CatalogNode, ...]) -> Iterable[CatalogNode]:

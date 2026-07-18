@@ -261,6 +261,18 @@ def test_catalog_revision_stays_aligned_when_initial_public_catalog_is_empty(
     controller.stop()
 
 
+def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    controller._catalog = SimpleNamespace(
+        snapshot=lambda: (_ for _ in ()).throw(ValueError("duplicate node"))
+    )
+
+    controller._refresh_catalog()
+
+    assert controller.state.catalog_revision == 0
+    controller.stop()
+
+
 def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     events: list[str] = []

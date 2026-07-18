@@ -488,7 +488,7 @@ class RemoteControlController(QObject):
                 snapshot.collections,
                 change_token=snapshot.catalog_revision,
             )
-        except CatalogResolutionError:
+        except (CatalogResolutionError, TypeError, ValueError):
             log.warning("Could not refresh remote-control catalog", exc_info=True)
             return
         if self._state.catalog_revision != previous_revision:

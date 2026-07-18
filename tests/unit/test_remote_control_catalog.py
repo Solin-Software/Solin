@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import date
 import json
 from typing import Any
@@ -462,6 +463,37 @@ def test_non_media_node_and_path_shaped_thumbnail_are_rejected() -> None:
     )
     public_reason = reason_catalog.snapshot().collections[0].nodes[1]
     assert public_reason.unavailable_reason == "Unavailable"
+
+
+def test_duplicate_meeting_node_ids_get_stable_remote_only_ids() -> None:
+    snapshot = _meeting_snapshot()
+    duplicate = deepcopy(snapshot.nodes[0]["children"][1])
+    duplicate["title"] = "Second occurrence"
+    duplicate["media_ref"]["file_path"] = "C:\\private\\second.mp4"
+    snapshot.nodes[0]["children"].append(duplicate)
+    catalog = RemoteCatalog(_PlaylistSource([]), snapshot)
+
+    first_snapshot = catalog.snapshot()
+    children = first_snapshot.collections[0].nodes[0].children
+    first_id = children[1].id
+    duplicate_id = children[2].id
+
+    assert first_id == "meeting-media"
+    assert duplicate_id != first_id
+    assert catalog.snapshot().collections[0].nodes[0].children[2].id == duplicate_id
+
+    resolved = catalog.resolve_play(
+        _play_command(
+            ProjectionSource.MEETING,
+            snapshot.tree_key,
+            duplicate_id,
+            first_snapshot.catalog_revision,
+        )
+    )
+
+    assert isinstance(resolved, ResolvedMeetingPlay)
+    assert resolved.media.file_path == "C:\\private\\second.mp4"
+    assert resolved.media.origin_item_id == duplicate_id
 
 
 def test_catalog_accepts_the_authoritative_meeting_tree_store(tmp_path) -> None:
