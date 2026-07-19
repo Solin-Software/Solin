@@ -73,3 +73,86 @@ def test_changed_checksum_rebuilds_the_persisted_midweek_tree(monkeypatch, tmp_p
 
     assert parsed == ["mwb"]
     assert checksums.get("mwb", "T", issue) == "new"
+
+
+def test_missing_baseline_downloads_midweek_source_even_when_checksum_matches(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monday = date(2026, 5, 25)
+    issue = mwb_issue_for_week(monday)
+    checksums = JwpubChecksumStore(tmp_path / "checksums.json")
+    checksums.save("mwb", "T", issue, "current")
+    worker = JwpubWorker(tmp_path / "jwpub", checksums)
+    downloads: list[tuple] = []
+    parsed: list[str] = []
+
+    monkeypatch.setattr(
+        worker_module,
+        "resolve_jwpub_archive",
+        lambda *_args: JwpubMediaInfo(
+            "https://example.invalid/publication.jwpub",
+            "current",
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_download",
+        lambda *args, **_kwargs: downloads.append(args) or True,
+    )
+    monkeypatch.setattr(worker, "_parse_mwb", lambda *_args: parsed.append("mwb"))
+    monkeypatch.setattr(worker, "_revalidate_wt", lambda *_args, **_kwargs: None)
+
+    worker.load_week(
+        monday,
+        language="T",
+        materialize_cached_publications=frozenset({"mwb"}),
+        persisted_source_checksums={"mwb": "current"},
+    )
+
+    assert len(downloads) == 1
+    assert parsed == ["mwb"]
+
+
+def test_missing_baseline_downloads_watchtower_source_even_when_checksum_matches(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monday = date(2026, 5, 25)
+    issue = "20260400"
+    checksums = JwpubChecksumStore(tmp_path / "checksums.json")
+    checksums.save("w", "T", issue, "current")
+    worker = JwpubWorker(tmp_path / "jwpub", checksums)
+    downloads: list[tuple] = []
+    parsed: list[str] = []
+
+    monkeypatch.setattr(
+        worker_module,
+        "resolve_jwpub_archive",
+        lambda *_args: JwpubMediaInfo(
+            "https://example.invalid/publication.jwpub",
+            "current",
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_download",
+        lambda *args, **_kwargs: downloads.append(args) or True,
+    )
+    monkeypatch.setattr(
+        worker,
+        "_try_wt_cached",
+        lambda *_args: parsed.append("wt") or True,
+    )
+    monkeypatch.setattr(worker, "_revalidate_mwb", lambda *_args, **_kwargs: None)
+
+    worker.load_week(
+        monday,
+        language="T",
+        materialize_cached_publications=frozenset({"wt"}),
+        known_wt_issue=issue,
+        persisted_source_checksums={"wt": "current"},
+    )
+
+    assert len(downloads) == 1
+    assert parsed == ["wt"]

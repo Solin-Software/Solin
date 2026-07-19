@@ -264,7 +264,10 @@ class MeetingPreparationService(QObject):
             materialize_cached_publications=frozenset(
                 pub_type
                 for pub_type in ("mwb", "wt")
-                if pub_type not in snapshots
+                if (
+                    (snapshot := snapshots.get(pub_type)) is None
+                    or not snapshot.canonical_nodes
+                )
             ),
             known_wt_issue=wt_snapshot.issue if wt_snapshot is not None else "",
             persisted_source_checksums={

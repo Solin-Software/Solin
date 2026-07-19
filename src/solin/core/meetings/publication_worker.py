@@ -128,13 +128,13 @@ class JwpubWorker(QObject):
         Stale-while-revalidate (SWR)
         ────────────────────────────
         Fase 1 — MATERIALIZAR: se a árvore persistida daquela publicação ainda
-                 não existe, usa uma cópia local utilizável imediatamente. Uma
-                 árvore já persistida é a fonte de verdade e não é reconstruída
-                 a partir do JWPUB cacheado.
+                 não existe ou não possui baseline canônico, usa uma cópia local
+                 confirmada. Uma árvore com baseline já persistido é a fonte de
+                 verdade e não é reconstruída a partir do JWPUB cacheado.
         Fase 2 — REVALIDAR: consulta a API em segundo plano (thread do worker).
                  Só baixa, lê e re-emite quando o checksum do servidor realmente
-                 mudou. Árvores antigas sem revisão persistida recebem uma única
-                 materialização confirmada para registrar essa revisão.
+                 mudou. Árvores antigas sem baseline recebem uma única
+                 materialização confirmada para registrar a estrutura oficial.
 
         force=True (retry de erro / troca de idioma) pula a fase de servir e faz
         uma revalidação limpa, mantendo a semântica de "recarregar de verdade".
@@ -256,12 +256,16 @@ class JwpubWorker(QObject):
             )
             return
 
-        if not self._needs_jwpub_refresh(
-            "mwb",
-            lang,
-            issue,
-            checksum,
-            persisted_source_checksum=persisted_source_checksum,
+        needs_materialization_download = materialize_cached and not served
+        if (
+            not needs_materialization_download
+            and not self._needs_jwpub_refresh(
+                "mwb",
+                lang,
+                issue,
+                checksum,
+                persisted_source_checksum=persisted_source_checksum,
+            )
         ):
             if (
                 (not served and materialize_cached)
@@ -397,12 +401,18 @@ class JwpubWorker(QObject):
             archive_info = resolve_jwpub_archive("w", lang, issue)
             url = archive_info.download_url
             checksum = archive_info.checksum
-            if url and self._needs_jwpub_refresh(
-                "w",
-                lang,
-                issue,
-                checksum,
-                persisted_source_checksum=persisted_source_checksum,
+            needs_materialization_download = (
+                materialize_cached and served_issue is None
+            )
+            if url and (
+                needs_materialization_download
+                or self._needs_jwpub_refresh(
+                    "w",
+                    lang,
+                    issue,
+                    checksum,
+                    persisted_source_checksum=persisted_source_checksum,
+                )
             ):
                 if self._download(
                     "w",
