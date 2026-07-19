@@ -11,13 +11,14 @@ import json
 import logging
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from solin.core.storage.json_repository import JsonFileRepository
 
+from .canonical_restore import canonical_source_keys
 from .thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
 from .media_nodes import should_accept_resolved_media_title
 from .tree_merger import MeetingTreeMerger, media_identity_signature
@@ -25,7 +26,7 @@ from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_s
 
 log = logging.getLogger(__name__)
 
-MEETING_TREE_STORE_VERSION = 2
+MEETING_TREE_STORE_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +90,9 @@ class MeetingTreeSnapshot:
     linked_folder_files: dict[str, str]
     meeting_folder_imports: dict[str, dict[str, Any]]
     overview: MeetingTreeOverview
+    canonical_nodes: list[Node] = field(default_factory=list)
+    canonical_reset_generation: int = 0
+    hidden_canonical_media: dict[str, Node] = field(default_factory=dict)
     source_checksum: str = ""
     revision: int = 0
     is_sign_language: bool = False
@@ -287,6 +291,9 @@ class MeetingTreeStore:
         overview: MeetingTreeOverview | None = None,
         *,
         source_checksum: str | None = None,
+        canonical_nodes: list[Node] | None = None,
+        canonical_reset_generation: int | None = None,
+        hidden_canonical_media: dict[str, Node] | None = None,
     ) -> MeetingTreeSnapshot:
         with self._lock:
             snapshot = self._save_locked(
@@ -298,6 +305,9 @@ class MeetingTreeStore:
                 meeting_folder_imports,
                 overview,
                 source_checksum=source_checksum,
+                canonical_nodes=canonical_nodes,
+                canonical_reset_generation=canonical_reset_generation,
+                hidden_canonical_media=hidden_canonical_media,
             )
         self._publish_changed()
         return snapshot
@@ -322,6 +332,7 @@ class MeetingTreeStore:
             deleted_source_keys = (
                 set(saved.deleted_source_keys) if saved is not None else set()
             )
+            deleted_source_keys &= canonical_source_keys(canonical)
             merged = MeetingTreeMerger(canonical, deleted_source_keys).merge(
                 saved.nodes if saved is not None else None
             )
@@ -341,6 +352,19 @@ class MeetingTreeStore:
                     source_checksum
                     if source_checksum is not None
                     else (saved.source_checksum if saved is not None else "")
+                ),
+                canonical_nodes=canonical,
+                canonical_reset_generation=(
+                    saved.canonical_reset_generation if saved is not None else 0
+                ),
+                hidden_canonical_media=(
+                    {
+                        key: copy.deepcopy(node)
+                        for key, node in saved.hidden_canonical_media.items()
+                        if key in canonical_source_keys(canonical)
+                    }
+                    if saved is not None
+                    else None
                 ),
             )
         self._publish_changed()
@@ -400,6 +424,9 @@ class MeetingTreeStore:
                 current.meeting_folder_imports or None,
                 current.overview,
                 source_checksum=current.source_checksum,
+                canonical_nodes=current.canonical_nodes,
+                canonical_reset_generation=current.canonical_reset_generation,
+                hidden_canonical_media=current.hidden_canonical_media,
             )
         self._publish_changed()
         return snapshot
@@ -431,6 +458,9 @@ class MeetingTreeStore:
         overview: MeetingTreeOverview | None,
         *,
         source_checksum: str | None,
+        canonical_nodes: list[Node] | None,
+        canonical_reset_generation: int | None,
+        hidden_canonical_media: dict[str, Node] | None,
     ) -> MeetingTreeSnapshot:
         data = copy.deepcopy(self._runtime_data())
         trees = data.setdefault("trees", {})
@@ -440,17 +470,70 @@ class MeetingTreeStore:
             if isinstance(existing, dict) and isinstance(existing.get("overview"), dict)
             else None
         )
+        existing_canonical = (
+            existing.get("canonical_nodes")
+            if isinstance(existing, dict) and isinstance(existing.get("canonical_nodes"), list)
+            else None
+        )
+        existing_hidden_value = (
+            existing.get("hidden_canonical_media")
+            if isinstance(existing, dict)
+            else None
+        )
+        existing_hidden_media: dict[str, Node] = (
+            existing_hidden_value
+            if isinstance(existing_hidden_value, dict)
+            else {}
+        )
+        baseline = canonical_nodes if canonical_nodes is not None else existing_canonical
+        hidden_media = (
+            hidden_canonical_media
+            if hidden_canonical_media is not None
+            else existing_hidden_media
+        )
+        if baseline:
+            valid_source_keys = canonical_source_keys(baseline)
+            hidden_media = {
+                str(key): copy.deepcopy(node)
+                for key, node in hidden_media.items()
+                if key in valid_source_keys and isinstance(node, dict)
+            }
+        else:
+            hidden_media = {
+                str(key): copy.deepcopy(node)
+                for key, node in hidden_media.items()
+                if key and isinstance(node, dict)
+            }
+        durable_deleted_source_keys = set(deleted_source_keys or set())
+        if baseline:
+            durable_deleted_source_keys &= canonical_source_keys(baseline)
         revision = (
             _int_or_default(existing.get("revision"), 0) + 1
             if isinstance(existing, dict)
             else 1
         )
         record: dict[str, Any] = {
-            "deleted_source_keys": sorted(deleted_source_keys or set()),
+            "deleted_source_keys": sorted(durable_deleted_source_keys),
             "last_canonical_hash": canonical_hash,
             "nodes": clone_nodes(nodes),
             "revision": revision,
+            "canonical_reset_generation": max(
+                0,
+                _int_or_default(
+                    canonical_reset_generation
+                    if canonical_reset_generation is not None
+                    else (
+                        existing.get("canonical_reset_generation", 0)
+                        if isinstance(existing, dict)
+                        else 0
+                    ),
+                    0,
+                ),
+            ),
+            "hidden_canonical_media": hidden_media,
         }
+        if baseline is not None:
+            record["canonical_nodes"] = clone_nodes(baseline)
         if source_checksum is not None:
             record["source_checksum"] = str(source_checksum)
         elif isinstance(existing, dict) and existing.get("source_checksum"):
@@ -580,6 +663,16 @@ def _import_mapping(value: object) -> dict[str, dict[str, Any]]:
     }
 
 
+def _node_mapping(value: object) -> dict[str, Node]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key): copy.deepcopy(node)
+        for key, node in value.items()
+        if key and isinstance(node, dict)
+    }
+
+
 def _snapshot_from_record(
     tree_key: str,
     record: object,
@@ -608,6 +701,18 @@ def _snapshot_from_record(
         linked_folder_files=_string_mapping(record.get("linked_folder_files", {})),
         meeting_folder_imports=_import_mapping(record.get("meeting_folder_imports", {})),
         overview=overview,
+        canonical_nodes=(
+            clone_nodes(record.get("canonical_nodes", []))
+            if isinstance(record.get("canonical_nodes"), list)
+            else []
+        ),
+        canonical_reset_generation=max(
+            0,
+            _int_or_default(record.get("canonical_reset_generation"), 0),
+        ),
+        hidden_canonical_media=_node_mapping(
+            record.get("hidden_canonical_media", {})
+        ),
         source_checksum=str(record.get("source_checksum", "")),
         revision=max(0, _int_or_default(record.get("revision"), 0)),
         is_sign_language=key.is_sign_language,

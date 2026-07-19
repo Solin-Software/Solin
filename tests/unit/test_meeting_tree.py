@@ -1555,7 +1555,7 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
             self.assertEqual(saved.revision, 1)
             raw = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(raw["version"], 2)
+            self.assertEqual(raw["version"], 4)
             self.assertEqual(raw["trees"][tree_key]["revision"], 1)
 
     def test_spoken_and_sign_variants_have_distinct_persisted_identities(self):
@@ -2223,6 +2223,80 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 controller._meeting_folder_imports["source-key"]["node_ids"],
                 ["page-2"],
             )
+            self.assertTrue(controller.saved)
+
+    def test_remove_official_linked_media_only_tombstones_it(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-27 MW"
+            folder.mkdir()
+            source = folder / "official.mp4"
+            source.write_bytes(b"video")
+            controller = FakeController()
+            controller._nodes = [{
+                "id": "official",
+                "type": "media",
+                "title": "Resolved official title",
+                "auto_title": False,
+                "resolved_url": "https://cdn.example.invalid/official.mp4",
+                "linked_folder_source": str(folder),
+                "children": [],
+                "media_ref": {"file_path": str(source)},
+                "meeting_generated": True,
+                "meeting_source_key": "media:official",
+            }]
+            controller._resolved_urls = {}
+            controller._linked_folder_files = {str(source): "official"}
+            controller._meeting_folder_imports = {}
+            controller._deleted_source_keys = set()
+            self._wire_remove_item_controller(controller)
+
+            MeetingTreeController.removeItem(controller, "official")
+
+            self.assertTrue(source.exists())
+            self.assertEqual(controller._nodes, [])
+            self.assertEqual(controller._deleted_source_keys, {"media:official"})
+            self.assertEqual(
+                controller._hidden_canonical_media["media:official"]["title"],
+                "Resolved official title",
+            )
+            self.assertEqual(
+                controller._hidden_canonical_media["media:official"]["resolved_url"],
+                "https://cdn.example.invalid/official.mp4",
+            )
+            self.assertTrue(controller.saved)
+
+    def test_remove_materialized_manual_media_does_not_delete_non_import_source(self):
+        class FakeController:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-27 MW"
+            folder.mkdir()
+            materialized = folder / "manually-added.mp4"
+            materialized.write_bytes(b"video")
+            controller = FakeController()
+            controller._nodes = [{
+                "id": "manual",
+                "type": "media",
+                "linked_folder_source": str(folder),
+                "children": [],
+                "media_ref": {"file_path": str(materialized)},
+                "meeting_generated": False,
+            }]
+            controller._resolved_urls = {}
+            controller._linked_folder_files = {str(materialized): "manual"}
+            controller._meeting_folder_imports = {}
+            controller._deleted_source_keys = set()
+            self._wire_remove_item_controller(controller)
+
+            MeetingTreeController.removeItem(controller, "manual")
+
+            self.assertTrue(materialized.exists())
+            self.assertEqual(controller._nodes, [])
+            self.assertEqual(controller._linked_folder_files, {})
             self.assertTrue(controller.saved)
 
 

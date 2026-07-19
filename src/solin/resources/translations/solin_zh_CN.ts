@@ -1688,6 +1688,22 @@
     </message>
   </context>
   <context>
+    <name>MeetingCanonicalRestore</name>
+    <message>
+      <location filename="../../qml/MeetingDetailView.qml" line="+137" />
+      <location filename="../../widgets/meetings/tree_controller.py" line="+242" />
+      <source>Restore official meeting content</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Restore the official meeting content?
+
+Manually added content, trims, framing and expanded state will be kept.</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
     <name>MeetingDestinationSession</name>
     <message>
       <location filename="../../widgets/meetings/destinations.py" line="+73" />
@@ -2864,6 +2880,16 @@ Stop the projection and try again.</source>
       <location line="+30" />
       <source>Rename media</source>
       <translation>重命名媒体</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/meetings/tree_controller.py" line="+8" />
+      <source>Cannot delete section</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Move or delete the manually added subsections and markers first.</source>
+      <translation type="unfinished" />
     </message>
   </context>
   <context>

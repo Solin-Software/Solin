@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QApplication
@@ -42,6 +44,7 @@ def test_playlist_icons_stay_embedded_in_python():
         "plus",
         "export",
         "folder_link",
+        "refresh",
         "save",
         "cloud",
         "section",
@@ -59,6 +62,14 @@ def test_playlist_icons_stay_embedded_in_python():
 
     assert set(PLAYLIST_ICON_SVGS) == expected
     assert all(svg.startswith("<svg") for svg in PLAYLIST_ICON_SVGS.values())
+
+
+def test_meeting_restore_button_visibility_tooltip_and_action_are_wired():
+    source = Path("src/solin/qml/MeetingDetailView.qml").read_text(encoding="utf-8")
+
+    assert "visible: root.hasController && controller.canonicalRestoreAvailable" in source
+    assert '"Restore official meeting content"' in source
+    assert "controller.restoreCanonicalContent()" in source
 
 
 def test_thumbnail_provider_can_return_uncropped_image_for_framing_editor():

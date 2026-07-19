@@ -218,12 +218,31 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 linked_folder_files={str(media): "media"},
                 meeting_folder_imports={},
                 expected_revision=0,
+                canonical_reset_generation=3,
+                hidden_canonical_media={
+                    "media:hidden": {
+                        "id": "hidden",
+                        "type": "media",
+                        "title": "Resolved hidden title",
+                        "children": [],
+                        "meeting_generated": True,
+                        "meeting_source_key": "media:hidden",
+                        "resolved_url": "https://cdn.example.invalid/hidden.mp4",
+                        "media_ref": {"file_path": "", "mime_type": "video/mp4"},
+                    }
+                },
             )
             raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
             saved_node = raw["meeting_tree"]["nodes"][0]
 
             self.assertEqual(record.revision, 1)
+            self.assertEqual(record.canonical_reset_generation, 3)
+            self.assertEqual(raw["meeting_tree"]["schema_version"], 3)
             self.assertEqual(saved_node["media_ref"]["file_path"], "talk.mp4")
+            self.assertEqual(
+                raw["meeting_tree"]["hidden_canonical_media"]["media:hidden"]["title"],
+                "Resolved hidden title",
+            )
             self.assertNotIn("thumbnail_local_path", saved_node)
             self.assertEqual(saved_node["image_framing"], nodes[0]["image_framing"])
             loaded = service.load_tree(str(root), _identity("mwb"))
@@ -238,6 +257,10 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
                 nodes[0]["image_framing"],
             )
             self.assertEqual(loaded.deleted_source_keys, {"official"})
+            self.assertEqual(
+                loaded.hidden_canonical_media["media:hidden"]["resolved_url"],
+                "https://cdn.example.invalid/hidden.mp4",
+            )
 
     def test_save_tree_ignores_canonical_hash_only_changes(self):
         service = _linked_folder_sync()
@@ -392,6 +415,204 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(
                 {node["id"] for node in loaded.nodes},
                 {"local", "remote"},
+            )
+
+    def test_newer_restore_generation_wins_stale_tombstones_and_keeps_manual_nodes(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-25 MW"
+            folder.mkdir()
+            official = {
+                "id": "official",
+                "type": "media",
+                "title": "Official",
+                "children": [],
+                "media_ref": {"file_path": "", "mime_type": "video/mp4"},
+                "meeting_generated": True,
+                "meeting_source_key": "media:official",
+            }
+            remote_manual = {
+                "id": "remote-manual",
+                "type": "media",
+                "children": [],
+                "media_ref": {"file_path": ""},
+                "meeting_generated": False,
+            }
+            local_manual = {
+                "id": "local-manual",
+                "type": "media",
+                "children": [],
+                "media_ref": {"file_path": ""},
+                "meeting_generated": False,
+            }
+            stale_official_container = {
+                "id": "stale-section",
+                "type": "section",
+                "title": "Stale",
+                "children": [local_manual],
+                "meeting_generated": True,
+                "meeting_source_key": "section:stale",
+            }
+            restored = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[official, remote_manual],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=0,
+                canonical_reset_generation=2,
+            )
+
+            stale = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[stale_official_container],
+                deleted_source_keys={"media:official"},
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=restored.revision - 1,
+                canonical_reset_generation=1,
+                hidden_canonical_media={"media:official": official},
+            )
+
+            self.assertEqual(stale.canonical_reset_generation, 2)
+            self.assertEqual(stale.deleted_source_keys, set())
+            self.assertEqual(stale.hidden_canonical_media, {})
+            self.assertEqual(
+                {node["id"] for node in stale.nodes},
+                {"official", "remote-manual", "local-manual"},
+            )
+
+    def test_higher_incoming_generation_invalidates_old_tombstones(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-25 MW"
+            folder.mkdir()
+            old_manual = {
+                "id": "old-manual",
+                "type": "media",
+                "children": [],
+                "media_ref": {"file_path": ""},
+                "meeting_generated": False,
+            }
+            previous = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[old_manual],
+                deleted_source_keys={"media:official"},
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=0,
+                canonical_reset_generation=1,
+                hidden_canonical_media={
+                    "media:official": {
+                        "id": "old-hidden",
+                        "type": "media",
+                        "children": [],
+                        "meeting_generated": True,
+                        "meeting_source_key": "media:official",
+                        "media_ref": {"file_path": ""},
+                    }
+                },
+            )
+            restored_official = {
+                "id": "official",
+                "type": "media",
+                "title": "Official",
+                "children": [],
+                "media_ref": {"file_path": "", "mime_type": "video/mp4"},
+                "meeting_generated": True,
+                "meeting_source_key": "media:official",
+            }
+
+            restored = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[restored_official],
+                deleted_source_keys=set(),
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=previous.revision - 1,
+                canonical_reset_generation=2,
+            )
+
+            self.assertEqual(restored.canonical_reset_generation, 2)
+            self.assertEqual(restored.deleted_source_keys, set())
+            self.assertEqual(restored.hidden_canonical_media, {})
+            self.assertEqual(
+                {node["id"] for node in restored.nodes},
+                {"official", "old-manual"},
+            )
+
+    def test_same_generation_unions_tombstones_and_manual_nodes(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "2026-05-25 MW"
+            folder.mkdir()
+            first = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[{
+                    "id": "remote-manual",
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": ""},
+                    "meeting_generated": False,
+                }],
+                deleted_source_keys={"media:a"},
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=0,
+                canonical_reset_generation=4,
+                hidden_canonical_media={
+                    "media:a": {
+                        "id": "hidden-a",
+                        "type": "media",
+                        "children": [],
+                        "meeting_generated": True,
+                        "meeting_source_key": "media:a",
+                        "media_ref": {"file_path": ""},
+                    }
+                },
+            )
+
+            merged = service.save_tree(
+                folder,
+                _identity("mwb"),
+                nodes=[{
+                    "id": "local-manual",
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": ""},
+                    "meeting_generated": False,
+                }],
+                deleted_source_keys={"media:b"},
+                linked_folder_files={},
+                meeting_folder_imports={},
+                expected_revision=first.revision - 1,
+                canonical_reset_generation=4,
+                hidden_canonical_media={
+                    "media:b": {
+                        "id": "hidden-b",
+                        "type": "media",
+                        "children": [],
+                        "meeting_generated": True,
+                        "meeting_source_key": "media:b",
+                        "media_ref": {"file_path": ""},
+                    }
+                },
+            )
+
+            self.assertEqual(merged.canonical_reset_generation, 4)
+            self.assertEqual(merged.deleted_source_keys, {"media:a", "media:b"})
+            self.assertEqual(
+                set(merged.hidden_canonical_media),
+                {"media:a", "media:b"},
+            )
+            self.assertEqual(
+                {node["id"] for node in merged.nodes},
+                {"remote-manual", "local-manual"},
             )
 
     def test_materialize_copies_manual_physical_file_to_root_without_deleting_origin(self):
