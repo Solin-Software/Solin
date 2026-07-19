@@ -330,8 +330,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         "show",
         ("titlebar", window, "#1A231F"),
         ("timer", 200),
-        ("open_media_files", file_args),
+        ("open_media_files", ["clip.mp4", "song.mp3"]),
     ]
+    assert file_args == []
 
 
 def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):

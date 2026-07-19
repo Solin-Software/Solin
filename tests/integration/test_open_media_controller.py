@@ -41,6 +41,7 @@ class _PlaylistWidgetStub:
         self.opened_pdf_playlists = []
         self.opened_named_playlists = []
         self.appended = []
+        self.native_imports = []
 
     def open_pdf_as_temp_playlist(self, items, stem):
         self.opened_pdf_playlists.append((items, stem))
@@ -53,6 +54,9 @@ class _PlaylistWidgetStub:
     def append_temp_playlist_items(self, playlist_id, items):
         self.appended.append((playlist_id, items))
         return True
+
+    def import_native_playlists(self, paths, open_after=False):
+        self.native_imports.append((paths, open_after))
 
 
 class _NotificationsStub:
@@ -192,6 +196,7 @@ def _controller(
             append_temp_playlist_items=(
                 window.playlist_widget.append_temp_playlist_items
             ),
+            import_native_playlists=window.playlist_widget.import_native_playlists,
         ),
     )
 
@@ -257,6 +262,18 @@ def test_open_media_files_sends_multiple_media_items_to_temp_playlist(tmp_path):
         {"url": image_path, "title": "slide.png", "type": "image"},
     ]]
     assert window.proj_bar.expanded == 0
+
+
+def test_open_media_files_routes_native_playlist_to_dedicated_import(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    package = str(tmp_path / "complete.solinplaylist")
+
+    controller.open_media_files([package])
+
+    assert window.playlist_widget.native_imports == [([package], True)]
+    assert window.projected is None
+    assert window._playlist_imports.temp_playlists == []
 
 
 def test_open_media_files_sends_multiple_http_media_to_temp_playlist():

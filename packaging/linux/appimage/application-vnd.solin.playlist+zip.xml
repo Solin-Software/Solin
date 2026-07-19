@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.solin.playlist+zip">
+    <comment>Solin playlist</comment>
+    <comment xml:lang="pt_BR">Playlist do Solin</comment>
+    <sub-class-of type="application/zip"/>
+    <icon name="application-vnd.solin.playlist+zip"/>
+    <glob pattern="*.solinplaylist" weight="90"/>
+    <magic priority="80">
+      <match type="string" value="PK\003\004" offset="0">
+        <match type="string" value="application/vnd.solin.playlist+zip" offset="38"/>
+      </match>
+    </magic>
+  </mime-type>
+</mime-info>

@@ -45,6 +45,7 @@ jobs:
             build-essential \
             ccache \
             desktop-file-utils \
+            shared-mime-info \
             patchelf \
             appstream \
             file \

@@ -47,12 +47,15 @@ Resolução de URLs JW.org:
 
 from __future__ import annotations
 
+import io
 import logging
 import os
 import re
 import sqlite3
 import urllib.parse
 import zipfile
+from collections.abc import Callable
+from concurrent.futures import CancelledError
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -70,6 +73,11 @@ log = logging.getLogger(__name__)
 # ── Constantes JW.org ──────────────────────────────────────────────────────────
 _JWORG_API = "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
 _TIMEOUT    = 8   # segundos
+
+ProgressCallback = Callable[[str, int, int | None], None]
+CancelCallback = Callable[[], bool]
+
+_READ_CHUNK_SIZE = 1024 * 1024
 
 # Mapa simples MimeType → extensão de arquivo
 _MIME_TO_EXT: dict[str, str] = {
@@ -162,9 +170,31 @@ def _database_text(
 class JWLPlaylistReader:
     """Lê um .jwlplaylist e retorna a estrutura de playlist normalizada."""
 
-    def __init__(self, path: str | Path, fallback_lang_code: str = "E"):
+    def __init__(
+        self,
+        path: str | Path,
+        fallback_lang_code: str = "E",
+        *,
+        progress_callback: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ):
         self._path = Path(path)
         self._fallback_lang_code = fallback_lang_code
+        self._progress_callback = progress_callback
+        self._should_cancel = should_cancel
+
+    def _raise_if_cancelled(self) -> None:
+        if self._should_cancel is not None and self._should_cancel():
+            raise CancelledError("JW Library playlist transfer cancelled")
+
+    def _report_progress(
+        self,
+        phase: str,
+        completed: int,
+        total: int | None,
+    ) -> None:
+        if self._progress_callback is not None:
+            self._progress_callback(phase, completed, total)
 
     def parse(self) -> dict:
         """
@@ -174,10 +204,13 @@ class JWLPlaylistReader:
         if not self._path.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {self._path}")
 
+        self._raise_if_cancelled()
+        self._report_progress("opening", 0, 1)
         try:
             with zipfile.ZipFile(self._path, "r") as zf:
                 self._zip = zf
                 self._names_in_zip = set(zf.namelist())
+                self._report_progress("opening", 1, 1)
                 return self._parse_zip()
         except zipfile.BadZipFile:
             raise
@@ -198,7 +231,9 @@ class JWLPlaylistReader:
         if not db_entry:
             raise ValueError("userData.db não encontrado no arquivo .jwlplaylist")
 
-        db_bytes = self._zip.read(db_entry)
+        db_bytes = self._read_zip_entry(db_entry, phase="database")
+        if db_bytes is None:
+            raise ValueError("userData.db não encontrado no arquivo .jwlplaylist")
         return self._parse_db(db_bytes)
 
     def _find_db(self) -> Optional[str]:
@@ -223,9 +258,12 @@ class JWLPlaylistReader:
         src: sqlite3.Connection | None = None
         mem: sqlite3.Connection | None = None
         try:
-            os.write(fd, db_bytes)
-            os.close(fd)
-            fd = -1
+            with os.fdopen(fd, "wb") as temporary_database:
+                fd = -1
+                view = memoryview(db_bytes)
+                for offset in range(0, len(view), _READ_CHUNK_SIZE):
+                    self._raise_if_cancelled()
+                    temporary_database.write(view[offset : offset + _READ_CHUNK_SIZE])
 
             src = sqlite3.connect(tmp_path)
             mem = sqlite3.connect(":memory:")
@@ -277,6 +315,7 @@ class JWLPlaylistReader:
 
         # ── Itens ordenados ───────────────────────────────────────────────────
         raw_items = self._get_raw_items(con)
+        self._raise_if_cancelled()
 
         # ── Mapa item → mídia embutida ────────────────────────────────────────
         im_map = self._build_independent_media_map(con)
@@ -286,7 +325,10 @@ class JWLPlaylistReader:
 
         # ── Constrói lista de resultado ───────────────────────────────────────
         items = []
-        for raw in raw_items:
+        total_items = len(raw_items)
+        self._report_progress("items", 0, total_items)
+        for index, raw in enumerate(raw_items):
+            self._raise_if_cancelled()
             iid = raw.playlist_item_id
 
             if iid in im_map:
@@ -302,9 +344,12 @@ class JWLPlaylistReader:
                 entry = self._build_video_entry(raw, loc)
             else:
                 log.warning("PlaylistItem %d has no associated media - ignored.", iid)
+                self._report_progress("items", index + 1, total_items)
                 continue
 
             items.append(entry)
+            self._raise_if_cancelled()
+            self._report_progress("items", index + 1, total_items)
 
         return {"name": playlist_name, "items": items}
 
@@ -475,7 +520,10 @@ class JWLPlaylistReader:
             log.warning("Independent media table not found: %s", e)
             return result
 
-        for row in rows:
+        total_media = len(rows)
+        self._report_progress("media_items", 0, total_media)
+        for index, row in enumerate(rows):
+            self._raise_if_cancelled()
             file_path = _database_text(
                 row["FilePath"],
                 "IndependentMedia.FilePath",
@@ -500,6 +548,7 @@ class JWLPlaylistReader:
             data = self._read_zip_entry(file_path)
             if data is None:
                 log.warning("File %s not found in ZIP - item ignored.", file_path)
+                self._report_progress("media_items", index + 1, total_media)
                 continue
 
             result[row["PlaylistItemId"]] = _IndependentMedia(
@@ -510,6 +559,7 @@ class JWLPlaylistReader:
                 hash_          = hash_value,
                 data           = data,
             )
+            self._report_progress("media_items", index + 1, total_media)
 
         return result
 
@@ -540,6 +590,7 @@ class JWLPlaylistReader:
             return result
 
         for row in rows:
+            self._raise_if_cancelled()
             result[row["PlaylistItemId"]] = _Location(
                 location_id           = row["LocationId"],
                 key_symbol            = _database_text(
@@ -556,16 +607,38 @@ class JWLPlaylistReader:
 
         return result
 
-    def _read_zip_entry(self, file_path: str) -> Optional[bytes]:
+    def _read_zip_entry(
+        self,
+        file_path: str,
+        *,
+        phase: str = "media_bytes",
+    ) -> Optional[bytes]:
         """Tenta ler uma entrada do ZIP por caminho exato ou correspondência parcial."""
+        entry_name: str | None = None
         if file_path in self._names_in_zip:
-            return self._zip.read(file_path)
-        # Às vezes o FilePath no banco tem separadores diferentes ou subpasta
-        basename = Path(file_path).name
-        for name in self._names_in_zip:
-            if Path(name).name == basename:
-                return self._zip.read(name)
-        return None
+            entry_name = file_path
+        else:
+            # Às vezes o FilePath no banco tem separadores diferentes ou subpasta
+            basename = Path(file_path).name
+            for name in self._names_in_zip:
+                if Path(name).name == basename:
+                    entry_name = name
+                    break
+        if entry_name is None:
+            return None
+
+        total = self._zip.getinfo(entry_name).file_size
+        completed = 0
+        self._report_progress(phase, completed, total)
+        destination = io.BytesIO()
+        with self._zip.open(entry_name, "r") as source:
+            while chunk := source.read(_READ_CHUNK_SIZE):
+                self._raise_if_cancelled()
+                destination.write(chunk)
+                completed += len(chunk)
+                self._report_progress(phase, completed, total)
+        self._raise_if_cancelled()
+        return destination.getvalue()
 
     # ── Construtores de entry ─────────────────────────────────────────────────
 
@@ -985,7 +1058,13 @@ def _extract_best_entry(
 
 # ── Função de conveniência ────────────────────────────────────────────────────
 
-def read_jwlplaylist(path: str | Path, fallback_lang_code: str = "E") -> dict:
+def read_jwlplaylist(
+    path: str | Path,
+    fallback_lang_code: str = "E",
+    *,
+    progress_callback: ProgressCallback | None = None,
+    should_cancel: CancelCallback | None = None,
+) -> dict:
     """
     Ponto de entrada simplificado.
 
@@ -994,5 +1073,13 @@ def read_jwlplaylist(path: str | Path, fallback_lang_code: str = "E") -> dict:
 
     Retorna dict com 'name' e 'items'.
     Propaga FileNotFoundError, BadZipFile ou ValueError.
+
+    Cancellation is cooperative and propagates ``concurrent.futures.CancelledError``.
+    Progress reports counts or uncompressed bytes according to the phase.
     """
-    return JWLPlaylistReader(path, fallback_lang_code=fallback_lang_code).parse()
+    return JWLPlaylistReader(
+        path,
+        fallback_lang_code=fallback_lang_code,
+        progress_callback=progress_callback,
+        should_cancel=should_cancel,
+    ).parse()

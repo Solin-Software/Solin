@@ -52,7 +52,7 @@ class PlaylistCard(QFrame):
     clicked = Signal(str)
     rename_req = Signal(str)
     delete_req = Signal(str)
-    export_req = Signal(str)
+    export_req = Signal(str, str)  # playlist_id, format
 
     def __init__(self, playlist_id: str, name: str, count: int, lang, parent=None):
         super().__init__(parent)
@@ -164,16 +164,24 @@ class PlaylistCard(QFrame):
         ar.setIcon(make_icon(ICON_EDIT, 13, PALETTE.text_secondary))
         ar.setText("  " + self.tr("Rename"))
         ar.triggered.connect(lambda: self.rename_req.emit(self._id))
-        ae = QAction(self)
-        ae.setIcon(make_icon(ICON_EXPORT, 13, PALETTE.text_secondary))
-        ae.setText("  " + self.tr("Export .jwlplaylist"))
-        ae.triggered.connect(lambda: self.export_req.emit(self._id))
+        export_menu = QMenu(self.tr("Export"), menu)
+        export_menu.setIcon(make_icon(ICON_EXPORT, 13, PALETTE.text_secondary))
+        native_export = QAction(self.tr("Solin Playlist…"), self)
+        native_export.triggered.connect(
+            lambda: self.export_req.emit(self._id, "solin")
+        )
+        jwl_export = QAction(self.tr("JW Library Playlist…"), self)
+        jwl_export.triggered.connect(
+            lambda: self.export_req.emit(self._id, "jwl")
+        )
+        export_menu.addAction(native_export)
+        export_menu.addAction(jwl_export)
         ad = QAction(self)
         ad.setIcon(make_icon(ICON_TRASH, 13, PALETTE.danger))
         ad.setText("  " + self.tr("Delete"))
         ad.triggered.connect(lambda: self.delete_req.emit(self._id))
         menu.addAction(ar)
-        menu.addAction(ae)
+        menu.addMenu(export_menu)
         menu.addSeparator()
         menu.addAction(ad)
         menu.exec(self._mbtn.mapToGlobal(QPoint(0, self._mbtn.height())))
@@ -297,7 +305,7 @@ class WatchedFolderCard(QFrame):
     clicked = Signal(str)
     rename_req = Signal(str)
     delete_req = Signal(str)
-    export_req = Signal(str)
+    export_req = Signal(str, str)  # folder_path, format
 
     def __init__(self, path: str, name: str, count: int, lang, parent=None):
         super().__init__(parent)
@@ -406,10 +414,18 @@ class WatchedFolderCard(QFrame):
         ar.setText("  " + self.tr("Rename"))
         ar.triggered.connect(lambda: self.rename_req.emit(self._path))
 
-        ae = QAction(self)
-        ae.setIcon(make_icon(ICON_EXPORT, 13, PALETTE.text_secondary))
-        ae.setText("  " + self.tr("Export .jwlplaylist"))
-        ae.triggered.connect(lambda: self.export_req.emit(self._path))
+        export_menu = QMenu(self.tr("Export"), menu)
+        export_menu.setIcon(make_icon(ICON_EXPORT, 13, PALETTE.text_secondary))
+        native_export = QAction(self.tr("Solin Playlist…"), self)
+        native_export.triggered.connect(
+            lambda: self.export_req.emit(self._path, "solin")
+        )
+        jwl_export = QAction(self.tr("JW Library Playlist…"), self)
+        jwl_export.triggered.connect(
+            lambda: self.export_req.emit(self._path, "jwl")
+        )
+        export_menu.addAction(native_export)
+        export_menu.addAction(jwl_export)
 
         ad = QAction(self)
         ad.setIcon(make_icon(ICON_TRASH, 13, PALETTE.danger))
@@ -417,7 +433,7 @@ class WatchedFolderCard(QFrame):
         ad.triggered.connect(lambda: self.delete_req.emit(self._path))
 
         menu.addAction(ar)
-        menu.addAction(ae)
+        menu.addMenu(export_menu)
         menu.addSeparator()
         menu.addAction(ad)
         menu.exec(self._mbtn.mapToGlobal(QPoint(0, self._mbtn.height())))

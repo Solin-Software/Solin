@@ -19,6 +19,9 @@
   <provides>
     <binary>solin</binary>
   </provides>
+  <mimetypes>
+    <mimetype>application/vnd.solin.playlist+zip</mimetype>
+  </mimetypes>
   <releases>
     <release version="@VERSION@" date="@RELEASE_DATE@"/>
   </releases>

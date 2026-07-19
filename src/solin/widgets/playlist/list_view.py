@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from PySide6.QtCore import QEvent, QSize, Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -15,37 +16,32 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QMenu,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from ...core.foundation.runtime_paths import ProfilePaths
-from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.jwl_export import (
-    JwlPlaylistExportRequest,
-    export_jwlplaylist_document,
-)
-from ...core.playlists.jwl_files import (
-    PlaylistWriteError,
-    read_jwlplaylist_document,
-)
-from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
-from ...core.playlists.storage import PlaylistStoragePaths
 from ...core.i18n.manager import LanguageManager
+from ...core.playlists.names import (
+    PlaylistNameConflictError,
+    PlaylistNameError,
+    ensure_unique_playlist_name,
+)
 from ...styles.icons import ICON_IMPORT, ICON_PLUS, make_icon
 from ...styles.theme import PALETTE
-from ...core.media.cache import MediaCacheManager
-from .components import CollapsibleSection, PlaylistCard, WatchedFolderCard
+from .components import (
+    CollapsibleSection,
+    PlaylistCard,
+    WatchedFolderCard,
+    playlist_card_menu_stylesheet,
+)
 from .dialogs import NameDialog
-from .item_visuals import enrich_items_for_export
 
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
-    from ...core.media.profile_store import ProfileMediaStore
-    from ...core.media.thumbnail_store import ThumbnailStore
     from ...core.playlists.storage import PlaylistRepository
 
 __all__ = (
@@ -85,6 +81,9 @@ PLAYLIST_PRIMARY_BUTTON_STYLESHEET = playlist_primary_button_stylesheet()
 class PlaylistListView(QWidget):
     open_playlist = Signal(str)
     open_watched_folder = Signal(str)
+    import_requested = Signal(object, str)  # paths, format
+    export_playlist_requested = Signal(str, str)  # playlist_id, format
+    export_watched_folder_requested = Signal(str, str)  # folder_path, format
 
     _COLS = 3
 
@@ -95,14 +94,9 @@ class PlaylistListView(QWidget):
         media_ctrl=None,
         watched_folder: str = "",
         *,
-        profile_paths: ProfilePaths,
-        storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
-        profile_media_store: ProfileMediaStore,
-        playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
-        media_cache_manager: MediaCacheManager,
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
     ):
@@ -111,14 +105,9 @@ class PlaylistListView(QWidget):
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._watched_folder = watched_folder
-        self._profile_paths = profile_paths
-        self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
-        self._profile_media_store = profile_media_store
-        self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
-        self._media_cache_manager = media_cache_manager
         self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[PlaylistCard] = []
         self._wf_cards: list[WatchedFolderCard] = []
@@ -127,7 +116,6 @@ class PlaylistListView(QWidget):
     def set_watched_folder(self, path: str) -> None:
         self._watched_folder = path
         self._rebuild_watched_section()
-
     def showEvent(self, e) -> None:
         self._rebuild_app_cards()
         self._rebuild_watched_section()
@@ -151,8 +139,8 @@ class PlaylistListView(QWidget):
         self._import_btn.setStyleSheet(playlist_secondary_button_stylesheet())
         self._import_btn.setFixedHeight(30)
         self._import_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._import_btn.setToolTip(self.tr("Import .jwlplaylist"))
-        self._import_btn.clicked.connect(self._import_playlist)
+        self._import_btn.setToolTip(self.tr("Import playlist"))
+        self._import_btn.clicked.connect(self._show_import_menu)
         hdr.addWidget(self._import_btn)
 
         self._new_btn = QPushButton(self)
@@ -273,7 +261,7 @@ class PlaylistListView(QWidget):
             card.clicked.connect(self.open_playlist.emit)
             card.rename_req.connect(self._rename_playlist)
             card.delete_req.connect(self._delete_playlist)
-            card.export_req.connect(self._export_playlist)
+            card.export_req.connect(self.export_playlist_requested.emit)
             row, col = divmod(i, self._COLS)
             self._app_grid_lay.addWidget(card, row, col)
             self._pl_cards.append(card)
@@ -311,7 +299,7 @@ class PlaylistListView(QWidget):
             card.clicked.connect(self.open_watched_folder.emit)
             card.rename_req.connect(self._rename_watched_folder)
             card.delete_req.connect(self._delete_watched_folder)
-            card.export_req.connect(self._export_watched_folder)
+            card.export_req.connect(self.export_watched_folder_requested.emit)
             row, col = divmod(i, self._COLS)
             self._wf_grid_lay.addWidget(card, row, col)
             self._wf_cards.append(card)
@@ -324,7 +312,7 @@ class PlaylistListView(QWidget):
     def retranslateUi(self) -> None:
         self._title_lbl.setText(self.tr("Playlists"))
         self._import_btn.setText("  " + self.tr("Import"))
-        self._import_btn.setToolTip(self.tr("Import .jwlplaylist"))
+        self._import_btn.setToolTip(self.tr("Import playlist"))
         self._new_btn.setText("  " + self.tr("New Playlist"))
         self._empty_lbl.setText(
             self.tr("No playlists yet.\nClick '＋ New Playlist' to create one.")
@@ -347,8 +335,12 @@ class PlaylistListView(QWidget):
         dlg = NameDialog(lang=self.lang, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        name = dlg.get_name()
-        if not name:
+        try:
+            name = ensure_unique_playlist_name(dlg.get_name(), self._playlists)
+        except PlaylistNameConflictError as exc:
+            self._show_duplicate_name_warning(exc.name)
+            return
+        except PlaylistNameError:
             return
         pl = {"id": str(uuid.uuid4()), "name": name, "items": []}
         self._playlists.append(pl)
@@ -364,12 +356,29 @@ class PlaylistListView(QWidget):
         dlg.setWindowTitle(self.tr("Rename playlist"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        name = dlg.get_name()
-        if not name:
+        try:
+            name = ensure_unique_playlist_name(
+                dlg.get_name(),
+                self._playlists,
+                excluding_id=pl_id,
+            )
+        except PlaylistNameConflictError as exc:
+            self._show_duplicate_name_warning(exc.name)
+            return
+        except PlaylistNameError:
             return
         pl["name"] = name
         self._playlist_repository.save(self._playlists)
         self._rebuild_app_cards()
+
+    def _show_duplicate_name_warning(self, name: str) -> None:
+        QMessageBox.warning(
+            self,
+            self.tr("Playlist already exists"),
+            self.tr('A playlist named "{name}" already exists.').replace(
+                "{name}", name
+            ),
+        )
 
     def _delete_playlist(self, pl_id: str) -> None:
         pl = self._find(pl_id)
@@ -407,92 +416,33 @@ class PlaylistListView(QWidget):
         self._schedule_cleanup(list(pl.get("items", [])))
         self._rebuild_app_cards()
 
-    def _export_playlist(self, pl_id: str) -> None:
-        pl = self._find(pl_id)
-        if not pl:
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self.tr("Export .jwlplaylist"),
-            os.path.join(
-                os.path.expanduser("~"),
-                pl["name"].replace(" ", "_") + ".jwlplaylist",
-            ),
-            "JW Library Playlist (*.jwlplaylist)",
-        )
-        if not path:
-            return
-        try:
-            items = enrich_items_for_export(
-                pl.get("items", []),
-                {},
-                self._playlist_thumbnail_store,
-            )
-            fallback_lang = jw_media_language_context(self.lang).fallback_code
-            export_jwlplaylist_document(
-                JwlPlaylistExportRequest(
-                    name=pl["name"],
-                    items=items,
-                    output_path=path,
-                    media_cache_dir=self._media_cache_manager.media_cache_dir,
-                    fallback_lang_code=fallback_lang,
-                )
-            )
-            QMessageBox.information(
-                self,
-                self.tr("Export complete"),
-                self.tr("Exported:\n{path}").replace("{path}", str(path)),
-            )
-        except (OSError, ValueError, PlaylistWriteError) as e:
-            QMessageBox.critical(self, self.tr("Export error"), str(e))
+    def _show_import_menu(self) -> None:
+        menu = QMenu(self)
+        menu.setStyleSheet(playlist_card_menu_stylesheet())
 
-    def _import_playlist(self) -> None:
+        native_import = QAction(self.tr("Solin Playlist…"), menu)
+        native_import.triggered.connect(lambda: self._pick_import("solin"))
+        jwl_import = QAction(self.tr("JW Library Playlist…"), menu)
+        jwl_import.triggered.connect(lambda: self._pick_import("jwl"))
+        menu.addAction(native_import)
+        menu.addAction(jwl_import)
+        menu.exec(self._import_btn.mapToGlobal(self._import_btn.rect().bottomLeft()))
+
+    def _pick_import(self, playlist_format: str) -> None:
+        if playlist_format == "solin":
+            title = self.tr("Import Solin Playlist")
+            file_filter = "Solin Playlist (*.solinplaylist)"
+        else:
+            title = self.tr("Import JW Library Playlist")
+            file_filter = "JW Library Playlist (*.jwlplaylist)"
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            self.tr("Import .jwlplaylist"),
+            title,
             os.path.expanduser("~"),
-            "JW Library Playlist (*.jwlplaylist)",
+            file_filter,
         )
-        if not paths:
-            return
-        fallback_lang = jw_media_language_context(self.lang).fallback_code
-
-        imported = 0
-        for path in paths:
-            try:
-                document = read_jwlplaylist_document(
-                    path,
-                    fallback_lang_code=fallback_lang,
-                )
-                pl_name = document.name or Path(path).stem
-                result = playlist_items_from_jwl_document_items(
-                    document.items,
-                    source_name=Path(path).name,
-                    save_embedded=(
-                        lambda data, filename, identifier, default_suffix:
-                        self._profile_media_store.save_embedded(
-                            data,
-                            filename,
-                            identifier=identifier,
-                            default_suffix=default_suffix,
-                        )
-                    ),
-                )
-                self._playlists.append(
-                    {"id": str(uuid.uuid4()), "name": pl_name, "items": result.items}
-                )
-                imported += 1
-            except (OSError, ValueError) as e:
-                QMessageBox.warning(
-                    self,
-                    self.tr("Import error"),
-                    self.tr("Could not import:\n{name}\n\n{error}").replace(
-                        "{name}", str(Path(path).name)
-                    ).replace("{error}", str(e)),
-                )
-        if imported:
-            self._playlist_repository.save(self._playlists)
-            self._rebuild_app_cards()
+        if paths:
+            self.import_requested.emit(paths, playlist_format)
 
     def _find(self, pl_id: str) -> Optional[dict]:
         return next((p for p in self._playlists if p["id"] == pl_id), None)
@@ -532,46 +482,3 @@ class PlaylistListView(QWidget):
             QMessageBox.critical(self, self.tr("Error"), str(exc))
             return
         self._rebuild_watched_section()
-
-    def _export_watched_folder(self, folder_path: str) -> None:
-        name = Path(folder_path).name
-        pl = self._watched_folder_playlist_store.load_playlist(folder_path)
-        items = pl.get("items", [])
-        if not items:
-            QMessageBox.information(
-                self,
-                self.tr("Empty folder"),
-                self.tr("No media files found in \"{name}\".").replace("{name}", name),
-            )
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self.tr("Export .jwlplaylist"),
-            os.path.join(os.path.expanduser("~"), name.replace(" ", "_") + ".jwlplaylist"),
-            "JW Library Playlist (*.jwlplaylist)",
-        )
-        if not path:
-            return
-        try:
-            enriched = enrich_items_for_export(
-                items,
-                {},
-                self._playlist_thumbnail_store,
-            )
-            fallback_lang = jw_media_language_context(self.lang).fallback_code
-            export_jwlplaylist_document(
-                JwlPlaylistExportRequest(
-                    name=name,
-                    items=enriched,
-                    output_path=path,
-                    media_cache_dir=self._media_cache_manager.media_cache_dir,
-                    fallback_lang_code=fallback_lang,
-                )
-            )
-            QMessageBox.information(
-                self,
-                self.tr("Export complete"),
-                self.tr("Exported:\n{path}").replace("{path}", str(path)),
-            )
-        except (OSError, ValueError, PlaylistWriteError) as exc:
-            QMessageBox.critical(self, self.tr("Export error"), str(exc))

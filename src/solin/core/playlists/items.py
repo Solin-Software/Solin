@@ -14,6 +14,7 @@ class PlaylistMediaItem(TypedDict):
     id: str
     title: str
     url: str
+    source_url: NotRequired[str]
     type: str
     auto_title: bool
     key_symbol: str | None

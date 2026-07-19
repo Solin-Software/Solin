@@ -57,7 +57,7 @@ download_verified() {
 [[ "$(uname -s)" == "Linux" ]] || fail "AppImage packaging must run on Linux or WSL 2."
 [[ "$(uname -m)" == "x86_64" ]] || fail "Only x86_64 AppImages are currently supported."
 
-for command_name in awk cp curl file ldd realpath sha256sum; do
+for command_name in awk cp curl file ldd realpath sha256sum update-mime-database; do
     command -v "${command_name}" >/dev/null || fail "Missing required command: ${command_name}"
 done
 
@@ -133,12 +133,22 @@ mkdir -p \
     "${APPDIR}/usr/lib/solin" \
     "${APPDIR}/usr/share/applications" \
     "${APPDIR}/usr/share/icons/hicolor/512x512/apps" \
+    "${APPDIR}/usr/share/icons/hicolor/512x512/mimetypes" \
+    "${APPDIR}/usr/share/icons/hicolor/scalable/mimetypes" \
+    "${APPDIR}/usr/share/mime/packages" \
     "${APPDIR}/usr/share/metainfo"
 cp -a "${STANDALONE_DIR}/." "${APPDIR}/usr/lib/solin/"
 install -m 755 "${TEMPLATE_ROOT}/AppRun" "${APPDIR}/AppRun"
 install -m 755 "${TEMPLATE_ROOT}/solin" "${APPDIR}/usr/bin/solin"
 install -m 644 "${TEMPLATE_ROOT}/com.solin.Solin.desktop" \
     "${APPDIR}/usr/share/applications/com.solin.Solin.desktop"
+install -m 644 "${TEMPLATE_ROOT}/application-vnd.solin.playlist+zip.xml" \
+    "${APPDIR}/usr/share/mime/packages/application-vnd.solin.playlist+zip.xml"
+install -m 644 "${PROJECT_ROOT}/src/solin/resources/assets/playlist-512.png" \
+    "${APPDIR}/usr/share/icons/hicolor/512x512/mimetypes/application-vnd.solin.playlist+zip.png"
+install -m 644 "${PROJECT_ROOT}/src/solin/resources/assets/playlist.svg" \
+    "${APPDIR}/usr/share/icons/hicolor/scalable/mimetypes/application-vnd.solin.playlist+zip.svg"
+update-mime-database "${APPDIR}/usr/share/mime"
 sed -e "s/@VERSION@/${APP_VERSION}/g" \
     -e "s/@RELEASE_DATE@/${RELEASE_DATE}/g" \
     "${TEMPLATE_ROOT}/com.solin.Solin.appdata.xml" \

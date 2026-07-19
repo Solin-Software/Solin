@@ -36,7 +36,11 @@
 #define MyAppExeName     "Solin.exe"
 #define MyAppMutex       "Solin_SingleInstance_Mutex"
 #define MyRegSubkey      "Software\Solin\Solin"
-#define MyDistDir        "..\..\..\build\main.dist"
+#define MyPlaylistProgId "Solin.Playlist"
+#define MyPlaylistMime   "application/vnd.solin.playlist+zip"
+#ifndef MyDistDir
+  #define MyDistDir      "..\..\..\build\main.dist"
+#endif
 
 #ifndef MyAppVersion
   #define MyAppVersion GetFileVersion(MyDistDir + "\" + MyAppExeName)
@@ -118,6 +122,7 @@ VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 
 RestartIfNeededByRun=no
+ChangesAssociations=yes
 
 ; =============================================================================
 [Languages]
@@ -139,6 +144,7 @@ Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 ; ── 2. App icon (only if not already inside main.dist) ───────────────────────
 Source: "..\..\..\src\solin\resources\assets\icon.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
+Source: "..\..\..\src\solin\resources\assets\playlist.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
 
 ; NOTE: Translations/lang folders are handled automatically via recursesubdirs
 ;       above, as long as they reside inside main.dist/.
@@ -195,13 +201,26 @@ Root: HKA; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; V
 Root: HKA; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
 
+; ── Native Solin playlist format ─────────────────────────────────────────────
+; Do not write the extension's default value or Windows UserChoice. Registering
+; through OpenWithProgids and Capabilities keeps an existing user-selected app
+; intact while making Solin available in Open With and Default Apps.
+Root: HKA; Subkey: "Software\Classes\.solinplaylist\OpenWithProgids"; ValueType: none; ValueName: "{#MyPlaylistProgId}"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: ""; ValueData: "Solin Playlist"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Solin Playlist"
+Root: HKA; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "Content Type"; ValueData: "{#MyPlaylistMime}"
+Root: HKA; Subkey: "Software\Classes\{#MyPlaylistProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\playlist.ico,0"
+Root: HKA; Subkey: "Software\Classes\{#MyPlaylistProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}\SupportedTypes"; ValueType: none; ValueName: ".solinplaylist"
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+Root: HKA; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Open native Solin playlists"
+Root: HKA; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: "{app}\resources\assets\icon.ico,0"
+Root: HKA; Subkey: "Software\Solin\Capabilities\FileAssociations"; ValueType: string; ValueName: ".solinplaylist"; ValueData: "{#MyPlaylistProgId}"
+Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "Software\Solin\Capabilities"; Flags: uninsdeletevalue
 
-; ── File-type associations (disabled by default) ─────────────────────────────
-; Remove the ";" to activate.
-; Root: HKA; Subkey: "Software\Classes\.jwlplaylist";                            ValueType: string; ValueName: ""; ValueData: "Solin.jwlplaylist"; Flags: uninsdeletevalue
-; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist";                       ValueType: string; ValueName: ""; ValueData: "JW Library Playlist"; Flags: uninsdeletekey
-; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist\DefaultIcon";           ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
-; Root: HKA; Subkey: "Software\Classes\Solin.jwlplaylist\shell\open\command";    ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 ; =============================================================================
 [Run]
@@ -676,12 +695,6 @@ begin
       RegDeleteKeyIfEmpty(HKLM, 'Software\Solin');
       RegDeleteKeyIfEmpty(HKCU, 'Software\Solin');
 
-      // File-type associations (uncomment if activated in [Registry])
-      // RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\.jwlplaylist');
-      // RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Solin.jwlplaylist');
-      // RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Classes\.jwlplaylist');
-      // RegDeleteKeyIncludingSubkeys(HKLM, 'Software\Classes\Solin.jwlplaylist');
-      
       // Remove o Solin do "Abrir com..." de Imagens
       RegDeleteValue(HKCU, 'Software\Classes\.png\OpenWithProgids', 'Solin.Image');
       RegDeleteValue(HKCU, 'Software\Classes\.jpg\OpenWithProgids', 'Solin.Image');

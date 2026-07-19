@@ -142,7 +142,14 @@ class MediaPartition:
 
 
 def media_identity(record: Mapping[str, Any]) -> MediaIdentity | None:
-    location = _first_text(record, "url", "download_url", "file_path", "jworg_url")
+    location = _first_text(
+        record,
+        "source_url",
+        "url",
+        "download_url",
+        "file_path",
+        "jworg_url",
+    )
     parsed = parse_jw_media_reference(
         location,
         original_filename=_first_text(record, "original_filename"),

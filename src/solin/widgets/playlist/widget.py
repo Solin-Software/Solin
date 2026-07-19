@@ -22,6 +22,7 @@ from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtQuickWidgets import QQuickWidget
 
 from solin.styles.theme import PALETTE, QML_THEME
+from solin.controllers.playlist_transfer_workflow import PlaylistTransferWorkflow
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.model import PlaylistEditModel
@@ -54,6 +55,11 @@ from ...core.media.identity import partition_media_items
 from ...core.media.insertion import MediaInsertResult
 from ...core.media.playback_request import MediaTrim
 from ...core.playlists.items import looks_like_filename_title
+from ...core.playlists.names import (
+    PlaylistNameConflictError,
+    PlaylistNameError,
+    ensure_unique_playlist_name,
+)
 from ...core.projection.image_framing import (
     ImageTransform,
     image_transform_from_record,
@@ -65,6 +71,7 @@ from ...ui.media_info import MediaInfoQueue
 from .drag_drop import PlaylistDragDropMixin
 from .edit_actions import PlaylistEditActionsMixin
 from .import_export import PlaylistEditImportMixin
+from .item_visuals import enrich_items_for_export
 from .list_view import PlaylistListView
 from ...core.meetings.colors import APP_BASE_HUE, generate_section_hue
 from .dialogs import HuePickerDialog, NameDialog
@@ -130,6 +137,8 @@ class PlaylistEditView(
     back_requested = Signal()
     project_items  = Signal(list, int, str)
     save_temp_as_permanent = Signal(str, dict)  # name, playlist data
+    export_requested = Signal(str)
+    import_jwl_requested = Signal(object, int, str)
     _manifestSaveCompleted = Signal(str, int, object)
 
     def __init__(
@@ -251,6 +260,26 @@ class PlaylistEditView(
 
     def _current_media_context(self) -> JWMediaLanguageContext:
         return jw_media_language_context(self.lang)
+
+    def playlist_export_snapshot(self, playlist_format: str) -> dict | None:
+        """Return a stable UI-thread snapshot ready for a transfer worker."""
+        if not self._pl:
+            return None
+        self._flush_image_framing_save()
+        self.model.finalize_drag()
+        snapshot = copy.deepcopy(self._pl)
+        snapshot.pop("_temp", None)
+        if playlist_format == "jwl":
+            snapshot["items"] = enrich_items_for_export(
+                snapshot.get("items", []),
+                self._id_to_thumb,
+                self._playlist_thumbnail_store,
+            )
+        return snapshot
+
+    @property
+    def current_playlist_id(self) -> str:
+        return str(self._pl.get("id") or "") if self._pl else ""
 
     def _apply_media_language_context(self) -> None:
         context = self._current_media_context()
@@ -1518,14 +1547,9 @@ class PlaylistWidget(QWidget):
             self._playlists, self.lang,
             media_ctrl=self._media_ctrl,
             watched_folder=self._watched_folder,
-            profile_paths=self._profile_paths,
-            storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
-            profile_media_store=self._profile_media_store,
-            playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             watched_folder_playlist_store=self._watched_folder_playlist_store,
-            media_cache_manager=self._media_cache_manager,
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
         )
@@ -1563,9 +1587,33 @@ class PlaylistWidget(QWidget):
 
         self._list_view.open_playlist.connect(self._open_playlist)
         self._list_view.open_watched_folder.connect(self._open_watched_folder)
+        self._list_view.import_requested.connect(self._on_playlist_import_requested)
+        self._list_view.export_playlist_requested.connect(
+            self._on_playlist_export_requested
+        )
+        self._list_view.export_watched_folder_requested.connect(
+            self._on_watched_folder_export_requested
+        )
         self._edit_view.back_requested.connect(self._go_back)
         self._edit_view.project_items.connect(self._on_project_items)
         self._edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
+        self._edit_view.export_requested.connect(self._on_edit_export_requested)
+        self._edit_view.import_jwl_requested.connect(
+            self._on_edit_jwl_import_requested
+        )
+
+        self._playlist_transfers = PlaylistTransferWorkflow(
+            parent=self,
+            notifications=self._notifications,
+            language_manager=self.lang,
+            playlists=self._playlists,
+            playlist_repository=self._playlist_repository,
+            profile_paths=self._profile_paths,
+            profile_media_store=self._profile_media_store,
+            media_cache_manager=self._media_cache_manager,
+            refresh_playlists=self._list_view.refresh,
+            open_playlist=self._open_playlist,
+        )
 
     def _setup_watcher(self):
         self._folder_watcher = self._watched_folder_watcher_factory(self)
@@ -1612,6 +1660,97 @@ class PlaylistWidget(QWidget):
         self._list_view.refresh_watched()
         self._stack.setCurrentIndex(0)
 
+    @Slot(object, str)
+    def _on_playlist_import_requested(
+        self,
+        paths: list[str],
+        playlist_format: str,
+    ) -> None:
+        self._playlist_transfers.import_playlists(paths, playlist_format)
+
+    def import_native_playlists(
+        self,
+        paths: list[str],
+        open_after: bool = False,
+    ) -> None:
+        """Import native packages opened by argv, IPC, or file association."""
+        self._playlist_transfers.import_playlists(
+            paths,
+            "solin",
+            open_after=open_after,
+        )
+
+    @Slot(str, str)
+    def _on_playlist_export_requested(
+        self,
+        playlist_id: str,
+        playlist_format: str,
+    ) -> None:
+        playlist = next(
+            (entry for entry in self._playlists if entry.get("id") == playlist_id),
+            None,
+        )
+        if playlist is None:
+            return
+        snapshot = copy.deepcopy(playlist)
+        if playlist_format == "jwl":
+            snapshot["items"] = enrich_items_for_export(
+                snapshot.get("items", []),
+                {},
+                self._playlist_thumbnail_store,
+            )
+        self._playlist_transfers.export_playlist(snapshot, playlist_format)
+
+    @Slot(str, str)
+    def _on_watched_folder_export_requested(
+        self,
+        folder_path: str,
+        playlist_format: str,
+    ) -> None:
+        playlist = self._watched_folder_playlist_store.load_playlist(folder_path)
+        if not playlist.get("items"):
+            self._notifications.information(
+                self.tr("No media files found in \"{name}\".").replace(
+                    "{name}", os.path.basename(folder_path)
+                )
+            )
+            return
+        snapshot = copy.deepcopy(playlist)
+        snapshot["name"] = str(snapshot.get("name") or os.path.basename(folder_path))
+        if playlist_format == "jwl":
+            snapshot["items"] = enrich_items_for_export(
+                snapshot.get("items", []),
+                {},
+                self._playlist_thumbnail_store,
+            )
+        self._playlist_transfers.export_playlist(snapshot, playlist_format)
+
+    @Slot(str)
+    def _on_edit_export_requested(self, playlist_format: str) -> None:
+        snapshot = self._edit_view.playlist_export_snapshot(playlist_format)
+        if snapshot is not None:
+            self._playlist_transfers.export_playlist(snapshot, playlist_format)
+
+    @Slot(object, int, str)
+    def _on_edit_jwl_import_requested(
+        self,
+        paths: list[str],
+        insert_at: int,
+        section_id: str,
+    ) -> None:
+        expected_playlist_id = self._edit_view.current_playlist_id
+        if not expected_playlist_id:
+            return
+        self._playlist_transfers.import_jwl_items(
+            paths,
+            section_id=section_id,
+            completed=lambda items: self._edit_view.commit_imported_jwl_items(
+                items,
+                insert_at=insert_at,
+                expected_playlist_id=expected_playlist_id,
+            ),
+        )
+
     # ── Watched folder ─────────────────────────────────────────────────────
 
     def set_watched_folder(self, path: str) -> None:
@@ -1652,6 +1791,17 @@ class PlaylistWidget(QWidget):
     # ── Temp playlist ──────────────────────────────────────────────────────
 
     def _on_save_temp_playlist(self, name: str, playlist_data: dict):
+        try:
+            name = ensure_unique_playlist_name(name, self._playlists)
+        except PlaylistNameConflictError as exc:
+            self._notifications.warning(
+                self.tr('A playlist named "{name}" already exists.').replace(
+                    "{name}", exc.name
+                )
+            )
+            return
+        except PlaylistNameError:
+            return
         if isinstance(playlist_data, dict):
             pl = copy.deepcopy(playlist_data)
         else:
@@ -1777,6 +1927,7 @@ class PlaylistWidget(QWidget):
         )
 
     def create_playlist_with_items(self, name: str, items: list[dict]) -> str:
+        name = ensure_unique_playlist_name(name, self._playlists)
         partition = partition_media_items([], items)
         pl = {
             "id": str(uuid.uuid4()),
@@ -1806,6 +1957,10 @@ class PlaylistWidget(QWidget):
     def cleanup(self) -> None:
         """Stop background work owned by child views."""
         self._cleanup_timer.stop()
+        try:
+            self._playlist_transfers.shutdown()
+        except Exception:  # noqa: BLE001 - widget cleanup boundary
+            log_ignored_exception(__name__, "Could not stop playlist transfers")
         try:
             self._edit_view.cleanup()
         except Exception:  # noqa: BLE001 - widget cleanup boundary

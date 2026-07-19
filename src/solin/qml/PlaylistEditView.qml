@@ -121,12 +121,36 @@ Rectangle {
                 }
 
                 HeaderButton {
+                    id: exportBtn
                     visible: !root.isWatched
                     iconName: "export"
                     iconSize: 14
                     colorHex: root.iconHex(root.textMuted)
-                    toolTipText: qsTranslate("_PlaylistEditView", "Export .jwlplaylist")
-                    onClicked: if (root.hasController) controller.exportClicked()
+                    toolTipText: qsTranslate("_PlaylistEditView", "Export playlist")
+                    onClicked: exportMenu.open()
+
+                    Menu {
+                        id: exportMenu
+                        y: parent.height + 4
+                        width: 210
+                        background: MenuPanel {}
+
+                        MenuItem {
+                            text: qsTranslate("_PlaylistEditView", "Solin Playlist...")
+                            icon.source: root.picon("export", 13, root.iconHex(root.textMuted))
+                            onTriggered: if (root.hasController) controller.exportClicked("solin")
+                            contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                            background: MenuBg { hovered: parent.hovered }
+                        }
+
+                        MenuItem {
+                            text: qsTranslate("_PlaylistEditView", "JW Library Playlist...")
+                            icon.source: root.picon("export", 13, root.iconHex(root.textMuted))
+                            onTriggered: if (root.hasController) controller.exportClicked("jwl")
+                            contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                            background: MenuBg { hovered: parent.hovered }
+                        }
+                    }
                 }
 
                 HeaderButton {

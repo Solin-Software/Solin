@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import zipfile
+from concurrent.futures import CancelledError
 
 import pytest
 
@@ -113,3 +114,54 @@ def test_read_jwlplaylist_normalizes_non_text_independent_media_mime_type(tmp_pa
         match="Invalid playlist field IndependentMedia.MimeType",
     ):
         read_jwlplaylist(archive)
+
+
+def test_read_jwlplaylist_honors_cancellation_before_opening(tmp_path):
+    archive = tmp_path / "playlist.jwlplaylist"
+    archive.write_bytes(b"not opened")
+
+    with pytest.raises(CancelledError):
+        read_jwlplaylist(archive, should_cancel=lambda: True)
+
+
+def test_read_jwlplaylist_reports_chunk_and_item_progress(tmp_path):
+    archive = _write_playlist_archive(
+        tmp_path,
+        """
+        CREATE TABLE PlaylistItem (
+            PlaylistItemId INTEGER,
+            Label TEXT,
+            Position INTEGER
+        );
+        CREATE TABLE IndependentMedia (
+            IndependentMediaId INTEGER,
+            FilePath TEXT,
+            OriginalFilename TEXT,
+            MimeType TEXT,
+            Hash TEXT
+        );
+        CREATE TABLE PlaylistItemIndependentMediaMap (
+            PlaylistItemId INTEGER,
+            IndependentMediaId INTEGER,
+            DurationTicks INTEGER
+        );
+        INSERT INTO PlaylistItem VALUES (1, 'Image', 0);
+        INSERT INTO IndependentMedia VALUES (1, 'image.png', 'image.png', 'image/png', '');
+        INSERT INTO PlaylistItemIndependentMediaMap VALUES (1, 1, 0);
+        """,
+        entries={"image.png": b"image"},
+    )
+    events = []
+
+    document = read_jwlplaylist(
+        archive,
+        progress_callback=lambda phase, completed, total: events.append(
+            (phase, completed, total)
+        ),
+    )
+
+    assert document["items"][0]["title"] == "Image"
+    assert ("opening", 1, 1) in events
+    assert ("items", 1, 1) in events
+    assert any(phase == "database" and completed == total for phase, completed, total in events)
+    assert any(phase == "media_bytes" and completed == total for phase, completed, total in events)
