@@ -62,7 +62,6 @@ from ...core.i18n.strings import (
 )
 from ...core.i18n.meeting_sections import (
     display_meeting_section_title,
-    translate_meeting_section_title,
 )
 from ...core.ingest.manifest import (
     ManifestError,
@@ -319,7 +318,6 @@ class MeetingTreeController(QObject):
             or (lambda: DEFAULT_PROJECTION_ASPECT_RATIO)
         )
         self._builder = MeetingTreeBuilder(
-            section_title=translate_meeting_section_title,
             media_fallback_title=lambda: _tr("_MediaRow", "Media"),
         )
         self._sync_service = linked_folder_sync
@@ -2445,20 +2443,39 @@ class MeetingTreeController(QObject):
         node = self._find_node(section_id)
         if not node or node.get("type") not in ("section", "subsection"):
             return
+        canonical = MeetingTreeController._canonical_counterpart(self, node)
+        initial_title = display_meeting_section_title(node)
         label = (
             _tr(_PLAYLIST_EDIT_CONTEXT, "Subsection name:")
             if node.get("type") == "subsection"
             else _tr(_PLAYLIST_EDIT_CONTEXT, "Section name:")
         )
-        dlg = NameDialog(node.get("title", ""), lang=True, parent=self.parent(), label=label)
+        dlg = NameDialog(initial_title, lang=True, parent=self.parent(), label=label)
         dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "Rename section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
         if not name:
             return
-        node["title"] = name
-        node["user_title_override"] = True
+        canonical_title = (
+            display_meeting_section_title(canonical)
+            if canonical is not None
+            else ""
+        )
+        if canonical is not None and name == canonical_title:
+            canonical_value = str(canonical.get("title") or "")
+            if (
+                str(node.get("title") or "") == canonical_value
+                and not node.get("user_title_override")
+            ):
+                return
+            node["title"] = canonical_value
+            node.pop("user_title_override", None)
+        else:
+            if name == initial_title:
+                return
+            node["title"] = name
+            node["user_title_override"] = True
         _clear_tree_data_cache(self)
         self._save()
         self._emit_section_changed(node)
@@ -2489,7 +2506,7 @@ class MeetingTreeController(QObject):
             self.parent(),
             _tr(_PLAYLIST_EDIT_CONTEXT, "Delete section"),
             _tr(_PLAYLIST_EDIT_CONTEXT, 'Delete section "{name}"?\nItems inside will be kept.').replace(
-                "{name}", str(node.get("title", ""))
+                "{name}", display_meeting_section_title(node)
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -2939,6 +2956,20 @@ class MeetingTreeController(QObject):
 
     def _find_node(self, node_id: str, nodes: list[Node] | None = None) -> Node | None:
         return find_tree_node(self._nodes, node_id, nodes)
+
+    def _canonical_counterpart(self, node: Node) -> Node | None:
+        source_key = str(node.get("meeting_source_key") or "")
+        if not node.get("meeting_generated") or not source_key:
+            return None
+        return next(
+            (
+                candidate
+                for candidate in iter_nodes(getattr(self, "_canonical_nodes", []))
+                if candidate.get("meeting_generated")
+                and str(candidate.get("meeting_source_key") or "") == source_key
+            ),
+            None,
+        )
 
     def _replace_node(self, node_id: str, replacement: list[Node]) -> bool:
         return replace_tree_node(self._nodes, node_id, replacement)

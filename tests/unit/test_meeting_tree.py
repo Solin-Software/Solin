@@ -13,6 +13,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from PySide6.QtWidgets import QDialog, QMessageBox
+
 import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
 import solin.core.meetings.publications as publications_module
@@ -265,17 +267,16 @@ class MeetingTreeBuilderTests(unittest.TestCase):
         self.assertFalse(hasattr(memorial_module, "MeetingMedia"))
         self.assertFalse(hasattr(memorial_module, "MemorialData"))
 
-    def test_builder_uses_injected_presentation_text(self):
+    def test_builder_keeps_canonical_section_titles_presentation_neutral(self):
         builder = MeetingTreeBuilder(
-            section_title=lambda source: f"translated:{source}",
             media_fallback_title=lambda: "Translated media",
         )
         tree = builder.build_weekend(
             WeekData(wt_all_media=[media(label="", caption="")])
         )
 
-        self.assertEqual(tree[0]["title"], "translated:PUBLIC TALK")
-        self.assertEqual(tree[1]["title"], "translated:Watchtower Study")
+        self.assertEqual(tree[0]["title"], "PUBLIC TALK")
+        self.assertEqual(tree[1]["title"], "Watchtower Study")
         self.assertEqual(tree[1]["children"][0]["title"], "Translated media")
 
     def test_midweek_builds_sections_and_cbs_markers(self):
@@ -1096,6 +1097,156 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             result = MeetingTreeController.placement_playlist_ref(controller)
 
         self.assertEqual(result["sections"][0]["name"], "Nossa Vida Cristã")
+
+    @staticmethod
+    def _section_display_title(node):
+        if node.get("user_title_override"):
+            return str(node.get("title") or "")
+        return "NOSSA VIDA CRISTÃ"
+
+    def _rename_section_controller(self, node, canonical):
+        controller = self.controller([node])
+        controller._canonical_nodes = [canonical]
+        controller._find_node = lambda node_id: node if node_id == node["id"] else None
+        controller.parent = lambda: None
+        controller.section_updates = []
+        controller._emit_section_changed = controller.section_updates.append
+        return controller
+
+    def test_rename_official_section_edits_its_localized_display_title(self):
+        canonical = {
+            "id": "section",
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "children": [],
+        }
+        node = copy.deepcopy(canonical)
+        controller = self._rename_section_controller(node, canonical)
+        dialog = SimpleNamespace(
+            setWindowTitle=lambda _title: None,
+            exec=lambda: QDialog.DialogCode.Accepted,
+            get_name=lambda: "Minha seção",
+        )
+
+        with (
+            patch(
+                "solin.widgets.meetings.tree_controller.display_meeting_section_title",
+                side_effect=self._section_display_title,
+            ),
+            patch(
+                "solin.widgets.meetings.tree_controller.NameDialog",
+                return_value=dialog,
+            ) as dialog_type,
+        ):
+            MeetingTreeController.renameSection(controller, "section")
+
+        self.assertEqual(dialog_type.call_args.args[0], "NOSSA VIDA CRISTÃ")
+        self.assertEqual(node["title"], "Minha seção")
+        self.assertTrue(node["user_title_override"])
+        self.assertEqual(controller.saved, 1)
+        self.assertEqual(controller.section_updates, [node])
+
+    def test_rename_official_section_to_canonical_display_clears_override(self):
+        canonical = {
+            "id": "section",
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "children": [],
+        }
+        node = canonical | {
+            "title": "Minha seção",
+            "user_title_override": True,
+        }
+        controller = self._rename_section_controller(node, canonical)
+        dialog = SimpleNamespace(
+            setWindowTitle=lambda _title: None,
+            exec=lambda: QDialog.DialogCode.Accepted,
+            get_name=lambda: "NOSSA VIDA CRISTÃ",
+        )
+
+        with (
+            patch(
+                "solin.widgets.meetings.tree_controller.display_meeting_section_title",
+                side_effect=self._section_display_title,
+            ),
+            patch(
+                "solin.widgets.meetings.tree_controller.NameDialog",
+                return_value=dialog,
+            ),
+        ):
+            MeetingTreeController.renameSection(controller, "section")
+
+        self.assertEqual(node["title"], "LIVING AS CHRISTIANS")
+        self.assertNotIn("user_title_override", node)
+        self.assertEqual(controller.saved, 1)
+        self.assertEqual(controller.section_updates, [node])
+
+    def test_accepting_unchanged_canonical_display_does_not_create_override(self):
+        canonical = {
+            "id": "section",
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "children": [],
+        }
+        node = copy.deepcopy(canonical)
+        controller = self._rename_section_controller(node, canonical)
+        dialog = SimpleNamespace(
+            setWindowTitle=lambda _title: None,
+            exec=lambda: QDialog.DialogCode.Accepted,
+            get_name=lambda: "NOSSA VIDA CRISTÃ",
+        )
+
+        with (
+            patch(
+                "solin.widgets.meetings.tree_controller.display_meeting_section_title",
+                side_effect=self._section_display_title,
+            ),
+            patch(
+                "solin.widgets.meetings.tree_controller.NameDialog",
+                return_value=dialog,
+            ),
+        ):
+            MeetingTreeController.renameSection(controller, "section")
+
+        self.assertEqual(node["title"], "LIVING AS CHRISTIANS")
+        self.assertNotIn("user_title_override", node)
+        self.assertEqual(controller.saved, 0)
+        self.assertEqual(controller.section_updates, [])
+
+    def test_delete_official_section_confirmation_uses_display_title(self):
+        node = {
+            "id": "section",
+            "type": "section",
+            "title": "LIVING AS CHRISTIANS",
+            "meeting_generated": True,
+            "meeting_source_key": "section:mwb:lac",
+            "children": [],
+        }
+        controller = self.controller([node])
+        controller._find_node = lambda node_id: node if node_id == "section" else None
+        controller.parent = lambda: None
+
+        with (
+            patch(
+                "solin.widgets.meetings.tree_controller.display_meeting_section_title",
+                return_value="NOSSA VIDA CRISTÃ",
+            ),
+            patch.object(
+                QMessageBox,
+                "question",
+                return_value=QMessageBox.StandardButton.No,
+            ) as question,
+        ):
+            MeetingTreeController.deleteSection(controller, "section")
+
+        self.assertIn("NOSSA VIDA CRISTÃ", question.call_args.args[2])
+        self.assertNotIn("LIVING AS CHRISTIANS", question.call_args.args[2])
 
     def test_move_node_reparents_media_and_emits_persistence_updates(self):
         nodes = [

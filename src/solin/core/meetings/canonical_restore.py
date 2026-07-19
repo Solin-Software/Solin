@@ -77,7 +77,10 @@ def canonical_tree_diff(
             if actual.node.get("text") != expected.node.get("text"):
                 renamed += 1
         elif node_type in {"section", "subsection"}:
-            if actual.node.get("title") != expected.node.get("title"):
+            if (
+                actual.node.get("title") != expected.node.get("title")
+                or actual.node.get("user_title_override")
+            ):
                 renamed += 1
             if actual.node.get("color_hue") != expected.node.get("color_hue"):
                 recolored += 1

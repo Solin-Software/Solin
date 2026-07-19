@@ -131,6 +131,15 @@ def test_diff_ignores_manual_nodes_and_operational_media_state() -> None:
     assert not canonical_tree_diff(canonical, current).has_changes
 
 
+def test_diff_detects_redundant_official_title_override() -> None:
+    canonical = [_section("section:mwb:lac", "LIVING AS CHRISTIANS", [])]
+    current = [canonical[0] | {"user_title_override": True}]
+
+    diff = canonical_tree_diff(canonical, current)
+
+    assert diff.renamed == 1
+
+
 def test_diff_detects_every_official_divergence_category() -> None:
     canonical = [
         _section("section:a", "Section A", [
