@@ -36,3 +36,28 @@ def test_export_jwlplaylist_document_uses_explicit_request(monkeypatch):
             {"fallback_lang_code": "T"},
         )
     ]
+
+
+def test_export_jwlplaylist_document_forwards_transfer_callbacks(monkeypatch):
+    calls = []
+    progress = lambda *_args: None
+    should_cancel = lambda: False
+    monkeypatch.setattr(
+        jwl_export,
+        "write_jwlplaylist_document",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    export_jwlplaylist_document(
+        JwlPlaylistExportRequest(
+            name="Playlist",
+            items=[],
+            output_path="playlist.jwlplaylist",
+            media_cache_dir="cache/media",
+            progress_callback=progress,
+            should_cancel=should_cancel,
+        )
+    )
+
+    assert calls[0][1]["progress_callback"] is progress
+    assert calls[0][1]["should_cancel"] is should_cancel

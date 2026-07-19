@@ -23,6 +23,10 @@ from PySide6.QtCore import Qt, QCoreApplication, QTimer
 # Apenas constantes puras — sem dependência de caminhos ou QApplication.
 from solin.bootstrap.config import default_app_config
 from solin.bootstrap.container import initialize_application_container
+from solin.bootstrap.file_open import (
+    ApplicationFileOpenRouter,
+    dispatch_pending_files,
+)
 from solin.core.foundation.resources import application_asset_path
 from solin.bootstrap.profile_flow import wire_profile_switch
 from solin.bootstrap.runtime_args import parse_runtime_args
@@ -356,7 +360,7 @@ def _launch_main_window(
     apply_titlebar_color(window, PALETTE.titlebar)
 
     if file_args:
-        QTimer.singleShot(200, lambda: window.open_media_files(file_args))
+        QTimer.singleShot(200, lambda: dispatch_pending_files(window, file_args))
 
     return window
 
@@ -479,6 +483,8 @@ def main():
     create_profile_mode = runtime_args.create_profile
     file_args = list(runtime_args.media_files)
     _main_window_ref = container.window_ref
+    file_open_router = ApplicationFileOpenRouter(app, _main_window_ref, file_args)
+    container.lifecycle.register_cleanup(file_open_router.close)
 
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager(

@@ -55,10 +55,13 @@ class PlaylistRepository:
 
     def save(self, playlists: list[dict]) -> None:
         try:
-            self._json.write({"playlists": playlists})
+            self.save_strict(playlists)
         except (OSError, UnicodeError, TypeError, ValueError):
             log_ignored_exception(__name__, "Could not save playlists file")
-            return
+
+    def save_strict(self, playlists: list[dict]) -> None:
+        """Atomically persist playlists and propagate serialization/write failures."""
+        self._json.write({"playlists": playlists})
         self._publish_changed()
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:

@@ -2203,8 +2203,7 @@ def test_jwl_document_consumers_use_shared_import_policy():
         PROJECT_ROOT / "src" / "solin" / "controllers" / "playlist_import_controller.py",
         PROJECT_ROOT / "src" / "solin" / "widgets" / "wifi_receive_widget.py",
         PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "tree_controller.py",
-        PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist" / "import_export.py",
-        PROJECT_ROOT / "src" / "solin" / "widgets" / "playlist" / "list_view.py",
+        PROJECT_ROOT / "src" / "solin" / "controllers" / "playlist_transfer_workflow.py",
     )
     violations: list[str] = []
 

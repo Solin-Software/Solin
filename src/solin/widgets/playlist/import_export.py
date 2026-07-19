@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.jwl_files import read_jwlplaylist_document
-from ...core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ...core.playlists.items import create_playlist_item
 
 
@@ -260,52 +258,40 @@ class PlaylistEditImportMixin:
     ) -> None:
         if not self._pl:
             return
-        fallback_lang = jw_media_language_context(self.lang).fallback_code
-        total_added = 0
-        for jwl_path in jwl_paths:
-            try:
-                document = read_jwlplaylist_document(
-                    jwl_path,
-                    fallback_lang_code=fallback_lang,
-                )
-                result = playlist_items_from_jwl_document_items(
-                    document.items,
-                    source_name=Path(jwl_path).name,
-                    section_id=section_id,
-                    save_embedded=(
-                        lambda data, filename, identifier, default_suffix:
-                        self._profile_media_store.save_embedded(
-                            data,
-                            filename,
-                            identifier=identifier,
-                            default_suffix=default_suffix,
-                        )
-                    ),
-                )
-                new_items = result.items
-                if new_items:
-                    items_list = self._pl.setdefault("items", [])
-                    if insert_at < 0 or insert_at >= len(items_list):
-                        items_list.extend(new_items)
-                    else:
-                        for i, ni in enumerate(new_items):
-                            items_list.insert(insert_at + i, ni)
-                        insert_at += len(new_items)
-                    total_added += len(new_items)
-            except (OSError, ValueError) as exc:
-                self._notifications.error(
-                    self.tr("Could not import: {name}").replace(
-                        "{name}", Path(jwl_path).name
-                    ) + f"  ({str(exc)[:50]})"
-                )
-        if total_added:
-            self._save()
-            self._rebuild_list()
-            if total_added == 1:
-                self._notifications.success(self.tr("1 item imported"))
+        self.import_jwl_requested.emit(jwl_paths, insert_at, section_id)
+
+    def commit_imported_jwl_items(
+        self,
+        items: list[dict],
+        *,
+        insert_at: int,
+        expected_playlist_id: str,
+    ) -> None:
+        if not self._pl or str(self._pl.get("id")) != expected_playlist_id:
+            raise RuntimeError(self.tr("The destination playlist is no longer open."))
+        if not items:
+            return
+        target = self._pl.setdefault("items", [])
+        previous_items = list(target)
+        if insert_at < 0 or insert_at >= len(target):
+            target.extend(items)
+        else:
+            target[insert_at:insert_at] = items
+        try:
+            if self._is_temp:
+                pass
+            elif self._is_watched:
+                self._save()
             else:
-                self._notifications.success(
-                    self.tr("{count} items imported").replace(
-                        "{count}", str(total_added)
-                    )
-                )
+                self._playlist_repository.save_strict(self._all_playlists)
+        except Exception:  # noqa: BLE001 - transactional playlist commit rollback
+            self._pl["items"] = previous_items
+            self._rebuild_list()
+            raise
+        self._rebuild_list()
+        if len(items) == 1:
+            self._notifications.success(self.tr("1 item imported"))
+        else:
+            self._notifications.success(
+                self.tr("{count} items imported").replace("{count}", str(len(items)))
+            )

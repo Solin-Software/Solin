@@ -68,7 +68,7 @@ def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
     assert "SOLIN_APPIMAGE_SKIP_BUILD" in package_script
     assert "APPIMAGE_EXTRACT_AND_RUN=1" in package_script
     assert 'exec "$APPDIR/usr/lib/solin/run-solin"' in launcher
-    assert "Exec=solin %U" in desktop_file
+    assert "Exec=solin %F" in desktop_file
     assert "Icon=com.solin.Solin" in desktop_file
     assert "<id>com.solin.Solin</id>" in metadata
     assert "@VERSION@" in metadata

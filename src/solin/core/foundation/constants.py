@@ -97,7 +97,11 @@ ALLOW_ZOOM_PAN_ON_LIVE_TAB: bool = False
 # configurada em Settings, nunca memorizando a anterior.
 MEMORIZE_PRE_MEDIA_SCENE: bool = True
 
-PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
+JWL_PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
+SOLIN_PLAYLIST_EXTS: frozenset[str] = frozenset({".solinplaylist"})
+# Legacy dispatch remains JWL-only. Native packages are accepted exclusively by
+# their dedicated top-level import/open flow and must not enter flat JWL ingest.
+PLAYLIST_EXTS: frozenset[str] = JWL_PLAYLIST_EXTS
 PDF_EXTS:      frozenset[str] = frozenset({".pdf"})
 JWPUB_EXTS:    frozenset[str] = frozenset({".jwpub"})
 PPTX_EXTS:     frozenset[str] = frozenset({".pptx", ".ppt", ".odp"})

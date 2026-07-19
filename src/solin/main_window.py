@@ -575,6 +575,7 @@ class MainWindow(QMainWindow):
                     )
                 ),
                 append_temp_playlist_items=(self.playlist_widget.append_temp_playlist_items),
+                import_native_playlists=self._import_native_playlists_from_shell,
             ),
         )
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
@@ -1081,6 +1082,14 @@ class MainWindow(QMainWindow):
 
     def open_media_files(self, paths: list):
         self._open_media_controller.open_media_files(paths)
+
+    def _import_native_playlists_from_shell(
+        self,
+        paths: list[str],
+        open_after: bool,
+    ) -> None:
+        self._navigation.switch_page(7)
+        self.playlist_widget.import_native_playlists(paths, open_after=open_after)
 
     def _project_media_at_index(
         self,

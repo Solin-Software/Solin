@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QFileDialog
 
 from ...core.foundation.constants import (
     JWPUB_EXTS,
@@ -18,15 +18,8 @@ from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.media.identity import contains_media, partition_media_items
 from ...core.media.insertion import MediaInsertResult
 from ...core.jw.identifiers import lang_to_meps
-from ...core.jw.language_context import jw_media_language_context
-from ...core.playlists.jwl_export import (
-    JwlPlaylistExportRequest,
-    export_jwlplaylist_document,
-)
-from ...core.playlists.jwl_files import PlaylistWriteError
 from ...core.playlists.items import create_playlist_item
 from .dialogs import NameDialog
-from .item_visuals import enrich_items_for_export
 
 
 __all__ = ("PlaylistEditActionsMixin",)
@@ -323,43 +316,10 @@ class PlaylistEditActionsMixin:
         s = random.randrange(len(items))
         self.project_items.emit(items[s:] + items[:s], 0, "random")
 
-    def _export(self) -> None:
+    def _export(self, playlist_format: str) -> None:
         if not self._pl:
             return
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self.tr("Export .jwlplaylist"),
-            os.path.join(
-                os.path.expanduser("~"),
-                self._pl["name"].replace(" ", "_") + ".jwlplaylist",
-            ),
-            "JW Library Playlist (*.jwlplaylist)",
-        )
-        if not path:
-            return
-        try:
-            items = enrich_items_for_export(
-                self._pl.get("items", []),
-                self._id_to_thumb,
-                self._playlist_thumbnail_store,
-            )
-            fallback_lang = jw_media_language_context(self.lang).fallback_code
-            export_jwlplaylist_document(
-                JwlPlaylistExportRequest(
-                    name=self._pl["name"],
-                    items=items,
-                    output_path=path,
-                    media_cache_dir=self._media_cache_manager.media_cache_dir,
-                    fallback_lang_code=fallback_lang,
-                )
-            )
-            QMessageBox.information(
-                self,
-                self.tr("Export complete"),
-                self.tr("Exported:\n{path}").replace("{path}", str(path)),
-            )
-        except (OSError, ValueError, PlaylistWriteError) as e:
-            QMessageBox.critical(self, self.tr("Export error"), str(e))
+        self.export_requested.emit(playlist_format)
 
     def _on_back(self) -> None:
         self._is_temp = False

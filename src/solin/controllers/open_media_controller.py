@@ -14,10 +14,11 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..core.foundation.constants import (
     DOCX_EXTS,
+    JWL_PLAYLIST_EXTS,
     JWPUB_EXTS,
     PDF_EXTS,
-    PLAYLIST_EXTS,
     PPTX_EXTS,
+    SOLIN_PLAYLIST_EXTS,
 )
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
 from ..core.jw.language_context import (
@@ -63,6 +64,7 @@ class OpenMediaHandlers:
     open_pdf_temp_playlist: Callable[[list, str], str]
     open_named_temp_playlist: Callable[[list, str], str]
     append_temp_playlist_items: Callable[[str, list[dict]], bool]
+    import_native_playlists: Callable[[list[str], bool], None]
 
 
 class OpenMediaController:
@@ -82,6 +84,7 @@ class OpenMediaController:
         pdf_paths = []
         lo_paths = []
         jwpub_paths = []
+        native_playlist_paths = []
 
         for path in paths:
             if path.startswith(("http://", "https://")):
@@ -93,7 +96,9 @@ class OpenMediaController:
                 continue
 
             ext = os.path.splitext(path)[1].lower()
-            if ext in PLAYLIST_EXTS:
+            if ext in SOLIN_PLAYLIST_EXTS:
+                native_playlist_paths.append(path)
+            elif ext in JWL_PLAYLIST_EXTS:
                 playlist.extend(self.expand_jwlplaylist(path))
             elif ext in JWPUB_EXTS:
                 jwpub_paths.append(path)
@@ -131,6 +136,8 @@ class OpenMediaController:
             self.open_pdf_as_temp(pdf_path)
         for lo_path in lo_paths:
             self.open_lo_as_temp(lo_path)
+        if native_playlist_paths:
+            self._handlers.import_native_playlists(native_playlist_paths, True)
 
         if unsupported:
             names = "\n".join(f"  • {os.path.basename(path)}" for path in unsupported)

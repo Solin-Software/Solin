@@ -27,8 +27,11 @@ import logging
 import os
 import sqlite3
 import struct
+import tempfile
 import uuid
 import zipfile
+from collections.abc import Callable
+from concurrent.futures import CancelledError
 from pathlib import Path
 from typing import Optional
 
@@ -404,12 +407,36 @@ class PlaylistWriteError(RuntimeError):
     """The playlist could not be serialized to a JW Library archive."""
 
 
+ProgressCallback = Callable[[str, int, int | None], None]
+CancelCallback = Callable[[], bool]
+
+_COPY_CHUNK_SIZE = 1024 * 1024
+
+
+def _raise_if_cancelled(should_cancel: CancelCallback | None) -> None:
+    if should_cancel is not None and should_cancel():
+        raise CancelledError("JW Library playlist transfer cancelled")
+
+
+def _report_progress(
+    progress_callback: ProgressCallback | None,
+    phase: str,
+    completed: int,
+    total: int | None,
+) -> None:
+    if progress_callback is not None:
+        progress_callback(phase, completed, total)
+
+
 def _write_jwlplaylist(
     playlist_name: str,
     items: list[dict],
     output_path: str | Path,
     media_cache_dir: str | os.PathLike[str],
     fallback_lang_code: str = "E",
+    *,
+    progress_callback: ProgressCallback | None = None,
+    should_cancel: CancelCallback | None = None,
 ) -> None:
     """
     Escreve um arquivo .jwlplaylist compatível com JW Library ≥ 14.
@@ -446,7 +473,9 @@ def _write_jwlplaylist(
     con = sqlite3.connect(":memory:")
     _create_schema(con)
 
-    embedded_files: list[tuple[str, bytes]] = []  # (zip_path, data)
+    # Path-backed media is re-read into the ZIP in chunks instead of retaining
+    # every local file in memory. Caller-provided bytes remain borrowed references.
+    embedded_files: list[tuple[str, bytes | Path, str]] = []
 
     location_id_seq  = 1
     ind_media_id_seq = 1
@@ -459,7 +488,12 @@ def _write_jwlplaylist(
     )
     tag_map_id = 1
 
+    total_items = len(items)
+    _raise_if_cancelled(should_cancel)
+    _report_progress(progress_callback, "items", 0, total_items)
+
     for position, item in enumerate(items):
+        _raise_if_cancelled(should_cancel)
         title      = item.get("title", f"Item {position + 1}")
         url        = item.get("url") or ""
         key_symbol = item.get("key_symbol")
@@ -584,7 +618,7 @@ def _write_jwlplaylist(
                        VALUES (?, ?, ?, 'image/jpeg', ?)""",
                     (ind_media_id_seq, t_orig_uuid, t_file_uuid, t_hash),
                 )
-                embedded_files.append((t_file_uuid, thumb_data))
+                embedded_files.append((t_file_uuid, thumb_data, t_hash))
                 thumbnail_path = t_file_uuid
                 ind_media_id_seq += 1
             else:
@@ -595,9 +629,11 @@ def _write_jwlplaylist(
         # ─────────────────────────────────────────────────────────────────────
         elif item.get("data") or (url and not is_http) or local_cached_path:
             # Resolve o caminho/dados do arquivo
+            embedded_source: bytes | Path
             if item.get("data"):
                 # Bytes já em memória (item importado via reader)
                 file_data = item["data"]
+                embedded_source = file_data
                 mime_type = item.get("mime_type") or "application/octet-stream"
                 orig_name = item.get("filename") or f"media_{playlist_item_id}"
                 ext       = Path(orig_name).suffix.lower()
@@ -607,6 +643,7 @@ def _write_jwlplaylist(
                 # URL remota cacheada → usa arquivo local
                 lp        = Path(local_cached_path)
                 file_data = lp.read_bytes()
+                embedded_source = lp
                 ext       = lp.suffix.lower()
                 orig_name = lp.name
                 mime_type = _MIME_FROM_EXT.get(ext, "application/octet-stream")
@@ -618,8 +655,15 @@ def _write_jwlplaylist(
                         "[writer] Local file not found: '%s' - item ignored.", url
                     )
                     playlist_item_id += 1
+                    _report_progress(
+                        progress_callback,
+                        "items",
+                        position + 1,
+                        total_items,
+                    )
                     continue
                 file_data = lp.read_bytes()
+                embedded_source = lp
                 ext       = lp.suffix.lower()
                 orig_name = lp.name
                 mime_type = _MIME_FROM_EXT.get(ext, "application/octet-stream")
@@ -671,7 +715,7 @@ def _write_jwlplaylist(
                    VALUES (?, ?, ?)""",
                 (playlist_item_id, ind_media_id_seq, duration_ticks),
             )
-            embedded_files.append((zip_name, file_data))
+            embedded_files.append((zip_name, embedded_source, file_hash))
 
             # Thumbnail
             if is_image:
@@ -690,13 +734,15 @@ def _write_jwlplaylist(
                            VALUES (?, ?, ?, 'image/jpeg', ?)""",
                         (ind_media_id_seq + 1, t_orig_uuid, t_file_uuid, t_hash),
                     )
-                    embedded_files.append((t_file_uuid, thumb_data))
+                    embedded_files.append((t_file_uuid, thumb_data, t_hash))
                     thumbnail_path = t_file_uuid
                     ind_media_id_seq += 1
                 else:
                     thumbnail_path = item.get("thumbnail_file_path")
 
             ind_media_id_seq += 1
+            if isinstance(embedded_source, Path):
+                file_data = b""
 
         # ─────────────────────────────────────────────────────────────────────
         # RAMO C: URL remota sem cache e sem referência JW → não exportável
@@ -728,21 +774,89 @@ def _write_jwlplaylist(
         )
         tag_map_id += 1
         playlist_item_id += 1
+        _report_progress(progress_callback, "items", position + 1, total_items)
 
+    _raise_if_cancelled(should_cancel)
+    _report_progress(progress_callback, "database", 0, 1)
     con.commit()
 
     db_bytes = _serialize_db(con)
     con.close()
+    _report_progress(progress_callback, "database", 1, 1)
 
     manifest = _build_manifest(playlist_name, db_bytes)
+    manifest_bytes = manifest.encode("utf-8")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("manifest.json", manifest)
-        zf.writestr("userData.db",   db_bytes)
-        zf.writestr("default_thumbnail.png", _DEFAULT_THUMBNAIL_PNG)
-        for zip_path, data in embedded_files:
-            zf.writestr(zip_path, data)
+    fixed_entries = (
+        ("manifest.json", manifest_bytes),
+        ("userData.db", db_bytes),
+        ("default_thumbnail.png", _DEFAULT_THUMBNAIL_PNG),
+    )
+    archive_total = sum(len(data) for _, data in fixed_entries)
+    for _, source, _ in embedded_files:
+        archive_total += len(source) if isinstance(source, bytes) else source.stat().st_size
+
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        dir=output_path.parent,
+    )
+    os.close(fd)
+    temporary_path = Path(temporary_name)
+
+    archive_completed = 0
+    _report_progress(progress_callback, "archive", archive_completed, archive_total)
+
+    def _write_bytes(zf: zipfile.ZipFile, zip_path: str, data: bytes) -> None:
+        nonlocal archive_completed
+        with zf.open(zip_path, "w") as destination:
+            view = memoryview(data)
+            for offset in range(0, len(view), _COPY_CHUNK_SIZE):
+                _raise_if_cancelled(should_cancel)
+                chunk = view[offset : offset + _COPY_CHUNK_SIZE]
+                destination.write(chunk)
+                archive_completed += len(chunk)
+                _report_progress(
+                    progress_callback,
+                    "archive",
+                    archive_completed,
+                    archive_total,
+                )
+
+    try:
+        with zipfile.ZipFile(temporary_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for zip_path, data in fixed_entries:
+                _write_bytes(zf, zip_path, data)
+
+            for zip_path, source, expected_hash in embedded_files:
+                if isinstance(source, bytes):
+                    _write_bytes(zf, zip_path, source)
+                    continue
+
+                digest = hashlib.sha256()
+                with source.open("rb") as source_file, zf.open(zip_path, "w") as destination:
+                    while chunk := source_file.read(_COPY_CHUNK_SIZE):
+                        _raise_if_cancelled(should_cancel)
+                        digest.update(chunk)
+                        destination.write(chunk)
+                        archive_completed += len(chunk)
+                        _report_progress(
+                            progress_callback,
+                            "archive",
+                            archive_completed,
+                            archive_total,
+                        )
+                if digest.hexdigest() != expected_hash:
+                    raise OSError(f"Media changed while exporting: {source}")
+
+        _raise_if_cancelled(should_cancel)
+        os.replace(temporary_path, output_path)
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            log.debug("Failed to remove temporary playlist archive", exc_info=True)
 
 
 def write_jwlplaylist(
@@ -751,8 +865,16 @@ def write_jwlplaylist(
     output_path: str | Path,
     media_cache_dir: str | os.PathLike[str],
     fallback_lang_code: str = "E",
+    *,
+    progress_callback: ProgressCallback | None = None,
+    should_cancel: CancelCallback | None = None,
 ) -> None:
-    """Write a JW Library playlist and normalize infrastructure failures."""
+    """Write a JW Library playlist atomically and normalize infrastructure failures.
+
+    Cancellation is cooperative and propagates ``concurrent.futures.CancelledError``.
+    Progress reports item counts for ``items``/``database`` and uncompressed bytes
+    for ``archive``.
+    """
     try:
         _write_jwlplaylist(
             playlist_name,
@@ -760,7 +882,11 @@ def write_jwlplaylist(
             output_path,
             media_cache_dir,
             fallback_lang_code=fallback_lang_code,
+            progress_callback=progress_callback,
+            should_cancel=should_cancel,
         )
+    except CancelledError:
+        raise
     except (OSError, sqlite3.Error, zipfile.LargeZipFile, struct.error) as exc:
         raise PlaylistWriteError(f"Could not write playlist to {output_path}") from exc
 

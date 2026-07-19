@@ -37,8 +37,12 @@
 #define MyAppExeName    "Solin.exe"
 #define MyAppMutex      "Solin_SingleInstance_Mutex"
 #define MyRegSubkey     "Software\Solin\Solin"
+#define MyPlaylistProgId "Solin.Playlist"
+#define MyPlaylistMime  "application/vnd.solin.playlist+zip"
 #define MyPatchFromVer  "1.0.0.0"   ; minimum installed version this patch accepts
-#define MyDistDir       "..\..\..\build\diff" ; release diff directory
+#ifndef MyDistDir
+  #define MyDistDir     "..\..\..\build\diff" ; release diff directory
+#endif
 
 #ifndef MyPatchVersion
   #define MyPatchVersion GetFileVersion(MyDistDir + "\" + MyAppExeName)
@@ -101,6 +105,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 LZMAUseSeparateProcess=yes
+ChangesAssociations=yes
 
 ; ── Privilege handling ────────────────────────────────────────────────────────
 ; Mirrors setup.iss: per-user by default, elevation optional via dialog.
@@ -127,6 +132,7 @@ Name: "italian";    MessagesFile: "compiler:Languages\Italian.isl"
 [Files]
 ; ── Option A — Copy the full dist (simpler, ensures consistency) ──────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\..\src\solin\resources\assets\playlist.ico"; DestDir: "{app}\resources\assets"; Flags: ignoreversion
 
 ; =============================================================================
 [Registry]
@@ -158,6 +164,42 @@ Root: HKA; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; V
 ; Áudios
 Root: HKA; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
+
+; ── Native Solin playlist format ─────────────────────────────────────────────
+; These entries are duplicated deliberately: the Check functions select the
+; hive discovered from the original installation rather than the patch
+; process's current HKA mode.
+Root: HKCU; Subkey: "Software\Classes\.solinplaylist\OpenWithProgids"; ValueType: none; ValueName: "{#MyPlaylistProgId}"; Flags: uninsdeletevalue; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: ""; ValueData: "Solin Playlist"; Flags: uninsdeletekey; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Solin Playlist"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "Content Type"; ValueData: "{#MyPlaylistMime}"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\{#MyPlaylistProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\playlist.ico,0"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\{#MyPlaylistProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\Applications\{#MyAppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\Applications\{#MyAppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\Applications\{#MyAppExeName}\SupportedTypes"; ValueType: none; ValueName: ".solinplaylist"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Classes\Applications\{#MyAppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Open native Solin playlists"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: "{app}\resources\assets\icon.ico,0"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\Solin\Capabilities\FileAssociations"; ValueType: string; ValueName: ".solinplaylist"; ValueData: "{#MyPlaylistProgId}"; Check: IsPatchUserInstall
+Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "Software\Solin\Capabilities"; Flags: uninsdeletevalue; Check: IsPatchUserInstall
+
+Root: HKLM; Subkey: "Software\Classes\.solinplaylist\OpenWithProgids"; ValueType: none; ValueName: "{#MyPlaylistProgId}"; Flags: uninsdeletevalue; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: ""; ValueData: "Solin Playlist"; Flags: uninsdeletekey; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "Solin Playlist"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\{#MyPlaylistProgId}"; ValueType: string; ValueName: "Content Type"; ValueData: "{#MyPlaylistMime}"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\{#MyPlaylistProgId}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\playlist.ico,0"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\{#MyPlaylistProgId}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\Applications\{#MyAppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\Applications\{#MyAppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\Applications\{#MyAppExeName}\SupportedTypes"; ValueType: none; ValueName: ".solinplaylist"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Classes\Applications\{#MyAppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Open native Solin playlists"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Solin\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: "{app}\resources\assets\icon.ico,0"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\Solin\Capabilities\FileAssociations"; ValueType: string; ValueName: ".solinplaylist"; ValueData: "{#MyPlaylistProgId}"; Check: IsPatchMachineInstall
+Root: HKLM; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: "Software\Solin\Capabilities"; Flags: uninsdeletevalue; Check: IsPatchMachineInstall
 
 ; ── Option B — List only changed files (smaller download) ────────────────────
 ; Comment the line above and uncomment/adjust lines below.
@@ -333,6 +375,16 @@ end;
 var
   GInstallPath:  String;  // full path to the existing install directory
   GInstallHive:  Integer; // HKLM or HKCU — where the installer keys were written
+
+function IsPatchUserInstall(): Boolean;
+begin
+  Result := GInstallHive = HKCU;
+end;
+
+function IsPatchMachineInstall(): Boolean;
+begin
+  Result := GInstallHive = HKLM;
+end;
 
 // ── Locate the existing install: HKCU first (per-user), then HKLM (machine) ──
 

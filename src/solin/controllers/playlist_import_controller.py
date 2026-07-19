@@ -23,6 +23,7 @@ from ..core.playlists.items import (
     create_playlist_item,
     playlist_items_from_jwpub,
 )
+from ..core.playlists.names import PlaylistNameConflictError
 from ..core.media.destinations import (
     MediaDestinationAsset,
     MediaDestinationOutcome,
@@ -210,10 +211,18 @@ class PlaylistImportController:
             return MediaDestinationOutcome(0)
 
         if target.create_new:
-            playlist_id = playlist_widget.create_playlist_with_items(
-                target.playlist_name,
-                [items[0]],
-            )
+            try:
+                playlist_id = playlist_widget.create_playlist_with_items(
+                    target.playlist_name,
+                    [items[0]],
+                )
+            except PlaylistNameConflictError as exc:
+                context.notifications.warning(
+                    context.translate(
+                        'A playlist named "{name}" already exists.'
+                    ).replace("{name}", exc.name)
+                )
+                return MediaDestinationOutcome(0, destination_accepted=False)
             referenced_urls = [str(items[0].get("url") or "")]
             added = 1
             if len(items) > 1:

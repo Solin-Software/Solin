@@ -212,6 +212,36 @@ jobs:
           fi
           test -d "${BUILD_DIR}/${APP_NAME}.app"
 
+      - name: Register Solin playlist document type
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          RESOURCES="$BUNDLE/Contents/Resources"
+          ICONSET="${BUILD_DIR}/playlist.iconset"
+          SOURCE_ICON="src/solin/resources/assets/playlist-1024.png"
+          mkdir -p "$RESOURCES" "$ICONSET"
+
+          sips -z 16 16 "$SOURCE_ICON" --out "$ICONSET/icon_16x16.png" >/dev/null
+          sips -z 32 32 "$SOURCE_ICON" --out "$ICONSET/icon_16x16@2x.png" >/dev/null
+          sips -z 32 32 "$SOURCE_ICON" --out "$ICONSET/icon_32x32.png" >/dev/null
+          sips -z 64 64 "$SOURCE_ICON" --out "$ICONSET/icon_32x32@2x.png" >/dev/null
+          sips -z 128 128 "$SOURCE_ICON" --out "$ICONSET/icon_128x128.png" >/dev/null
+          sips -z 256 256 "$SOURCE_ICON" --out "$ICONSET/icon_128x128@2x.png" >/dev/null
+          sips -z 256 256 "$SOURCE_ICON" --out "$ICONSET/icon_256x256.png" >/dev/null
+          sips -z 512 512 "$SOURCE_ICON" --out "$ICONSET/icon_256x256@2x.png" >/dev/null
+          sips -z 512 512 "$SOURCE_ICON" --out "$ICONSET/icon_512x512.png" >/dev/null
+          cp "$SOURCE_ICON" "$ICONSET/icon_512x512@2x.png"
+          iconutil --convert icns --output "$RESOURCES/playlist.icns" "$ICONSET"
+
+          python scripts/configure_macos_playlist_filetype.py \
+            --bundle "$BUNDLE" \
+            --icon-name "playlist.icns"
+
+          plutil -lint "$BUNDLE/Contents/Info.plist"
+          test -s "$RESOURCES/playlist.icns"
+          rm -rf "$ICONSET"
+
       - name: Normalize macOS Qt QML runtime links
         shell: bash
         run: |

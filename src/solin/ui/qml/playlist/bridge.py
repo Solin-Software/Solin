@@ -35,7 +35,7 @@ class PlaylistEditBridge(QObject):
     # Signals for Python consumers (connected in _PlaylistEditView)
     backRequested          = Signal()
     addRequested           = Signal()
-    exportRequested        = Signal()
+    exportRequested        = Signal(str)
     saveTempRequested      = Signal()
     playAllRequested       = Signal()
     shuffleRequested       = Signal()
@@ -256,9 +256,9 @@ class PlaylistEditBridge(QObject):
     def addClicked(self):
         self.addRequested.emit()
 
-    @Slot()
-    def exportClicked(self):
-        self.exportRequested.emit()
+    @Slot(str)
+    def exportClicked(self, playlist_format: str):
+        self.exportRequested.emit(playlist_format)
 
     @Slot()
     def saveTempClicked(self):

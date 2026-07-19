@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import CancelledError
 
 import pytest
 
@@ -132,3 +133,59 @@ def test_jwl_round_trip_prefers_location_duration_from_database(
     assert item["start_trim_ticks"] == 30_000_000
     assert item["end_trim_ticks"] == 40_000_000
     assert item["base_duration_ticks"] == 120_000_000
+
+
+def test_write_jwlplaylist_reports_progress(tmp_path):
+    events = []
+    archive = tmp_path / "progress.jwlplaylist"
+
+    writer.write_jwlplaylist(
+        "Progress",
+        [
+            {
+                "title": "Image",
+                "url": "",
+                "type": "image",
+                "data": b"image-data",
+                "filename": "image.png",
+                "mime_type": "image/png",
+            }
+        ],
+        archive,
+        tmp_path / "cache",
+        progress_callback=lambda phase, completed, total: events.append(
+            (phase, completed, total)
+        ),
+    )
+
+    assert ("items", 0, 1) in events
+    assert ("items", 1, 1) in events
+    archive_events = [event for event in events if event[0] == "archive"]
+    assert archive_events[0][1] == 0
+    assert archive_events[-1][1] == archive_events[-1][2]
+
+
+def test_write_jwlplaylist_cancel_keeps_existing_destination_and_removes_temporary_file(
+    tmp_path,
+):
+    archive = tmp_path / "existing.jwlplaylist"
+    archive.write_bytes(b"existing archive")
+    cancelled = False
+
+    def progress(phase, completed, _total):
+        nonlocal cancelled
+        if phase == "archive" and completed > 0:
+            cancelled = True
+
+    with pytest.raises(CancelledError):
+        writer.write_jwlplaylist(
+            "Cancelled",
+            [{"title": "Empty", "url": "https://example.test/not-cached.mp4"}],
+            archive,
+            tmp_path / "cache",
+            progress_callback=progress,
+            should_cancel=lambda: cancelled,
+        )
+
+    assert archive.read_bytes() == b"existing archive"
+    assert list(tmp_path.glob(f".{archive.name}.*.tmp")) == []

@@ -46,6 +46,8 @@ solin = [
     "resources/remote_control/styles/*",
     "resources/assets/*.icns",
     "resources/assets/*.ico",
+    "resources/assets/*.png",
+    "resources/assets/*.svg",
     "resources/translations/*.qm",
     "resources/translations/locales/*.json",
 ]
