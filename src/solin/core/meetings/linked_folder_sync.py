@@ -6,7 +6,7 @@ import logging
 import os
 import shutil
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -22,12 +22,13 @@ from solin.core.ingest.manifest import (
 )
 
 from .folder_matcher import match_meeting_folder
+from .tree_merger import include_manual_meeting_nodes
 from .tree_types import Node, clean_dict, clone_nodes, iter_nodes
 
 log = logging.getLogger(__name__)
 
 MEETING_TREE_KEY = "meeting_tree"
-MEETING_TREE_SCHEMA_VERSION = 1
+MEETING_TREE_SCHEMA_VERSION = 3
 MEETING_TREE_CONTENT_KEYS = (
     "schema_version",
     "tree_key",
@@ -37,6 +38,8 @@ MEETING_TREE_CONTENT_KEYS = (
     "folder_date",
     "nodes",
     "deleted_source_keys",
+    "canonical_reset_generation",
+    "hidden_canonical_media",
     "meeting_folder_imports",
     "linked_folder_files",
 )
@@ -73,6 +76,8 @@ class MeetingSyncRecord:
     linked_folder_files: dict[str, str]
     meeting_folder_imports: dict[str, dict[str, Any]]
     revision: int
+    canonical_reset_generation: int = 0
+    hidden_canonical_media: dict[str, Node] = dataclass_field(default_factory=dict)
 
 
 def meeting_tag_for_pub_type(pub_type: str) -> str:
@@ -172,6 +177,8 @@ class MeetingLinkedFolderSync:
         linked_folder_files: dict[str, str],
         meeting_folder_imports: dict[str, dict[str, Any]],
         expected_revision: int,
+        canonical_reset_generation: int = 0,
+        hidden_canonical_media: dict[str, Node] | None = None,
     ) -> MeetingSyncRecord:
         saved_record: MeetingSyncRecord | None = None
 
@@ -187,6 +194,12 @@ class MeetingLinkedFolderSync:
                 for key, value in meeting_folder_imports.items()
                 if isinstance(value, dict)
             }
+            save_generation = max(0, int(canonical_reset_generation or 0))
+            save_hidden_media = {
+                str(key): dict(node)
+                for key, node in (hidden_canonical_media or {}).items()
+                if key and isinstance(node, dict)
+            }
 
             if (
                 isinstance(existing, dict)
@@ -194,8 +207,31 @@ class MeetingLinkedFolderSync:
                 and existing_revision > expected_revision
             ):
                 existing_record = self._record_from_block(folder, existing, identity)
-                save_nodes = self._merge_conflicting_nodes(existing_record.nodes, save_nodes)
-                save_deleted |= existing_record.deleted_source_keys
+                if existing_record.canonical_reset_generation > save_generation:
+                    save_nodes = include_manual_meeting_nodes(
+                        existing_record.nodes,
+                        save_nodes,
+                    )
+                    save_deleted = set(existing_record.deleted_source_keys)
+                    save_generation = existing_record.canonical_reset_generation
+                    save_hidden_media = dict(
+                        existing_record.hidden_canonical_media
+                    )
+                elif save_generation > existing_record.canonical_reset_generation:
+                    save_nodes = include_manual_meeting_nodes(
+                        save_nodes,
+                        existing_record.nodes,
+                    )
+                else:
+                    save_nodes = self._merge_conflicting_nodes(
+                        existing_record.nodes,
+                        save_nodes,
+                    )
+                    save_deleted |= existing_record.deleted_source_keys
+                    save_hidden_media = {
+                        **existing_record.hidden_canonical_media,
+                        **save_hidden_media,
+                    }
                 save_linked = {**existing_record.linked_folder_files, **save_linked}
                 save_imports = {**existing_record.meeting_folder_imports, **save_imports}
 
@@ -207,6 +243,8 @@ class MeetingLinkedFolderSync:
                 deleted_source_keys=save_deleted,
                 linked_folder_files=save_linked,
                 meeting_folder_imports=save_imports,
+                canonical_reset_generation=save_generation,
+                hidden_canonical_media=save_hidden_media,
                 revision=revision,
             )
             if (
@@ -344,6 +382,10 @@ class MeetingLinkedFolderSync:
         nodes = self._resolve_nodes(raw_nodes if isinstance(raw_nodes, list) else [], folder)
         imports = self._resolve_imports(block.get("meeting_folder_imports", {}), folder)
         linked = self._resolve_linked_files(block.get("linked_folder_files", {}), folder)
+        hidden_media = self._resolve_node_mapping(
+            block.get("hidden_canonical_media", {}),
+            folder,
+        )
         folder_date = self._date_from_block_or_folder(block, folder, identity)
         deleted_values = block.get("deleted_source_keys", [])
         deleted = set()
@@ -362,6 +404,11 @@ class MeetingLinkedFolderSync:
             linked_folder_files=linked,
             meeting_folder_imports=imports,
             revision=self._revision(block),
+            canonical_reset_generation=max(
+                0,
+                self._int_value(block.get("canonical_reset_generation")),
+            ),
+            hidden_canonical_media=hidden_media,
         )
 
     def _block_from_tree(
@@ -373,6 +420,8 @@ class MeetingLinkedFolderSync:
         deleted_source_keys: set[str],
         linked_folder_files: dict[str, str],
         meeting_folder_imports: dict[str, dict[str, Any]],
+        canonical_reset_generation: int,
+        hidden_canonical_media: dict[str, Node],
         revision: int,
     ) -> dict[str, Any]:
         return {
@@ -385,6 +434,11 @@ class MeetingLinkedFolderSync:
             "canonical_hash": identity.canonical_hash,
             "nodes": self._portable_nodes(nodes, folder),
             "deleted_source_keys": sorted(deleted_source_keys),
+            "canonical_reset_generation": max(0, int(canonical_reset_generation)),
+            "hidden_canonical_media": self._portable_node_mapping(
+                hidden_canonical_media,
+                folder,
+            ),
             "meeting_folder_imports": self._portable_imports(meeting_folder_imports, folder),
             "linked_folder_files": self._portable_linked_files(linked_folder_files, folder),
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -421,6 +475,18 @@ class MeetingLinkedFolderSync:
                 node.pop("thumbnail_cache_key", None)
         return clean_dict(result)
 
+    def _portable_node_mapping(
+        self,
+        nodes: dict[str, Node],
+        folder: Path,
+    ) -> dict[str, Node]:
+        result: dict[str, Node] = {}
+        for key, node in nodes.items():
+            portable = self._portable_nodes([node], folder)
+            if portable:
+                result[str(key)] = portable[0]
+        return result
+
     def _resolve_nodes(self, nodes: list[Node], folder: Path) -> list[Node]:
         result = clone_nodes(nodes)
         for node in iter_nodes(result):
@@ -436,6 +502,22 @@ class MeetingLinkedFolderSync:
                 )
             if node.get("type") == "media":
                 node["linked_folder_source"] = str(folder)
+        return result
+
+    def _resolve_node_mapping(
+        self,
+        value: object,
+        folder: Path,
+    ) -> dict[str, Node]:
+        if not isinstance(value, dict):
+            return {}
+        result: dict[str, Node] = {}
+        for key, node in value.items():
+            if not key or not isinstance(node, dict):
+                continue
+            resolved = self._resolve_nodes([node], folder)
+            if resolved:
+                result[str(key)] = resolved[0]
         return result
 
     def _portable_linked_files(
@@ -517,6 +599,13 @@ class MeetingLinkedFolderSync:
             return 0
         try:
             return max(0, int(block.get("revision") or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _int_value(value: Any) -> int:
+        try:
+            return int(value or 0)
         except (TypeError, ValueError):
             return 0
 

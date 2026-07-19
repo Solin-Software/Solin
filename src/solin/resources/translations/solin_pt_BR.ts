@@ -1690,6 +1690,24 @@
     </message>
   </context>
   <context>
+    <name>MeetingCanonicalRestore</name>
+    <message>
+      <location filename="../../qml/MeetingDetailView.qml" line="+137" />
+      <location filename="../../widgets/meetings/tree_controller.py" line="+242" />
+      <source>Restore official meeting content</source>
+      <translation>Restaurar conteúdo oficial da reunião</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Restore the official meeting content?
+
+Manually added content, trims, framing and expanded state will be kept.</source>
+      <translation>Restaurar o conteúdo oficial da reunião?
+
+O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado de expansão serão mantidos.</translation>
+    </message>
+  </context>
+  <context>
     <name>MeetingDestinationSession</name>
     <message>
       <location filename="../../widgets/meetings/destinations.py" line="+73" />
@@ -2867,6 +2885,16 @@ Pare a projeção e tente novamente.</translation>
       <location line="+30" />
       <source>Rename media</source>
       <translation>Renomear mídia</translation>
+    </message>
+    <message>
+      <location filename="../../widgets/meetings/tree_controller.py" line="+8" />
+      <source>Cannot delete section</source>
+      <translation>Não é possível excluir a seção</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Move or delete the manually added subsections and markers first.</source>
+      <translation>Mova ou exclua primeiro as subseções e os marcadores adicionados manualmente.</translation>
     </message>
   </context>
   <context>

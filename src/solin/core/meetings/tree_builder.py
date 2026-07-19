@@ -68,13 +68,12 @@ def _section_node(
     hue: int | None = None,
     children: list[Node] | None = None,
     collapsed: bool | None = None,
-    section_title: Callable[[str], str],
 ) -> Node:
     source_key = f"section:{meeting_type}:{section_code}"
     label, default_hue = SECTION_META.get(section_code, (section_code, 215))
     payload = {
         "type": "section",
-        "title": title or section_title(label),
+        "title": title or label,
         "section_code": section_code,
         "color_hue": default_hue if hue is None else hue,
     }
@@ -179,10 +178,8 @@ class MeetingTreeBuilder:
     def __init__(
         self,
         *,
-        section_title: Callable[[str], str] | None = None,
         media_fallback_title: Callable[[], str] | None = None,
     ) -> None:
-        self._section_title = section_title or (lambda source: source)
         self._media_fallback_title = media_fallback_title or (lambda: "Media")
 
     def build_midweek(self, wd: WeekData) -> list[Node]:
@@ -236,7 +233,6 @@ class MeetingTreeBuilder:
                     "mwb",
                     code,
                     children=children,
-                    section_title=self._section_title,
                 )
             )
         return nodes
@@ -257,13 +253,11 @@ class MeetingTreeBuilder:
                 "public_talk",
                 children=[],
                 collapsed=False,
-                section_title=self._section_title,
             ),
             _section_node(
                 "wt",
                 "wt",
                 children=children,
-                section_title=self._section_title,
             ),
         ]
 
@@ -282,7 +276,6 @@ class MeetingTreeBuilder:
                 "memorial",
                 "memorial",
                 children=children,
-                section_title=self._section_title,
             )
         ]
 

@@ -128,6 +128,20 @@ Rectangle {
                 }
 
                 HeaderButton {
+                    id: restoreBtn
+                    visible: root.hasController && controller.canonicalRestoreAvailable
+                    iconName: "refresh"
+                    iconSize: 14
+                    colorHex: root.iconHex(root.accent)
+                    accentButton: true
+                    toolTipText: qsTranslate(
+                        "MeetingCanonicalRestore",
+                        "Restore official meeting content"
+                    )
+                    onClicked: if (root.hasController) controller.restoreCanonicalContent()
+                }
+
+                HeaderButton {
                     id: syncBtn
                     visible: root.hasController && controller.syncAvailable
                     enabled: root.hasController

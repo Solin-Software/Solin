@@ -6,6 +6,7 @@ from datetime import date
 from PySide6.QtCore import QCoreApplication, QObject, Signal, Slot
 
 import solin.core.meetings.preparation as preparation_module
+from solin.core.meetings.canonical_restore import canonical_tree_diff
 from solin.core.meetings.models import MeetingMedia, WeekData
 from solin.core.meetings.preparation import (
     MeetingPreparationKey,
@@ -420,9 +421,75 @@ def test_automatic_download_prefetches_persisted_url_before_revalidation(
 
         assert cache.prefetch_calls[0][0] == ["https://cdn.example/meeting.mp4"]
         assert len(publication.loads) == 1
-        assert publication.loads[0]["materialize_cached_publications"] == frozenset({"wt"})
+        assert publication.loads[0]["materialize_cached_publications"] == frozenset(
+            {"mwb", "wt"}
+        )
         assert publication.loads[0]["known_wt_issue"] == ""
         assert publication.loads[0]["persisted_source_checksums"] == {"mwb": ""}
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_legacy_persisted_week_materializes_cache_to_seed_canonical_baseline(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    tree_key = "mwb:2026-05-25:T:20260500"
+    store.save(
+        tree_key,
+        [{
+            "id": "legacy-official",
+            "type": "media",
+            "children": [],
+            "meeting_generated": True,
+            "meeting_source_key": "media:mwb:legacy",
+        }],
+        "legacy-hash",
+        source_checksum="confirmed",
+    )
+    try:
+        legacy = store.snapshot(tree_key)
+        assert legacy is not None
+        assert legacy.canonical_nodes == []
+
+        service.ensure_week(MeetingPreparationRequest(key=key))
+
+        request = publication.loads[0]
+        assert request["materialize_cached_publications"] == frozenset({"mwb", "wt"})
+        assert request["persisted_source_checksums"] == {"mwb": "confirmed"}
+
+        generation = int(request["generation"])
+        publication.mwb_ready.emit(
+            key.monday.isoformat(),
+            _week_data(
+                generation,
+                with_media=True,
+                source_checksum="confirmed",
+            ),
+        )
+
+        reconciled = store.snapshot(tree_key)
+        assert reconciled is not None
+        assert reconciled.canonical_nodes
+        restored_candidate = clone_nodes(reconciled.nodes)
+        official_media = next(
+            node
+            for node in iter_nodes(restored_candidate)
+            if node.get("type") == "media" and node.get("meeting_generated")
+        )
+        source_key = str(official_media["meeting_source_key"])
+        for parent in iter_nodes(restored_candidate):
+            children = parent.get("children", [])
+            if official_media in children:
+                children.remove(official_media)
+                break
+        assert canonical_tree_diff(
+            reconciled.canonical_nodes,
+            restored_candidate,
+            {source_key},
+        ).has_changes
     finally:
         service.shutdown(wait_ms=1000)
 
@@ -434,10 +501,19 @@ def test_persisted_week_skips_cached_materialization_and_passes_wt_issue(
     service, publication, store, _cache = _service(monkeypatch, tmp_path)
     key = MeetingPreparationKey(date(2026, 5, 25), "T")
     for pub_type, issue in (("mwb", "20260500"), ("wt", "20260400")):
+        canonical = [{
+            "id": f"{pub_type}-section",
+            "type": "section",
+            "title": "Section",
+            "children": [],
+            "meeting_generated": True,
+            "meeting_source_key": f"section:{pub_type}:official",
+        }]
         store.save(
             f"{pub_type}:2026-05-25:T:{issue}",
-            [],
+            canonical,
             "hash",
+            canonical_nodes=canonical,
         )
     try:
         service.ensure_week(MeetingPreparationRequest(key=key))

@@ -21,6 +21,7 @@ _DURABLE_MEDIA_FIELDS = (
     "start_trim_ticks",
     "end_trim_ticks",
     "image_framing",
+    "linked_folder_source",
 )
 _CANONICAL_RESOLUTION_FIELDS = (
     "resolved_url",
@@ -53,6 +54,41 @@ def media_identity_signature(node: Node) -> tuple:
     return tuple(_media_identity_value(ref, field) for field in _MEDIA_IDENTITY_FIELDS)
 
 
+def overlay_durable_media_state(
+    saved: Node,
+    node: Node,
+    *,
+    prefer_saved_resolution: bool = False,
+) -> None:
+    """Overlay user/runtime media state when both nodes describe the same media."""
+    if node.get("type") != "media" or saved.get("type") != "media":
+        return
+    if media_identity_signature(saved) != media_identity_signature(node):
+        return
+    for field in _DURABLE_MEDIA_FIELDS:
+        if (
+            not prefer_saved_resolution
+            and field in _CANONICAL_RESOLUTION_FIELDS
+            and node.get(field) not in (None, "")
+        ):
+            continue
+        value = saved.get(field)
+        if value not in (None, ""):
+            node[field] = copy.deepcopy(value)
+
+    # Resolver-provided titles are derived presentation data, not a user
+    # override. Keep them when the canonical source only had a placeholder.
+    if (
+        node.get("auto_title")
+        and saved.get("title")
+        and not saved.get("auto_title")
+        and not saved.get("user_title_override")
+    ):
+        node["title"] = saved.get("title", node.get("title", ""))
+        node["auto_title"] = False
+        node.setdefault("media_ref", {})["label"] = node["title"]
+
+
 def merge_persisted_meeting_trees(
     prepared: list[Node],
     portable: list[Node],
@@ -69,6 +105,13 @@ def merge_persisted_meeting_trees(
 
     merged = MeetingTreeMerger(prepared, deleted_source_keys).merge(portable)
     _PersistedManualNodeMerger(merged).include(prepared)
+    return merged
+
+
+def include_manual_meeting_nodes(target: list[Node], source: list[Node]) -> list[Node]:
+    """Union manual nodes from *source* into *target* without replacing its official tree."""
+    merged = clone_nodes(target)
+    _PersistedManualNodeMerger(merged).include(source)
     return merged
 
 
@@ -120,6 +163,9 @@ class _PersistedManualNodeMerger:
                         self._include_level(target["children"], source_children)
                 continue
             if target is None:
+                source_children = source.get("children", [])
+                if isinstance(source_children, list):
+                    self._include_level(target_level, source_children)
                 continue
             self._overlay_resolution(source, target)
             if source.get("type") in ("section", "subsection") and target.get(
@@ -250,22 +296,13 @@ class MeetingTreeMerger:
         self._used.add(key)
         node = copy.deepcopy(canonical)
         node["id"] = saved.get("id") or node.get("id")
-        self._copy_durable_media_state(saved, node)
+        overlay_durable_media_state(saved, node)
         if saved.get("user_title_override"):
             if node.get("type") == "marker":
                 node["text"] = saved.get("text", node.get("text", ""))
             else:
                 node["title"] = saved.get("title", node.get("title", ""))
             node["user_title_override"] = True
-        elif (
-            node.get("type") == "media"
-            and node.get("auto_title")
-            and saved.get("title")
-            and not saved.get("auto_title")
-        ):
-            node["title"] = saved.get("title", node.get("title", ""))
-            node["auto_title"] = False
-            node.setdefault("media_ref", {})["label"] = node["title"]
         if node.get("type") in ("section", "subsection"):
             node["collapsed"] = bool(saved.get("collapsed", node.get("collapsed", False)))
             node["color_hue"] = saved.get("color_hue", node.get("color_hue", 215))
@@ -275,21 +312,6 @@ class MeetingTreeMerger:
                 insert_missing=True,
             )
         return [node]
-
-    def _copy_durable_media_state(self, saved: Node, node: Node) -> None:
-        if node.get("type") != "media" or saved.get("type") != "media":
-            return
-        if media_identity_signature(saved) != media_identity_signature(node):
-            return
-        for field in _DURABLE_MEDIA_FIELDS:
-            if field in _CANONICAL_RESOLUTION_FIELDS and node.get(field) not in (
-                None,
-                "",
-            ):
-                continue
-            value = saved.get(field)
-            if value not in (None, ""):
-                node[field] = copy.deepcopy(value)
 
     def _salvage_children(self, stale_node: Node) -> list[Node]:
         children = stale_node.get("children", [])
@@ -346,4 +368,6 @@ __all__ = [
     "MeetingTreeMerger",
     "media_identity_signature",
     "merge_persisted_meeting_trees",
+    "include_manual_meeting_nodes",
+    "overlay_durable_media_state",
 ]
