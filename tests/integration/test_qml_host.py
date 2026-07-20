@@ -6,7 +6,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import (
+    QCoreApplication,
     Property,
+    QMetaObject,
     QObject,
     QPoint,
     QPointF,
@@ -23,6 +25,10 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.timer_engine import TimerEngine
 from solin.core.foundation.resources import application_translation_root
+from solin.core.i18n.meeting_schedule import (
+    meeting_kind_label,
+    meeting_weekday_names,
+)
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
@@ -52,6 +58,96 @@ class _CursorProbe(QObject):
     @Slot()
     def pointerExit(self) -> None:  # noqa: N802
         self.exited += 1
+
+
+class _MediaCountdownProbe(QObject):
+    mediaCountdownAutomationChanged = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.refreshes = 0
+        self.automation = {
+            "enabled": True,
+            "leadSeconds": 600,
+            "presentationIndex": 0,
+            "status": "ready",
+            "configuredCount": 2,
+            "slots": [
+                {
+                    "kind": "midweek",
+                    "label": "Midweek meeting",
+                    "configured": True,
+                    "weekday": 0,
+                    "weekdayLabel": "Monday",
+                    "timeText": "19:30",
+                },
+                {
+                    "kind": "weekend",
+                    "label": "Weekend meeting",
+                    "configured": True,
+                    "weekday": 5,
+                    "weekdayLabel": "Saturday",
+                    "timeText": "10:00",
+                },
+            ],
+            "next": {
+                "slotId": "midweek:2026-06-08:19:30",
+                "kind": "midweek",
+                "label": "Midweek meeting",
+                "weekdayLabel": "Monday",
+                "startTime": "19:30",
+                "triggerTime": "19:20:00",
+            },
+            "activeAutomatic": False,
+            "blockingReason": "",
+            "suggestedTargetHour": 19,
+            "suggestedTargetMinute": 30,
+            "suggestedFromMeeting": True,
+        }
+
+    @Property("QVariant", notify=mediaCountdownAutomationChanged)
+    def mediaCountdownAutomation(self):  # noqa: N802 - QML API
+        return self.automation
+
+    @Slot()
+    def refreshMediaCountdownPage(self) -> None:  # noqa: N802 - QML API
+        self.refreshes += 1
+        self.mediaCountdownAutomationChanged.emit()
+
+    @Slot(bool)
+    def setAutomaticCountdownEnabled(self, enabled: bool) -> None:  # noqa: N802
+        self.automation["enabled"] = enabled
+        self.mediaCountdownAutomationChanged.emit()
+
+    @Slot(int)
+    def setAutomaticCountdownLeadSeconds(self, seconds: int) -> None:  # noqa: N802
+        self.automation["leadSeconds"] = seconds
+        self.mediaCountdownAutomationChanged.emit()
+
+    @Slot(int)
+    def setMediaCountdownPresentation(self, index: int) -> None:  # noqa: N802
+        self.automation["presentationIndex"] = index
+        self.mediaCountdownAutomationChanged.emit()
+
+    @Slot()
+    def configureMeetingSchedule(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot(int, int)
+    def startCountdownToTime(self, _hour: int, _minute: int) -> None:  # noqa: N802
+        pass
+
+    @Slot(int)
+    def startCountdownMinutes(self, _minutes: int) -> None:  # noqa: N802
+        pass
+
+    @Slot()
+    def pointerEnter(self) -> None:  # noqa: N802 - QML API
+        pass
+
+    @Slot()
+    def pointerExit(self) -> None:  # noqa: N802 - QML API
+        pass
 
 
 class _PlaybackProtectionProbe(QObject):
@@ -397,6 +493,114 @@ def test_first_reorder_after_section_insertion_stays_incremental() -> None:
     assert target_list.indexOfNode(inserted_card) == 0
     assert target_list.indexOfNode(existing_card) == 1
 
+    widget.deleteLater()
+
+
+def test_media_countdown_page_renders_context_and_applies_meeting_suggestion() -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 820)
+    configure_qml_host(
+        widget,
+        type_name="MediaCountdownPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        mouse_tracking=True,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+
+    assert QMetaObject.invokeMethod(root, "enterPage")
+    QTest.qWait(40)
+
+    assert timer.refreshes == 1
+    assert root.property("hourValue") == 19
+    assert root.property("minValue") == 30
+    visible_text = _visible_texts(root)
+    assert "Automatic countdown" in visible_text
+    assert "Meeting time selected" in visible_text
+    assert "Start countdown to this time" in visible_text
+    assert "How long before the meeting should the countdown start?" in visible_text
+    assert "Midweek meeting" in visible_text
+    manual_card = root.findChild(QObject, "manualCountdownCard")
+    automatic_card = root.findChild(QObject, "automaticCountdownCard")
+    assert manual_card is not None
+    assert automatic_card is not None
+    assert manual_card.property("y") < automatic_card.property("y")
+
+    status_description = root.findChild(QObject, "countdownStatusDescription")
+    assert status_description is not None
+    timer.automation.update({"status": "active", "activeAutomatic": False})
+    timer.mediaCountdownAutomationChanged.emit()
+    QTest.qWait(20)
+    assert status_description.property("text") == "Reach zero at 19:30"
+
+    timer.automation.update({
+        "status": "waiting_for_projection",
+        "blockingReason": "automation_unavailable",
+    })
+    timer.mediaCountdownAutomationChanged.emit()
+    QTest.qWait(20)
+    assert status_description.property("text") == (
+        "Automatic projection is temporarily unavailable. "
+        "Solin will keep trying only until the meeting starts."
+    )
+    widget.deleteLater()
+
+
+def test_media_countdown_portuguese_catalog_covers_ui_and_runtime_feedback(
+    pt_br_translator,
+) -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 820)
+    configure_qml_host(
+        widget,
+        type_name="MediaCountdownPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    assert QMetaObject.invokeMethod(root, "enterPage")
+    QTest.qWait(40)
+
+    visible_text = _visible_texts(root)
+    assert "Contagem regressiva automática" in visible_text
+    assert "Horário da reunião selecionado" in visible_text
+    assert "Quanto tempo antes da reunião o cronômetro deve começar?" in visible_text
+    assert meeting_weekday_names()[0] == "Segunda-feira"
+    assert meeting_kind_label("midweek") == "Reunião do meio de semana"
+    assert QCoreApplication.translate(
+        "MediaCountdownPage",
+        (
+            "Automatic projection is temporarily unavailable. Solin will keep "
+            "trying only until the meeting starts."
+        ),
+    ) == (
+        "A projeção automática está temporariamente indisponível. O Solin "
+        "continuará tentando somente até o início da reunião."
+    )
+    assert QCoreApplication.translate(
+        "MediaCountdownAutomation",
+        "Countdown started automatically for {time}.",
+    ) == "Contagem regressiva iniciada automaticamente para as {time}."
+    assert QCoreApplication.translate(
+        "MediaCountdownAutomation",
+        "The countdown did not start because no media window was available.",
+    ) == (
+        "A contagem regressiva não foi iniciada porque nenhuma janela de mídia "
+        "estava disponível."
+    )
+    assert QCoreApplication.translate(
+        "MediaCountdownAutomation",
+        "The countdown did not start because automatic projection remained unavailable.",
+    ) == (
+        "A contagem regressiva não foi iniciada porque a projeção automática "
+        "permaneceu indisponível."
+    )
     widget.deleteLater()
 
 

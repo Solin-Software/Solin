@@ -23,6 +23,7 @@ class MainWindowStartupDependencies:
     zoom_settings: Any
     zoom_service: Any
     background_song_service: Any
+    media_countdown_automation: Any
     monitor_popup_factory: Callable[[], Any]
     ipc_controller_factory: Callable[[], Any]
     remote_services_factory: Callable[[], Any]
@@ -60,6 +61,7 @@ class MainWindowBootstrapController:
         self.connect_zoom_signals()
         self.start_zoom_if_enabled()
         self.start_background_song_service()
+        self.start_media_countdown_automation()
         monitor_popup = self.build_monitor_popup()
         ipc_controller = self.create_ipc_controller()
         self.start_ipc_if_needed(ipc_controller)
@@ -105,6 +107,9 @@ class MainWindowBootstrapController:
 
     def start_background_song_service(self) -> None:
         self._dependencies.background_song_service.start()
+
+    def start_media_countdown_automation(self) -> None:
+        self._dependencies.media_countdown_automation.start()
 
     def build_monitor_popup(self):
         dependencies = self._dependencies

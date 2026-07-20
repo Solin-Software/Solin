@@ -1203,6 +1203,181 @@
       <source>min</source>
       <translation>min</translation>
     </message>
+      <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
+      <source>Automation off</source>
+      <translation>Automatik av</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
+      <source>Configuration required</source>
+      <translation>Konfiguration krävs</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
+      <source>Ready</source>
+      <translation>Klar</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
+      <source>Waiting for the media window</source>
+      <translation>Väntar på mediefönstret</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
+      <source>Countdown active</source>
+      <translation>Nedräkning aktiv</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
+      <source>Interrupted for this meeting</source>
+      <translation>Avbruten för detta möte</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
+      <source>Not started</source>
+      <translation>Inte startad</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>Aktivera funktionen för att visa en nedräkning före konfigurerade möten.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
+      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
+      <translation>Ingen mötestid har konfigurerats. Nedräkningen förblir klar tills ett schema läggs till.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
+      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
+      <translation>Inget mediefönster är tillgängligt. Solin fortsätter att försöka endast tills mötet börjar.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
+      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
+      <translation>Mediefönstret används. Solin fortsätter att försöka endast tills mötet börjar.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="77" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
+      <translation>Automatisk projicering är tillfälligt otillgänglig. Solin fortsätter att försöka endast tills mötet börjar.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>Startade automatiskt · når noll kl. %1</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>Den startar inte automatiskt igen för detta mötestillfälle.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>Mötestiden nåddes innan nedräkningen kunde starta.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
+      <source>Next: %1, %2 · automatic start at %3</source>
+      <translation>Nästa: %1, %2 · automatisk start kl. %3</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>Väntar på nästa konfigurerade möte.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
+      <source>Automatic countdown</source>
+      <translation>Automatisk nedräkning</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
+      <source>Shows a countdown in the media window before configured meetings.</source>
+      <translation>Visar en nedräkning i mediefönstret före konfigurerade möten.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Hur lång tid före mötet ska nedräkningen börja?</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
+      <source>10 seconds – 2 hours</source>
+      <translation>10 sekunder – 2 timmar</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
+      <source>h</source>
+      <translation>h</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>−10 s</source>
+      <translation>−10 s</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>+10 s</source>
+      <translation>+10 s</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
+      <source>s</source>
+      <translation>s</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
+      <source>Default appearance</source>
+      <translation>Standardutseende</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
+      <source>Used for automatic and manual countdowns.</source>
+      <translation>Används för automatiska och manuella nedräkningar.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
+      <source>Meeting times</source>
+      <translation>Mötestider</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
+      <source>Configure meetings</source>
+      <translation>Konfigurera möten</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Complete times</source>
+      <translation>Fyll i tider</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Edit times</source>
+      <translation>Redigera tider</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
+      <source>Not configured</source>
+      <translation>Inte konfigurerat</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <source>Start manually</source>
+      <translation>Starta manuellt</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
+      <source>Start or restart a countdown at any time.</source>
+      <translation>Starta eller starta om en nedräkning när som helst.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
+      <source>Meeting time selected</source>
+      <translation>Mötestid vald</translation>
+    </message>
   </context>
   <context>
     <name>MediaDestinationBridge</name>
@@ -6778,6 +6953,92 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 {path}</source>
       <translation>Sparad i:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>Nedräkningen startade automatiskt till kl. {time}.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>Nedräkningen startade inte eftersom mediefönstret fortfarande användes.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>Nedräkningen startade inte eftersom inget mediefönster var tillgängligt.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>Nedräkningen startade inte eftersom automatisk projektion förblev otillgänglig.</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>Måndag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>Tisdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>Onsdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>Torsdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>Fredag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>Lördag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>Söndag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>Veckomöte</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>Helgmöte</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>Inte konfigurerad</translation>
+
     </message>
   </context>
 </TS>

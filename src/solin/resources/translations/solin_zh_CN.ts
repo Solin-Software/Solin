@@ -1202,6 +1202,181 @@
       <source>min</source>
       <translation>分钟</translation>
     </message>
+      <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
+      <source>Automation off</source>
+      <translation>自动功能已关闭</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
+      <source>Configuration required</source>
+      <translation>需要配置</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
+      <source>Ready</source>
+      <translation>准备就绪</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
+      <source>Waiting for the media window</source>
+      <translation>正在等待媒体窗口</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
+      <source>Countdown active</source>
+      <translation>倒计时进行中</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
+      <source>Interrupted for this meeting</source>
+      <translation>已针对本次聚会中断</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
+      <source>Not started</source>
+      <translation>未启动</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>开启后，会在已配置的聚会开始前显示倒计时。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
+      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
+      <translation>尚未配置聚会时间。在添加日程之前，倒计时将保持就绪状态。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
+      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
+      <translation>没有可用的媒体窗口。Solin 只会持续尝试到聚会开始为止。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
+      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
+      <translation>媒体窗口正在使用中。Solin 只会持续尝试到聚会开始为止。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="76" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
+      <translation>自动投影暂时不可用。Solin 只会持续尝试到聚会开始为止。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>已自动启动 · 将于 %1 归零</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>本次聚会不会再次自动启动。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>倒计时尚未开始，聚会时间就已经到了。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
+      <source>Next: %1, %2 · automatic start at %3</source>
+      <translation>下一场：%1，%2 · 将于 %3 自动启动</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>正在等待下一场已配置的聚会。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
+      <source>Automatic countdown</source>
+      <translation>自动倒计时</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
+      <source>Shows a countdown in the media window before configured meetings.</source>
+      <translation>在已配置的聚会开始前，在媒体窗口中显示倒计时。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>倒计时应在聚会开始前多久启动？</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
+      <source>10 seconds – 2 hours</source>
+      <translation>10秒 – 2小时</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
+      <source>h</source>
+      <translation>小时</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>−10 s</source>
+      <translation>−10秒</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>+10 s</source>
+      <translation>+10秒</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
+      <source>s</source>
+      <translation>秒</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
+      <source>Default appearance</source>
+      <translation>默认外观</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
+      <source>Used for automatic and manual countdowns.</source>
+      <translation>用于自动和手动倒计时。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
+      <source>Meeting times</source>
+      <translation>聚会时间</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
+      <source>Configure meetings</source>
+      <translation>配置聚会</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Complete times</source>
+      <translation>补全时间</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Edit times</source>
+      <translation>编辑时间</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
+      <source>Not configured</source>
+      <translation>未配置</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <source>Start manually</source>
+      <translation>手动启动</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
+      <source>Start or restart a countdown at any time.</source>
+      <translation>随时启动或重新启动倒计时。</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
+      <source>Meeting time selected</source>
+      <translation>已选择聚会时间</translation>
+    </message>
   </context>
   <context>
     <name>MediaDestinationBridge</name>
@@ -6774,6 +6949,92 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 {path}</source>
       <translation>已保存到：
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>{time} 的倒计时已自动启动。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>由于媒体窗口一直处于使用中，倒计时未能启动。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>由于没有可用的媒体窗口，倒计时未能启动。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>由于自动投影一直不可用，倒计时未能启动。</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>星期一</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>星期二</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>星期三</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>星期四</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>星期五</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>星期六</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>星期日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>周中聚会</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>周末聚会</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>未配置</translation>
+
     </message>
   </context>
 </TS>

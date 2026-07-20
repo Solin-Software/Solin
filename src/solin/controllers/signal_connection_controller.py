@@ -24,6 +24,7 @@ class MainWindowSignalSources:
     ndi_service: Any
     camera_service: Any
     auto_share_finished: Any
+    media_countdown_automation: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,7 @@ class MainWindowSignalHandlers:
     live_integrations: Any
     background_song_service: Any
     projection_integrations: Any
+    open_meeting_schedule_settings: Any
     apply_theme: Any | None = None
     timer_output: Any | None = None
     timer_bridge: Any | None = None
@@ -81,6 +83,15 @@ class SignalConnectionController:
             media_projection.on_song_project
         )
         sources.timer_widget.project_timer_signal.connect(timer_theme.start_timer)
+        sources.timer_widget.meeting_schedule_requested.connect(
+            handlers.open_meeting_schedule_settings
+        )
+        sources.media_countdown_automation.countdown_requested.connect(
+            timer_theme.start_automatic_timer
+        )
+        sources.media_countdown_automation.automatic_stop_requested.connect(
+            handlers.projection_stop.stop_any
+        )
         sources.sermon_theme_widget.project_theme_signal.connect(
             timer_theme.project_sermon_theme
         )
@@ -171,6 +182,9 @@ class SignalConnectionController:
         )
         settings.meeting_schedule_changed.connect(
             handlers.background_song_service.reload_settings
+        )
+        settings.meeting_schedule_changed.connect(
+            sources.media_countdown_automation.reload_schedule
         )
         if handlers.apply_theme is not None:
             settings.theme_changed.connect(handlers.apply_theme)

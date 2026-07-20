@@ -54,6 +54,9 @@ def _build_main_window_profile_settings(profile_settings):
         ProjectionPlaybackSettingsStore,
     )
     from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
+    from solin.core.timer.media_countdown_settings import (
+        MediaCountdownAutomationSettingsStore,
+    )
     from solin.core.network.browser_settings import BrowserSettingsStore
     from solin.core.projection.monitor_allocation import MonitorAllocationStore
     from solin.core.remote.notification_settings import NotificationSettingsStore
@@ -72,6 +75,9 @@ def _build_main_window_profile_settings(profile_settings):
         camera=CameraSettingsStore.for_profile_settings(profile_settings),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
         meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
+        media_countdown_automation=(
+            MediaCountdownAutomationSettingsStore.for_profile_settings(profile_settings)
+        ),
         watched_folder=WatchedFolderSettingsStore.for_profile_settings(profile_settings),
         yeartext=YeartextSettingsStore.for_profile_settings(profile_settings),
         background_song=BackgroundSongSettingsStore.for_profile_settings(profile_settings),

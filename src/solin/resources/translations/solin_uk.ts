@@ -1204,6 +1204,181 @@
       <source>min</source>
       <translation>хв</translation>
     </message>
+      <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
+      <source>Automation off</source>
+      <translation>Автоматизацію вимкнено</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
+      <source>Configuration required</source>
+      <translation>Потрібне налаштування</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
+      <source>Ready</source>
+      <translation>Готовий</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
+      <source>Waiting for the media window</source>
+      <translation>Очікування вікна медіа</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
+      <source>Countdown active</source>
+      <translation>Зворотний відлік активний</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
+      <source>Interrupted for this meeting</source>
+      <translation>Перервано для цього зібрання</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
+      <source>Not started</source>
+      <translation>Не запущено</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>Увімкніть, щоб показувати зворотний відлік перед налаштованими зібраннями.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
+      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
+      <translation>Не налаштовано час жодного зібрання. Зворотний відлік залишатиметься готовим, доки не буде додано розклад.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
+      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
+      <translation>Немає доступного вікна медіа. Solin повторюватиме спробу лише до початку зібрання.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
+      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
+      <translation>Вікно медіа використовується. Solin повторюватиме спробу лише до початку зібрання.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="77" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
+      <translation>Автоматичне проєктування тимчасово недоступне. Solin повторюватиме спробу лише до початку зібрання.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>Запущено автоматично · нуль о %1</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>Для цього зібрання він більше не запуститься автоматично.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>Час початку зібрання настав до того, як вдалося запустити зворотний відлік.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
+      <source>Next: %1, %2 · automatic start at %3</source>
+      <translation>Далі: %1, %2 · автоматичний запуск о %3</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>Очікування наступного налаштованого зібрання.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
+      <source>Automatic countdown</source>
+      <translation>Автоматичний зворотний відлік</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
+      <source>Shows a countdown in the media window before configured meetings.</source>
+      <translation>Показує зворотний відлік у вікні медіа перед налаштованими зібраннями.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>За скільки часу до зібрання має початися зворотний відлік?</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
+      <source>10 seconds – 2 hours</source>
+      <translation>10 секунд – 2 години</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
+      <source>h</source>
+      <translation>год</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>−10 s</source>
+      <translation>−10 с</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <source>+10 s</source>
+      <translation>+10 с</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
+      <source>s</source>
+      <translation>с</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
+      <source>Default appearance</source>
+      <translation>Вигляд за замовчуванням</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
+      <source>Used for automatic and manual countdowns.</source>
+      <translation>Використовується для автоматичного та ручного зворотного відліку.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
+      <source>Meeting times</source>
+      <translation>Час зібрань</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
+      <source>Configure meetings</source>
+      <translation>Налаштувати зібрання</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Complete times</source>
+      <translation>Вказати час</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
+      <source>Edit times</source>
+      <translation>Змінити час</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
+      <source>Not configured</source>
+      <translation>Не налаштовано</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <source>Start manually</source>
+      <translation>Запустити вручну</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
+      <source>Start or restart a countdown at any time.</source>
+      <translation>Запустити або перезапустити зворотний відлік у будь-який момент.</translation>
+    </message>
+    <message>
+      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
+      <source>Meeting time selected</source>
+      <translation>Вибрано час зібрання</translation>
+    </message>
   </context>
   <context>
     <name>MediaDestinationBridge</name>
@@ -6784,6 +6959,92 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 {path}</source>
       <translation>Збережено в:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>Зворотний відлік автоматично запущено до {time}.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>Зворотний відлік не запустився, оскільки вікно медіа залишалося зайнятим.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>Зворотний відлік не запустився, оскільки не було доступного вікна медіа.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>Зворотний відлік не запустився, оскільки автоматична проекція залишалася недоступною.</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>Понеділок</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>Вівторок</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>Середа</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>Четвер</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>П’ятниця</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>Субота</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>Неділя</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>Зібрання серед тижня</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>Зібрання у вихідні</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>Не налаштовано</translation>
+
     </message>
   </context>
 </TS>

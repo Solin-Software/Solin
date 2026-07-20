@@ -13,11 +13,17 @@ reservation, PDF export, and fullscreen output to explicitly injected adapters.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
 
 from solin.core.i18n.date import format_time_with_seconds, week_label
+from solin.core.i18n.meeting_schedule import (
+    meeting_kind_label,
+    meeting_not_configured_label,
+    meeting_weekday_names,
+)
 from solin.core.meetings.meeting_weeks import current_monday
 from solin.core.meetings.section_meta import SECTION_META
 from solin.core.timer.application import TimerSession
@@ -175,6 +181,8 @@ class TimerBridge(QObject):
 
     # Relayed to TimerWidget.project_timer_signal for the media-countdown mode.
     mediaCountdownRequested = Signal(QDateTime, str)
+    mediaCountdownAutomationChanged = Signal()
+    meetingScheduleConfigurationRequested = Signal()
     pointerEntered = Signal()
     pointerExited = Signal()
 
@@ -186,6 +194,7 @@ class TimerBridge(QObject):
         output,
         monitors: TimerMonitorController,
         pdf_export: TimerPdfExportController,
+        media_countdown_automation,
         language_manager=None,
         parent: QObject | None = None,
     ) -> None:
@@ -195,6 +204,7 @@ class TimerBridge(QObject):
         self._output = output
         self._monitors = monitors
         self._pdf_export = pdf_export
+        self._media_countdown_automation = media_countdown_automation
         self._language_manager = language_manager
         self._clock_config: ClockConfig = session.clock_config
         self._schedule = session.schedule
@@ -202,6 +212,9 @@ class TimerBridge(QObject):
 
         self._engine.state_changed.connect(self._on_engine_state)
         self._engine.tick.connect(self._on_engine_tick)
+        self._media_countdown_automation.state_changed.connect(
+            self.mediaCountdownAutomationChanged
+        )
 
         self._engine.set_schedule(self._schedule)
 
@@ -216,6 +229,7 @@ class TimerBridge(QObject):
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
         self.clockConfigChanged.emit()
+        self.mediaCountdownAutomationChanged.emit()
 
     def refresh_theme(self) -> None:
         self.scheduleChanged.emit()
@@ -453,14 +467,106 @@ class TimerBridge(QObject):
 
     # ── Exposed: media countdown mode ──────────────────────────────────────
 
+    def _media_countdown_automation_model(self) -> dict:
+        snapshot = self._media_countdown_automation.snapshot()
+        occurrence = snapshot.next_occurrence
+        suggestion_hour, suggestion_minute, suggestion_is_meeting = (
+            self._media_countdown_automation.suggested_manual_target()
+        )
+        weekday_names = meeting_weekday_names()
+        kind_labels = {
+            "midweek": meeting_kind_label("midweek"),
+            "weekend": meeting_kind_label("weekend"),
+        }
+        slots = []
+        for slot in snapshot.schedule.slots:
+            slots.append({
+                "kind": slot.kind,
+                "label": kind_labels.get(slot.kind, slot.kind),
+                "configured": slot.is_configured,
+                "weekday": slot.weekday,
+                "weekdayLabel": (
+                    weekday_names[slot.weekday]
+                    if 0 <= slot.weekday < len(weekday_names)
+                    else meeting_not_configured_label()
+                ),
+                "timeText": slot.time_text,
+            })
+
+        presentation = snapshot.config.presentation
+        try:
+            presentation_index = MEDIA_COUNTDOWN_PRESENTATION_OPTIONS.index(presentation)
+        except ValueError:
+            presentation_index = 0
+        configured_count = sum(bool(slot["configured"]) for slot in slots)
+        if occurrence is None:
+            next_model = {}
+        else:
+            trigger_at = occurrence.starts_at.timestamp() - snapshot.config.lead_seconds
+            trigger = datetime.fromtimestamp(trigger_at).astimezone()
+            next_model = {
+                "slotId": occurrence.slot_id,
+                "kind": occurrence.slot.kind,
+                "label": kind_labels.get(occurrence.slot.kind, occurrence.slot.kind),
+                "weekdayLabel": weekday_names[occurrence.starts_at.weekday()],
+                "startTime": occurrence.starts_at.strftime("%H:%M"),
+                "triggerTime": trigger.strftime("%H:%M:%S"),
+            }
+        return {
+            "enabled": snapshot.config.enabled,
+            "leadSeconds": snapshot.config.lead_seconds,
+            "presentationIndex": presentation_index,
+            "status": snapshot.status.value,
+            "configuredCount": configured_count,
+            "slots": slots,
+            "next": next_model,
+            "activeAutomatic": snapshot.active_automatic,
+            "blockingReason": snapshot.blocking_reason.value,
+            "suggestedTargetHour": suggestion_hour,
+            "suggestedTargetMinute": suggestion_minute,
+            "suggestedFromMeeting": suggestion_is_meeting,
+        }
+
+    mediaCountdownAutomation = Property(
+        _QVARIANT,
+        _media_countdown_automation_model,
+        notify=mediaCountdownAutomationChanged,
+    )
+
     @staticmethod
     def _media_countdown_presentation(index: int) -> str:
         if 0 <= index < len(MEDIA_COUNTDOWN_PRESENTATION_OPTIONS):
             return MEDIA_COUNTDOWN_PRESENTATION_OPTIONS[index].value
         return MEDIA_COUNTDOWN_PRESENTATION_OPTIONS[0].value
 
-    @Slot(int, int, int)
-    def startCountdownToTime(self, hour: int, minute: int, presentation_index: int) -> None:
+    @Slot(bool)
+    def setAutomaticCountdownEnabled(self, enabled: bool) -> None:
+        self._media_countdown_automation.set_enabled(enabled)
+
+    @Slot(int)
+    def setAutomaticCountdownLeadSeconds(self, seconds: int) -> None:
+        self._media_countdown_automation.set_lead_seconds(seconds)
+
+    @Slot(int)
+    def setMediaCountdownPresentation(self, presentation_index: int) -> None:
+        self._media_countdown_automation.set_presentation(
+            self._media_countdown_presentation(int(presentation_index))
+        )
+
+    @Slot()
+    def refreshMediaCountdownPage(self) -> None:
+        self._media_countdown_automation.refresh()
+        self.mediaCountdownAutomationChanged.emit()
+
+    @Slot()
+    def configureMeetingSchedule(self) -> None:
+        self.meetingScheduleConfigurationRequested.emit()
+
+    def _selected_media_countdown_presentation(self) -> str:
+        return self._media_countdown_automation.snapshot().config.presentation.value
+
+    @Slot(int, int)
+    def startCountdownToTime(self, hour: int, minute: int) -> None:
         from PySide6.QtCore import QDate, QTime
         selected = QTime(int(hour), int(minute), 0)
         now = QTime.currentTime()
@@ -471,15 +577,15 @@ class TimerBridge(QObject):
             target.setTime(selected)
         self.mediaCountdownRequested.emit(
             target,
-            self._media_countdown_presentation(int(presentation_index)),
+            self._selected_media_countdown_presentation(),
         )
 
-    @Slot(int, int)
-    def startCountdownMinutes(self, minutes: int, presentation_index: int) -> None:
+    @Slot(int)
+    def startCountdownMinutes(self, minutes: int) -> None:
         target = QDateTime.currentDateTime().addSecs(int(minutes) * 60)
         self.mediaCountdownRequested.emit(
             target,
-            self._media_countdown_presentation(int(presentation_index)),
+            self._selected_media_countdown_presentation(),
         )
 
     # ── Exposed: QML cursor bridge ─────────────────────────────────────────

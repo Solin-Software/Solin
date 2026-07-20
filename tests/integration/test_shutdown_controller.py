@@ -92,6 +92,7 @@ def _dependencies(events=None):
             notifications=_Recorder(events, "notifications"),
             projection_integrations=_Recorder(events, "projection-integrations"),
             background_song=_Recorder(events, "background-song"),
+            media_countdown_automation=_Recorder(events, "media-countdown"),
             media_controller=_Recorder(events, "media"),
             ndi=_Recorder(events, "ndi"),
             camera=_Recorder(events, "camera"),
@@ -168,6 +169,7 @@ def test_shutdown_runs_owned_cleanup_boundaries_in_order():
 
     assert events == [
         "remote-control.stop",
+        "media-countdown.shutdown",
         "projection",
         "floating",
         "timer.close_all",

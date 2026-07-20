@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Any
 
 MIDWEEK = "midweek"
@@ -78,7 +78,7 @@ class MeetingSlot:
 
 @dataclass(frozen=True, slots=True)
 class MeetingOccurrence:
-    """A concrete meeting occurrence for the current local date."""
+    """A concrete occurrence of a configured meeting in local time."""
 
     slot: MeetingSlot
     starts_at: datetime
@@ -121,6 +121,28 @@ class MeetingSchedule:
             )
             if now < starts_at:
                 candidates.append(MeetingOccurrence(slot=slot, starts_at=starts_at))
+        if not candidates:
+            return None
+        return min(candidates, key=lambda occurrence: occurrence.starts_at)
+
+    def next_occurrence(self, now: datetime) -> MeetingOccurrence | None:
+        """Return the nearest future configured meeting across the next week."""
+
+        candidates: list[MeetingOccurrence] = []
+        for slot in self.slots:
+            if not slot.is_configured:
+                continue
+            assert slot.start_minutes is not None
+            days_ahead = (slot.weekday - now.weekday()) % 7
+            meeting_date = now.date() + timedelta(days=days_ahead)
+            starts_at = datetime.combine(
+                meeting_date,
+                time(slot.start_minutes // 60, slot.start_minutes % 60),
+                tzinfo=now.tzinfo,
+            )
+            if starts_at <= now:
+                starts_at += timedelta(days=7)
+            candidates.append(MeetingOccurrence(slot=slot, starts_at=starts_at))
         if not candidates:
             return None
         return min(candidates, key=lambda occurrence: occurrence.starts_at)

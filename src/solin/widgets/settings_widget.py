@@ -16,6 +16,7 @@ from PySide6.QtCore import (
     Signal,
     QEvent,
     QObject,
+    QTimer,
 )
 
 from ..core.i18n.manager import LanguageManager
@@ -311,6 +312,22 @@ class SettingsWidget(
         for toggle in self.findChildren(SettingsToggleSwitch):
             toggle.update()
         self.update()
+
+    def focus_meeting_schedule(self) -> None:
+        """Reveal the canonical meeting schedule card after contextual navigation."""
+
+        card = getattr(self, "_meeting_schedule_card", None)
+        if card is None:
+            return
+
+        def reveal() -> None:
+            self._settings_scroll.ensureWidgetVisible(card, 0, 28)
+            rows = getattr(self, "_schedule_rows", {})
+            first_controls = next(iter(rows.values()), ())
+            focus_target = first_controls[0] if first_controls else card
+            focus_target.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        QTimer.singleShot(0, reveal)
 
     # ── i18n ───────────────────────────────────────────────────────────────
 

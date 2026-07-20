@@ -29,6 +29,7 @@ class TimerWidget(QWidget):
 
     # Media-window countdown mode emits the target and selected presentation.
     project_timer_signal = Signal(QDateTime, str)
+    meeting_schedule_requested = Signal()
 
     def __init__(
         self,
@@ -50,6 +51,9 @@ class TimerWidget(QWidget):
 
         self.bridge.setParent(self)
         self.bridge.mediaCountdownRequested.connect(self.project_timer_signal)
+        self.bridge.meetingScheduleConfigurationRequested.connect(
+            self.meeting_schedule_requested
+        )
         self.bridge.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.bridge.pointerExited.connect(self.end_qml_pointer_cursor)
         self._qml = QQuickWidget()

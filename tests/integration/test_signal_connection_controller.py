@@ -38,7 +38,11 @@ class _WindowStub:
         self.songs_widget = _signal_namespace("songs", "project_video_signal")
         self.meetings_widget = _signal_namespace("meetings", "project_media")
         self.clips_widget = _signal_namespace("clips", "project_video_signal")
-        self.timer_widget = _signal_namespace("timer", "project_timer_signal")
+        self.timer_widget = _signal_namespace(
+            "timer",
+            "project_timer_signal",
+            "meeting_schedule_requested",
+        )
         self.sermon_theme_widget = _signal_namespace("theme", "project_theme_signal")
         self.playlist_widget = _signal_namespace(
             "playlist",
@@ -114,6 +118,14 @@ class _WindowStub:
             set_enabled=_slot("background_song_enabled"),
             reload_settings=_slot("background_song_reload_settings"),
         )
+        self._media_countdown_automation = _signal_namespace(
+            "media_countdown_automation",
+            "countdown_requested",
+            "automatic_stop_requested",
+        )
+        self._media_countdown_automation.reload_schedule = _slot(
+            "media_countdown_reload_schedule"
+        )
         self._auto_share_finished = _Signal("auto_share_finished")
 
         self._playlist_imports = SimpleNamespace(
@@ -168,6 +180,7 @@ class _WindowStub:
         )
         self._timer_theme = SimpleNamespace(
             start_timer=_slot("start_timer"),
+            start_automatic_timer=_slot("start_automatic_timer"),
             project_sermon_theme=_slot("project_sermon_theme"),
             on_timer_update_proj=_slot("timer_update"),
             on_timer_blink_proj=_slot("timer_blink"),
@@ -193,6 +206,7 @@ def _sources(window):
         ndi_service=window._ndi_service,
         camera_service=window._camera_service,
         auto_share_finished=window._auto_share_finished,
+        media_countdown_automation=window._media_countdown_automation,
     )
 
 
@@ -209,6 +223,7 @@ def _handlers(window, *, timer_output=None, timer_bridge=None):
         live_integrations=window._live_integrations,
         background_song_service=window._background_song_service,
         projection_integrations=window._projection_integrations,
+        open_meeting_schedule_settings=_slot("open_meeting_schedule_settings"),
         timer_output=timer_output,
         timer_bridge=timer_bridge,
     )
@@ -222,7 +237,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 50
+    assert total_connections == 54
     assert window.songs_widget.project_video_signal.connected == [
         window._media_projection.on_sjjm_project
     ]
@@ -247,7 +262,17 @@ def test_connect_signals_wires_expected_signal_graph():
         window._background_song_service.set_enabled
     ]
     assert window.settings_widget.meeting_schedule_changed.connected == [
-        window._background_song_service.reload_settings
+        window._background_song_service.reload_settings,
+        window._media_countdown_automation.reload_schedule,
+    ]
+    assert window.timer_widget.meeting_schedule_requested.connected == [
+        controller._handlers.open_meeting_schedule_settings
+    ]
+    assert window._media_countdown_automation.countdown_requested.connected == [
+        window._timer_theme.start_automatic_timer
+    ]
+    assert window._media_countdown_automation.automatic_stop_requested.connected == [
+        window._projection_stop.stop_any
     ]
     assert window._auto_share_finished.connected == [
         window._projection_integrations.on_auto_share_finished

@@ -86,6 +86,33 @@ def test_schedule_uses_earliest_configured_meeting_today():
     assert occurrence.starts_at == _now(19, 0)
 
 
+def test_schedule_returns_nearest_future_occurrence_across_the_week():
+    monday = _now(20, 0)
+    schedule = MeetingSchedule(
+        midweek=MeetingSlot(MIDWEEK, 2, 19 * 60 + 30),
+        weekend=MeetingSlot(WEEKEND, 5, 10 * 60),
+    )
+
+    occurrence = schedule.next_occurrence(monday)
+
+    assert occurrence is not None
+    assert occurrence.slot.kind == MIDWEEK
+    assert occurrence.starts_at == datetime(2026, 6, 10, 19, 30, tzinfo=monday.tzinfo)
+
+
+def test_next_occurrence_rolls_a_started_weekly_slot_to_next_week():
+    monday = _now(20, 0)
+    schedule = MeetingSchedule(
+        midweek=MeetingSlot(MIDWEEK, monday.weekday(), 19 * 60 + 30),
+        weekend=MeetingSlot(WEEKEND),
+    )
+
+    occurrence = schedule.next_occurrence(monday)
+
+    assert occurrence is not None
+    assert occurrence.starts_at == monday.replace(hour=19, minute=30) + timedelta(days=7)
+
+
 def test_load_schedule_keeps_invalid_values_unconfigured():
     store, settings = _store()
     settings.clear()
