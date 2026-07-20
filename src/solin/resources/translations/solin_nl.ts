@@ -1144,64 +1144,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Nu</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Morgen om %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Nul bereiken om</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Vandaag om %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>Schakel dit in om vóór geconfigureerde vergaderingen een afteltimer weer te geven.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Voeg vergaderdagen en -tijden toe om de automatisering volledig in te stellen.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Er is geen mediavenster beschikbaar. Solin blijft het proberen totdat de vergadering begint.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>Het mediavenster is in gebruik. Solin hervat het aftellen zodra het weer beschikbaar is.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>Automatische projectie is tijdelijk niet beschikbaar. Solin blijft het proberen totdat de vergadering begint.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>Automatisch gestart · bereikt nul om %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>Deze wordt voor deze vergadering niet opnieuw automatisch gestart.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>De vergadertijd werd bereikt voordat het aftellen kon beginnen.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Volgende: %1 om %2 · start automatisch om %3</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>Wachten op de volgende geconfigureerde vergadering.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
       <source>−1 h</source>
       <translation>−1 u</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
       <source>+1 h</source>
       <translation>+1 u</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>uur</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
       <source>−1 min</source>
       <translation>−1 min</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
       <source>+1 min</source>
       <translation>+1 min</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Weergeven in mediavenster</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>minuten</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Ronde timer</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
+      <source>−10 s</source>
+      <translation>−10 s</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
+      <source>+10 s</source>
+      <translation>+10 s</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>seconden</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Projectieweergave</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Wordt gebruikt voor toekomstige handmatige en automatische afteltimers. Een actieve projectie wordt niet gewijzigd.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Circulair</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
       <source>Annual text</source>
       <translation>Jaartekst</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Aftellen tot deze tijd starten</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
+      <source>Start manually</source>
+      <translation>Handmatig starten</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Of aftellen gedurende</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Kies een doel, controleer het en start daarna de afteltimer.</translation>
     </message>
     <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>min</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>Tot een tijdstip</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>Voor een tijdsduur</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Afteltimer starten</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Hoelang moet de afteltimer lopen?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 min.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Aangepast</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Duur: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Vóór vergaderingen</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Automatisch aftellen vóór vergaderingen</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Instellingen verbergen</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Configureren</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Vergaderschema vereist</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Stel minstens één vergaderdag en -tijd in, zodat deze automatisering kan werken.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Vergadertijden instellen</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Hoe lang vóór de vergadering moet de afteltimer starten?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Kies een veelgebruikt interval of stel een precieze tijd in tussen 10 seconden en 2 uur.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Volgende vergadering</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Niet geconfigureerd</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Aftellen begint</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Dagen en tijden bewerken</translation>
     </message>
   </context>
   <context>
@@ -6779,6 +6954,92 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 {path}</source>
       <translation>Opgeslagen in:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>Het aftellen voor {time} is automatisch gestart.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>Het aftellen is niet gestart omdat het mediavenster in gebruik bleef.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>Het aftellen is niet gestart omdat er geen mediavenster beschikbaar was.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>Het aftellen is niet gestart omdat automatische projectie onbeschikbaar bleef.</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>Maandag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>Dinsdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>Woensdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>Donderdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>Vrijdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>Zaterdag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>Zondag</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>Doordeweekse vergadering</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>Weekendvergadering</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>Niet geconfigureerd</translation>
+
     </message>
   </context>
 </TS>

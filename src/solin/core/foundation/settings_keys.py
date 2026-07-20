@@ -50,6 +50,10 @@ class SettingsKey:
     BACKGROUND_SONG_FADE_SECONDS: Final = "background_song/fade_seconds"
     BACKGROUND_SONG_STOP_BEFORE_SECONDS: Final = "background_song/stop_before_seconds"
 
+    MEDIA_COUNTDOWN_AUTOMATIC_ENABLED: Final = "media_countdown/automatic_enabled"
+    MEDIA_COUNTDOWN_LEAD_SECONDS: Final = "media_countdown/lead_seconds"
+    MEDIA_COUNTDOWN_PRESENTATION: Final = "media_countdown/presentation"
+
     CAMERA_ENABLED: Final = "camera/enabled"
     CAMERA_BACKEND: Final = "camera/backend"
     CAMERA_DEVICE_NAME: Final = "camera/device_name"

@@ -139,6 +139,11 @@ class ProjectionSession:
             windows.append(self.floating_preview_window)
         return windows
 
+    def has_active_projection(self) -> bool:
+        """Return whether replacing media would displace an operator projection."""
+
+        return self._tab_projection_active or self.state_type != "idle"
+
     def close_floating_preview(self) -> None:
         if self.floating_preview_window is not None:
             self.floating_preview_window.close()

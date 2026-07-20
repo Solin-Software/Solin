@@ -94,6 +94,13 @@ class PlaybackProtectionController(QObject):
             self.manualChangeBlocked.emit()
         return False
 
+    def allow_automatic_projection_change(self, *, projection_active: bool) -> bool:
+        """Authorize automation only when it will not displace operator content."""
+
+        if self.automation_locked:
+            return False
+        return not bool(projection_active)
+
     @Slot(int)
     def requestSeek(self, position: int) -> None:  # noqa: N802 - QML/Qt API
         self.request_seek(position)

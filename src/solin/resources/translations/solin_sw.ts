@@ -1144,64 +1144,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Sasa</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Kesho saa %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Fika sifuri saa</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Leo saa %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>Washa ili kuonyesha hesabu ya kurudi nyuma kabla ya mikutano iliyosanidiwa.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Ongeza siku na nyakati za mikutano ili kukamilisha usanidi wa uendeshaji otomatiki.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Hakuna dirisha la midia linalopatikana. Solin itaendelea kujaribu hadi mkutano uanze.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>Dirisha la midia linatumika. Solin itaendelea na kipima muda litakapopatikana.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>Uonyeshaji wa kiotomatiki haupatikani kwa muda. Solin itaendelea kujaribu hadi mkutano uanze.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>Imeanza kiotomatiki · itafika sifuri saa %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>Haitaanza tena kiotomatiki kwa mkutano huu.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>Wakati wa mkutano ulifikiwa kabla hesabu ya kurudi nyuma haijaanza.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Inayofuata: %1 saa %2 · inaanza kiotomatiki saa %3</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>Inasubiri mkutano unaofuata uliosanidiwa.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
       <source>−1 h</source>
       <translation>−1 saa</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
       <source>+1 h</source>
       <translation>+1 saa</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>saa</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
       <source>−1 min</source>
       <translation>−1 dk</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
       <source>+1 min</source>
       <translation>+1 dk</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Onyesha kwenye dirisha la media</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>dakika</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Kipima muda cha duara</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
+      <source>−10 s</source>
+      <translation>−10 sek</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
+      <source>+10 s</source>
+      <translation>+10 sek</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>sekunde</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Mwonekano wa uonyeshaji</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Hutumika kwa vipima muda vya mwenyewe na kiotomatiki vya baadaye. Uonyeshaji unaoendelea haubadilishwi.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Mviringo</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
       <source>Annual text</source>
       <translation>Andiko la mwaka</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Anza kuhesabu hadi wakati huu</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
+      <source>Start manually</source>
+      <translation>Anza mwenyewe</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Au hesabu kwenda chini kwa</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Chagua lengo, likague, kisha uanze kipima muda.</translation>
     </message>
     <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>dk</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>Hadi wakati maalumu</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>Kwa muda fulani</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Anza kipima muda</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Kipima muda kiendelee kwa muda gani?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>dak %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Maalumu</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Muda: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Kabla ya mikutano</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Kipima muda kiotomatiki kabla ya mikutano</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Ficha mipangilio</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Sanidi</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Ratiba ya mikutano inahitajika</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Bainisha angalau siku moja na wakati wa mkutano ili uendeshaji huu otomatiki uweze kufanya kazi.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Sanidi nyakati za mikutano</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Hesabu ya kurudi nyuma ianze muda gani kabla ya mkutano?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Chagua kipindi cha kawaida au weka muda mahususi kati ya sekunde 10 na saa 2.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Mkutano unaofuata</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Haijasanidiwa</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Kipima muda kinaanza</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Hariri siku na nyakati</translation>
     </message>
   </context>
   <context>
@@ -6779,6 +6954,92 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 {path}</source>
       <translation>Imehifadhiwa kwenye:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>Hesabu ya kurudi nyuma ya saa {time} imeanza kiotomatiki.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>Hesabu ya kurudi nyuma haikuanza kwa sababu dirisha la midia liliendelea kutumika.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>Hesabu ya kurudi nyuma haikuanza kwa sababu hakukuwa na dirisha la midia lililopatikana.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>Hesabu ya kurudi nyuma haikuanza kwa sababu uonyeshaji wa kiotomatiki uliendelea kutopatikana.</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>Jumatatu</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>Jumanne</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>Jumatano</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>Alhamisi</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>Ijumaa</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>Jumamosi</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>Jumapili</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>Mkutano wa katikati ya juma</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>Mkutano wa mwisho wa juma</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>Haijasanidiwa</translation>
+
     </message>
   </context>
 </TS>

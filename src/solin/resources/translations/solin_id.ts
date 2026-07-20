@@ -1143,64 +1143,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Sekarang</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Besok pukul %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Capai nol pada</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Hari ini pukul %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>Aktifkan untuk menampilkan hitung mundur sebelum perhimpunan yang dikonfigurasi.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Tambahkan hari dan waktu rapat untuk menyelesaikan penyiapan otomatisasi.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Tidak ada jendela media yang tersedia. Solin akan terus mencoba hingga rapat dimulai.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>Jendela media sedang digunakan. Solin akan melanjutkan hitung mundur saat jendela tersedia.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>Proyeksi otomatis tidak tersedia untuk sementara. Solin akan terus mencoba hingga rapat dimulai.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>Dimulai secara otomatis · mencapai nol pada %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>Tidak akan dimulai lagi secara otomatis untuk perhimpunan ini.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>Waktu perhimpunan tercapai sebelum hitung mundur dapat dimulai.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Berikutnya: %1 pukul %2 · dimulai otomatis pukul %3</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>Menunggu perhimpunan terkonfigurasi berikutnya.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
       <source>−1 h</source>
       <translation>−1 jam</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
       <source>+1 h</source>
       <translation>+1 jam</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>jam</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
       <source>−1 min</source>
       <translation>−1 mnt</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
       <source>+1 min</source>
       <translation>+1 mnt</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Tampilkan di jendela media</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>menit</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Timer melingkar</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
+      <source>−10 s</source>
+      <translation>−10 dtk</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
+      <source>+10 s</source>
+      <translation>+10 dtk</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>detik</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Tampilan proyeksi</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Digunakan untuk hitung mundur manual dan otomatis berikutnya. Proyeksi yang sedang aktif tidak diubah.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Melingkar</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
       <source>Annual text</source>
       <translation>Ayat tahunan</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Mulai hitung mundur ke waktu ini</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
+      <source>Start manually</source>
+      <translation>Mulai secara manual</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Atau hitung mundur selama</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Pilih target, tinjau, lalu mulai hitung mundur.</translation>
     </message>
     <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>mnt</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>Hingga waktu tertentu</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>Selama durasi</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Mulai hitung mundur</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Berapa lama hitung mundur harus berlangsung?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 mnt</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Kustom</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Durasi: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Sebelum rapat</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Hitung mundur otomatis sebelum rapat</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Sembunyikan pengaturan</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Konfigurasi</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Jadwal rapat diperlukan</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Tentukan setidaknya satu hari dan waktu rapat agar otomatisasi ini dapat berjalan.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Konfigurasikan waktu rapat</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Berapa lama sebelum perhimpunan hitung mundur harus dimulai?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Pilih interval umum atau atur waktu yang tepat antara 10 detik dan 2 jam.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Rapat berikutnya</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Belum dikonfigurasi</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Hitung mundur dimulai</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Edit hari dan waktu</translation>
     </message>
   </context>
   <context>
@@ -6774,6 +6949,92 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 {path}</source>
       <translation>Disimpan ke:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>Hitung mundur untuk pukul {time} dimulai secara otomatis.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>Hitung mundur tidak dimulai karena jendela media tetap digunakan.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>Hitung mundur tidak dimulai karena tidak ada jendela media yang tersedia.</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>Hitung mundur tidak dimulai karena proyeksi otomatis tetap tidak tersedia.</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>Senin</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>Selasa</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>Rabu</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>Kamis</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>Jumat</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>Sabtu</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>Minggu</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>Perhimpunan tengah pekan</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>Perhimpunan akhir pekan</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>Belum dikonfigurasi</translation>
+
     </message>
   </context>
 </TS>

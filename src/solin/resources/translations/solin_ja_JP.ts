@@ -1143,64 +1143,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>現在</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>明日 %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>ゼロになる時刻</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>今日 %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
+      <source>Turn it on to show a countdown before configured meetings.</source>
+      <translation>オンにすると、設定済みの集会前にカウントダウンを表示します。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>自動化の設定を完了するには、集会の曜日と時刻を追加してください。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>メディアウィンドウを利用できません。Solin は集会が始まるまで再試行します。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>メディアウィンドウは使用中です。利用可能になり次第、Solin がカウントダウンを再開します。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>自動投影は一時的に利用できません。Solin は集会が始まるまで再試行します。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
+      <source>Started automatically · reaches zero at %1</source>
+      <translation>自動開始 · %1にゼロになります</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
+      <source>It will not start again automatically for this occurrence.</source>
+      <translation>この集会では、自動的に再開されません。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
+      <source>The meeting time was reached before the countdown could start.</source>
+      <translation>カウントダウンを開始する前に集会時刻になりました。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>次回: %1 %2 · %3に自動開始</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
+      <source>Waiting for the next configured meeting.</source>
+      <translation>次に設定されている集会を待っています。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
       <source>−1 h</source>
       <translation>−1時間</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
       <source>+1 h</source>
       <translation>+1時間</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>時間</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
       <source>−1 min</source>
       <translation>−1分</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
       <source>+1 min</source>
       <translation>+1分</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>メディアウィンドウに表示</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>分</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>円形タイマー</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
+      <source>−10 s</source>
+      <translation>−10秒</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
+      <source>+10 s</source>
+      <translation>+10秒</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>秒</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>投影の表示スタイル</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>今後の手動および自動カウントダウンに使用されます。現在投影中の表示は変更されません。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>円形</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
       <source>Annual text</source>
       <translation>年間聖句</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>この時刻までのカウントダウンを開始</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
+      <source>Start manually</source>
+      <translation>手動で開始</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>または時間を指定してカウントダウン</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>終了時刻を選び、内容を確認してからカウントダウンを開始します。</translation>
     </message>
     <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>分</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>指定時刻まで</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>時間を指定</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>カウントダウンを開始</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>カウントダウンの時間はどのくらいにしますか？</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1分</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>カスタム</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>時間: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>集会前</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>集会前の自動カウントダウン</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>設定を隠す</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>設定</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>集会スケジュールが必要です</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>この自動化を実行できるように、集会の曜日と時刻を少なくとも1つ設定してください。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>集会時刻を設定</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>集会のどれくらい前にカウントダウンを開始しますか？</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>よく使う時間を選ぶか、10秒から2時間の範囲で正確に設定してください。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>次の集会</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>未設定</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>カウントダウン開始</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>曜日と時刻を編集</translation>
     </message>
   </context>
   <context>
@@ -6774,6 +6949,92 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 {path}</source>
       <translation>保存先:
 {path}</translation>
+    </message>
+  </context>
+  <context>
+    <name>MediaCountdownAutomation</name>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>Countdown started automatically for {time}.</source>
+      <translation>{time}のカウントダウンを自動的に開始しました。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because the media window remained in use.</source>
+      <translation>メディアウィンドウが使用中のままだったため、カウントダウンを開始できませんでした。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because no media window was available.</source>
+      <translation>利用可能なメディアウィンドウがなかったため、カウントダウンを開始できませんでした。</translation>
+    </message>
+    <message>
+      <location filename="../../controllers/media_countdown_automation_controller.py" line="1" />
+      <source>The countdown did not start because automatic projection remained unavailable.</source>
+      <translation>自動投影を利用できない状態が続いたため、カウントダウンを開始できませんでした。</translation>
+    </message>
+  </context>
+  <context>
+    <name>_MeetingSchedule</name>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Monday</source>
+      <translation>月曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Tuesday</source>
+      <translation>火曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Wednesday</source>
+      <translation>水曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Thursday</source>
+      <translation>木曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Friday</source>
+      <translation>金曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Saturday</source>
+      <translation>土曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Sunday</source>
+      <translation>日曜日</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Midweek meeting</source>
+      <translation>週日の集会</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Weekend meeting</source>
+      <translation>週末の集会</translation>
+
+    </message>
+    <message>
+      <location filename="../../core/i18n/meeting_schedule.py" line="1" />
+      <source>Not configured</source>
+      <translation>未設定</translation>
+
     </message>
   </context>
 </TS>

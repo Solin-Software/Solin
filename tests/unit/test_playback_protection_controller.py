@@ -96,6 +96,25 @@ def test_disabling_protection_unlocks_current_playback_immediately() -> None:
     assert media.seeks == [750]
 
 
+def test_automatic_projection_never_displaces_active_operator_content() -> None:
+    settings = _Settings()
+    media = _Media()
+    controller = PlaybackProtectionController(settings, media)
+
+    controller.set_enabled(True)
+
+    assert controller.allow_automatic_projection_change(projection_active=True) is False
+    assert controller.allow_automatic_projection_change(projection_active=False) is True
+
+    controller.set_enabled(False)
+
+    assert controller.allow_automatic_projection_change(projection_active=True) is False
+
+    controller.acquire_automation_lock("zoom-share:1")
+
+    assert controller.allow_automatic_projection_change(projection_active=False) is False
+
+
 def test_automation_lock_is_mandatory_while_playback_protection_is_disabled() -> None:
     settings = _Settings()
     media = _Media()

@@ -22,6 +22,7 @@ class ShutdownServices:
     notifications: Any | None
     projection_integrations: Any
     background_song: Any
+    media_countdown_automation: Any
     media_controller: Any
     ndi: Any
     camera: Any
@@ -53,6 +54,7 @@ class ShutdownController:
 
     def shutdown(self) -> None:
         self.stop_remote_control()
+        self.stop_scheduled_automation()
         self.close_projection_targets()
         self.stop_remote_services()
         self.stop_notifications()
@@ -63,6 +65,9 @@ class ShutdownController:
         self.cleanup_jwl_temp_files()
         self.save_window_state()
         self.cleanup_lazy_pages()
+
+    def stop_scheduled_automation(self) -> None:
+        self._dependencies.services.media_countdown_automation.shutdown()
 
     def stop_remote_control(self) -> None:
         remote_control = self._dependencies.services.remote_control

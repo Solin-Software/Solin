@@ -44,9 +44,41 @@ class TimerThemeController:
         self._handlers = handlers
         self._session = context.projection_session
 
-    def start_timer(self, target_dt: QDateTime, presentation_value: str) -> None:
+    def start_timer(self, target_dt: QDateTime, presentation_value: str) -> bool:
         if not self._context.playback_protection.allow_manual_projection_change():
-            return
+            return False
+        return self._start_timer(target_dt, presentation_value)
+
+    def start_automatic_timer(
+        self,
+        target_dt: QDateTime,
+        presentation_value: str,
+        occurrence_id: str,
+    ) -> bool:
+        context = self._context
+        if not target_dt.isValid() or target_dt <= QDateTime.currentDateTime():
+            return False
+        if self._session.has_active_projection():
+            return False
+        if not context.playback_protection.allow_automatic_projection_change(
+            projection_active=False,
+        ):
+            return False
+        return self._start_timer(
+            target_dt,
+            presentation_value,
+            origin="automatic_countdown",
+            occurrence_id=occurrence_id,
+        )
+
+    def _start_timer(
+        self,
+        target_dt: QDateTime,
+        presentation_value: str,
+        *,
+        origin: str = "manual",
+        occurrence_id: str = "",
+    ) -> bool:
         context = self._context
         presentation = MediaCountdownPresentation(presentation_value)
         self._session.set_tab_projection_active(False)
@@ -64,13 +96,18 @@ class TimerThemeController:
             f"Cronômetro → {target_dt.time().toString('HH:mm')}",
             auto_keys_media=False,
         )
-        self._session.set_state({
+        state = {
             "type": "timer",
             "title": context.translate("Timer"),
             "target_dt": target_dt,
             "total": total,
             "presentation": presentation.value,
-        })
+            "origin": origin,
+        }
+        if occurrence_id:
+            state["occurrence_id"] = occurrence_id
+        self._session.set_state(state)
+        return True
 
     def on_timer_update_proj(self, remaining: int, total: int) -> None:
         if self._session.state_type == "timer":

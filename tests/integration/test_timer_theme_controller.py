@@ -70,9 +70,15 @@ class _ProjectionWindowStub:
 
 
 class _ProtectionStub:
-    locked = False
+    def __init__(self):
+        self.locked = False
+        self.automatic_projection_states = []
 
     def allow_manual_projection_change(self, *, notify=True):
+        return not self.locked
+
+    def allow_automatic_projection_change(self, *, projection_active):
+        self.automatic_projection_states.append(projection_active)
         return not self.locked
 
 
@@ -147,6 +153,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
         "target_dt": target_dt,
         "total": 42,
         "presentation": MediaCountdownPresentation.YEARLY_TEXT.value,
+        "origin": "manual",
     }
     args, kwargs = window._projection_integrations.statuses[0]
     assert args[0] is True
@@ -166,6 +173,90 @@ def test_timer_projection_is_rejected_without_side_effects_when_locked():
     assert window.projection_session.state == {"type": "video"}
     assert window._navigation.stopped == 0
     assert window.media_ctrl.stopped == 0
+    assert window.proj_bar.timers == []
+
+
+def test_automatic_timer_revalidates_policy_and_records_occurrence_origin():
+    window = _WindowStub()
+    window.projection_session.set_tab_projection_active(False)
+    window.projection_session.reset_state()
+    controller = _controller(window)
+    controller._remaining_seconds = lambda _target_dt: 300
+    target_dt = QDateTime.currentDateTime().addSecs(300)
+
+    started = controller.start_automatic_timer(
+        target_dt,
+        MediaCountdownPresentation.CIRCULAR.value,
+        "midweek:2026-06-08:19:30",
+    )
+
+    assert started is True
+    assert window.playback_protection.automatic_projection_states == [False]
+    assert window.projection_session.state == {
+        "type": "timer",
+        "title": "Timer",
+        "target_dt": target_dt,
+        "total": 300,
+        "presentation": MediaCountdownPresentation.CIRCULAR.value,
+        "origin": "automatic_countdown",
+        "occurrence_id": "midweek:2026-06-08:19:30",
+    }
+
+
+def test_automatic_timer_never_replaces_an_active_operator_projection():
+    window = _WindowStub()
+    controller = _controller(window)
+    target_dt = QDateTime.currentDateTime().addSecs(60)
+
+    started = controller.start_automatic_timer(
+        target_dt,
+        MediaCountdownPresentation.CIRCULAR.value,
+        "midweek:2026-06-08:19:30",
+    )
+
+    assert started is False
+    assert window.playback_protection.automatic_projection_states == []
+    assert window.projection_session.state == {"type": "video"}
+    assert window.projection_session.tab_projection_active is True
+    assert window.media_ctrl.stopped == 0
+    assert window.proj_bar.timers == []
+
+
+def test_automatic_timer_has_no_side_effects_when_policy_changes_before_start():
+    window = _WindowStub()
+    window.projection_session.set_tab_projection_active(False)
+    window.projection_session.reset_state()
+    window.playback_protection.locked = True
+    controller = _controller(window)
+    target_dt = QDateTime.currentDateTime().addSecs(60)
+
+    started = controller.start_automatic_timer(
+        target_dt,
+        MediaCountdownPresentation.CIRCULAR.value,
+        "midweek:2026-06-08:19:30",
+    )
+
+    assert started is False
+    assert window.playback_protection.automatic_projection_states == [False]
+    assert window.projection_session.state == {"type": "idle"}
+    assert window.media_ctrl.stopped == 0
+    assert window.proj_bar.timers == []
+
+
+def test_automatic_timer_rejects_a_target_that_has_already_been_reached():
+    window = _WindowStub()
+    controller = _controller(window)
+    target_dt = QDateTime.currentDateTime().addSecs(-1)
+
+    started = controller.start_automatic_timer(
+        target_dt,
+        MediaCountdownPresentation.CIRCULAR.value,
+        "midweek:2026-06-08:19:30",
+    )
+
+    assert started is False
+    assert window.playback_protection.automatic_projection_states == []
+    assert window.projection_session.state == {"type": "video"}
     assert window.proj_bar.timers == []
 
 

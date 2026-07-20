@@ -22,6 +22,11 @@ from ...core.meetings.schedule import (
     WEEKEND,
     parse_time_text,
 )
+from ...core.i18n.meeting_schedule import (
+    meeting_kind_label,
+    meeting_not_configured_label,
+    meeting_weekday_names,
+)
 from ...styles.icons import ICON_CALENDAR, ICON_CHEVRON_DOWN, ICON_CHEVRON_UP, make_icon
 from .shared import (
     SETTINGS_ACCENT,
@@ -456,6 +461,7 @@ class MeetingScheduleSectionMixin:
 
     def _build_meeting_schedule_card(self):
         card, lay = self._card()
+        self._meeting_schedule_card = card
         self._schedule_rows: dict[str, tuple[_ScheduleDayButton, _ScheduleTimeButton]] = {}
 
         self._schedule_hint_lbl = QLabel(self.tr(
@@ -474,14 +480,14 @@ class MeetingScheduleSectionMixin:
 
         lay.addWidget(self._schedule_row(
             MIDWEEK,
-            self.tr("Midweek meeting"),
+            meeting_kind_label(MIDWEEK),
             self.tr("Day and time for the midweek meeting."),
             DEFAULT_MIDWEEK_TIME,
         ))
         lay.addWidget(self._divider())
         lay.addWidget(self._schedule_row(
             WEEKEND,
-            self.tr("Weekend meeting"),
+            meeting_kind_label(WEEKEND),
             self.tr("Day and time for the weekend meeting."),
             DEFAULT_WEEKEND_TIME,
         ))
@@ -599,7 +605,7 @@ class MeetingScheduleSectionMixin:
     def _populate_day_button(self, day_button: _ScheduleDayButton) -> None:
         current = day_button.current_day()
         day_button.blockSignals(True)
-        options = [(self.tr("Not configured"), UNCONFIGURED_WEEKDAY)]
+        options = [(meeting_not_configured_label(), UNCONFIGURED_WEEKDAY)]
         for idx, text in zip(_DAY_DATA, self._weekday_names(), strict=True):
             options.append((text, idx))
         day_button.set_options(options)
@@ -610,11 +616,11 @@ class MeetingScheduleSectionMixin:
         self._schedule_hint_lbl.setText(self.tr(
             "Used by automatic features that depend on the meeting start time."
         ))
-        self._midweek_schedule_title_lbl.setText(self.tr("Midweek meeting"))
+        self._midweek_schedule_title_lbl.setText(meeting_kind_label(MIDWEEK))
         self._midweek_schedule_desc_lbl.setText(
             self.tr("Day and time for the midweek meeting.")
         )
-        self._weekend_schedule_title_lbl.setText(self.tr("Weekend meeting"))
+        self._weekend_schedule_title_lbl.setText(meeting_kind_label(WEEKEND))
         self._weekend_schedule_desc_lbl.setText(
             self.tr("Day and time for the weekend meeting.")
         )
@@ -633,12 +639,4 @@ class MeetingScheduleSectionMixin:
         return self.get_meeting_schedule().has_configured_slot
 
     def _weekday_names(self) -> tuple[str, ...]:
-        return (
-            self.tr("Monday"),
-            self.tr("Tuesday"),
-            self.tr("Wednesday"),
-            self.tr("Thursday"),
-            self.tr("Friday"),
-            self.tr("Saturday"),
-            self.tr("Sunday"),
-        )
+        return meeting_weekday_names()

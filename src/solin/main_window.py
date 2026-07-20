@@ -41,6 +41,9 @@ from .controllers.media_destination_controller import (
     MediaDestinationContext,
     MediaDestinationController,
 )
+from .controllers.media_countdown_automation_controller import (
+    MediaCountdownAutomationController,
+)
 from .controllers.open_media_controller import (
     OpenMediaContext,
     OpenMediaController,
@@ -228,6 +231,7 @@ class MainWindow(QMainWindow):
         self._browser_settings = profile_settings_bundle.browser
         self._projection_playback_settings = profile_settings_bundle.projection_playback
         self._meeting_schedule_settings = profile_settings_bundle.meeting_schedule
+        self._media_countdown_settings = profile_settings_bundle.media_countdown
         self._watched_folder_settings = profile_settings_bundle.watched_folder
         self._remote_control_settings = profile_settings_bundle.remote_control
         self._remote_control_credentials = profile_settings_bundle.remote_control_credentials
@@ -276,6 +280,24 @@ class MainWindow(QMainWindow):
             )
         )
 
+        self.notifications = NotificationCenter(self)
+        self.playback_protection = PlaybackProtectionController(
+            self._media_settings,
+            self.media_ctrl,
+            self,
+        )
+        self.playback_protection.manualChangeBlocked.connect(
+            self._notify_playback_protection_blocked
+        )
+        self._media_countdown_automation = MediaCountdownAutomationController(
+            settings=self._media_countdown_settings,
+            schedule_source=self._meeting_schedule_settings,
+            projection_session=self.projection_session,
+            playback_protection=self.playback_protection,
+            notifications=self.notifications,
+            parent=self,
+        )
+
         # ── Advanced timer + shared monitor allocation ────────────────────────
         # Created before the UI is built so the Timer tab can bind to them.
         # The allocation store is the persistent source of truth for which
@@ -301,6 +323,7 @@ class MainWindow(QMainWindow):
             output=self.timer_output,
             monitors=self.timer_monitors,
             pdf_export=TimerPdfExportController(self),
+            media_countdown_automation=self._media_countdown_automation,
             language_manager=lang_manager,
         )
 
@@ -350,15 +373,6 @@ class MainWindow(QMainWindow):
         self._window_state.restore_size()
         self._window_state.apply_icon()
 
-        self.notifications = NotificationCenter(self)
-        self.playback_protection = PlaybackProtectionController(
-            self._media_settings,
-            self.media_ctrl,
-            self,
-        )
-        self.playback_protection.manualChangeBlocked.connect(
-            self._notify_playback_protection_blocked
-        )
         self._auto_share_mouse_interference_warning.connect(
             self._notify_auto_share_mouse_interference
         )
@@ -731,6 +745,7 @@ class MainWindow(QMainWindow):
                 ndi_service=self._ndi_service,
                 camera_service=self._camera_service,
                 auto_share_finished=self._auto_share_finished,
+                media_countdown_automation=self._media_countdown_automation,
             ),
             MainWindowSignalHandlers(
                 media_projection=self._media_projection,
@@ -747,6 +762,7 @@ class MainWindow(QMainWindow):
                 apply_theme=self._apply_theme,
                 timer_output=self.timer_output,
                 timer_bridge=self.timer_bridge,
+                open_meeting_schedule_settings=self._open_meeting_schedule_settings,
             ),
         )
         self._signal_connections.connect_signals()
@@ -808,6 +824,7 @@ class MainWindow(QMainWindow):
                 zoom_settings=self._zoom_settings,
                 zoom_service=self._zoom_service,
                 background_song_service=self._background_song_service,
+                media_countdown_automation=self._media_countdown_automation,
                 monitor_popup_factory=lambda: MonitorManagerPopup(self),
                 ipc_controller_factory=lambda: IpcController(
                     self,
@@ -835,6 +852,7 @@ class MainWindow(QMainWindow):
                     notifications=self.notifications,
                     projection_integrations=self._projection_integrations,
                     background_song=self._background_song_service,
+                    media_countdown_automation=self._media_countdown_automation,
                     media_controller=self.media_ctrl,
                     ndi=self._ndi_service,
                     camera=self._camera_service,
@@ -904,6 +922,10 @@ class MainWindow(QMainWindow):
             play=lambda: browser.play_destination_media(url, kind),
             prepare=prepare if needs_preparation else None,
         )
+
+    def _open_meeting_schedule_settings(self) -> None:
+        self._navigation.switch_page(6)
+        self.settings_widget.focus_meeting_schedule()
 
     @staticmethod
     def _browser_destination_request(

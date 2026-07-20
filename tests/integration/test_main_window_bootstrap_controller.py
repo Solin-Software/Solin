@@ -142,6 +142,7 @@ class _Window:
         self._zoom_service = _ZoomService(self)
         self._zoom_settings = _EnabledSettings(zoom_enabled)
         self._background_song_service = _Startable(self, "background-song")
+        self._media_countdown_automation = _Startable(self, "media-countdown")
         self.projection_session = ProjectionSession()
         self.obs_scene_session = ObsSceneSession()
         self._jwl_tmp_files = set()
@@ -164,6 +165,7 @@ def _make_controller(window, *, ipc_active=False, platform="win32"):
             zoom_settings=window._zoom_settings,
             zoom_service=window._zoom_service,
             background_song_service=window._background_song_service,
+            media_countdown_automation=window._media_countdown_automation,
             monitor_popup_factory=lambda: _MonitorPopup(window),
             ipc_controller_factory=lambda: _IpcController(window),
             remote_services_factory=lambda: _RemoteServices(window, window.lang),
@@ -192,6 +194,7 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
         "connect:zoom.share_error",
         "zoom",
         "background-song",
+        "media-countdown",
         "monitor",
         "ipc",
         "remote",
