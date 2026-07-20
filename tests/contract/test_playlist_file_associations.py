@@ -85,7 +85,7 @@ def test_linux_appimage_declares_and_packages_native_playlist_mime_type():
 
     assert "Exec=solin %F" in desktop
     assert f"MimeType={MIME_TYPE};" in desktop
-    assert f"<mimetype>{MIME_TYPE}</mimetype>" in appstream
+    assert f"<mediatype>{MIME_TYPE}</mediatype>" in appstream
     assert "usr/share/mime/packages" in package_script
     assert "usr/share/icons/hicolor/512x512/mimetypes" in package_script
     assert "usr/share/icons/hicolor/scalable/mimetypes" in package_script

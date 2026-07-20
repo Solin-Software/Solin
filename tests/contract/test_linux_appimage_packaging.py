@@ -71,6 +71,9 @@ def test_appimage_recipe_has_required_appdir_metadata_and_pinned_tools():
     assert "Exec=solin %F" in desktop_file
     assert "Icon=com.solin.Solin" in desktop_file
     assert "<id>com.solin.Solin</id>" in metadata
+    assert "<developer_name>Solin</developer_name>" in metadata
+    assert "<developer " not in metadata
+    assert "<mimetypes>" not in metadata
     assert "@VERSION@" in metadata
     assert "@RELEASE_DATE@" in metadata
 

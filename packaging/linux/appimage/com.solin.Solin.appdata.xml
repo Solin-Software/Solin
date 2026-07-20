@@ -11,17 +11,13 @@
       projection, OBS and Zoom.
     </p>
   </description>
-  <developer id="com.solin">
-    <name>Solin</name>
-  </developer>
+  <developer_name>Solin</developer_name>
   <url type="homepage">https://solinav.vercel.app/</url>
   <launchable type="desktop-id">com.solin.Solin.desktop</launchable>
   <provides>
     <binary>solin</binary>
+    <mediatype>application/vnd.solin.playlist+zip</mediatype>
   </provides>
-  <mimetypes>
-    <mimetype>application/vnd.solin.playlist+zip</mimetype>
-  </mimetypes>
   <releases>
     <release version="@VERSION@" date="@RELEASE_DATE@"/>
   </releases>
