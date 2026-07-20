@@ -540,21 +540,11 @@ export class Renderer {
       !node.available ||
       state.connection !== "online" ||
       state.pendingCommands.has("play");
-    const button = element("button", {
+    const row = element("div", {
       className: "media-row",
-      attrs: {
-        type: "button",
-        disabled: disabled ? "" : null,
-        "data-current": String(current),
-        "aria-label": current
-          ? t("media.playing", { title: node.title || t("media.unknown") })
-          : t("media.play", { title: node.title || t("media.unknown") }),
-      },
       dataset: {
-        action: "play-media",
-        source: collection.kind,
-        collectionId: collection.id,
-        nodeId: node.id,
+        current: String(current),
+        disabled: String(disabled),
       },
     });
     const thumbnail = element("span", { className: "media-thumbnail", attrs: { "aria-hidden": "true" } });
@@ -590,10 +580,25 @@ export class Renderer {
       );
     }
     copy.append(detail);
-    const action = element("span", { className: "media-action", attrs: { "aria-hidden": "true" } });
+    const action = element("button", {
+      className: "media-action",
+      attrs: {
+        type: "button",
+        disabled: disabled ? "" : null,
+        "aria-label": current
+          ? t("media.playing", { title: node.title || t("media.unknown") })
+          : t("media.play", { title: node.title || t("media.unknown") }),
+      },
+      dataset: {
+        action: "play-media",
+        source: collection.kind,
+        collectionId: collection.id,
+        nodeId: node.id,
+      },
+    });
     action.append(cssIcon("play"));
-    button.append(thumbnail, copy, action);
-    return button;
+    row.append(thumbnail, copy, action);
+    return row;
   }
 
   #renderPlayer(state) {

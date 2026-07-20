@@ -209,6 +209,39 @@ def test_remote_control_service_worker_caches_only_the_static_shell() -> None:
     assert "window.location.reload()" in pwa
 
 
+def test_remote_control_media_cards_only_play_from_the_explicit_action() -> None:
+    renderer = (PWA_ROOT / "scripts" / "renderer.js").read_text(encoding="utf-8")
+    components = (PWA_ROOT / "styles" / "components.css").read_text(encoding="utf-8")
+    media_row = re.search(
+        r"  #mediaRow\(.*?\n(?P<body>.*?)\n  #renderPlayer\(",
+        renderer,
+        flags=re.DOTALL,
+    )
+    assert media_row is not None
+    body = media_row.group("body")
+    card, play_action = body.split('const action = element("button",', maxsplit=1)
+
+    assert 'const row = element("div", {' in card
+    assert 'className: "media-row"' in card
+    assert 'action: "play-media"' not in card
+    assert 'className: "media-action"' in play_action
+    assert 'disabled: disabled ? "" : null' in play_action
+    assert '"aria-label": current' in play_action
+    assert 'action: "play-media"' in play_action
+    assert "row.append(thumbnail, copy, action)" in play_action
+
+    action_rules = re.findall(
+        r"\.media-action\s*\{(?P<body>.*?)\}",
+        components,
+        flags=re.DOTALL,
+    )
+    assert any(
+        "width: var(--touch-target);" in rule
+        and "height: var(--touch-target);" in rule
+        for rule in action_rules
+    )
+
+
 def test_remote_control_connection_uses_an_atomic_session_snapshot() -> None:
     app = (PWA_ROOT / "scripts" / "app.js").read_text(encoding="utf-8")
     api = (PWA_ROOT / "scripts" / "api.js").read_text(encoding="utf-8")
