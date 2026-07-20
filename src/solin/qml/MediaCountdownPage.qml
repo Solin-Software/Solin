@@ -816,8 +816,6 @@ Item {
                             Layout.preferredHeight: 44
                             radius: height / 2
                             color: expanderMouse.containsMouse ? page.pal_hover : "transparent"
-                            border.width: activeFocus ? 2 : 1
-                            border.color: activeFocus ? page.pal_accent : page.pal_border
                             activeFocusOnTab: true
 
                             Accessible.role: Accessible.Button
