@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QThread, qInstallMessageHandler
 from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.playlist_transfer_controller import (
@@ -72,6 +72,23 @@ def test_transfer_dialog_scales_large_byte_totals_without_integer_overflow() -> 
 
     assert dialog._progress.value() == 500
     dialog.finish()
+    dialog.deleteLater()
+
+
+def test_transfer_dialog_stylesheet_is_accepted_by_qt() -> None:
+    messages: list[str] = []
+
+    def capture_message(_mode, _context, message: str) -> None:
+        messages.append(message)
+
+    previous_handler = qInstallMessageHandler(capture_message)
+    try:
+        dialog = PlaylistTransferDialog()
+        dialog.ensurePolished()
+    finally:
+        qInstallMessageHandler(previous_handler)
+
+    assert not any("Could not parse stylesheet" in message for message in messages)
     dialog.deleteLater()
 
 

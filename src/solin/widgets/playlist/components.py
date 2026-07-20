@@ -29,12 +29,12 @@ def playlist_card_menu_stylesheet() -> str:
     return (
         f"QMenu{{background:{PALETTE.surface};border:1px solid {PALETTE.border};"
         f"border-radius:6px;padding:4px;color:{PALETTE.text_secondary};"
-        "font-size:11px;}}"
+        "font-size:11px;}"
         "QMenu::item{padding:7px 18px;border-radius:4px;}"
         f"QMenu::item:selected{{background:{PALETTE.accent_muted};"
         f"color:{PALETTE.accent_text};}}"
         f"QMenu::separator{{height:1px;background:{PALETTE.border_muted};"
-        "margin:3px 8px;}}"
+        "margin:3px 8px;}"
     )
 
 
