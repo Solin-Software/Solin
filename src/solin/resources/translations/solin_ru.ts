@@ -1145,239 +1145,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Текущий</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Завтра в %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Достичь нуля в</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Сегодня в %1</translation>
     </message>
     <message>
-      <location line="+17" />
-      <source>−1 h</source>
-      <translation>−1 ч</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 h</source>
-      <translation>+1 ч</translation>
-    </message>
-    <message>
-      <location line="+18" />
-      <source>−1 min</source>
-      <translation>−1 мин</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 min</source>
-      <translation>+1 мин</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Показать в окне медиа</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Круговой таймер</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Annual text</source>
-      <translation>Ежегодный текст</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Начать обратный отсчёт до этого времени</translation>
-    </message>
-    <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Или отсчитать</translation>
-    </message>
-    <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>мин</translation>
-    </message>
-      <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
-      <source>Automation off</source>
-      <translation>Автоматизация отключена</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
-      <source>Configuration required</source>
-      <translation>Требуется настройка</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
-      <source>Ready</source>
-      <translation>Готов</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
-      <source>Waiting for the media window</source>
-      <translation>Ожидание окна медиа</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
-      <source>Countdown active</source>
-      <translation>Обратный отсчёт активен</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
-      <source>Interrupted for this meeting</source>
-      <translation>Прерван для этой встречи</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
-      <source>Not started</source>
-      <translation>Не запущен</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
       <source>Turn it on to show a countdown before configured meetings.</source>
       <translation>Включите, чтобы показывать обратный отсчёт перед настроенными встречами.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
-      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
-      <translation>Время встречи не настроено. Обратный отсчёт будет оставаться готовым, пока не будет добавлено расписание.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Добавьте дни и время встреч, чтобы завершить настройку автоматизации.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
-      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
-      <translation>Окно медиа недоступно. Solin будет повторять попытку только до начала встречи.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Окно мультимедиа недоступно. Solin будет повторять попытку до начала встречи.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
-      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
-      <translation>Окно медиа используется. Solin будет повторять попытку только до начала встречи.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>Окно мультимедиа занято. Solin возобновит обратный отсчёт, когда оно освободится.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="77" />
-      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
-      <translation>Автоматическая проекция временно недоступна. Solin будет повторять попытку только до начала встречи.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>Автоматическая проекция временно недоступна. Solin будет повторять попытку до начала встречи.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
       <source>Started automatically · reaches zero at %1</source>
       <translation>Запущен автоматически · ноль в %1</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
       <source>It will not start again automatically for this occurrence.</source>
       <translation>Для этой встречи он больше не запустится автоматически.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
       <source>The meeting time was reached before the countdown could start.</source>
       <translation>Время начала встречи наступило до того, как удалось запустить обратный отсчёт.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
-      <source>Next: %1, %2 · automatic start at %3</source>
-      <translation>Далее: %1, %2 · автоматический запуск в %3</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Далее: %1 в %2 · автоматический запуск в %3</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
       <source>Waiting for the next configured meeting.</source>
       <translation>Ожидание следующей настроенной встречи.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
-      <source>Automatic countdown</source>
-      <translation>Автоматический обратный отсчёт</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
+      <source>−1 h</source>
+      <translation>−1 ч</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
-      <source>Shows a countdown in the media window before configured meetings.</source>
-      <translation>Показывает обратный отсчёт в окне медиа перед настроенными встречами.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
+      <source>+1 h</source>
+      <translation>+1 ч</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
-      <source>How long before the meeting should the countdown start?</source>
-      <translation>За сколько времени до встречи должен начаться обратный отсчёт?</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>часы</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
-      <source>10 seconds – 2 hours</source>
-      <translation>10 секунд – 2 часа</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
+      <source>−1 min</source>
+      <translation>−1 мин</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
-      <source>h</source>
-      <translation>ч</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
+      <source>+1 min</source>
+      <translation>+1 мин</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>минуты</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
       <source>−10 s</source>
       <translation>−10 с</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
       <source>+10 s</source>
       <translation>+10 с</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
-      <source>s</source>
-      <translation>с</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>секунды</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
-      <source>Default appearance</source>
-      <translation>Вид по умолчанию</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Вид проекции</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
-      <source>Used for automatic and manual countdowns.</source>
-      <translation>Используется для автоматического и ручного обратного отсчёта.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Используется для будущих ручных и автоматических отсчётов. Активная проекция не изменяется.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
-      <source>Meeting times</source>
-      <translation>Время встреч</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Круговой</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
-      <source>Configure meetings</source>
-      <translation>Настроить встречи</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Annual text</source>
+      <translation>Ежегодный текст</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Complete times</source>
-      <translation>Указать время</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Edit times</source>
-      <translation>Изменить время</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
-      <source>Not configured</source>
-      <translation>Не настроено</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
       <source>Start manually</source>
       <translation>Запустить вручную</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
-      <source>Start or restart a countdown at any time.</source>
-      <translation>Запустите или перезапустите обратный отсчёт в любое время.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Выберите цель, проверьте её и запустите обратный отсчёт.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
-      <source>Meeting time selected</source>
-      <translation>Выбрано время встречи</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>До указанного времени</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>На заданный период</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Запустить обратный отсчёт</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Как долго должен идти обратный отсчёт?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 мин</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Другой</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Продолжительность: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Перед встречами</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Автоматический обратный отсчёт перед встречами</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Скрыть настройки</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Настроить</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Требуется расписание встреч</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Задайте хотя бы один день и время встречи, чтобы автоматизация могла работать.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Настроить время встреч</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>За сколько времени до встречи должен начаться обратный отсчёт?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Выберите стандартный интервал или задайте точное время от 10 секунд до 2 часов.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Следующая встреча</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Не настроено</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Начало обратного отсчёта</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Изменить дни и время</translation>
     </message>
   </context>
   <context>

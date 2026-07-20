@@ -91,10 +91,37 @@ Rectangle {
         Repeater {
             model: seg.options
             delegate: Item {
+                id: option
                 required property int index
                 required property string modelData
                 width: seg._segW
                 height: parent.height
+                activeFocusOnTab: seg.enabled
+
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: modelData
+                Accessible.checked: index === seg.current
+
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        seg.picked(index)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Left && index > 0) {
+                        seg.picked(index - 1)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Right && index + 1 < seg.options.length) {
+                        seg.picked(index + 1)
+                        event.accepted = true
+                    }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
+                    border.width: option.activeFocus ? 2 : 0
+                    border.color: index === seg.current ? appTheme.white : seg.accent
+                }
 
                 Text {
                     id: label

@@ -1144,239 +1144,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Ora</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Domani alle %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Raggiungi zero alle</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Oggi alle %1</translation>
     </message>
     <message>
-      <location line="+17" />
-      <source>−1 h</source>
-      <translation>−1 h</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 h</source>
-      <translation>+1 h</translation>
-    </message>
-    <message>
-      <location line="+18" />
-      <source>−1 min</source>
-      <translation>−1 min</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 min</source>
-      <translation>+1 min</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Mostra nella finestra multimediale</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Timer circolare</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Annual text</source>
-      <translation>Testo annuale</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Avvia il conto alla rovescia fino a quest’ora</translation>
-    </message>
-    <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Oppure conto alla rovescia per</translation>
-    </message>
-    <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>min</translation>
-    </message>
-      <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
-      <source>Automation off</source>
-      <translation>Automazione disattivata</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
-      <source>Configuration required</source>
-      <translation>Configurazione richiesta</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
-      <source>Ready</source>
-      <translation>Pronto</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
-      <source>Waiting for the media window</source>
-      <translation>In attesa della finestra multimediale</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
-      <source>Countdown active</source>
-      <translation>Conto alla rovescia attivo</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
-      <source>Interrupted for this meeting</source>
-      <translation>Interrotto per questa adunanza</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
-      <source>Not started</source>
-      <translation>Non avviato</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
       <source>Turn it on to show a countdown before configured meetings.</source>
       <translation>Attiva questa opzione per mostrare un conto alla rovescia prima delle adunanze configurate.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
-      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
-      <translation>Non è configurato alcun orario di adunanza. Il conto alla rovescia rimarrà pronto finché non verrà aggiunta una programmazione.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Aggiungi i giorni e gli orari delle adunanze per completare la configurazione dell’automazione.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
-      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
-      <translation>Non è disponibile alcuna finestra multimediale. Solin continuerà a riprovare solo fino all’inizio dell’adunanza.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Nessuna finestra multimediale disponibile. Solin continuerà a provare fino all’inizio dell’adunanza.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
-      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
-      <translation>La finestra multimediale è in uso. Solin continuerà a riprovare solo fino all’inizio dell’adunanza.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>La finestra multimediale è in uso. Solin riprenderà il conto alla rovescia non appena sarà disponibile.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>La proiezione automatica non è temporaneamente disponibile. Solin continuerà a provare fino all’inizio dell’adunanza.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
       <source>Started automatically · reaches zero at %1</source>
       <translation>Avviato automaticamente · raggiunge lo zero alle %1</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
       <source>It will not start again automatically for this occurrence.</source>
       <translation>Non verrà riavviato automaticamente per questa adunanza.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
       <source>The meeting time was reached before the countdown could start.</source>
       <translation>L’orario dell’adunanza è stato raggiunto prima che il conto alla rovescia potesse iniziare.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
-      <source>Next: %1, %2 · automatic start at %3</source>
-      <translation>Prossima: %1, %2 · avvio automatico alle %3</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Prossima: %1 alle %2 · avvio automatico alle %3</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
       <source>Waiting for the next configured meeting.</source>
       <translation>In attesa della prossima adunanza configurata.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
-      <source>Automatic countdown</source>
-      <translation>Conto alla rovescia automatico</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
+      <source>−1 h</source>
+      <translation>−1 h</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
-      <source>Shows a countdown in the media window before configured meetings.</source>
-      <translation>Mostra un conto alla rovescia nella finestra multimediale prima delle adunanze configurate.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
+      <source>+1 h</source>
+      <translation>+1 h</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
-      <source>How long before the meeting should the countdown start?</source>
-      <translation>Quanto tempo prima dell’adunanza deve iniziare il conto alla rovescia?</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>ore</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
-      <source>10 seconds – 2 hours</source>
-      <translation>10 secondi – 2 ore</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
+      <source>−1 min</source>
+      <translation>−1 min</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
-      <source>h</source>
-      <translation>h</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
+      <source>+1 min</source>
+      <translation>+1 min</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>minuti</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
       <source>−10 s</source>
       <translation>−10 s</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
       <source>+10 s</source>
       <translation>+10 s</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
-      <source>s</source>
-      <translation>s</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>secondi</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
-      <source>Default appearance</source>
-      <translation>Aspetto predefinito</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Aspetto della proiezione</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
-      <source>Used for automatic and manual countdowns.</source>
-      <translation>Utilizzato per i conti alla rovescia automatici e manuali.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Viene usato per i prossimi conti alla rovescia manuali e automatici. Una proiezione attiva non viene modificata.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
-      <source>Meeting times</source>
-      <translation>Orari delle adunanze</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Circolare</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
-      <source>Configure meetings</source>
-      <translation>Configura le adunanze</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Annual text</source>
+      <translation>Testo annuale</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Complete times</source>
-      <translation>Completa gli orari</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Edit times</source>
-      <translation>Modifica gli orari</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
-      <source>Not configured</source>
-      <translation>Non configurato</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
       <source>Start manually</source>
       <translation>Avvia manualmente</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
-      <source>Start or restart a countdown at any time.</source>
-      <translation>Avvia o riavvia un conto alla rovescia in qualsiasi momento.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Scegli quando deve terminare, controlla i dati e poi avvia il conto alla rovescia.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
-      <source>Meeting time selected</source>
-      <translation>Orario dell’adunanza selezionato</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>Fino a un orario</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
-      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
-      <translation>La proiezione automatica è temporaneamente indisponibile. Solin continuerà a riprovare solo fino all’inizio dell’adunanza.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>Per una durata</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Avvia conto alla rovescia</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Quanto deve durare il conto alla rovescia?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 min</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Personalizzato</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Durata: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Prima delle adunanze</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Conto alla rovescia automatico prima delle adunanze</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Nascondi impostazioni</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Configura</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Programma delle adunanze richiesto</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Definisci almeno un giorno e un orario di adunanza affinché questa automazione possa funzionare.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Configura gli orari delle adunanze</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Quanto tempo prima dell’adunanza deve iniziare il conto alla rovescia?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Scegli un intervallo comune o imposta un tempo preciso compreso tra 10 secondi e 2 ore.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Prossima adunanza</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Non configurato</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Il conto alla rovescia inizia</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Modifica giorni e orari</translation>
     </message>
   </context>
   <context>

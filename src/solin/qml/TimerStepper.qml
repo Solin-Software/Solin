@@ -10,6 +10,7 @@ Row {
     property string text: "0"
     property color accent: appTheme.accent
     property real fieldWidth: 64
+    property int valueFontSize: 16
     property bool editable: false
     property bool buttonsVisible: true
     property string decTip: ""
@@ -26,14 +27,27 @@ Row {
         property string glyph: "+"
         property string tip: ""
         signal pressed_()
-        width: 28; height: 28; radius: 7
+        width: 34; height: 34; radius: 9
         color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.18) : appTheme.surfaceAlt
-        border.width: 1
-        border.color: sbMa.containsMouse ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.55) : appTheme.borderStrong
+        border.width: activeFocus ? 2 : 1
+        border.color: activeFocus || sbMa.containsMouse
+                      ? Qt.rgba(ctl.accent.r, ctl.accent.g, ctl.accent.b, 0.75)
+                      : appTheme.borderStrong
         scale: sbMa.pressed ? 0.9 : 1.0
+        activeFocusOnTab: true
+
+        Accessible.role: Accessible.Button
+        Accessible.name: tip
+
         Behavior on color { ColorAnimation { duration: 120 } }
         Behavior on border.color { ColorAnimation { duration: 120 } }
         Behavior on scale { NumberAnimation { duration: 80 } }
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                sb.pressed_()
+                event.accepted = true
+            }
+        }
         Text {
             anchors.centerIn: parent
             text: sb.glyph
@@ -45,6 +59,7 @@ Row {
         TimerPointerArea {
             id: sbMa
             anchors.fill: parent
+            anchors.margins: -4
             onClicked: sb.pressed_()
         }
         ThemedToolTip {
@@ -62,16 +77,41 @@ Row {
     }
 
     Item {
+        id: valueField
         width: ctl.fieldWidth
-        height: 28
+        height: 34
         anchors.verticalCenter: parent.verticalCenter
+        activeFocusOnTab: ctl.editable
+
+        Accessible.role: Accessible.EditableText
+        Accessible.name: ctl.text
+        Accessible.description: ctl.editable ? qsTr("Double-click to edit") : ""
+
+        Keys.onPressed: function(event) {
+            if (ctl.editable && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_F2)) {
+                editField.text = ctl.text
+                ctl.editing = true
+                editField.forceActiveFocus()
+                editField.selectAll()
+                event.accepted = true
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            visible: valueField.activeFocus && !ctl.editing
+            radius: 8
+            color: "transparent"
+            border.width: 2
+            border.color: ctl.accent
+        }
 
         Text {
             visible: !ctl.editing
             anchors.centerIn: parent
             text: ctl.text
             color: appTheme.textPrimary
-            font.pixelSize: 16
+            font.pixelSize: ctl.valueFontSize
             font.weight: Font.Bold
 
             TimerPointerArea {
@@ -111,7 +151,7 @@ Row {
                 color: appTheme.textPrimary
                 selectionColor: ctl.accent
                 selectedTextColor: appTheme.white
-                font.pixelSize: 15
+                font.pixelSize: Math.max(12, ctl.valueFontSize - 1)
                 font.weight: Font.Bold
                 clip: true
                 inputMethodHints: Qt.ImhPreferNumbers

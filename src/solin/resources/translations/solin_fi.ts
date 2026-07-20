@@ -1144,239 +1144,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>Nyt</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>Huomenna klo %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>Nolla saavutetaan klo</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>Tänään klo %1</translation>
     </message>
     <message>
-      <location line="+17" />
-      <source>−1 h</source>
-      <translation>−1 h</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 h</source>
-      <translation>+1 h</translation>
-    </message>
-    <message>
-      <location line="+18" />
-      <source>−1 min</source>
-      <translation>−1 min</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 min</source>
-      <translation>+1 min</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>Näytä mediaikkunassa</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>Pyöreä ajastin</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Annual text</source>
-      <translation>Vuositeksti</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>Aloita lähtölaskenta tähän aikaan</translation>
-    </message>
-    <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>Tai laske alaspäin ajan</translation>
-    </message>
-    <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>min</translation>
-    </message>
-      <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
-      <source>Automation off</source>
-      <translation>Automaatio pois päältä</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
-      <source>Configuration required</source>
-      <translation>Määritys tarvitaan</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
-      <source>Ready</source>
-      <translation>Valmis</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
-      <source>Waiting for the media window</source>
-      <translation>Odotetaan mediaikkunaa</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
-      <source>Countdown active</source>
-      <translation>Lähtölaskenta käynnissä</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
-      <source>Interrupted for this meeting</source>
-      <translation>Keskeytetty tämän kokouksen ajaksi</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
-      <source>Not started</source>
-      <translation>Ei käynnistynyt</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
       <source>Turn it on to show a countdown before configured meetings.</source>
       <translation>Ota toiminto käyttöön, jotta lähtölaskenta näytetään ennen määritettyjä kokouksia.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
-      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
-      <translation>Yhtään kokousaikaa ei ole määritetty. Lähtölaskenta pysyy valmiina, kunnes aikatauluun lisätään aika.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>Lisää kokouspäivät ja -ajat viimeistelläksesi automaation määrityksen.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
-      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
-      <translation>Mediaikkunaa ei ole käytettävissä. Solin yrittää uudelleen vain kokouksen alkuun asti.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>Mediaikkunaa ei ole käytettävissä. Solin yrittää uudelleen kokouksen alkuun asti.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
-      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
-      <translation>Mediaikkuna on käytössä. Solin yrittää uudelleen vain kokouksen alkuun asti.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>Mediaikkuna on käytössä. Solin jatkaa lähtölaskentaa, kun ikkuna vapautuu.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="77" />
-      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
-      <translation>Automaattinen heijastus ei ole tilapäisesti käytettävissä. Solin yrittää uudelleen vain kokouksen alkuun asti.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>Automaattinen projisointi ei ole tilapäisesti käytettävissä. Solin yrittää uudelleen kokouksen alkuun asti.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
       <source>Started automatically · reaches zero at %1</source>
       <translation>Käynnistyi automaattisesti · saavuttaa nollan klo %1</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
       <source>It will not start again automatically for this occurrence.</source>
       <translation>Se ei käynnisty enää automaattisesti tämän kokouskerran aikana.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
       <source>The meeting time was reached before the countdown could start.</source>
       <translation>Kokouksen alkamisaika koitti ennen kuin lähtölaskenta ehti käynnistyä.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
-      <source>Next: %1, %2 · automatic start at %3</source>
-      <translation>Seuraava: %1, %2 · automaattinen käynnistys klo %3</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>Seuraava: %1 klo %2 · käynnistyy automaattisesti klo %3</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
       <source>Waiting for the next configured meeting.</source>
       <translation>Odotetaan seuraavaa määritettyä kokousta.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
-      <source>Automatic countdown</source>
-      <translation>Automaattinen lähtölaskenta</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
+      <source>−1 h</source>
+      <translation>−1 h</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
-      <source>Shows a countdown in the media window before configured meetings.</source>
-      <translation>Näyttää lähtölaskennan mediaikkunassa ennen määritettyjä kokouksia.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
+      <source>+1 h</source>
+      <translation>+1 h</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
-      <source>How long before the meeting should the countdown start?</source>
-      <translation>Kuinka kauan ennen kokousta lähtölaskennan pitäisi alkaa?</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
+      <translation>tuntia</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
-      <source>10 seconds – 2 hours</source>
-      <translation>10 sekuntia – 2 tuntia</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
+      <source>−1 min</source>
+      <translation>−1 min</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
-      <source>h</source>
-      <translation>h</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
+      <source>+1 min</source>
+      <translation>+1 min</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>minuuttia</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
       <source>−10 s</source>
       <translation>−10 s</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
       <source>+10 s</source>
       <translation>+10 s</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
-      <source>s</source>
-      <translation>s</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
+      <translation>sekuntia</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
-      <source>Default appearance</source>
-      <translation>Oletusulkoasu</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>Projisoinnin ulkoasu</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
-      <source>Used for automatic and manual countdowns.</source>
-      <translation>Käytetään automaattisissa ja manuaalisissa lähtölaskennoissa.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>Käytetään tulevissa manuaalisissa ja automaattisissa lähtölaskennoissa. Käynnissä oleva projisointi ei muutu.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
-      <source>Meeting times</source>
-      <translation>Kokousajat</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>Ympyrä</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
-      <source>Configure meetings</source>
-      <translation>Määritä kokoukset</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Annual text</source>
+      <translation>Vuositeksti</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Complete times</source>
-      <translation>Täydennä ajat</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Edit times</source>
-      <translation>Muokkaa aikoja</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
-      <source>Not configured</source>
-      <translation>Ei määritetty</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
       <source>Start manually</source>
       <translation>Käynnistä manuaalisesti</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
-      <source>Start or restart a countdown at any time.</source>
-      <translation>Käynnistä lähtölaskenta tai aloita se alusta milloin tahansa.</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>Valitse tavoite, tarkista se ja käynnistä lähtölaskenta.</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
-      <source>Meeting time selected</source>
-      <translation>Kokousaika valittu</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>Tiettyyn aikaan asti</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>Tietyn ajan</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>Käynnistä lähtölaskenta</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>Kuinka pitkään lähtölaskennan tulee kestää?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 min</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>Mukautettu</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>Kesto: %1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>Ennen kokouksia</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>Automaattinen lähtölaskenta ennen kokouksia</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>Piilota asetukset</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>Määritä</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>Kokousaikataulu vaaditaan</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>Määritä vähintään yksi kokouspäivä ja -aika, jotta tämä automaatio voi toimia.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>Määritä kokousajat</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>Kuinka kauan ennen kokousta lähtölaskennan pitäisi alkaa?</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>Valitse yleinen aikaväli tai määritä tarkka aika 10 sekunnin ja 2 tunnin väliltä.</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>Seuraava kokous</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>Ei määritetty</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>Lähtölaskenta alkaa</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>Muokkaa päiviä ja aikoja</translation>
     </message>
   </context>
   <context>

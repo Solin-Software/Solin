@@ -18,12 +18,12 @@ from PySide6.QtCore import (
 
 from solin.core.meetings.schedule import MeetingOccurrence, MeetingSchedule
 from solin.core.timer.media_countdown_automation import (
-    MediaCountdownAutomationConfig,
     MediaCountdownBlockingReason,
     MediaCountdownAutomationStatus,
 )
 from solin.core.timer.media_countdown_settings import (
-    MediaCountdownAutomationSettingsStore,
+    MediaCountdownSettings,
+    MediaCountdownSettingsStore,
 )
 from solin.core.timer.models import MediaCountdownPresentation
 
@@ -53,11 +53,14 @@ class MeetingScheduleSource(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class MediaCountdownAutomationSnapshot:
-    config: MediaCountdownAutomationConfig
+    settings: MediaCountdownSettings
     schedule: MeetingSchedule
     status: MediaCountdownAutomationStatus
     next_occurrence: MeetingOccurrence | None
     has_projection_target: bool
+    active_countdown: bool
+    active_origin: str
+    active_target: QDateTime | None
     active_automatic: bool
     blocking_reason: MediaCountdownBlockingReason
 
@@ -72,7 +75,7 @@ class MediaCountdownAutomationController(QObject):
     def __init__(
         self,
         *,
-        settings: MediaCountdownAutomationSettingsStore,
+        settings: MediaCountdownSettingsStore,
         schedule_source: MeetingScheduleSource,
         projection_session: Any,
         playback_protection: Any,
@@ -88,7 +91,8 @@ class MediaCountdownAutomationController(QObject):
         self._notifications = notifications
         self._now_provider = now_provider or (lambda: datetime.now().astimezone())
 
-        self._config = self._settings.load()
+        self._media_settings = self._settings.load()
+        self._config = self._media_settings.automation
         self._schedule = self._schedule_source.load()
         self._status = MediaCountdownAutomationStatus.DISABLED
         self._next_occurrence: MeetingOccurrence | None = None
@@ -138,16 +142,28 @@ class MediaCountdownAutomationController(QObject):
                 MediaCountdownBlockingReason.NONE,
             )
         state = self._projection_session.state
+        active_countdown = state.get("type") == "timer"
+        target = state.get("target_dt")
+        active_target = (
+            target if isinstance(target, QDateTime) and target.isValid() else None
+        )
+        active_automatic = (
+            active_countdown and state.get("origin") == "automatic_countdown"
+        )
         return MediaCountdownAutomationSnapshot(
-            config=self._config,
+            settings=self._media_settings,
             schedule=self._schedule,
             status=self._status,
             next_occurrence=self._next_occurrence,
             has_projection_target=self._has_projection_target(),
+            active_countdown=active_countdown,
+            active_origin=(
+                "automatic" if active_automatic else "manual" if active_countdown else ""
+            ),
+            active_target=active_target,
             active_automatic=(
                 self._status is MediaCountdownAutomationStatus.ACTIVE
-                and state.get("type") == "timer"
-                and state.get("origin") == "automatic_countdown"
+                and active_automatic
             ),
             blocking_reason=blocking_reason,
         )
@@ -194,7 +210,8 @@ class MediaCountdownAutomationController(QObject):
 
     def evaluate(self) -> None:
         now = self._now_provider()
-        self._config = self._settings.load()
+        self._media_settings = self._settings.load()
+        self._config = self._media_settings.automation
         self._schedule = self._schedule_source.load()
         self._record_crossed_occurrence(now)
         occurrence = self._schedule.next_occurrence(now)
@@ -287,7 +304,7 @@ class MediaCountdownAutomationController(QObject):
         target = QDateTime.fromSecsSinceEpoch(int(occurrence.starts_at.timestamp()))
         self.countdown_requested.emit(
             target,
-            self._config.presentation.value,
+            self._media_settings.presentation.value,
             occurrence.slot_id,
         )
         if (

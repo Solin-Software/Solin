@@ -1143,239 +1143,239 @@
   <context>
     <name>MediaCountdownPage</name>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="+52" />
-      <source>Now</source>
-      <translation>当前</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="93" />
+      <source>Tomorrow at %1</source>
+      <translation>明天 %1</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Reach zero at</source>
-      <translation>归零时间</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="94" />
+      <source>Today at %1</source>
+      <translation>今天 %1</translation>
     </message>
     <message>
-      <location line="+17" />
-      <source>−1 h</source>
-      <translation>−1小时</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 h</source>
-      <translation>+1小时</translation>
-    </message>
-    <message>
-      <location line="+18" />
-      <source>−1 min</source>
-      <translation>−1分钟</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>+1 min</source>
-      <translation>+1分钟</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Display on media window</source>
-      <translation>在媒体窗口中显示</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Circular timer</source>
-      <translation>圆形计时器</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Annual text</source>
-      <translation>年度经文</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Start countdown to this time</source>
-      <translation>开始倒计时到此时间</translation>
-    </message>
-    <message>
-      <location line="+16" />
-      <source>Or count down for</source>
-      <translation>或倒计时</translation>
-    </message>
-    <message>
-      <location line="+41" />
-      <source>min</source>
-      <translation>分钟</translation>
-    </message>
-      <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="54" />
-      <source>Automation off</source>
-      <translation>自动功能已关闭</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="55" />
-      <source>Configuration required</source>
-      <translation>需要配置</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="56" />
-      <source>Ready</source>
-      <translation>准备就绪</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="57" />
-      <source>Waiting for the media window</source>
-      <translation>正在等待媒体窗口</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="58" />
-      <source>Countdown active</source>
-      <translation>倒计时进行中</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="59" />
-      <source>Interrupted for this meeting</source>
-      <translation>已针对本次聚会中断</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="60" />
-      <source>Not started</source>
-      <translation>未启动</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="69" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="111" />
       <source>Turn it on to show a countdown before configured meetings.</source>
       <translation>开启后，会在已配置的聚会开始前显示倒计时。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="71" />
-      <source>No meeting time is configured. The countdown will remain ready until a schedule is added.</source>
-      <translation>尚未配置聚会时间。在添加日程之前，倒计时将保持就绪状态。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="113" />
+      <source>Add meeting days and times to finish setting up the automation.</source>
+      <translation>添加聚会日期和时间以完成自动化设置。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="74" />
-      <source>No media window is available. Solin will keep trying only until the meeting starts.</source>
-      <translation>没有可用的媒体窗口。Solin 只会持续尝试到聚会开始为止。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="116" />
+      <source>No media window is available. Solin will keep trying until the meeting starts.</source>
+      <translation>没有可用的媒体窗口。Solin 会不断尝试，直到聚会开始。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="75" />
-      <source>The media window is in use. Solin will keep trying only until the meeting starts.</source>
-      <translation>媒体窗口正在使用中。Solin 只会持续尝试到聚会开始为止。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="118" />
+      <source>The media window is in use. Solin will resume the countdown when it becomes available.</source>
+      <translation>媒体窗口正在使用中。窗口可用后，Solin 会恢复倒计时。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="76" />
-      <source>Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.</source>
-      <translation>自动投影暂时不可用。Solin 只会持续尝试到聚会开始为止。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="119" />
+      <source>Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.</source>
+      <translation>自动投影暂时不可用。Solin 会不断尝试，直到聚会开始。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="78" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="122" />
       <source>Started automatically · reaches zero at %1</source>
       <translation>已自动启动 · 将于 %1 归零</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="80" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="124" />
       <source>It will not start again automatically for this occurrence.</source>
       <translation>本次聚会不会再次自动启动。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="82" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="126" />
       <source>The meeting time was reached before the countdown could start.</source>
       <translation>倒计时尚未开始，聚会时间就已经到了。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="84" />
-      <source>Next: %1, %2 · automatic start at %3</source>
-      <translation>下一场：%1，%2 · 将于 %3 自动启动</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="128" />
+      <source>Next: %1 at %2 · starts automatically at %3</source>
+      <translation>下一场：%1 %2 · 将于 %3 自动启动</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="89" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="132" />
       <source>Waiting for the next configured meeting.</source>
       <translation>正在等待下一场已配置的聚会。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="197" />
-      <source>Automatic countdown</source>
-      <translation>自动倒计时</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="331" />
+      <source>−1 h</source>
+      <translation>−1小时</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="204" />
-      <source>Shows a countdown in the media window before configured meetings.</source>
-      <translation>在已配置的聚会开始前，在媒体窗口中显示倒计时。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="332" />
+      <source>+1 h</source>
+      <translation>+1小时</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="281" />
-      <source>How long before the meeting should the countdown start?</source>
-      <translation>倒计时应在聚会开始前多久启动？</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="271" />
-      <source>10 seconds – 2 hours</source>
-      <translation>10秒 – 2小时</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="297" />
-      <source>h</source>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="343" />
+      <source>hours</source>
       <translation>小时</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="365" />
+      <source>−1 min</source>
+      <translation>−1分钟</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="366" />
+      <source>+1 min</source>
+      <translation>+1分钟</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="377" />
+      <source>minutes</source>
+      <translation>分钟</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="399" />
       <source>−10 s</source>
       <translation>−10秒</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="327" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="400" />
       <source>+10 s</source>
       <translation>+10秒</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="335" />
-      <source>s</source>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="411" />
+      <source>seconds</source>
       <translation>秒</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="347" />
-      <source>Default appearance</source>
-      <translation>默认外观</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="503" />
+      <source>Projection appearance</source>
+      <translation>投影外观</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="364" />
-      <source>Used for automatic and manual countdowns.</source>
-      <translation>用于自动和手动倒计时。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="511" />
+      <source>Used for future manual and automatic countdowns. An active projection is not changed.</source>
+      <translation>用于今后的手动和自动倒计时。不会更改当前投影。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="380" />
-      <source>Meeting times</source>
-      <translation>聚会时间</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Circular</source>
+      <translation>圆形</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="387" />
-      <source>Configure meetings</source>
-      <translation>配置聚会</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="525" />
+      <source>Annual text</source>
+      <translation>年度经文</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Complete times</source>
-      <translation>补全时间</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="389" />
-      <source>Edit times</source>
-      <translation>编辑时间</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="411" />
-      <source>Not configured</source>
-      <translation>未配置</translation>
-    </message>
-    <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="442" />
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="546" />
       <source>Start manually</source>
       <translation>手动启动</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="448" />
-      <source>Start or restart a countdown at any time.</source>
-      <translation>随时启动或重新启动倒计时。</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="553" />
+      <source>Choose a target, review it, then start the countdown.</source>
+      <translation>选择目标，确认无误后启动倒计时。</translation>
     </message>
     <message>
-      <location filename="../../qml/MediaCountdownPage.qml" line="490" />
-      <source>Meeting time selected</source>
-      <translation>已选择聚会时间</translation>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>Until a time</source>
+      <translation>直到指定时间</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="568" />
+      <source>For a duration</source>
+      <translation>按时长</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="673" />
+      <source>Start countdown</source>
+      <translation>启动倒计时</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="690" />
+      <source>How long should the countdown run?</source>
+      <translation>倒计时要持续多久？</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="707" />
+      <source>%1 min</source>
+      <translation>%1 分钟</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="715" />
+      <source>Custom</source>
+      <translation>自定义</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="735" />
+      <source>Duration: %1</source>
+      <translation>时长：%1</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="776" />
+      <source>Before meetings</source>
+      <translation>聚会前</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="803" />
+      <source>Automatic countdown before meetings</source>
+      <translation>聚会前自动倒计时</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Hide settings</source>
+      <translation>隐藏设置</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="824" />
+      <source>Configure</source>
+      <translation>配置</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="890" />
+      <source>Meeting schedule required</source>
+      <translation>需要聚会日程</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="897" />
+      <source>Define at least one meeting day and time so this automation can run.</source>
+      <translation>请至少设置一个聚会日期和时间，以便运行此自动化功能。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="905" />
+      <source>Configure meeting times</source>
+      <translation>配置聚会时间</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="923" />
+      <source>How long before the meeting should the countdown start?</source>
+      <translation>倒计时应在聚会开始前多久启动？</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="931" />
+      <source>Choose a common interval or set a precise time between 10 seconds and 2 hours.</source>
+      <translation>选择常用时长，或精确设置 10 秒到 2 小时之间的时间。</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="989" />
+      <source>Next meeting</source>
+      <translation>下一场聚会</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="996" />
+      <source>Not configured</source>
+      <translation>未配置</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1008" />
+      <source>Countdown starts</source>
+      <translation>倒计时启动时间</translation>
+    </message>
+    <message>
+      <location filename="../../src/solin/qml/MediaCountdownPage.qml" line="1023" />
+      <source>Edit days and times</source>
+      <translation>编辑日期和时间</translation>
     </message>
   </context>
   <context>

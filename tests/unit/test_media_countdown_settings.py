@@ -13,12 +13,13 @@ from solin.core.timer.media_countdown_automation import (
     MediaCountdownAutomationConfig,
 )
 from solin.core.timer.media_countdown_settings import (
-    MediaCountdownAutomationSettingsStore,
+    MediaCountdownSettings,
+    MediaCountdownSettingsStore,
 )
 from solin.core.timer.models import MediaCountdownPresentation
 
 
-def _store() -> tuple[MediaCountdownAutomationSettingsStore, SettingsStore]:
+def _store() -> tuple[MediaCountdownSettingsStore, SettingsStore]:
     profile = ProfileSettings.for_profile_id(
         f"media_countdown_settings_{uuid.uuid4().hex}"
     )
@@ -26,17 +27,19 @@ def _store() -> tuple[MediaCountdownAutomationSettingsStore, SettingsStore]:
         profile.organization,
         QSETTINGS_PREFS_APP,
     )
-    return MediaCountdownAutomationSettingsStore(settings), settings
+    return MediaCountdownSettingsStore(settings), settings
 
 
 def test_media_countdown_settings_default_to_safe_disabled_configuration() -> None:
     store, settings = _store()
     settings.clear()
     try:
-        assert store.load() == MediaCountdownAutomationConfig(
-            enabled=False,
-            lead_seconds=DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS,
+        assert store.load() == MediaCountdownSettings(
             presentation=MediaCountdownPresentation.CIRCULAR,
+            automation=MediaCountdownAutomationConfig(
+                enabled=False,
+                lead_seconds=DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS,
+            ),
         )
     finally:
         settings.clear()
@@ -52,13 +55,15 @@ def test_media_countdown_settings_roundtrip_and_clamp_operator_preferences() -> 
 
         config = store.load()
 
-        assert config.enabled is True
-        assert config.lead_seconds == MIN_MEDIA_COUNTDOWN_LEAD_SECONDS
+        assert config.automation.enabled is True
+        assert config.automation.lead_seconds == MIN_MEDIA_COUNTDOWN_LEAD_SECONDS
         assert config.presentation is MediaCountdownPresentation.YEARLY_TEXT
 
         store.set_lead_seconds(MAX_MEDIA_COUNTDOWN_LEAD_SECONDS + 1)
 
-        assert store.load().lead_seconds == MAX_MEDIA_COUNTDOWN_LEAD_SECONDS
+        assert (
+            store.load().automation.lead_seconds == MAX_MEDIA_COUNTDOWN_LEAD_SECONDS
+        )
     finally:
         settings.clear()
 
@@ -72,17 +77,21 @@ def test_media_countdown_settings_recover_from_invalid_persisted_values() -> Non
 
         config = store.load()
 
-        assert config.lead_seconds == DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS
+        assert (
+            config.automation.lead_seconds == DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS
+        )
         assert config.presentation is MediaCountdownPresentation.CIRCULAR
     finally:
         settings.clear()
 
 
-def test_media_countdown_config_normalization_preserves_enum_presentation() -> None:
-    config = MediaCountdownAutomationConfig(
-        enabled=True,
-        lead_seconds=30,
+def test_media_countdown_settings_normalization_preserves_enum_presentation() -> None:
+    config = MediaCountdownSettings(
         presentation=MediaCountdownPresentation.YEARLY_TEXT,
+        automation=MediaCountdownAutomationConfig(
+            enabled=True,
+            lead_seconds=30,
+        ),
     )
 
     assert config.normalized().presentation is MediaCountdownPresentation.YEARLY_TEXT

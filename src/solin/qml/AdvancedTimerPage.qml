@@ -279,6 +279,7 @@ Item {
                         RowLabel { text: qsTr("Show seconds") }
                         TimerToggle {
                             checked: page.cfg.show_seconds; accent: page.pal_accent
+                            accessibleName: qsTr("Show seconds")
                             enabled: page.digitalClockOptionsAvailable
                             onToggled: function(v) { timer.updateClock("show_seconds", v) }
                         }
@@ -290,6 +291,7 @@ Item {
                         RowLabel { text: qsTr("AM / PM") }
                         TimerToggle {
                             checked: page.cfg.show_ampm; accent: page.pal_accent
+                            accessibleName: qsTr("AM / PM")
                             enabled: page.ampmOptionAvailable
                             onToggled: function(v) { timer.updateClock("show_ampm", v) }
                         }
@@ -381,6 +383,7 @@ Item {
                         TimerToggle {
                             Layout.leftMargin: 4
                             checked: timer.timerVisible; accent: page.pal_accent
+                            accessibleName: qsTr("Show timer")
                             onToggled: function(v) { timer.setTimerVisible(v) }
                         }
                     }

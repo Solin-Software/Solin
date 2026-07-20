@@ -55,7 +55,7 @@ def _build_main_window_profile_settings(profile_settings):
     )
     from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
     from solin.core.timer.media_countdown_settings import (
-        MediaCountdownAutomationSettingsStore,
+        MediaCountdownSettingsStore,
     )
     from solin.core.network.browser_settings import BrowserSettingsStore
     from solin.core.projection.monitor_allocation import MonitorAllocationStore
@@ -75,8 +75,8 @@ def _build_main_window_profile_settings(profile_settings):
         camera=CameraSettingsStore.for_profile_settings(profile_settings),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
         meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
-        media_countdown_automation=(
-            MediaCountdownAutomationSettingsStore.for_profile_settings(profile_settings)
+        media_countdown=(
+            MediaCountdownSettingsStore.for_profile_settings(profile_settings)
         ),
         watched_folder=WatchedFolderSettingsStore.for_profile_settings(profile_settings),
         yeartext=YeartextSettingsStore.for_profile_settings(profile_settings),

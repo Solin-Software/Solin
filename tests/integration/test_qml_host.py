@@ -6,6 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import (
+    Q_ARG,
     QCoreApplication,
     Property,
     QMetaObject,
@@ -61,85 +62,87 @@ class _CursorProbe(QObject):
 
 
 class _MediaCountdownProbe(QObject):
-    mediaCountdownAutomationChanged = Signal()
+    mediaCountdownChanged = Signal()
 
     def __init__(self) -> None:
         super().__init__()
         self.refreshes = 0
-        self.automation = {
-            "enabled": True,
-            "leadSeconds": 600,
+        self.presentation_updates: list[int] = []
+        self.enabled_updates: list[bool] = []
+        self.lead_updates: list[int] = []
+        self.time_requests: list[tuple[int, int]] = []
+        self.duration_requests: list[int] = []
+        self.schedule_requests = 0
+        self.model = {
             "presentationIndex": 0,
-            "status": "ready",
-            "configuredCount": 2,
-            "slots": [
-                {
+            "activeProjection": {
+                "active": False,
+                "origin": "",
+                "targetTime": "",
+            },
+            "manualSuggestion": {
+                "hour": 19,
+                "minute": 30,
+                "fromMeeting": True,
+            },
+            "automation": {
+                "enabled": True,
+                "leadSeconds": 600,
+                "status": "ready",
+                "activeAutomatic": False,
+                "blockingReason": "",
+            },
+            "schedule": {
+                "configuredCount": 2,
+                "next": {
+                    "slotId": "midweek:2026-06-08:19:30",
                     "kind": "midweek",
                     "label": "Midweek meeting",
-                    "configured": True,
-                    "weekday": 0,
                     "weekdayLabel": "Monday",
-                    "timeText": "19:30",
+                    "startTime": "19:30",
+                    "triggerTime": "19:20:00",
                 },
-                {
-                    "kind": "weekend",
-                    "label": "Weekend meeting",
-                    "configured": True,
-                    "weekday": 5,
-                    "weekdayLabel": "Saturday",
-                    "timeText": "10:00",
-                },
-            ],
-            "next": {
-                "slotId": "midweek:2026-06-08:19:30",
-                "kind": "midweek",
-                "label": "Midweek meeting",
-                "weekdayLabel": "Monday",
-                "startTime": "19:30",
-                "triggerTime": "19:20:00",
             },
-            "activeAutomatic": False,
-            "blockingReason": "",
-            "suggestedTargetHour": 19,
-            "suggestedTargetMinute": 30,
-            "suggestedFromMeeting": True,
         }
 
-    @Property("QVariant", notify=mediaCountdownAutomationChanged)
-    def mediaCountdownAutomation(self):  # noqa: N802 - QML API
-        return self.automation
+    @Property("QVariant", notify=mediaCountdownChanged)
+    def mediaCountdown(self):  # noqa: N802 - QML API
+        return self.model
 
     @Slot()
     def refreshMediaCountdownPage(self) -> None:  # noqa: N802 - QML API
         self.refreshes += 1
-        self.mediaCountdownAutomationChanged.emit()
+        self.mediaCountdownChanged.emit()
 
     @Slot(bool)
     def setAutomaticCountdownEnabled(self, enabled: bool) -> None:  # noqa: N802
-        self.automation["enabled"] = enabled
-        self.mediaCountdownAutomationChanged.emit()
+        self.enabled_updates.append(enabled)
+        self.model["automation"]["enabled"] = enabled
+        self.mediaCountdownChanged.emit()
 
     @Slot(int)
     def setAutomaticCountdownLeadSeconds(self, seconds: int) -> None:  # noqa: N802
-        self.automation["leadSeconds"] = seconds
-        self.mediaCountdownAutomationChanged.emit()
+        self.lead_updates.append(seconds)
+        self.model["automation"]["leadSeconds"] = seconds
+        self.mediaCountdownChanged.emit()
 
     @Slot(int)
     def setMediaCountdownPresentation(self, index: int) -> None:  # noqa: N802
-        self.automation["presentationIndex"] = index
-        self.mediaCountdownAutomationChanged.emit()
+        self.presentation_updates.append(index)
+        self.model["presentationIndex"] = index
+        self.mediaCountdownChanged.emit()
 
     @Slot()
     def configureMeetingSchedule(self) -> None:  # noqa: N802 - QML API
-        pass
+        self.schedule_requests += 1
 
     @Slot(int, int)
-    def startCountdownToTime(self, _hour: int, _minute: int) -> None:  # noqa: N802
-        pass
+    def startCountdownToTime(self, hour: int, minute: int) -> None:  # noqa: N802
+        self.time_requests.append((hour, minute))
 
     @Slot(int)
-    def startCountdownMinutes(self, _minutes: int) -> None:  # noqa: N802
-        pass
+    def startCountdownDuration(self, seconds: int) -> None:  # noqa: N802
+        self.duration_requests.append(seconds)
 
     @Slot()
     def pointerEnter(self) -> None:  # noqa: N802 - QML API
@@ -516,36 +519,263 @@ def test_media_countdown_page_renders_context_and_applies_meeting_suggestion() -
 
     assert timer.refreshes == 1
     assert root.property("hourValue") == 19
-    assert root.property("minValue") == 30
+    assert root.property("minuteValue") == 30
     visible_text = _visible_texts(root)
-    assert "Automatic countdown" in visible_text
-    assert "Meeting time selected" in visible_text
-    assert "Start countdown to this time" in visible_text
-    assert "How long before the meeting should the countdown start?" in visible_text
-    assert "Midweek meeting" in visible_text
+    assert "Projection appearance" in visible_text
+    assert "Circular" in visible_text
+    assert "Annual text" in visible_text
+    assert "Start manually" in visible_text
+    assert "Meeting time" not in visible_text
+    assert "Before meetings" in visible_text
     manual_card = root.findChild(QObject, "manualCountdownCard")
     automatic_card = root.findChild(QObject, "automaticCountdownCard")
+    appearance_row = root.findChild(QObject, "countdownAppearanceRow")
+    presentation_selector = root.findChild(QObject, "presentationSelector")
+    automation_panel = root.findChild(QObject, "automationSettingsPanel")
+    assert appearance_row is not None
+    assert presentation_selector is not None
     assert manual_card is not None
     assert automatic_card is not None
+    assert automation_panel is not None
+    assert appearance_row.property("y") < manual_card.property("y")
     assert manual_card.property("y") < automatic_card.property("y")
+    assert appearance_row.property("height") <= 64
+    assert presentation_selector.property("height") == 42
+    assert automation_panel.property("visible") is False
+
+    root.setProperty("automationExpanded", True)
+    QTest.qWait(20)
+    assert automation_panel.property("visible") is True
+    assert "How long before the meeting should the countdown start?" in _visible_texts(root)
 
     status_description = root.findChild(QObject, "countdownStatusDescription")
     assert status_description is not None
-    timer.automation.update({"status": "active", "activeAutomatic": False})
-    timer.mediaCountdownAutomationChanged.emit()
+    timer.model["automation"].update({"status": "active", "activeAutomatic": False})
+    timer.mediaCountdownChanged.emit()
     QTest.qWait(20)
-    assert status_description.property("text") == "Reach zero at 19:30"
+    assert status_description.property("text") == (
+        "Next: Monday at 19:30 · starts automatically at 19:20:00"
+    )
 
-    timer.automation.update({
+    timer.model["automation"].update({
         "status": "waiting_for_projection",
         "blockingReason": "automation_unavailable",
     })
-    timer.mediaCountdownAutomationChanged.emit()
+    timer.mediaCountdownChanged.emit()
     QTest.qWait(20)
     assert status_description.property("text") == (
         "Automatic projection is temporarily unavailable. "
-        "Solin will keep trying only until the meeting starts."
+        "Solin will keep trying until the meeting starts."
     )
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("type_name", "signal_name"),
+    [("TimerButton", "clicked"), ("TimerToggle", "toggled")],
+)
+def test_timer_pointer_controls_do_not_keep_focus_after_mouse_click(
+    type_name: str,
+    signal_name: str,
+) -> None:
+    widget = QQuickWidget()
+    widget.resize(120, 60)
+    configure_qml_host(
+        widget,
+        type_name=type_name,
+        clear_color="#000000",
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    QTest.qWait(20)
+
+    activation = QSignalSpy(getattr(root, signal_name))
+    QTest.mouseClick(
+        widget,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        QPoint(widget.width() // 2, widget.height() // 2),
+    )
+
+    assert activation.count() == 1
+    assert root.property("activeFocus") is False
+
+    root.forceActiveFocus()
+    assert root.property("activeFocus") is True
+    QTest.keyClick(widget, Qt.Key.Key_Space)
+    assert activation.count() == 2
+    widget.deleteLater()
+
+
+def test_media_countdown_manual_duration_requires_confirmation() -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 820)
+    configure_qml_host(
+        widget,
+        type_name="MediaCountdownPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    assert QMetaObject.invokeMethod(root, "enterPage")
+    QTest.qWait(30)
+
+    root.setProperty("manualMode", 1)
+    start_button = root.findChild(QObject, "startDurationButton")
+    custom_editor = root.findChild(QObject, "customDurationEditor")
+    presentation_selector = root.findChild(QObject, "presentationSelector")
+    assert start_button is not None
+    assert custom_editor is not None
+    assert presentation_selector is not None
+
+    root.setProperty("selectedDurationSeconds", 900)
+    root.setProperty("customDurationVisible", False)
+    QTest.qWait(10)
+    assert root.property("selectedDurationSeconds") == 900
+    assert timer.duration_requests == []
+
+    assert QMetaObject.invokeMethod(start_button, "clicked")
+    assert timer.duration_requests == [900]
+
+    root.setProperty("customDurationVisible", True)
+    root.setProperty("selectedDurationSeconds", 3661)
+    QTest.qWait(10)
+    assert custom_editor.property("visible") is True
+    assert custom_editor.property("value") == 3661
+
+    assert QMetaObject.invokeMethod(
+        presentation_selector,
+        "picked",
+        Q_ARG(int, 1),
+    )
+    assert timer.presentation_updates == [1]
+    assert QMetaObject.invokeMethod(
+        presentation_selector,
+        "picked",
+        Q_ARG(int, 0),
+    )
+    assert timer.presentation_updates == [1, 0]
+    widget.deleteLater()
+
+
+def test_media_countdown_does_not_duplicate_live_projection_status() -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(640, 820)
+    configure_qml_host(
+        widget,
+        type_name="MediaCountdownPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    assert QMetaObject.invokeMethod(root, "enterPage")
+    QTest.qWait(30)
+
+    automation_toggle = root.findChild(QObject, "automationToggle")
+    assert automation_toggle is not None
+    assert root.findChild(QObject, "activeCountdownBanner") is None
+
+    timer.model["activeProjection"] = {
+        "active": True,
+        "origin": "manual",
+        "targetTime": "19:30",
+    }
+    timer.model["automation"].update({
+        "status": "active",
+        "activeAutomatic": False,
+    })
+    timer.mediaCountdownChanged.emit()
+    QTest.qWait(20)
+    visible_text = _visible_texts(root)
+    assert "Manual countdown in progress" not in visible_text
+    assert "Automatic countdown in progress" not in visible_text
+    assert "Next: Monday at 19:30 · starts automatically at 19:20:00" in visible_text
+    assert "Scheduled" not in visible_text
+    assert "Countdown active" not in visible_text
+
+    root.setProperty("automationExpanded", False)
+    assert QMetaObject.invokeMethod(
+        automation_toggle,
+        "toggled",
+        Q_ARG(bool, True),
+    )
+    QTest.qWait(10)
+    assert timer.enabled_updates == [True]
+    assert root.property("automationExpanded") is True
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize("width", [415, 560, 640, 900])
+def test_media_countdown_page_is_responsive_without_horizontal_overflow(
+    width: int,
+) -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(width, 760)
+    configure_qml_host(
+        widget,
+        type_name="MediaCountdownPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    widget.show()
+    assert QMetaObject.invokeMethod(root, "enterPage")
+    QTest.qWait(30)
+
+    for object_name in (
+        "countdownAppearanceRow",
+        "manualCountdownCard",
+        "automaticCountdownCard",
+    ):
+        card = root.findChild(QObject, object_name)
+        assert card is not None
+        assert 0 < card.property("width") <= width - 32
+
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("width", "compact"),
+    [(500, True), (640, False)],
+)
+def test_timer_view_moves_mode_selector_below_header_when_compact(
+    width: int,
+    compact: bool,
+) -> None:
+    timer = _MediaCountdownProbe()
+    widget = QQuickWidget()
+    widget.resize(width, 760)
+    configure_qml_host(
+        widget,
+        type_name="TimerView",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    root.setProperty("mode", 1)
+    widget.show()
+    QTest.qWait(30)
+
+    wide_selector = root.findChild(QObject, "timerModeSelectorWide")
+    compact_selector = root.findChild(QObject, "timerModeSelectorCompact")
+    assert wide_selector is not None
+    assert compact_selector is not None
+    assert root.property("compactHeader") is compact
+    assert compact_selector.property("visible") is compact
+    assert wide_selector.property("visible") is not compact
+    if compact:
+        assert compact_selector.property("width") <= width - 40
+
     widget.deleteLater()
 
 
@@ -568,8 +798,12 @@ def test_media_countdown_portuguese_catalog_covers_ui_and_runtime_feedback(
     QTest.qWait(40)
 
     visible_text = _visible_texts(root)
-    assert "Contagem regressiva automática" in visible_text
-    assert "Horário da reunião selecionado" in visible_text
+    assert "Aparência da projeção" in visible_text
+    assert "Horário da reunião" not in visible_text
+    assert "Antes das reuniões" in visible_text
+    root.setProperty("automationExpanded", True)
+    QTest.qWait(20)
+    visible_text = _visible_texts(root)
     assert "Quanto tempo antes da reunião o cronômetro deve começar?" in visible_text
     assert meeting_weekday_names()[0] == "Segunda-feira"
     assert meeting_kind_label("midweek") == "Reunião do meio de semana"
@@ -577,16 +811,18 @@ def test_media_countdown_portuguese_catalog_covers_ui_and_runtime_feedback(
         "MediaCountdownPage",
         (
             "Automatic projection is temporarily unavailable. Solin will keep "
-            "trying only until the meeting starts."
+            "trying until the meeting starts."
         ),
     ) == (
         "A projeção automática está temporariamente indisponível. O Solin "
-        "continuará tentando somente até o início da reunião."
+        "continuará tentando até o início da reunião."
     )
     assert QCoreApplication.translate(
         "MediaCountdownAutomation",
         "Countdown started automatically for {time}.",
-    ) == "Contagem regressiva iniciada automaticamente para as {time}."
+    ) == (
+        "Contagem regressiva iniciada automaticamente. Chegará a zero às {time}."
+    )
     assert QCoreApplication.translate(
         "MediaCountdownAutomation",
         "The countdown did not start because no media window was available.",

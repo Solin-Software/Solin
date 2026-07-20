@@ -25,6 +25,7 @@ Rectangle {
     readonly property color danger: appTheme.danger
 
     readonly property int sideMargin: 20
+    readonly property bool compactHeader: width < 560
 
     property int mode: 0  // 0 = advanced, 1 = media countdown
 
@@ -39,10 +40,13 @@ Rectangle {
         // ── Header ────────────────────────────────────────────────────────────
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 70
+            Layout.preferredHeight: root.compactHeader ? 116 : 70
 
             RowLayout {
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: 70
                 anchors.leftMargin: root.sideMargin
                 anchors.rightMargin: root.sideMargin
                 spacing: 14
@@ -89,14 +93,33 @@ Rectangle {
                 }
 
                 TimerSegment {
+                    objectName: "timerModeSelectorWide"
+                    visible: !root.compactHeader
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                     options: [qsTr("Advanced"), qsTr("Media countdown")]
                     current: root.mode
                     accent: root.accent
                     segWidth: 140
-                    segHeight: 36
+                    segHeight: 44
                     onPicked: function(index) { root.mode = index }
                 }
+            }
+
+            TimerSegment {
+                objectName: "timerModeSelectorCompact"
+                visible: root.compactHeader
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: root.sideMargin
+                anchors.rightMargin: root.sideMargin
+                anchors.bottomMargin: 8
+                options: [qsTr("Advanced"), qsTr("Media countdown")]
+                current: root.mode
+                accent: root.accent
+                stretch: true
+                segHeight: 40
+                onPicked: function(index) { root.mode = index }
             }
         }
 

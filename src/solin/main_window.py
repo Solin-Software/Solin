@@ -231,9 +231,7 @@ class MainWindow(QMainWindow):
         self._browser_settings = profile_settings_bundle.browser
         self._projection_playback_settings = profile_settings_bundle.projection_playback
         self._meeting_schedule_settings = profile_settings_bundle.meeting_schedule
-        self._media_countdown_automation_settings = (
-            profile_settings_bundle.media_countdown_automation
-        )
+        self._media_countdown_settings = profile_settings_bundle.media_countdown
         self._watched_folder_settings = profile_settings_bundle.watched_folder
         self._remote_control_settings = profile_settings_bundle.remote_control
         self._remote_control_credentials = profile_settings_bundle.remote_control_credentials
@@ -292,7 +290,7 @@ class MainWindow(QMainWindow):
             self._notify_playback_protection_blocked
         )
         self._media_countdown_automation = MediaCountdownAutomationController(
-            settings=self._media_countdown_automation_settings,
+            settings=self._media_countdown_settings,
             schedule_source=self._meeting_schedule_settings,
             projection_session=self.projection_session,
             playback_protection=self.playback_protection,

@@ -20,25 +20,32 @@ from solin.core.timer.media_countdown_automation import (
     MediaCountdownBlockingReason,
     MediaCountdownAutomationStatus,
 )
+from solin.core.timer.media_countdown_settings import MediaCountdownSettings
 from solin.core.timer.models import MediaCountdownPresentation
 
 
 class _Settings:
-    def __init__(self, config: MediaCountdownAutomationConfig) -> None:
-        self.config = config
+    def __init__(self, settings: MediaCountdownSettings) -> None:
+        self.settings = settings
 
-    def load(self) -> MediaCountdownAutomationConfig:
-        return self.config
+    def load(self) -> MediaCountdownSettings:
+        return self.settings
 
     def set_enabled(self, enabled: bool) -> None:
-        self.config = replace(self.config, enabled=bool(enabled))
+        self.settings = replace(
+            self.settings,
+            automation=replace(self.settings.automation, enabled=bool(enabled)),
+        )
 
     def set_lead_seconds(self, seconds: int) -> None:
-        self.config = replace(self.config, lead_seconds=int(seconds))
+        self.settings = replace(
+            self.settings,
+            automation=replace(self.settings.automation, lead_seconds=int(seconds)),
+        )
 
     def set_presentation(self, presentation) -> None:
-        self.config = replace(
-            self.config,
+        self.settings = replace(
+            self.settings,
             presentation=MediaCountdownPresentation(presentation),
         )
 
@@ -99,10 +106,12 @@ def _controller(
     allowed: bool = True,
 ):
     settings = _Settings(
-        MediaCountdownAutomationConfig(
-            enabled=enabled,
-            lead_seconds=lead_seconds,
+        MediaCountdownSettings(
             presentation=MediaCountdownPresentation.CIRCULAR,
+            automation=MediaCountdownAutomationConfig(
+                enabled=enabled,
+                lead_seconds=lead_seconds,
+            ),
         )
     )
     source = _ScheduleSource(schedule or _schedule())
@@ -166,6 +175,9 @@ def test_startup_inside_window_starts_immediately_and_acceptance_becomes_active(
 
     assert controller.snapshot().status is MediaCountdownAutomationStatus.ACTIVE
     assert controller.snapshot().active_automatic is True
+    assert controller.snapshot().active_countdown is True
+    assert controller.snapshot().active_origin == "automatic"
+    assert controller.snapshot().active_target is not None
     assert session.state["occurrence_id"] == "midweek:2026-06-08:19:30"
     assert len(notifications.information_messages) == 1
 
@@ -180,6 +192,29 @@ def test_startup_inside_window_starts_immediately_and_acceptance_becomes_active(
 
     assert controller.snapshot().next_occurrence is not None
     assert controller.snapshot().next_occurrence.starts_at == _now(19, 30)
+
+
+def test_changing_shared_presentation_does_not_replace_active_countdown() -> None:
+    clock = [_now(19, 27)]
+    controller, settings, _, session, _, _ = _controller(now=clock)
+
+    def accept(target: QDateTime, presentation: str, occurrence_id: str) -> None:
+        session.set_state({
+            "type": "timer",
+            "target_dt": target,
+            "presentation": presentation,
+            "origin": "automatic_countdown",
+            "occurrence_id": occurrence_id,
+        })
+
+    controller.countdown_requested.connect(accept)
+    controller.evaluate()
+
+    controller.set_presentation(MediaCountdownPresentation.YEARLY_TEXT)
+
+    assert session.state["presentation"] == MediaCountdownPresentation.CIRCULAR.value
+    assert settings.settings.presentation is MediaCountdownPresentation.YEARLY_TEXT
+    assert controller.snapshot().status is MediaCountdownAutomationStatus.ACTIVE
 
 
 def test_active_projection_waits_regardless_of_playback_protection_setting() -> None:

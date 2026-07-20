@@ -14,7 +14,7 @@ from ..core.jw.background_song_settings import BackgroundSongSettingsStore
 from ..core.jw.yeartext_settings import YeartextSettingsStore
 from ..core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
 from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
-from ..core.timer.media_countdown_settings import MediaCountdownAutomationSettingsStore
+from ..core.timer.media_countdown_settings import MediaCountdownSettingsStore
 from ..core.network.browser_settings import BrowserSettingsStore
 from ..core.projection.monitor_allocation import MonitorAllocationStore
 from ..core.remote.notification_settings import NotificationSettingsStore
@@ -36,7 +36,7 @@ class MainWindowProfileSettings:
     camera: CameraSettingsStore
     projection_playback: ProjectionPlaybackSettingsStore
     meeting_schedule: MeetingScheduleSettingsStore
-    media_countdown_automation: MediaCountdownAutomationSettingsStore
+    media_countdown: MediaCountdownSettingsStore
     watched_folder: WatchedFolderSettingsStore
     yeartext: YeartextSettingsStore
     background_song: BackgroundSongSettingsStore

@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from .models import MediaCountdownPresentation
-
 DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS = 10 * 60
 MIN_MEDIA_COUNTDOWN_LEAD_SECONDS = 10
 MAX_MEDIA_COUNTDOWN_LEAD_SECONDS = 2 * 60 * 60
@@ -24,26 +22,15 @@ def clamp_media_countdown_lead_seconds(value: Any) -> int:
     )
 
 
-def normalize_media_countdown_presentation(value: Any) -> MediaCountdownPresentation:
-    if isinstance(value, MediaCountdownPresentation):
-        return value
-    try:
-        return MediaCountdownPresentation(str(value))
-    except ValueError:
-        return MediaCountdownPresentation.CIRCULAR
-
-
 @dataclass(frozen=True, slots=True)
 class MediaCountdownAutomationConfig:
     enabled: bool = False
     lead_seconds: int = DEFAULT_MEDIA_COUNTDOWN_LEAD_SECONDS
-    presentation: MediaCountdownPresentation = MediaCountdownPresentation.CIRCULAR
 
     def normalized(self) -> "MediaCountdownAutomationConfig":
         return MediaCountdownAutomationConfig(
             enabled=bool(self.enabled),
             lead_seconds=clamp_media_countdown_lead_seconds(self.lead_seconds),
-            presentation=normalize_media_countdown_presentation(self.presentation),
         )
 
 
@@ -72,5 +59,4 @@ __all__ = [
     "MediaCountdownBlockingReason",
     "MediaCountdownAutomationStatus",
     "clamp_media_countdown_lead_seconds",
-    "normalize_media_countdown_presentation",
 ]

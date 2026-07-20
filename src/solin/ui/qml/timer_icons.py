@@ -9,6 +9,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 from solin.styles.icons import (
     ICON_CALENDAR,
+    ICON_CHEVRON_DOWN,
     ICON_CHEVRON_LEFT,
     ICON_CHEVRON_RIGHT,
     ICON_HOME,
@@ -53,6 +54,7 @@ _TIMER_ICON_MAP = {
     "home": ICON_HOME,
     "chevron_left": ICON_CHEVRON_LEFT,
     "chevron_right": ICON_CHEVRON_RIGHT,
+    "chevron_down": ICON_CHEVRON_DOWN,
 }
 
 

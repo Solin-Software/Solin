@@ -1,10 +1,11 @@
-// MediaCountdownPage.qml — contextual manual and meeting-aware countdown setup.
+// MediaCountdownPage.qml — clear manual operation with meeting-aware automation.
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 
 Item {
     id: page
+
     property color pal_bg: appTheme.bg
     property color pal_surface: appTheme.surface
     property color pal_surfaceAlt: appTheme.surfaceAlt
@@ -16,103 +17,126 @@ Item {
     property color pal_textMuted: appTheme.textMuted
     property color pal_accent: appTheme.accent
 
-    property var automation: timer.mediaCountdownAutomation
-    property string nowText: "--:--:--"
-    property int hourValue: 0
-    property int minValue: 0
-    property bool targetDirty: false
+    property var countdown: timer.mediaCountdown
+    readonly property var manualSuggestion: countdown && countdown.manualSuggestion
+                                                     ? countdown.manualSuggestion : ({})
+    readonly property var automation: countdown && countdown.automation
+                                                ? countdown.automation : ({})
+    readonly property var schedule: countdown && countdown.schedule
+                                              ? countdown.schedule : ({})
+    readonly property var nextMeeting: schedule && schedule.next ? schedule.next : ({})
 
-    readonly property int leadSeconds: automation && automation.leadSeconds
+    readonly property int presentationIndex: countdown && countdown.presentationIndex !== undefined
+                                             ? countdown.presentationIndex : 0
+    readonly property int leadSeconds: automation && automation.leadSeconds !== undefined
                                        ? automation.leadSeconds : 600
-    readonly property int leadHours: Math.floor(leadSeconds / 3600)
-    readonly property int leadMinutes: Math.floor((leadSeconds % 3600) / 60)
-    readonly property int leadRemainderSeconds: leadSeconds % 60
+    readonly property int configuredCount: schedule && schedule.configuredCount !== undefined
+                                           ? schedule.configuredCount : 0
+    readonly property int gutter: width < 480 ? 16 : width < 720 ? 22 : 32
+    readonly property bool narrowContent: contentColumn.width < 540
 
-    function pad(n) { return ("0" + n).slice(-2) }
+    property var nowValue: new Date()
+    property int hourValue: 0
+    property int minuteValue: 0
+    property bool targetDirty: false
+    property int manualMode: 0
+    property int selectedDurationSeconds: 600
+    property bool customDurationVisible: false
+    property bool leadCustomVisible: false
+    property bool automationExpanded: false
+
+    function pad(value) {
+        return ("0" + value).slice(-2)
+    }
+
+    function clamp(value, minimum, maximum) {
+        return Math.max(minimum, Math.min(maximum, value))
+    }
 
     function applySuggestedTarget() {
-        if (!automation || targetDirty)
+        if (!manualSuggestion || targetDirty)
             return
-        hourValue = automation.suggestedTargetHour
-        minValue = automation.suggestedTargetMinute
+        hourValue = manualSuggestion.hour !== undefined ? manualSuggestion.hour : 0
+        minuteValue = manualSuggestion.minute !== undefined ? manualSuggestion.minute : 0
+    }
+
+    function isLeadPreset(seconds) {
+        return seconds === 300 || seconds === 600 || seconds === 900 || seconds === 1800
     }
 
     function enterPage() {
         targetDirty = false
+        manualMode = 0
+        customDurationVisible = false
+        automationExpanded = false
         timer.refreshMediaCountdownPage()
-        Qt.callLater(applySuggestedTarget)
+        Qt.callLater(function() {
+            page.applySuggestedTarget()
+            page.leadCustomVisible = !page.isLeadPreset(page.leadSeconds)
+            page.automationExpanded = !!page.automation.enabled && page.configuredCount === 0
+        })
     }
 
     function updateLead(seconds) {
-        timer.setAutomaticCountdownLeadSeconds(Math.max(10, Math.min(7200, seconds)))
+        timer.setAutomaticCountdownLeadSeconds(clamp(seconds, 10, 7200))
     }
 
-    function statusTitle() {
-        if (!automation)
-            return ""
-        switch (automation.status) {
-        case "disabled": return qsTr("Automation off")
-        case "schedule_required": return qsTr("Configuration required")
-        case "ready": return qsTr("Ready")
-        case "waiting_for_projection": return qsTr("Waiting for the media window")
-        case "active": return qsTr("Countdown active")
-        case "suppressed": return qsTr("Interrupted for this meeting")
-        case "missed": return qsTr("Not started")
-        default: return ""
-        }
+    function selectedTargetIsTomorrow() {
+        var selectedMinutes = hourValue * 60 + minuteValue
+        var nowMinutes = nowValue.getHours() * 60 + nowValue.getMinutes()
+        return selectedMinutes <= nowMinutes
     }
 
-    function statusDescription() {
-        if (!automation)
-            return ""
-        if (automation.status === "disabled")
+    function selectedTargetText() {
+        var time = pad(hourValue) + ":" + pad(minuteValue)
+        return selectedTargetIsTomorrow()
+               ? qsTr("Tomorrow at %1").arg(time)
+               : qsTr("Today at %1").arg(time)
+    }
+
+    function durationText(seconds) {
+        var hours = Math.floor(seconds / 3600)
+        var minutes = Math.floor((seconds % 3600) / 60)
+        var remainder = seconds % 60
+        return pad(hours) + ":" + pad(minutes) + ":" + pad(remainder)
+    }
+
+    function selectManualDuration(seconds) {
+        selectedDurationSeconds = clamp(seconds, 10, 86399)
+        customDurationVisible = false
+    }
+
+    function automationSummary() {
+        if (!automation || !automation.enabled)
             return qsTr("Turn it on to show a countdown before configured meetings.")
-        if (automation.status === "schedule_required")
-            return qsTr("No meeting time is configured. The countdown will remain ready until a schedule is added.")
+        if (automation.status === "schedule_required" || configuredCount === 0)
+            return qsTr("Add meeting days and times to finish setting up the automation.")
         if (automation.status === "waiting_for_projection") {
             if (automation.blockingReason === "no_window")
-                return qsTr("No media window is available. Solin will keep trying only until the meeting starts.")
+                return qsTr("No media window is available. Solin will keep trying until the meeting starts.")
             if (automation.blockingReason === "in_use")
-                return qsTr("The media window is in use. Solin will keep trying only until the meeting starts.")
-            if (automation.blockingReason === "automation_unavailable")
-                return qsTr("Automatic projection is temporarily unavailable. Solin will keep trying only until the meeting starts.")
-            return qsTr("Waiting for the media window")
+                return qsTr("The media window is in use. Solin will resume the countdown when it becomes available.")
+            return qsTr("Automatic projection is temporarily unavailable. Solin will keep trying until the meeting starts.")
         }
-        if (automation.status === "active" && automation.next && automation.next.startTime) {
-            if (automation.activeAutomatic)
-                return qsTr("Started automatically · reaches zero at %1").arg(automation.next.startTime)
-            return qsTr("Reach zero at") + " " + automation.next.startTime
-        }
+        if (automation.status === "active" && automation.activeAutomatic && nextMeeting.startTime)
+            return qsTr("Started automatically · reaches zero at %1").arg(nextMeeting.startTime)
         if (automation.status === "suppressed")
             return qsTr("It will not start again automatically for this occurrence.")
         if (automation.status === "missed")
             return qsTr("The meeting time was reached before the countdown could start.")
-        if (automation.next && automation.next.startTime) {
-            return qsTr("Next: %1, %2 · automatic start at %3")
-                .arg(automation.next.weekdayLabel)
-                .arg(automation.next.startTime)
-                .arg(automation.next.triggerTime)
-        }
+        if (nextMeeting.startTime)
+            return qsTr("Next: %1 at %2 · starts automatically at %3")
+                .arg(nextMeeting.weekdayLabel)
+                .arg(nextMeeting.startTime)
+                .arg(nextMeeting.triggerTime)
         return qsTr("Waiting for the next configured meeting.")
-    }
-
-    function statusColor() {
-        if (!automation)
-            return pal_textMuted
-        if (automation.status === "active" || automation.status === "ready")
-            return pal_accent
-        if (automation.status === "schedule_required" ||
-                automation.status === "waiting_for_projection" ||
-                automation.status === "missed")
-            return appTheme.warning
-        return pal_textMuted
     }
 
     onVisibleChanged: if (visible) enterPage()
 
     Connections {
         target: timer
-        function onMediaCountdownAutomationChanged() {
+        function onMediaCountdownChanged() {
             if (page.visible && !page.targetDirty)
                 Qt.callLater(page.applySuggestedTarget)
         }
@@ -123,21 +147,287 @@ Item {
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: page.nowText = Qt.formatTime(new Date(), "HH:mm:ss")
+        onTriggered: {
+            page.nowValue = new Date()
+        }
+    }
+
+    component SurfaceCard: Rectangle {
+        id: card
+        default property alias contents: body.data
+        property alias contentSpacing: body.spacing
+        property int contentMargins: page.narrowContent ? 18 : 24
+
+        implicitHeight: body.implicitHeight + contentMargins * 2
+        radius: 18
+        color: page.pal_surface
+        border.width: 1
+        border.color: page.pal_border
+
+        ColumnLayout {
+            id: body
+            anchors.fill: parent
+            anchors.margins: card.contentMargins
+            spacing: 18
+        }
+    }
+
+    component PillTabs: Rectangle {
+        id: tabs
+        property var options: []
+        property int current: 0
+        signal picked(int index)
+
+        implicitHeight: 44
+        radius: height / 2
+        color: page.pal_surfaceAlt
+        border.width: 1
+        border.color: page.pal_border
+
+        Rectangle {
+            x: 4 + tabs.current * width
+            y: 4
+            width: (tabs.width - 8) / Math.max(1, tabs.options.length)
+            height: tabs.height - 8
+            radius: height / 2
+            color: page.pal_accent
+            Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        }
+
+        Row {
+            anchors.fill: parent
+            anchors.margins: 4
+            Repeater {
+                model: tabs.options
+                delegate: Item {
+                    id: tab
+                    required property int index
+                    required property string modelData
+                    width: (tabs.width - 8) / Math.max(1, tabs.options.length)
+                    height: tabs.height - 8
+                    activeFocusOnTab: true
+
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: modelData
+                    Accessible.checked: index === tabs.current
+
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                            tabs.picked(index)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Left && index > 0) {
+                            tabs.picked(index - 1)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Right && index + 1 < tabs.options.length) {
+                            tabs.picked(index + 1)
+                            event.accepted = true
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: "transparent"
+                        border.width: tab.activeFocus ? 2 : 0
+                        border.color: appTheme.white
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: tab.modelData
+                        color: tab.index === tabs.current ? appTheme.white : page.pal_textMuted
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                    }
+
+                    TimerPointerArea {
+                        anchors.fill: parent
+                        onClicked: tabs.picked(tab.index)
+                    }
+                }
+            }
+        }
+    }
+
+    component ChoiceChip: Rectangle {
+        id: chip
+        property string text: ""
+        property bool selected: false
+        signal clicked()
+
+        implicitWidth: chipLabel.implicitWidth + 30
+        implicitHeight: 44
+        radius: height / 2
+        color: selected
+               ? Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.14)
+               : (chipMouse.containsMouse ? page.pal_hover : page.pal_surfaceAlt)
+        border.width: activeFocus ? 2 : 1
+        border.color: selected || activeFocus ? page.pal_accent
+                                             : chipMouse.containsMouse
+                                               ? page.pal_borderStrong : page.pal_border
+        activeFocusOnTab: true
+        scale: chipMouse.pressed ? 0.96 : 1
+
+        Accessible.role: Accessible.RadioButton
+        Accessible.name: text
+        Accessible.checked: selected
+
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
+        Behavior on scale { NumberAnimation { duration: 80 } }
+
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                chip.clicked()
+                event.accepted = true
+            }
+        }
+
+        Text {
+            id: chipLabel
+            anchors.centerIn: parent
+            text: chip.text
+            color: chip.selected ? page.pal_accent : page.pal_textSecondary
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+        }
+
+        TimerPointerArea {
+            id: chipMouse
+            anchors.fill: parent
+            onClicked: chip.clicked()
+        }
+    }
+
+    component DurationEditor: Item {
+        id: editor
+        property int value: 600
+        property int minimumValue: 10
+        property int maximumValue: 86399
+        signal valueRequested(int seconds)
+
+        readonly property int hours: Math.floor(value / 3600)
+        readonly property int minutes: Math.floor((value % 3600) / 60)
+        readonly property int seconds: value % 60
+
+        implicitHeight: durationRow.implicitHeight
+
+        function requestValue(nextValue) {
+            valueRequested(page.clamp(nextValue, minimumValue, maximumValue))
+        }
+
+        RowLayout {
+            id: durationRow
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: page.narrowContent ? 4 : 8
+
+            ColumnLayout {
+                spacing: 5
+                TimerStepper {
+                    text: page.pad(editor.hours)
+                    accent: page.pal_accent
+                    fieldWidth: page.narrowContent ? 34 : 44
+                    editable: true
+                    decTip: qsTr("−1 h")
+                    incTip: qsTr("+1 h")
+                    onDecremented: editor.requestValue(editor.value - 3600)
+                    onIncremented: editor.requestValue(editor.value + 3600)
+                    onEdited: function(text) {
+                        var parsed = parseInt(text, 10)
+                        if (!isNaN(parsed))
+                            editor.requestValue(parsed * 3600 + editor.minutes * 60 + editor.seconds)
+                    }
+                }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("hours")
+                    color: page.pal_textMuted
+                    font.pixelSize: 11
+                }
+            }
+
+            Text {
+                text: ":"
+                color: page.pal_textSecondary
+                font.pixelSize: 22
+                font.weight: Font.DemiBold
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: 4
+            }
+
+            ColumnLayout {
+                spacing: 5
+                TimerStepper {
+                    text: page.pad(editor.minutes)
+                    accent: page.pal_accent
+                    fieldWidth: page.narrowContent ? 34 : 44
+                    editable: true
+                    decTip: qsTr("−1 min")
+                    incTip: qsTr("+1 min")
+                    onDecremented: editor.requestValue(editor.value - 60)
+                    onIncremented: editor.requestValue(editor.value + 60)
+                    onEdited: function(text) {
+                        var parsed = parseInt(text, 10)
+                        if (!isNaN(parsed))
+                            editor.requestValue(editor.hours * 3600 + page.clamp(parsed, 0, 59) * 60 + editor.seconds)
+                    }
+                }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("minutes")
+                    color: page.pal_textMuted
+                    font.pixelSize: 11
+                }
+            }
+
+            Text {
+                text: ":"
+                color: page.pal_textSecondary
+                font.pixelSize: 22
+                font.weight: Font.DemiBold
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: 4
+            }
+
+            ColumnLayout {
+                spacing: 5
+                TimerStepper {
+                    text: page.pad(editor.seconds)
+                    accent: page.pal_accent
+                    fieldWidth: page.narrowContent ? 34 : 44
+                    editable: true
+                    decTip: qsTr("−10 s")
+                    incTip: qsTr("+10 s")
+                    onDecremented: editor.requestValue(editor.value - 10)
+                    onIncremented: editor.requestValue(editor.value + 10)
+                    onEdited: function(text) {
+                        var parsed = parseInt(text, 10)
+                        if (!isNaN(parsed))
+                            editor.requestValue(editor.hours * 3600 + editor.minutes * 60 + page.clamp(parsed, 0, 59))
+                    }
+                }
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("seconds")
+                    color: page.pal_textMuted
+                    font.pixelSize: 11
+                }
+            }
+        }
     }
 
     Flickable {
         id: scroll
         anchors.fill: parent
-        anchors.topMargin: 8
-        anchors.bottomMargin: 4
+        anchors.topMargin: 10
+        anchors.bottomMargin: 6
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
         maximumFlickVelocity: 5200
         flickDeceleration: 2800
         contentWidth: width
-        contentHeight: contentCol.implicitHeight + 28
+        contentHeight: contentColumn.implicitHeight + 34
 
         property real wheelTargetY: contentY
 
@@ -146,19 +436,19 @@ Item {
         }
 
         function smoothWheelScroll(delta) {
-            if (!wheelAnim.running)
+            if (!wheelAnimation.running)
                 wheelTargetY = contentY
             wheelTargetY = clampContentY(wheelTargetY + delta)
-            wheelAnim.stop()
-            wheelAnim.to = wheelTargetY
-            wheelAnim.start()
+            wheelAnimation.stop()
+            wheelAnimation.to = wheelTargetY
+            wheelAnimation.start()
         }
 
         NumberAnimation {
-            id: wheelAnim
+            id: wheelAnimation
             target: scroll
             property: "contentY"
-            duration: 200
+            duration: 190
             easing.type: Easing.OutCubic
         }
 
@@ -172,112 +462,464 @@ Item {
             }
         }
 
-        GridLayout {
-            id: contentCol
-            width: Math.max(0, Math.min(560, scroll.width - 48))
-            x: Math.round((scroll.width - width) / 2)
-            columns: 1
-            columnSpacing: 0
-            rowSpacing: 16
+        ScrollBar.vertical: ScrollBar {
+            id: verticalBar
+            policy: ScrollBar.AsNeeded
+            contentItem: Rectangle {
+                implicitWidth: 5
+                radius: width / 2
+                color: page.pal_borderStrong
+                opacity: verticalBar.active ? 0.85 : 0.42
+                Behavior on opacity { NumberAnimation { duration: 140 } }
+            }
+            background: Item {}
+        }
 
-            Rectangle {
-                objectName: "automaticCountdownCard"
-                Layout.row: 1
+        ColumnLayout {
+            id: contentColumn
+            width: Math.max(0, Math.min(800, scroll.width - page.gutter * 2))
+            x: Math.round((scroll.width - width) / 2)
+            spacing: 18
+
+            Item {
+                objectName: "countdownAppearanceRow"
                 Layout.fillWidth: true
-                implicitHeight: automationCol.implicitHeight + 40
-                radius: 14
-                color: page.pal_surface
-                border.color: page.pal_border
-                border.width: 1
+                implicitHeight: appearanceLayout.implicitHeight
+
+                GridLayout {
+                    id: appearanceLayout
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    columns: page.narrowContent ? 1 : 2
+                    columnSpacing: 24
+                    rowSpacing: 10
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        spacing: 3
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("Projection appearance")
+                            color: page.pal_textPrimary
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("Used for future manual and automatic countdowns. An active projection is not changed.")
+                            color: page.pal_textMuted
+                            font.pixelSize: 10
+                            maximumLineCount: page.narrowContent ? 2 : 1
+                            elide: Text.ElideRight
+                            wrapMode: page.narrowContent ? Text.WordWrap : Text.NoWrap
+                        }
+                    }
+
+                    TimerSegment {
+                        objectName: "presentationSelector"
+                        Layout.fillWidth: page.narrowContent
+                        Layout.preferredWidth: page.narrowContent ? 0 : 284
+                        Layout.alignment: page.narrowContent ? Qt.AlignLeft : Qt.AlignRight
+                        options: [qsTr("Circular"), qsTr("Annual text")]
+                        current: page.presentationIndex
+                        accent: page.pal_accent
+                        stretch: true
+                        segHeight: 42
+                        labelPixelSize: 12
+                        onPicked: function(index) { timer.setMediaCountdownPresentation(index) }
+                    }
+                }
+            }
+
+            SurfaceCard {
+                objectName: "manualCountdownCard"
+                Layout.fillWidth: true
+                contentSpacing: 14
 
                 ColumnLayout {
-                    id: automationCol
-                    anchors.fill: parent
-                    anchors.margins: 20
+                    Layout.fillWidth: true
+                    spacing: 3
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Start manually")
+                        color: page.pal_textPrimary
+                        font.pixelSize: 17
+                        font.weight: Font.Bold
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Choose a target, review it, then start the countdown.")
+                        color: page.pal_textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    implicitHeight: 44
+
+                    PillTabs {
+                        objectName: "manualModeTabs"
+                        anchors.left: parent.left
+                        width: page.narrowContent ? parent.width : Math.min(340, parent.width)
+                        options: [qsTr("Until a time"), qsTr("For a duration")]
+                        current: page.manualMode
+                        onPicked: function(index) { page.manualMode = index }
+                    }
+                }
+
+                ColumnLayout {
+                    objectName: "manualTargetTimePanel"
+                    Layout.fillWidth: true
+                    visible: page.manualMode === 0
+                    spacing: 14
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: targetLayout.implicitHeight + 28
+                        radius: 14
+                        color: page.pal_surfaceAlt
+                        border.width: 1
+                        border.color: page.pal_border
+
+                        GridLayout {
+                            id: targetLayout
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            columns: page.narrowContent ? 1 : 2
+                            columnSpacing: 22
+                            rowSpacing: 12
+
+                            RowLayout {
+                                Layout.alignment: page.narrowContent ? Qt.AlignHCenter : Qt.AlignLeft
+                                spacing: 6
+                                TimerStepper {
+                                    text: page.pad(page.hourValue)
+                                    accent: page.pal_accent
+                                    fieldWidth: 48
+                                    valueFontSize: 27
+                                    editable: true
+                                    decTip: qsTr("−1 h")
+                                    incTip: qsTr("+1 h")
+                                    onDecremented: {
+                                        page.targetDirty = true
+                                        page.hourValue = (page.hourValue + 23) % 24
+                                    }
+                                    onIncremented: {
+                                        page.targetDirty = true
+                                        page.hourValue = (page.hourValue + 1) % 24
+                                    }
+                                    onEdited: function(text) {
+                                        var parsed = parseInt(text, 10)
+                                        if (!isNaN(parsed)) {
+                                            page.targetDirty = true
+                                            page.hourValue = ((parsed % 24) + 24) % 24
+                                        }
+                                    }
+                                }
+                                Text {
+                                    text: ":"
+                                    color: page.pal_textPrimary
+                                    font.pixelSize: 27
+                                    font.weight: Font.Bold
+                                }
+                                TimerStepper {
+                                    text: page.pad(page.minuteValue)
+                                    accent: page.pal_accent
+                                    fieldWidth: 48
+                                    valueFontSize: 27
+                                    editable: true
+                                    decTip: qsTr("−1 min")
+                                    incTip: qsTr("+1 min")
+                                    onDecremented: {
+                                        page.targetDirty = true
+                                        page.minuteValue = (page.minuteValue + 59) % 60
+                                    }
+                                    onIncremented: {
+                                        page.targetDirty = true
+                                        page.minuteValue = (page.minuteValue + 1) % 60
+                                    }
+                                    onEdited: function(text) {
+                                        var parsed = parseInt(text, 10)
+                                        if (!isNaN(parsed)) {
+                                            page.targetDirty = true
+                                            page.minuteValue = ((parsed % 60) + 60) % 60
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                Layout.alignment: Qt.AlignVCenter
+                                text: page.selectedTargetText()
+                                color: page.pal_textPrimary
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: page.narrowContent ? Text.AlignHCenter : Text.AlignLeft
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    TimerButton {
+                        objectName: "startTargetTimeButton"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 46
+                        text: qsTr("Start countdown")
+                        variant: "primary"
+                        accent: page.pal_accent
+                        iconName: "play"
+                        iconSize: 14
+                        onClicked: timer.startCountdownToTime(page.hourValue, page.minuteValue)
+                    }
+                }
+
+                ColumnLayout {
+                    objectName: "manualDurationPanel"
+                    Layout.fillWidth: true
+                    visible: page.manualMode === 1
                     spacing: 16
 
-                    RowLayout {
+                    Text {
                         Layout.fillWidth: true
-                        spacing: 12
+                        text: qsTr("How long should the countdown run?")
+                        color: page.pal_textSecondary
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                    }
 
-                        ColumnLayout {
+                    Flow {
+                        id: manualPresetFlow
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: childrenRect.height
+                        spacing: 8
+
+                        Repeater {
+                            model: [300, 600, 900, 1200, 1800]
+                            delegate: ChoiceChip {
+                                required property int modelData
+                                objectName: "durationPreset" + modelData
+                                text: qsTr("%1 min").arg(modelData / 60)
+                                selected: !page.customDurationVisible && page.selectedDurationSeconds === modelData
+                                onClicked: page.selectManualDuration(modelData)
+                            }
+                        }
+
+                        ChoiceChip {
+                            objectName: "customDurationChip"
+                            text: qsTr("Custom")
+                            selected: page.customDurationVisible
+                            onClicked: page.customDurationVisible = true
+                        }
+                    }
+
+                    DurationEditor {
+                        objectName: "customDurationEditor"
+                        Layout.fillWidth: true
+                        visible: page.customDurationVisible
+                        value: page.selectedDurationSeconds
+                        minimumValue: 10
+                        maximumValue: 86399
+                        onValueRequested: function(seconds) {
+                            page.selectedDurationSeconds = seconds
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("Duration: %1").arg(page.durationText(page.selectedDurationSeconds))
+                        color: page.pal_textMuted
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignRight
+                    }
+
+                    TimerButton {
+                        objectName: "startDurationButton"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 46
+                        text: qsTr("Start countdown")
+                        variant: "primary"
+                        accent: page.pal_accent
+                        iconName: "play"
+                        iconSize: 14
+                        onClicked: timer.startCountdownDuration(page.selectedDurationSeconds)
+                    }
+                }
+            }
+
+            SurfaceCard {
+                objectName: "automaticCountdownCard"
+                Layout.fillWidth: true
+                contentSpacing: 12
+                contentMargins: page.narrowContent ? 16 : 20
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: page.narrowContent ? 1 : 2
+                    columnSpacing: 18
+                    rowSpacing: 10
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        spacing: 5
+
+                        Text {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            spacing: 3
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                text: qsTr("Automatic countdown")
-                                color: page.pal_textPrimary
-                                font.pixelSize: 16
-                                font.weight: Font.Bold
-                            }
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                text: qsTr("Shows a countdown in the media window before configured meetings.")
-                                color: page.pal_textMuted
-                                font.pixelSize: 11
-                                wrapMode: Text.WordWrap
+                            text: qsTr("Before meetings")
+                            color: page.pal_textPrimary
+                            font.pixelSize: 15
+                            font.weight: Font.Bold
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            objectName: "countdownStatusDescription"
+                            Layout.fillWidth: true
+                            text: page.automationSummary()
+                            color: page.pal_textMuted
+                            font.pixelSize: 11
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: page.automationExpanded ? 3 : 2
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.alignment: page.narrowContent ? Qt.AlignRight : Qt.AlignVCenter
+                        spacing: 8
+
+                        TimerToggle {
+                            objectName: "automationToggle"
+                            checked: !!page.automation.enabled
+                            accent: page.pal_accent
+                            accessibleName: qsTr("Automatic countdown before meetings")
+                            onToggled: function(value) {
+                                timer.setAutomaticCountdownEnabled(value)
+                                if (value)
+                                    page.automationExpanded = true
                             }
                         }
 
-                        TimerToggle {
-                            checked: page.automation ? page.automation.enabled : false
-                            accent: page.pal_accent
-                            onToggled: function(value) { timer.setAutomaticCountdownEnabled(value) }
+                        Rectangle {
+                            id: automationExpander
+                            objectName: "toggleAutomationSettingsButton"
+                            signal clicked()
+                            Layout.preferredWidth: 44
+                            Layout.preferredHeight: 44
+                            radius: height / 2
+                            color: expanderMouse.containsMouse ? page.pal_hover : "transparent"
+                            border.width: activeFocus ? 2 : 1
+                            border.color: activeFocus ? page.pal_accent : page.pal_border
+                            activeFocusOnTab: true
+
+                            Accessible.role: Accessible.Button
+                            Accessible.name: page.automationExpanded ? qsTr("Hide settings") : qsTr("Configure")
+
+                            onClicked: page.automationExpanded = !page.automationExpanded
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                                    automationExpander.clicked()
+                                    event.accepted = true
+                                }
+                            }
+
+                            Image {
+                                anchors.centerIn: parent
+                                width: 16
+                                height: 16
+                                sourceSize: Qt.size(32, 32)
+                                source: "image://timericons/chevron_down/32/" +
+                                        String(page.pal_textSecondary).replace("#", "")
+                                rotation: page.automationExpanded ? 180 : 0
+                                Behavior on rotation {
+                                    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+                                }
+                            }
+
+                            TimerPointerArea {
+                                id: expanderMouse
+                                anchors.fill: parent
+                                onClicked: automationExpander.clicked()
+                            }
                         }
+                    }
+                }
+
+                ColumnLayout {
+                    objectName: "automationSettingsPanel"
+                    Layout.fillWidth: true
+                    visible: page.automationExpanded
+                    enabled: page.automationExpanded
+                    opacity: page.automationExpanded ? 1 : 0
+                    spacing: 16
+                    Behavior on opacity {
+                        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
                     }
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: statusCol.implicitHeight + 22
-                        radius: 10
-                        color: Qt.rgba(page.statusColor().r, page.statusColor().g,
-                                       page.statusColor().b, 0.08)
+                        Layout.preferredHeight: 1
+                        color: page.pal_border
+                        opacity: 0.8
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: page.configuredCount === 0
+                        implicitHeight: emptyScheduleColumn.implicitHeight + 32
+                        radius: 14
+                        color: page.pal_surfaceAlt
                         border.width: 1
-                        border.color: Qt.rgba(page.statusColor().r, page.statusColor().g,
-                                              page.statusColor().b, 0.28)
+                        border.color: appTheme.warning
 
                         ColumnLayout {
-                            id: statusCol
+                            id: emptyScheduleColumn
                             anchors.fill: parent
-                            anchors.margins: 11
-                            spacing: 4
-                            RowLayout {
-                                spacing: 7
-                                Rectangle {
-                                    width: 7; height: 7; radius: 4
-                                    color: page.statusColor()
-                                }
-                                Text {
-                                    text: page.statusTitle()
-                                    color: page.pal_textPrimary
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
-                                }
+                            anchors.margins: 16
+                            spacing: 10
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("Meeting schedule required")
+                                color: page.pal_textPrimary
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
                             }
                             Text {
-                                objectName: "countdownStatusDescription"
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                text: page.statusDescription()
+                                text: qsTr("Define at least one meeting day and time so this automation can run.")
                                 color: page.pal_textMuted
                                 font.pixelSize: 11
                                 wrapMode: Text.WordWrap
+                            }
+                            TimerButton {
+                                Layout.alignment: Qt.AlignLeft
+                                Layout.preferredHeight: 42
+                                text: qsTr("Configure meeting times")
+                                variant: "soft"
+                                accent: page.pal_accent
+                                onClicked: timer.configureMeetingSchedule()
                             }
                         }
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        visible: page.configuredCount > 0
+                        spacing: 16
 
-                        RowLayout {
+                        ColumnLayout {
                             Layout.fillWidth: true
+                            spacing: 5
                             Text {
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 0
                                 text: qsTr("How long before the meeting should the countdown start?")
                                 color: page.pal_textSecondary
                                 font.pixelSize: 12
@@ -285,340 +927,103 @@ Item {
                                 wrapMode: Text.WordWrap
                             }
                             Text {
-                                text: qsTr("10 seconds – 2 hours")
-                                color: page.pal_textMuted
-                                font.pixelSize: 10
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.alignment: Qt.AlignHCenter
-                            spacing: 6
-
-                            ColumnLayout {
-                                spacing: 3
-                                TimerStepper {
-                                    text: page.pad(page.leadHours)
-                                    accent: page.pal_accent
-                                    fieldWidth: 34
-                                    editable: true
-                                    decTip: qsTr("−1 h"); incTip: qsTr("+1 h")
-                                    onDecremented: page.updateLead(page.leadSeconds - 3600)
-                                    onIncremented: page.updateLead(page.leadSeconds + 3600)
-                                    onEdited: function(v) {
-                                        var n = parseInt(v, 10)
-                                        if (!isNaN(n)) page.updateLead(n * 3600 + page.leadMinutes * 60 + page.leadRemainderSeconds)
-                                    }
-                                }
-                                Text { Layout.alignment: Qt.AlignHCenter; text: qsTr("h"); color: page.pal_textMuted; font.pixelSize: 10 }
-                            }
-                            Text { text: ":"; color: page.pal_textSecondary; font.pixelSize: 18; Layout.alignment: Qt.AlignTop; Layout.topMargin: 4 }
-                            ColumnLayout {
-                                spacing: 3
-                                TimerStepper {
-                                    text: page.pad(page.leadMinutes)
-                                    accent: page.pal_accent
-                                    fieldWidth: 34
-                                    editable: true
-                                    decTip: qsTr("−1 min"); incTip: qsTr("+1 min")
-                                    onDecremented: page.updateLead(page.leadSeconds - 60)
-                                    onIncremented: page.updateLead(page.leadSeconds + 60)
-                                    onEdited: function(v) {
-                                        var n = parseInt(v, 10)
-                                        if (!isNaN(n)) page.updateLead(page.leadHours * 3600 + Math.max(0, Math.min(59, n)) * 60 + page.leadRemainderSeconds)
-                                    }
-                                }
-                                Text { Layout.alignment: Qt.AlignHCenter; text: qsTr("min"); color: page.pal_textMuted; font.pixelSize: 10 }
-                            }
-                            Text { text: ":"; color: page.pal_textSecondary; font.pixelSize: 18; Layout.alignment: Qt.AlignTop; Layout.topMargin: 4 }
-                            ColumnLayout {
-                                spacing: 3
-                                TimerStepper {
-                                    text: page.pad(page.leadRemainderSeconds)
-                                    accent: page.pal_accent
-                                    fieldWidth: 34
-                                    editable: true
-                                    decTip: qsTr("−10 s"); incTip: qsTr("+10 s")
-                                    onDecremented: page.updateLead(page.leadSeconds - 10)
-                                    onIncremented: page.updateLead(page.leadSeconds + 10)
-                                    onEdited: function(v) {
-                                        var n = parseInt(v, 10)
-                                        if (!isNaN(n)) page.updateLead(page.leadHours * 3600 + page.leadMinutes * 60 + Math.max(0, Math.min(59, n)))
-                                    }
-                                }
-                                Text { Layout.alignment: Qt.AlignHCenter; text: qsTr("s"); color: page.pal_textMuted; font.pixelSize: 10 }
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: page.pal_border; opacity: 0.7 }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Text {
-                            text: qsTr("Default appearance")
-                            color: page.pal_textSecondary
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                        }
-                        TimerSegment {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 36
-                            options: [qsTr("Circular timer"), qsTr("Annual text")]
-                            current: page.automation ? page.automation.presentationIndex : 0
-                            accent: page.pal_accent
-                            stretch: true
-                            segHeight: 36
-                            onPicked: function(index) { timer.setMediaCountdownPresentation(index) }
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: qsTr("Used for automatic and manual countdowns.")
-                            color: page.pal_textMuted
-                            font.pixelSize: 10
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: page.pal_border; opacity: 0.7 }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                text: qsTr("Meeting times")
-                                color: page.pal_textSecondary
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                            }
-                            TimerButton {
-                                text: page.automation && page.automation.configuredCount === 0
-                                      ? qsTr("Configure meetings")
-                                      : page.automation && page.automation.configuredCount === 1
-                                        ? qsTr("Complete times") : qsTr("Edit times")
-                                variant: "ghost"
-                                accent: page.pal_accent
-                                onClicked: timer.configureMeetingSchedule()
-                            }
-                        }
-
-                        Repeater {
-                            model: page.automation ? page.automation.slots : []
-                            delegate: RowLayout {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                spacing: 8
-                                Text {
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 0
-                                    text: modelData.label
-                                    color: page.pal_textMuted
-                                    font.pixelSize: 11
-                                }
-                                Text {
-                                    text: modelData.configured
-                                          ? modelData.weekdayLabel + ", " + modelData.timeText
-                                          : qsTr("Not configured")
-                                    color: modelData.configured ? page.pal_textSecondary : page.pal_textMuted
-                                    font.pixelSize: 11
-                                    font.weight: modelData.configured ? Font.DemiBold : Font.Normal
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                objectName: "manualCountdownCard"
-                Layout.row: 0
-                Layout.fillWidth: true
-                implicitHeight: manualCol.implicitHeight + 40
-                radius: 14
-                color: page.pal_surface
-                border.color: page.pal_border
-                border.width: 1
-
-                ColumnLayout {
-                    id: manualCol
-                    anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 14
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                            spacing: 3
-                            Text {
-                                text: qsTr("Start manually")
-                                color: page.pal_textPrimary
-                                font.pixelSize: 16
-                                font.weight: Font.Bold
-                            }
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 0
-                                text: qsTr("Start or restart a countdown at any time.")
+                                text: qsTr("Choose a common interval or set a precise time between 10 seconds and 2 hours.")
                                 color: page.pal_textMuted
                                 font.pixelSize: 11
                                 wrapMode: Text.WordWrap
                             }
                         }
-                        RowLayout {
-                            spacing: 7
-                            Text {
-                                text: qsTr("Now")
-                                color: page.pal_textMuted
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                                font.capitalization: Font.AllUppercase
-                            }
-                            Text {
-                                text: page.nowText
-                                color: page.pal_textSecondary
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                            }
-                        }
-                    }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
+                        Flow {
+                            id: leadPresetFlow
                             Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                            text: qsTr("Reach zero at")
-                            color: page.pal_textSecondary
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                        }
-                        Rectangle {
-                            visible: page.automation && page.automation.suggestedFromMeeting && !page.targetDirty
-                            implicitWidth: selectedMeetingText.implicitWidth + 16
-                            implicitHeight: 24
-                            radius: 7
-                            color: Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.10)
-                            border.color: Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.28)
-                            Text {
-                                id: selectedMeetingText
-                                anchors.centerIn: parent
-                                text: qsTr("Meeting time selected")
-                                color: page.pal_accent
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                            }
-                        }
-                    }
+                            Layout.preferredHeight: childrenRect.height
+                            spacing: 8
 
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 8
-                        TimerStepper {
-                            text: page.pad(page.hourValue)
-                            accent: page.pal_accent
-                            fieldWidth: 50
-                            editable: true
-                            decTip: qsTr("−1 h"); incTip: qsTr("+1 h")
-                            onDecremented: { page.targetDirty = true; page.hourValue = (page.hourValue + 23) % 24 }
-                            onIncremented: { page.targetDirty = true; page.hourValue = (page.hourValue + 1) % 24 }
-                            onEdited: function(v) {
-                                var n = parseInt(v, 10)
-                                if (!isNaN(n)) { page.targetDirty = true; page.hourValue = ((n % 24) + 24) % 24 }
-                            }
-                        }
-                        Text { text: ":"; color: page.pal_textPrimary; font.pixelSize: 22; font.weight: Font.Bold }
-                        TimerStepper {
-                            text: page.pad(page.minValue)
-                            accent: page.pal_accent
-                            fieldWidth: 50
-                            editable: true
-                            decTip: qsTr("−1 min"); incTip: qsTr("+1 min")
-                            onDecremented: { page.targetDirty = true; page.minValue = (page.minValue + 59) % 60 }
-                            onIncremented: { page.targetDirty = true; page.minValue = (page.minValue + 1) % 60 }
-                            onEdited: function(v) {
-                                var n = parseInt(v, 10)
-                                if (!isNaN(n)) { page.targetDirty = true; page.minValue = ((n % 60) + 60) % 60 }
-                            }
-                        }
-                    }
-
-                    TimerButton {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 44
-                        text: qsTr("Start countdown to this time")
-                        variant: "primary"
-                        accent: page.pal_accent
-                        iconName: "play"
-                        iconSize: 13
-                        onClicked: timer.startCountdownToTime(page.hourValue, page.minValue)
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: page.pal_border; opacity: 0.7 }
-
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: qsTr("Or count down for")
-                        color: page.pal_textMuted
-                        font.pixelSize: 10
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 1.2
-                        font.capitalization: Font.AllUppercase
-                    }
-
-                    Grid {
-                        id: presetGrid
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: implicitHeight
-                        columns: width < 390 ? 3 : 5
-                        spacing: 8
-                        Repeater {
-                            model: [5, 10, 15, 20, 30]
-                            delegate: Rectangle {
-                                required property int modelData
-                                width: Math.max(0, (presetGrid.width
-                                                   - presetGrid.spacing * (presetGrid.columns - 1))
-                                                  / presetGrid.columns)
-                                height: 40
-                                radius: 8
-                                color: chipMa.containsMouse
-                                       ? Qt.rgba(page.pal_accent.r, page.pal_accent.g, page.pal_accent.b, 0.14)
-                                       : page.pal_surfaceAlt
-                                border.width: 1
-                                border.color: chipMa.containsMouse ? page.pal_accent : page.pal_border
-                                scale: chipMa.pressed ? 0.95 : 1.0
-                                Behavior on color { ColorAnimation { duration: 130 } }
-                                Behavior on border.color { ColorAnimation { duration: 130 } }
-                                Behavior on scale { NumberAnimation { duration: 90 } }
-                                ColumnLayout {
-                                    anchors.centerIn: parent
-                                    spacing: -1
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: "" + modelData
-                                        color: chipMa.containsMouse ? appTheme.accentText : page.pal_textPrimary
-                                        font.pixelSize: 17
-                                        font.weight: Font.Bold
-                                    }
-                                    Text {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        text: qsTr("min")
-                                        color: page.pal_textMuted
-                                        font.pixelSize: 10
+                            Repeater {
+                                model: [300, 600, 900, 1800]
+                                delegate: ChoiceChip {
+                                    required property int modelData
+                                    objectName: "leadPreset" + modelData
+                                    text: qsTr("%1 min").arg(modelData / 60)
+                                    selected: !page.leadCustomVisible && page.leadSeconds === modelData
+                                    onClicked: {
+                                        page.leadCustomVisible = false
+                                        page.updateLead(modelData)
                                     }
                                 }
-                                TimerPointerArea {
-                                    id: chipMa
-                                    anchors.fill: parent
-                                    onClicked: timer.startCountdownMinutes(modelData)
+                            }
+
+                            ChoiceChip {
+                                text: qsTr("Custom")
+                                selected: page.leadCustomVisible
+                                onClicked: page.leadCustomVisible = true
+                            }
+                        }
+
+                        DurationEditor {
+                            Layout.fillWidth: true
+                            visible: page.leadCustomVisible
+                            value: page.leadSeconds
+                            minimumValue: 10
+                            maximumValue: 7200
+                            onValueRequested: function(seconds) { page.updateLead(seconds) }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 1
+                                color: page.pal_border
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Next meeting")
+                                    color: page.pal_textMuted
+                                    font.pixelSize: 11
                                 }
+                                Text {
+                                    text: page.nextMeeting.startTime
+                                          ? page.nextMeeting.weekdayLabel + ", " + page.nextMeeting.startTime
+                                          : qsTr("Not configured")
+                                    color: page.pal_textPrimary
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Countdown starts")
+                                    color: page.pal_textMuted
+                                    font.pixelSize: 11
+                                }
+                                Text {
+                                    text: page.nextMeeting.triggerTime || "--:--:--"
+                                    color: page.pal_accent
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+
+                            TimerButton {
+                                Layout.alignment: Qt.AlignRight
+                                Layout.preferredHeight: 40
+                                text: qsTr("Edit days and times")
+                                variant: "ghost"
+                                accent: page.pal_accent
+                                onClicked: timer.configureMeetingSchedule()
                             }
                         }
                     }
