@@ -552,6 +552,42 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     assert raw["version"] == 4
 
 
+def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
+    tmp_path: Path,
+) -> None:
+    tree_key = "mwb:2026-05-25:T:issue"
+    store = MeetingTreeStore(tmp_path / "meeting_trees.json")
+    complete = [_section("section:a", "Section", [_media("media:a", "Media")])]
+    initial = store.reconcile(
+        tree_key,
+        complete,
+        "complete-hash",
+        MeetingTreeOverview(title="Meeting", media_count=1),
+        source_checksum="complete-checksum",
+    )
+    store.save(
+        tree_key,
+        initial.nodes,
+        initial.canonical_hash,
+        {"media:a"},
+    )
+
+    preliminary = [_section("section:a", "Section", [])]
+    pending = store.reconcile(
+        tree_key,
+        preliminary,
+        "preliminary-hash",
+        MeetingTreeOverview(title="Meeting", media_count=0),
+        source_checksum="new-checksum",
+        canonical_complete=False,
+    )
+
+    assert pending.canonical_nodes == complete
+    assert pending.canonical_hash == "complete-hash"
+    assert pending.source_checksum == "complete-checksum"
+    assert pending.deleted_source_keys == {"media:a"}
+
+
 def test_controller_exposes_canonical_restore_qml_contract() -> None:
     meta = MeetingTreeController.staticMetaObject
 

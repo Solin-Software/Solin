@@ -475,6 +475,10 @@ class MeetingPreparationService(QObject):
             job.key.is_sign_language,
         )
         try:
+            canonical_complete = (
+                pub_type != "mwb"
+                or wd.cbs_status in {"idle", "ready", "empty"}
+            )
             snapshot = self._store.reconcile(
                 tree_key,
                 canonical,
@@ -486,6 +490,7 @@ class MeetingPreparationService(QObject):
                     if pub_type == "mwb"
                     else wd.wt_source_checksum
                 ),
+                canonical_complete=canonical_complete,
             )
         except (OSError, UnicodeError, ValueError) as exc:
             message = str(exc)

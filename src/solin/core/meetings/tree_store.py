@@ -321,26 +321,42 @@ class MeetingTreeStore:
         *,
         fallback: MeetingTreeSnapshot | None = None,
         source_checksum: str | None = None,
+        canonical_complete: bool = True,
     ) -> MeetingTreeSnapshot:
-        """Atomically merge canonical data into the latest persisted aggregate."""
+        """Atomically merge prepared data and confirm it only when complete."""
         with self._lock:
             current = _snapshot_from_record(
                 tree_key,
                 self._runtime_data().get("trees", {}).get(tree_key),
             )
             saved = current or fallback
-            deleted_source_keys = (
+            saved_deleted_source_keys = (
                 set(saved.deleted_source_keys) if saved is not None else set()
             )
-            deleted_source_keys &= canonical_source_keys(canonical)
-            merged = MeetingTreeMerger(canonical, deleted_source_keys).merge(
+            canonical_keys = canonical_source_keys(canonical)
+            merge_deleted_source_keys = saved_deleted_source_keys & canonical_keys
+            merged = MeetingTreeMerger(canonical, merge_deleted_source_keys).merge(
                 saved.nodes if saved is not None else None
+            )
+            durable_deleted_source_keys = (
+                merge_deleted_source_keys
+                if canonical_complete
+                else (
+                    set(current.deleted_source_keys)
+                    if current is not None
+                    else set()
+                )
+            )
+            durable_canonical_hash = (
+                canonical_hash
+                if canonical_complete
+                else (current.canonical_hash if current is not None else "")
             )
             snapshot = self._save_locked(
                 tree_key,
                 merged,
-                canonical_hash,
-                deleted_source_keys,
+                durable_canonical_hash,
+                durable_deleted_source_keys,
                 dict(saved.linked_folder_files) if saved is not None else None,
                 (
                     copy.deepcopy(saved.meeting_folder_imports)
@@ -349,11 +365,15 @@ class MeetingTreeStore:
                 ),
                 overview,
                 source_checksum=(
-                    source_checksum
-                    if source_checksum is not None
-                    else (saved.source_checksum if saved is not None else "")
+                    (
+                        source_checksum
+                        if source_checksum is not None
+                        else (saved.source_checksum if saved is not None else "")
+                    )
+                    if canonical_complete
+                    else None
                 ),
-                canonical_nodes=canonical,
+                canonical_nodes=canonical if canonical_complete else None,
                 canonical_reset_generation=(
                     saved.canonical_reset_generation if saved is not None else 0
                 ),
@@ -361,9 +381,9 @@ class MeetingTreeStore:
                     {
                         key: copy.deepcopy(node)
                         for key, node in saved.hidden_canonical_media.items()
-                        if key in canonical_source_keys(canonical)
+                        if key in canonical_keys
                     }
-                    if saved is not None
+                    if canonical_complete and saved is not None
                     else None
                 ),
             )

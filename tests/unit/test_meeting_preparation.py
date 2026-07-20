@@ -134,6 +134,7 @@ def _week_data(
     *,
     with_media: bool,
     source_checksum: str = "",
+    cbs_status: str = "idle",
 ) -> WeekData:
     media = (
         [
@@ -157,6 +158,7 @@ def _week_data(
         mwb_source_checksum=source_checksum,
         mwb_date_label="May 25-31",
         mwb_all_media=media,
+        cbs_status=cbs_status,
     )
 
 
@@ -389,6 +391,40 @@ def test_reconciled_tree_records_the_confirmed_source_checksum(monkeypatch, tmp_
                 and snapshot.source_checksum == "confirmed"
             )
         )
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_loading_mwb_references_do_not_confirm_partial_canonical_tree(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    try:
+        service.ensure_week(MeetingPreparationRequest(key=key))
+        generation = int(publication.loads[0]["generation"])
+        partial = _week_data(
+            generation,
+            with_media=True,
+            source_checksum="confirmed",
+            cbs_status="loading",
+        )
+        publication.mwb_ready.emit(key.monday.isoformat(), partial)
+
+        snapshot = store.find_snapshot("mwb", key.monday, "T")
+        assert snapshot is not None
+        assert snapshot.nodes
+        assert snapshot.canonical_nodes == []
+        assert snapshot.source_checksum == ""
+
+        partial.cbs_status = "ready"
+        publication.cbs_ready.emit(key.monday.isoformat(), partial)
+
+        confirmed = store.find_snapshot("mwb", key.monday, "T")
+        assert confirmed is not None
+        assert confirmed.canonical_nodes
+        assert confirmed.source_checksum == "confirmed"
     finally:
         service.shutdown(wait_ms=1000)
 
