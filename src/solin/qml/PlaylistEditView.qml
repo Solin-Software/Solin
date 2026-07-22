@@ -260,7 +260,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             playlistController: root.hasController ? controller : null
-            treeModel: typeof playlistModel !== "undefined" ? playlistModel : null
+            treeSource: typeof playlistTreeSource !== "undefined" ? playlistTreeSource : null
             hasItems: root.hasItems
             loading: root.isLoading
             contentLeftInset: root.contentLeftInset

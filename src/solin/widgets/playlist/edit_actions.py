@@ -130,6 +130,9 @@ class PlaylistEditActionsMixin:
                 continue
             new_items.append(candidate)
             added += 1
+        if added and self._is_watched:
+            self._sync_playlist_chrome(emit_data_changed=False)
+            return
         if added:
             items = self._pl.setdefault("items", [])
             inserted_with_tree = (
@@ -156,9 +159,6 @@ class PlaylistEditActionsMixin:
                 self._tree_session.refresh()
             self._sync_playlist_chrome(emit_data_changed=False)
             QTimer.singleShot(0, self._request_missing_thumbnails)
-        if added and self._is_watched:
-            self._sync_playlist_chrome(emit_data_changed=False)
-            return
         if added:
             if added == 1:
                 msg = self.tr("1 file added")

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
@@ -929,6 +930,40 @@ def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path)
 
     assert queued == []
     assert warnings == ["File already in playlist"]
+
+
+def test_linked_folder_accepts_distinct_local_jw_filename_variants(tmp_path):
+    first = tmp_path / "sjjm_E_02_r720P.mp4"
+    second = tmp_path / "sjjm_E_02_r720P (1).mp4"
+    first.write_bytes(b"first-recording")
+    second.write_bytes(b"different-recording")
+    queued = []
+    view = SimpleNamespace(
+        _pl={"items": []},
+        _is_watched=True,
+        _watched_path=str(tmp_path / "linked"),
+        _tree_session=SimpleNamespace(
+            pending_items=lambda: (),
+            refresh=lambda: None,
+        ),
+        _queue_watched_media_copy=lambda item, **options: queued.append(
+            (item, options)
+        ),
+        _list_id_for_section=lambda _section_id: "root",
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _notifications=SimpleNamespace(
+            warning=lambda _message: None,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+
+    PlaylistEditActionsMixin._add_files(view, [str(first), str(second)])
+
+    assert [Path(item["url"]).name for item, _options in queued] == [
+        first.name,
+        second.name,
+    ]
 
 
 def test_linked_folder_commit_deduplicates_legacy_destination(tmp_path):

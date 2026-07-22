@@ -15,6 +15,7 @@ from solin.controllers.thumbnail_persistence_controller import (
 from solin.controllers.snapshot_write_coordinator import SnapshotWriteCoordinator
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.foundation.resource_keys import ResourceClaim
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.ui.qml.media_tree.state import MediaStateRegistry
 
 
@@ -35,6 +36,7 @@ class MediaTreeRuntime(QObject):
     ) -> None:
         super().__init__(parent)
         self.resource_lanes = ResourceLaneRegistry()
+        self.presentation_workers = ThreadedWorkerPool()
         self.registry = MediaStateRegistry(self)
         self.operations = MediaOperationCoordinator(
             max_workers=max_workers,
@@ -87,7 +89,14 @@ class MediaTreeRuntime(QObject):
         unfinished_snapshots = self.snapshots.shutdown(wait_ms=min(wait_ms, 1_500))
         self.probes.shutdown()
         unfinished_operations = self.operations.shutdown(wait_ms)
-        return (*unfinished_snapshots, *unfinished_operations)
+        unfinished_presentations = self.presentation_workers.shutdown(
+            timeout=min(wait_ms / 1_000, 1.5)
+        )
+        return (
+            *unfinished_snapshots,
+            *unfinished_operations,
+            *unfinished_presentations,
+        )
 
 
 __all__ = ["MediaTreeRuntime"]

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from copy import deepcopy
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,12 +21,23 @@ from solin.core.playlists.tree_editing import (
     insert_playlist_media,
     move_playlist_node,
 )
-from solin.ui.qml.media_tree.model import MediaTreeModel
+from solin.ui.qml.media_tree.model import MediaTreeSource
+from solin.ui.qml.media_tree.build_coordinator import (
+    SnapshotBuildCoordinator,
+    SnapshotBuildRequest,
+    SnapshotBuildResult,
+)
 from solin.ui.qml.media_tree.playlist_presenter import (
     PendingPlaylistMedia,
     PlaylistTreePresenter,
 )
+from solin.ui.qml.media_tree.probe_queue import ProbeRequestQueue
 from solin.ui.qml.media_tree.topology import TopologySignature, topology_signature
+from solin.styles.theme import current_theme_scheme
+from solin.ui.qml.playlist.visuals import playlist_media_badge
+
+
+logger = logging.getLogger(__name__)
 
 
 class PlaylistTreeSession(QObject):
@@ -41,11 +54,21 @@ class PlaylistTreeSession(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self.model = MediaTreeModel("playlist:inactive", self)
+        self.source = MediaTreeSource("playlist:inactive", self)
+        self.source.snapshotPublished.connect(self.snapshotPublished)
         self._runtime = runtime
         self._thumbnail_path = thumbnail_path
         self._thumbnail_ready = thumbnail_ready
         self._presenter = PlaylistTreePresenter()
+        self._builds = SnapshotBuildCoordinator(
+            runtime.presentation_workers,
+            worker_name="playlist-tree-snapshot",
+            parent=self,
+        )
+        self._builds.snapshotReady.connect(self._on_snapshot_ready)
+        self._builds.buildFailed.connect(self._on_snapshot_failed)
+        self._builds.idle.connect(self._resume_deferred_publish)
+        self.source.retryRequested.connect(self._schedule_publish)
         self._playlist: dict[str, Any] | None = None
         self._owner_id = ""
         self._revision = 0
@@ -56,10 +79,15 @@ class PlaylistTreeSession(QObject):
         self._source_revisions: dict[str, int] = {}
         self._pending: dict[str, PendingPlaylistMedia] = {}
         self._operations: dict[str, MediaOperationRecord] = {}
+        self._probe_requests = ProbeRequestQueue(
+            self._request_queued_node,
+            parent=self,
+        )
         self._publish_timer = QTimer(self)
         self._publish_timer.setSingleShot(True)
         self._publish_timer.setInterval(0)
         self._publish_timer.timeout.connect(self._publish_now)
+        self._publish_dirty = False
         runtime.registry.stateChanged.connect(self._on_state_changed)
         runtime.operations.operationChanged.connect(self._on_operation_changed)
         if thumbnail_ready is not None:
@@ -72,7 +100,7 @@ class PlaylistTreeSession(QObject):
 
     @property
     def tree_id(self) -> str:
-        return self.model.treeId
+        return self._owner_id
 
     @property
     def playlist(self) -> dict[str, Any] | None:
@@ -98,21 +126,22 @@ class PlaylistTreeSession(QObject):
         self._generation += 1
         self._playlist = playlist
         self._owner_id = next_owner
+        self._probe_requests.clear()
         if owner_changed:
-            self._revision = 0
             self._structure_revision = 0
             self._topology_signature = None
             self._known_sources.clear()
             self._source_revisions.clear()
         if self._pending:
-            self._structure_revision += 1
+            self._advance_structure_revision()
         self._pending.clear()
         self._operations.clear()
         if previous_owner and owner_changed:
             self._runtime.probes.clear_owner(previous_owner)
         self._refresh_structure_revision()
         self._sync_sources(request_all=True)
-        self._publish_now(activate=True)
+        self.source.begin_transition(next_owner)
+        self._schedule_publish()
 
     def refresh(self, *, probe_changed_sources: bool = True) -> None:
         if self._playlist is None:
@@ -150,7 +179,7 @@ class PlaylistTreeSession(QObject):
             target_list_id=target_list_id or "root",
             insert_index=insert_index,
         )
-        self._structure_revision += 1
+        self._advance_structure_revision()
         self._known_sources[item_id] = str(item.get("url") or "")
         self._source_revisions.setdefault(item_id, 0)
         self._schedule_publish()
@@ -158,7 +187,7 @@ class PlaylistTreeSession(QObject):
     def remove_pending(self, item_id: str) -> None:
         if self._pending.pop(item_id, None) is None:
             return
-        self._structure_revision += 1
+        self._advance_structure_revision()
         self._operations.pop(item_id, None)
         self._known_sources.pop(item_id, None)
         self._source_revisions.pop(item_id, None)
@@ -196,7 +225,7 @@ class PlaylistTreeSession(QObject):
         if (
             self._playlist is None
             or node_id in self._pending
-            or expected_tree_id != self.model.treeId
+            or expected_tree_id != self._owner_id
             or expected_structure_revision != self._structure_revision
         ):
             return False
@@ -238,7 +267,7 @@ class PlaylistTreeSession(QObject):
             return
         for item_id, current_source in self._known_sources.items():
             if current_source == source and item_id not in self._pending:
-                self._request_node(item_id, current_source)
+                self._probe_requests.enqueue(item_id, priority=True)
 
     def request_nodes(self, node_ids: Iterable[str]) -> None:
         """Re-probe known persisted nodes without rescanning unrelated sources."""
@@ -248,7 +277,7 @@ class PlaylistTreeSession(QObject):
         for item_id in dict.fromkeys(node_ids):
             source = self._known_sources.get(item_id)
             if source is not None and item_id not in self._pending:
-                self._request_node(item_id, source)
+                self._probe_requests.enqueue(item_id, priority=True)
 
     def patch_source_progress(self, source: str, completed: int, total: int) -> None:
         ratio = -1.0 if total <= 0 else min(1.0, max(0.0, completed / total))
@@ -269,13 +298,28 @@ class PlaylistTreeSession(QObject):
         if self._owner_id:
             self._runtime.probes.clear_owner(self._owner_id)
         self._publish_timer.stop()
+        self._publish_dirty = False
+        self._probe_requests.close()
+        self._builds.close()
         self._pending.clear()
         self._operations.clear()
         self._playlist = None
         self._owner_id = ""
 
     def _schedule_publish(self) -> None:
-        if self._playlist is not None and not self._publish_timer.isActive():
+        if self._playlist is None:
+            return
+        self._publish_dirty = True
+        if not self._builds.active and not self._publish_timer.isActive():
+            self._publish_timer.start()
+
+    @Slot()
+    def _resume_deferred_publish(self) -> None:
+        if (
+            self._publish_dirty
+            and self._playlist is not None
+            and not self._publish_timer.isActive()
+        ):
             self._publish_timer.start()
 
     def _refresh_structure_revision(self) -> None:
@@ -285,29 +329,107 @@ class PlaylistTreeSession(QObject):
         if signature == self._topology_signature:
             return
         self._topology_signature = signature
-        self._structure_revision += 1
+        self._advance_structure_revision()
 
-    def _publish_now(self, *, activate: bool = False) -> None:
+    def _advance_structure_revision(self) -> None:
+        self._structure_revision += 1
+        self.source.invalidate_pending_snapshot()
+
+    def _publish_now(self) -> None:
         if self._playlist is None:
             return
+        self._publish_timer.stop()
+        if self._builds.active:
+            self._publish_dirty = True
+            return
+        self._publish_dirty = False
         self._revision += 1
+        revision = self._revision
+        generation = self._generation
+        tree_id = self._owner_id
         states = {
             node_id: self._runtime.registry.state(self._owner_id, node_id)
             for node_id in self._known_sources
         }
-        snapshot = self._presenter.build(
-            self._playlist,
-            revision=self._revision,
-            runtime_states=states,
-            operations=self._operations,
-            source_revisions=self._source_revisions,
-            pending_media=tuple(self._pending.values()),
+        playlist = _capture_playlist(self._playlist)
+        operations = dict(self._operations)
+        source_revisions = dict(self._source_revisions)
+        pending_media = tuple(
+            PendingPlaylistMedia(
+                deepcopy(pending.item),
+                pending.target_list_id,
+                pending.insert_index,
+            )
+            for pending in self._pending.values()
         )
-        if activate or snapshot.tree_id != self.model.treeId:
-            self.model.activate_snapshot(snapshot)
+        media_types = {
+            str(item.get("type") or "video")
+            for item in playlist.get("items", [])
+        } | {
+            str(pending.item.get("type") or "video")
+            for pending in pending_media
+        }
+        badges = {media_type: playlist_media_badge(media_type) for media_type in media_types}
+        scheme = current_theme_scheme()
+
+        def build():
+            return self._presenter.build(
+                playlist,
+                revision=revision,
+                runtime_states=states,
+                operations=operations,
+                source_revisions=source_revisions,
+                pending_media=pending_media,
+                theme_scheme=scheme,
+                media_badges=badges,
+            )
+
+        self._builds.request(
+            SnapshotBuildRequest(
+                generation,
+                revision,
+                tree_id,
+                build,
+                structure_revision=self._structure_revision,
+            )
+        )
+
+    @Slot(object)
+    def _on_snapshot_ready(self, value: object) -> None:
+        if not isinstance(value, SnapshotBuildResult) or value.snapshot is None:
+            return
+        request = value.request
+        if (
+            request.generation != self._generation
+            or request.tree_id != self._owner_id
+            or request.structure_revision != self._structure_revision
+        ):
+            return
+        if self.source.transitioning or value.snapshot.tree_id != self.source.treeId:
+            self.source.activate_snapshot(value.snapshot)
         else:
-            self.model.apply_snapshot(snapshot)
-        self.snapshotPublished.emit(snapshot.tree_id, snapshot.revision)
+            self.source.publish_snapshot(value.snapshot)
+
+    @Slot(object)
+    def _on_snapshot_failed(self, value: object) -> None:
+        if not isinstance(value, SnapshotBuildResult):
+            return
+        request = value.request
+        if (
+            request.generation != self._generation
+            or request.tree_id != self._owner_id
+            or request.revision != self._revision
+            or request.structure_revision != self._structure_revision
+        ):
+            return
+        logger.error(
+            "Playlist tree snapshot %s:%d failed: %s",
+            request.tree_id,
+            request.revision,
+            value.error,
+        )
+        if self.source.transitioning:
+            self.source.activate_error(request.tree_id, request.revision, value.error)
 
     def _sync_sources(
         self,
@@ -323,6 +445,7 @@ class PlaylistTreeSession(QObject):
             if item.get("id")
         }
         for item_id in set(self._known_sources) - set(current) - set(self._pending):
+            self._probe_requests.discard(item_id)
             self._runtime.probes.remove(self._owner_id, item_id)
             self._known_sources.pop(item_id, None)
             self._source_revisions.pop(item_id, None)
@@ -336,7 +459,12 @@ class PlaylistTreeSession(QObject):
                 self._source_revisions.setdefault(item_id, 0)
             self._known_sources[item_id] = source
             if request_all or (request_changed and (previous is None or changed)):
-                self._request_node(item_id, source)
+                self._probe_requests.enqueue(item_id)
+
+    def _request_queued_node(self, item_id: str) -> None:
+        source = self._known_sources.get(item_id)
+        if source is not None and item_id not in self._pending:
+            self._request_node(item_id, source)
 
     def _request_node(self, item_id: str, source: str) -> None:
         self._runtime.probes.request(
@@ -390,15 +518,23 @@ class PlaylistTreeSession(QObject):
             return
         source = self._known_sources.get(node_id)
         if source is not None:
-            self._runtime.probes.request(
-                owner_id=owner_id,
-                node_id=node_id,
-                source=source,
-                thumbnail_path=self._thumbnail_path(
-                    thumbnail_storage_id(node_id, source)
-                ),
-                thumbnail_source=f"image://playlistthumbs/{node_id}",
-            )
+            self._probe_requests.enqueue(node_id, priority=True)
+
+
+def _capture_playlist(playlist: dict[str, Any]) -> dict[str, Any]:
+    """Isolate the JSON fields consumed by the background presenter."""
+
+    captured = dict(playlist)
+    captured["items"] = [
+        {
+            **item,
+            "image_framing": deepcopy(item.get("image_framing")),
+        }
+        for item in playlist.get("items", [])
+    ]
+    captured["sections"] = [dict(section) for section in playlist.get("sections", [])]
+    captured["markers"] = [dict(marker) for marker in playlist.get("markers", [])]
+    return captured
 
 
 __all__ = ["PlaylistTreeSession"]

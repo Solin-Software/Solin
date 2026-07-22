@@ -411,8 +411,8 @@ class MeetingTreeController(QObject):
         )
 
     @Property(QObject, constant=True)
-    def treeModel(self):  # noqa: N802 - QML API
-        return self._tree_session.model
+    def treeSource(self):  # noqa: N802 - QML API
+        return self._tree_session.source
 
     def _schedule_tree_snapshot(self, *_args: object) -> None:
         if not self._tree_key:

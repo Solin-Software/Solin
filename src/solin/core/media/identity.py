@@ -8,6 +8,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Generic, Hashable, TypeVar
 from urllib.parse import urlsplit, urlunsplit
 
@@ -309,27 +310,50 @@ def media_identity(record: Mapping[str, Any]) -> MediaIdentity | None:
     ) or {}
     language_code = _first_text(record, "language", "language_code", "api_code").upper()
     if not language_code:
-        match = _JW_LANGUAGE_RE.search(urlsplit(location).path)
+        match = _JW_LANGUAGE_RE.search(Path(urlsplit(location).path).name)
         if match:
             language_code = match.group(1).upper()
     source_id = _first_text(record, "jw_media_id", "natural_key", "guid")
     if not source_id and record.get("download_url") and record.get("source"):
         source_id = _text(record.get("id"))
+    # A local filename can resemble a JW delivery filename without proving
+    # that two independent files are the same media. For local-only records,
+    # the path is authoritative; semantic JW matching is reserved for records
+    # carrying a stable source ID, a remote origin, or no location at all.
+    use_jw_reference = (
+        bool(source_id)
+        or bool(record.get("jw_identity_authoritative"))
+        or _text(record.get("source")).lower() == "jworg"
+        or not locations
+        or any(
+            location.startswith(("http://", "https://"))
+            for location in locations
+        )
+    )
+    key_symbol = (
+        _first_text(record, "key_symbol", "pub")
+        or _text(parsed.get("key_symbol"))
+    ).lower()
+    doc_id = (
+        _first_integer(record, "doc_id", "meps_doc_id", "docid")
+        or _integer(parsed.get("doc_id"))
+    )
+    issue_tag = (
+        _first_integer(record, "issue_tag", "issue")
+        or _integer(parsed.get("issue_tag"))
+    )
+    track = _first_integer(record, "track") or _integer(parsed.get("track"))
+    if not use_jw_reference:
+        key_symbol = ""
+        doc_id = 0
+        issue_tag = 0
+        track = 0
     identity = MediaIdentity(
         source_id=source_id,
-        key_symbol=(
-            _first_text(record, "key_symbol", "pub")
-            or _text(parsed.get("key_symbol"))
-        ).lower(),
-        doc_id=(
-            _first_integer(record, "doc_id", "meps_doc_id", "docid")
-            or _integer(parsed.get("doc_id"))
-        ),
-        issue_tag=(
-            _first_integer(record, "issue_tag", "issue")
-            or _integer(parsed.get("issue_tag"))
-        ),
-        track=_first_integer(record, "track") or _integer(parsed.get("track")),
+        key_symbol=key_symbol,
+        doc_id=doc_id,
+        issue_tag=issue_tag,
+        track=track,
         meps_language=(
             _first_integer(record, "meps_language")
             or _integer(parsed.get("meps_language"))

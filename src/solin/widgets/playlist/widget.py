@@ -284,7 +284,7 @@ class PlaylistEditView(
             self._on_playlist_snapshot_write_completed
         )
         self._playlist_save_failure_notified = False
-        self.model = self._tree_session.model
+        self.tree_source = self._tree_session.source
         self.bridge = PlaylistEditBridge(
             projection_aspect_ratio_provider,
             self._image_source_aspect_ratio,
@@ -638,7 +638,7 @@ class PlaylistEditView(
                 "playlisticons": PlaylistIconProvider(),
             },
             context_properties={
-                "playlistModel": self.model,
+                "playlistTreeSource": self.tree_source,
                 "controller": self.bridge,
                 "catalogBridge": self.catalog_bridge,
                 "songsBridge": self.songs_bridge,

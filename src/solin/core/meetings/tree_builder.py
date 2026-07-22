@@ -57,6 +57,8 @@ def _media_to_ref(item: MeetingMedia) -> dict[str, Any]:
         "base_duration_ticks",
     ):
         ref.pop(field, None)
+    if item.key_symbol or item.meps_doc_id:
+        ref["jw_identity_authoritative"] = True
     return ref
 
 

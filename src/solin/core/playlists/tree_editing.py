@@ -38,6 +38,10 @@ def build_playlist_tree(playlist: dict[str, Any]) -> list[PlaylistNode]:
             subsections_by_parent.setdefault(parent_id, []).append(section)
 
     first_index = _first_index_by_section(items)
+    items_by_section: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    for index, item in enumerate(items):
+        section_id = str(item.get("section_id") or "")
+        items_by_section.setdefault(section_id, []).append((index, item))
 
     def media_node(item: dict[str, Any]) -> PlaylistNode:
         return {"id": item["id"], "type": "media", "ref": item, "children": []}
@@ -47,9 +51,8 @@ def build_playlist_tree(playlist: dict[str, Any]) -> list[PlaylistNode]:
 
     def subsection_children(section_id: str) -> list[PlaylistNode]:
         ordered: list[tuple[float, int, int, int, str, dict[str, Any]]] = []
-        for index, item in enumerate(items):
-            if item.get("section_id") == section_id:
-                ordered.append((float(index), 1, 0, index, "media", item))
+        for index, item in items_by_section.get(section_id, []):
+            ordered.append((float(index), 1, 0, index, "media", item))
         for fallback, marker in enumerate(markers_by_subsection.get(section_id, [])):
             position = marker.get("position")
             if not isinstance(position, int) or isinstance(position, bool):
@@ -70,9 +73,9 @@ def build_playlist_tree(playlist: dict[str, Any]) -> list[PlaylistNode]:
         if not subsection:
             nested_sections = subsections_by_parent.get(section_id, [])
             for node_type, ref in _ordered_section_children(
-                section_id,
                 nested_sections,
-                items,
+                items_by_section.get(section_id, []),
+                len(items),
                 first_index,
             ):
                 children.append(
@@ -88,9 +91,8 @@ def build_playlist_tree(playlist: dict[str, Any]) -> list[PlaylistNode]:
         }
 
     root_nodes: list[tuple[tuple[float, int, int, int], PlaylistNode]] = []
-    for index, item in enumerate(items):
-        if not item.get("section_id"):
-            root_nodes.append((_media_order_key(index), media_node(item)))
+    for index, item in items_by_section.get("", []):
+        root_nodes.append((_media_order_key(index), media_node(item)))
     for fallback, section in enumerate(top_sections):
         root_nodes.append((
             _section_order_key(section, fallback, len(items), first_index),
@@ -280,18 +282,17 @@ def _first_index_by_section(items: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _ordered_section_children(
-    section_id: str,
     subsections: list[dict[str, Any]],
-    items: list[dict[str, Any]],
+    items: list[tuple[int, dict[str, Any]]],
+    item_count: int,
     first_index: dict[str, int],
 ) -> list[tuple[str, dict[str, Any]]]:
     ordered: list[tuple[tuple[float, int, int, int], str, dict[str, Any]]] = []
-    for index, item in enumerate(items):
-        if item.get("section_id") == section_id:
-            ordered.append((_media_order_key(index), "media", item))
+    for index, item in items:
+        ordered.append((_media_order_key(index), "media", item))
     for fallback, subsection in enumerate(subsections):
         ordered.append((
-            _section_order_key(subsection, fallback, len(items), first_index),
+            _section_order_key(subsection, fallback, item_count, first_index),
             "subsection",
             subsection,
         ))

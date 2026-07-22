@@ -227,7 +227,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             playlistController: root.hasController ? controller : null
-            treeModel: root.hasController ? controller.treeModel : null
+            treeSource: root.hasController ? controller.treeSource : null
             hasItems: root.hasItems
             contentLeftInset: root.contentLeftInset
             contentRightInset: root.contentRightInset

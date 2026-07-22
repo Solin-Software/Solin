@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import pytest
-from PySide6.QtCore import QEvent, QObject, Signal, Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QPushButton
+import os
+import subprocess
+import sys
+import textwrap
+
+from PySide6.QtCore import QEvent, QObject, Signal
 
 from solin.controllers.playback_protection_controller import (
     PlaybackProtectionController,
 )
+from tests._paths import REPO_ROOT
 
 
 class _Settings:
@@ -171,23 +174,65 @@ def test_automation_locks_are_owner_scoped_and_idempotent() -> None:
 
 
 def test_automation_lock_consumes_clicks_at_the_application_boundary() -> None:
-    application = QApplication.instance()
-    if application is None:
+    script = textwrap.dedent(
+        """
+        from PySide6.QtCore import QObject, Signal, Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication, QPushButton
+
+        from solin.controllers.playback_protection_controller import (
+            PlaybackProtectionController,
+        )
+
+
+        class Settings:
+            def playback_protection_enabled(self):
+                return False
+
+            def set_playback_protection_enabled(self, _enabled):
+                pass
+
+
+        class Media(QObject):
+            state_changed = Signal(object)
+            is_playing = False
+
+            def seek(self, _position):
+                pass
+
+
         application = QApplication([])
-    elif not isinstance(application, QApplication):
-        pytest.skip("Application-wide pointer filtering requires QApplication")
+        controller = PlaybackProtectionController(
+            Settings(),
+            Media(),
+            parent=application,
+        )
+        button = QPushButton("Target")
+        clicks = []
+        button.clicked.connect(lambda: clicks.append(True))
+        button.show()
 
-    controller = PlaybackProtectionController(_Settings(), _Media())
-    button = QPushButton("Target")
-    clicks: list[bool] = []
-    button.clicked.connect(lambda: clicks.append(True))
-    button.show()
+        controller.acquire_automation_lock("zoom-share:1")
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert clicks == []
 
-    controller.acquire_automation_lock("zoom-share:1")
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-    assert clicks == []
+        controller.release_automation_lock("zoom-share:1")
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert clicks == [True]
+        button.close()
+        """
+    )
+    environment = os.environ.copy()
+    environment["QT_QPA_PLATFORM"] = "offscreen"
 
-    controller.release_automation_lock("zoom-share:1")
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-    assert clicks == [True]
-    button.close()
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout

@@ -209,6 +209,32 @@ def test_watched_folder_copy_preserves_distinct_user_named_variant(tmp_path):
     assert second.destination.read_bytes() == b"second-video"
 
 
+def test_watched_folder_copy_does_not_infer_duplicate_from_numbered_media_name(
+    tmp_path,
+):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    original = source_folder / "S-337-26v_T_02_r720P.mp4"
+    numbered = source_folder / "S-337-26v_T_02_r720P (1).mp4"
+    original.write_bytes(b"first-recording")
+    numbered.write_bytes(b"different-recording")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    store = WatchedFolderFileStore()
+
+    original_result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(original, linked, "copy-original")
+    )
+    numbered_result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(numbered, linked, "copy-numbered")
+    )
+
+    assert original_result.already_present is False
+    assert numbered_result.already_present is False
+    assert original_result.destination == linked / original.name
+    assert numbered_result.destination == linked / numbered.name
+
+
 def test_watched_folder_scanner_ignores_transaction_staging(tmp_path):
     folder = tmp_path / "folder"
     folder.mkdir()

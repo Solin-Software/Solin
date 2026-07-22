@@ -9,6 +9,7 @@ from solin.ui.qml.media_tree.snapshot import (
 
 
 def _media(node_id: str, **roles) -> MediaTreeNodeSnapshot:
+    roles = {"title": "", "mediaType": "video", **roles}
     return MediaTreeNodeSnapshot.create(
         node_id,
         MediaTreeNodeType.MEDIA,
@@ -42,6 +43,7 @@ def test_snapshot_rejects_duplicate_ids_across_the_hierarchy() -> None:
     section = MediaTreeNodeSnapshot.create(
         "section-1",
         MediaTreeNodeType.SECTION,
+        roles={"title": "", "collapsed": False, "itemCount": 1},
         children=(duplicate,),
     )
 
@@ -60,10 +62,12 @@ def test_snapshot_rejects_invalid_hierarchy_and_role_types() -> None:
     invalid_section = MediaTreeNodeSnapshot.create(
         "nested-section",
         MediaTreeNodeType.SECTION,
+        roles={"title": "", "collapsed": False, "itemCount": 0},
     )
     parent = MediaTreeNodeSnapshot.create(
         "parent-section",
         MediaTreeNodeType.SECTION,
+        roles={"title": "", "collapsed": False, "itemCount": 0},
         children=(invalid_section,),
     )
     with pytest.raises(MediaTreeSnapshotError, match="cannot be inside"):
@@ -71,8 +75,29 @@ def test_snapshot_rejects_invalid_hierarchy_and_role_types() -> None:
 
     with pytest.raises(MediaTreeSnapshotError, match="must be a boolean"):
         _media("media-1", isMissing="no")
-    with pytest.raises(MediaTreeSnapshotError, match="between -1 and 1"):
+    with pytest.raises(MediaTreeSnapshotError, match="between 0 and 1"):
         _media("media-1", operationProgress=float("nan"))
+    with pytest.raises(MediaTreeSnapshotError, match="between 0 and 1"):
+        _media("media-1", operationProgress=-0.5)
+
+
+def test_snapshot_rejects_inconsistent_section_item_count() -> None:
+    section = MediaTreeNodeSnapshot.create(
+        "section-1",
+        MediaTreeNodeType.SECTION,
+        roles={"title": "", "collapsed": False, "itemCount": 2},
+        children=(_media("media-1"),),
+    )
+
+    with pytest.raises(MediaTreeSnapshotError, match="itemCount is 2, expected 1"):
+        MediaTreeSnapshot.create("playlist:1", 1, (section,))
+
+
+def test_snapshot_rejects_incomplete_or_unknown_media_contracts() -> None:
+    with pytest.raises(MediaTreeSnapshotError, match="missing roles: mediaType, title"):
+        MediaTreeNodeSnapshot.create("empty", MediaTreeNodeType.MEDIA)
+    with pytest.raises(MediaTreeSnapshotError, match="Unknown media type"):
+        _media("media-1", mediaType="spreadsheet")
 
 
 @pytest.mark.parametrize("revision", [-1, True, 1.5])

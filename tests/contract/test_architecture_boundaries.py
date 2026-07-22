@@ -576,13 +576,19 @@ def test_media_trees_have_one_complete_snapshot_reconciliation_boundary():
 
     qml_path = PROJECT_ROOT / "src" / "solin" / "qml" / "PlaylistTreeView.qml"
     qml_source = qml_path.read_text(encoding="utf-8")
-    assert "treeModel" in qml_source
+    assert "treeSource" in qml_source
     assert "component DropList" in qml_source
     assert (
         "function reconcileFromNodes(nodes, forcePresentation, sharedVisualPool)"
         in qml_source
     )
-    assert "treeModel ? treeModel.treeData : []" in qml_source
+    assert "treeSource ? treeSource.treeData : []" in qml_source
+    model_source = (
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree" / "model.py"
+    ).read_text(encoding="utf-8")
+    assert "QAbstractItemModel" not in model_source
+    assert "beginInsertRows" not in model_source
+    assert "beginMoveRows" not in model_source
     for legacy_api in (
         "scheduleRebuild",
         "mediaInserted",

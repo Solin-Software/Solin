@@ -56,9 +56,12 @@ class MediaPresentationState:
             not isinstance(self.cloud_progress, (int, float))
             or isinstance(self.cloud_progress, bool)
             or not math.isfinite(float(self.cloud_progress))
-            or not -1.0 <= float(self.cloud_progress) <= 1.0
+            or (
+                float(self.cloud_progress) != -1.0
+                and not 0.0 <= float(self.cloud_progress) <= 1.0
+            )
         ):
-            raise ValueError("cloud_progress must be between -1 and 1")
+            raise ValueError("cloud_progress must be -1 or between 0 and 1")
         if (
             not isinstance(self.duration_ticks, int)
             or isinstance(self.duration_ticks, bool)
@@ -74,6 +77,9 @@ class MediaPresentationState:
             raise ValueError("image_aspect_ratio must be finite and non-negative")
 
 
+EMPTY_PRESENTATION_STATE = MediaPresentationState()
+
+
 @dataclass(frozen=True, slots=True)
 class MediaProbeResult:
     key: MediaProbeKey
@@ -87,7 +93,7 @@ class MediaStateRegistry(QObject):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._generations: dict[tuple[str, str, str], int] = {}
+        self._generation = 0
         self._keys: dict[tuple[str, str, str], MediaProbeKey] = {}
         self._states: dict[tuple[str, str], MediaPresentationState] = {}
 
@@ -104,8 +110,8 @@ class MediaStateRegistry(QObject):
         identity = (owner_id, node_id, purpose)
         previous_key = self._keys.get(identity)
         source_changed = previous_key is not None and previous_key.source != source
-        generation = self._generations.get(identity, 0) + 1
-        self._generations[identity] = generation
+        self._generation += 1
+        generation = self._generation
         key = MediaProbeKey(owner_id, node_id, source, purpose, generation)
         self._keys[identity] = key
         state_key = (owner_id, node_id)
@@ -145,7 +151,7 @@ class MediaStateRegistry(QObject):
         return True
 
     def state(self, owner_id: str, node_id: str) -> MediaPresentationState:
-        return self._states.get((owner_id, node_id), MediaPresentationState())
+        return self._states.get((owner_id, node_id), EMPTY_PRESENTATION_STATE)
 
     def patch(
         self,
@@ -156,7 +162,7 @@ class MediaStateRegistry(QObject):
         """Merge UI-known progress into memory without probing the filesystem."""
 
         state_key = (owner_id, node_id)
-        current = self._states.get(state_key, MediaPresentationState())
+        current = self._states.get(state_key, EMPTY_PRESENTATION_STATE)
         allowed = {
             "availability",
             "local_path",
@@ -185,7 +191,6 @@ class MediaStateRegistry(QObject):
         ]
         for identity in identities:
             self._keys.pop(identity, None)
-            self._generations.pop(identity, None)
         if self._states.pop((owner_id, node_id), None) is not None:
             self.stateChanged.emit(owner_id, node_id)
 

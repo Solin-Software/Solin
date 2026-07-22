@@ -8,6 +8,7 @@ from solin.core.media.identity import (
     partition_media_items,
     same_media,
 )
+from solin.core.playlists.items import create_playlist_item
 
 
 def test_stable_jw_id_matches_when_delivery_url_changes() -> None:
@@ -73,6 +74,36 @@ def test_local_path_fallback_is_normalized(tmp_path) -> None:
         {"url": str(media_path)},
         {"file_path": str(tmp_path / "." / "video.mp4")},
     ) is True
+
+
+def test_local_jw_filename_variants_do_not_imply_duplicate_media(tmp_path) -> None:
+    first_path = tmp_path / "sjjm_E_02_r720P.mp4"
+    second_path = tmp_path / "sjjm_E_02_r720P (1).mp4"
+    first = create_playlist_item(first_path.stem, str(first_path))
+    second = create_playlist_item(second_path.stem, str(second_path))
+
+    assert first["key_symbol"] is None
+    assert second["key_symbol"] is None
+    assert same_media(first, second) is False
+    assert partition_media_items([], [first, second]).unique_items == (first, second)
+
+
+def test_authoritative_local_jw_reference_matches_remote_delivery(tmp_path) -> None:
+    local_copy = {
+        "file_path": str(tmp_path / "cached.mp4"),
+        "key_symbol": "sjjm",
+        "track": 2,
+        "meps_language": 5,
+        "jw_identity_authoritative": True,
+    }
+    remote = {
+        "url": "https://akamd1.jw-cdn.org/x/sjjm_T_002_r720P.mp4"
+    }
+
+    local_identity = media_identity(local_copy)
+    assert local_identity is not None
+    assert local_identity.language_code == ""
+    assert same_media(local_copy, remote) is True
 
 
 def test_copied_media_matches_its_origin_and_destination(tmp_path) -> None:

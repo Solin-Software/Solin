@@ -31,10 +31,14 @@ Item {
     property color dangerSubtle: appTheme.dangerSubtle
 
     property var playlistController: null
-    property var treeModel: null
+    property var treeSource: null
     property bool hasItems: false
     property bool loading: false
-    readonly property var playlistNodes: treeModel ? treeModel.treeData : []
+    readonly property var playlistNodes: treeSource ? treeSource.treeData : []
+    readonly property bool treeTransitioning: treeSource
+                                              ? treeSource.transitioning
+                                              : false
+    readonly property string treeError: treeSource ? treeSource.error : ""
     readonly property bool hasController: playlistController !== null
     readonly property bool playbackProtectionEnabled:
         typeof playbackProtection !== "undefined"
@@ -214,6 +218,13 @@ Item {
         z: 9999
     }
 
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.treeTransitioning
+        z: 10000
+        preventStealing: true
+    }
+
     QtObject {
         id: dragManager
         objectName: "dragManager"
@@ -260,11 +271,11 @@ Item {
             draggedItem = item
             draggedId = item.nodeId
             draggedType = item.nodeType
-            treeId = root.treeModel ? root.treeModel.treeId : ""
+            treeId = root.treeSource ? root.treeSource.treeId : ""
             structureRevision = root.hasController
                     ? root.playlistController.treeStructureRevision() : -1
-            if (root.treeModel)
-                root.treeModel.beginInteraction()
+            if (root.treeSource)
+                root.treeSource.beginInteraction()
             item.opacity = 0.34
 
             var globalPos = item.parent.mapToItem(dragOverlay, item.x, item.y)
@@ -290,13 +301,13 @@ Item {
                 return
             var wasInactive = !externalActive
             if (wasInactive) {
-                treeId = root.treeModel ? root.treeModel.treeId : ""
+                treeId = root.treeSource ? root.treeSource.treeId : ""
                 structureRevision = root.hasController
                         ? root.playlistController.treeStructureRevision() : -1
                 root.externalDropTreeId = treeId
                 root.externalDropStructureRevision = structureRevision
-                if (root.treeModel)
-                    root.treeModel.beginInteraction()
+                if (root.treeSource)
+                    root.treeSource.beginInteraction()
             }
             externalActive = true
             draggedId = ""
@@ -323,8 +334,8 @@ Item {
             draggedType = ""
             treeId = ""
             structureRevision = -1
-            if (root.treeModel)
-                root.treeModel.endInteraction()
+            if (root.treeSource)
+                root.treeSource.endInteraction()
             rootPlaylist.reconcileFromNodes(root.currentPlaylistNodes())
         }
 
@@ -370,8 +381,8 @@ Item {
             structureRevision = -1
             externalActive = false
 
-            if (root.treeModel)
-                root.treeModel.endInteraction()
+            if (root.treeSource)
+                root.treeSource.endInteraction()
 
             if (!modelMoved || !viewSynchronized) {
                 item.destroy()
@@ -396,8 +407,8 @@ Item {
             treeId = ""
             structureRevision = -1
             externalActive = false
-            if (root.treeModel)
-                root.treeModel.endInteraction()
+            if (root.treeSource)
+                root.treeSource.endInteraction()
             rootPlaylist.reconcileFromNodes(root.currentPlaylistNodes())
         }
 
@@ -420,20 +431,28 @@ Item {
     }
 
     Connections {
-        target: root.treeModel
+        target: root.treeSource
         function onRevisionChanged() {
             treeSyncTimer.restart()
         }
+        function onTransitioningChanged() {
+            if (!root.treeTransitioning)
+                return
+            if (dragManager.draggedItem)
+                dragManager.cancelDrag()
+            else if (dragManager.externalActive)
+                root.clearExternalDropPreview()
+        }
     }
 
-    onTreeModelChanged: treeSyncTimer.restart()
+    onTreeSourceChanged: treeSyncTimer.restart()
 
     Timer {
         id: treeSyncTimer
         interval: 0
         repeat: false
         onTriggered: {
-            var nextTreeId = root.treeModel ? root.treeModel.treeId : ""
+            var nextTreeId = root.treeSource ? root.treeSource.treeId : ""
             var treeChanged = nextTreeId !== root.activeTreeId
             if (treeChanged && dragManager.draggedItem)
                 dragManager.cancelDrag()
@@ -461,6 +480,7 @@ Item {
                 border.width: 1
                 border.color: root.border_
                 visible: !root.hasItems && !root.treeHydrating && !root.loading
+                         && root.treeError === ""
                 opacity: 0.75
 
                 ColumnLayout {
@@ -495,7 +515,7 @@ Item {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 8
-                visible: root.loading
+                visible: root.loading && root.treeError === ""
 
                 BusyIndicator {
                     Layout.alignment: Qt.AlignHCenter
@@ -512,6 +532,74 @@ Item {
                 }
             }
 
+            ColumnLayout {
+                objectName: "treeErrorState"
+                anchors.centerIn: parent
+                spacing: 10
+                visible: root.treeError !== "" && !root.loading
+                z: 40
+
+                Image {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 28
+                    height: 28
+                    source: root.picon("refresh", 28, root.iconHex(root.textDim))
+                    opacity: 0.72
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTranslate("_PlaylistEditView", "Media unavailable")
+                    color: root.textMuted
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
+                }
+
+                Rectangle {
+                    id: treeRetryButton
+                    objectName: "treeRetryButton"
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: retryRow.implicitWidth + 22
+                    implicitHeight: 34
+                    radius: 8
+                    color: retryMouse.containsMouse ? root.hover : "transparent"
+                    border.width: 1
+                    border.color: retryMouse.containsMouse
+                                  ? root.borderStrong : root.border_
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                    RowLayout {
+                        id: retryRow
+                        anchors.centerIn: parent
+                        spacing: 7
+
+                        Image {
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            source: root.picon(
+                                        "refresh", 14,
+                                        root.iconHex(root.textSecondary))
+                        }
+
+                        Text {
+                            text: qsTranslate("MediaDestinationDialog", "Try again")
+                            color: root.textSecondary
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                        }
+                    }
+
+                    MouseArea {
+                        id: retryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.treeSource) root.treeSource.retry()
+                    }
+                }
+            }
+
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
@@ -522,7 +610,8 @@ Item {
                 color: appTheme.surfaceChrome
                 border.width: 1
                 border.color: root.borderStrong
-                opacity: root.treeHydrating && root.hasItems ? 0.96 : 0.0
+                opacity: (root.treeHydrating || root.treeTransitioning)
+                         && root.hasItems ? 0.96 : 0.0
                 visible: opacity > 0
                 z: 50
 
@@ -536,7 +625,7 @@ Item {
                     BusyIndicator {
                         Layout.preferredWidth: 18
                         Layout.preferredHeight: 18
-                        running: root.treeHydrating
+                        running: root.treeHydrating || root.treeTransitioning
                     }
 
                     Text {
@@ -557,7 +646,7 @@ Item {
                 anchors.fill: parent
                 anchors.topMargin: 6
                 anchors.bottomMargin: 4
-                visible: root.hasItems
+                visible: root.hasItems && root.treeError === ""
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 flickableDirection: Flickable.VerticalFlick
@@ -759,7 +848,9 @@ Item {
                     || pendingForcePresentation
             pendingForcePresentation = false
             var ownsVisualPool = !sharedVisualPool
-            var visualPool = sharedVisualPool || ({})
+            // Node IDs are domain data, so the pool must not inherit keys such
+            // as "constructor" or "__proto__" from Object.prototype.
+            var visualPool = sharedVisualPool || Object.create(null)
             if (ownsVisualPool)
                 collectVisualPool(visualPool)
 
@@ -782,7 +873,9 @@ Item {
             for (var desiredIndex = 0; desiredIndex < visibleLimit;
                     desiredIndex++) {
                 var desiredNode = desired[desiredIndex]
-                var visual = visualPool[desiredNode.id]
+                var visual = Object.prototype.hasOwnProperty.call(
+                            visualPool, desiredNode.id)
+                        ? visualPool[desiredNode.id] : null
                 if (visual && visual.nodeType !== desiredNode.type) {
                     visual.destroy()
                     visual = null

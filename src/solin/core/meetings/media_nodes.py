@@ -165,6 +165,12 @@ def create_playlist_media_node(
         "is_song": False,
         "cbs_article_title": "",
     }
+    if (
+        raw.get("jw_identity_authoritative")
+        or raw.get("jw_media_id")
+        or str(raw.get("source") or "").lower() == "jworg"
+    ):
+        ref["jw_identity_authoritative"] = True
     node: Node = {
         "id": node_id,
         "type": "media",

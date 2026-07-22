@@ -20,7 +20,6 @@ class MediaTreeNodeType(StrEnum):
     SECTION = "section"
     SUBSECTION = "subsection"
     MARKER = "marker"
-    OPERATION = "operation"
 
 
 type ScalarRoleValue = str | bool | int | float | None
@@ -89,6 +88,13 @@ _OPERATION_STATES = frozenset({
     "failed",
     "ready",
 })
+_MEDIA_TYPES = frozenset({"audio", "image", "video"})
+_REQUIRED_ROLES = {
+    MediaTreeNodeType.MEDIA: frozenset({"title", "mediaType"}),
+    MediaTreeNodeType.SECTION: frozenset({"title", "collapsed", "itemCount"}),
+    MediaTreeNodeType.SUBSECTION: frozenset({"title", "collapsed", "itemCount"}),
+    MediaTreeNodeType.MARKER: frozenset({"text"}),
+}
 
 
 def freeze_role_value(value: MutableRoleValue) -> FrozenRoleValue:
@@ -146,18 +152,22 @@ def _validate_role_value(name: str, value: object) -> None:
     ):
         raise MediaTreeSnapshotError(f"Role {name!r} must be a non-negative integer")
     if name in _PROGRESS_ROLES:
+        progress = float(value) if isinstance(value, (int, float)) else float("nan")
         if (
             not isinstance(value, (int, float))
             or isinstance(value, bool)
-            or not math.isfinite(float(value))
-            or float(value) < -1.0
-            or float(value) > 1.0
+            or not math.isfinite(progress)
+            or (progress != -1.0 and not 0.0 <= progress <= 1.0)
         ):
-            raise MediaTreeSnapshotError(f"Role {name!r} must be between -1 and 1")
+            raise MediaTreeSnapshotError(
+                f"Role {name!r} must be -1 or between 0 and 1"
+            )
     if name == "imageFraming" and value is not None and not isinstance(value, Mapping):
         raise MediaTreeSnapshotError("Role 'imageFraming' must be an object or null")
     if name == "operationState" and value not in _OPERATION_STATES:
         raise MediaTreeSnapshotError(f"Unknown operation state {value!r}")
+    if name == "mediaType" and value not in _MEDIA_TYPES:
+        raise MediaTreeSnapshotError(f"Unknown media type {value!r}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +198,12 @@ class MediaTreeNodeSnapshot:
         if unknown:
             names = ", ".join(sorted(unknown))
             raise MediaTreeSnapshotError(f"Unknown media-tree roles: {names}")
+        missing = _REQUIRED_ROLES[self.node_type] - set(role_names)
+        if missing:
+            names = ", ".join(sorted(missing))
+            raise MediaTreeSnapshotError(
+                f"{self.node_type.value!r} node {self.node_id!r} is missing roles: {names}"
+            )
         for name, value in self.roles.items:
             _validate_role_value(name, thaw_role_value(value))
         if not isinstance(self.children, tuple) or not all(
@@ -268,7 +284,34 @@ class MediaTreeSnapshot:
                 raise MediaTreeSnapshotError(f"Duplicate node ID {node.node_id!r}")
             seen_ids.add(node.node_id)
             self._validate_placement(node, parent_type)
+            self._validate_item_count(node)
             stack.extend((child, node.node_type) for child in reversed(node.children))
+
+    @staticmethod
+    def _validate_item_count(node: MediaTreeNodeSnapshot) -> None:
+        role_value = next(
+            (value for name, value in node.roles.items if name == "itemCount"),
+            None,
+        )
+        if role_value is None:
+            return
+        actual = sum(
+            1
+            for child in node.children
+            if child.node_type == MediaTreeNodeType.MEDIA
+        ) + sum(
+            sum(
+                1
+                for grandchild in child.children
+                if grandchild.node_type == MediaTreeNodeType.MEDIA
+            )
+            for child in node.children
+            if child.node_type == MediaTreeNodeType.SUBSECTION
+        )
+        if role_value != actual:
+            raise MediaTreeSnapshotError(
+                f"Node {node.node_id!r} itemCount is {role_value}, expected {actual}"
+            )
 
     @staticmethod
     def _validate_placement(
@@ -284,11 +327,6 @@ class MediaTreeSnapshot:
             MediaTreeNodeType.SECTION: frozenset({None}),
             MediaTreeNodeType.SUBSECTION: frozenset({MediaTreeNodeType.SECTION}),
             MediaTreeNodeType.MARKER: frozenset({MediaTreeNodeType.SUBSECTION}),
-            MediaTreeNodeType.OPERATION: frozenset({
-                None,
-                MediaTreeNodeType.SECTION,
-                MediaTreeNodeType.SUBSECTION,
-            }),
         }
         if parent_type not in allowed_parents[node.node_type]:
             parent_name = "root" if parent_type is None else parent_type.value
@@ -298,7 +336,6 @@ class MediaTreeSnapshot:
         if node.node_type in {
             MediaTreeNodeType.MEDIA,
             MediaTreeNodeType.MARKER,
-            MediaTreeNodeType.OPERATION,
         } and node.children:
             raise MediaTreeSnapshotError(
                 f"{node.node_type.value!r} node {node.node_id!r} cannot have children"

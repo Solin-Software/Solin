@@ -33,7 +33,7 @@ from solin.core.i18n.meeting_schedule import (
 from solin.core.meetings.tree_editing import move_tree_node
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
-from solin.ui.qml.media_tree.model import MediaTreeModel
+from solin.ui.qml.media_tree.model import MediaTreeSource
 from solin.ui.qml.media_tree.snapshot import (
     MediaTreeNodeSnapshot,
     MediaTreeNodeType,
@@ -285,7 +285,7 @@ def _playlist_tree_host(
 ) -> tuple[
     QQuickWidget,
     _PlaylistTreeControllerProbe,
-    MediaTreeModel,
+    MediaTreeSource,
     _PlaybackProtectionProbe,
 ]:
     protection = _PlaybackProtectionProbe(enabled=False)
@@ -302,7 +302,7 @@ def _playlist_tree_host(
     )
     root = widget.rootObject()
     assert root is not None
-    model = MediaTreeModel("qml-test", widget)
+    model = MediaTreeSource("qml-test", widget)
     model.activate_snapshot(
         MediaTreeSnapshot.create(
             "qml-test",
@@ -311,7 +311,7 @@ def _playlist_tree_host(
         )
     )
     root.setProperty("playlistController", controller)
-    root.setProperty("treeModel", model)
+    root.setProperty("treeSource", model)
     root.setProperty("hasItems", True)
     widget.show()
     QTest.qWait(40)
@@ -370,12 +370,12 @@ def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -
         "title": "Renamed without rebuilding",
         "thumbSource": "image://playlistthumbs/keep/2",
     }
-    model.apply_snapshot(
+    model.publish_snapshot(
         MediaTreeSnapshot.create("qml-test", 2, (_snapshot_node(renamed_keep),))
     )
     QTest.qWait(30)
 
-    assert not model.index_for_id("remove").isValid()
+    assert all(node["id"] != "remove" for node in model.treeData)
     assert _find_visual(root, "mediaCard-keep") is keep_card
     assert "Renamed without rebuilding" in _visible_texts(keep_card)
     assert keep_card.property("thumbSource") == "image://playlistthumbs/keep/2"
@@ -394,6 +394,68 @@ def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -
     QTest.qWait(30)
     assert _find_visual(root, "mediaCard-keep") is keep_card
     assert "Same ID in another playlist" in _visible_texts(keep_card)
+
+    same_tree_update = {
+        **keep,
+        "title": "Updated after same-tree reactivation",
+    }
+    model.begin_transition("qml-other")
+    model.activate_snapshot(
+        MediaTreeSnapshot.create(
+            "qml-other",
+            2,
+            (_snapshot_node(same_tree_update),),
+        )
+    )
+    QTest.qWait(30)
+    assert _find_visual(root, "mediaCard-keep") is keep_card
+    assert "Updated after same-tree reactivation" in _visible_texts(keep_card)
+    widget.deleteLater()
+
+
+def test_playlist_tree_accepts_node_ids_reserved_by_javascript_objects() -> None:
+    nodes = [
+        _playlist_media_node(node_id, node_id)
+        for node_id in ("constructor", "__proto__", "toString", "safe-id")
+    ]
+    widget, _controller, _model, _protection = _playlist_tree_host(
+        nodes,
+        height=360,
+    )
+    root = widget.rootObject()
+    assert root is not None
+
+    for node in nodes:
+        assert _find_visual(root, f"mediaCard-{node['id']}") is not None
+
+    widget.deleteLater()
+
+
+def test_playlist_tree_shows_a_retryable_state_after_snapshot_failure() -> None:
+    node = _playlist_media_node("media-1", "Media")
+    widget, _controller, model, _protection = _playlist_tree_host([node])
+    root = widget.rootObject()
+    assert root is not None
+    retries: list[bool] = []
+    model.retryRequested.connect(lambda: retries.append(True))
+
+    model.begin_transition("qml-test")
+    model.activate_error("qml-test", 2, "broken snapshot")
+    QTest.qWait(30)
+
+    error_state = _find_visual(root, "treeErrorState")
+    retry_button = _find_visual(root, "treeRetryButton")
+    assert error_state is not None and error_state.property("visible") is True
+    assert retry_button is not None and retry_button.property("visible") is True
+
+    center = retry_button.mapToScene(
+        QPointF(retry_button.width() / 2, retry_button.height() / 2)
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=center)
+
+    assert retries == [True]
+    assert model.transitioning is True
+    assert model.error == ""
     widget.deleteLater()
 
 
@@ -429,7 +491,7 @@ def test_playlist_tree_preserves_card_identity_across_parent_snapshots() -> None
 
     moved_first = {**first, "itemCount": 0, "children": []}
     moved_second = {**second, "itemCount": 1, "children": [media]}
-    model.apply_snapshot(
+    model.publish_snapshot(
         MediaTreeSnapshot.create(
             "qml-test",
             2,
@@ -450,7 +512,7 @@ def test_playlist_edit_shell_accepts_the_shared_tree_theme_contract() -> None:
     widget = QQuickWidget()
     widget.resize(640, 420)
     controller = PlaylistEditBridge(parent=widget)
-    model = MediaTreeModel("playlist:shell", widget)
+    model = MediaTreeSource("playlist:shell", widget)
     configure_qml_host(
         widget,
         type_name="PlaylistEditView",
@@ -461,7 +523,7 @@ def test_playlist_edit_shell_accepts_the_shared_tree_theme_contract() -> None:
         },
         context_properties={
             "controller": controller,
-            "playlistModel": model,
+            "playlistTreeSource": model,
             "playbackProtection": None,
         },
         mouse_tracking=True,

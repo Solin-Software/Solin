@@ -146,3 +146,24 @@ def test_presenter_uses_resolved_runtime_state_for_local_media() -> None:
     assert roles["duration"] == "1:30"
     assert roles["trimAvailable"] is True
     assert roles["isMissing"] is False
+
+
+def test_presenter_structurally_shares_unchanged_immutable_nodes() -> None:
+    presenter = PlaylistTreePresenter()
+    first = presenter.build(_playlist(), revision=1)
+    changed_runtime = {
+        "local-media": MediaPresentationState(
+            availability=MediaAvailability.AVAILABLE,
+            duration_ticks=30 * 10_000_000,
+        )
+    }
+
+    second = presenter.build(
+        _playlist(),
+        revision=2,
+        runtime_states=changed_runtime,
+    )
+
+    assert second.roots[0] is not first.roots[0]
+    assert second.roots[0].children[0] is not first.roots[0].children[0]
+    assert second.roots[0].children[1] is first.roots[0].children[1]

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast
 
 from ..media.formats import MediaKind, media_kind_from_path, media_type_from_path
+from solin.core.jw.identifiers import is_jw_url
 from solin.core.media.jw_reference import parse_jw_media_reference
 
 
@@ -29,6 +30,7 @@ class PlaylistMediaItem(TypedDict):
     end_action: NotRequired[int | None]
     language: NotRequired[str]
     jw_media_id: NotRequired[str]
+    jw_identity_authoritative: NotRequired[bool]
     image_framing: NotRequired[dict[str, Any]]
 
 
@@ -46,6 +48,12 @@ def create_playlist_item(
 ) -> PlaylistMediaItem:
     """Create the stable persisted representation of a playlist media item."""
     media_type = attributes.pop("type", media_type_from_path(url, default="video"))
+    explicit_jw_identity = bool(
+        attributes.get("jw_identity_authoritative")
+        or attributes.get("jw_media_id")
+        or attributes.get("key_symbol")
+        or attributes.get("doc_id")
+    )
     url_stem = Path(url.split("?", 1)[0]).stem if url else ""
     auto_title = looks_like_filename_title(title) or (bool(url_stem) and title == url_stem)
     item: dict[str, Any] = {
@@ -61,14 +69,17 @@ def create_playlist_item(
         "meps_language": 0,
     }
     item.update(attributes)
+    if explicit_jw_identity:
+        item["jw_identity_authoritative"] = True
 
     if not item.get("key_symbol") and url:
         parsed = parse_jw_media_reference(
             url,
             original_filename=str(item.get("original_filename") or ""),
         )
-        if parsed:
+        if parsed and (explicit_jw_identity or is_jw_url(url)):
             item.update(parsed)
+            item["jw_identity_authoritative"] = True
             if parsed["key_symbol"] or parsed["doc_id"]:
                 item["auto_title"] = True
 

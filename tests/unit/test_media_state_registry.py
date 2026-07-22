@@ -4,6 +4,7 @@ from solin.ui.qml.media_tree.state import (
     MediaProbeResult,
     MediaStateRegistry,
 )
+import pytest
 
 
 def test_registry_rejects_a_probe_for_an_obsolete_source_generation() -> None:
@@ -31,6 +32,26 @@ def test_registry_rejects_a_probe_for_an_obsolete_source_generation() -> None:
     assert stale is False
     assert current is True
     assert registry.state("playlist:1", "media-1").local_path == "new.mp4"
+
+
+def test_presentation_state_rejects_fractional_negative_progress() -> None:
+    with pytest.raises(ValueError, match="must be -1 or between 0 and 1"):
+        MediaPresentationState(cloud_progress=-0.5)
+
+
+def test_registry_rejects_a_completion_from_before_owner_clear() -> None:
+    registry = MediaStateRegistry()
+    stale = registry.begin_probe("playlist:1", "media-1", "video.mp4")
+    registry.clear_owner("playlist:1")
+    current = registry.begin_probe("playlist:1", "media-1", "video.mp4")
+
+    assert stale != current
+    assert not registry.accept(
+        MediaProbeResult(
+            stale,
+            MediaPresentationState(availability=MediaAvailability.MISSING),
+        )
+    )
 
 
 def test_registry_preserves_last_known_visuals_while_rechecking() -> None:
