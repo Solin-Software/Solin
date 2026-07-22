@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import struct
+from types import SimpleNamespace
 import zlib
 
+import pytest
+from PySide6.QtWidgets import QApplication
+
+from solin.core.media.info_queue import MediaInfoFailure, MediaInfoFailureKind
 from solin.ui import media_info as media_info_module
 from solin.ui.media_info import (
     MediaInfoQueue,
@@ -11,6 +18,9 @@ from solin.ui.media_info import (
     _embedded_image_is_complete,
     _id3v2_info_from_bytes,
 )
+
+
+_APP = QApplication.instance() or QApplication([])
 
 
 class _NoRemoteWorkerPool:
@@ -25,6 +35,501 @@ def _media_info_queue(tmp_path, parent=None):
         _NoRemoteWorkerPool(),
         parent,
     )
+
+
+class _ManualSignal:
+    def __init__(self) -> None:
+        self._callbacks = []
+
+    def connect(self, callback) -> None:
+        self._callbacks.append(callback)
+
+    def emit(self, *args) -> None:
+        for callback in tuple(self._callbacks):
+            callback(*args)
+
+
+class _ManualExtractor:
+    def __init__(self) -> None:
+        self.info_ready = _ManualSignal()
+        self.thumbnail_failed = _ManualSignal()
+        self.duration_ready = _ManualSignal()
+
+    def cancel(self) -> None:
+        pass
+
+
+class _NullPixmap:
+    @staticmethod
+    def isNull():  # noqa: N802 - Qt-style test double
+        return True
+
+
+def test_http_status_failure_classification_handles_permanent_and_cloud_errors():
+    missing = media_info_module._failure_from_exception(
+        media_info_module.HttpStatusError("https://example/missing", 404, "missing")
+    )
+    unavailable = media_info_module._failure_from_exception(
+        media_info_module.HttpStatusError(
+            "https://example/unavailable",
+            503,
+            "unavailable",
+        )
+    )
+    locked = media_info_module._failure_from_exception(
+        media_info_module.HttpStatusError("https://example/locked", 423, "locked")
+    )
+    conflict = media_info_module._failure_from_exception(
+        media_info_module.HttpStatusError("https://example/conflict", 409, "conflict")
+    )
+
+    assert missing.kind is MediaInfoFailureKind.PERMANENT
+    assert missing.code == "http-404"
+    assert unavailable.kind is MediaInfoFailureKind.TRANSIENT
+    assert locked.kind is MediaInfoFailureKind.TRANSIENT
+    assert conflict.kind is MediaInfoFailureKind.TRANSIENT
+
+
+def test_local_image_access_failure_is_transient_and_worker_routed(tmp_path):
+    source = SimpleNamespace(
+        _url=str(tmp_path / "cloud-placeholder.jpg"),
+        _MAX_BYTES=media_info_module.LocalImageInfoExtractor._MAX_BYTES,
+    )
+
+    with pytest.raises(OSError) as captured:
+        media_info_module.LocalImageInfoExtractor._fetch_info(source)
+
+    failure = media_info_module._failure_from_exception(captured.value)
+    assert failure.kind is MediaInfoFailureKind.TRANSIENT
+    assert media_info_module._EXTRACTOR_FACTORIES[(False, "image")] is (
+        media_info_module._local_image_factory
+    )
+
+
+def test_remote_audio_invalid_embedded_image_is_failure_not_absence(monkeypatch):
+    class _DecodeFailurePixmap:
+        @staticmethod
+        def loadFromData(_data):  # noqa: N802 - Qt-style test double
+            return False
+
+        @staticmethod
+        def isNull():  # noqa: N802 - Qt-style test double
+            return True
+
+    monkeypatch.setattr(media_info_module, "QPixmap", _DecodeFailurePixmap)
+    extractor = media_info_module.RemoteAudioInfoExtractor(
+        9,
+        "https://example/audio.mp3",
+        _NoRemoteWorkerPool(),
+    )
+    ready = []
+    failed = []
+    extractor.info_ready.connect(lambda *args: ready.append(args))
+    extractor.thumbnail_failed.connect(lambda *args: failed.append(args))
+
+    extractor._deliver_worker_result(b"not-a-decodable-image", "")
+
+    assert ready == []
+    assert len(failed) == 1
+    assert failed[0][0] == 9
+    assert failed[0][1].kind is MediaInfoFailureKind.FORMAT
+    extractor.cancel()
+
+
+def test_remote_title_only_result_does_not_start_qmedia_stream(monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(
+        media_info_module,
+        "QTimer",
+        SimpleNamespace(singleShot=lambda delay, callback: scheduled.append((delay, callback))),
+    )
+    ready = []
+    streams = []
+    source = SimpleNamespace(
+        _done=False,
+        _require_duration=False,
+        _require_thumbnail=False,
+        _page_title="",
+        _page_pixmap=_NullPixmap(),
+        info_ready=SimpleNamespace(emit=lambda *args: ready.append(args)),
+        deleteLater=lambda: None,
+        _start_stream=streams.append,
+    )
+
+    media_info_module._RemoteVideoMetaThenStream._on_page_ready(
+        source,
+        9,
+        _NullPixmap(),
+        "Resolved title",
+    )
+
+    assert ready == [(9, source._page_pixmap, "Resolved title")]
+    assert streams == []
+    assert len(scheduled) == 1
+
+
+def test_remote_title_only_failure_retries_without_qmedia_stream(monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(
+        media_info_module,
+        "QTimer",
+        SimpleNamespace(singleShot=lambda delay, callback: scheduled.append((delay, callback))),
+    )
+    failures = []
+    streams = []
+    source = SimpleNamespace(
+        _done=False,
+        _require_duration=False,
+        _require_thumbnail=False,
+        thumbnail_failed=SimpleNamespace(emit=lambda *args: failures.append(args)),
+        deleteLater=lambda: None,
+        _start_stream=streams.append,
+    )
+    failure = MediaInfoFailure(
+        MediaInfoFailureKind.TRANSIENT,
+        "temporarily unavailable",
+        "transport",
+    )
+
+    media_info_module._RemoteVideoMetaThenStream._on_page_failed(
+        source,
+        9,
+        failure,
+    )
+
+    assert failures == [(9, failure)]
+    assert streams == []
+    assert len(scheduled) == 1
+
+
+def test_local_audio_invalid_embedded_image_is_not_reported_as_absent(monkeypatch):
+    class _DecodeFailurePixmap:
+        @staticmethod
+        def loadFromData(_data):  # noqa: N802 - Qt-style test double
+            return False
+
+        @staticmethod
+        def isNull():  # noqa: N802 - Qt-style test double
+            return True
+
+    monkeypatch.setattr(media_info_module, "QPixmap", _DecodeFailurePixmap)
+    extractor = media_info_module.LocalAudioInfoExtractor(
+        10,
+        "cloud-backed.mp3",
+        _NoRemoteWorkerPool(),
+    )
+    ready = []
+    failed = []
+    extractor.info_ready.connect(lambda *args: ready.append(args))
+    extractor.thumbnail_failed.connect(lambda *args: failed.append(args))
+
+    extractor._deliver_worker_result(b"not-a-decodable-image", "")
+
+    assert ready == []
+    assert len(failed) == 1
+    assert failed[0][1].kind is MediaInfoFailureKind.FORMAT
+    assert media_info_module._EXTRACTOR_FACTORIES[(False, "audio")] is (
+        media_info_module._local_audio_factory
+    )
+    extractor.cancel()
+
+
+def test_local_audio_metadata_read_is_deferred_to_worker(monkeypatch, tmp_path):
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_read_audio_info_from_file",
+        lambda _path: pytest.fail("audio was read on the Qt thread"),
+    )
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    queue = _media_info_queue(tmp_path)
+
+    queue.request(10, str(tmp_path / "cloud-backed.mp3"), "audio")
+
+    assert queue._extractors[10] is extractor
+    queue.shutdown()
+
+
+def test_local_audio_without_cover_finishes_as_authoritative_absence():
+    finished = []
+    failed = []
+    source = SimpleNamespace(
+        _done=False,
+        _require_thumbnail=True,
+        _metadata_pixmap=media_info_module.QPixmap(),
+        _metadata_title="",
+        _metadata_image_failed=False,
+        _finish=lambda *args: finished.append(args),
+        _on_player_failed=lambda *args: failed.append(args),
+    )
+
+    media_info_module._LocalAudioMetaThenPlayer._on_player_ready(
+        source,
+        10,
+        media_info_module.QPixmap(),
+        "",
+    )
+
+    assert len(finished) == 1
+    assert finished[0][0] == 10
+    assert finished[0][1].isNull()
+    assert failed == []
+
+
+def test_legacy_negative_cache_is_not_treated_as_authoritative_absence(tmp_path):
+    queue = _media_info_queue(tmp_path)
+    _image_path, metadata_path = queue._get_cache_paths("clip.mp4")
+    Path(metadata_path).parent.mkdir(parents=True)
+    Path(metadata_path).write_text(
+        json.dumps({"has_thumb": False, "title": "", "duration_ms": 0}),
+        encoding="utf-8",
+    )
+
+    pixmap, title, duration = queue._load_from_disk_cache("clip.mp4")
+
+    assert pixmap is None
+    assert title == ""
+    assert duration == 0
+
+
+def test_permanent_failure_does_not_emit_ready_or_write_negative_cache(
+    monkeypatch,
+    tmp_path,
+):
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    queue = _media_info_queue(tmp_path)
+    ready = []
+    failed = []
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.request_failed.connect(lambda *args: failed.append(args))
+
+    queue.request(7, "missing.mp4", "video")
+    failure = MediaInfoFailure(
+        MediaInfoFailureKind.PERMANENT,
+        "not found",
+        "missing",
+    )
+    extractor.thumbnail_failed.emit(7, failure)
+
+    _image_path, metadata_path = queue._get_cache_paths("missing.mp4")
+    assert ready == []
+    assert failed == [(7, failure)]
+    assert queue.get_cached(7) == (None, "")
+    assert not Path(metadata_path).exists()
+
+
+def test_empty_video_result_is_a_failure_not_authoritative_absence(
+    monkeypatch,
+    tmp_path,
+):
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    queue = _media_info_queue(tmp_path)
+    ready = []
+    failed = []
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.request_failed.connect(lambda *args: failed.append(args))
+
+    queue.request(4, "clip.mp4", "video")
+    extractor.info_ready.emit(4, _NullPixmap(), "Metadata title")
+
+    assert ready == []
+    assert len(failed) == 1
+    assert failed[0][0] == 4
+    assert failed[0][1].kind is MediaInfoFailureKind.FORMAT
+    assert queue.get_cached(4) == (None, "")
+
+
+def test_transient_failure_remains_pending_until_scheduled_retry(
+    monkeypatch,
+    tmp_path,
+):
+    created: list[_ManualExtractor] = []
+
+    def factory(*_args):
+        extractor = _ManualExtractor()
+        created.append(extractor)
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    monkeypatch.setattr(
+        media_info_module,
+        "retry_delay_seconds",
+        lambda _failure, _attempt: 30.0,
+    )
+    queue = _media_info_queue(tmp_path)
+    failed = []
+    queue.request_failed.connect(lambda *args: failed.append(args))
+
+    queue.request(5, "cloud-placeholder.mp4", "video")
+    created[0].thumbnail_failed.emit(
+        5,
+        MediaInfoFailure(
+            MediaInfoFailureKind.TRANSIENT,
+            "temporarily locked",
+            "locked",
+        ),
+    )
+
+    assert failed == []
+    assert 5 in queue._request_states
+    assert 5 in queue._retry_timers
+    assert queue.get_cached(5) == (None, "")
+
+
+def test_remote_404_uses_completed_local_media_only_after_origin_failure(
+    monkeypatch,
+    tmp_path,
+):
+    remote_url = "https://cdn.example/missing.mp4"
+    local_fallback = str(tmp_path / "media" / "cached.mp4")
+    created: list[tuple[str, _ManualExtractor]] = []
+
+    def factory(_index, target, _media_type, _worker_pool, _parent):
+        extractor = _ManualExtractor()
+        created.append((target, extractor))
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    monkeypatch.setattr(
+        media_info_module,
+        "completed_cached_path",
+        lambda url, _cache_dir: local_fallback if url == remote_url else None,
+    )
+    queue = _media_info_queue(tmp_path)
+
+    queue.request(3, remote_url, "video")
+
+    assert [target for target, _extractor in created] == [remote_url]
+
+    origin_failure = MediaInfoFailure(
+        MediaInfoFailureKind.PERMANENT,
+        "not found",
+        "http-404",
+    )
+    created[0][1].thumbnail_failed.emit(3, origin_failure)
+
+    assert [target for target, _extractor in created] == [
+        remote_url,
+        local_fallback,
+    ]
+    assert queue._request_states[3].origin_failure is origin_failure
+
+
+def test_remote_404_without_local_media_stops_without_retry(monkeypatch, tmp_path):
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    monkeypatch.setattr(
+        media_info_module,
+        "completed_cached_path",
+        lambda *_args: None,
+    )
+    queue = _media_info_queue(tmp_path)
+    failures = []
+    queue.request_failed.connect(lambda *args: failures.append(args))
+
+    queue.request(9, "https://cdn.example/missing.mp4", "video")
+    failure = MediaInfoFailure(
+        MediaInfoFailureKind.PERMANENT,
+        "not found",
+        "http-404",
+    )
+    extractor.thumbnail_failed.emit(9, failure)
+
+    assert failures == [(9, failure)]
+    assert 9 not in queue._request_states
+    assert 9 not in queue._retry_timers
+
+
+def test_remote_404_is_memoized_without_becoming_thumbnail_absence(
+    monkeypatch,
+    tmp_path,
+):
+    created: list[_ManualExtractor] = []
+
+    def factory(*_args):
+        extractor = _ManualExtractor()
+        created.append(extractor)
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    monkeypatch.setattr(
+        media_info_module,
+        "completed_cached_path",
+        lambda *_args: None,
+    )
+    queue = _media_info_queue(tmp_path)
+    remote_url = "https://cdn.example/missing.mp4"
+
+    queue.request(1, remote_url, "video")
+    failure = MediaInfoFailure(
+        MediaInfoFailureKind.PERMANENT,
+        "not found",
+        "http-404",
+    )
+    created[0].thumbnail_failed.emit(1, failure)
+    queue.clear()
+    queue.request(2, remote_url, "video")
+
+    assert len(created) == 1
+    assert queue._terminal_source_failures[remote_url] is failure
+    _image_path, metadata_path = queue._get_cache_paths(remote_url)
+    assert not Path(metadata_path).exists()
+
+
+def test_memoized_remote_404_uses_local_media_when_it_becomes_available(
+    monkeypatch,
+    tmp_path,
+):
+    remote_url = "https://cdn.example/missing.mp4"
+    local_fallback = str(tmp_path / "media" / "cached.mp4")
+    local_is_available = False
+    created: list[tuple[str, _ManualExtractor]] = []
+
+    def factory(_index, target, _media_type, _worker_pool, _parent):
+        extractor = _ManualExtractor()
+        created.append((target, extractor))
+        return extractor
+
+    def completed_path(_url, _cache_dir):
+        return local_fallback if local_is_available else None
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    monkeypatch.setattr(media_info_module, "completed_cached_path", completed_path)
+    queue = _media_info_queue(tmp_path)
+
+    queue.request(1, remote_url, "video")
+    failure = MediaInfoFailure(
+        MediaInfoFailureKind.PERMANENT,
+        "not found",
+        "http-404",
+    )
+    created[0][1].thumbnail_failed.emit(1, failure)
+    local_is_available = True
+    queue.request(2, remote_url, "video")
+
+    assert [target for target, _extractor in created] == [
+        remote_url,
+        local_fallback,
+    ]
+    assert queue._request_states[2].origin_failure is failure
 
 
 def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
@@ -217,6 +722,105 @@ def test_media_info_queue_keeps_cached_info_when_duration_is_not_required(
     assert not queue._scheduler.is_scheduled(7)
 
 
+def test_duration_only_request_does_not_cache_or_emit_opportunistic_media(
+    monkeypatch,
+    tmp_path,
+):
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    queue = _media_info_queue(tmp_path)
+    disk_writes = []
+    ready = []
+    durations = []
+    monkeypatch.setattr(
+        queue,
+        "_save_to_disk_cache",
+        lambda *args: disk_writes.append(args),
+    )
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.duration_ready.connect(lambda *args: durations.append(args))
+
+    queue.request(
+        7,
+        str(tmp_path / "clip.mp4"),
+        require_thumbnail=False,
+        require_title=False,
+        require_duration=True,
+    )
+    extractor.duration_ready.emit(7, 12_345)
+    extractor.info_ready.emit(7, media_info_module.QPixmap(1, 1), "Unexpected title")
+
+    assert durations == [(7, 12_345)]
+    assert len(ready) == 1
+    assert ready[0][0] == 7
+    assert ready[0][1].isNull()
+    assert ready[0][2] == ""
+    assert disk_writes == []
+
+
+def test_remote_audio_duration_requirement_falls_back_to_qmedia(
+    monkeypatch,
+    tmp_path,
+):
+    class _IntentExtractor(_ManualExtractor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.intent = None
+
+        def set_request_intent(self, **intent):
+            self.intent = intent
+
+    header_extractor = _ManualExtractor()
+    duration_extractor = _IntentExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: header_extractor,
+    )
+    monkeypatch.setattr(
+        media_info_module,
+        "MediaInfoExtractor",
+        lambda *_args: duration_extractor,
+    )
+    queue = _media_info_queue(tmp_path)
+    ready = []
+    durations = []
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.duration_ready.connect(lambda *args: durations.append(args))
+    cover = media_info_module.QPixmap(1, 1)
+
+    queue.request(
+        7,
+        "https://example.test/audio.mp3",
+        "audio",
+        require_duration=True,
+    )
+    header_extractor.info_ready.emit(7, cover, "Remote title")
+
+    assert ready == []
+    assert duration_extractor.intent == {
+        "require_thumbnail": False,
+        "require_title": False,
+        "require_duration": True,
+    }
+
+    duration_extractor.duration_ready.emit(7, 12_345)
+    duration_extractor.info_ready.emit(
+        7,
+        media_info_module.QPixmap(),
+        "",
+    )
+
+    assert durations == [(7, 12_345)]
+    assert len(ready) == 1
+    assert not ready[0][1].isNull()
+    assert ready[0][2] == "Remote title"
+
+
 def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     monkeypatch,
     tmp_path,
@@ -258,7 +862,7 @@ def test_media_info_queue_refills_capacity_after_extractor_factory_failure(
     queue._pump()
 
     assert created == [1, 2]
-    assert terminal_results == [0]
+    assert terminal_results == []
     assert set(queue._scheduler.active) == {1, 2}
     assert not queue._scheduler.pending
 

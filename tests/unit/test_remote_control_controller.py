@@ -4,6 +4,7 @@ import asyncio
 from io import BytesIO
 import json
 from pathlib import Path
+import threading
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -270,6 +271,57 @@ def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path)
     controller._refresh_catalog()
 
     assert controller.state.catalog_revision == 0
+    controller.stop()
+
+
+def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    caller_thread = threading.get_ident()
+    worker_threads: list[int] = []
+    original_snapshot = controller._catalog.snapshot
+
+    def snapshot():
+        worker_threads.append(threading.get_ident())
+        return original_snapshot()
+
+    controller._catalog.snapshot = snapshot
+    controller._schedule_catalog_refresh()
+    controller._catalog_refresh_timer.stop()
+    controller._start_catalog_refresh()
+
+    deadline = time.monotonic() + 2
+    while controller._catalog_refresh_inflight is not None:
+        _APP.processEvents()
+        time.sleep(0.001)
+        assert time.monotonic() < deadline
+
+    assert worker_threads
+    assert all(thread_id != caller_thread for thread_id in worker_threads)
+    assert controller.state.catalog_revision == 1
+    controller.stop()
+
+
+def test_catalog_invalidation_during_scan_keeps_single_debounced_followup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    scheduled = []
+    monkeypatch.setattr(
+        "solin.controllers.remote_control_controller.QTimer.singleShot",
+        lambda delay, callback: scheduled.append((delay, callback)),
+    )
+    controller._catalog_refresh_generation = 2
+    controller._catalog_refresh_inflight = (1, object())
+    controller._catalog_refresh_pending = False
+    controller._catalog_refresh_timer.start()
+
+    controller._on_catalog_snapshot_completed(1, None, None)
+
+    assert controller._catalog_refresh_timer.isActive()
+    assert scheduled == []
+    controller._catalog_refresh_timer.stop()
+    controller._catalog_refresh_inflight = None
     controller.stop()
 
 

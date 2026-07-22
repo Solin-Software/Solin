@@ -258,6 +258,29 @@ def test_move_media_to_subsection_updates_storage_and_marker_positions(tmp_path)
     ]
 
 
+def test_incremental_tree_move_does_not_emit_redundant_model_reset(tmp_path):
+    playlist = _nested_playlist()
+    model = _model(tmp_path)
+    model.rebuild(playlist)
+    resets: list[bool] = []
+    model.modelReset.connect(lambda: resets.append(True))
+
+    assert model.move_node(
+        "root-media",
+        "subsection:subsection-1",
+        0,
+        publish_reset=False,
+    )
+
+    assert resets == []
+    subsection = model.tree_data()[0]["children"][1]
+    assert [node["id"] for node in subsection["children"]] == [
+        "root-media",
+        "marker-1",
+        "subsection-media",
+    ]
+
+
 def test_empty_subsection_move_persists_before_section_media(tmp_path):
     playlist = {
         "sections": [

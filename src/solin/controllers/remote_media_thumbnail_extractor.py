@@ -21,10 +21,13 @@ log = logging.getLogger(__name__)
 _MAX_THUMBNAIL_WIDTH: Final = 640
 _MAX_THUMBNAIL_HEIGHT: Final = 360
 _MAX_PENDING_MEDIA: Final = 32
+# The queue is remote-first and may then open a completed local cache file.
+# These deadlines cover one bounded origin attempt plus one local fallback;
+# retry policy beyond that remains owned by the queue and later requests.
 _EXTRACTION_TIMEOUT_SECONDS: Final = {
-    MediaKind.AUDIO: 4.0,
-    MediaKind.IMAGE: 8.0,
-    MediaKind.VIDEO: 12.0,
+    MediaKind.AUDIO: 25.0,
+    MediaKind.IMAGE: 20.0,
+    MediaKind.VIDEO: 40.0,
 }
 
 
@@ -57,6 +60,7 @@ class RemoteMediaThumbnailExtractor(QObject):
         self.requested.connect(self._dispatch)
         self.cancellation_requested.connect(self._cancel)
         self._queue.info_ready.connect(self._on_info_ready)
+        self._queue.request_failed.connect(self._on_request_failed)
 
     async def extract(self, location: str, media_kind: MediaKind) -> bytes | None:
         """Return a bounded JPEG without touching Qt from the server thread."""
@@ -153,6 +157,10 @@ class RemoteMediaThumbnailExtractor(QObject):
             log.warning("Could not encode extracted remote media thumbnail", exc_info=True)
         self._finish(index, data)
 
+    @Slot(int, object)
+    def _on_request_failed(self, index: int, _failure: object) -> None:
+        self._finish(index, None)
+
     def shutdown(self) -> None:
         """Cancel owned Qt extraction and resolve all remote waiters once."""
 
@@ -173,6 +181,10 @@ class RemoteMediaThumbnailExtractor(QObject):
         key = self._index_to_key.pop(index, None)
         if key is None:
             return
+        try:
+            self._queue.invalidate(index)
+        except (AttributeError, RuntimeError):
+            log.warning("Could not release remote media thumbnail state", exc_info=True)
         requests = self._pending.pop(key, ())
         for request in requests:
             self._complete(request, data)

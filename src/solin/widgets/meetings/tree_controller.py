@@ -354,8 +354,9 @@ class MeetingTreeController(QObject):
         self._info_queue = media_info_queue_factory(self)
         self._info_queue.info_ready.connect(self._on_info_ready)
         self._info_queue.duration_ready.connect(self._on_duration_ready)
-        self._info_request_by_token: dict[int, tuple[str, str]] = {}
-        self._active_info_requests: set[tuple[str, str]] = set()
+        self._info_queue.request_failed.connect(self._on_info_failed)
+        self._info_request_by_token: dict[int, tuple[str, str, str]] = {}
+        self._active_info_requests: set[tuple[str, str, str]] = set()
         self._next_token = 1
         self._resolve_to_node_id: dict[str, str] = {}
         self._resolved_urls: dict[str, str] = {}
@@ -1415,6 +1416,7 @@ class MeetingTreeController(QObject):
         try:
             self._info_queue.info_ready.disconnect(self._on_info_ready)
             self._info_queue.duration_ready.disconnect(self._on_duration_ready)
+            self._info_queue.request_failed.disconnect(self._on_info_failed)
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect meeting tree info queue")
         try:
@@ -2281,6 +2283,7 @@ class MeetingTreeController(QObject):
         node = self._find_node(item_id)
         if not node:
             return
+        self._cancel_media_info_requests_for_item(item_id)
         MeetingTreeController._remember_hidden_canonical_media(self, node)
         # Official meeting media is recoverable canonical content. Its linked
         # copy must remain available. A manual item only owns a source file when
@@ -3362,9 +3365,16 @@ class MeetingTreeController(QObject):
         *,
         purpose: str = "metadata",
     ) -> None:
-        request_key = (item_id, purpose)
+        source_identity = self._media_info_source_identity(url)
+        request_key = (item_id, purpose, source_identity)
         if request_key in self._active_info_requests:
             return
+        for token, active_key in tuple(self._info_request_by_token.items()):
+            if active_key[:2] != request_key[:2]:
+                continue
+            self._info_queue.invalidate(token)
+            self._info_request_by_token.pop(token, None)
+            self._active_info_requests.discard(active_key)
         token = self._next_token
         self._next_token += 1
         self._info_request_by_token[token] = request_key
@@ -3376,6 +3386,45 @@ class MeetingTreeController(QObject):
             require_duration=(
                 purpose == "metadata" and media_type in {"audio", "video"}
             ),
+        )
+
+    def _cancel_media_info_requests_for_item(self, item_id: str) -> None:
+        """Stop queued, active, and retrying media work for a removed node."""
+
+        self._media_request_queue = deque(
+            node
+            for node in self._media_request_queue
+            if str(node.get("id") or "") != item_id
+        )
+        for token, request_key in tuple(self._info_request_by_token.items()):
+            if request_key[0] != item_id:
+                continue
+            self._info_queue.invalidate(token)
+            self._info_request_by_token.pop(token, None)
+            self._active_info_requests.discard(request_key)
+
+    @staticmethod
+    def _media_info_source_identity(url: str) -> str:
+        if MediaCacheManager.is_remote(url):
+            return url
+        return os.path.normcase(os.path.abspath(url))
+
+    def _media_info_request_is_current(
+        self,
+        node: Node,
+        purpose: str,
+        source_identity: str,
+    ) -> bool:
+        if purpose == "thumb":
+            current_source = str(node.get("thumbnail_url") or "")
+        else:
+            current_source = self._url_for_node(node)
+            if MediaCacheManager.is_remote(current_source):
+                current_source = (
+                    self._media_cache_manager.cached_path(current_source) or ""
+                )
+        return bool(current_source) and (
+            self._media_info_source_identity(current_source) == source_identity
         )
 
     @Slot(str, str, str, str)
@@ -3408,14 +3457,19 @@ class MeetingTreeController(QObject):
     @Slot(int, object, str)
     def _on_info_ready(self, token: int, pixmap: QPixmap, title: str):
         request_key = self._info_request_by_token.pop(token, None)
+        self._info_queue.invalidate(token)
         if request_key is None:
             return
         self._active_info_requests.discard(request_key)
-        item_id, _purpose = request_key
+        item_id, purpose, source_identity = request_key
         if not item_id:
             return
         node = self._find_node(item_id)
-        if not node:
+        if not node or not self._media_info_request_is_current(
+            node,
+            purpose,
+            source_identity,
+        ):
             return
         patch: dict[str, Any] = {}
         if pixmap and not pixmap.isNull():
@@ -3446,6 +3500,12 @@ class MeetingTreeController(QObject):
             self._queue_derived_media_patch(node, patch)
             self._emit_media_changed(item_id)
 
+    @Slot(int, object)
+    def _on_info_failed(self, token: int, _failure: object) -> None:
+        request_key = self._info_request_by_token.pop(token, None)
+        if request_key is not None:
+            self._active_info_requests.discard(request_key)
+
     def _should_accept_resolved_title(self, node: Node) -> bool:
         return should_accept_resolved_media_title(
             node,
@@ -3459,7 +3519,15 @@ class MeetingTreeController(QObject):
         if not item_id or duration_ms <= 0:
             return
         node = self._find_node(item_id)
-        if not node:
+        if (
+            not node
+            or request_key is None
+            or not self._media_info_request_is_current(
+                node,
+                request_key[1],
+                request_key[2],
+            )
+        ):
             return
         ticks = int(duration_ms) * 10_000
         if self._duration_ticks(node) > 0:

@@ -32,6 +32,7 @@ Item {
 
     property var playlistController: null
     property bool hasItems: false
+    property bool loading: false
     property var playlistNodes: []
     readonly property bool hasController: playlistController !== null
     readonly property bool playbackProtectionEnabled:
@@ -506,7 +507,7 @@ Item {
                 color: "transparent"
                 border.width: 1
                 border.color: root.border_
-                visible: !root.hasItems && !root.treeHydrating
+                visible: !root.hasItems && !root.treeHydrating && !root.loading
                 opacity: 0.75
 
                 ColumnLayout {
@@ -535,6 +536,26 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                     }
+                }
+            }
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 8
+                visible: root.loading
+
+                BusyIndicator {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 24
+                    running: root.loading
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTranslate("_PlaylistEditView", "Loading playlist...")
+                    color: root.textMuted
+                    font.pixelSize: 11
                 }
             }
 

@@ -54,6 +54,7 @@ from solin.core.media.formats import (
     VIDEO_EXTS,
     media_type_from_path,
 )
+from solin.core.media.identity import partition_media_items
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
     MANIFEST_REPOSITORY,
@@ -249,12 +250,13 @@ def scan_root(folder_path: str) -> list[dict]:
             continue
         if is_meeting_folder(sub.name):
             continue
-        items = scan_subfolder(str(sub))
+        manifest = MANIFEST_REPOSITORY.load(sub)
+        items = _scan_subfolder(sub, manifest)
         result.append({
             "id":         _path_id(sub),
             "name":       sub.name,
             "path":       str(sub),
-            "item_count": len(items),
+            "item_count": _manifest_playlist_item_count(sub, manifest, items),
         })
     return result
 
@@ -305,9 +307,13 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
     if not sub.is_dir():
         return []
 
-    items: list[dict] = []
+    return _scan_subfolder(sub, MANIFEST_REPOSITORY.load(sub))
 
-    manifest = MANIFEST_REPOSITORY.load(sub)
+
+def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
+    """Scan one validated subfolder using an already loaded manifest."""
+
+    items: list[dict] = []
 
     # Coleta todos os arquivos permitidos no cache (gerados pelo Solin)
     allowed_cache_files = set()
@@ -369,6 +375,30 @@ def scan_subfolder(subfolder_path: str) -> list[dict]:
     # Ordena por título
     items.sort(key=lambda it: it.get("title", "").lower())
     return items
+
+
+def _manifest_playlist_item_count(
+    subfolder: Path,
+    manifest: dict,
+    scanned_items: list[dict],
+) -> int:
+    """Count the canonical playlist plus newly discovered physical media."""
+
+    raw_items = manifest.get("playlist", {}).get("items", [])
+    saved_items: list[dict] = []
+    if isinstance(raw_items, list):
+        for raw_item in raw_items:
+            if not isinstance(raw_item, dict):
+                continue
+            runtime_item = dict(raw_item)
+            runtime_item["url"] = _from_manifest_url(
+                str(raw_item.get("url") or ""),
+                subfolder,
+            )
+            saved_items.append(runtime_item)
+
+    new_items = partition_media_items(saved_items, scanned_items).unique_items
+    return len(saved_items) + len(new_items)
 
 
 def get_pending_files(subfolder_path: str) -> list[str]:

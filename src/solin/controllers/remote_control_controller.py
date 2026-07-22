@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 import logging
 import os
@@ -175,6 +175,7 @@ class RemoteControlController(QObject):
     session_inventory_reported = Signal(object)
     runtime_status_reported = Signal(bool, bool, str)
     session_revocation_reported = Signal(str, bool)
+    _catalog_snapshot_completed = Signal(int, object, object)
 
     def __init__(self, dependencies: RemoteControlDependencies, parent: QObject) -> None:
         super().__init__(parent)
@@ -208,6 +209,21 @@ class RemoteControlController(QObject):
             thumbnail_id_resolver=self._thumbnail_id,
             meeting_group_title_resolver=display_meeting_section_title,
         )
+        self._catalog_refresh_executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="solin-remote-catalog",
+        )
+        self._catalog_refresh_generation = 0
+        self._catalog_refresh_inflight: tuple[int, Future[Any]] | None = None
+        self._catalog_refresh_pending = False
+        self._catalog_refresh_shutdown = False
+        self._catalog_refresh_timer = QTimer(self)
+        self._catalog_refresh_timer.setSingleShot(True)
+        self._catalog_refresh_timer.setInterval(750)
+        self._catalog_refresh_timer.timeout.connect(self._start_catalog_refresh)
+        self._catalog_snapshot_completed.connect(
+            self._on_catalog_snapshot_completed
+        )
         self._playback_timer = QTimer(self)
         self._playback_timer.setSingleShot(True)
         self._playback_timer.setInterval(160)
@@ -216,7 +232,7 @@ class RemoteControlController(QObject):
         self._runtime_timer.setInterval(15_000)
         self._runtime_timer.timeout.connect(self._reconcile_runtime)
 
-        self.catalog_invalidated.connect(self._refresh_catalog)
+        self.catalog_invalidated.connect(self._schedule_catalog_refresh)
         self.playback_invalidated.connect(self._schedule_playback_refresh)
         self._connect_publishers()
 
@@ -235,6 +251,18 @@ class RemoteControlController(QObject):
         self._runtime_timer.start()
 
     def stop(self) -> None:
+        self._catalog_refresh_shutdown = True
+        self._catalog_refresh_timer.stop()
+        future = (
+            self._catalog_refresh_inflight[1]
+            if self._catalog_refresh_inflight is not None
+            else None
+        )
+        if future is not None:
+            future.cancel()
+        self._catalog_refresh_executor.shutdown(wait=False, cancel_futures=True)
+        self._catalog_refresh_inflight = None
+        self._catalog_refresh_pending = False
         self._runtime_timer.stop()
         self._playback_timer.stop()
         self._sessions.revoke_all()
@@ -481,16 +509,100 @@ class RemoteControlController(QObject):
 
     @Slot()
     def _refresh_catalog(self) -> None:
+        """Synchronously refresh for startup and explicit local operations."""
+
         try:
             snapshot = self._catalog.snapshot()
-            previous_revision = self._state.catalog_revision
-            self._state.update_catalog(
-                snapshot.collections,
-                change_token=snapshot.catalog_revision,
-            )
         except (CatalogResolutionError, TypeError, ValueError):
             log.warning("Could not refresh remote-control catalog", exc_info=True)
             return
+        self._apply_catalog_snapshot(snapshot)
+
+    @Slot()
+    def _schedule_catalog_refresh(self) -> None:
+        """Coalesce repository invalidations without blocking the Qt thread."""
+
+        if self._catalog_refresh_shutdown:
+            return
+        self._catalog_refresh_generation += 1
+        self._catalog_refresh_timer.start()
+
+    @Slot()
+    def _start_catalog_refresh(self) -> None:
+        if self._catalog_refresh_shutdown:
+            return
+        if self._catalog_refresh_inflight is not None:
+            self._catalog_refresh_pending = True
+            return
+        self._catalog_refresh_pending = False
+        generation = self._catalog_refresh_generation
+        future = self._catalog_refresh_executor.submit(self._catalog.snapshot)
+        self._catalog_refresh_inflight = (generation, future)
+        future.add_done_callback(
+            lambda completed, current_generation=generation: (
+                self._emit_catalog_snapshot_completed(
+                    current_generation,
+                    completed,
+                )
+            )
+        )
+
+    def _emit_catalog_snapshot_completed(
+        self,
+        generation: int,
+        future: Future[Any],
+    ) -> None:
+        try:
+            snapshot = future.result()
+        except BaseException as error:  # noqa: BLE001 - worker boundary
+            try:
+                self._catalog_snapshot_completed.emit(generation, None, error)
+            except RuntimeError:
+                pass
+        else:
+            try:
+                self._catalog_snapshot_completed.emit(generation, snapshot, None)
+            except RuntimeError:
+                pass
+
+    @Slot(int, object, object)
+    def _on_catalog_snapshot_completed(
+        self,
+        generation: int,
+        snapshot: object,
+        error: BaseException | None,
+    ) -> None:
+        inflight = self._catalog_refresh_inflight
+        if inflight is None or inflight[0] != generation:
+            return
+        self._catalog_refresh_inflight = None
+        stale = generation != self._catalog_refresh_generation
+        if error is not None:
+            if not isinstance(error, (CatalogResolutionError, TypeError, ValueError)):
+                log.warning(
+                    "Could not refresh remote-control catalog",
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+            else:
+                log.warning(
+                    "Could not refresh remote-control catalog: %s",
+                    error,
+                )
+        elif not stale and snapshot is not None:
+            self._apply_catalog_snapshot(snapshot)
+
+        if self._catalog_refresh_pending or stale:
+            self._catalog_refresh_pending = False
+            if self._catalog_refresh_timer.isActive():
+                return
+            QTimer.singleShot(0, self._start_catalog_refresh)
+
+    def _apply_catalog_snapshot(self, snapshot: Any) -> None:
+        previous_revision = self._state.catalog_revision
+        self._state.update_catalog(
+            snapshot.collections,
+            change_token=snapshot.catalog_revision,
+        )
         if self._state.catalog_revision != previous_revision:
             self._publish_snapshot()
 

@@ -2025,7 +2025,7 @@ def test_media_info_services_live_outside_widget_package():
     assert not legacy_path.exists()
 
 
-def test_media_info_remote_workers_are_injected_from_composition():
+def test_media_info_workers_are_injected_from_composition():
     media_info_source = (
         PROJECT_ROOT / "src" / "solin" / "ui" / "media_info.py"
     ).read_text(encoding="utf-8")
@@ -2035,7 +2035,7 @@ def test_media_info_remote_workers_are_injected_from_composition():
 
     assert "import threading" not in media_info_source
     assert "threading.Thread" not in media_info_source
-    assert "remote_worker_pool" in media_info_source
+    assert "worker_pool" in media_info_source
     assert "ThreadedWorkerPool" in composition_source
     assert "_media_info_workers" in composition_source
 

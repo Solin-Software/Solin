@@ -52,6 +52,7 @@ class _Store:
 def _outbox(store: _Store):
     controller = type("Controller", (), {})()
     controller._pending_manifest_saves = {}
+    controller._manifest_state_generation = 0
     controller._manifest_save_inflight = None
     controller._manifest_save_future = None
     controller._manifest_save_executor = _ImmediateExecutor()
@@ -70,6 +71,9 @@ def _outbox(store: _Store):
         controller._on_manifest_save_completed
     )
     controller._warn_manifest_save_failed = lambda *_args: False
+    controller._wf_refresh_inflight = None
+    controller._wf_refresh_superseded = False
+    controller._wf_refresh_pending = False
     return controller
 
 
@@ -89,6 +93,21 @@ def test_outbox_keeps_independent_snapshots_when_view_switches_folder() -> None:
     }
     assert snapshots["C:/linked/one"]["items"][0]["id"] == "first"
     assert snapshots["C:/linked/two"]["items"][0]["id"] == "second"
+
+
+def test_scheduling_save_supersedes_concurrent_folder_snapshot() -> None:
+    controller = _outbox(_Store())
+    controller._wf_refresh_inflight = (1, "C:/linked/one")
+
+    PlaylistEditView._schedule_manifest_save(
+        controller,
+        "C:/linked/one",
+        {"items": [{"id": "new-state"}]},
+    )
+
+    assert controller._manifest_state_generation == 1
+    assert controller._wf_refresh_superseded is True
+    assert controller._wf_refresh_pending is True
 
 
 def test_outbox_coalesces_same_folder_to_latest_snapshot() -> None:
@@ -149,8 +168,10 @@ def test_refresh_is_deferred_while_current_folder_has_pending_save() -> None:
     controller._is_watched = True
     controller._watched_path = "C:/linked/one"
     controller._wf_sync_thread = None
+    controller._wf_refresh_shutdown = False
     controller._wf_refresh_pending = False
     controller._flush_image_framing_save = lambda: None
+    controller._reset_watched_folder_refresh_retry = lambda: None
     store.load_playlist = lambda _path: (_ for _ in ()).throw(
         AssertionError("pending local order must not be replaced by stale manifest")
     )
@@ -169,11 +190,15 @@ def test_reopening_folder_uses_pending_snapshot_instead_of_stale_disk_state() ->
     store = _Store()
     controller = _outbox(store)
     controller._flush_image_framing_save = lambda: None
+    controller._reset_watched_folder_refresh_retry = lambda: None
     controller._watched_file_availability = lambda _playlist: ()
     controller._thumb_queue = type("Queue", (), {"clear": lambda _self: None})()
     controller._thumb_scan_timer = _Timer()
     controller._thumb_scan_items = []
     controller._id_to_thumb = {}
+    controller._thumb_idx_to_id = {}
+    controller._thumb_idx_to_source = {}
+    controller._thumb_idx_to_intent = {}
     controller._thumb_pending_item_ids = set()
     controller._rebuild_list = lambda: None
     controller._start_wf_sync = lambda: None

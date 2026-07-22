@@ -4,7 +4,38 @@ from pathlib import Path
 
 import pytest
 
-from solin.core.media.info_queue import MediaInfoScheduler
+from solin.core.media.info_queue import (
+    MediaInfoFailure,
+    MediaInfoFailureKind,
+    MediaInfoScheduler,
+    retry_delay_seconds,
+)
+
+
+def test_retry_policy_only_retries_transient_failures() -> None:
+    transient = MediaInfoFailure(MediaInfoFailureKind.TRANSIENT)
+    permanent = MediaInfoFailure(MediaInfoFailureKind.PERMANENT)
+    invalid_format = MediaInfoFailure(MediaInfoFailureKind.FORMAT)
+
+    assert [retry_delay_seconds(transient, attempt) for attempt in range(1, 8)] == [
+        1.0,
+        3.0,
+        10.0,
+        30.0,
+        90.0,
+        300.0,
+        300.0,
+    ]
+    assert retry_delay_seconds(permanent, 1) is None
+    assert retry_delay_seconds(invalid_format, 1) is None
+
+
+def test_retry_policy_rejects_invalid_attempt_number() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        retry_delay_seconds(
+            MediaInfoFailure(MediaInfoFailureKind.TRANSIENT),
+            0,
+        )
 
 
 def test_scheduler_enforces_positive_concurrency():
@@ -29,16 +60,20 @@ def test_scheduler_limits_concurrency_and_deduplicates_indices():
     assert scheduler.active == {1: second, 2: third}
 
 
-def test_scheduler_preserves_duration_requirement_on_job() -> None:
+def test_scheduler_preserves_request_intent_on_job() -> None:
     scheduler = MediaInfoScheduler()
 
     job = scheduler.enqueue(
         0,
         "clip.mp4",
         "video",
+        require_thumbnail=False,
+        require_title=False,
         require_duration=True,
     )
 
+    assert job.require_thumbnail is False
+    assert job.require_title is False
     assert job.require_duration is True
 
 

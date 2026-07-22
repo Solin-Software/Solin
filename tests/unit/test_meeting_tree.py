@@ -51,6 +51,75 @@ from solin.widgets.meetings.tree_controller import (
 )
 
 
+def test_media_info_request_replaces_pending_work_when_source_changes() -> None:
+    class _Queue:
+        def __init__(self) -> None:
+            self.invalidated = []
+            self.requests = []
+
+        def invalidate(self, token) -> None:
+            self.invalidated.append(token)
+
+        def request(self, *args, **kwargs) -> None:
+            self.requests.append((args, kwargs))
+
+    queue = _Queue()
+    controller = SimpleNamespace(
+        _info_queue=queue,
+        _info_request_by_token={},
+        _active_info_requests=set(),
+        _next_token=1,
+        _media_info_source_identity=(
+            MeetingTreeController._media_info_source_identity
+        ),
+    )
+
+    MeetingTreeController._queue_info(
+        controller,
+        "media-1",
+        "C:/media/old.mp4",
+        "video",
+    )
+    MeetingTreeController._queue_info(
+        controller,
+        "media-1",
+        "C:/media/new.mp4",
+        "video",
+    )
+
+    assert queue.invalidated == [1]
+    assert [args[1] for args, _kwargs in queue.requests] == [
+        "C:/media/old.mp4",
+        "C:/media/new.mp4",
+    ]
+    assert set(controller._info_request_by_token) == {2}
+
+
+def test_removed_meeting_item_cancels_queued_and_retrying_media_work() -> None:
+    invalidated = []
+    removed_key = ("removed", "metadata", "source-a")
+    kept_key = ("kept", "thumb", "source-b")
+    controller = SimpleNamespace(
+        _media_request_queue=deque([
+            {"id": "removed"},
+            {"id": "kept"},
+        ]),
+        _info_request_by_token={3: removed_key, 4: kept_key},
+        _active_info_requests={removed_key, kept_key},
+        _info_queue=SimpleNamespace(invalidate=invalidated.append),
+    )
+
+    MeetingTreeController._cancel_media_info_requests_for_item(
+        controller,
+        "removed",
+    )
+
+    assert invalidated == [3]
+    assert list(controller._media_request_queue) == [{"id": "kept"}]
+    assert controller._info_request_by_token == {4: kept_key}
+    assert controller._active_info_requests == {kept_key}
+
+
 def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> None:
     emitted = []
     background = publications_module._WeekLoadRequest(
@@ -1404,13 +1473,22 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         controller._derived_media_patches = {}
         controller._derived_media_save_timer = timer
         controller._info_request_by_token = {
-            1: ("media-1", "metadata"),
-            2: ("media-2", "metadata"),
+            1: (
+                "media-1",
+                "metadata",
+                MeetingTreeController._media_info_source_identity("one.mp4"),
+            ),
+            2: (
+                "media-2",
+                "metadata",
+                MeetingTreeController._media_info_source_identity("two.mp4"),
+            ),
         }
         controller._duration_ticks = MeetingTreeController._duration_ticks.__get__(
             controller,
             type(controller),
         )
+        controller._media_info_request_is_current = lambda *_args: True
         controller._find_node = lambda item_id: next(
             (node for node in nodes if node["id"] == item_id),
             None,
@@ -2010,6 +2088,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
 
     def _wire_remove_item_controller(self, controller) -> None:
         controller._watched_folder_file_store = WatchedFolderFileStore()
+        controller._cancel_media_info_requests_for_item = lambda _item_id: None
         controller._find_node = (
             lambda node_id, nodes=None: MeetingTreeController._find_node(
                 controller,
