@@ -35,7 +35,6 @@ Item {
     property real requestedZoom: 1.0
     property real requestedNormX: 0.0
     property real requestedNormY: 0.0
-    property bool geometrySyncQueued: false
     property bool panning: false
     property bool pressedForPan: false
     property bool gestureMoved: false
@@ -159,13 +158,7 @@ Item {
     }
 
     function scheduleGeometrySync() {
-        if (geometrySyncQueued)
-            return
-        geometrySyncQueued = true
-        Qt.callLater(function() {
-            geometrySyncQueued = false
-            syncFramingToGeometry()
-        })
+        geometrySyncTimer.restart()
     }
 
     function isDefaultTransform() {
@@ -223,6 +216,13 @@ Item {
     onWidthChanged: scheduleGeometrySync()
     onHeightChanged: scheduleGeometrySync()
     Component.onCompleted: applyFraming(framing)
+
+    Timer {
+        id: geometrySyncTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.syncFramingToGeometry()
+    }
 
     Rectangle {
         anchors.fill: parent

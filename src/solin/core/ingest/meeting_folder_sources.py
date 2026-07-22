@@ -13,12 +13,14 @@ from solin.core.foundation.constants import (
     PLAYLIST_EXTS,
     PPTX_EXTS,
 )
+from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.media.formats import (
     AUDIO_EXTS,
     IMAGE_EXTS,
     VIDEO_EXTS,
     media_type_from_path,
 )
+from solin.core.media.local_source import local_source_revision_from_stat
 from solin.core.meetings.folder_matcher import match_meeting_folder
 
 DIRECT_MEDIA_SOURCE_EXTS: frozenset[str] = VIDEO_EXTS | AUDIO_EXTS | IMAGE_EXTS
@@ -39,8 +41,14 @@ def _source_key(path: Path) -> str:
 
 def _file_signature(path: Path) -> dict[str, Any]:
     """Fast change signature used to decide whether an autoimport can be reused."""
-    stat = path.stat()
-    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+    revision = local_source_revision_from_stat(path.stat())
+    return {
+        "size": revision.size,
+        "mtime_ns": revision.mtime_ns,
+        "ctime_ns": revision.ctime_ns,
+        "device": revision.device,
+        "inode": revision.inode,
+    }
 
 
 def _source_kind(path: Path) -> str:
@@ -97,6 +105,8 @@ def scan_meeting_folder_sources(folder_path: str | Path) -> list[dict[str, Any]]
 
         sources: list[dict[str, Any]] = []
         for file_path in sorted(subfolder.iterdir(), key=lambda path: path.name.lower()):
+            if is_watched_folder_staging_path(file_path):
+                continue
             if not file_path.is_file():
                 continue
             if file_path.name.startswith(".") or file_path.name.startswith("_solin"):

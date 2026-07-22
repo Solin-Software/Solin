@@ -4,12 +4,15 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.meetings.canonical_restore import (
     canonical_tree_diff,
     restore_canonical_tree,
 )
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
 from solin.core.meetings.tree_types import iter_nodes
+from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
+from solin.ui.qml.media_tree.state import MediaPresentationState
 from solin.widgets.meetings.tree_controller import MeetingTreeController
 from PySide6.QtWidgets import QMessageBox
 
@@ -402,24 +405,19 @@ def test_restore_recovers_hidden_media_title_and_remote_download_url() -> None:
     assert media["thumbnail_url"] == "https://cdn.example.invalid/official.jpg"
     assert media["base_duration_ticks"] == 123_000
 
-    class CacheManager:
-        @staticmethod
-        def is_cached(_url: str) -> bool:
-            return False
-
-        @staticmethod
-        def is_prefetching(_url: str) -> bool:
-            return False
-
-    class Controller:
-        _media_cache_manager = CacheManager()
-        _cloud_progress_by_url: dict[str, float] = {}
-
-    cloud_visible, cloud_active, _progress, _tooltip = (
-        MeetingTreeController._cloud_state(Controller(), media["resolved_url"])
+    roles = media_roles(
+        MediaRoleInput(
+            node_id=media["id"],
+            title=media["title"],
+            media_type="video",
+            badge="Video",
+            url=media["resolved_url"],
+        ),
+        MediaPresentationState(),
+        None,
     )
-    assert cloud_visible is True
-    assert cloud_active is False
+    assert roles["cloudVisible"] is True
+    assert roles["cloudActive"] is False
 
 
 def test_legacy_hidden_media_without_state_is_resolved_after_restore() -> None:
@@ -436,6 +434,13 @@ def test_legacy_hidden_media_without_state_is_resolved_after_restore() -> None:
 
         def _url_for_node(self, node):
             return MeetingTreeController._url_for_node(self, node)
+
+        def _request_jw_resolution(self, node, *, allow_generated=False):
+            return MeetingTreeController._request_jw_resolution(
+                self,
+                node,
+                allow_generated=allow_generated,
+            )
 
     restored_media = _media("media:legacy", "Media") | {
         "media_ref": {
@@ -472,6 +477,13 @@ def test_restored_placeholder_title_is_resolved_even_when_remote_url_survived() 
 
         def _url_for_node(self, node):
             return MeetingTreeController._url_for_node(self, node)
+
+        def _request_jw_resolution(self, node, *, allow_generated=False):
+            return MeetingTreeController._request_jw_resolution(
+                self,
+                node,
+                allow_generated=allow_generated,
+            )
 
     restored_media = _media("media:renamed", "Media") | {
         "auto_title": True,
@@ -616,6 +628,7 @@ def _transaction_controller(store, *, sync_service=None):
     controller._linked_folder_files = {}
     controller._meeting_folder_imports = {}
     controller._canonical_reset_generation = 5
+    controller._hidden_canonical_media = {}
     controller._canonical_restore_available = True
     controller._meeting_type = "mwb"
     controller._tree_key = "mwb:2026-05-25:T:issue"
@@ -639,6 +652,21 @@ def _transaction_controller(store, *, sync_service=None):
     controller._start_media_requests = lambda: None
     controller._emit_section_counts = lambda: None
     controller._generated_asset_roots = lambda: []
+    controller._meeting_folder_imported_node_ids = lambda: set()
+    controller.saved = 0
+    controller._save_local_cache = (
+        lambda: setattr(controller, "saved", controller.saved + 1) or True
+    )
+
+    def submit_modal_operation(**options):
+        try:
+            value = options["runner"](lambda _progress: None, CancellationFlag())
+            options["commit"](value)
+        except Exception as exc:  # noqa: BLE001 - test operation boundary
+            options["failed"](str(exc))
+        return True
+
+    controller._submit_modal_operation = submit_modal_operation
     return controller
 
 
@@ -663,14 +691,8 @@ def test_restore_confirmation_is_concise_and_does_not_list_diff_categories() -> 
     assert "items" not in captured["message"]
 
 
-def test_restore_storage_failure_keeps_previous_state_and_does_not_publish() -> None:
-    class FailingStore:
-        def save(self, *_args, **_kwargs):
-            raise OSError("disk full")
-
-    controller = _transaction_controller(FailingStore())
-    previous_nodes = controller._nodes
-    previous_deleted = set(controller._deleted_source_keys)
+def test_restore_commits_state_and_queues_persistence() -> None:
+    controller = _transaction_controller(object())
 
     with patch.object(
         QMessageBox,
@@ -679,13 +701,12 @@ def test_restore_storage_failure_keeps_previous_state_and_does_not_publish() -> 
     ):
         MeetingTreeController.restoreCanonicalContent(controller)
 
-    assert controller._nodes is previous_nodes
-    assert controller._deleted_source_keys == previous_deleted
-    assert controller._canonical_reset_generation == 5
+    assert controller._nodes == controller._canonical_nodes
+    assert controller._deleted_source_keys == set()
+    assert controller._canonical_reset_generation == 6
+    assert controller.saved == 1
     assert controller.storageSaved.calls == []
-    assert controller.storageSaveFailed.calls == [
-        ("mwb:2026-05-25:T:issue", "disk full")
-    ]
+    assert controller.storageSaveFailed.calls == []
 
 
 def test_restore_materialization_failure_never_persists_or_publishes() -> None:
@@ -713,6 +734,7 @@ def test_restore_materialization_failure_never_persists_or_publishes() -> None:
     assert controller._nodes is previous_nodes
     assert controller._deleted_source_keys == {"media:a"}
     assert store.calls == 0
+    assert controller.saved == 0
     assert controller.storageSaved.calls == []
     assert controller.storageSaveFailed.calls == [
         ("mwb:2026-05-25:T:issue", "copy failed")

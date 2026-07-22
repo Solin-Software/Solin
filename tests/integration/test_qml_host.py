@@ -30,8 +30,16 @@ from solin.core.i18n.meeting_schedule import (
     meeting_kind_label,
     meeting_weekday_names,
 )
+from solin.core.meetings.tree_editing import move_tree_node
 from solin.core.timer.models import ClockConfig
 from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.media_tree.model import MediaTreeSource
+from solin.ui.qml.media_tree.snapshot import (
+    MediaTreeNodeSnapshot,
+    MediaTreeNodeType,
+    MediaTreeSnapshot,
+)
+from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
 
@@ -191,32 +199,22 @@ def pt_br_translator():
 
 
 class _PlaylistTreeControllerProbe(QObject):
-    stateChanged = Signal()
-    mediaChanged = Signal(str, str, str, str)
-    imageFramingChanged = Signal(str, object)
-    mediaInserted = Signal(str, int, "QVariant")
-    nodesInserted = Signal(str, int, "QVariant")
-    nodeReplaced = Signal(str, "QVariant")
-    nodeMoved = Signal(str, str, int)
-    sectionChanged = Signal(str, str, str, str, str, int)
-    sectionCollapseChanged = Signal(str, bool)
-    sectionCountsChanged = Signal(object)
     markerEditRequested = Signal(str)
-    cloudChanged = Signal(str, bool, bool, float, str)
 
     def __init__(self, nodes: list[dict]) -> None:
         super().__init__()
         self._nodes = nodes
         self.projected: list[str] = []
-        self.moves: list[tuple[str, str, int]] = []
-
-    @Property(object, notify=stateChanged)
-    def playlistData(self):  # noqa: N802 - QML API
-        return self._nodes
+        self.moves: list[tuple[str, str, int, int]] = []
+        self.collapsed: list[str] = []
 
     @Slot(str)
     def projectItem(self, item_id: str) -> None:  # noqa: N802 - QML API
         self.projected.append(item_id)
+
+    @Slot(str)
+    def toggleCollapse(self, section_id: str) -> None:  # noqa: N802 - QML API
+        self.collapsed.append(section_id)
 
     @Slot(result=float)
     def imageFramingAspectRatio(self) -> float:  # noqa: N802 - QML API
@@ -226,14 +224,35 @@ class _PlaylistTreeControllerProbe(QObject):
     def imageFramingSourceAspectRatio(self, _item_id: str) -> float:  # noqa: N802
         return 16 / 9
 
-    @Slot(str, str, int, result=bool)
+    @Slot(result=int)
+    def treeStructureRevision(self) -> int:  # noqa: N802 - QML API
+        return 1
+
+    @Slot(str, str, str, result=bool)
+    def canDrop(  # noqa: N802 - QML API
+        self,
+        _node_id: str,
+        _node_type: str,
+        _target_list_id: str,
+    ) -> bool:
+        return True
+
+    @Slot(str, str, int, str, int, result=bool)
     def moveNode(  # noqa: N802 - QML API
         self,
         node_id: str,
         target_list_id: str,
         insert_index: int,
+        tree_id: str,
+        structure_revision: int,
     ) -> bool:
-        self.moves.append((node_id, target_list_id, insert_index))
+        if tree_id != "qml-test":
+            return False
+        if not move_tree_node(self._nodes, node_id, target_list_id, insert_index):
+            return False
+        self.moves.append(
+            (node_id, target_list_id, insert_index, structure_revision)
+        )
         return True
 
 
@@ -252,23 +271,10 @@ def _playlist_media_node(item_id: str, title: str) -> dict:
         "imageFraming": None,
         "mediaType": "video",
         "badge": "Video",
-    }
-
-
-def _playlist_section_node(
-    section_id: str,
-    children: list[dict],
-) -> dict:
-    return {
-        "type": "section",
-        "id": section_id,
-        "title": "Section",
-        "color": "#4f8cff",
-        "textColor": "#ffffff",
-        "badgeBg": "#26466f",
-        "itemCount": len(children),
-        "collapsed": False,
-        "children": children,
+        "canDrag": True,
+        "canEdit": True,
+        "canProject": True,
+        "canRemove": True,
     }
 
 
@@ -279,7 +285,7 @@ def _playlist_tree_host(
 ) -> tuple[
     QQuickWidget,
     _PlaylistTreeControllerProbe,
-    QObject,
+    MediaTreeSource,
     _PlaybackProtectionProbe,
 ]:
     protection = _PlaybackProtectionProbe(enabled=False)
@@ -296,16 +302,34 @@ def _playlist_tree_host(
     )
     root = widget.rootObject()
     assert root is not None
+    model = MediaTreeSource("qml-test", widget)
+    model.activate_snapshot(
+        MediaTreeSnapshot.create(
+            "qml-test",
+            1,
+            tuple(_snapshot_node(node) for node in nodes),
+        )
+    )
     root.setProperty("playlistController", controller)
-    root.setProperty("playlistNodes", nodes)
+    root.setProperty("treeSource", model)
     root.setProperty("hasItems", True)
-    root_playlist = root.findChild(QObject, "rootPlaylist")
-    assert root_playlist is not None
-    root_playlist.scheduleRebuild(nodes)
     widget.show()
     QTest.qWait(40)
-    assert root_playlist.property("rebuildQueued") is False
-    return widget, controller, root_playlist, protection
+    return widget, controller, model, protection
+
+
+def _snapshot_node(node: dict) -> MediaTreeNodeSnapshot:
+    roles = {
+        key: value
+        for key, value in node.items()
+        if key not in {"id", "type", "children"}
+    }
+    return MediaTreeNodeSnapshot.create(
+        str(node["id"]),
+        MediaTreeNodeType(str(node["type"])),
+        roles=roles,
+        children=tuple(_snapshot_node(child) for child in node.get("children", [])),
+    )
 
 
 def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
@@ -319,183 +343,363 @@ def _visible_texts(item, *, parent_visible: bool = True) -> list[str]:
     return texts
 
 
-def test_deleting_untracked_moved_delegate_is_exact_and_does_not_rebuild() -> None:
-    nodes = [
-        _playlist_media_node("keep", "Keep"),
-        _playlist_media_node("remove", "Remove"),
-    ]
-    widget, controller, root_playlist, _protection = _playlist_tree_host(
-        nodes,
+def _find_visual(item, object_name: str):
+    if item.objectName() == object_name:
+        return item
+    for child in item.childItems():
+        if match := _find_visual(child, object_name):
+            return match
+    return None
+
+
+def test_playlist_tree_reconciles_complete_snapshots_without_recreating_host() -> None:
+    keep = _playlist_media_node("keep", "Keep")
+    remove = _playlist_media_node("remove", "Remove")
+    widget, _controller, model, _protection = _playlist_tree_host(
+        [keep, remove],
         height=220,
     )
+    root = widget.rootObject()
+    assert root is not None
+    keep_card = _find_visual(root, "mediaCard-keep")
+    assert keep_card is not None
+    assert _find_visual(root, "mediaCard-remove") is not None
 
-    remove_card = next(
-        item
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId") == "remove"
+    renamed_keep = {
+        **keep,
+        "title": "Renamed without rebuilding",
+        "thumbSource": "image://playlistthumbs/keep/2",
+    }
+    model.publish_snapshot(
+        MediaTreeSnapshot.create("qml-test", 2, (_snapshot_node(renamed_keep),))
     )
-    root_playlist.removeNode(remove_card)
-
-    controller._nodes = [nodes[0]]
-    controller.nodeReplaced.emit("remove", [])
-    assert root_playlist.property("rebuildQueued") is False
     QTest.qWait(30)
 
-    visual_ids = [
-        item.property("nodeId")
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeType") == "media"
-    ]
-    assert "keep" in visual_ids
-    assert "remove" not in visual_ids
+    assert all(node["id"] != "remove" for node in model.treeData)
+    assert _find_visual(root, "mediaCard-keep") is keep_card
+    assert "Renamed without rebuilding" in _visible_texts(keep_card)
+    assert keep_card.property("thumbSource") == "image://playlistthumbs/keep/2"
 
-    widget.deleteLater()
-
-
-def test_move_from_section_to_root_then_delete_stays_incremental() -> None:
-    moved = _playlist_media_node("moved", "Moved")
-    section = _playlist_section_node("section", [moved])
-    nodes = [section]
-    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
-
-    section_without_media = _playlist_section_node("section", [])
-    controller._nodes = [section_without_media, moved]
-    controller.nodeMoved.emit("moved", "root", 1)
-    assert root_playlist.property("rebuildQueued") is False
-
-    controller._nodes = [section_without_media]
-    controller.nodeReplaced.emit("moved", [])
-    assert root_playlist.property("rebuildQueued") is False
-    QTest.qWait(20)
-
-    visual_ids = [
-        item.property("nodeId")
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId")
-    ]
-    assert "section" in visual_ids
-    assert "moved" not in visual_ids
-
-    widget.deleteLater()
-
-
-def test_move_from_root_to_section_then_delete_stays_incremental() -> None:
-    moved = _playlist_media_node("moved", "Moved")
-    empty_section = _playlist_section_node("section", [])
-    nodes = [moved, empty_section]
-    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
-    target_list = root_playlist.findList("section:section")
-    assert target_list is not None
-    assert target_list.property("collapsed") is False
-    assert target_list.property("rebuildQueued") is False
-    assert target_list.property("pendingIndex") == 0
-
-    section_with_media = _playlist_section_node("section", [moved])
-    controller._nodes = [section_with_media]
-    controller.nodeMoved.emit("moved", "section:section", 0)
-    assert root_playlist.property("rebuildQueued") is False
-
-    controller._nodes = [_playlist_section_node("section", [])]
-    controller.nodeReplaced.emit("moved", [])
-    assert root_playlist.property("rebuildQueued") is False
-    QTest.qWait(20)
-
-    visual_ids = [
-        item.property("nodeId")
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId")
-    ]
-    assert "section" in visual_ids
-    assert "moved" not in visual_ids
-
-    widget.deleteLater()
-
-
-def test_move_between_sections_then_delete_stays_incremental() -> None:
-    moved = _playlist_media_node("moved", "Moved")
-    source_section = _playlist_section_node("source", [moved])
-    target_section = _playlist_section_node("target", [])
-    nodes = [source_section, target_section]
-    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
-
-    moved_card = next(
-        item
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId") == "moved"
+    same_id_in_another_tree = {
+        **keep,
+        "title": "Same ID in another playlist",
+    }
+    model.activate_snapshot(
+        MediaTreeSnapshot.create(
+            "qml-other",
+            1,
+            (_snapshot_node(same_id_in_another_tree),),
+        )
     )
-    target_list = root_playlist.findList("section:target")
-    assert target_list is not None
-    drag_manager = widget.rootObject().findChild(QObject, "dragManager")
-    assert drag_manager is not None
-    placeholder = widget.rootObject().findChild(QObject, "dragPlaceholder")
+    QTest.qWait(30)
+    assert _find_visual(root, "mediaCard-keep") is keep_card
+    assert "Same ID in another playlist" in _visible_texts(keep_card)
+
+    same_tree_update = {
+        **keep,
+        "title": "Updated after same-tree reactivation",
+    }
+    model.begin_transition("qml-other")
+    model.activate_snapshot(
+        MediaTreeSnapshot.create(
+            "qml-other",
+            2,
+            (_snapshot_node(same_tree_update),),
+        )
+    )
+    QTest.qWait(30)
+    assert _find_visual(root, "mediaCard-keep") is keep_card
+    assert "Updated after same-tree reactivation" in _visible_texts(keep_card)
+    widget.deleteLater()
+
+
+def test_playlist_tree_accepts_node_ids_reserved_by_javascript_objects() -> None:
+    nodes = [
+        _playlist_media_node(node_id, node_id)
+        for node_id in ("constructor", "__proto__", "toString", "safe-id")
+    ]
+    widget, _controller, _model, _protection = _playlist_tree_host(
+        nodes,
+        height=360,
+    )
+    root = widget.rootObject()
+    assert root is not None
+
+    for node in nodes:
+        assert _find_visual(root, f"mediaCard-{node['id']}") is not None
+
+    widget.deleteLater()
+
+
+def test_playlist_tree_shows_a_retryable_state_after_snapshot_failure() -> None:
+    node = _playlist_media_node("media-1", "Media")
+    widget, _controller, model, _protection = _playlist_tree_host([node])
+    root = widget.rootObject()
+    assert root is not None
+    retries: list[bool] = []
+    model.retryRequested.connect(lambda: retries.append(True))
+
+    model.begin_transition("qml-test")
+    model.activate_error("qml-test", 2, "broken snapshot")
+    QTest.qWait(30)
+
+    error_state = _find_visual(root, "treeErrorState")
+    retry_button = _find_visual(root, "treeRetryButton")
+    assert error_state is not None and error_state.property("visible") is True
+    assert retry_button is not None and retry_button.property("visible") is True
+
+    center = retry_button.mapToScene(
+        QPointF(retry_button.width() / 2, retry_button.height() / 2)
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=center)
+
+    assert retries == [True]
+    assert model.transitioning is True
+    assert model.error == ""
+    widget.deleteLater()
+
+
+def test_playlist_tree_preserves_card_identity_across_parent_snapshots() -> None:
+    media = _playlist_media_node("moving", "Moving media")
+    first = {
+        "type": "section",
+        "id": "first-section",
+        "title": "First",
+        "color": "#4f46e5",
+        "textColor": "#ffffff",
+        "badgeBg": "#26235f",
+        "collapsed": False,
+        "itemCount": 1,
+        "canDrag": True,
+        "children": [media],
+    }
+    second = {
+        **first,
+        "id": "second-section",
+        "title": "Second",
+        "itemCount": 0,
+        "children": [],
+    }
+    widget, _controller, model, _protection = _playlist_tree_host(
+        [first, second],
+        height=360,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    moving_card = _find_visual(root, "mediaCard-moving")
+    assert moving_card is not None
+
+    moved_first = {**first, "itemCount": 0, "children": []}
+    moved_second = {**second, "itemCount": 1, "children": [media]}
+    model.publish_snapshot(
+        MediaTreeSnapshot.create(
+            "qml-test",
+            2,
+            (_snapshot_node(moved_first), _snapshot_node(moved_second)),
+        )
+    )
+    QTest.qWait(240)
+
+    second_card = _find_visual(root, "sectionCard-second-section")
+    assert second_card is not None
+    assert _find_visual(root, "mediaCard-moving") is moving_card
+    assert moving_card.mapToScene(QPointF()).y() > second_card.mapToScene(QPointF()).y()
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+def test_playlist_edit_shell_accepts_the_shared_tree_theme_contract() -> None:
+    widget = QQuickWidget()
+    widget.resize(640, 420)
+    controller = PlaylistEditBridge(parent=widget)
+    model = MediaTreeSource("playlist:shell", widget)
+    configure_qml_host(
+        widget,
+        type_name="PlaylistEditView",
+        clear_color="#000000",
+        image_providers={
+            "playlisticons": PlaylistIconProvider(),
+            "playlistthumbs": PlaylistThumbnailProvider({}),
+        },
+        context_properties={
+            "controller": controller,
+            "playlistTreeSource": model,
+            "playbackProtection": None,
+        },
+        mouse_tracking=True,
+    )
+
+    assert widget.rootObject() is not None
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+def test_playlist_tree_preserves_nested_section_geometry() -> None:
+    child = _playlist_media_node("child", "Nested media")
+    populated = {
+        "type": "section",
+        "id": "populated",
+        "title": "Populated section",
+        "color": "#4f46e5",
+        "textColor": "#ffffff",
+        "badgeBg": "#26235f",
+        "collapsed": False,
+        "itemCount": 1,
+        "canDrag": True,
+        "children": [child],
+    }
+    empty = {
+        "type": "section",
+        "id": "empty",
+        "title": "Empty section",
+        "color": "#f59e0b",
+        "textColor": "#ffffff",
+        "badgeBg": "#4c3510",
+        "collapsed": False,
+        "itemCount": 0,
+        "canDrag": True,
+        "children": [],
+    }
+    widget, _controller, _model, _protection = _playlist_tree_host(
+        [populated, empty],
+        height=360,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    populated_card = _find_visual(root, "sectionCard-populated")
+    empty_card = _find_visual(root, "sectionCard-empty")
+    child_card = _find_visual(root, "mediaCard-child")
+    assert populated_card is not None
+    assert empty_card is not None
+    assert child_card is not None
+
+    QTest.qWait(240)
+    populated_scene = populated_card.mapToScene(QPointF())
+    child_scene = child_card.mapToScene(QPointF())
+    assert child_scene.x() - populated_scene.x() == pytest.approx(16)
+    assert populated_card.height() > 48
+    assert empty_card.height() == pytest.approx(118)
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+def test_playlist_tree_drag_keeps_placeholder_and_full_ghost_feedback() -> None:
+    first = _playlist_media_node("first", "First media")
+    second = _playlist_media_node("second", "Second media")
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [first, second],
+        height=220,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    grip = _find_visual(root, "dragGrip-first")
+    card = _find_visual(root, "mediaCard-first")
+    overlay = _find_visual(root, "dragOverlay")
+    placeholder = _find_visual(root, "dragPlaceholder")
+    assert grip is not None
+    assert card is not None
+    assert overlay is not None
     assert placeholder is not None
 
-    drag_manager.startDrag(moved_card)
-    target_list.appendNode(placeholder)
-    drag_manager.endDrag()
-    assert controller.moves == [("moved", "section:target", 0)]
-    assert root_playlist.property("rebuildQueued") is False
-
-    source_without_media = _playlist_section_node("source", [])
-    controller._nodes = [
-        source_without_media,
-        _playlist_section_node("target", []),
-    ]
-    controller.nodeReplaced.emit("moved", [])
-    assert root_playlist.property("rebuildQueued") is False
+    QTest.qWait(240)
+    start = grip.mapToScene(QPointF(grip.width() / 2, grip.height() / 2)).toPoint()
+    moved = QPoint(start.x() + 30, start.y() + 35)
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(widget, moved, delay=10)
     QTest.qWait(20)
 
-    visual_ids = [
-        item.property("nodeId")
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId")
-    ]
-    assert "source" in visual_ids
-    assert "target" in visual_ids
-    assert "moved" not in visual_ids
+    assert card.parentItem() is overlay
+    assert card.height() == pytest.approx(72)
+    assert card.property("opacity") == pytest.approx(0.34)
+    assert placeholder.property("visible") is True
 
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=moved)
+    QTest.qWait(10)
+    assert placeholder.property("visible") is False
+    assert controller.moves
+    assert controller.moves[-1][-1] == 1
+    assert widget.errors() == []
     widget.deleteLater()
 
 
-def test_first_reorder_after_section_insertion_stays_incremental() -> None:
-    existing = _playlist_media_node("existing", "Existing")
-    section = _playlist_section_node("section", [existing])
-    nodes = [section]
-    widget, controller, root_playlist, _protection = _playlist_tree_host(nodes)
-
-    inserted = _playlist_media_node("inserted", "Inserted")
-    controller._nodes = [
-        _playlist_section_node("section", [existing, inserted]),
-    ]
-    controller.mediaInserted.emit("section:section", 2**31 - 1, [inserted])
-    assert root_playlist.property("rebuildQueued") is False
-
-    target_list = root_playlist.findList("section:section")
-    assert target_list is not None
-    existing_card = next(
-        item
-        for item in target_list.findChildren(QObject)
-        if item.property("nodeId") == "existing"
+def test_playlist_tree_accepts_consecutive_down_and_back_reorders() -> None:
+    first = _playlist_media_node("first", "First media")
+    second = _playlist_media_node("second", "Second media")
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [first, second],
+        height=220,
     )
-    inserted_card = next(
-        item
-        for item in target_list.findChildren(QObject)
-        if item.property("nodeId") == "inserted"
+    root = widget.rootObject()
+    assert root is not None
+    first_card = _find_visual(root, "mediaCard-first")
+    second_card = _find_visual(root, "mediaCard-second")
+    assert first_card is not None
+    assert second_card is not None
+    QTest.qWait(240)
+
+    def drag_by(item_id: str, delta_y: int) -> None:
+        drag_area = _find_visual(root, f"dragMouse-{item_id}")
+        assert drag_area is not None
+        start = drag_area.mapToScene(
+            QPointF(drag_area.width() / 2, drag_area.height() / 2)
+        ).toPoint()
+        QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=start)
+        QTest.qWait(5)
+        QTest.mouseMove(widget, QPoint(start.x() + 10, start.y() + 10), delay=10)
+        destination = QPoint(start.x() + 20, start.y() + delta_y)
+        QTest.mouseMove(widget, destination, delay=10)
+        QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=destination)
+        QTest.qWait(240)
+
+    drag_by("first", 115)
+    assert first_card.mapToScene(QPointF()).y() > second_card.mapToScene(QPointF()).y()
+    assert [node["id"] for node in controller._nodes] == ["second", "first"]
+
+    drag_by("first", -115)
+    assert first_card.mapToScene(QPointF()).y() < second_card.mapToScene(QPointF()).y()
+    assert [node["id"] for node in controller._nodes] == ["first", "second"]
+    assert len(controller.moves) == 2
+    assert widget.errors() == []
+    widget.deleteLater()
+
+
+def test_playlist_section_collapse_retains_the_original_height_animation() -> None:
+    section = {
+        "type": "section",
+        "id": "animated",
+        "title": "Animated section",
+        "color": "#4f46e5",
+        "textColor": "#ffffff",
+        "badgeBg": "#26235f",
+        "collapsed": False,
+        "itemCount": 1,
+        "canDrag": True,
+        "children": [_playlist_media_node("child", "Nested media")],
+    }
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [section],
+        height=260,
     )
-    drag_manager = widget.rootObject().findChild(QObject, "dragManager")
-    placeholder = widget.rootObject().findChild(QObject, "dragPlaceholder")
-    assert drag_manager is not None
-    assert placeholder is not None
+    root = widget.rootObject()
+    assert root is not None
+    card = _find_visual(root, "sectionCard-animated")
+    header = _find_visual(root, "sectionHeaderHitArea-animated")
+    assert card is not None
+    assert header is not None
+    QTest.qWait(240)
+    expanded_height = card.height()
+    assert expanded_height > 100
 
-    drag_manager.startDrag(inserted_card)
-    target_list.insertBeforeNode(placeholder, existing_card)
-    drag_manager.endDrag()
+    point = header.mapToScene(QPointF(header.width() / 2, header.height() / 2)).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=point)
+    QTest.qWait(60)
+    animated_height = card.height()
 
-    assert controller.moves == [("inserted", "section:section", 0)]
-    assert root_playlist.property("rebuildQueued") is False
-    assert target_list.indexOfNode(inserted_card) == 0
-    assert target_list.indexOfNode(existing_card) == 1
-
+    assert 48 < animated_height < expanded_height
+    QTest.qWait(220)
+    assert card.height() == pytest.approx(48)
+    assert controller.collapsed == ["animated"]
+    assert widget.errors() == []
     widget.deleteLater()
 
 
@@ -639,6 +843,7 @@ def test_media_countdown_manual_duration_requires_confirmation() -> None:
     assert timer.duration_requests == []
 
     assert QMetaObject.invokeMethod(start_button, "clicked")
+    QTest.qWait(1)
     assert timer.duration_requests == [900]
 
     root.setProperty("customDurationVisible", True)
@@ -899,155 +1104,44 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state() -> None:
     assert probe.exited == 1
 
 
-def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
-    pt_br_translator,
-) -> None:
-    nodes = [{
-        "type": "media",
-        "id": "media-1",
-        "title": "Protected media",
-        "duration": "1:00",
-        "thumbSource": "",
-        "cloudVisible": False,
-        "cloudActive": False,
-        "cloudProgress": -1.0,
-        "cloudTooltip": "",
-        "isMissing": False,
-        "imageFraming": None,
-        "mediaType": "video",
-        "badge": "Video",
-    }]
-    protection = _PlaybackProtectionProbe(enabled=True)
-    controller = _PlaylistTreeControllerProbe(nodes)
-    widget = QQuickWidget()
-    widget.resize(520, 180)
-
-    configure_qml_host(
-        widget,
-        type_name="PlaylistTreeView",
-        clear_color="#000000",
-        image_providers={
-            "playlisticons": PlaylistIconProvider(),
-        },
-        context_properties={"playbackProtection": protection},
-        mouse_tracking=True,
-    )
+def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled() -> None:
+    node = _playlist_media_node("media-1", "Protected media")
+    widget, controller, _model, protection = _playlist_tree_host([node], height=180)
     root = widget.rootObject()
     assert root is not None
-    root.setProperty("playlistController", controller)
-    root.setProperty("playlistNodes", nodes)
-    root.setProperty("hasItems", True)
-    root_playlist = root.findChild(QObject, "rootPlaylist")
-    assert root_playlist is not None
-    root_playlist.scheduleRebuild(nodes)
-    widget.show()
-    QTest.qWait(30)
+    protection.set_enabled(True)
+    QTest.qWait(10)
 
-    media_card = next(
-        item
-        for item in root_playlist.findChildren(QObject)
-        if item.property("nodeId") == "media-1"
-    )
-    play_button = media_card.findChild(QObject, "protectedPlayButton")
-    download_button = media_card.findChild(QObject, "mediaDownloadButton")
-    more_button = media_card.findChild(QObject, "mediaMoreButton")
-    item_menu = media_card.findChild(QObject, "mediaItemMenu")
-    card_hit_area = media_card.findChild(QObject, "mediaCardHitArea")
-    framing_thumbnail = media_card.findChild(QObject, "imageFramingThumbnail")
+    play_button = _find_visual(root, "protectedPlayButton-media-1")
+    card_hit_area = _find_visual(root, "mediaCardHitArea-media-1")
     assert play_button is not None
-    assert download_button is not None
-    assert more_button is not None
-    assert item_menu is not None
     assert card_hit_area is not None
-    assert framing_thumbnail is not None
     assert play_button.property("visible") is True
-    assert play_button.property("enabled") is True
-    assert download_button.property("x") < play_button.property("x")
-    assert play_button.property("x") < more_button.property("x")
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
-    assert framing_thumbnail.property("clickActionEnabled") is False
-    protected_menu_count = item_menu.property("count")
-    assert media_card.findChild(QObject, "mediaItemPlayAction") is None
-    trim_action = media_card.findChild(QObject, "mediaItemTrimAction")
-    assert trim_action is not None
-    assert trim_action.property("text") == "Tempos de início e fim"
 
-    assert root.findChild(QObject, "mediaTrimDialog") is None
-    root.openMediaTrim(nodes[0])
-    QTest.qWait(1)
-    trim_dialog = root.findChild(QObject, "mediaTrimDialog")
-    assert trim_dialog is not None
-    trim_timeline = trim_dialog.findChild(QObject, "trimTimeline")
-    trim_start_handle = trim_dialog.findChild(QObject, "trimStartHandle")
-    trim_end_handle = trim_dialog.findChild(QObject, "trimEndHandle")
-    trim_start_drag_area = trim_dialog.findChild(QObject, "trimStartDragArea")
-    trim_end_drag_area = trim_dialog.findChild(QObject, "trimEndDragArea")
-    trim_selected_range = trim_dialog.findChild(QObject, "trimSelectedRange")
-    trim_start_bubble = trim_dialog.findChild(QObject, "trimStartBubble")
-    trim_end_bubble = trim_dialog.findChild(QObject, "trimEndBubble")
-    trim_audio_preview_label = trim_dialog.findChild(QObject, "trimAudioPreviewLabel")
-    trim_muted_preview_label = trim_dialog.findChild(QObject, "trimMutedPreviewLabel")
-    assert trim_timeline is not None
-    assert trim_start_handle is not None
-    assert trim_end_handle is not None
-    assert trim_start_drag_area is not None
-    assert trim_end_drag_area is not None
-    assert trim_selected_range is not None
-    assert trim_start_bubble is not None
-    assert trim_end_bubble is not None
-    assert trim_audio_preview_label is not None
-    assert trim_muted_preview_label is not None
-    assert trim_audio_preview_label.property("color").name() == "#cbd5e1"
-    assert trim_muted_preview_label.property("color").name() == "#cbd5e1"
-
-    trim_dialog.setProperty("durationMs", 1_000_000)
-    trim_dialog.setProperty("startMs", 499_950)
-    trim_dialog.setProperty("endMs", 500_050)
-    QTest.qWait(1)
-
-    start_inner_edge = (
-        trim_start_handle.property("x") + trim_start_handle.property("width")
-    )
-    end_inner_edge = trim_end_handle.property("x")
-    selected_start = trim_selected_range.property("x")
-    selected_end = selected_start + trim_selected_range.property("width")
-    assert start_inner_edge == pytest.approx(selected_start)
-    assert end_inner_edge == pytest.approx(selected_end)
-    assert start_inner_edge <= end_inner_edge
-    assert (
-        trim_start_drag_area.property("x")
-        + trim_start_drag_area.property("width")
-        <= trim_start_handle.property("width")
-    )
-    assert trim_end_drag_area.property("x") >= 0
-    assert trim_start_bubble.property("y") <= -10
-    assert trim_end_bubble.property("y") <= -10
-
-    media_card.clicked.emit()
+    card_center = card_hit_area.mapToScene(
+        QPointF(card_hit_area.width() / 2, card_hit_area.height() / 2)
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
     assert controller.projected == []
-
-    play_button.clicked.emit()
+    play_center = play_button.mapToScene(
+        QPointF(play_button.width() / 2, play_button.height() / 2)
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=play_center)
     assert controller.projected == ["media-1"]
 
     protection.set_locked(True)
     QTest.qWait(1)
     assert play_button.property("enabled") is False
 
+    protection.set_locked(False)
     protection.set_enabled(False)
     QTest.qWait(1)
     assert play_button.property("visible") is False
     assert card_hit_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
-    assert framing_thumbnail.property("clickActionEnabled") is True
-    assert item_menu.property("count") == protected_menu_count
-    assert media_card.findChild(QObject, "mediaItemPlayAction") is None
-    media_card.clicked.emit()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=card_center)
     assert controller.projected == ["media-1", "media-1"]
-
-    unprotected_video_menu_count = item_menu.property("count")
-    media_card.setProperty("mediaType", "image")
-    QTest.qWait(1)
-    assert item_menu.property("count") == unprotected_video_menu_count - 1
-    assert media_card.findChild(QObject, "mediaItemTrimAction") is None
+    widget.deleteLater()
 
 
 def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:

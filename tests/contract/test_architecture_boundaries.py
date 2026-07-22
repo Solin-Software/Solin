@@ -487,8 +487,8 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "jw_songs.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_library.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "meeting_detail.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree" / "model.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "bridge.py",
-        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "model.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "visuals.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "quick_toolbar.py",
         PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "timer_bridge.py",
@@ -563,6 +563,98 @@ def test_qml_presentation_adapters_live_under_ui_qml():
     assert violations == [], (
         "QML presentation adapters must live under solin.ui.qml instead of the "
         "package root:\n" + "\n".join(violations)
+    )
+
+
+def test_media_trees_have_one_complete_snapshot_reconciliation_boundary():
+    removed_legacy_paths = (
+        PROJECT_ROOT / "src" / "solin" / "core" / "tree_delta.py",
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "model.py",
+    )
+    for path in removed_legacy_paths:
+        assert not path.exists(), f"Legacy media-tree implementation still exists: {path}"
+
+    qml_path = PROJECT_ROOT / "src" / "solin" / "qml" / "PlaylistTreeView.qml"
+    qml_source = qml_path.read_text(encoding="utf-8")
+    assert "treeSource" in qml_source
+    assert "component DropList" in qml_source
+    assert (
+        "function reconcileFromNodes(nodes, forcePresentation, sharedVisualPool)"
+        in qml_source
+    )
+    assert "treeSource ? treeSource.treeData : []" in qml_source
+    model_source = (
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree" / "model.py"
+    ).read_text(encoding="utf-8")
+    assert "QAbstractItemModel" not in model_source
+    assert "beginInsertRows" not in model_source
+    assert "beginMoveRows" not in model_source
+    for legacy_api in (
+        "scheduleRebuild",
+        "mediaInserted",
+        "nodesInserted",
+        "nodeReplaced",
+        "nodeMoved",
+        "sectionChanged",
+        "sectionCollapseChanged",
+    ):
+        assert legacy_api not in qml_source
+
+    controller_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            PROJECT_ROOT / "src" / "solin" / "widgets" / "meetings" / "tree_controller.py",
+            PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "playlist" / "bridge.py",
+        )
+    )
+    for legacy_api in (
+        "mediaInserted = Signal",
+        "nodesInserted = Signal",
+        "nodeReplaced = Signal",
+        "nodeMoved = Signal",
+        "sectionChanged = Signal",
+        "sectionCollapseChanged = Signal",
+    ):
+        assert legacy_api not in controller_sources
+
+
+def test_media_tree_reconciliation_and_presenters_are_io_free() -> None:
+    media_tree_root = (
+        PROJECT_ROOT / "src" / "solin" / "ui" / "qml" / "media_tree"
+    )
+    forbidden_call_names = {
+        "open",
+        "stat",
+        "exists",
+        "is_file",
+        "is_dir",
+        "read_text",
+        "read_bytes",
+        "write_text",
+        "write_bytes",
+        "cached_path",
+        "completed_cached_path",
+    }
+    violations: list[str] = []
+
+    for path in sorted(media_tree_root.glob("*.py")):
+        for node in ast.walk(_tree(path)):
+            if not isinstance(node, ast.Call):
+                continue
+            function = node.func
+            if isinstance(function, ast.Name):
+                name = function.id
+            elif isinstance(function, ast.Attribute):
+                name = function.attr
+            else:
+                continue
+            if name in forbidden_call_names:
+                violations.append(f"{_display(path, node)} [{name}]")
+
+    assert violations == [], (
+        "Media-tree snapshots must be reconciled entirely from in-memory state; "
+        "filesystem and cache work belongs to the asynchronous runtime:\n"
+        + "\n".join(violations)
     )
 
 

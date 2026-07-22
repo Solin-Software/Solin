@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from collections.abc import Mapping, Sequence
+from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Generic, Hashable, TypeVar
 from urllib.parse import urlsplit, urlunsplit
 
 from solin.core.jw.identifiers import is_jw_url
@@ -18,6 +20,7 @@ _JW_LANGUAGE_RE = re.compile(
     r"(?:pub-)?[A-Za-z0-9]+_([A-Z]{1,4})_",
     re.IGNORECASE,
 )
+_IdentityKey = TypeVar("_IdentityKey", bound=Hashable)
 
 
 def _integer(value: Any) -> int:
@@ -78,6 +81,7 @@ class MediaIdentity:
     meps_language: int = 0
     language_code: str = ""
     location: str = ""
+    alternate_locations: tuple[str, ...] = ()
 
     def _jw_key(self) -> tuple[str, int, int, int] | None:
         if self.doc_id:
@@ -119,7 +123,16 @@ class MediaIdentity:
             ):
                 return False
             return True
-        return bool(self.location and self.location == other.location)
+        other_locations = other.locations
+        return any(location in other_locations for location in self.locations)
+
+    @property
+    def locations(self) -> tuple[str, ...]:
+        return tuple(
+            location
+            for location in (self.location, *self.alternate_locations)
+            if location
+        )
 
     @property
     def dedupe_token(self) -> str:
@@ -129,10 +142,145 @@ class MediaIdentity:
                 self._jw_key(),
                 self.meps_language,
                 self.language_code,
-                self.location,
+                self.locations,
             )
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+class _LanguageConstraintIndex(Generic[_IdentityKey]):
+    """O(1) wildcard-compatible language constraints for authoritative IDs."""
+
+    def __init__(self) -> None:
+        self._keys: set[_IdentityKey] = set()
+        self._languages: set[tuple[_IdentityKey, str]] = set()
+        self._meps_languages: set[tuple[_IdentityKey, int]] = set()
+        self._constraints: set[tuple[_IdentityKey, str, int]] = set()
+
+    def add(self, key: _IdentityKey, language: str, meps_language: int) -> None:
+        self._keys.add(key)
+        self._languages.add((key, language))
+        self._meps_languages.add((key, meps_language))
+        self._constraints.add((key, language, meps_language))
+
+    def matches(self, key: _IdentityKey, language: str, meps_language: int) -> bool:
+        if key not in self._keys:
+            return False
+        if not language and not meps_language:
+            return True
+        if not language:
+            return (
+                (key, 0) in self._meps_languages
+                or (key, meps_language) in self._meps_languages
+            )
+        if not meps_language:
+            return (
+                (key, "") in self._languages
+                or (key, language) in self._languages
+            )
+        return any(
+            (key, current_language, current_meps) in self._constraints
+            for current_language in ("", language)
+            for current_meps in (0, meps_language)
+        )
+
+
+class _LocationIdentityIndex:
+    """Track location aliases while honoring rejected same-JW constraints."""
+
+    def __init__(self) -> None:
+        self._totals: dict[str, int] = defaultdict(int)
+        self._by_jw_key: dict[tuple[str, tuple[str, int, int, int]], int] = (
+            defaultdict(int)
+        )
+
+    def add(self, identity: MediaIdentity) -> None:
+        jw_key = identity._jw_key()
+        for location in identity.locations:
+            self._totals[location] += 1
+            if jw_key is not None:
+                self._by_jw_key[(location, jw_key)] += 1
+
+    def matches(
+        self,
+        locations: tuple[str, ...],
+        rejected_jw_key: tuple[str, int, int, int] | None,
+    ) -> bool:
+        for location in locations:
+            total = self._totals.get(location, 0)
+            if rejected_jw_key is None:
+                if total:
+                    return True
+                continue
+            if total > self._by_jw_key.get((location, rejected_jw_key), 0):
+                return True
+        return False
+
+
+class _MediaIdentityIndex:
+    """Index possible matches without weakening ``MediaIdentity.matches``."""
+
+    def __init__(self, identities: Iterable[MediaIdentity] = ()) -> None:
+        self._source_constraints = _LanguageConstraintIndex[str]()
+        self._jw_constraints = _LanguageConstraintIndex[
+            tuple[str, int, int, int]
+        ]()
+        self._without_source_jw_constraints = _LanguageConstraintIndex[
+            tuple[str, int, int, int]
+        ]()
+        self._locations = _LocationIdentityIndex()
+        self._without_source_locations = _LocationIdentityIndex()
+        for identity in identities:
+            self.add(identity)
+
+    def add(self, identity: MediaIdentity) -> None:
+        if identity.source_id:
+            self._source_constraints.add(
+                identity.source_id,
+                identity.language_code,
+                identity.meps_language,
+            )
+        if (jw_key := identity._jw_key()) is not None:
+            self._jw_constraints.add(
+                jw_key,
+                identity.language_code,
+                identity.meps_language,
+            )
+            if not identity.source_id:
+                self._without_source_jw_constraints.add(
+                    jw_key,
+                    identity.language_code,
+                    identity.meps_language,
+                )
+        self._locations.add(identity)
+        if not identity.source_id:
+            self._without_source_locations.add(identity)
+
+    def matches(self, candidate: MediaIdentity) -> bool:
+        if candidate.source_id and self._source_constraints.matches(
+            candidate.source_id,
+            candidate.language_code,
+            candidate.meps_language,
+        ):
+            return True
+        if (jw_key := candidate._jw_key()) is not None:
+            jw_constraints = (
+                self._without_source_jw_constraints
+                if candidate.source_id
+                else self._jw_constraints
+            )
+            if jw_constraints.matches(
+                jw_key,
+                candidate.language_code,
+                candidate.meps_language,
+            ):
+                return True
+        locations = (
+            self._without_source_locations
+            if candidate.source_id
+            else self._locations
+        )
+        return locations.matches(candidate.locations, jw_key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,47 +290,77 @@ class MediaPartition:
 
 
 def media_identity(record: Mapping[str, Any]) -> MediaIdentity | None:
-    location = _first_text(
-        record,
-        "source_url",
-        "url",
-        "download_url",
-        "file_path",
-        "jworg_url",
+    locations = tuple(
+        dict.fromkeys(
+            normalized
+            for key in (
+                "source_url",
+                "url",
+                "download_url",
+                "file_path",
+                "jworg_url",
+            )
+            if (normalized := _normalized_location(_text(record.get(key))))
+        )
     )
+    location = locations[0] if locations else ""
     parsed = parse_jw_media_reference(
         location,
         original_filename=_first_text(record, "original_filename"),
     ) or {}
     language_code = _first_text(record, "language", "language_code", "api_code").upper()
     if not language_code:
-        match = _JW_LANGUAGE_RE.search(urlsplit(location).path)
+        match = _JW_LANGUAGE_RE.search(Path(urlsplit(location).path).name)
         if match:
             language_code = match.group(1).upper()
     source_id = _first_text(record, "jw_media_id", "natural_key", "guid")
     if not source_id and record.get("download_url") and record.get("source"):
         source_id = _text(record.get("id"))
+    # A local filename can resemble a JW delivery filename without proving
+    # that two independent files are the same media. For local-only records,
+    # the path is authoritative; semantic JW matching is reserved for records
+    # carrying a stable source ID, a remote origin, or no location at all.
+    use_jw_reference = (
+        bool(source_id)
+        or bool(record.get("jw_identity_authoritative"))
+        or _text(record.get("source")).lower() == "jworg"
+        or not locations
+        or any(
+            location.startswith(("http://", "https://"))
+            for location in locations
+        )
+    )
+    key_symbol = (
+        _first_text(record, "key_symbol", "pub")
+        or _text(parsed.get("key_symbol"))
+    ).lower()
+    doc_id = (
+        _first_integer(record, "doc_id", "meps_doc_id", "docid")
+        or _integer(parsed.get("doc_id"))
+    )
+    issue_tag = (
+        _first_integer(record, "issue_tag", "issue")
+        or _integer(parsed.get("issue_tag"))
+    )
+    track = _first_integer(record, "track") or _integer(parsed.get("track"))
+    if not use_jw_reference:
+        key_symbol = ""
+        doc_id = 0
+        issue_tag = 0
+        track = 0
     identity = MediaIdentity(
         source_id=source_id,
-        key_symbol=(
-            _first_text(record, "key_symbol", "pub")
-            or _text(parsed.get("key_symbol"))
-        ).lower(),
-        doc_id=(
-            _first_integer(record, "doc_id", "meps_doc_id", "docid")
-            or _integer(parsed.get("doc_id"))
-        ),
-        issue_tag=(
-            _first_integer(record, "issue_tag", "issue")
-            or _integer(parsed.get("issue_tag"))
-        ),
-        track=_first_integer(record, "track") or _integer(parsed.get("track")),
+        key_symbol=key_symbol,
+        doc_id=doc_id,
+        issue_tag=issue_tag,
+        track=track,
         meps_language=(
             _first_integer(record, "meps_language")
             or _integer(parsed.get("meps_language"))
         ),
         language_code=language_code,
-        location=_normalized_location(location),
+        location=location,
+        alternate_locations=locations[1:],
     )
     if not (identity.source_id or identity._jw_key() or identity.location):
         return None
@@ -206,11 +384,11 @@ def contains_media(
     candidate_identity = media_identity(candidate)
     if candidate_identity is None:
         return False
-    return any(
-        existing_identity is not None
-        and existing_identity.matches(candidate_identity)
-        for existing_identity in (media_identity(item) for item in existing_items)
-    )
+    return _MediaIdentityIndex(
+        identity
+        for item in existing_items
+        if (identity := media_identity(item)) is not None
+    ).matches(candidate_identity)
 
 
 def partition_media_items(
@@ -219,19 +397,22 @@ def partition_media_items(
 ) -> MediaPartition:
     accepted: list[Mapping[str, Any]] = []
     duplicates: list[Mapping[str, Any]] = []
-    identities = [
+    identities = _MediaIdentityIndex(
         identity
-        for identity in (media_identity(item) for item in existing_items)
-        if identity is not None
-    ]
+        for item in existing_items
+        if (identity := media_identity(item)) is not None
+    )
     for candidate in candidates:
         identity = media_identity(candidate)
-        if identity is not None and any(existing.matches(identity) for existing in identities):
+        if identity is not None and identities.matches(identity):
             duplicates.append(candidate)
+            # Preserve aliases discovered in a duplicate record so later
+            # candidates resolve through the same equivalence component.
+            identities.add(identity)
             continue
         accepted.append(candidate)
         if identity is not None:
-            identities.append(identity)
+            identities.add(identity)
     return MediaPartition(tuple(accepted), tuple(duplicates))
 
 

@@ -126,7 +126,7 @@ class MediaProjectionController:
             url = item.get("url") or item.get("file_path") or ""
             title = item.get("title") or item.get("label") or "Media"
             media_type = item.get("type") or item.get("media_type") or "video"
-            if media_type == "image" and url and os.path.exists(url):
+            if media_type == "image" and url:
                 origin_item = {
                     "url": url,
                     "title": title,
@@ -156,7 +156,7 @@ class MediaProjectionController:
         mime = item.mime_type or ""
         title = re.sub(r"<[^>]+>", "", item.label or item.caption or "Media").strip()
 
-        if "image" in mime and item.file_path and os.path.exists(item.file_path):
+        if "image" in mime and item.file_path:
             origin_item = {
                 "url": item.file_path,
                 "title": title,
@@ -175,9 +175,7 @@ class MediaProjectionController:
         if "video" not in mime and "image" in mime:
             return
 
-        if item.file_path and (
-            item.file_path.startswith(("http://", "https://")) or os.path.exists(item.file_path)
-        ):
+        if item.file_path:
             if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
                 self._next_is_sjjm = True
             media_type = "audio" if "audio" in mime else "video"

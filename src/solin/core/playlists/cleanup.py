@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.media.thumbnail_store import ThumbnailStore
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
 from solin.core.playlists.storage import (
     PendingDeletionRepository,
     PlaylistRepository,
@@ -92,7 +93,7 @@ def flush_pending_deletions(
         and os.path.isabs(item["url"])
     }
     referenced_ids = {
-        item["id"]
+        thumbnail_storage_id(item["id"], str(item.get("url") or ""))
         for item in playlist_items
         if isinstance(item.get("id"), str) and item["id"]
     }
@@ -100,9 +101,12 @@ def flush_pending_deletions(
     still_pending = []
     for path in pending:
         normalized = os.path.normcase(os.path.normpath(path))
+        thumbnail_storage_id_from_path = ThumbnailStore.storage_id_from_filename(
+            os.path.basename(path)
+        )
         if (
             normalized in referenced_urls
-            or os.path.splitext(os.path.basename(path))[0] in referenced_ids
+            or thumbnail_storage_id_from_path in referenced_ids
         ):
             continue
         try:
@@ -162,14 +166,16 @@ def flush_thumbs_dir(
     for item in playlist_items:
         item_id = item.get("id", "")
         if item_id:
-            referenced_ids.add(item_id)
+            referenced_ids.add(
+                thumbnail_storage_id(str(item_id), str(item.get("url") or ""))
+            )
 
     for fname in os.listdir(thumb_dir):
         fpath = os.path.join(thumb_dir, fname)
         if not os.path.isfile(fpath):
             continue
-        stem = os.path.splitext(fname)[0]
-        if stem not in referenced_ids:
+        storage_id = ThumbnailStore.storage_id_from_filename(fname)
+        if storage_id is None or storage_id not in referenced_ids:
             try:
                 os.remove(fpath)
             except OSError:
@@ -251,17 +257,19 @@ class PlaylistCleanupQueue:
     ) -> None:
         self._storage_paths = storage_paths
         self._thumbnail_store = thumbnail_store
-        self._pending_ids: set[str] = set()
+        self._pending_storage_ids: set[str] = set()
 
     @property
     def pending_count(self) -> int:
-        return len(self._pending_ids)
+        return len(self._pending_storage_ids)
 
     def enqueue_items(self, items: list[dict]) -> None:
         for item in items:
             item_id = item.get("id", "")
             if isinstance(item_id, str) and item_id:
-                self._pending_ids.add(item_id)
+                self._pending_storage_ids.add(
+                    thumbnail_storage_id(item_id, str(item.get("url") or ""))
+                )
 
     def flush(self) -> None:
         if not self.pending_count:
@@ -277,17 +285,25 @@ class PlaylistCleanupQueue:
             )
             return
         referenced_ids = {
-            str(item_id)
+            thumbnail_storage_id(
+                str(item_id),
+                str(item.get("url") or ""),
+            )
             for item in playlist_items
             if isinstance((item_id := item.get("id", "")), str) and item_id
         }
 
-        pending_ids = self._pending_ids
-        self._pending_ids = set()
+        pending_ids = self._pending_storage_ids
+        self._pending_storage_ids = set()
 
         for item_id in pending_ids - referenced_ids:
-            thumb = self._thumbnail_store.path(item_id)
-            if thumb.exists():
+            paths = (
+                self._thumbnail_store.path(item_id),
+                self._thumbnail_store.source_signature_path(item_id),
+            )
+            for thumb in paths:
+                if not thumb.exists():
+                    continue
                 try_remove_file(
                     os.fspath(thumb),
                     self._storage_paths,

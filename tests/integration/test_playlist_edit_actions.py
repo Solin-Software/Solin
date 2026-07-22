@@ -1,8 +1,49 @@
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
 from solin.widgets.playlist import widget as playlist_widget
 from solin.widgets.playlist.edit_actions import PlaylistEditActionsMixin
+
+
+def _attach_presentation_state(
+    view,
+    *,
+    thumbnail_source: str = "",
+    local_path: str = "C:/media/clip.mp4",
+    source_signature: str = "",
+    persisted: list | None = None,
+    refreshed: list | None = None,
+) -> None:
+    state = MediaPresentationState(
+        availability=MediaAvailability.AVAILABLE,
+        local_path=local_path,
+        thumbnail_source=thumbnail_source,
+        source_signature=source_signature,
+    )
+    persisted = persisted if persisted is not None else []
+    refreshed = refreshed if refreshed is not None else []
+    view._tree_session = getattr(
+        view,
+        "_tree_session",
+        SimpleNamespace(
+            owner_id="playlist:saved",
+            playlist=getattr(view, "_pl", None),
+            refresh=lambda **_kwargs: refreshed.append(True),
+        ),
+    )
+    view._media_tree_runtime = SimpleNamespace(
+        registry=SimpleNamespace(
+            state=lambda _owner, _node: state,
+            patch=lambda *_args, **_kwargs: None,
+        ),
+        thumbnails=SimpleNamespace(
+            save_image=lambda **values: persisted.append(values),
+        ),
+    )
 
 
 def test_playlist_edit_view_uses_actions_mixin():
@@ -29,6 +70,7 @@ def test_existing_thumbnail_does_not_skip_missing_duration_hydration():
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
+    _attach_presentation_state(view, thumbnail_source="image://playlistthumbs/media-1")
     item = {
         "id": "media-1",
         "url": "clip.mp4",
@@ -47,6 +89,123 @@ def test_existing_thumbnail_does_not_skip_missing_duration_hydration():
             },
         )
     ]
+
+
+def test_local_auto_title_requests_embedded_metadata_even_with_existing_thumbnail():
+    class _Thumbnail:
+        @staticmethod
+        def isNull():  # noqa: N802 - Qt-style test double
+            return False
+
+    requests = []
+    view = SimpleNamespace(
+        _id_to_thumb={"media-1": _Thumbnail()},
+        _request_thumbnail=lambda *args, **kwargs: requests.append((args, kwargs)),
+    )
+    view._thumbnail_request_intent = lambda current: (
+        playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
+    )
+    _attach_presentation_state(
+        view,
+        thumbnail_source="image://playlistthumbs/media-1",
+    )
+    item = {
+        "id": "media-1",
+        "url": "C:/media/gnj_T_02_r720P.mp4",
+        "type": "video",
+        "title": "gnj_T_02_r720P",
+        "auto_title": True,
+        "base_duration_ticks": 10_000,
+    }
+
+    playlist_widget.PlaylistEditView._request_missing_thumbnail_for_item(view, item)
+
+    assert requests == [
+        (
+            ("media-1", "C:/media/gnj_T_02_r720P.mp4", "video"),
+            {
+                "require_thumbnail": False,
+                "require_title": True,
+                "require_duration": False,
+            },
+        )
+    ]
+
+
+def test_probe_completion_starts_one_complete_presentation_request():
+    item = {
+        "id": "media-1",
+        "url": "C:/media/gnj_T_02_r720P.mp4",
+        "type": "video",
+        "title": "gnj_T_02_r720P",
+        "auto_title": True,
+    }
+    state = MediaPresentationState(availability=MediaAvailability.CHECKING)
+    requests = []
+    view = SimpleNamespace(
+        _pl={"items": [item]},
+        _id_to_thumb={},
+        _tree_session=SimpleNamespace(owner_id="playlist:saved"),
+        _media_tree_runtime=SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _node: state,
+            )
+        ),
+        _request_thumbnail=lambda *args, **kwargs: requests.append((args, kwargs)),
+    )
+    view._thumbnail_request_intent = lambda current: (
+        playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
+    )
+    view._request_missing_thumbnail_for_item = lambda current: (
+        playlist_widget.PlaylistEditView._request_missing_thumbnail_for_item(
+            view,
+            current,
+        )
+    )
+
+    view._request_missing_thumbnail_for_item(item)
+    assert requests == []
+
+    state = MediaPresentationState(
+        availability=MediaAvailability.AVAILABLE,
+        local_path=item["url"],
+        source_signature="100:200",
+    )
+    playlist_widget.PlaylistEditView._on_presentation_state_changed(
+        view,
+        "playlist:saved",
+        "media-1",
+    )
+
+    assert requests == [
+        (
+            ("media-1", item["url"], "video"),
+            {
+                "require_thumbnail": True,
+                "require_title": True,
+                "require_duration": True,
+            },
+        )
+    ]
+
+
+def test_source_change_failure_reprobes_before_requesting_metadata_again():
+    retired = []
+    requested = []
+    view = SimpleNamespace(
+        _thumb_idx_to_id={12: "media-1"},
+        _retire_thumbnail_request=retired.append,
+        _tree_session=SimpleNamespace(request_nodes=requested.append),
+    )
+
+    playlist_widget.PlaylistEditView._on_thumbnail_failed(
+        view,
+        12,
+        SimpleNamespace(code="source-changed"),
+    )
+
+    assert retired == [12]
+    assert requested == [{"media-1"}]
 
 
 def test_rebuild_keeps_matching_thumbnail_request_and_applies_late_result(
@@ -91,16 +250,20 @@ def test_rebuild_keeps_matching_thumbnail_request_and_applies_late_result(
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
-    view._thumbnail_result_is_current = lambda item_id, source: (
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
         playlist_widget.PlaylistEditView._thumbnail_result_is_current(
             view,
             item_id,
             source,
+            signature,
         )
     )
-    monkeypatch.setattr(playlist_widget, "save_thumbnail", lambda *_args: None)
+    persisted = []
+    refreshed = []
+    _attach_presentation_state(view, persisted=persisted, refreshed=refreshed)
 
     pixmap = _Pixmap()
+    pixmap.toImage = lambda: SimpleNamespace()
     playlist_widget.PlaylistEditView._reconcile_thumbnail_requests(
         view,
         [dict(item)],
@@ -113,8 +276,8 @@ def test_rebuild_keeps_matching_thumbnail_request_and_applies_late_result(
     assert view._thumb_idx_to_intent == {}
     assert view._thumb_pending_item_ids == set()
     assert view._id_to_thumb == {"media-1": pixmap}
-    assert updated == ["media-1"]
-    assert changed == ["media-1"]
+    assert persisted and persisted[0]["node_id"] == "media-1"
+    assert refreshed == [True]
 
 
 def test_visual_rebuild_does_not_restart_thumbnail_work():
@@ -149,8 +312,13 @@ def test_visual_rebuild_does_not_restart_thumbnail_work():
     view._reconcile_thumbnail_requests = lambda items: (
         playlist_widget.PlaylistEditView._reconcile_thumbnail_requests(view, items)
     )
+    refreshed = []
+    view._tree_session = SimpleNamespace(
+        playlist=playlist,
+        refresh=lambda **_kwargs: refreshed.append(True),
+    )
 
-    playlist_widget.PlaylistEditView._rebuild_model(view)
+    playlist_widget.PlaylistEditView._publish_tree_snapshot(view)
 
     assert invalidated == []
     assert view._thumb_idx_to_id == {12: "media-1"}
@@ -159,7 +327,7 @@ def test_visual_rebuild_does_not_restart_thumbnail_work():
         12: playlist_widget._ThumbnailRequestIntent(True, False, False)
     }
     assert view._thumb_pending_item_ids == {"media-1"}
-    assert rebuilt == [playlist]
+    assert refreshed == [True]
     assert replacements == []
 
 
@@ -192,6 +360,7 @@ def test_rebuild_promotes_request_when_duration_becomes_required():
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
+    _attach_presentation_state(view)
 
     playlist_widget.PlaylistEditView._reconcile_thumbnail_requests(view, [item])
 
@@ -206,6 +375,91 @@ def test_rebuild_promotes_request_when_duration_becomes_required():
             },
         )
     ]
+
+
+def test_active_metadata_request_is_promoted_when_probe_enables_thumbnail():
+    invalidated = []
+    requests = []
+    view = SimpleNamespace(
+        _thumb_idx_to_id={12: "media-1"},
+        _thumb_idx_to_source={12: "C:/media/clip.mp4"},
+        _thumb_idx_to_intent={
+            12: playlist_widget._ThumbnailRequestIntent(False, True, True)
+        },
+        _thumb_pending_item_ids={"media-1"},
+        _thumb_request_token=12,
+        _thumb_queue=SimpleNamespace(
+            invalidate=invalidated.append,
+            request=lambda *args, **kwargs: requests.append((args, kwargs)),
+        ),
+        _same_media_source=playlist_widget.PlaylistEditView._same_media_source,
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+    _attach_presentation_state(view)
+
+    playlist_widget.PlaylistEditView._request_thumbnail(
+        view,
+        "media-1",
+        "C:/media/clip.mp4",
+        "video",
+        require_thumbnail=True,
+        require_title=True,
+        require_duration=False,
+    )
+
+    assert invalidated == [12]
+    assert view._thumb_idx_to_id == {13: "media-1"}
+    assert view._thumb_idx_to_intent == {
+        13: playlist_widget._ThumbnailRequestIntent(True, True, True)
+    }
+    assert requests == [
+        (
+            (13, "C:/media/clip.mp4", "video"),
+            {
+                "require_thumbnail": True,
+                "require_title": True,
+                "require_duration": True,
+                "restart_on_source_change": False,
+            },
+        )
+    ]
+
+
+def test_active_request_is_not_restarted_when_it_already_covers_intent():
+    invalidated = []
+    requests = []
+    view = SimpleNamespace(
+        _thumb_idx_to_id={12: "media-1"},
+        _thumb_idx_to_source={12: "C:/media/clip.mp4"},
+        _thumb_idx_to_intent={
+            12: playlist_widget._ThumbnailRequestIntent(True, True, True)
+        },
+        _thumb_pending_item_ids={"media-1"},
+        _thumb_request_token=12,
+        _thumb_queue=SimpleNamespace(
+            invalidate=invalidated.append,
+            request=lambda *args, **kwargs: requests.append((args, kwargs)),
+        ),
+        _same_media_source=playlist_widget.PlaylistEditView._same_media_source,
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+    _attach_presentation_state(view)
+
+    playlist_widget.PlaylistEditView._request_thumbnail(
+        view,
+        "media-1",
+        "C:/media/clip.mp4",
+        "video",
+        require_thumbnail=True,
+    )
+
+    assert invalidated == []
+    assert requests == []
+    assert view._thumb_idx_to_id == {12: "media-1"}
 
 
 def test_rebuild_retires_request_when_snapshot_satisfies_all_intents():
@@ -240,6 +494,7 @@ def test_rebuild_retires_request_when_snapshot_satisfies_all_intents():
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
+    _attach_presentation_state(view, thumbnail_source="image://playlistthumbs/media-1")
 
     playlist_widget.PlaylistEditView._reconcile_thumbnail_requests(view, [item])
 
@@ -286,16 +541,18 @@ def test_duration_only_result_does_not_rewrite_thumbnail_or_title():
     view._retire_thumbnail_request = lambda token: (
         playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
     )
-    view._thumbnail_result_is_current = lambda item_id, source: (
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
         playlist_widget.PlaylistEditView._thumbnail_result_is_current(
             view,
             item_id,
             source,
+            signature,
         )
     )
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
+    _attach_presentation_state(view)
 
     playlist_widget.PlaylistEditView._on_info(
         view,
@@ -342,16 +599,19 @@ def test_equal_auto_title_is_marked_resolved_without_visual_patch():
     view._retire_thumbnail_request = lambda token: (
         playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
     )
-    view._thumbnail_result_is_current = lambda item_id, source: (
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
         playlist_widget.PlaylistEditView._thumbnail_result_is_current(
             view,
             item_id,
             source,
+            signature,
         )
     )
     view._thumbnail_request_intent = lambda current: (
         playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
     )
+    refreshed = []
+    _attach_presentation_state(view, refreshed=refreshed)
 
     playlist_widget.PlaylistEditView._on_info(
         view,
@@ -363,6 +623,163 @@ def test_equal_auto_title_is_marked_resolved_without_visual_patch():
     assert item["auto_title"] is False
     assert title_updates == []
     assert saves == [True]
+
+
+def test_empty_metadata_title_does_not_resolve_auto_title():
+    item = {
+        "id": "media-1",
+        "url": "C:/media/clip.mp4",
+        "title": "clip",
+        "auto_title": True,
+    }
+    saves = []
+    view = SimpleNamespace(
+        _pl={"items": [item]},
+        _thumb_idx_to_id={12: "media-1"},
+        _thumb_idx_to_source={12: item["url"]},
+        _thumb_idx_to_intent={
+            12: playlist_widget._ThumbnailRequestIntent(False, True, False)
+        },
+        _thumb_pending_item_ids={"media-1"},
+        _thumb_queue=SimpleNamespace(invalidate=lambda _token: None),
+        _id_to_thumb={},
+        _save=lambda: saves.append(True),
+        _same_media_source=playlist_widget.PlaylistEditView._same_media_source,
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
+        playlist_widget.PlaylistEditView._thumbnail_result_is_current(
+            view,
+            item_id,
+            source,
+            signature,
+        )
+    )
+    view._thumbnail_request_intent = lambda current: (
+        playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
+    )
+    _attach_presentation_state(view)
+
+    playlist_widget.PlaylistEditView._on_info(view, 12, None, "")
+
+    assert item["auto_title"] is True
+    assert saves == []
+
+
+def test_local_embedded_title_replaces_filename_and_is_persisted():
+    item = {
+        "id": "media-1",
+        "url": "C:/media/gnj_T_02_r720P.mp4",
+        "title": "gnj_T_02_r720P",
+        "auto_title": True,
+        "base_duration_ticks": 10_000,
+    }
+    saves = []
+    refreshed = []
+    view = SimpleNamespace(
+        _pl={"items": [item]},
+        _thumb_idx_to_id={12: "media-1"},
+        _thumb_idx_to_source={12: item["url"]},
+        _thumb_idx_to_intent={
+            12: playlist_widget._ThumbnailRequestIntent(False, True, False)
+        },
+        _thumb_pending_item_ids={"media-1"},
+        _thumb_queue=SimpleNamespace(invalidate=lambda _token: None),
+        _id_to_thumb={},
+        _save=lambda: saves.append(True),
+        _same_media_source=playlist_widget.PlaylistEditView._same_media_source,
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
+        playlist_widget.PlaylistEditView._thumbnail_result_is_current(
+            view,
+            item_id,
+            source,
+            signature,
+        )
+    )
+    view._thumbnail_request_intent = lambda current: (
+        playlist_widget.PlaylistEditView._thumbnail_request_intent(view, current)
+    )
+    _attach_presentation_state(view, refreshed=refreshed)
+
+    playlist_widget.PlaylistEditView._on_info(
+        view,
+        12,
+        None,
+        'Episódio 2: "Este é meu Filho"',
+    )
+
+    assert item["title"] == 'Episódio 2: "Este é meu Filho"'
+    assert item["auto_title"] is False
+    assert saves == [True]
+    assert refreshed == [True]
+
+
+def test_result_from_replaced_local_content_cannot_patch_playlist():
+    item = {
+        "id": "media-1",
+        "url": "C:/media/clip.mp4",
+        "title": "clip",
+        "auto_title": True,
+    }
+    saves = []
+    persisted = []
+    view = SimpleNamespace(
+        _pl={"items": [item]},
+        _thumb_idx_to_id={12: "media-1"},
+        _thumb_idx_to_source={12: item["url"]},
+        _thumb_idx_to_intent={
+            12: playlist_widget._ThumbnailRequestIntent(
+                True,
+                True,
+                False,
+                "100:200",
+            )
+        },
+        _thumb_pending_item_ids={"media-1"},
+        _thumb_queue=SimpleNamespace(invalidate=lambda _token: None),
+        _id_to_thumb={},
+        _save=lambda: saves.append(True),
+        _same_media_source=playlist_widget.PlaylistEditView._same_media_source,
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+    view._thumbnail_result_is_current = lambda item_id, source, signature: (
+        playlist_widget.PlaylistEditView._thumbnail_result_is_current(
+            view,
+            item_id,
+            source,
+            signature,
+        )
+    )
+    _attach_presentation_state(
+        view,
+        source_signature="101:300",
+        persisted=persisted,
+    )
+    pixmap = SimpleNamespace(
+        isNull=lambda: False,
+        toImage=lambda: SimpleNamespace(),
+    )
+
+    playlist_widget.PlaylistEditView._on_info(
+        view,
+        12,
+        pixmap,
+        "Stale title",
+    )
+
+    assert item["title"] == "clip"
+    assert item["auto_title"] is True
+    assert view._id_to_thumb == {}
+    assert persisted == []
+    assert saves == []
 
 
 def test_playlist_widget_records_source_duration_through_public_boundary():
@@ -401,7 +818,7 @@ def test_append_temp_playlist_items_rejects_stale_session():
     edit_view = SimpleNamespace(
         _is_temp=True,
         _pl={"id": "current", "items": []},
-        _rebuild_list=lambda: rebuilds.append(True),
+        _reconcile_playlist=lambda: rebuilds.append(True),
     )
     widget = SimpleNamespace(_edit_view=edit_view)
 
@@ -421,7 +838,7 @@ def test_append_temp_playlist_items_updates_matching_session():
     edit_view = SimpleNamespace(
         _is_temp=True,
         _pl={"id": "current", "items": []},
-        _rebuild_list=lambda: rebuilds.append(True),
+        _reconcile_playlist=lambda: rebuilds.append(True),
     )
     widget = SimpleNamespace(_edit_view=edit_view)
     item = {"title": "Imported"}
@@ -477,6 +894,362 @@ def test_jw_duplicate_is_rejected_before_thumbnail_or_playlist_mutation(tmp_path
     assert result.duplicate_count == 1
     assert view._pl["items"] == [existing]
     assert thumbnail_copies == []
+
+
+def test_linked_folder_rejects_a_previously_copied_source_as_duplicate(tmp_path):
+    source = tmp_path / "source" / "S-337-26v_T_02_r720P.mp4"
+    destination = tmp_path / "linked" / source.name
+    queued = []
+    warnings = []
+    view = SimpleNamespace(
+        _pl={
+            "items": [
+                {
+                    "id": "existing",
+                    "url": str(destination),
+                    "source_url": str(source),
+                    "type": "video",
+                }
+            ]
+        },
+        _is_watched=True,
+        _watched_path=str(destination.parent),
+        _tree_session=SimpleNamespace(pending_items=lambda: ()),
+        _queue_watched_media_copy=lambda *args, **kwargs: queued.append(
+            (args, kwargs)
+        ),
+        _list_id_for_section=lambda _section_id: "root",
+        _notifications=SimpleNamespace(
+            warning=warnings.append,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+
+    PlaylistEditActionsMixin._add_files(view, [str(source)])
+
+    assert queued == []
+    assert warnings == ["File already in playlist"]
+
+
+def test_linked_folder_accepts_distinct_local_jw_filename_variants(tmp_path):
+    first = tmp_path / "sjjm_E_02_r720P.mp4"
+    second = tmp_path / "sjjm_E_02_r720P (1).mp4"
+    first.write_bytes(b"first-recording")
+    second.write_bytes(b"different-recording")
+    queued = []
+    view = SimpleNamespace(
+        _pl={"items": []},
+        _is_watched=True,
+        _watched_path=str(tmp_path / "linked"),
+        _tree_session=SimpleNamespace(
+            pending_items=lambda: (),
+            refresh=lambda: None,
+        ),
+        _queue_watched_media_copy=lambda item, **options: queued.append(
+            (item, options)
+        ),
+        _list_id_for_section=lambda _section_id: "root",
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _notifications=SimpleNamespace(
+            warning=lambda _message: None,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+
+    PlaylistEditActionsMixin._add_files(view, [str(first), str(second)])
+
+    assert [Path(item["url"]).name for item, _options in queued] == [
+        first.name,
+        second.name,
+    ]
+
+
+def test_linked_folder_commit_deduplicates_legacy_destination(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    source = source_folder / "S-337-26v_T_02_r720P.mp4"
+    source.write_bytes(b"same-video")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    destination = linked / source.name
+    destination.write_bytes(source.read_bytes())
+    playlist = {
+        "items": [
+            {
+                "id": "existing",
+                "url": str(destination),
+                "type": "video",
+            }
+        ]
+    }
+    removed = []
+    refreshed = []
+    warnings = []
+    saves = []
+
+    def submit(spec):
+        result = spec.runner(
+            lambda *_args: None,
+            SimpleNamespace(is_set=lambda: False),
+        )
+        spec.commit(result)
+        return True
+
+    tree_session = SimpleNamespace(
+        owner_id="playlist:linked",
+        generation=1,
+        playlist=playlist,
+        add_pending=lambda *_args, **_kwargs: None,
+        remove_pending=removed.append,
+        refresh=lambda: refreshed.append(True),
+    )
+    item = {
+        "id": "candidate",
+        "title": source.stem,
+        "url": str(source),
+        "type": "video",
+        "auto_title": True,
+    }
+    view = SimpleNamespace(
+        _pl=playlist,
+        _watched_path=str(linked),
+        _tree_session=tree_session,
+        _watched_folder_file_store=WatchedFolderFileStore(),
+        _media_tree_runtime=SimpleNamespace(
+            operations=SimpleNamespace(submit=submit),
+            schedule_artifact_cleanup=lambda *_args, **_kwargs: None,
+        ),
+        _schedule_manifest_save=lambda *_args: saves.append(True),
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _request_missing_thumbnails=lambda: None,
+        _notifications=SimpleNamespace(
+            warning=warnings.append,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+
+    PlaylistEditActionsMixin._queue_watched_media_copy(
+        view,
+        item,
+        source_path=str(source),
+        target_list_id="root",
+        target_list_index=-1,
+    )
+
+    assert [current["id"] for current in playlist["items"]] == ["existing"]
+    assert [path.name for path in linked.iterdir()] == [source.name]
+    assert removed == ["candidate"]
+    assert refreshed == [True]
+    assert warnings == ["File already in playlist"]
+    assert saves == []
+
+
+def test_linked_folder_commit_targets_rebound_snapshot_of_same_playlist(tmp_path):
+    source = tmp_path / "source" / "clip.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"video")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    original_playlist = {"id": "linked", "items": []}
+    rebound_playlist = {"id": "linked", "items": []}
+    submitted = []
+    saves = []
+    tree_session = SimpleNamespace(
+        owner_id="playlist:linked",
+        generation=1,
+        playlist=original_playlist,
+        add_pending=lambda *_args, **_kwargs: None,
+        remove_pending=lambda *_args: None,
+        refresh=lambda: None,
+    )
+    view = SimpleNamespace(
+        _pl=original_playlist,
+        _watched_path=str(linked),
+        _tree_session=tree_session,
+        _watched_folder_file_store=WatchedFolderFileStore(),
+        _media_tree_runtime=SimpleNamespace(
+            operations=SimpleNamespace(
+                submit=lambda spec: submitted.append(spec) or True,
+            ),
+            schedule_artifact_cleanup=lambda *_args, **_kwargs: None,
+        ),
+        _schedule_manifest_save=lambda _folder, playlist: saves.append(playlist),
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _request_missing_thumbnails=lambda: None,
+        _notifications=SimpleNamespace(
+            warning=lambda _message: None,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+    item = {
+        "id": "candidate",
+        "title": source.stem,
+        "url": str(source),
+        "type": "video",
+    }
+
+    PlaylistEditActionsMixin._queue_watched_media_copy(
+        view,
+        item,
+        source_path=str(source),
+        target_list_id="root",
+        target_list_index=-1,
+    )
+    tree_session.playlist = rebound_playlist
+    result = submitted[0].runner(
+        lambda *_args: None,
+        SimpleNamespace(is_set=lambda: False),
+    )
+    submitted[0].commit(result)
+
+    assert original_playlist["items"] == []
+    assert [current["id"] for current in rebound_playlist["items"]] == [
+        "candidate"
+    ]
+    assert saves == [rebound_playlist]
+
+
+def test_linked_folder_commit_replaces_watcher_auto_adoption_at_requested_target(
+    tmp_path,
+):
+    source = tmp_path / "source" / "clip.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"video")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    playlist = {
+        "id": "linked",
+        "items": [],
+        "sections": [{"id": "section-1", "name": "Section", "position": 0}],
+    }
+    submitted = []
+    tree_session = SimpleNamespace(
+        owner_id="playlist:linked",
+        generation=1,
+        playlist=playlist,
+        add_pending=lambda *_args, **_kwargs: None,
+        remove_pending=lambda *_args: None,
+        refresh=lambda: None,
+    )
+    view = SimpleNamespace(
+        _pl=playlist,
+        _watched_path=str(linked),
+        _tree_session=tree_session,
+        _watched_folder_file_store=WatchedFolderFileStore(),
+        _media_tree_runtime=SimpleNamespace(
+            operations=SimpleNamespace(
+                submit=lambda spec: submitted.append(spec) or True,
+            ),
+            schedule_artifact_cleanup=lambda *_args, **_kwargs: None,
+        ),
+        _schedule_manifest_save=lambda *_args: None,
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _request_missing_thumbnails=lambda: None,
+        _notifications=SimpleNamespace(
+            warning=lambda _message: None,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+    item = {
+        "id": "candidate",
+        "title": source.stem,
+        "url": str(source),
+        "type": "video",
+    }
+
+    PlaylistEditActionsMixin._queue_watched_media_copy(
+        view,
+        item,
+        source_path=str(source),
+        target_list_id="section:section-1",
+        target_list_index=-1,
+    )
+    result = submitted[0].runner(
+        lambda *_args: None,
+        SimpleNamespace(is_set=lambda: False),
+    )
+    playlist["items"] = [
+        {
+            "id": "scanner-auto-adopted",
+            "title": result.destination.stem,
+            "url": str(result.destination),
+            "type": "video",
+        }
+    ]
+    submitted[0].commit(result)
+
+    assert [current["id"] for current in playlist["items"]] == ["candidate"]
+    assert playlist["items"][0]["section_id"] == "section-1"
+
+
+def test_linked_folder_commit_does_not_fall_back_to_root_when_target_disappears(
+    tmp_path,
+):
+    source = tmp_path / "source" / "clip.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"video")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    playlist = {"id": "linked", "items": [], "sections": []}
+    submitted = []
+    cleanups = []
+    warnings = []
+    tree_session = SimpleNamespace(
+        owner_id="playlist:linked",
+        generation=1,
+        playlist=playlist,
+        add_pending=lambda *_args, **_kwargs: None,
+        remove_pending=lambda *_args: None,
+        refresh=lambda: None,
+    )
+    view = SimpleNamespace(
+        _pl=playlist,
+        _watched_path=str(linked),
+        _tree_session=tree_session,
+        _watched_folder_file_store=WatchedFolderFileStore(),
+        _media_tree_runtime=SimpleNamespace(
+            operations=SimpleNamespace(
+                submit=lambda spec: submitted.append(spec) or True,
+            ),
+            schedule_artifact_cleanup=lambda paths, **_kwargs: cleanups.extend(paths),
+        ),
+        _schedule_manifest_save=lambda *_args: None,
+        _sync_playlist_chrome=lambda **_kwargs: None,
+        _request_missing_thumbnails=lambda: None,
+        _notifications=SimpleNamespace(
+            warning=warnings.append,
+            success=lambda _message: None,
+        ),
+        tr=lambda message: message,
+    )
+    item = {
+        "id": "candidate",
+        "title": source.stem,
+        "url": str(source),
+        "type": "video",
+    }
+
+    PlaylistEditActionsMixin._queue_watched_media_copy(
+        view,
+        item,
+        source_path=str(source),
+        target_list_id="section:removed",
+        target_list_index=-1,
+    )
+    result = submitted[0].runner(
+        lambda *_args: None,
+        SimpleNamespace(is_set=lambda: False),
+    )
+    submitted[0].commit(result)
+
+    assert playlist["items"] == []
+    assert cleanups == [result.destination]
+    assert warnings == ["Could not update the linked folder."]
 
 
 class _Signal:
@@ -540,6 +1313,7 @@ def test_watched_folder_sync_is_quiet_unless_it_fails():
     view = SimpleNamespace(
         _watched_path="folder",
         _watched_folder_playlist_store=_WatchedFolderStore(thread),
+        _media_tree_runtime=SimpleNamespace(resource_lanes=ResourceLaneRegistry()),
         _notifications=notifications,
         _wf_refresh_pending=False,
         _wf_sync_thread=None,
@@ -548,7 +1322,7 @@ def test_watched_folder_sync_is_quiet_unless_it_fails():
         refresh_watched_folder=lambda: refreshes.append(True),
     )
 
-    playlist_widget.PlaylistEditView._start_wf_sync(view)
+    playlist_widget.PlaylistEditView._start_wf_sync(view, ("pending",))
     thread.sync_complete.emit()
     thread.sync_failed.emit("disk full")
 
@@ -665,7 +1439,9 @@ def test_initial_watched_folder_open_defers_all_disk_reads():
             )
         ),
         catalog_bridge=SimpleNamespace(set_playlist_ref=lambda value: rebuilt.append(value)),
-        model=SimpleNamespace(rebuild=lambda value: rebuilt.append(value)),
+        _tree_session=SimpleNamespace(
+            activate=lambda value: rebuilt.append(value),
+        ),
         bridge=SimpleNamespace(set_state=lambda **values: states.append(values)),
         tr=lambda value: value,
         refresh_watched_folder=lambda: refreshes.append(True),
@@ -792,21 +1568,23 @@ def test_availability_refresh_patches_media_without_full_qml_reset(
     }
     snapshot = playlist_widget._WatchedFolderSnapshot(
         playlist=playlist,
-        availability=((key, True),),
+        availability=((key, (True, 2_048, 20)),),
         pending_files=(),
     )
     chrome_updates = []
-    media_updates = []
+    reconciled = []
+    requested_nodes = []
     scheduled = []
     view = SimpleNamespace(
         _pl=playlist,
-        _wf_file_availability=((key, False),),
+        _wf_file_availability=((key, (False, 0, 0, 0, 0, 0)),),
         _watched_playlist_equivalent=lambda _playlist: True,
-        _rebuild_model=lambda: None,
+        _publish_tree_snapshot=lambda: reconciled.append(True),
+        _tree_session=SimpleNamespace(request_nodes=requested_nodes.append),
         _sync_playlist_chrome=lambda **kwargs: chrome_updates.append(kwargs),
+        _cancel_thumbnail_requests_for_item=lambda _item_id: None,
         _request_missing_thumbnails=lambda: None,
         _start_wf_sync=lambda _pending: None,
-        bridge=SimpleNamespace(emit_media_changed=media_updates.append),
     )
     view._availability_changed_item_ids = lambda current, availability: (
         playlist_widget.PlaylistEditView._availability_changed_item_ids(
@@ -829,7 +1607,8 @@ def test_availability_refresh_patches_media_without_full_qml_reset(
     )
 
     assert chrome_updates == [{"emit_data_changed": False}]
-    assert media_updates == ["media-1"]
+    assert reconciled == [True]
+    assert requested_nodes == [{"media-1"}]
     assert len(scheduled) == 1
 
 

@@ -118,6 +118,12 @@ class MeetingTreeStore:
     def path(self) -> Path:
         return self._json.path
 
+    @property
+    def loaded(self) -> bool:
+        """Whether the process cache is available without filesystem access."""
+        with self._lock:
+            return self._data is not None
+
     def _empty(self) -> dict[str, Any]:
         return {"version": MEETING_TREE_STORE_VERSION, "trees": {}}
 
@@ -211,6 +217,16 @@ class MeetingTreeStore:
             return _snapshot_from_record(
                 tree_key,
                 self._runtime_data().get("trees", {}).get(tree_key),
+            )
+
+    def cached_snapshot(self, tree_key: str) -> MeetingTreeSnapshot | None:
+        """Return an already loaded revision without initiating filesystem I/O."""
+        with self._lock:
+            if self._data is None:
+                return None
+            return _snapshot_from_record(
+                tree_key,
+                self._data.get("trees", {}).get(tree_key),
             )
 
     def load_deleted_source_keys(self, tree_key: str) -> set[str]:

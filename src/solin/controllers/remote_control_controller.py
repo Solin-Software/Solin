@@ -20,6 +20,7 @@ from ..core.i18n.meeting_sections import display_meeting_section_title
 from ..core.i18n.remote_control import remote_control_localization
 from ..core.media.formats import MediaKind
 from ..core.meetings.thumbnails import meeting_thumb_storage_id
+from ..core.media.thumbnail_identity import thumbnail_storage_id
 from ..core.remote_control.catalog import (
     CatalogResolutionCode,
     CatalogResolutionError,
@@ -949,11 +950,7 @@ class RemoteControlController(QObject):
         if not root:
             return []
         store = self._dependencies.watched_folder_playlist_store
-        return [
-            store.load_playlist(str(entry["path"]))
-            for entry in store.scan_root(root)
-            if entry.get("path")
-        ]
+        return store.load_all_playlists(root)
 
     @staticmethod
     def _media_availability(
@@ -991,12 +988,26 @@ class RemoteControlController(QObject):
         node_id = str(raw.get("id") or "")
         if not node_id:
             return None
+        media_ref_value = raw.get("media_ref")
+        media_ref = media_ref_value if isinstance(media_ref_value, Mapping) else {}
+        source_key = str(
+            raw.get("thumbnail_url")
+            or raw.get("url")
+            or raw.get("resolved_url")
+            or media_ref.get("file_path")
+            or ""
+        )
         if kind is CatalogKind.MEETING:
-            storage_id = meeting_thumb_storage_id(collection_id, node_id)
+            base_id = (
+                meeting_thumb_storage_id(collection_id, node_id)
+                if raw.get("meeting_generated")
+                else node_id
+            )
             store = self._dependencies.meeting_thumbnail_store
         else:
-            storage_id = node_id
+            base_id = node_id
             store = self._dependencies.playlist_thumbnail_store
+        storage_id = thumbnail_storage_id(base_id, source_key)
         if store.exists(storage_id):
             return storage_id
         source = private_media_thumbnail_source(raw)

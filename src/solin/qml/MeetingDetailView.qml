@@ -31,10 +31,11 @@ Rectangle {
 
     readonly property bool hasController: typeof controller !== "undefined" && controller !== null
     readonly property bool hasItems: hasController && controller.hasItems
-    readonly property var playlistNodes: hasController ? controller.playlistData : []
 
     property string externalDropListId: "root"
     property int externalDropIndex: -1
+    property string externalDropTreeId: ""
+    property int externalDropStructureRevision: -1
     property int dropIndicatorIndex: -1
 
     function picon(name, size, colorHex) {
@@ -68,6 +69,8 @@ Rectangle {
         var index = meetingTree.getIndexAt(local.y)
         externalDropListId = meetingTree.externalDropListId
         externalDropIndex = meetingTree.externalDropIndex
+        externalDropTreeId = meetingTree.externalDropTreeId
+        externalDropStructureRevision = meetingTree.externalDropStructureRevision
         return index
     }
 
@@ -75,6 +78,8 @@ Rectangle {
         meetingTree.clearExternalDropPreview()
         externalDropListId = "root"
         externalDropIndex = -1
+        externalDropTreeId = ""
+        externalDropStructureRevision = -1
         dropIndicatorIndex = -1
     }
 
@@ -222,8 +227,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             playlistController: root.hasController ? controller : null
+            treeSource: root.hasController ? controller.treeSource : null
             hasItems: root.hasItems
-            playlistNodes: root.playlistNodes
             contentLeftInset: root.contentLeftInset
             contentRightInset: root.contentRightInset
             scrollbarGutter: root.scrollbarGutter
@@ -239,10 +244,58 @@ Rectangle {
             textDim: root.textDim
             accent: root.accent
             accentTint: root.accentTint
-            previewBg: root.previewBg
-            previewBorder: root.previewBorder
             danger: root.danger
             dangerSubtle: root.dangerSubtle
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        z: 900
+        visible: root.hasController && controller.syncBusy
+        color: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.82)
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(360, parent.width - 48)
+            height: 154
+            radius: 12
+            color: root.surface
+            border.width: 1
+            border.color: root.borderStrong
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 12
+
+                Text {
+                    Layout.fillWidth: true
+                    text: controller.syncBusyMessage !== ""
+                          ? controller.syncBusyMessage
+                          : qsTranslate("_PlaylistEditView", "Offline / Syncing")
+                    color: root.textSecondary
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                ProgressBar {
+                    Layout.fillWidth: true
+                    indeterminate: true
+                }
+
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTranslate("PlaylistTransferDialog", "Cancel")
+                    onClicked: controller.cancelModalOperation()
+                }
+            }
         }
     }
 

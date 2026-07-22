@@ -8,7 +8,9 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
+from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.foundation.constants import QSETTINGS_PREFS_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
@@ -114,6 +116,9 @@ def _configure_sync_save_queue(controller) -> None:
     controller._sync_save_inflight = None
     controller._sync_save_future = None
     controller._sync_save_executor = _ImmediateExecutor()
+    controller._media_tree_runtime = SimpleNamespace(
+        resource_lanes=SimpleNamespace(run=lambda _key, action: action())
+    )
     controller._sync_save_timer = _Timer()
     controller._schedule_sync_manifest_save = (
         lambda **kwargs: MeetingTreeController._schedule_sync_manifest_save(
@@ -671,6 +676,46 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
             self.assertEqual(materialized[0]["media_ref"]["file_path"], str(cached))
             self.assertEqual(linked[str(cached)], "official")
 
+    def test_cancelled_materialization_rolls_back_files_created_by_transaction(self):
+        service = _linked_folder_sync()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = root / "first.mp4"
+            second = root / "second.mp4"
+            first.write_bytes(b"first")
+            second.write_bytes(b"second")
+            folder = root / "2026-05-25 MW"
+            folder.mkdir()
+            nodes = [
+                {
+                    "id": path.stem,
+                    "type": "media",
+                    "children": [],
+                    "media_ref": {"file_path": str(path)},
+                }
+                for path in (first, second)
+            ]
+            cancellation = CancellationFlag()
+            copy_file = service._copy_into_directory
+
+            def cancel_after_first(*args, **kwargs):
+                result = copy_file(*args, **kwargs)
+                cancellation.set()
+                return result
+
+            service._copy_into_directory = cancel_after_first
+
+            with self.assertRaisesRegex(Exception, "cancelled"):
+                service.materialize_tree_files(
+                    nodes,
+                    folder,
+                    generated_roots=[],
+                    cancellation=cancellation,
+                )
+
+            self.assertFalse((folder / first.name).exists())
+            self.assertFalse((folder / second.name).exists())
+
     def test_save_manifest_drops_nonportable_stale_linked_file_entries(self):
         service = _linked_folder_sync()
         with tempfile.TemporaryDirectory() as tmp:
@@ -805,76 +850,6 @@ class MeetingLinkedFolderSyncTests(unittest.TestCase):
 
 
 class MeetingTreeControllerSyncTests(unittest.TestCase):
-    def test_prepare_nodes_for_sync_uses_copied_file(self):
-        class FakeController:
-            pass
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "source.mp4"
-            source.write_bytes(b"video")
-            folder = root / "2026-05-25 MW"
-            folder.mkdir()
-            controller = FakeController()
-            controller._sync_enabled = True
-            controller._sync_folder = str(folder)
-            controller._sync_service = _linked_folder_sync()
-            controller._linked_folder_files = {}
-            controller._generated_asset_roots = lambda: ()
-
-            nodes = [{
-                "id": "media",
-                "type": "media",
-                "children": [],
-                "media_ref": {"file_path": str(source)},
-            }]
-
-            prepared = MeetingTreeController._prepare_nodes_for_sync(controller, nodes)
-
-            copied = folder / "source.mp4"
-            self.assertTrue(source.exists())
-            self.assertTrue(copied.exists())
-            self.assertEqual(prepared[0]["media_ref"]["file_path"], str(copied))
-            self.assertEqual(controller._linked_folder_files[str(copied)], "media")
-
-    def test_materialize_current_nodes_replaces_stale_processed_file_links(self):
-        class FakeController:
-            pass
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            profile_cache = root / "profile-cache" / "pdf_pages" / "report"
-            profile_cache.mkdir(parents=True)
-            source_page = profile_cache / "page_001.jpg"
-            source_page.write_bytes(b"page")
-            folder = root / "2026-05-25 MW"
-            folder.mkdir()
-            controller = FakeController()
-            controller._sync_folder = str(folder)
-            controller._sync_service = _linked_folder_sync()
-            controller._linked_folder_files = {
-                str(source_page): "page",
-                r"C:\Users\Someone\AppData\Local\Solin\cache\page_001.jpg": "page",
-            }
-            controller._generated_asset_roots = lambda: (str(profile_cache.parent),)
-            controller._nodes = [{
-                "id": "page",
-                "type": "media",
-                "linked_folder_source": str(folder),
-                "children": [],
-                "media_ref": {"file_path": str(source_page)},
-            }]
-
-            MeetingTreeController._materialize_current_nodes_for_sync(controller)
-
-            cached_page = folder / CACHE_DIR_NAME / "page_001.jpg"
-            self.assertTrue(cached_page.exists())
-            self.assertEqual(
-                controller._nodes[0]["media_ref"]["file_path"],
-                str(cached_page),
-            )
-            self.assertEqual(controller._linked_folder_files, {str(cached_page): "page"})
-
     def test_save_sync_manifest_adopts_saved_merged_record(self):
         class FakeController:
             pass
@@ -953,7 +928,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertEqual(controller._sync_revision, 7)
             self.assertEqual(local_saves, [True])
 
-    def test_refresh_sync_from_manifest_emits_incremental_reorder(self):
+    def test_sync_discovery_publishes_canonical_reorder(self):
         class FakeController:
             pass
 
@@ -1009,41 +984,35 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._linked_folder_files = {}
             controller._meeting_folder_imports = {}
             controller._meeting_folder_pending_sources = set()
-            controller._load_sync_record = lambda: record
-            controller._flush_image_framing_save = lambda: None
-            controller._apply_sync_record = (
-                lambda sync_record: MeetingTreeController._apply_sync_record(
-                    controller,
-                    sync_record,
-                )
-            )
-            controller._linked_folder_availability = ()
-            controller._linked_folder_availability_signature = lambda: ()
+            controller._meeting_folder_scan_generation = 0
+            controller._meeting_folder_scan_operation_id = ""
+            controller._canonical_reset_generation = 0
+            controller._hidden_canonical_media = {}
             controller._save_local_cache = lambda: True
+            controller._schedule_sync_manifest_save = lambda: None
             controller._start_media_requests = lambda: None
             controller._emit_section_counts = (
                 lambda: MeetingTreeController._emit_section_counts(controller)
             )
-            controller.nodeMoved = _Signal()
             controller.sectionCountsChanged = _Signal()
             controller.chromeChanged = _Signal()
             controller.syncStateChanged = _Signal()
             controller.stateChanged = _Signal()
 
-            self.assertTrue(MeetingTreeController._refresh_sync_from_manifest(controller))
-
-            self.assertEqual(
-                controller.nodeMoved.calls,
-                [
-                    ("section", "root", 0),
-                    ("media", "section:section", 0),
-                ],
+            MeetingTreeController._apply_sync_discovery(
+                controller,
+                type(
+                    "Discovery",
+                    (),
+                    {"available": True, "folder": folder, "record": record},
+                )(),
             )
-            self.assertEqual(controller.stateChanged.calls, [])
+
+            self.assertEqual(len(controller.stateChanged.calls), 1)
             self.assertEqual(controller._nodes, record.nodes)
             self.assertEqual(controller._sync_revision, 2)
 
-    def test_sync_refresh_applies_section_patch_without_rebuild(self):
+    def test_sync_discovery_publishes_section_state_without_manual_patch(self):
         class FakeController:
             pass
 
@@ -1087,17 +1056,10 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._linked_folder_files = {}
         controller._meeting_folder_imports = {}
         controller._meeting_folder_pending_sources = set()
-        controller._linked_folder_availability = ()
-        controller._load_sync_record = lambda: record
-        controller._flush_image_framing_save = lambda: None
-        controller._apply_sync_record = (
-            lambda sync_record: MeetingTreeController._apply_sync_record(
-                controller,
-                sync_record,
-            )
-        )
-        controller._linked_folder_availability_signature = lambda: ()
+        controller._canonical_reset_generation = 0
+        controller._hidden_canonical_media = {}
         controller._save_local_cache = lambda: True
+        controller._schedule_sync_manifest_save = lambda: None
         controller._start_media_requests = lambda: None
         controller._find_node = (
             lambda node_id: MeetingTreeController._find_node(controller, node_id)
@@ -1111,22 +1073,25 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
         controller._emit_section_counts = (
             lambda: MeetingTreeController._emit_section_counts(controller)
         )
-        controller.nodeReplaced = _Signal()
-        controller.nodesInserted = _Signal()
-        controller.nodeMoved = _Signal()
-        controller.sectionChanged = _Signal()
-        controller.sectionCollapseChanged = _Signal()
         controller.sectionCountsChanged = _Signal()
         controller.chromeChanged = _Signal()
         controller.syncStateChanged = _Signal()
         controller.stateChanged = _Signal()
 
-        self.assertTrue(MeetingTreeController._refresh_sync_from_manifest(controller))
+        MeetingTreeController._apply_sync_discovery(
+            controller,
+            type(
+                "Discovery",
+                (),
+                {
+                    "available": True,
+                    "folder": record.folder,
+                    "record": record,
+                },
+            )(),
+        )
 
-        self.assertEqual(controller.stateChanged.calls, [])
-        self.assertEqual(controller.sectionCollapseChanged.calls, [("section", True)])
-        self.assertEqual(len(controller.sectionChanged.calls), 1)
-        self.assertEqual(controller.sectionChanged.calls[0][0], "section")
+        self.assertEqual(len(controller.stateChanged.calls), 1)
         self.assertEqual(controller._nodes, record.nodes)
         self.assertEqual(controller._sync_revision, 2)
 
@@ -1334,6 +1299,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller = FakeController()
             controller._sync_available = True
             controller._sync_identity = _identity("mwb")
+            controller._tree_key = controller._sync_identity.tree_key
             controller._sync_root = str(folder.parent)
             controller._sync_folder = ""
             controller._sync_enabled = False
@@ -1343,24 +1309,16 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._deleted_source_keys = set()
             controller._linked_folder_files = {}
             controller._meeting_folder_imports = {}
+            controller._canonical_reset_generation = 0
+            controller._hidden_canonical_media = {}
             controller._sync_service = service
             controller._linked_folder_availability = ()
             controller.chromeChanged = _Signal()
             controller.stateChanged = _Signal()
             controller.syncStateChanged = _Signal()
             controller.saved = False
-            controller._sync_snapshot = (
-                lambda: MeetingTreeController._sync_snapshot(controller)
-            )
-            controller._restore_sync_snapshot = (
-                lambda snapshot: MeetingTreeController._restore_sync_snapshot(
-                    controller,
-                    snapshot,
-                )
-            )
-            controller._set_sync_busy = (
-                lambda value: MeetingTreeController._set_sync_busy(controller, value)
-            )
+            controller._generated_asset_roots = lambda: ()
+            controller._cancel_sync_refresh = lambda: None
             controller._apply_sync_record = (
                 lambda record: MeetingTreeController._apply_sync_record(
                     controller,
@@ -1371,7 +1329,21 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 lambda: setattr(controller, "saved", True)
             )
             controller._linked_folder_availability_signature = lambda: ()
+            controller._start_media_requests = lambda: None
             controller._warn_sync_failed = lambda _message: None
+
+            def submit_modal_operation(**options):
+                try:
+                    value = options["runner"](
+                        lambda _progress: None,
+                        CancellationFlag(),
+                    )
+                    options["commit"](value)
+                except Exception as exc:  # noqa: BLE001 - test operation boundary
+                    options["failed"](str(exc))
+                return True
+
+            controller._submit_modal_operation = submit_modal_operation
 
             MeetingTreeController._enable_sync(controller)
 
@@ -1416,13 +1388,14 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._linked_folder_files = {}
             controller._meeting_folder_imports = {}
             controller._meeting_folder_pending_sources = set()
-            controller._linked_folder_availability = ()
+            controller._meeting_folder_scan_generation = 0
+            controller._meeting_folder_scan_operation_id = ""
+            controller._sync_refresh_generation = 0
+            controller._sync_refresh_operation_id = ""
+            controller._pending_sync_saves = {}
+            controller._canonical_reset_generation = 0
+            controller._hidden_canonical_media = {}
             controller._sync_service = service
-            controller.nodeReplaced = _Signal()
-            controller.nodesInserted = _Signal()
-            controller.nodeMoved = _Signal()
-            controller.sectionChanged = _Signal()
-            controller.sectionCollapseChanged = _Signal()
             controller.sectionCountsChanged = _Signal()
             controller.chromeChanged = _Signal()
             controller.stateChanged = _Signal()
@@ -1435,14 +1408,22 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._refresh_sync_availability = (
                 lambda: MeetingTreeController._refresh_sync_availability(controller)
             )
-            controller._refresh_sync_from_manifest = (
-                lambda: MeetingTreeController._refresh_sync_from_manifest(controller)
+            controller._pending_sync_save_for_identity = (
+                lambda sync_identity: (
+                    MeetingTreeController._pending_sync_save_for_identity(
+                        controller,
+                        sync_identity,
+                    )
+                )
             )
-            controller._load_sync_record = (
-                lambda: MeetingTreeController._load_sync_record(controller)
+            controller._request_sync_refresh = (
+                lambda: MeetingTreeController._request_sync_refresh(controller)
             )
-            controller._candidate_sync_folder = (
-                lambda: MeetingTreeController._candidate_sync_folder(controller)
+            controller._apply_sync_discovery = (
+                lambda discovery: MeetingTreeController._apply_sync_discovery(
+                    controller,
+                    discovery,
+                )
             )
             controller._apply_sync_record = (
                 lambda sync_record: MeetingTreeController._apply_sync_record(
@@ -1453,13 +1434,42 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._save_local_cache = (
                 lambda: setattr(controller, "saved", True)
             )
+            controller._schedule_sync_manifest_save = lambda: None
             controller._start_media_requests = lambda *_args: None
             controller._emit_section_counts = (
                 lambda: MeetingTreeController._emit_section_counts(controller)
             )
-            controller._qml_node = lambda node: node
-            controller._linked_folder_availability_signature = lambda: ()
             controller._watched_folder_file_store = WatchedFolderFileStore()
+            controller._apply_meeting_folder_scan = (
+                lambda folders, monday, pub_type: (
+                    MeetingTreeController._apply_meeting_folder_scan(
+                        controller,
+                        folders,
+                        monday,
+                        pub_type,
+                    )
+                )
+            )
+
+            class ImmediateOperations:
+                @staticmethod
+                def submit(spec):
+                    value = spec.runner(
+                        lambda _progress: None,
+                        CancellationFlag(),
+                    )
+                    spec.commit(value)
+                    return True
+
+                @staticmethod
+                def cancel(_operation_id):
+                    return None
+
+            controller._media_tree_runtime = type(
+                "Runtime",
+                (),
+                {"operations": ImmediateOperations()},
+            )()
             controller._adopt_existing_meeting_folder_source = (
                 lambda _source, _folder: []
             )
@@ -1469,7 +1479,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                     AssertionError("manifest adoption should not need import")
                 )
             )
-            controller._emit_linked_folder_availability_if_changed = lambda: None
+            controller._start_media_requests = lambda: None
 
             MeetingTreeController.inject_linked_folder_media(controller, str(root))
 
@@ -1478,12 +1488,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertEqual(controller._nodes, record.nodes)
             self.assertEqual(controller._deleted_source_keys, {"remote-source"})
             self.assertTrue(controller.saved)
-            self.assertEqual(len(controller.nodesInserted.calls), 1)
-            list_id, insert_index, inserted_nodes = controller.nodesInserted.calls[0]
-            self.assertEqual((list_id, insert_index), ("root", 0))
-            self.assertEqual(inserted_nodes[0]["id"], "remote")
-            self.assertEqual(inserted_nodes[0]["type"], "media")
-            self.assertEqual(controller.stateChanged.calls, [])
+            self.assertEqual(len(controller.stateChanged.calls), 1)
 
 
 if __name__ == "__main__":

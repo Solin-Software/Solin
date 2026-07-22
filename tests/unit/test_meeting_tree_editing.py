@@ -46,6 +46,30 @@ def test_move_tree_node_reparents_and_clamps_insert_index():
     assert [node["id"] for node in nodes[0]["children"]] == ["existing", "media"]
 
 
+def test_move_tree_node_uses_post_removal_slots_within_same_parent():
+    def nodes():
+        return [
+            {"id": node_id, "type": "media", "children": []}
+            for node_id in ("a", "b", "c")
+        ]
+
+    after_b = nodes()
+    assert move_tree_node(after_b, "a", "root", 1)
+    assert [node["id"] for node in after_b] == ["b", "a", "c"]
+
+    after_c = nodes()
+    assert move_tree_node(after_c, "a", "root", 2)
+    assert [node["id"] for node in after_c] == ["b", "c", "a"]
+
+    unchanged = nodes()
+    assert move_tree_node(unchanged, "a", "root", 0)
+    assert [node["id"] for node in unchanged] == ["a", "b", "c"]
+
+    upward = nodes()
+    assert move_tree_node(upward, "c", "root", 0)
+    assert [node["id"] for node in upward] == ["c", "a", "b"]
+
+
 def test_move_tree_node_rejects_invalid_descendant_target_without_mutation():
     nodes = [
         {

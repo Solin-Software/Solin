@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QBuffer, QIODevice
-from PySide6.QtGui import QImageReader, QPixmap
+from PySide6.QtGui import QImage, QImageReader, QPixmap
 
 from solin.core.foundation.constants import THUMB_JPEG_QUALITY
 from solin.core.media.thumbnail_store import ThumbnailStore
@@ -42,6 +42,21 @@ def pixmap_to_jpeg_bytes(pixmap: QPixmap) -> bytes | None:
         return None
     try:
         if not pixmap.save(buffer, "JPEG", THUMB_JPEG_QUALITY):
+            return None
+        data = bytes(buffer.data())
+        return data or None
+    finally:
+        buffer.close()
+
+
+def image_to_jpeg_bytes(image: QImage) -> bytes | None:
+    if image is None or image.isNull():
+        return None
+    buffer = QBuffer()
+    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
+        return None
+    try:
+        if not image.save(buffer, "JPEG", THUMB_JPEG_QUALITY):
             return None
         data = bytes(buffer.data())
         return data or None

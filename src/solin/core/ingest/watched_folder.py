@@ -48,6 +48,8 @@ from PySide6.QtCore import QObject, QFileSystemWatcher, Signal, QThread
 from solin.core.foundation.constants import (
     PDF_EXTS, PPTX_EXTS, DOCX_EXTS, JWPUB_EXTS, PLAYLIST_EXTS,
 )
+from solin.core.foundation.resource_keys import ResourceClaim
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.media.formats import (
     AUDIO_EXTS,
     IMAGE_EXTS,
@@ -55,6 +57,8 @@ from solin.core.media.formats import (
     media_type_from_path,
 )
 from solin.core.media.identity import partition_media_items
+from solin.core.playlists.items import create_playlist_item
+from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
     MANIFEST_REPOSITORY,
@@ -87,6 +91,20 @@ _PAGE_CACHE_VERSION = 1
 def _path_id(path: str | Path) -> str:
     """ID estável derivado do caminho absoluto normalizado (16 chars hex)."""
     return hashlib.md5(os.path.normpath(str(path)).encode()).hexdigest()[:16]
+
+
+def _physical_playlist_item(path: Path) -> dict:
+    """Build a discovered file through the canonical playlist-item factory."""
+
+    item = dict(
+        create_playlist_item(
+            title=path.stem,
+            url=str(path),
+            type=_media_type(path),
+        )
+    )
+    item["id"] = _path_id(path)
+    return item
 
 
 def _media_type(path: str | Path) -> str:
@@ -324,18 +342,15 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
 
     # 1. Arquivos de mídia na raiz da subpasta
     for f in sub.iterdir():
+        if is_watched_folder_staging_path(f):
+            continue
         if not f.is_file():
             continue
         if f.name.startswith("_solin") or f.name.startswith("."):
             continue
         ext = f.suffix.lower()
         if ext in SCAN_EXTS:
-            items.append({
-                "id":    _path_id(f),
-                "title": f.stem,
-                "url":   str(f),
-                "type":  _media_type(f),
-            })
+            items.append(_physical_playlist_item(f))
 
     # 2. Arquivos de mídia em .solin_cache/ (apenas os legítimos)
     cache = sub / CACHE_DIR_NAME
@@ -347,12 +362,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
                 continue
             ext = f.suffix.lower()
             if ext in SCAN_EXTS:
-                items.append({
-                    "id":    _path_id(f),
-                    "title": f.stem,
-                    "url":   str(f),
-                    "type":  _media_type(f),
-                })
+                items.append(_physical_playlist_item(f))
 
     # 3. Virtual items do manifesto (URLs de vídeos/áudios de .jwpub/.jwlplaylist)
     for src_name, entry in manifest.get("processed", {}).items():
@@ -413,6 +423,8 @@ def get_pending_files(subfolder_path: str) -> list[str]:
     processed = manifest.get("processed", {})
     pending = []
     for f in sub.iterdir():
+        if is_watched_folder_staging_path(f):
+            continue
         if not f.is_file():
             continue
         ext = f.suffix.lower()
@@ -520,6 +532,15 @@ def load_manifest_playlist(subfolder_path: str) -> dict:
         )
         if portable_url != raw_url:
             si["url"] = portable_url
+            manifest_changed = True
+        if "auto_title" not in si:
+            si["auto_title"] = bool(
+                create_playlist_item(
+                    title=str(si.get("title") or ""),
+                    url=resolved_url,
+                    type=str(si.get("type") or _media_type(Path(resolved_url))),
+                )["auto_title"]
+            )
             manifest_changed = True
         runtime_item = dict(si)
         runtime_item["url"] = (
@@ -972,69 +993,75 @@ class WatchedFolderSyncThread(QThread):
         *,
         media_lang: str,
         fallback_lang_code: str,
+        resource_lanes: ResourceLaneRegistry,
+        resource_claim: ResourceClaim,
         parent=None,
     ):
         super().__init__(parent)
         self._subfolder = subfolder_path
         self._media_lang = media_lang or "E"
         self._fallback_lang = fallback_lang_code or "E"
+        self._resource_lanes = resource_lanes
+        self._resource_claim = resource_claim
 
     def run(self) -> None:
-        sub = Path(self._subfolder)
-        if not sub.is_dir():
-            self.sync_failed.emit(f"Folder not found: {sub}")
-            return
-
         try:
-            self._check_interrupted()
-            # Reconcile first (remove orphans)
-            reconcile_manifest(self._subfolder)
-            self._check_interrupted()
-
-            pending = get_pending_files(self._subfolder)
-            if not pending:
-                self.sync_complete.emit()
-                return
-
-            cache = _cache_dir(sub)
-
-            for file_path in pending:
-                self._check_interrupted()
-                fp = Path(file_path)
-                ext = fp.suffix.lower()
-                self.progress.emit(fp.name, f"Processing {fp.name}…")
-                outputs: list[str] = []
-                committed = False
-
-                try:
-                    outputs, virtuals = self._process_file(fp, cache, ext)
-                    fingerprint = _file_fingerprint(fp)
-                    previous = _commit_processed_entry(sub, fp.name, {
-                        "type": ext.lstrip("."),
-                        "size": fingerprint["size"],
-                        "mtime": fingerprint["mtime"],
-                        "outputs": [os.path.basename(o) for o in outputs],
-                        "virtual_items": virtuals,
-                        "processed_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                    committed = True
-                    self._remove_replaced_outputs(cache, fp, previous, outputs)
-                except InterruptedError:
-                    raise
-                except Exception as exc:  # noqa: BLE001 - per-file sync fault isolation
-                    if outputs and not committed:
-                        self._remove_uncommitted_outputs(cache, fp, outputs)
-                    log.error("Sync failed for %s: %s", fp.name, exc)
-                    self.progress.emit(fp.name, f"⚠ Error: {str(exc)[:60]}")
-
-            self._check_interrupted()
-            self.sync_complete.emit()
-
+            self._resource_lanes.run(self._resource_claim, self._run_sync)
         except InterruptedError:
             log.info("Watched-folder sync cancelled for %s", self._subfolder)
         except Exception as exc:  # noqa: BLE001 - QThread reports terminal failure via signal
             log.exception("Watched-folder sync thread failed")
             self.sync_failed.emit(str(exc))
+
+    def _run_sync(self) -> None:
+        sub = Path(self._subfolder)
+        if not sub.is_dir():
+            self.sync_failed.emit(f"Folder not found: {sub}")
+            return
+
+        self._check_interrupted()
+        # Reconcile first (remove orphans)
+        reconcile_manifest(self._subfolder)
+        self._check_interrupted()
+
+        pending = get_pending_files(self._subfolder)
+        if not pending:
+            self.sync_complete.emit()
+            return
+
+        cache = _cache_dir(sub)
+
+        for file_path in pending:
+            self._check_interrupted()
+            fp = Path(file_path)
+            ext = fp.suffix.lower()
+            self.progress.emit(fp.name, f"Processing {fp.name}…")
+            outputs: list[str] = []
+            committed = False
+
+            try:
+                outputs, virtuals = self._process_file(fp, cache, ext)
+                fingerprint = _file_fingerprint(fp)
+                previous = _commit_processed_entry(sub, fp.name, {
+                    "type": ext.lstrip("."),
+                    "size": fingerprint["size"],
+                    "mtime": fingerprint["mtime"],
+                    "outputs": [os.path.basename(o) for o in outputs],
+                    "virtual_items": virtuals,
+                    "processed_at": datetime.now(timezone.utc).isoformat(),
+                })
+                committed = True
+                self._remove_replaced_outputs(cache, fp, previous, outputs)
+            except InterruptedError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - per-file sync fault isolation
+                if outputs and not committed:
+                    self._remove_uncommitted_outputs(cache, fp, outputs)
+                log.error("Sync failed for %s: %s", fp.name, exc)
+                self.progress.emit(fp.name, f"⚠ Error: {str(exc)[:60]}")
+
+        self._check_interrupted()
+        self.sync_complete.emit()
 
     def _process_file(self, fp: Path, cache: Path,
                       ext: str) -> tuple[list[str], list[dict]]:

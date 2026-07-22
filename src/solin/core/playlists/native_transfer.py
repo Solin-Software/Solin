@@ -23,6 +23,9 @@ from solin.core.jw.identifiers import is_jw_url
 from solin.core.media.download_storage import completed_cached_path
 from solin.core.media.formats import MEDIA_EXTS, mime_to_ext
 from solin.core.media.jw_reference import parse_jw_media_reference
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
+from solin.core.media.local_source import local_source_signature
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.playlists.native_manifest import (
     portable_playlist_snapshot,
     regenerate_playlist_ids,
@@ -292,6 +295,12 @@ def import_native_playlist(
                 sources=resolved_sources,
                 assets=assets,
             )
+            _bind_thumbnail_destinations(
+                assets,
+                playlist=playlist,
+                old_to_new_item_ids=item_id_map,
+                thumbnail_dir=thumbnail_dir,
+            )
             _check_cancelled(request.cancellation)
             _emit(
                 request,
@@ -313,6 +322,13 @@ def import_native_playlist(
                     raise FileExistsError(f"Import destination already exists: {destination}")
                 os.replace(asset.stage_path, destination)
                 created_files.append(destination)
+            _bind_imported_thumbnail_provenance(
+                assets,
+                playlist=playlist,
+                old_to_new_item_ids=item_id_map,
+                thumbnail_dir=thumbnail_dir,
+                created_files=created_files,
+            )
 
         return NativePlaylistImportResult(
             playlist=playlist,
@@ -473,7 +489,8 @@ def _build_export_plan(request: NativePlaylistExportRequest) -> _ExportPlan:
     thumbnail_root = Path(request.thumbnail_cache_dir)
     for item in original_items:
         item_id = str(item["id"])
-        path = thumbnail_root / f"{item_id}.jpg"
+        storage_id = thumbnail_storage_id(item_id, str(item.get("url") or ""))
+        path = thumbnail_root / f"{storage_id}.jpg"
         try:
             if not path.is_file():
                 continue
@@ -699,6 +716,65 @@ def _assign_import_destinations(
             filename = f"{uuid.uuid4().hex}{suffix}"
             asset.stage_path = media_stage / filename
             asset.destination = embedded_dir / filename
+
+
+def _bind_thumbnail_destinations(
+    assets: list[_ImportAsset],
+    *,
+    playlist: dict[str, Any],
+    old_to_new_item_ids: dict[str, str],
+    thumbnail_dir: Path,
+) -> None:
+    items_by_id = {
+        str(item.get("id") or ""): item
+        for item in playlist.get("items", [])
+        if isinstance(item, dict)
+    }
+    for asset in assets:
+        if asset.descriptor["role"] != "thumbnail":
+            continue
+        old_item_id = str(asset.descriptor["item_ids"][0])
+        new_item_id = old_to_new_item_ids[old_item_id]
+        item = items_by_id.get(new_item_id, {})
+        storage_id = thumbnail_storage_id(
+            new_item_id,
+            str(item.get("url") or ""),
+        )
+        asset.destination = thumbnail_dir / f"{storage_id}.jpg"
+
+
+def _bind_imported_thumbnail_provenance(
+    assets: list[_ImportAsset],
+    *,
+    playlist: dict[str, Any],
+    old_to_new_item_ids: dict[str, str],
+    thumbnail_dir: Path,
+    created_files: list[Path],
+) -> None:
+    """Bind imported thumbnails to the final revision of embedded local media."""
+
+    items_by_id = {
+        str(item.get("id") or ""): item
+        for item in playlist.get("items", [])
+        if isinstance(item, dict)
+    }
+    store = ThumbnailStore(thumbnail_dir)
+    for asset in assets:
+        if asset.descriptor["role"] != "thumbnail":
+            continue
+        old_item_id = str(asset.descriptor["item_ids"][0])
+        new_item_id = old_to_new_item_ids[old_item_id]
+        item = items_by_id.get(new_item_id, {})
+        source = str(item.get("url") or "")
+        if source.startswith(("http://", "https://")):
+            continue
+        source_signature = local_source_signature(source)
+        if not source_signature:
+            continue
+        storage_id = thumbnail_storage_id(new_item_id, source)
+        created_files.append(
+            store.bind_source_signature(storage_id, source_signature)
+        )
 
 
 def _extract_asset_streaming(

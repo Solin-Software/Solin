@@ -14,12 +14,15 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QFileDialog
 
 from solin.controllers.playlist_transfer_controller import (
+    PlaylistTransferCancelled,
     PlaylistTransferController,
     PlaylistTransferJob,
     PlaylistTransferProgress,
 )
 from solin.core.foundation.constants import VERSION
 from solin.core.jw.language_context import jw_media_language_context
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.playlists.jwl_export import (
     JwlPlaylistExportRequest,
     export_jwlplaylist_document,
@@ -39,6 +42,32 @@ from solin.core.playlists.names import PlaylistNameRegistry
 
 
 _INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
+
+def _items_with_persisted_thumbnails(
+    items: list[dict],
+    thumbnail_root: str | Path,
+    should_cancel: Callable[[], bool],
+) -> list[dict]:
+    store = ThumbnailStore(thumbnail_root)
+    enriched: list[dict] = []
+    for item in items:
+        if should_cancel():
+            break
+        current = dict(item)
+        if not current.get("thumbnail_data"):
+            storage_id = thumbnail_storage_id(
+                str(current.get("id") or ""),
+                str(current.get("url") or ""),
+            )
+            try:
+                data = store.path(storage_id).read_bytes()
+            except (OSError, ValueError):
+                data = b""
+            if data:
+                current["thumbnail_data"] = data
+        enriched.append(current)
+    return enriched
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +148,53 @@ class PlaylistTransferWorkflow(QObject):
                 title=title,
                 initial_stage=self.tr("Preparing playlist…"),
                 runner=runner,
+                completed=lambda _result: None,
+                succeeded_message=self.tr("Exported: {path}").replace(
+                    "{path}", output_path
+                ),
+            )
+        )
+
+    def load_and_export_playlist(
+        self,
+        *,
+        display_name: str,
+        playlist_format: str,
+        loader: Callable[[], dict],
+        empty_message: str,
+    ) -> None:
+        """Load a disk-backed playlist and export it entirely off the GUI thread."""
+        output_path = self._choose_export_path(display_name, playlist_format)
+        if not output_path:
+            return
+
+        if playlist_format == "solin":
+            title = self.tr("Export Solin Playlist")
+        elif playlist_format == "jwl":
+            title = self.tr("Export JW Library Playlist")
+        else:
+            raise ValueError(f"Unsupported playlist format: {playlist_format}")
+
+        def run(progress, cancellation):
+            progress(PlaylistTransferProgress(stage=self.tr("Opening playlist…")))
+            playlist = copy.deepcopy(loader())
+            if cancellation.is_set():
+                raise PlaylistTransferCancelled
+            if not playlist.get("items"):
+                raise ValueError(empty_message)
+            playlist["name"] = str(playlist.get("name") or display_name)
+            if playlist_format == "solin":
+                transfer = self._native_export_runner(playlist, output_path)
+            else:
+                transfer = self._jwl_export_runner(playlist, output_path)
+            return transfer(progress, cancellation)
+
+        self._submit(
+            PlaylistTransferJob(
+                key=f"export:{playlist_format}:{output_path}",
+                title=title,
+                initial_stage=self.tr("Opening playlist…"),
+                runner=run,
                 completed=lambda _result: None,
                 succeeded_message=self.tr("Exported: {path}").replace(
                     "{path}", output_path
@@ -229,10 +305,15 @@ class PlaylistTransferWorkflow(QObject):
                     )
                 )
 
+            items = _items_with_persisted_thumbnails(
+                list(playlist.get("items", [])),
+                self._profile_paths.thumb_cache_dir,
+                cancellation.is_set,
+            )
             return export_jwlplaylist_document(
                 JwlPlaylistExportRequest(
                     name=playlist_name,
-                    items=list(playlist.get("items", [])),
+                    items=items,
                     output_path=output_path,
                     media_cache_dir=self._media_cache_manager.media_cache_dir,
                     fallback_lang_code=fallback_language,

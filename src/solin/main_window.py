@@ -37,6 +37,7 @@ from .controllers.media_projection_controller import (
     MediaProjectionController,
     MediaProjectionHandlers,
 )
+from .controllers.media_tree_runtime import MediaTreeRuntime
 from .controllers.media_destination_controller import (
     MediaDestinationContext,
     MediaDestinationController,
@@ -207,6 +208,13 @@ class MainWindow(QMainWindow):
         self.profile_paths = profile_paths
         self._profile_settings = profile_settings_bundle
         self.media_cache_manager = media_cache_manager
+        self.media_tree_runtime = MediaTreeRuntime(
+            media_cache_manager.media_cache_dir,
+            parent=self,
+        )
+        watched_folder_playlist_store.bind_resource_lanes(
+            self.media_tree_runtime.resource_lanes
+        )
         self.media_ctrl = media_controller
         self._background_media_controller = background_media_controller
         self.font_manager = font_manager
@@ -397,6 +405,7 @@ class MainWindow(QMainWindow):
                 profile_paths=self.profile_paths,
                 runtime_paths=self.runtime_paths,
                 media_cache_manager=self.media_cache_manager,
+                media_tree_runtime=self.media_tree_runtime,
                 media_controller=self.media_ctrl,
                 screen_manager=self.screen_mgr,
                 obs_service=self._obs_service,
@@ -853,6 +862,7 @@ class MainWindow(QMainWindow):
                     projection_integrations=self._projection_integrations,
                     background_song=self._background_song_service,
                     media_countdown_automation=self._media_countdown_automation,
+                    media_tree_runtime=self.media_tree_runtime,
                     media_controller=self.media_ctrl,
                     ndi=self._ndi_service,
                     camera=self._camera_service,

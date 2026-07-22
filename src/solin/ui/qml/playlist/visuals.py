@@ -8,6 +8,7 @@ from solin.styles.icons import (
     ICON_ARROW_LEFT,
     ICON_CHEVRON_DOWN,
     ICON_CHEVRON_UP,
+    ICON_CLOSE,
     ICON_CLOUD_DOWNLOAD,
     ICON_EDIT,
     ICON_EXPORT,
@@ -78,10 +79,9 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
     The *version* suffix is for cache-busting; we parse only the *item_id*.
     """
 
-    def __init__(self, thumb_cache: dict, disk_loader_cb=None):
+    def __init__(self, thumb_cache: dict):
         super().__init__(QQuickImageProvider.ImageType.Pixmap)
         self._cache = thumb_cache
-        self._disk_loader_cb = disk_loader_cb
 
     def requestPixmap(self, id_str: str, size, requestedSize):
         parts = id_str.split("/")
@@ -98,10 +98,6 @@ class PlaylistThumbnailProvider(QQuickImageProvider):
             else PLAYLIST_THUMBNAIL_HEIGHT
         )
         pixmap = self._cache.get(item_id)
-        if (not pixmap or pixmap.isNull()) and self._disk_loader_cb:
-            pixmap = self._disk_loader_cb(item_id)
-            if pixmap and not pixmap.isNull():
-                self._cache[item_id] = pixmap
 
         if pixmap and not pixmap.isNull():
             if preserve_full_aspect:
@@ -138,6 +134,7 @@ PLAYLIST_ICON_SVGS = {
     "back":           ICON_ARROW_LEFT,
     "plus":           ICON_PLUS,
     "refresh":        ICON_REFRESH,
+    "close":          ICON_CLOSE,
     "export":         ICON_EXPORT,
     "folder_link":    ICON_FOLDER_LINK,
     "save":           ICON_SAVE_PLAYLIST,

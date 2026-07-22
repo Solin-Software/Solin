@@ -91,6 +91,7 @@ class MainWindowUiContext:
     profile_paths: Any
     runtime_paths: Any
     media_cache_manager: Any
+    media_tree_runtime: Any
     media_controller: Any
     screen_manager: Any
     obs_service: Any
@@ -454,6 +455,7 @@ class MainWindowUiController:
             watched_folder_watcher_factory=context.watched_folder_watcher_factory,
             playlist_cleanup_queue_factory=context.playlist_cleanup_queue_factory,
             media_cache_manager=context.media_cache_manager,
+            media_tree_runtime=context.media_tree_runtime,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
             jw_catalog_thumbnail_session_factory=(context.jw_catalog_thumbnail_session_factory),
             jw_songs_store=context.jw_songs_store,
@@ -482,6 +484,7 @@ class MainWindowUiController:
             profile_paths=context.profile_paths,
             runtime_paths=context.runtime_paths,
             cache_manager=context.media_cache_manager,
+            media_tree_runtime=context.media_tree_runtime,
             jw_catalog_service_factory=context.jw_catalog_service_factory,
             jw_catalog_thumbnail_session_factory=(context.jw_catalog_thumbnail_session_factory),
             jw_songs_store=context.jw_songs_store,

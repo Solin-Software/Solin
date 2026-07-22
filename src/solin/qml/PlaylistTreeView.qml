@@ -31,9 +31,14 @@ Item {
     property color dangerSubtle: appTheme.dangerSubtle
 
     property var playlistController: null
+    property var treeSource: null
     property bool hasItems: false
     property bool loading: false
-    property var playlistNodes: []
+    readonly property var playlistNodes: treeSource ? treeSource.treeData : []
+    readonly property bool treeTransitioning: treeSource
+                                              ? treeSource.transitioning
+                                              : false
+    readonly property string treeError: treeSource ? treeSource.error : ""
     readonly property bool hasController: playlistController !== null
     readonly property bool playbackProtectionEnabled:
         typeof playbackProtection !== "undefined"
@@ -53,12 +58,12 @@ Item {
 
     property string externalDropListId: "root"
     property int externalDropIndex: -1
+    property string externalDropTreeId: ""
+    property int externalDropStructureRevision: -1
     property int dropIndicatorIndex: -1
+    property string activeTreeId: ""
     property string pendingMarkerEditId: ""
     property int pendingMarkerEditAttempts: 0
-    property var pendingMediaPatches: ({})
-    property var pendingCloudPatches: ({})
-    property var pendingImageFramingPatches: ({})
 
     Loader {
         id: mediaTrimLoader
@@ -119,7 +124,7 @@ Item {
     }
 
     function currentPlaylistNodes() {
-        return root.hasController ? root.playlistController.playlistData : root.playlistNodes
+        return root.playlistNodes
     }
 
     function pointerEntered() {
@@ -175,6 +180,8 @@ Item {
         dragManager.endExternalDrop()
         externalDropListId = "root"
         externalDropIndex = -1
+        externalDropTreeId = ""
+        externalDropStructureRevision = -1
         dropIndicatorIndex = -1
     }
 
@@ -182,60 +189,6 @@ Item {
         pendingMarkerEditId = markerId
         pendingMarkerEditAttempts = 0
         markerEditTimer.restart()
-    }
-
-    function rememberMediaPatch(itemId, title, duration, thumbSource) {
-        pendingMediaPatches[itemId] = {
-            "title": title,
-            "duration": duration,
-            "thumbSource": thumbSource
-        }
-    }
-
-    function applyPendingMediaPatch(mediaItem) {
-        var patch = pendingMediaPatches[mediaItem.nodeId]
-        if (!patch)
-            return
-        mediaItem.applyMediaPatch(
-            patch.title,
-            patch.duration,
-            patch.thumbSource
-        )
-        delete pendingMediaPatches[mediaItem.nodeId]
-    }
-
-    function rememberCloudPatch(itemId, visible, active, progress, tooltip) {
-        pendingCloudPatches[itemId] = {
-            "visible": visible,
-            "active": active,
-            "progress": progress,
-            "tooltip": tooltip
-        }
-    }
-
-    function applyPendingCloudPatch(mediaItem) {
-        var patch = pendingCloudPatches[mediaItem.nodeId]
-        if (!patch)
-            return
-        mediaItem.applyCloudPatch(
-            patch.visible,
-            patch.active,
-            patch.progress,
-            patch.tooltip
-        )
-        delete pendingCloudPatches[mediaItem.nodeId]
-    }
-
-    function rememberImageFramingPatch(itemId, framing) {
-        pendingImageFramingPatches[itemId] = framing
-    }
-
-    function applyPendingImageFramingPatch(mediaItem) {
-        if (!pendingImageFramingPatches.hasOwnProperty(mediaItem.nodeId))
-            return
-        mediaItem.applyImageFramingPatch(
-            pendingImageFramingPatches[mediaItem.nodeId])
-        delete pendingImageFramingPatches[mediaItem.nodeId]
     }
 
     Timer {
@@ -260,8 +213,16 @@ Item {
 
     Item {
         id: dragOverlay
+        objectName: "dragOverlay"
         anchors.fill: parent
         z: 9999
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.treeTransitioning
+        z: 10000
+        preventStealing: true
     }
 
     QtObject {
@@ -270,6 +231,8 @@ Item {
         property var draggedItem: null
         property string draggedId: ""
         property string draggedType: ""
+        property string treeId: ""
+        property int structureRevision: -1
         property bool externalActive: false
         property bool active: draggedItem !== null || externalActive
 
@@ -308,6 +271,11 @@ Item {
             draggedItem = item
             draggedId = item.nodeId
             draggedType = item.nodeType
+            treeId = root.treeSource ? root.treeSource.treeId : ""
+            structureRevision = root.hasController
+                    ? root.playlistController.treeStructureRevision() : -1
+            if (root.treeSource)
+                root.treeSource.beginInteraction()
             item.opacity = 0.34
 
             var globalPos = item.parent.mapToItem(dragOverlay, item.x, item.y)
@@ -332,6 +300,15 @@ Item {
             if (draggedItem)
                 return
             var wasInactive = !externalActive
+            if (wasInactive) {
+                treeId = root.treeSource ? root.treeSource.treeId : ""
+                structureRevision = root.hasController
+                        ? root.playlistController.treeStructureRevision() : -1
+                root.externalDropTreeId = treeId
+                root.externalDropStructureRevision = structureRevision
+                if (root.treeSource)
+                    root.treeSource.beginInteraction()
+            }
             externalActive = true
             draggedId = ""
             draggedType = "media"
@@ -355,6 +332,11 @@ Item {
             externalActive = false
             draggedId = ""
             draggedType = ""
+            treeId = ""
+            structureRevision = -1
+            if (root.treeSource)
+                root.treeSource.endInteraction()
+            rootPlaylist.reconcileFromNodes(root.currentPlaylistNodes())
         }
 
         function endDrag() {
@@ -370,10 +352,12 @@ Item {
                 var index = targetList.indexOfNode(placeholder)
                 modelMoved = root.hasController
                              && root.playlistController.moveNode(
-                                 draggedId,
-                                 targetList.listId,
-                                 index
-                             )
+                                   draggedId,
+                                   targetList.listId,
+                                   index,
+                                   treeId,
+                                   structureRevision
+                              )
                 if (modelMoved) {
                     viewSynchronized = rootPlaylist.moveExistingNode(
                         draggedId,
@@ -393,11 +377,16 @@ Item {
             draggedItem = null
             draggedId = ""
             draggedType = ""
+            treeId = ""
+            structureRevision = -1
             externalActive = false
+
+            if (root.treeSource)
+                root.treeSource.endInteraction()
 
             if (!modelMoved || !viewSynchronized) {
                 item.destroy()
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
+                rootPlaylist.reconcileFromNodes(root.currentPlaylistNodes())
             }
         }
 
@@ -415,7 +404,12 @@ Item {
             draggedItem = null
             draggedId = ""
             draggedType = ""
+            treeId = ""
+            structureRevision = -1
             externalActive = false
+            if (root.treeSource)
+                root.treeSource.endInteraction()
+            rootPlaylist.reconcileFromNodes(root.currentPlaylistNodes())
         }
 
         function isDescendant(parentItem, childItem) {
@@ -431,66 +425,44 @@ Item {
 
     Connections {
         target: root.hasController ? root.playlistController : null
-        function onStateChanged() {
-            if (!dragManager.active)
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onMediaChanged(itemId, title, duration, thumbSource) {
-            if (!rootPlaylist.updateMediaNode(itemId, title, duration, thumbSource))
-                root.rememberMediaPatch(itemId, title, duration, thumbSource)
-        }
-
-        function onImageFramingChanged(itemId, framing) {
-            if (!rootPlaylist.updateImageFramingNode(itemId, framing))
-                root.rememberImageFramingPatch(itemId, framing)
-        }
-
-        function onMediaInserted(listId, insertIndex, nodes) {
-            if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onNodesInserted(listId, insertIndex, nodes) {
-            if (!rootPlaylist.insertNodes(listId, insertIndex, nodes))
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onNodeReplaced(nodeId, nodes) {
-            if (!rootPlaylist.replaceNode(nodeId, nodes))
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onNodeMoved(nodeId, targetListId, insertIndex) {
-            if (dragManager.active)
-                return
-            if (!rootPlaylist.moveExistingNode(nodeId, targetListId, insertIndex))
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onSectionChanged(nodeId, title, color, textColor, badgeBg, itemCount) {
-            if (!rootPlaylist.updateSectionNode(
-                    nodeId, title, color, textColor, badgeBg, itemCount)) {
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-            }
-        }
-
-        function onSectionCollapseChanged(nodeId, collapsed) {
-            if (!rootPlaylist.updateSectionCollapse(nodeId, collapsed))
-                rootPlaylist.scheduleRebuild(root.currentPlaylistNodes())
-        }
-
-        function onSectionCountsChanged(counts) {
-            rootPlaylist.updateSectionCounts(counts)
-        }
-
         function onMarkerEditRequested(markerId) {
             root.requestMarkerEdit(markerId)
         }
+    }
 
-        function onCloudChanged(itemId, visible, active, progress, tooltip) {
-            if (!rootPlaylist.updateCloudNode(itemId, visible, active, progress, tooltip))
-                root.rememberCloudPatch(itemId, visible, active, progress, tooltip)
+    Connections {
+        target: root.treeSource
+        function onRevisionChanged() {
+            treeSyncTimer.restart()
+        }
+        function onTransitioningChanged() {
+            if (!root.treeTransitioning)
+                return
+            if (dragManager.draggedItem)
+                dragManager.cancelDrag()
+            else if (dragManager.externalActive)
+                root.clearExternalDropPreview()
+        }
+    }
+
+    onTreeSourceChanged: treeSyncTimer.restart()
+
+    Timer {
+        id: treeSyncTimer
+        interval: 0
+        repeat: false
+        onTriggered: {
+            var nextTreeId = root.treeSource ? root.treeSource.treeId : ""
+            var treeChanged = nextTreeId !== root.activeTreeId
+            if (treeChanged && dragManager.draggedItem)
+                dragManager.cancelDrag()
+            else if (treeChanged && dragManager.externalActive)
+                root.clearExternalDropPreview()
+            root.activeTreeId = nextTreeId
+            rootPlaylist.reconcileFromNodes(
+                root.currentPlaylistNodes(),
+                treeChanged
+            )
         }
     }
 
@@ -508,6 +480,7 @@ Item {
                 border.width: 1
                 border.color: root.border_
                 visible: !root.hasItems && !root.treeHydrating && !root.loading
+                         && root.treeError === ""
                 opacity: 0.75
 
                 ColumnLayout {
@@ -542,7 +515,7 @@ Item {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 8
-                visible: root.loading
+                visible: root.loading && root.treeError === ""
 
                 BusyIndicator {
                     Layout.alignment: Qt.AlignHCenter
@@ -559,6 +532,74 @@ Item {
                 }
             }
 
+            ColumnLayout {
+                objectName: "treeErrorState"
+                anchors.centerIn: parent
+                spacing: 10
+                visible: root.treeError !== "" && !root.loading
+                z: 40
+
+                Image {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 28
+                    height: 28
+                    source: root.picon("refresh", 28, root.iconHex(root.textDim))
+                    opacity: 0.72
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTranslate("_PlaylistEditView", "Media unavailable")
+                    color: root.textMuted
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
+                }
+
+                Rectangle {
+                    id: treeRetryButton
+                    objectName: "treeRetryButton"
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: retryRow.implicitWidth + 22
+                    implicitHeight: 34
+                    radius: 8
+                    color: retryMouse.containsMouse ? root.hover : "transparent"
+                    border.width: 1
+                    border.color: retryMouse.containsMouse
+                                  ? root.borderStrong : root.border_
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                    RowLayout {
+                        id: retryRow
+                        anchors.centerIn: parent
+                        spacing: 7
+
+                        Image {
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            source: root.picon(
+                                        "refresh", 14,
+                                        root.iconHex(root.textSecondary))
+                        }
+
+                        Text {
+                            text: qsTranslate("MediaDestinationDialog", "Try again")
+                            color: root.textSecondary
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                        }
+                    }
+
+                    MouseArea {
+                        id: retryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.treeSource) root.treeSource.retry()
+                    }
+                }
+            }
+
             Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
@@ -569,7 +610,8 @@ Item {
                 color: appTheme.surfaceChrome
                 border.width: 1
                 border.color: root.borderStrong
-                opacity: root.treeHydrating && root.hasItems ? 0.96 : 0.0
+                opacity: (root.treeHydrating || root.treeTransitioning)
+                         && root.hasItems ? 0.96 : 0.0
                 visible: opacity > 0
                 z: 50
 
@@ -583,7 +625,7 @@ Item {
                     BusyIndicator {
                         Layout.preferredWidth: 18
                         Layout.preferredHeight: 18
-                        running: root.treeHydrating
+                        running: root.treeHydrating || root.treeTransitioning
                     }
 
                     Text {
@@ -604,7 +646,7 @@ Item {
                 anchors.fill: parent
                 anchors.topMargin: 6
                 anchors.bottomMargin: 4
-                visible: root.hasItems
+                visible: root.hasItems && root.treeError === ""
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 flickableDirection: Flickable.VerticalFlick
@@ -661,7 +703,7 @@ Item {
                     listKind: "root"
                     depth: 0
 
-                    Component.onCompleted: scheduleRebuild(root.playlistNodes)
+                    Component.onCompleted: scheduleInitialHydration(root.playlistNodes)
                 }
 
                 ScrollBar.vertical: ScrollBar {
@@ -700,8 +742,9 @@ Item {
         property real listContentHeight: 0
         property bool layoutQueued: false
         property bool collapsed: false
-        property bool rebuildQueued: false
+        property bool initialHydrationQueued: false
         property bool hydrationRegistered: false
+        property bool pendingForcePresentation: false
 
         implicitHeight: Math.max(listKind === "root" ? 30 : 64, listContentHeight)
         height: collapsed ? 0 : implicitHeight
@@ -711,17 +754,17 @@ Item {
         onWidthChanged: requestLayout()
         onCollapsedChanged: {
             if (collapsed) {
-                rebuildTimer.stop()
+                hydrationTimer.stop()
                 finishHydration()
                 requestLayout()
                 return
             }
             if (items.length === 0 && pendingNodes.length > 0) {
-                rebuildQueued = false
-                rebuildFromNodes(pendingNodes)
+                initialHydrationQueued = false
+                hydrateInitialNodes(pendingNodes)
             } else if (pendingIndex < pendingNodes.length) {
                 startHydration()
-                rebuildTimer.start()
+                hydrationTimer.start()
             }
         }
 
@@ -741,10 +784,10 @@ Item {
                                          listRoot.listId)
         }
 
-        function rebuildFromNodes(nodes) {
+        function hydrateInitialNodes(nodes) {
             if (dragManager.active)
                 return
-            rebuildTimer.stop()
+            hydrationTimer.stop()
             finishHydration()
             var oldItems = items.slice()
             for (var i = 0; i < oldItems.length; i++)
@@ -767,9 +810,111 @@ Item {
                             : root.treeHydrationChildInitialBatch)
             doLayout()
             if (pendingIndex < pendingNodes.length)
-                rebuildTimer.start()
+                hydrationTimer.start()
             else
                 finishHydration()
+        }
+
+        function collectVisualPool(pool) {
+            for (var index = 0; index < items.length; index++) {
+                var visual = items[index]
+                if (!visual || visual === dragManager.placeholder)
+                    continue
+                pool[visual.nodeId] = visual
+                if (visual.bodyList)
+                    visual.bodyList.collectVisualPool(pool)
+            }
+        }
+
+        function destroyVisualPool(pool) {
+            for (var nodeId in pool) {
+                var visual = pool[nodeId]
+                if (visual)
+                    visual.destroy()
+                delete pool[nodeId]
+            }
+        }
+
+        function reconcileFromNodes(nodes, forcePresentation, sharedVisualPool) {
+            var desired = nodes || []
+            if (dragManager.active) {
+                pendingNodes = desired
+                pendingForcePresentation = pendingForcePresentation
+                        || Boolean(forcePresentation)
+                return
+            }
+
+            var effectiveForcePresentation = Boolean(forcePresentation)
+                    || pendingForcePresentation
+            pendingForcePresentation = false
+            var ownsVisualPool = !sharedVisualPool
+            // Node IDs are domain data, so the pool must not inherit keys such
+            // as "constructor" or "__proto__" from Object.prototype.
+            var visualPool = sharedVisualPool || Object.create(null)
+            if (ownsVisualPool)
+                collectVisualPool(visualPool)
+
+            hydrationTimer.stop()
+            finishHydration()
+            initialHydrationQueued = false
+
+            var visibleLimit = collapsed
+                    ? Math.min(items.length, desired.length)
+                    : Math.min(
+                          desired.length,
+                          Math.max(
+                              items.length,
+                              listKind === "root"
+                                  ? root.treeHydrationInitialBatch
+                                  : root.treeHydrationChildInitialBatch
+                          )
+                      )
+            var nextItems = []
+            for (var desiredIndex = 0; desiredIndex < visibleLimit;
+                    desiredIndex++) {
+                var desiredNode = desired[desiredIndex]
+                var visual = Object.prototype.hasOwnProperty.call(
+                            visualPool, desiredNode.id)
+                        ? visualPool[desiredNode.id] : null
+                if (visual && visual.nodeType !== desiredNode.type) {
+                    visual.destroy()
+                    visual = null
+                }
+                if (!visual)
+                    visual = createNodeObject(desiredNode)
+                if (!visual)
+                    continue
+                delete visualPool[desiredNode.id]
+                updateNodeList(visual)
+                moveNodeToContainer(visual)
+                if (visual.applySnapshot
+                        && (effectiveForcePresentation
+                            || visual.presentationRevision
+                               !== desiredNode.presentationRevision)) {
+                    visual.applySnapshot(desiredNode)
+                    visual.presentationRevision = desiredNode.presentationRevision
+                } else if (!visual.applySnapshot) {
+                    visual.node = desiredNode
+                }
+                if (visual.bodyList)
+                    visual.bodyList.reconcileFromNodes(
+                        desiredNode.children || [],
+                        effectiveForcePresentation,
+                        visualPool
+                    )
+                nextItems.push(visual)
+            }
+
+            items = nextItems
+            pendingNodes = desired
+            pendingIndex = visibleLimit
+            requestLayout()
+            if (ownsVisualPool)
+                destroyVisualPool(visualPool)
+            if (!collapsed && pendingIndex < pendingNodes.length) {
+                startHydration()
+                hydrationTimer.start()
+            }
         }
 
         function componentForNode(node) {
@@ -808,15 +953,15 @@ Item {
             target.splice.apply(target, args)
         }
 
-        function scheduleRebuild(nodes) {
+        function scheduleInitialHydration(nodes) {
             pendingNodes = nodes || []
             pendingIndex = 0
-            rebuildQueued = true
+            initialHydrationQueued = true
             if (listKind === "root")
                 root.resetTreeHydration()
             if (collapsed)
                 return
-            rebuildTimer.restart()
+            hydrationTimer.restart()
         }
 
         function startHydration() {
@@ -863,7 +1008,7 @@ Item {
             startHydration()
             createNextBatch(root.treeHydrationBatch)
             if (pendingIndex < pendingNodes.length)
-                rebuildTimer.start()
+                hydrationTimer.start()
             else
                 finishHydration()
         }
@@ -969,7 +1114,7 @@ Item {
         }
 
         function moveExistingNode(nodeId, targetListId, insertIndex, visualNode) {
-            if (root.treeHydrating || rebuildQueued)
+            if (root.treeHydrating || initialHydrationQueued)
                 return false
             var taken = takePendingNode(pendingNodes, nodeId)
             if (!taken)
@@ -1101,7 +1246,7 @@ Item {
             if (!node)
                 return false
             synchronizePendingInsertion(insertIndex, node)
-            if (collapsed || rebuildQueued)
+            if (collapsed || initialHydrationQueued)
                 return false
             if (insertIndex > pendingIndex)
                 return false
@@ -1112,181 +1257,6 @@ Item {
             pendingIndex = Math.min(pendingNodes.length, pendingIndex + 1)
             requestLayout()
             return true
-        }
-
-        function insertNodes(targetListId, insertIndex, nodes) {
-            var insertedNodes = nodes || []
-            if (insertedNodes.length === 0)
-                return true
-            if (listId === targetListId) {
-                return insertNodesHere(insertIndex, insertedNodes)
-            }
-
-            var visibleTarget = findList(targetListId)
-            if (visibleTarget
-                    && !visibleTarget.insertNodesHere(insertIndex, insertedNodes)) {
-                return false
-            }
-            return synchronizeNodesInPendingTree(
-                pendingNodes,
-                targetListId,
-                insertIndex,
-                insertedNodes
-            )
-        }
-
-        function insertNodesHere(insertIndex, nodes) {
-            if (!nodes || nodes.length === 0)
-                return true
-            var idx = Math.max(0, Math.min(insertIndex, pendingNodes.length))
-            var oldPendingIndex = pendingIndex
-            spliceArray(pendingNodes, idx, 0, nodes)
-
-            if (collapsed || rebuildQueued || idx > oldPendingIndex)
-                return true
-
-            var visualIdx = Math.max(0, Math.min(idx, items.length))
-            for (var n = 0; n < nodes.length; n++) {
-                var obj = createNodeObject(nodes[n])
-                if (obj) {
-                    items.splice(visualIdx + n, 0, obj)
-                    updateNodeList(obj)
-                }
-            }
-            pendingIndex += nodes.length
-            requestLayout()
-            return true
-        }
-
-        function synchronizePendingInsertionRange(targetNodes, insertIndex, nodes) {
-            var idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
-            var alreadySynchronized = idx + nodes.length <= targetNodes.length
-            for (var n = 0; alreadySynchronized && n < nodes.length; n++) {
-                alreadySynchronized = targetNodes[idx + n]
-                                      && targetNodes[idx + n].id === nodes[n].id
-            }
-            if (alreadySynchronized)
-                return
-
-            for (var i = targetNodes.length - 1; i >= 0; i--) {
-                for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
-                    if (targetNodes[i]
-                            && targetNodes[i].id === nodes[nodeIndex].id) {
-                        targetNodes.splice(i, 1)
-                        break
-                    }
-                }
-            }
-            idx = Math.max(0, Math.min(insertIndex, targetNodes.length))
-            spliceArray(targetNodes, idx, 0, nodes)
-        }
-
-        function synchronizeNodesInPendingTree(
-                sourceNodes, targetListId, insertIndex, nodes) {
-            if (!sourceNodes || !nodes || nodes.length === 0)
-                return false
-            for (var i = 0; i < sourceNodes.length; i++) {
-                var node = sourceNodes[i]
-                if (childListIdForNode(node) === targetListId) {
-                    if (!node.children)
-                        node.children = []
-                    synchronizePendingInsertionRange(
-                        node.children,
-                        insertIndex,
-                        nodes
-                    )
-                    return true
-                }
-                if (node.children
-                        && synchronizeNodesInPendingTree(
-                            node.children,
-                            targetListId,
-                            insertIndex,
-                            nodes
-                        )) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        function replaceNode(nodeId, nodes) {
-            var replacement = nodes || []
-            for (var pendingIdx = 0; pendingIdx < pendingNodes.length; pendingIdx++) {
-                if (pendingNodes[pendingIdx].id === nodeId)
-                    return replaceNodeHere(pendingIdx, replacement)
-            }
-
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (child && child.bodyList && child.bodyList.replaceNode(nodeId, replacement))
-                    return true
-            }
-            return replaceNodeInPendingTree(pendingNodes, nodeId, replacement)
-        }
-
-        function replaceNodeHere(pendingIdx, nodes) {
-            var oldNodeId = pendingNodes[pendingIdx].id
-            var wasHydrated = !rebuildQueued && pendingIdx < pendingIndex
-            spliceArray(pendingNodes, pendingIdx, 1, nodes)
-            if (!wasHydrated)
-                return true
-
-            var visualIdx = -1
-            for (var i = 0; i < items.length; i++) {
-                if (items[i] && items[i].nodeId === oldNodeId) {
-                    visualIdx = i
-                    break
-                }
-            }
-            if (visualIdx < 0) {
-                // A freshly moved delegate may already be reparented here but
-                // not yet registered in items. Remove only the exact ID.
-                destroyDirectVisualNodes(oldNodeId, null)
-                if (nodes.length === 0) {
-                    pendingIndex = Math.max(
-                        0,
-                        Math.min(pendingNodes.length, pendingIndex - 1)
-                    )
-                    requestLayout()
-                    return true
-                }
-                // Replacements need deterministic positioning. If the exact
-                // delegate is absent, rebuild from the already-correct model.
-                scheduleRebuild(pendingNodes)
-                return true
-            }
-
-            var existing = items[visualIdx]
-            if (existing)
-                existing.destroy()
-            destroyDirectVisualNodes(oldNodeId, existing)
-            items.splice(visualIdx, 1)
-            for (var n = 0; n < nodes.length; n++) {
-                var obj = createNodeObject(nodes[n])
-                if (obj) {
-                    items.splice(visualIdx + n, 0, obj)
-                    updateNodeList(obj)
-                }
-            }
-            pendingIndex += nodes.length - 1
-            requestLayout()
-            return true
-        }
-
-        function replaceNodeInPendingTree(sourceNodes, nodeId, nodes) {
-            if (!sourceNodes)
-                return false
-            for (var i = 0; i < sourceNodes.length; i++) {
-                var node = sourceNodes[i]
-                if (node.id === nodeId) {
-                    spliceArray(sourceNodes, i, 1, nodes)
-                    return true
-                }
-                if (node.children && replaceNodeInPendingTree(node.children, nodeId, nodes))
-                    return true
-            }
-            return false
         }
 
         function requestLayout() {
@@ -1387,57 +1357,6 @@ Item {
             updatePlaceholder(localY)
         }
 
-        function updateMediaNode(itemId, title, duration, thumbSource) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if (child.nodeType === "media" && child.nodeId === itemId) {
-                    child.applyMediaPatch(title, duration, thumbSource)
-                    return true
-                }
-                if (child.bodyList && child.bodyList.updateMediaNode(
-                            itemId, title, duration, thumbSource)) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        function updateCloudNode(itemId, visible, active, progress, tooltip) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if (child.nodeType === "media" && child.nodeId === itemId) {
-                    child.applyCloudPatch(visible, active, progress, tooltip)
-                    return true
-                }
-                if (child.bodyList && child.bodyList.updateCloudNode(
-                            itemId, visible, active, progress, tooltip)) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        function updateImageFramingNode(itemId, framing) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if (child.nodeType === "media" && child.nodeId === itemId) {
-                    child.applyImageFramingPatch(framing)
-                    return true
-                }
-                if (child.bodyList && child.bodyList.updateImageFramingNode(
-                            itemId, framing)) {
-                    return true
-                }
-            }
-            return false
-        }
-
         function editMarkerNode(markerId) {
             for (var i = 0; i < items.length; i++) {
                 var child = items[i]
@@ -1453,37 +1372,6 @@ Item {
             return false
         }
 
-        function updateSectionCounts(counts) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if ((child.nodeType === "section" || child.nodeType === "subsection")
-                        && counts[child.nodeId] !== undefined) {
-                    child.applyItemCountPatch(counts[child.nodeId])
-                }
-                if (child.bodyList)
-                    child.bodyList.updateSectionCounts(counts)
-            }
-            updateSectionCountsInPendingTree(pendingNodes, counts)
-        }
-
-        function updateSectionCountsInPendingTree(sourceNodes, counts) {
-            if (!sourceNodes || !counts)
-                return
-            for (var i = 0; i < sourceNodes.length; i++) {
-                var node = sourceNodes[i]
-                if (!node)
-                    continue
-                if ((node.type === "section" || node.type === "subsection")
-                        && counts[node.id] !== undefined) {
-                    node.itemCount = counts[node.id]
-                }
-                if (node.children)
-                    updateSectionCountsInPendingTree(node.children, counts)
-            }
-        }
-
         Timer {
             id: layoutTimer
             interval: 0
@@ -1495,103 +1383,21 @@ Item {
         }
 
         Timer {
-            id: rebuildTimer
+            id: hydrationTimer
             interval: 0
             repeat: false
             onTriggered: {
-                if (listRoot.rebuildQueued) {
-                    listRoot.rebuildQueued = false
-                    listRoot.rebuildFromNodes(listRoot.pendingNodes)
+                if (listRoot.initialHydrationQueued) {
+                    listRoot.initialHydrationQueued = false
+                    listRoot.hydrateInitialNodes(listRoot.pendingNodes)
                     return
                 }
                 listRoot.continueHydration()
             }
         }
 
-        function updateSectionNode(nodeId, title, color, textColor, badgeBg, itemCount) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if ((child.nodeType === "section" || child.nodeType === "subsection")
-                        && child.nodeId === nodeId) {
-                    child.applySectionPatch(title, color, textColor, badgeBg, itemCount)
-                    return true
-                }
-                if (child.bodyList && child.bodyList.updateSectionNode(
-                        nodeId, title, color, textColor, badgeBg, itemCount)) {
-                    return true
-                }
-            }
-            return updateSectionNodeInPendingTree(
-                pendingNodes, nodeId, title, color, textColor, badgeBg, itemCount)
-        }
-
-        function updateSectionNodeInPendingTree(
-                sourceNodes, nodeId, title, color, textColor, badgeBg, itemCount) {
-            if (!sourceNodes)
-                return false
-            for (var i = 0; i < sourceNodes.length; i++) {
-                var node = sourceNodes[i]
-                if (!node)
-                    continue
-                if ((node.type === "section" || node.type === "subsection")
-                        && node.id === nodeId) {
-                    node.title = title
-                    node.color = color
-                    node.textColor = textColor
-                    node.badgeBg = badgeBg
-                    node.itemCount = itemCount
-                    return true
-                }
-                if (node.children && updateSectionNodeInPendingTree(
-                        node.children, nodeId, title, color, textColor, badgeBg, itemCount)) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        function updateSectionCollapse(nodeId, collapsedValue) {
-            for (var i = 0; i < items.length; i++) {
-                var child = items[i]
-                if (!child)
-                    continue
-                if ((child.nodeType === "section" || child.nodeType === "subsection")
-                        && child.nodeId === nodeId) {
-                    child.applySectionCollapsePatch(collapsedValue)
-                    return true
-                }
-                if (child.bodyList
-                        && child.bodyList.updateSectionCollapse(nodeId, collapsedValue)) {
-                    return true
-                }
-            }
-            return updateSectionCollapseInPendingTree(pendingNodes, nodeId, collapsedValue)
-        }
-
-        function updateSectionCollapseInPendingTree(sourceNodes, nodeId, collapsedValue) {
-            if (!sourceNodes)
-                return false
-            for (var i = 0; i < sourceNodes.length; i++) {
-                var node = sourceNodes[i]
-                if (!node)
-                    continue
-                if ((node.type === "section" || node.type === "subsection")
-                        && node.id === nodeId) {
-                    node.collapsed = collapsedValue
-                    return true
-                }
-                if (node.children && updateSectionCollapseInPendingTree(
-                        node.children, nodeId, collapsedValue)) {
-                    return true
-                }
-            }
-            return false
-        }
-
         Component.onDestruction: {
-            rebuildTimer.stop()
+            hydrationTimer.stop()
             finishHydration()
         }
     }
@@ -1604,6 +1410,8 @@ Item {
         property string nodeType: ""
         property var parentList: null
         property int depth: 0
+        property int presentationRevision: -1
+        property bool canDrag: node ? node.canDrag !== false : true
         property alias dragArea: dragMouse
         property bool dragStarted: false
         property bool suspendBehavior: false
@@ -1650,7 +1458,10 @@ Item {
 
         MouseArea {
             id: dragMouse
+            objectName: "dragMouse-" + draggable.nodeId
             anchors.fill: parent
+            enabled: draggable.canDrag
+            preventStealing: true
             hoverEnabled: true
             cursorShape: draggable.dragStarted
                          ? Qt.ClosedHandCursor
@@ -1700,6 +1511,7 @@ Item {
 
     component MediaCard: DraggableItem {
         id: mediaRoot
+        objectName: "mediaCard-" + nodeId
         nodeType: "media"
         height: 72
         property string displayTitle: node ? node.title : ""
@@ -1713,15 +1525,22 @@ Item {
         property var imageFraming: node ? node.imageFraming : null
         property string mediaType: node ? node.mediaType : "video"
         property bool hasCustomTrim: node ? (node.hasCustomTrim === true) : false
+        property string operationId: node ? node.operationId : ""
+        property string operationState: node ? node.operationState : "ready"
+        property real operationProgress: node ? node.operationProgress : -1
+        property string operationMessage: node ? node.operationMessage : ""
+        property bool operationCancellable: node ? node.operationCancellable === true : false
+        property bool operationRetryable: node ? node.operationRetryable === true : false
+        readonly property bool operationActive:
+            operationState === "queued" || operationState === "preparing"
+            || operationState === "copying" || operationState === "processing"
+            || operationState === "finalizing"
         property real framingAspectRatio: 16 / 9
         property real framingSourceAspectRatio: 0
 
         Component.onCompleted: {
             dragArea.parent = mediaDragZone
             dragArea.anchors.fill = mediaDragZone
-            root.applyPendingMediaPatch(mediaRoot)
-            root.applyPendingCloudPatch(mediaRoot)
-            root.applyPendingImageFramingPatch(mediaRoot)
             refreshFramingAspectRatio()
         }
 
@@ -1731,37 +1550,29 @@ Item {
             if (root.hasController) root.playlistController.projectItem(nodeId)
         }
 
-        function applyMediaPatch(title, duration, newThumbSource) {
-            displayTitle = title
-            displayDuration = duration
-            if (newThumbSource !== "" && newThumbSource !== thumbSource)
-                thumbSource = newThumbSource
-            if (node) {
-                node.title = title
-                node.duration = duration
-                if (newThumbSource !== "")
-                    node.thumbSource = newThumbSource
-            }
-        }
-
-        function applyCloudPatch(visible, active, progress, tooltip) {
-            cloudVisible = visible
-            cloudActive = active
-            cloudProgress = progress
-            cloudTooltip = tooltip
-            if (node) {
-                node.cloudVisible = visible
-                node.cloudActive = active
-                node.cloudProgress = progress
-                node.cloudTooltip = tooltip
-            }
-        }
-
-        function applyImageFramingPatch(record) {
-            imageFraming = record
-            if (node)
-                node.imageFraming = record
-            framingThumb.applyFraming(record)
+        function applySnapshot(nextNode) {
+            node = nextNode
+            displayTitle = nextNode.title || ""
+            displayDuration = nextNode.duration || ""
+            thumbSource = nextNode.thumbSource || ""
+            cloudVisible = nextNode.cloudVisible === true
+            cloudActive = nextNode.cloudActive === true
+            cloudProgress = nextNode.cloudProgress !== undefined
+                    ? nextNode.cloudProgress : -1
+            cloudTooltip = nextNode.cloudTooltip || ""
+            isMissing = nextNode.isMissing === true
+            imageFraming = nextNode.imageFraming || null
+            mediaType = nextNode.mediaType || "video"
+            hasCustomTrim = nextNode.hasCustomTrim === true
+            operationId = nextNode.operationId || ""
+            operationState = nextNode.operationState || "ready"
+            operationProgress = nextNode.operationProgress !== undefined
+                    ? nextNode.operationProgress : -1
+            operationMessage = nextNode.operationMessage || ""
+            operationCancellable = nextNode.operationCancellable === true
+            operationRetryable = nextNode.operationRetryable === true
+            framingThumb.applyFraming(imageFraming)
+            refreshFramingAspectRatio()
         }
 
         function refreshFramingAspectRatio() {
@@ -1789,8 +1600,9 @@ Item {
 
             MouseArea {
                 id: mediaCardHitArea
-                objectName: "mediaCardHitArea"
+                objectName: "mediaCardHitArea-" + mediaRoot.nodeId
                 anchors.fill: parent
+                enabled: !mediaRoot.operationActive
                 hoverEnabled: true
                 property bool nativePointerActive: false
                 cursorShape: root.playbackProtectionEnabled
@@ -1836,6 +1648,7 @@ Item {
                 // Drag handle
                 Item {
                     id: mediaDragZone
+                    objectName: "dragGrip-" + mediaRoot.nodeId
                     Layout.preferredWidth: 24
                     Layout.fillHeight: true
 
@@ -1891,7 +1704,9 @@ Item {
                         resetBackgroundColor: root.alphaColor(root.bg, 0.86)
                         resetForegroundColor: root.textPrimary
                         editable: !mediaRoot.isMissing
+                                  && !mediaRoot.operationActive
                         clickActionEnabled: !mediaRoot.isMissing
+                                            && !mediaRoot.operationActive
                                             && !root.playbackProtectionEnabled
                         interactionHint: qsTranslate(
                             "ImageFramingThumbnail",
@@ -1948,6 +1763,14 @@ Item {
                             root.iconHex(root.mediaToneColor(node ? node.mediaType : "video", false)))
                     }
 
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        width: 24
+                        height: 24
+                        running: mediaRoot.operationActive
+                        visible: running
+                    }
+
                     // Duration pill on thumbnail
                     Rectangle {
                         visible: mediaRoot.displayDuration !== ""
@@ -1997,19 +1820,29 @@ Item {
 
                     // Badge pill — normal type or missing warning
                     Rectangle {
-                        visible: mediaRoot.isMissing || (node && node.badge !== "")
+                        visible: mediaRoot.isMissing
+                                 || mediaRoot.operationMessage !== ""
+                                 || (node && node.badge !== "")
                         width: badgeText.implicitWidth + 10
                         height: 16
                         radius: 4
-                        color: root.mediaBadgeBg(node ? node.mediaType : "video", mediaRoot.isMissing)
+                        color: mediaRoot.operationState === "failed"
+                               ? root.dangerSubtle
+                               : root.mediaBadgeBg(node ? node.mediaType : "video",
+                                                   mediaRoot.isMissing)
 
                         Text {
                             id: badgeText
                             anchors.centerIn: parent
                             text: mediaRoot.isMissing
                                   ? "⚠ " + qsTranslate("_PlaylistEditView", "Offline / Syncing")
+                                  : mediaRoot.operationMessage !== ""
+                                    ? mediaRoot.operationMessage
                                   : (node ? node.badge : "")
-                            color: root.mediaToneColor(node ? node.mediaType : "video", mediaRoot.isMissing)
+                            color: mediaRoot.operationState === "failed"
+                                   ? root.danger
+                                   : root.mediaToneColor(node ? node.mediaType : "video",
+                                                         mediaRoot.isMissing)
                             font.pixelSize: 9
                             font.weight: Font.Bold
                             font.letterSpacing: 0.4
@@ -2031,7 +1864,9 @@ Item {
 
                         CloudDownloadButton {
                             objectName: "mediaDownloadButton"
-                            Layout.preferredWidth: 28
+                            Layout.preferredWidth:
+                                mediaRoot.operationCancellable
+                                || mediaRoot.operationRetryable ? 0 : 28
                             Layout.preferredHeight: 28
                             Layout.alignment: Qt.AlignVCenter
                             iconSource: root.picon("cloud", 14, root.iconHex(root.textMuted))
@@ -2039,8 +1874,10 @@ Item {
                             downloading: mediaRoot.cloudActive
                             progress: mediaRoot.cloudProgress
                             active: mediaRoot.cloudVisible
-                            enabled: mediaRoot.cloudVisible
-                            opacity: mediaRoot.cloudVisible ? 1.0 : 0.0
+                                    && !mediaRoot.operationCancellable
+                                    && !mediaRoot.operationRetryable
+                            enabled: active
+                            opacity: active ? 1.0 : 0.0
                             onPointerEntered: root.pointerEntered()
                             onPointerExited: root.pointerExited()
                             onClicked: if (root.hasController) root.playlistController.downloadItem(mediaRoot.nodeId)
@@ -2048,7 +1885,31 @@ Item {
                         }
 
                         HeaderButton {
-                            objectName: "protectedPlayButton"
+                            visible: mediaRoot.operationCancellable
+                            Layout.preferredWidth: visible ? 28 : 0
+                            Layout.preferredHeight: 28
+                            iconName: "close"
+                            iconSize: 12
+                            colorHex: root.iconHex(root.textMuted)
+                            toolTipText: qsTranslate("PlaylistTransferDialog", "Cancel")
+                            onClicked: if (root.hasController)
+                                root.playlistController.cancelOperation(mediaRoot.operationId)
+                        }
+
+                        HeaderButton {
+                            visible: mediaRoot.operationRetryable
+                            Layout.preferredWidth: visible ? 28 : 0
+                            Layout.preferredHeight: 28
+                            iconName: "refresh"
+                            iconSize: 12
+                            colorHex: root.iconHex(root.textMuted)
+                            toolTipText: qsTranslate("PlaylistTransferDialog", "Retry")
+                            onClicked: if (root.hasController)
+                                root.playlistController.retryOperation(mediaRoot.operationId)
+                        }
+
+                        HeaderButton {
+                            objectName: "protectedPlayButton-" + mediaRoot.nodeId
                             visible: root.playbackProtectionEnabled
                             Layout.preferredWidth: visible ? 28 : 0
                             Layout.preferredHeight: 28
@@ -2058,6 +1919,7 @@ Item {
                             colorHex: root.iconHex(root.accent)
                             accentButton: true
                             enabled: !mediaRoot.isMissing
+                                     && !mediaRoot.operationActive
                                      && !root.playbackProtectionLocked
                             toolTipText: mediaRoot.isMissing
                                          ? qsTranslate("_PlaylistEditView", "Media unavailable")
@@ -2072,6 +1934,7 @@ Item {
 
                         HeaderButton {
                             objectName: "mediaMoreButton"
+                            enabled: !mediaRoot.operationActive
                             iconName: "more"
                             iconSize: 13
                             colorHex: root.iconHex(root.textDim)
@@ -2124,6 +1987,39 @@ Item {
                     }
                 }
             }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                height: 2
+                width: mediaRoot.operationProgress < 0
+                       ? Math.max(32, parent.width * 0.28)
+                       : parent.width * Math.max(
+                             0,
+                             Math.min(1, mediaRoot.operationProgress)
+                         )
+                color: root.accent
+                visible: mediaRoot.operationActive
+                opacity: mediaRoot.operationProgress < 0 ? 0.45 : 1.0
+
+                SequentialAnimation on x {
+                    running: mediaRoot.operationActive
+                             && mediaRoot.operationProgress < 0
+                    loops: Animation.Infinite
+                    NumberAnimation {
+                        from: 0
+                        to: Math.max(0, mediaCard.width * 0.72)
+                        duration: 850
+                        easing.type: Easing.InOutCubic
+                    }
+                    NumberAnimation {
+                        from: Math.max(0, mediaCard.width * 0.72)
+                        to: 0
+                        duration: 850
+                        easing.type: Easing.InOutCubic
+                    }
+                }
+            }
         }
     }
 
@@ -2165,6 +2061,12 @@ Item {
             if (root.hasController)
                 root.playlistController.renameMarker(markerRoot.nodeId, displayText)
             committing = false
+        }
+
+        function applySnapshot(nextNode) {
+            node = nextNode
+            if (!editing)
+                displayText = nextNode.text || ""
         }
 
         RowLayout {
@@ -2273,6 +2175,7 @@ Item {
 
     component SectionCard: DraggableItem {
         id: sectionRoot
+        objectName: "sectionCard-" + nodeId
         nodeType: node && node.type === "subsection" ? "subsection" : "section"
         height: card.height
         property alias bodyList: childList
@@ -2297,31 +2200,15 @@ Item {
                 root.playlistController.toggleCollapse(nodeId)
         }
 
-        function applyItemCountPatch(count) {
-            displayItemCount = count
-            if (node)
-                node.itemCount = count
-        }
-
-        function applySectionPatch(title, color, textColor, badgeBg, itemCount) {
-            displayTitle = title
-            displayColor = color
-            displayTextColor = textColor
-            displayBadgeBg = badgeBg
-            displayItemCount = itemCount
-            if (node) {
-                node.title = title
-                node.color = color
-                node.textColor = textColor
-                node.badgeBg = badgeBg
-                node.itemCount = itemCount
-            }
-        }
-
-        function applySectionCollapsePatch(collapsedValue) {
-            collapsed = collapsedValue
-            if (node)
-                node.collapsed = collapsedValue
+        function applySnapshot(nextNode) {
+            node = nextNode
+            nodeType = nextNode.type
+            displayTitle = nextNode.title || ""
+            displayColor = nextNode.color || root.accent
+            displayTextColor = nextNode.textColor || root.textPrimary
+            displayBadgeBg = nextNode.badgeBg || root.hover
+            displayItemCount = nextNode.itemCount || 0
+            collapsed = nextNode.collapsed === true
         }
 
         onClicked: sectionRoot.toggleCollapsed()
@@ -2373,8 +2260,9 @@ Item {
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
 
-                    MouseArea {
-                        id: headerMa
+                        MouseArea {
+                            id: headerMa
+                            objectName: "sectionHeaderHitArea-" + sectionRoot.nodeId
                         anchors.fill: parent
                         hoverEnabled: true
                         onEntered: root.pointerEntered()
@@ -2532,7 +2420,7 @@ Item {
                     Component.onCompleted: {
                         pendingNodes = node ? node.children : []
                         if (!collapsed)
-                            scheduleRebuild(pendingNodes)
+                            scheduleInitialHydration(pendingNodes)
                     }
                 }
 

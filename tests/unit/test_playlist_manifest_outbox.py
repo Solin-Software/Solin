@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from concurrent.futures import Future
 from pathlib import Path
+from types import SimpleNamespace
 
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest.manifest import MANIFEST_FILE, ManifestWriteError
 from solin.widgets.playlist.widget import PlaylistEditView
 
@@ -58,6 +60,9 @@ def _outbox(store: _Store):
     controller._manifest_save_executor = _ImmediateExecutor()
     controller._manifest_save_timer = _Timer()
     controller._watched_folder_playlist_store = store
+    controller._media_tree_runtime = SimpleNamespace(
+        resource_lanes=ResourceLaneRegistry()
+    )
     controller._arm_manifest_save_timer = (
         lambda: PlaylistEditView._arm_manifest_save_timer(controller)
     )
@@ -200,7 +205,7 @@ def test_reopening_folder_uses_pending_snapshot_instead_of_stale_disk_state() ->
     controller._thumb_idx_to_source = {}
     controller._thumb_idx_to_intent = {}
     controller._thumb_pending_item_ids = set()
-    controller._rebuild_list = lambda: None
+    controller._reconcile_playlist = lambda: None
     controller._start_wf_sync = lambda: None
     store.load_playlist = lambda _path: (_ for _ in ()).throw(
         AssertionError("reentry must use the pending outbox snapshot")
