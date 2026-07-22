@@ -3,7 +3,41 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Iterable
+
+
+class MediaInfoFailureKind(str, Enum):
+    """Stable failure categories used by the extraction retry policy."""
+
+    TRANSIENT = "transient"
+    PERMANENT = "permanent"
+    FORMAT = "format"
+
+
+@dataclass(frozen=True, slots=True)
+class MediaInfoFailure:
+    """An extraction failure, distinct from an authoritative empty result."""
+
+    kind: MediaInfoFailureKind
+    message: str = ""
+    code: str = ""
+
+
+def retry_delay_seconds(failure: MediaInfoFailure, attempt: int) -> float | None:
+    """Return capped backoff while a transient request remains owned."""
+
+    if attempt < 1:
+        raise ValueError("attempt must be positive")
+    if failure.kind is not MediaInfoFailureKind.TRANSIENT:
+        return None
+    schedule = (1.0, 3.0, 10.0, 30.0, 90.0)
+    if attempt <= len(schedule):
+        return schedule[attempt - 1]
+    # A transient cloud lock/hydration can outlive the fast retry window. Keep
+    # a low-frequency retry alive until the owner invalidates the request, so
+    # the UI eventually receives the thumbnail without a rebuild/re-entry.
+    return 300.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +54,8 @@ class MediaInfoJob:
     index: int
     url: str
     media_type: str
+    require_thumbnail: bool = True
+    require_title: bool = True
     require_duration: bool = False
 
 
@@ -57,6 +93,8 @@ class MediaInfoScheduler:
         url: str,
         media_type: str,
         *,
+        require_thumbnail: bool = True,
+        require_title: bool = True,
         require_duration: bool = False,
     ) -> MediaInfoJob:
         active = self.active.get(index)
@@ -72,6 +110,8 @@ class MediaInfoScheduler:
             index=index,
             url=url,
             media_type=media_type,
+            require_thumbnail=require_thumbnail,
+            require_title=require_title,
             require_duration=require_duration,
         )
         self.pending.append(job)

@@ -18,6 +18,7 @@ _APP = QCoreApplication.instance() or QCoreApplication([])
 
 class _Queue(QObject):
     info_ready = Signal(int, object, str)
+    request_failed = Signal(int, object)
 
     def __init__(self, parent: QObject) -> None:
         super().__init__(parent)

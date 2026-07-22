@@ -205,11 +205,16 @@ class PlaylistEditModel(QAbstractListModel):
     def rebuild(self, pl: dict) -> None:
         """Full rebuild from playlist dict."""
         self.beginResetModel()
+        self._replace_playlist_data(pl)
+        self.endResetModel()
+
+    def _replace_playlist_data(self, pl: dict) -> None:
+        """Refresh backing entries without prescribing a visual update."""
+
         self._pl = pl
         self.invalidate_tree_data_cache()
         self._entries = self._build_entries(pl)
         self._compute_card_properties()
-        self.endResetModel()
 
     def invalidate_tree_data_cache(self) -> None:
         self._tree_data_cache = None
@@ -607,7 +612,14 @@ class PlaylistEditModel(QAbstractListModel):
         )
         return marker.get("subsection_id", "") if marker else ""
 
-    def move_node(self, node_id: str, target_list_id: str, insert_index: int) -> bool:
+    def move_node(
+        self,
+        node_id: str,
+        target_list_id: str,
+        insert_index: int,
+        *,
+        publish_reset: bool = True,
+    ) -> bool:
         """Move a tree node, then flatten back into playlist storage."""
         if not self._pl:
             return False
@@ -632,7 +644,13 @@ class PlaylistEditModel(QAbstractListModel):
             return False
 
         self._flatten_storage_tree(tree)
-        self.rebuild(self._pl)
+        if publish_reset:
+            self.rebuild(self._pl)
+        else:
+            # PlaylistTreeView moves the existing QML object itself. Keep the
+            # authoritative backing entries aligned without emitting a second,
+            # redundant reset through the unused flat model surface.
+            self._replace_playlist_data(self._pl)
         return True
 
     def flat_insert_index_for_list(self, target_list_id: str, insert_index: int) -> int:

@@ -400,7 +400,12 @@ class PlaylistEditBridge(QObject):
     def moveNode(self, node_id: str, target_list_id: str, insert_index: int) -> bool:
         if not self._model:
             return False
-        ok = self._model.move_node(node_id, target_list_id, insert_index)
+        ok = self._model.move_node(
+            node_id,
+            target_list_id,
+            insert_index,
+            publish_reset=False,
+        )
         if ok:
             self.emit_section_counts_changed()
             self.dragFinished.emit()
