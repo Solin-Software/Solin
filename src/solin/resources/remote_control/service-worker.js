@@ -1,4 +1,4 @@
-const CACHE_NAME = "solin-remote-shell-v15";
+const CACHE_NAME = "solin-remote-shell-v16";
 const SHELL_RESOURCES = [
   "./",
   "./index.html",

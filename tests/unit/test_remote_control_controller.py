@@ -266,7 +266,7 @@ def test_catalog_revision_stays_aligned_when_initial_public_catalog_is_empty(
 def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     controller._catalog = SimpleNamespace(
-        snapshot=lambda: (_ for _ in ()).throw(ValueError("duplicate node"))
+        build=lambda: (_ for _ in ()).throw(ValueError("duplicate node"))
     )
 
     controller._refresh_catalog()
@@ -279,13 +279,13 @@ def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> No
     controller, *_ = _controller(tmp_path, [])
     caller_thread = threading.get_ident()
     worker_threads: list[int] = []
-    original_snapshot = controller._catalog.snapshot
+    original_build = controller._catalog.build
 
-    def snapshot():
+    def build():
         worker_threads.append(threading.get_ident())
-        return original_snapshot()
+        return original_build()
 
-    controller._catalog.snapshot = snapshot
+    controller._catalog.build = build
     controller._schedule_catalog_refresh()
     controller._catalog_refresh_timer.stop()
     controller._start_catalog_refresh()
@@ -317,12 +317,166 @@ def test_catalog_invalidation_during_scan_keeps_single_debounced_followup(
     controller._catalog_refresh_pending = False
     controller._catalog_refresh_timer.start()
 
-    controller._on_catalog_snapshot_completed(1, None, None)
+    controller._on_catalog_build_completed(1, None, None)
 
     assert controller._catalog_refresh_timer.isActive()
     assert scheduled == []
     controller._catalog_refresh_timer.stop()
     controller._catalog_refresh_inflight = None
+    controller.stop()
+
+
+def test_superseded_catalog_build_cannot_replace_the_published_private_view(
+    tmp_path: Path,
+) -> None:
+    first_path = tmp_path / "first.mp4"
+    second_path = tmp_path / "second.mp4"
+    first_path.write_bytes(b"first")
+    second_path.write_bytes(b"second")
+    playlist = {
+        "id": "playlist-1",
+        "name": "Program",
+        "items": [
+            {
+                "id": "media-1",
+                "title": "Opening",
+                "type": "video",
+                "url": str(first_path),
+            }
+        ],
+    }
+    controller, *_rest, media_projection = _controller(tmp_path, [playlist])
+    controller._refresh_catalog()
+    published_revision = controller.state.catalog_revision
+    playlist["items"][0]["url"] = str(second_path)
+    superseded = controller._catalog.build()
+    controller._catalog_refresh_generation = 2
+    controller._catalog_refresh_inflight = (1, object())
+    controller._catalog_refresh_timer.start()
+
+    controller._on_catalog_build_completed(1, superseded, None)
+
+    command = PlayCommand(
+        str(uuid.uuid4()),
+        ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
+        published_revision,
+    )
+    assert controller._execute_command(command) is None
+    assert media_projection.projected is not None
+    assert media_projection.projected[0][0]["url"] == str(first_path)
+    assert controller.state.catalog_revision == published_revision
+    controller._catalog_refresh_timer.stop()
+    controller.stop()
+
+
+def test_synchronous_catalog_refresh_supersedes_an_inflight_build(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    first_path = tmp_path / "first.mp4"
+    second_path = tmp_path / "second.mp4"
+    third_path = tmp_path / "third.mp4"
+    for path in (first_path, second_path, third_path):
+        path.write_bytes(path.stem.encode())
+    playlist = {
+        "id": "playlist-1",
+        "name": "Program",
+        "items": [
+            {
+                "id": "media-1",
+                "title": "Opening",
+                "type": "video",
+                "url": str(first_path),
+            }
+        ],
+    }
+    controller, *_rest, media_projection = _controller(tmp_path, [playlist])
+    controller._refresh_catalog()
+
+    playlist["items"][0]["url"] = str(second_path)
+    superseded = controller._catalog.build()
+    inflight_generation = controller._catalog_refresh_generation
+    controller._catalog_refresh_inflight = (inflight_generation, object())
+    scheduled = []
+    monkeypatch.setattr(
+        "solin.controllers.remote_control_controller.QTimer.singleShot",
+        lambda delay, callback: scheduled.append((delay, callback)),
+    )
+
+    playlist["items"][0]["url"] = str(third_path)
+    controller._refresh_catalog()
+    published_revision = controller.state.catalog_revision
+    controller._on_catalog_build_completed(inflight_generation, superseded, None)
+
+    command = PlayCommand(
+        str(uuid.uuid4()),
+        ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
+        published_revision,
+    )
+    assert controller._execute_command(command) is None
+    assert media_projection.projected is not None
+    assert media_projection.projected[0][0]["url"] == str(third_path)
+    assert controller.state.catalog_revision == published_revision
+    assert len(scheduled) == 1
+    controller.stop()
+
+
+def test_catalog_commit_is_atomic_for_public_and_private_readers(tmp_path: Path) -> None:
+    media_path = tmp_path / "video.mp4"
+    media_path.write_bytes(b"video")
+    playlist = {
+        "id": "playlist-1",
+        "name": "Program",
+        "items": [
+            {
+                "id": "media-1",
+                "title": "Opening",
+                "type": "video",
+                "url": str(media_path),
+            }
+        ],
+    }
+    controller, *_ = _controller(tmp_path, [playlist])
+    build = controller._catalog.build()
+    public_published = threading.Event()
+    allow_private_publish = threading.Event()
+    reader_completed = threading.Event()
+    original_publish = controller._catalog.publish
+
+    def paused_publish(candidate, *, revision=None):
+        public_published.set()
+        assert allow_private_publish.wait(timeout=2)
+        return original_publish(candidate, revision=revision)
+
+    controller._catalog.publish = paused_publish
+    commit_thread = threading.Thread(target=controller._commit_catalog_build, args=(build,))
+    commit_thread.start()
+    assert public_published.wait(timeout=2)
+
+    observed: list[tuple[int, str]] = []
+
+    def read_published_catalog() -> None:
+        revision = controller.state.catalog_revision
+        resolved = controller._catalog.resolve_play(
+            PlayCommand(
+                str(uuid.uuid4()),
+                ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
+                revision,
+            )
+        )
+        observed.append((revision, resolved.current_item["url"]))
+        reader_completed.set()
+
+    reader_thread = threading.Thread(target=read_published_catalog)
+    reader_thread.start()
+    assert not reader_completed.wait(timeout=0.05)
+    allow_private_publish.set()
+    commit_thread.join(timeout=2)
+    reader_thread.join(timeout=2)
+
+    assert not commit_thread.is_alive()
+    assert not reader_thread.is_alive()
+    assert observed == [(1, str(media_path))]
     controller.stop()
 
 
@@ -465,6 +619,58 @@ def test_play_resolves_private_media_and_annotates_the_projection_queue(
     assert index == 0
     assert queue[0]["url"] == str(media_path)
     assert queue[0]["origin_kind"] == "playlist"
+    controller.stop()
+
+
+def test_play_uses_the_exact_private_catalog_published_to_remote_clients(
+    tmp_path: Path,
+) -> None:
+    first_path = tmp_path / "first.mp4"
+    second_path = tmp_path / "second.mp4"
+    first_path.write_bytes(b"first")
+    second_path.write_bytes(b"second")
+    playlist = {
+        "id": "playlist-1",
+        "name": "Program",
+        "items": [
+            {
+                "id": "media-1",
+                "title": "Opening",
+                "type": "video",
+                "url": str(first_path),
+            }
+        ],
+    }
+    controller, *_rest, media_projection = _controller(tmp_path, [playlist])
+    controller._refresh_catalog()
+    published_revision = controller.state.catalog_revision
+    playlist["items"][0]["url"] = str(second_path)
+    command = PlayCommand(
+        str(uuid.uuid4()),
+        ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
+        published_revision,
+    )
+
+    error = controller._execute_command(command)
+
+    assert error is None
+    assert media_projection.projected is not None
+    assert media_projection.projected[0][0]["url"] == str(first_path)
+    assert controller.state.catalog_revision == published_revision
+
+    controller._refresh_catalog()
+    assert controller.state.catalog_revision == published_revision + 1
+    stale_error = controller._execute_command(command)
+    assert stale_error is not None
+    assert stale_error.code is CommandErrorCode.CATALOG_STALE
+
+    refreshed_command = PlayCommand(
+        str(uuid.uuid4()),
+        command.origin,
+        controller.state.catalog_revision,
+    )
+    assert controller._execute_command(refreshed_command) is None
+    assert media_projection.projected[0][0]["url"] == str(second_path)
     controller.stop()
 
 

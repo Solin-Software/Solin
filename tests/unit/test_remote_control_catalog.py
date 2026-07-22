@@ -163,8 +163,11 @@ def test_local_media_resolution_stays_private_and_tracks_catalog_epoch(
     assert str(first) not in json.dumps(snapshot.to_dict())
 
     playlist["items"][0]["url"] = str(second)
-    assert catalog.resolve_local_media(origin) is None
-    catalog.snapshot()
+    still_published = catalog.resolve_local_media(origin)
+    assert still_published is not None
+    assert still_published.location == str(first)
+    refreshed = catalog.snapshot()
+    assert refreshed.catalog_revision == snapshot.catalog_revision + 1
     resolved = catalog.resolve_local_media(origin)
     assert resolved is not None
     assert resolved.location == str(second)
@@ -348,7 +351,7 @@ def test_playlist_resolution_returns_an_annotated_copy_only_inside_desktop() -> 
     assert playlist["items"][2]["title"] == "Song"
 
 
-def test_private_playlist_reference_change_invalidates_catalog_revision() -> None:
+def test_private_playlist_reference_change_is_committed_before_revision_advances() -> None:
     playlist = _playlist()
     source = _PlaylistSource([playlist])
     catalog = RemoteCatalog(source, [])
@@ -361,11 +364,45 @@ def test_private_playlist_reference_change_invalidates_catalog_revision() -> Non
     )
     playlist["items"][2]["url"] = "C:/private/replaced.mp3"
 
+    resolved_before_publish = catalog.resolve_play(command)
+    assert resolved_before_publish.current_item["url"] == "C:/private/song.mp3"
+
+    refreshed = catalog.snapshot()
+    assert refreshed.catalog_revision == snapshot.catalog_revision + 1
     with pytest.raises(CatalogResolutionError) as exc_info:
         catalog.resolve_play(command)
 
     assert exc_info.value.code is CatalogResolutionCode.STALE_CATALOG
-    assert catalog.snapshot().catalog_revision == snapshot.catalog_revision + 1
+    resolved_after_publish = catalog.resolve_play(
+        _play_command(
+            ProjectionSource.PLAYLIST,
+            "playlist-1",
+            "song-audio",
+            refreshed.catalog_revision,
+        )
+    )
+    assert resolved_after_publish.current_item["url"] == "C:/private/replaced.mp3"
+
+
+def test_unpublished_catalog_build_does_not_change_resolution_or_revision() -> None:
+    playlist = _playlist()
+    catalog = RemoteCatalog(_PlaylistSource([playlist]), [])
+    published = catalog.snapshot()
+    playlist["items"][2]["url"] = "C:/private/replaced.mp3"
+
+    superseded_build = catalog.build()
+    command = _play_command(
+        ProjectionSource.PLAYLIST,
+        "playlist-1",
+        "song-audio",
+        published.catalog_revision,
+    )
+
+    resolved = catalog.resolve_play(command)
+
+    assert superseded_build.fingerprint
+    assert resolved.current_item["url"] == "C:/private/song.mp3"
+    assert catalog.snapshot().catalog_revision == published.catalog_revision + 1
 
 
 def test_meeting_catalog_and_resolution_keep_media_ref_private() -> None:

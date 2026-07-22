@@ -22,6 +22,7 @@ from ..core.media.formats import MediaKind
 from ..core.meetings.thumbnails import meeting_thumb_storage_id
 from ..core.media.thumbnail_identity import thumbnail_storage_id
 from ..core.remote_control.catalog import (
+    CatalogBuild,
     CatalogResolutionCode,
     CatalogResolutionError,
     MediaAvailability,
@@ -176,12 +177,15 @@ class RemoteControlController(QObject):
     session_inventory_reported = Signal(object)
     runtime_status_reported = Signal(bool, bool, str)
     session_revocation_reported = Signal(str, bool)
-    _catalog_snapshot_completed = Signal(int, object, object)
+    _catalog_build_completed = Signal(int, object, object)
 
     def __init__(self, dependencies: RemoteControlDependencies, parent: QObject) -> None:
         super().__init__(parent)
         self._dependencies = dependencies
-        self._state = RemoteControlStateStore()
+        self._catalog_publication_lock = threading.RLock()
+        self._state = RemoteControlStateStore(
+            publication_lock=self._catalog_publication_lock,
+        )
         self._sessions = InMemorySessionStore()
         self._rate_limiter = LoginRateLimiter()
         self._tls_store = TLSCertificateStore(
@@ -209,6 +213,7 @@ class RemoteControlController(QObject):
             availability_resolver=self._media_availability,
             thumbnail_id_resolver=self._thumbnail_id,
             meeting_group_title_resolver=display_meeting_section_title,
+            publication_lock=self._catalog_publication_lock,
         )
         self._catalog_refresh_executor = ThreadPoolExecutor(
             max_workers=1,
@@ -222,9 +227,7 @@ class RemoteControlController(QObject):
         self._catalog_refresh_timer.setSingleShot(True)
         self._catalog_refresh_timer.setInterval(750)
         self._catalog_refresh_timer.timeout.connect(self._start_catalog_refresh)
-        self._catalog_snapshot_completed.connect(
-            self._on_catalog_snapshot_completed
-        )
+        self._catalog_build_completed.connect(self._on_catalog_build_completed)
         self._playback_timer = QTimer(self)
         self._playback_timer.setSingleShot(True)
         self._playback_timer.setInterval(160)
@@ -512,12 +515,15 @@ class RemoteControlController(QObject):
     def _refresh_catalog(self) -> None:
         """Synchronously refresh for startup and explicit local operations."""
 
+        self._catalog_refresh_generation += 1
+        self._catalog_refresh_pending = False
+        self._catalog_refresh_timer.stop()
         try:
-            snapshot = self._catalog.snapshot()
+            build = self._catalog.build()
         except (CatalogResolutionError, TypeError, ValueError):
             log.warning("Could not refresh remote-control catalog", exc_info=True)
             return
-        self._apply_catalog_snapshot(snapshot)
+        self._commit_catalog_build(build)
 
     @Slot()
     def _schedule_catalog_refresh(self) -> None:
@@ -537,40 +543,38 @@ class RemoteControlController(QObject):
             return
         self._catalog_refresh_pending = False
         generation = self._catalog_refresh_generation
-        future = self._catalog_refresh_executor.submit(self._catalog.snapshot)
+        future = self._catalog_refresh_executor.submit(self._catalog.build)
         self._catalog_refresh_inflight = (generation, future)
         future.add_done_callback(
-            lambda completed, current_generation=generation: (
-                self._emit_catalog_snapshot_completed(
-                    current_generation,
-                    completed,
-                )
+            lambda completed, current_generation=generation: self._emit_catalog_build_completed(
+                current_generation,
+                completed,
             )
         )
 
-    def _emit_catalog_snapshot_completed(
+    def _emit_catalog_build_completed(
         self,
         generation: int,
         future: Future[Any],
     ) -> None:
         try:
-            snapshot = future.result()
+            build = future.result()
         except BaseException as error:  # noqa: BLE001 - worker boundary
             try:
-                self._catalog_snapshot_completed.emit(generation, None, error)
+                self._catalog_build_completed.emit(generation, None, error)
             except RuntimeError:
                 pass
         else:
             try:
-                self._catalog_snapshot_completed.emit(generation, snapshot, None)
+                self._catalog_build_completed.emit(generation, build, None)
             except RuntimeError:
                 pass
 
     @Slot(int, object, object)
-    def _on_catalog_snapshot_completed(
+    def _on_catalog_build_completed(
         self,
         generation: int,
-        snapshot: object,
+        build: object,
         error: BaseException | None,
     ) -> None:
         inflight = self._catalog_refresh_inflight
@@ -589,8 +593,8 @@ class RemoteControlController(QObject):
                     "Could not refresh remote-control catalog: %s",
                     error,
                 )
-        elif not stale and snapshot is not None:
-            self._apply_catalog_snapshot(snapshot)
+        elif not stale and isinstance(build, CatalogBuild):
+            self._commit_catalog_build(build)
 
         if self._catalog_refresh_pending or stale:
             self._catalog_refresh_pending = False
@@ -598,13 +602,22 @@ class RemoteControlController(QObject):
                 return
             QTimer.singleShot(0, self._start_catalog_refresh)
 
-    def _apply_catalog_snapshot(self, snapshot: Any) -> None:
-        previous_revision = self._state.catalog_revision
-        self._state.update_catalog(
-            snapshot.collections,
-            change_token=snapshot.catalog_revision,
-        )
-        if self._state.catalog_revision != previous_revision:
+    def _commit_catalog_build(self, build: CatalogBuild) -> None:
+        """Commit public and private catalog representations at one revision."""
+
+        with self._catalog_publication_lock:
+            previous_revision = self._state.catalog_revision
+            published = self._state.update_catalog(
+                build.collections,
+                change_token=build.fingerprint,
+            )
+            private_snapshot = self._catalog.publish(
+                build,
+                revision=published.catalog_revision,
+            )
+            if private_snapshot != published:
+                raise RuntimeError("Public and private catalog snapshots diverged")
+        if published.catalog_revision != previous_revision:
             self._publish_snapshot()
 
     @Slot(str)
@@ -1088,13 +1101,16 @@ class RemoteControlController(QObject):
         expected_catalog_revision: int,
         request_key: ThumbnailRequestKey,
     ) -> bytes | None:
-        target = self._thumbnail_target(source, collection_id, node_id)
-        if target is None:
-            return None
-        origin, store, storage_id = target
-        media = self._catalog.resolve_local_media(origin)
-        if media is None:
-            return None
+        with self._catalog_publication_lock:
+            if self._state.catalog_revision != expected_catalog_revision:
+                return None
+            target = self._thumbnail_target(source, collection_id, node_id)
+            if target is None:
+                return None
+            origin, store, storage_id = target
+            media = self._catalog.resolve_local_media(origin)
+            if media is None:
+                return None
         if media.extraction_kind is MediaKind.IMAGE and not media.is_remote:
             data = await asyncio.to_thread(
                 render_local_image_thumbnail,

@@ -360,38 +360,82 @@ function setVolume(value) {
 async function sendCommand(fields) {
   const { type } = fields;
   if (store.state.connection !== "online" || store.state.pendingCommands.has(type)) return;
-  const command = { commandId: newCommandId(), ...fields };
   setCommandPending(type, true);
   try {
-    const result = await postCommandWithAuthenticationRecovery(command);
-    if (result === null) return;
-    if (!result.ok) {
-      const remoteError = result.error ?? {};
-      throw new ApiError(remoteError.message || t("command.notCompleted"), {
-        code: remoteError.code || "failed",
-        retryable: Boolean(remoteError.retryable),
-      });
-    }
+    await executeCommandWithStateRecovery(fields);
   } catch (error) {
     if (isUnauthorized(error)) {
       showLogin({ expired: true });
       return;
     }
-    const code = error instanceof ApiError ? error.code : "failed";
-    if (code === "catalog_stale" || code === "playback_stale") {
-      showToast(t("command.stateChanged"), "info");
-      await recover();
-    } else if (code === "blocked") {
-      showToast(t("command.protected"), "error");
-    } else if (code === "unavailable" || code === "not_found") {
-      showToast(t("command.unavailable"), "error");
-      await recover();
-    } else {
-      showToast(t("command.sendFailed"), "error");
-    }
+    showToast(t("command.sendFailed"), "error");
   } finally {
     setCommandPending(type, false);
   }
+}
+
+async function executeCommandWithStateRecovery(initialFields) {
+  let fields = initialFields;
+  let retriedPlay = false;
+  while (true) {
+    try {
+      const command = { commandId: newCommandId(), ...fields };
+      const result = await postCommandWithAuthenticationRecovery(command);
+      if (result === null) return;
+      if (!result.ok) {
+        const remoteError = result.error ?? {};
+        throw new ApiError(remoteError.message || t("command.notCompleted"), {
+          code: remoteError.code || "failed",
+          retryable: Boolean(remoteError.retryable),
+        });
+      }
+      return;
+    } catch (error) {
+      if (isUnauthorized(error)) throw error;
+      const code = error instanceof ApiError ? error.code : "failed";
+      if (code === "catalog_stale" || code === "playback_stale") {
+        const recovered = await recover();
+        const refreshed = refreshedPlayCommand(fields);
+        if (code === "catalog_stale" && !retriedPlay && recovered && refreshed) {
+          fields = refreshed;
+          retriedPlay = true;
+          continue;
+        }
+        showToast(t("command.stateChanged"), "info");
+      } else if (code === "blocked") {
+        showToast(t("command.protected"), "error");
+      } else if (code === "unavailable" || code === "not_found") {
+        showToast(t("command.unavailable"), "error");
+        await recover();
+      } else {
+        showToast(t("command.sendFailed"), "error");
+      }
+      return;
+    }
+  }
+}
+
+function refreshedPlayCommand(fields) {
+  if (fields.type !== "play" || !fields.origin) return null;
+  const { source, collectionId, nodeId } = fields.origin;
+  const collection = store.state.catalog.collections.find(
+    (candidate) => candidate.id === collectionId && candidate.kind === source,
+  );
+  const node = findCatalogNode(collection?.nodes ?? [], nodeId);
+  if (!node || node.kind !== "media" || !node.available) return null;
+  return {
+    ...fields,
+    catalogRevision: store.state.catalog.catalogRevision,
+  };
+}
+
+function findCatalogNode(nodes, nodeId) {
+  for (const node of nodes) {
+    if (node.id === nodeId) return node;
+    const found = findCatalogNode(node.children ?? [], nodeId);
+    if (found) return found;
+  }
+  return null;
 }
 
 async function postCommandWithAuthenticationRecovery(command) {
