@@ -509,7 +509,13 @@ class RemoteControlController(QObject):
         dependencies.settings_widget.remote_control_credentials_changed.connect(
             self.credentials_changed
         )
-        dependencies.settings_widget.watched_folder_changed.connect(self.catalog_invalidated.emit)
+        dependencies.settings_widget.watched_folder_changed.connect(self._on_watched_folder_changed)
+
+    @Slot(str)
+    def _on_watched_folder_changed(self, _path: str) -> None:
+        """Invalidate the remote catalog without forwarding the path payload."""
+
+        self.catalog_invalidated.emit()
 
     @Slot()
     def _refresh_catalog(self) -> None:

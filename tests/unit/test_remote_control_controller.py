@@ -275,6 +275,18 @@ def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path)
     controller.stop()
 
 
+def test_clearing_watched_folder_invalidates_remote_catalog(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    initial_generation = controller._catalog_refresh_generation
+
+    controller._dependencies.settings_widget.watched_folder_changed.emit("")
+
+    assert controller._catalog_refresh_generation == initial_generation + 1
+    assert controller._catalog_refresh_timer.isActive()
+    controller._catalog_refresh_timer.stop()
+    controller.stop()
+
+
 def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     caller_thread = threading.get_ident()
