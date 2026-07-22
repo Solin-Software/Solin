@@ -202,10 +202,7 @@ def test_remote_title_only_failure_retries_without_qmedia_stream(monkeypatch):
     assert len(scheduled) == 1
 
 
-def test_local_audio_invalid_embedded_image_is_not_cached_as_absent(
-    monkeypatch,
-    tmp_path,
-):
+def test_local_audio_invalid_embedded_image_is_not_reported_as_absent(monkeypatch):
     class _DecodeFailurePixmap:
         @staticmethod
         def loadFromData(_data):  # noqa: N802 - Qt-style test double
@@ -216,11 +213,33 @@ def test_local_audio_invalid_embedded_image_is_not_cached_as_absent(
             return True
 
     monkeypatch.setattr(media_info_module, "QPixmap", _DecodeFailurePixmap)
+    extractor = media_info_module.LocalAudioInfoExtractor(
+        10,
+        "cloud-backed.mp3",
+        _NoRemoteWorkerPool(),
+    )
+    ready = []
+    failed = []
+    extractor.info_ready.connect(lambda *args: ready.append(args))
+    extractor.thumbnail_failed.connect(lambda *args: failed.append(args))
+
+    extractor._deliver_worker_result(b"not-a-decodable-image", "")
+
+    assert ready == []
+    assert len(failed) == 1
+    assert failed[0][1].kind is MediaInfoFailureKind.FORMAT
+    assert media_info_module._EXTRACTOR_FACTORIES[(False, "audio")] is (
+        media_info_module._local_audio_factory
+    )
+    extractor.cancel()
+
+
+def test_local_audio_metadata_read_is_deferred_to_worker(monkeypatch, tmp_path):
     extractor = _ManualExtractor()
     monkeypatch.setattr(
         media_info_module,
-        "_audio_info_from_file",
-        lambda _path: (b"not-a-decodable-image", ""),
+        "_read_audio_info_from_file",
+        lambda _path: pytest.fail("audio was read on the Qt thread"),
     )
     monkeypatch.setattr(
         media_info_module,
@@ -228,21 +247,37 @@ def test_local_audio_invalid_embedded_image_is_not_cached_as_absent(
         lambda *_args: extractor,
     )
     queue = _media_info_queue(tmp_path)
-    ready = []
+
+    queue.request(10, str(tmp_path / "cloud-backed.mp3"), "audio")
+
+    assert queue._extractors[10] is extractor
+    queue.shutdown()
+
+
+def test_local_audio_without_cover_finishes_as_authoritative_absence():
+    finished = []
     failed = []
-    queue.info_ready.connect(lambda *args: ready.append(args))
-    queue.request_failed.connect(lambda *args: failed.append(args))
-
-    queue.request(10, str(tmp_path / "audio.mp3"), "audio")
-    extractor.info_ready.emit(10, _NullPixmap(), "")
-
-    assert ready == []
-    assert len(failed) == 1
-    assert failed[0][1].kind is MediaInfoFailureKind.FORMAT
-    _image_path, metadata_path = queue._get_cache_paths(
-        str(tmp_path / "audio.mp3")
+    source = SimpleNamespace(
+        _done=False,
+        _require_thumbnail=True,
+        _metadata_pixmap=media_info_module.QPixmap(),
+        _metadata_title="",
+        _metadata_image_failed=False,
+        _finish=lambda *args: finished.append(args),
+        _on_player_failed=lambda *args: failed.append(args),
     )
-    assert not Path(metadata_path).exists()
+
+    media_info_module._LocalAudioMetaThenPlayer._on_player_ready(
+        source,
+        10,
+        media_info_module.QPixmap(),
+        "",
+    )
+
+    assert len(finished) == 1
+    assert finished[0][0] == 10
+    assert finished[0][1].isNull()
+    assert failed == []
 
 
 def test_legacy_negative_cache_is_not_treated_as_authoritative_absence(tmp_path):

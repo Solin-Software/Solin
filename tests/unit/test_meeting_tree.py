@@ -95,6 +95,31 @@ def test_media_info_request_replaces_pending_work_when_source_changes() -> None:
     assert set(controller._info_request_by_token) == {2}
 
 
+def test_removed_meeting_item_cancels_queued_and_retrying_media_work() -> None:
+    invalidated = []
+    removed_key = ("removed", "metadata", "source-a")
+    kept_key = ("kept", "thumb", "source-b")
+    controller = SimpleNamespace(
+        _media_request_queue=deque([
+            {"id": "removed"},
+            {"id": "kept"},
+        ]),
+        _info_request_by_token={3: removed_key, 4: kept_key},
+        _active_info_requests={removed_key, kept_key},
+        _info_queue=SimpleNamespace(invalidate=invalidated.append),
+    )
+
+    MeetingTreeController._cancel_media_info_requests_for_item(
+        controller,
+        "removed",
+    )
+
+    assert invalidated == [3]
+    assert list(controller._media_request_queue) == [{"id": "kept"}]
+    assert controller._info_request_by_token == {4: kept_key}
+    assert controller._active_info_requests == {kept_key}
+
+
 def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> None:
     emitted = []
     background = publications_module._WeekLoadRequest(
@@ -2063,6 +2088,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
 
     def _wire_remove_item_controller(self, controller) -> None:
         controller._watched_folder_file_store = WatchedFolderFileStore()
+        controller._cancel_media_info_requests_for_item = lambda _item_id: None
         controller._find_node = (
             lambda node_id, nodes=None: MeetingTreeController._find_node(
                 controller,

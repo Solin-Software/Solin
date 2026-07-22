@@ -141,3 +141,11 @@ def test_unknown_media_does_not_enter_qt_queue() -> None:
     assert asyncio.run(extractor.extract("C:/private/file.bin", MediaKind.UNKNOWN)) is None
     assert queue.requests == []
     extractor.shutdown()
+
+
+def test_remote_deadlines_cover_origin_and_completed_local_fallback() -> None:
+    deadlines = extractor_module._EXTRACTION_TIMEOUT_SECONDS
+
+    assert deadlines[MediaKind.AUDIO] >= 25
+    assert deadlines[MediaKind.IMAGE] >= 20
+    assert deadlines[MediaKind.VIDEO] >= 40

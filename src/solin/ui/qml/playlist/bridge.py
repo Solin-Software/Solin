@@ -99,6 +99,7 @@ class PlaylistEditBridge(QObject):
         self._playlist_name = ""
         self._is_temp = False
         self._is_watched = False
+        self._is_loading = False
         self._has_items = False
         self._item_count_text = "0 items"
         self._model: PlaylistEditModel | None = None
@@ -150,6 +151,10 @@ class PlaylistEditBridge(QObject):
         return self._is_watched
 
     @Property(bool, notify=chromeChanged)
+    def isLoading(self):
+        return self._is_loading
+
+    @Property(bool, notify=chromeChanged)
     def hasItems(self):
         return self._has_items
 
@@ -164,12 +169,14 @@ class PlaylistEditBridge(QObject):
     # ── State setters (called from Python) ─────────────────────────────────
 
     def set_state(self, *, name: str = "", is_temp: bool = False,
-                  is_watched: bool = False, item_count: int = 0,
+                  is_watched: bool = False, is_loading: bool = False,
+                  item_count: int = 0,
                   item_word: str = "items", has_entries: bool | None = None,
                   emit_data_changed: bool = True) -> None:
         self._playlist_name = name
         self._is_temp = is_temp
         self._is_watched = is_watched
+        self._is_loading = is_loading
         self._has_items = (item_count > 0 if has_entries is None else has_entries)
         self._item_count_text = f"{item_count} {item_word}"
         self.chromeChanged.emit()

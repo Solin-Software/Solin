@@ -33,6 +33,7 @@ Rectangle {
     readonly property string playlistName: hasController ? controller.playlistName : ""
     readonly property bool isTemp: hasController && controller.isTemp
     readonly property bool isWatched: hasController && controller.isWatched
+    readonly property bool isLoading: hasController && controller.isLoading
     readonly property bool hasItems: hasController && controller.hasItems
     readonly property string itemCountText: hasController ? controller.itemCountText : ""
     readonly property var playlistNodes: hasController ? controller.playlistData : []
@@ -155,6 +156,7 @@ Rectangle {
 
                 HeaderButton {
                     id: plusBtn
+                    enabled: !root.isLoading
                     iconName: "plus"
                     iconSize: 14
                     colorHex: root.iconHex(root.accent)
@@ -198,6 +200,8 @@ Rectangle {
 
         // ── Toolbar ───────────────────────────────────────────────────────────
         Item {
+            enabled: !root.isLoading
+            opacity: enabled ? 1.0 : 0.55
             Layout.fillWidth: true
             Layout.preferredHeight: 36
             Layout.leftMargin: root.contentLeftInset
@@ -252,6 +256,7 @@ Rectangle {
             Layout.fillHeight: true
             playlistController: root.hasController ? controller : null
             hasItems: root.hasItems
+            loading: root.isLoading
             playlistNodes: root.playlistNodes
             contentLeftInset: root.contentLeftInset
             contentRightInset: root.contentRightInset

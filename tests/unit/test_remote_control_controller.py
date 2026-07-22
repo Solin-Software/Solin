@@ -301,6 +301,30 @@ def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> No
     controller.stop()
 
 
+def test_catalog_invalidation_during_scan_keeps_single_debounced_followup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    scheduled = []
+    monkeypatch.setattr(
+        "solin.controllers.remote_control_controller.QTimer.singleShot",
+        lambda delay, callback: scheduled.append((delay, callback)),
+    )
+    controller._catalog_refresh_generation = 2
+    controller._catalog_refresh_inflight = (1, object())
+    controller._catalog_refresh_pending = False
+    controller._catalog_refresh_timer.start()
+
+    controller._on_catalog_snapshot_completed(1, None, None)
+
+    assert controller._catalog_refresh_timer.isActive()
+    assert scheduled == []
+    controller._catalog_refresh_timer.stop()
+    controller._catalog_refresh_inflight = None
+    controller.stop()
+
+
 def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     events: list[str] = []

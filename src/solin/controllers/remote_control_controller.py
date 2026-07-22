@@ -593,6 +593,8 @@ class RemoteControlController(QObject):
 
         if self._catalog_refresh_pending or stale:
             self._catalog_refresh_pending = False
+            if self._catalog_refresh_timer.isActive():
+                return
             QTimer.singleShot(0, self._start_catalog_refresh)
 
     def _apply_catalog_snapshot(self, snapshot: Any) -> None:

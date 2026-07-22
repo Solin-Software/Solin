@@ -2283,6 +2283,7 @@ class MeetingTreeController(QObject):
         node = self._find_node(item_id)
         if not node:
             return
+        self._cancel_media_info_requests_for_item(item_id)
         MeetingTreeController._remember_hidden_canonical_media(self, node)
         # Official meeting media is recoverable canonical content. Its linked
         # copy must remain available. A manual item only owns a source file when
@@ -3386,6 +3387,21 @@ class MeetingTreeController(QObject):
                 purpose == "metadata" and media_type in {"audio", "video"}
             ),
         )
+
+    def _cancel_media_info_requests_for_item(self, item_id: str) -> None:
+        """Stop queued, active, and retrying media work for a removed node."""
+
+        self._media_request_queue = deque(
+            node
+            for node in self._media_request_queue
+            if str(node.get("id") or "") != item_id
+        )
+        for token, request_key in tuple(self._info_request_by_token.items()):
+            if request_key[0] != item_id:
+                continue
+            self._info_queue.invalidate(token)
+            self._info_request_by_token.pop(token, None)
+            self._active_info_requests.discard(request_key)
 
     @staticmethod
     def _media_info_source_identity(url: str) -> str:

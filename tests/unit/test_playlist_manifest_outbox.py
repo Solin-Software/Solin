@@ -171,6 +171,7 @@ def test_refresh_is_deferred_while_current_folder_has_pending_save() -> None:
     controller._wf_refresh_shutdown = False
     controller._wf_refresh_pending = False
     controller._flush_image_framing_save = lambda: None
+    controller._reset_watched_folder_refresh_retry = lambda: None
     store.load_playlist = lambda _path: (_ for _ in ()).throw(
         AssertionError("pending local order must not be replaced by stale manifest")
     )
@@ -189,6 +190,7 @@ def test_reopening_folder_uses_pending_snapshot_instead_of_stale_disk_state() ->
     store = _Store()
     controller = _outbox(store)
     controller._flush_image_framing_save = lambda: None
+    controller._reset_watched_folder_refresh_retry = lambda: None
     controller._watched_file_availability = lambda _playlist: ()
     controller._thumb_queue = type("Queue", (), {"clear": lambda _self: None})()
     controller._thumb_scan_timer = _Timer()

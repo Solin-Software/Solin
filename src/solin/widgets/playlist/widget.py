@@ -94,6 +94,14 @@ _PLAYLIST_REORDER_LOCATION_KEYS = frozenset({
 _MANIFEST_SAVE_DEBOUNCE_MS = 180
 _MANIFEST_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
 _MANIFEST_SAVE_RETRY_BUDGET_SECONDS = 60.0
+_WATCHED_FOLDER_REFRESH_RETRY_DELAYS_MS = (
+    1_000,
+    3_000,
+    10_000,
+    30_000,
+    90_000,
+    300_000,
+)
 
 
 @dataclass(slots=True)
@@ -259,6 +267,10 @@ class PlaylistEditView(
         self._wf_refresh_future: Future[_WatchedFolderSnapshot] | None = None
         self._wf_refresh_shutdown = False
         self._wf_file_availability: tuple[tuple[str, bool], ...] = ()
+        self._wf_refresh_retry_index = 0
+        self._wf_refresh_retry_timer = QTimer(self)
+        self._wf_refresh_retry_timer.setSingleShot(True)
+        self._wf_refresh_retry_timer.timeout.connect(self.refresh_watched_folder)
 
         # QML Integration
         self.model = PlaylistEditModel(
@@ -340,6 +352,7 @@ class PlaylistEditView(
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
         self._wf_refresh_shutdown = True
+        self._wf_refresh_retry_timer.stop()
         self._flush_image_framing_save()
         self._manifest_save_timer.stop()
         refresh_future = self._wf_refresh_future
@@ -823,6 +836,7 @@ class PlaylistEditView(
 
     def load_playlist(self, pl: dict):
         self._flush_image_framing_save()
+        self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
         self._is_watched = False
         self._watched_path = ""
@@ -839,21 +853,15 @@ class PlaylistEditView(
         self._rebuild_list()
 
     def load_watched_folder(self, folder_path: str):
-        """Load a linked folder as a full playlist with drag-reorder + sections."""
+        """Open a linked folder without reading cloud-backed files on the Qt thread."""
         self._flush_image_framing_save()
+        self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
         self._is_watched = True
         self._watched_path = folder_path
         self._is_temp = False
         key = os.path.normcase(os.path.abspath(folder_path))
         pending = self._pending_manifest_saves.get(key)
-        pl = (
-            copy.deepcopy(pending.playlist)
-            if pending is not None
-            else self._watched_folder_playlist_store.load_playlist(folder_path)
-        )
-        self._pl = pl
-        self._wf_file_availability = self._watched_file_availability(pl)
         self._thumb_queue.clear()
         self._thumb_scan_timer.stop()
         self._thumb_scan_items.clear()
@@ -862,8 +870,32 @@ class PlaylistEditView(
         self._thumb_idx_to_source.clear()
         self._thumb_idx_to_intent.clear()
         self._thumb_pending_item_ids.clear()
-        self._rebuild_list()
-        self._start_wf_sync()
+        self._wf_file_availability = ()
+
+        if pending is not None:
+            self._pl = copy.deepcopy(pending.playlist)
+            self._wf_refresh_pending = True
+            self._rebuild_list()
+            return
+
+        self._pl = None
+        loading_playlist = {
+            "id": "",
+            "name": os.path.basename(os.path.normpath(folder_path)) or folder_path,
+            "items": [],
+            "sections": [],
+            "markers": [],
+        }
+        self.catalog_bridge.set_playlist_ref(loading_playlist)
+        self.model.rebuild(loading_playlist)
+        self.bridge.set_state(
+            name=loading_playlist["name"],
+            is_watched=True,
+            is_loading=True,
+            item_count=0,
+            item_word=self.tr("items"),
+        )
+        self.refresh_watched_folder()
 
     def _start_wf_sync(self, pending_files: tuple[str, ...] | None = None):
         """Start background sync for pending processable files in linked folder."""
@@ -1004,6 +1036,22 @@ class PlaylistEditView(
             )
         )
 
+    def _reset_watched_folder_refresh_retry(self) -> None:
+        self._wf_refresh_retry_timer.stop()
+        self._wf_refresh_retry_index = 0
+
+    def _schedule_watched_folder_refresh_retry(self) -> None:
+        if self._wf_refresh_shutdown or not self._is_watched:
+            return
+        delay = _WATCHED_FOLDER_REFRESH_RETRY_DELAYS_MS[
+            min(
+                self._wf_refresh_retry_index,
+                len(_WATCHED_FOLDER_REFRESH_RETRY_DELAYS_MS) - 1,
+            )
+        ]
+        self._wf_refresh_retry_index += 1
+        self._wf_refresh_retry_timer.start(delay)
+
     def supersede_watched_folder_refresh(self) -> None:
         """Reject an in-flight snapshot as soon as a newer disk event arrives."""
         if self._wf_refresh_inflight is not None:
@@ -1099,7 +1147,10 @@ class PlaylistEditView(
                 "Could not refresh linked-folder snapshot",
                 exc_info=(type(error), error, error.__traceback__),
             )
+            if can_apply:
+                self._schedule_watched_folder_refresh_retry()
         elif snapshot is not None and can_apply:
+            self._reset_watched_folder_refresh_retry()
             self._apply_watched_folder_snapshot(snapshot)
         elif snapshot is not None and key == current_key:
             self._wf_refresh_pending = True
@@ -1384,6 +1435,15 @@ class PlaylistEditView(
         if item_id is not None and item_id not in self._thumb_idx_to_id.values():
             self._thumb_pending_item_ids.discard(item_id)
         return item_id, source_url, intent
+
+    def _cancel_thumbnail_requests_for_item(self, item_id: str) -> None:
+        """Stop queued, active, and retrying work owned by a removed item."""
+
+        for token, requested_item_id in tuple(self._thumb_idx_to_id.items()):
+            if requested_item_id != item_id:
+                continue
+            self._thumb_queue.invalidate(token)
+            self._retire_thumbnail_request(token)
 
     def _thumbnail_result_is_current(self, item_id: str, source_url: str) -> bool:
         if not self._pl:
@@ -1750,6 +1810,7 @@ class PlaylistEditView(
                     )
                     return
         self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
+        self._cancel_thumbnail_requests_for_item(item_id)
         self._save()
         if self._is_watched and self._watched_path and item:
             self._remove_watched_item(self._watched_path, item)
@@ -2008,6 +2069,7 @@ class PlaylistWidget(QWidget):
     def _go_back(self):
         # If coming back from a watched folder, clear the watched state
         if self._edit_view._is_watched:
+            self._edit_view._reset_watched_folder_refresh_retry()
             self._edit_view._is_watched = False
             self._edit_view._watched_path = ""
         self._list_view.refresh()

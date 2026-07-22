@@ -21,10 +21,13 @@ log = logging.getLogger(__name__)
 _MAX_THUMBNAIL_WIDTH: Final = 640
 _MAX_THUMBNAIL_HEIGHT: Final = 360
 _MAX_PENDING_MEDIA: Final = 32
+# The queue is remote-first and may then open a completed local cache file.
+# These deadlines cover one bounded origin attempt plus one local fallback;
+# retry policy beyond that remains owned by the queue and later requests.
 _EXTRACTION_TIMEOUT_SECONDS: Final = {
-    MediaKind.AUDIO: 4.0,
-    MediaKind.IMAGE: 8.0,
-    MediaKind.VIDEO: 12.0,
+    MediaKind.AUDIO: 25.0,
+    MediaKind.IMAGE: 20.0,
+    MediaKind.VIDEO: 40.0,
 }
 
 

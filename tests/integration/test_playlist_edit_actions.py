@@ -611,6 +611,7 @@ def test_watched_folder_refresh_schedules_disk_snapshot_off_qt_thread():
     folder_path = "C:/linked/one"
     view = SimpleNamespace(
         _flush_image_framing_save=lambda: None,
+        _reset_watched_folder_refresh_retry=lambda: None,
         _wf_refresh_shutdown=False,
         _is_watched=True,
         _watched_path=folder_path,
@@ -636,6 +637,77 @@ def test_watched_folder_refresh_schedules_disk_snapshot_off_qt_thread():
     assert view._wf_refresh_future is not None
 
 
+def test_initial_watched_folder_open_defers_all_disk_reads():
+    rebuilt = []
+    states = []
+    refreshes = []
+    folder_path = "C:/linked/one"
+    view = SimpleNamespace(
+        _flush_image_framing_save=lambda: None,
+        _reset_watched_folder_refresh_retry=lambda: None,
+        _wf_refresh_pending=False,
+        _is_watched=False,
+        _watched_path="",
+        _is_temp=False,
+        _pending_manifest_saves={},
+        _thumb_queue=SimpleNamespace(clear=lambda: None),
+        _thumb_scan_timer=SimpleNamespace(stop=lambda: None),
+        _thumb_scan_items=[],
+        _id_to_thumb={},
+        _thumb_idx_to_id={},
+        _thumb_idx_to_source={},
+        _thumb_idx_to_intent={},
+        _thumb_pending_item_ids=set(),
+        _wf_file_availability=(),
+        _watched_folder_playlist_store=SimpleNamespace(
+            load_playlist=lambda _path: (_ for _ in ()).throw(
+                AssertionError("disk read ran on Qt thread")
+            )
+        ),
+        catalog_bridge=SimpleNamespace(set_playlist_ref=lambda value: rebuilt.append(value)),
+        model=SimpleNamespace(rebuild=lambda value: rebuilt.append(value)),
+        bridge=SimpleNamespace(set_state=lambda **values: states.append(values)),
+        tr=lambda value: value,
+        refresh_watched_folder=lambda: refreshes.append(True),
+    )
+
+    playlist_widget.PlaylistEditView.load_watched_folder(view, folder_path)
+
+    assert view._pl is None
+    assert refreshes == [True]
+    assert states == [{
+        "name": "one",
+        "is_watched": True,
+        "is_loading": True,
+        "item_count": 0,
+        "item_word": "items",
+    }]
+    assert rebuilt[0] == rebuilt[1]
+
+
+def test_removed_playlist_item_cancels_all_owned_thumbnail_requests():
+    invalidated = []
+    view = SimpleNamespace(
+        _thumb_idx_to_id={3: "removed", 4: "kept", 5: "removed"},
+        _thumb_idx_to_source={3: "a", 4: "b", 5: "c"},
+        _thumb_idx_to_intent={3: object(), 4: object(), 5: object()},
+        _thumb_pending_item_ids={"removed", "kept"},
+        _thumb_queue=SimpleNamespace(invalidate=invalidated.append),
+    )
+    view._retire_thumbnail_request = lambda token: (
+        playlist_widget.PlaylistEditView._retire_thumbnail_request(view, token)
+    )
+
+    playlist_widget.PlaylistEditView._cancel_thumbnail_requests_for_item(
+        view,
+        "removed",
+    )
+
+    assert invalidated == [3, 5]
+    assert view._thumb_idx_to_id == {4: "kept"}
+    assert view._thumb_pending_item_ids == {"kept"}
+
+
 def test_watched_folder_refresh_applies_only_current_snapshot():
     folder_path = "C:/linked/one"
     key = os.path.normcase(os.path.abspath(folder_path))
@@ -657,6 +729,7 @@ def test_watched_folder_refresh_applies_only_current_snapshot():
         _wf_sync_thread=None,
         _wf_refresh_pending=False,
         _apply_watched_folder_snapshot=applied.append,
+        _reset_watched_folder_refresh_retry=lambda: None,
     )
 
     playlist_widget.PlaylistEditView._on_watched_folder_refresh_completed(
@@ -670,6 +743,37 @@ def test_watched_folder_refresh_applies_only_current_snapshot():
     assert applied == [snapshot]
     assert view._wf_refresh_inflight is None
     assert view._wf_refresh_future is None
+
+
+def test_initial_watched_folder_failure_schedules_cloud_retry():
+    folder_path = "C:/linked/one"
+    key = os.path.normcase(os.path.abspath(folder_path))
+    retries = []
+    error = OSError("temporarily locked")
+    view = SimpleNamespace(
+        _wf_refresh_inflight=(7, key),
+        _wf_refresh_future=object(),
+        _wf_refresh_superseded=False,
+        _wf_refresh_pending=False,
+        _wf_refresh_manifest_generation=0,
+        _manifest_state_generation=0,
+        _watched_path=folder_path,
+        _is_watched=True,
+        _pending_manifest_saves={},
+        _wf_sync_thread=None,
+        _schedule_watched_folder_refresh_retry=lambda: retries.append(True),
+    )
+
+    playlist_widget.PlaylistEditView._on_watched_folder_refresh_completed(
+        view,
+        7,
+        key,
+        None,
+        error,
+    )
+
+    assert retries == [True]
+    assert view._wf_refresh_inflight is None
 
 
 def test_availability_refresh_patches_media_without_full_qml_reset(

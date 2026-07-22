@@ -49,6 +49,7 @@ class PlaylistEditActionsMixin:
             name=self._pl.get("name", ""),
             is_temp=self._is_temp,
             is_watched=self._is_watched,
+            is_loading=False,
             item_count=n,
             item_word=word,
             has_entries=self.model.entry_count() > 0,
