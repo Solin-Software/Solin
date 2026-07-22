@@ -24,6 +24,14 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.i18n.manager import LanguageManager
+from ...core.foundation.resource_keys import (
+    folder_read_resource_claim,
+    folder_resource_key,
+)
+from ...core.media.operations import (
+    MediaOperationPresentation,
+    MediaOperationSpec,
+)
 from ...core.playlists.names import (
     PlaylistNameConflictError,
     PlaylistNameError,
@@ -42,7 +50,6 @@ from .dialogs import NameDialog
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
-    from ...core.playlists.storage import PlaylistRepository
 
 __all__ = (
     "PLAYLIST_PRIMARY_BUTTON_STYLESHEET",
@@ -94,9 +101,10 @@ class PlaylistListView(QWidget):
         media_ctrl=None,
         watched_folder: str = "",
         *,
-        playlist_repository: PlaylistRepository,
+        persist_playlists: Callable[[], None],
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
+        media_tree_runtime,
         schedule_cleanup: Callable[[list[dict]], None],
         parent=None,
     ):
@@ -105,12 +113,18 @@ class PlaylistListView(QWidget):
         self.lang = lang
         self._media_ctrl = media_ctrl
         self._watched_folder = watched_folder
-        self._playlist_repository = playlist_repository
+        self._persist_playlists = persist_playlists
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
+        self._media_tree_runtime = media_tree_runtime
         self._schedule_cleanup = schedule_cleanup
         self._pl_cards: list[PlaylistCard] = []
         self._wf_cards: list[WatchedFolderCard] = []
+        self._watched_scan_generation = 0
+        self._watched_scan_operation_id = ""
+        self._watched_mutation_operation_ids: set[str] = set()
+        self._watched_mutation_paths: set[str] = set()
+        self._cleaning_up = False
         self._build_ui()
 
     def set_watched_folder(self, path: str) -> None:
@@ -250,7 +264,7 @@ class PlaylistListView(QWidget):
         self._pl_cards.clear()
 
         has = bool(self._playlists)
-        has_wf = bool(self._watched_folder and Path(self._watched_folder).is_dir())
+        has_wf = bool(self._watched_folder)
         self._app_section.set_header_visible(has_wf)
         self._empty_lbl.setVisible(not has)
         self._app_grid_cont.setVisible(has)
@@ -267,26 +281,74 @@ class PlaylistListView(QWidget):
             self._pl_cards.append(card)
 
     def _rebuild_watched_section(self) -> None:
+        has_root = bool(self._watched_folder)
+        self._wf_section.setVisible(has_root)
+        self._app_section.set_header_visible(has_root)
+        self._app_grid_cont.setVisible(bool(self._playlists))
+        if not has_root:
+            self._watched_scan_generation += 1
+            if self._watched_scan_operation_id:
+                self._media_tree_runtime.operations.cancel(
+                    self._watched_scan_operation_id
+                )
+                self._watched_scan_operation_id = ""
+            self._render_watched_section([])
+            self._empty_lbl.setVisible(not bool(self._playlists))
+            return
+        self._request_watched_section_snapshot()
+
+    def _request_watched_section_snapshot(self) -> None:
+        if self._cleaning_up:
+            return
+        self._watched_scan_generation += 1
+        generation = self._watched_scan_generation
+        folder_path = self._watched_folder
+        if self._watched_scan_operation_id:
+            self._media_tree_runtime.operations.cancel(self._watched_scan_operation_id)
+        operation_id = f"playlist-catalog:{uuid.uuid4().hex}"
+        self._watched_scan_operation_id = operation_id
+
+        def run(_progress, _cancellation):
+            return self._watched_folder_playlist_store.scan_root(folder_path)
+
+        def commit(value: object) -> None:
+            if (
+                generation != self._watched_scan_generation
+                or folder_path != self._watched_folder
+            ):
+                return
+            self._watched_scan_operation_id = ""
+            if not isinstance(value, list):
+                raise TypeError("Linked-folder catalog returned an invalid result")
+            self._render_watched_section(value)
+
+        def finished_without_result(*_args) -> None:
+            if generation == self._watched_scan_generation:
+                self._watched_scan_operation_id = ""
+
+        submitted = self._media_tree_runtime.operations.submit(
+            MediaOperationSpec(
+                operation_id=operation_id,
+                scope_id="playlist-catalog",
+                operation_type="linked_folder_catalog_scan",
+                conflict_key=folder_read_resource_claim(folder_path),
+                presentation=MediaOperationPresentation.BACKGROUND,
+                runner=run,
+                commit=commit,
+                priority=-50,
+                failed=finished_without_result,
+                cancelled=finished_without_result,
+            )
+        )
+        if not submitted:
+            finished_without_result()
+
+    def _render_watched_section(self, subfolders: list[dict]) -> None:
         while self._wf_grid_lay.count():
             it = self._wf_grid_lay.takeAt(0)
             if it and it.widget():
                 it.widget().deleteLater()
         self._wf_cards.clear()
-
-        has_root = bool(self._watched_folder and Path(self._watched_folder).is_dir())
-        self._wf_section.setVisible(has_root)
-        self._wf_empty_lbl.setVisible(False)
-
-        self._app_section.set_header_visible(has_root)
-        self._app_grid_cont.setVisible(bool(self._playlists))
-
-        if not has_root:
-            self._empty_lbl.setVisible(not bool(self._playlists))
-            return
-
-        subfolders = self._watched_folder_playlist_store.scan_root(
-            self._watched_folder,
-        )
         has_subs = bool(subfolders)
         self._wf_empty_lbl.setVisible(not has_subs)
         self._wf_grid_cont.setVisible(has_subs)
@@ -300,9 +362,24 @@ class PlaylistListView(QWidget):
             card.rename_req.connect(self._rename_watched_folder)
             card.delete_req.connect(self._delete_watched_folder)
             card.export_req.connect(self.export_watched_folder_requested.emit)
+            card.setEnabled(
+                os.path.normcase(os.path.abspath(sf["path"]))
+                not in self._watched_mutation_paths
+            )
             row, col = divmod(i, self._COLS)
             self._wf_grid_lay.addWidget(card, row, col)
             self._wf_cards.append(card)
+
+    def cleanup(self) -> None:
+        self._cleaning_up = True
+        self._watched_scan_generation += 1
+        if self._watched_scan_operation_id:
+            self._media_tree_runtime.operations.cancel(self._watched_scan_operation_id)
+            self._watched_scan_operation_id = ""
+        for operation_id in tuple(self._watched_mutation_operation_ids):
+            self._media_tree_runtime.operations.cancel(operation_id)
+        self._watched_mutation_operation_ids.clear()
+        self._watched_mutation_paths.clear()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -344,7 +421,7 @@ class PlaylistListView(QWidget):
             return
         pl = {"id": str(uuid.uuid4()), "name": name, "items": []}
         self._playlists.append(pl)
-        self._playlist_repository.save(self._playlists)
+        self._persist_playlists()
         self._rebuild_app_cards()
         self.open_playlist.emit(pl["id"])
 
@@ -368,7 +445,7 @@ class PlaylistListView(QWidget):
         except PlaylistNameError:
             return
         pl["name"] = name
-        self._playlist_repository.save(self._playlists)
+        self._persist_playlists()
         self._rebuild_app_cards()
 
     def _show_duplicate_name_warning(self, name: str) -> None:
@@ -412,7 +489,7 @@ class PlaylistListView(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._playlists.remove(pl)
-        self._playlist_repository.save(self._playlists)
+        self._persist_playlists()
         self._schedule_cleanup(list(pl.get("items", [])))
         self._rebuild_app_cards()
 
@@ -456,12 +533,14 @@ class PlaylistListView(QWidget):
         new_name = dlg.get_name()
         if not new_name or new_name == current_name:
             return
-        try:
-            self._watched_folder_file_store.rename_folder(folder_path, new_name)
-        except (OSError, ValueError) as exc:
-            QMessageBox.critical(self, self.tr("Error"), str(exc))
-            return
-        self._rebuild_watched_section()
+        self._submit_watched_folder_mutation(
+            folder_path,
+            "rename_linked_playlist_folder",
+            lambda: self._watched_folder_file_store.rename_folder(
+                folder_path,
+                new_name,
+            ),
+        )
 
     def _delete_watched_folder(self, folder_path: str) -> None:
         name = Path(folder_path).name
@@ -476,9 +555,61 @@ class PlaylistListView(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        try:
-            self._watched_folder_file_store.delete_folder(folder_path)
-        except OSError as exc:
-            QMessageBox.critical(self, self.tr("Error"), str(exc))
+        self._submit_watched_folder_mutation(
+            folder_path,
+            "delete_linked_playlist_folder",
+            lambda: self._watched_folder_file_store.delete_folder(folder_path),
+        )
+
+    def _submit_watched_folder_mutation(
+        self,
+        folder_path: str,
+        operation_type: str,
+        mutate: Callable[[], object],
+    ) -> None:
+        path_key = os.path.normcase(os.path.abspath(folder_path))
+        if path_key in self._watched_mutation_paths:
             return
-        self._rebuild_watched_section()
+        operation_id = f"{operation_type}:{uuid.uuid4().hex}"
+        self._watched_mutation_paths.add(path_key)
+        self._watched_mutation_operation_ids.add(operation_id)
+        self._set_watched_card_enabled(path_key, False)
+
+        def run(_progress, _cancellation):
+            return mutate()
+
+        def finish() -> None:
+            self._watched_mutation_operation_ids.discard(operation_id)
+            self._watched_mutation_paths.discard(path_key)
+            if not self._cleaning_up:
+                self._rebuild_watched_section()
+
+        def commit(_value: object) -> None:
+            finish()
+
+        def failed(message: str, _retryable: bool) -> None:
+            finish()
+            QMessageBox.critical(self, self.tr("Error"), message)
+
+        submitted = self._media_tree_runtime.operations.submit(
+            MediaOperationSpec(
+                operation_id=operation_id,
+                scope_id="playlist-catalog",
+                operation_type=operation_type,
+                conflict_key=folder_resource_key(self._watched_folder),
+                presentation=MediaOperationPresentation.BACKGROUND,
+                runner=run,
+                commit=commit,
+                priority=50,
+                failed=failed,
+                cancelled=finish,
+            )
+        )
+        if not submitted:
+            finish()
+
+    def _set_watched_card_enabled(self, path_key: str, enabled: bool) -> None:
+        for card in self._wf_cards:
+            if os.path.normcase(os.path.abspath(card.path)) == path_key:
+                card.setEnabled(enabled)
+                return

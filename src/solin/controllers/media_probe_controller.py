@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import hashlib
 import os
 from pathlib import Path
 import uuid
 
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtGui import QImage, QImageReader
 
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
+from solin.core.foundation.resource_keys import file_resource_key
 from solin.core.media.operations import MediaOperationPresentation, MediaOperationSpec
 from solin.core.media.presentation_probe import (
     MediaPresentationProbeRequest,
@@ -27,6 +30,8 @@ from solin.ui.qml.media_tree.state import (
 
 
 _RETRY_DELAYS_MS = (250, 500, 1_000, 2_000, 5_000, 10_000, 30_000)
+_MISSING_GRACE_ATTEMPTS = 5
+_THUMBNAIL_DECODE_GRACE_ATTEMPTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,8 +44,17 @@ class _ProbeIntent:
     attempt: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class _ProbePayload:
+    result: MediaPresentationProbeResult
+    thumbnail: QImage | None = None
+    image_aspect_ratio: float = 0.0
+
+
 class MediaProbeController(QObject):
     """Populate a MediaStateRegistry without running filesystem I/O on Qt."""
+
+    thumbnailReady = Signal(str, str, object)
 
     def __init__(
         self,
@@ -136,21 +150,71 @@ class MediaProbeController(QObject):
         def run(_progress, cancellation):
             if cancellation.is_set():
                 return None
-            return probe_media_presentation(request)
+            result = probe_media_presentation(request)
+            if cancellation.is_set():
+                return None
+            thumbnail = _read_thumbnail(request.thumbnail_path)
+            aspect_ratio = _image_aspect_ratio(result.local_path)
+            return _ProbePayload(result, thumbnail, aspect_ratio)
 
         def commit(value: object) -> None:
-            if not isinstance(value, MediaPresentationProbeResult):
+            if not isinstance(value, _ProbePayload):
                 return
             if self._operation_ids.get(identity) != operation_id:
                 return
             self._operation_ids.pop(identity, None)
+            result = value.result
+            thumbnail_matches_source = bool(
+                not result.source_signature
+                or result.thumbnail_source_signature == result.source_signature
+            )
+            thumbnail_decoded = value.thumbnail is not None
+            thumbnail_usable = (
+                result.thumbnail_exists
+                and thumbnail_decoded
+                and thumbnail_matches_source
+            )
+            thumbnail_temporarily_unreadable = (
+                result.thumbnail_exists
+                and not thumbnail_decoded
+                and thumbnail_matches_source
+                and intent.attempt < _THUMBNAIL_DECODE_GRACE_ATTEMPTS
+            )
+            if (
+                result.availability == ProbedMediaAvailability.MISSING
+                and not intent.source.startswith(("http://", "https://"))
+                and intent.attempt < _MISSING_GRACE_ATTEMPTS
+            ):
+                result = replace(
+                    result,
+                    availability=ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE,
+                    error=result.error or "Local media is still stabilizing",
+                )
             accepted = self._registry.accept(
                 MediaProbeResult(
                     key,
-                    _presentation_state(value, intent.thumbnail_source),
+                    _presentation_state(
+                        result,
+                        intent.thumbnail_source,
+                        value.image_aspect_ratio,
+                        thumbnail_usable=thumbnail_usable,
+                    ),
                 )
             )
-            if accepted and value.availability == ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE:
+            if accepted:
+                self.thumbnailReady.emit(
+                    intent.owner_id,
+                    intent.node_id,
+                    value.thumbnail if thumbnail_usable else None,
+                )
+            if (
+                accepted
+                and (
+                    result.availability
+                    == ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE
+                    or thumbnail_temporarily_unreadable
+                )
+            ):
                 self._schedule_retry(intent)
             elif accepted:
                 self._intents[identity] = _ProbeIntent(
@@ -169,10 +233,15 @@ class MediaProbeController(QObject):
             operation_id=operation_id,
             scope_id=intent.owner_id,
             operation_type="presentation_probe",
-            conflict_key=f"probe:{_source_key(intent.source)}",
+            conflict_key=(
+                file_resource_key(intent.thumbnail_path)
+                if intent.thumbnail_path is not None
+                else f"probe:{_source_key(intent.source)}"
+            ),
             presentation=MediaOperationPresentation.BACKGROUND,
             runner=run,
             commit=commit,
+            priority=-100,
             failed=lambda _message, _retryable: finished_without_result(),
             cancelled=finished_without_result,
         )
@@ -197,7 +266,10 @@ class MediaProbeController(QObject):
         self._intents[identity] = retry
         timer = QTimer(self)
         timer.setSingleShot(True)
-        timer.setInterval(_RETRY_DELAYS_MS[min(intent.attempt, len(_RETRY_DELAYS_MS) - 1)])
+        base_delay = _RETRY_DELAYS_MS[
+            min(intent.attempt, len(_RETRY_DELAYS_MS) - 1)
+        ]
+        timer.setInterval(_jittered_delay_ms(base_delay, retry))
         timer.timeout.connect(lambda: self._retry(identity, retry, timer))
         self._retry_timers[identity] = timer
         timer.start()
@@ -225,6 +297,9 @@ class MediaProbeController(QObject):
 def _presentation_state(
     result: MediaPresentationProbeResult,
     thumbnail_source: str,
+    image_aspect_ratio: float = 0.0,
+    *,
+    thumbnail_usable: bool = False,
 ) -> MediaPresentationState:
     availability = {
         ProbedMediaAvailability.AVAILABLE: MediaAvailability.AVAILABLE,
@@ -236,13 +311,42 @@ def _presentation_state(
     return MediaPresentationState(
         availability=availability,
         local_path=result.local_path,
-        thumbnail_source=thumbnail_source if result.thumbnail_exists else "",
+        thumbnail_source=thumbnail_source if thumbnail_usable else "",
+        source_signature=result.source_signature,
         cached=result.cached,
+        image_aspect_ratio=image_aspect_ratio,
         error=result.error,
     )
+
+
+def _read_thumbnail(path: Path | None) -> QImage | None:
+    if path is None:
+        return None
+    reader = QImageReader(str(path))
+    reader.setAutoTransform(True)
+    image = reader.read()
+    return image if not image.isNull() else None
+
+
+def _image_aspect_ratio(path: str) -> float:
+    if not path:
+        return 0.0
+    reader = QImageReader(path)
+    size = reader.size()
+    if not size.isValid() or size.height() <= 0:
+        return 0.0
+    return size.width() / size.height()
 
 
 def _source_key(source: str) -> str:
     if source.startswith(("http://", "https://")):
         return source
     return os.path.normcase(os.path.abspath(source)) if source else "empty"
+
+
+def _jittered_delay_ms(base_delay: int, intent: _ProbeIntent) -> int:
+    identity = (
+        f"{intent.owner_id}\0{intent.node_id}\0{intent.source}\0{intent.attempt}"
+    ).encode("utf-8", errors="surrogatepass")
+    sample = hashlib.blake2s(identity, digest_size=1).digest()[0] / 255
+    return max(1, int(round(base_delay * (0.85 + sample * 0.30))))

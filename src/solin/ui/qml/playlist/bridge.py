@@ -1,10 +1,7 @@
 """QML bridge facade for PlaylistEditView.
 
-Architecture
-────────────
-- PlaylistEditModel owns the row data.
-- PlaylistEditBridge exposes playlist actions and state to QML.
-- PlaylistThumbnailProvider / PlaylistIconProvider live in playlist.visuals.
+The bridge exposes user intents and lightweight chrome state. Tree data lives
+exclusively in ``PlaylistTreeSession.model``.
 """
 from __future__ import annotations
 
@@ -19,7 +16,7 @@ from solin.core.projection.aspect_ratio import (
 )
 
 if TYPE_CHECKING:
-    from solin.ui.qml.playlist.model import PlaylistEditModel
+    from solin.ui.qml.media_tree.playlist_session import PlaylistTreeSession
 
 
 # ── Bridge ─────────────────────────────────────────────────────────────────────
@@ -52,6 +49,8 @@ class PlaylistEditBridge(QObject):
     )
     imageFramingResetRequested = Signal(str)
     mediaTrimSetRequested = Signal(str, float, float, float)
+    operationCancelRequested = Signal(str)
+    operationRetryRequested = Signal(str)
     renameMarkerSignal   = Signal(str, str)     # marker_id, text
     deleteMarkerSignal   = Signal(str)          # marker_id
 
@@ -62,23 +61,9 @@ class PlaylistEditBridge(QObject):
     collapseSectionSignal = Signal(str)         # section_id
 
     dragFinished = Signal()                     # trigger save after drag
-    moveEntrySignal = Signal(int, int)
-
-    # State changed signal for full playlist data refreshes.
     stateChanged = Signal()
-    # Lightweight metadata changes that should not rebuild the QML tree.
     chromeChanged = Signal()
-    mediaChanged = Signal(str, str, str, str)   # item_id, title, duration, thumb_source
-    mediaInserted = Signal(str, int, "QVariant")  # list_id, insert_index, media nodes
-    nodesInserted = Signal(str, int, "QVariant")  # list_id, insert_index, tree nodes
-    nodeReplaced = Signal(str, "QVariant")      # node_id, replacement tree nodes
-    nodeMoved = Signal(str, str, int)           # node_id, target_list_id, insert_index
-    sectionChanged = Signal(str, str, str, str, str, int)
-    sectionCollapseChanged = Signal(str, bool)  # node_id, collapsed
-    sectionCountsChanged = Signal("QVariant")
     markerEditRequested = Signal(str)           # marker_id
-    cloudChanged = Signal(str, bool, bool, float, str)
-    imageFramingChanged = Signal(str, "QVariant")
     pointerEntered = Signal()
     pointerExited = Signal()
 
@@ -102,39 +87,11 @@ class PlaylistEditBridge(QObject):
         self._is_loading = False
         self._has_items = False
         self._item_count_text = "0 items"
-        self._model: PlaylistEditModel | None = None
+        self._tree_session: PlaylistTreeSession | None = None
 
-    def attach_model(self, model: PlaylistEditModel) -> None:
-        self._model = model
+    def attach_session(self, session: PlaylistTreeSession) -> None:
+        self._tree_session = session
         self.stateChanged.emit()
-
-    def emit_media_changed(self, item_id: str) -> None:
-        if not self._model:
-            return
-        patch = self._model.media_patch(item_id)
-        if not patch:
-            return
-        self.mediaChanged.emit(
-            item_id,
-            patch.get("title", ""),
-            patch.get("duration", ""),
-            patch.get("thumbSource", ""),
-        )
-
-    def emit_cloud_changed_for_url(self, url: str) -> None:
-        if not self._model:
-            return
-        for patch in self._model.cloud_patches_for_url(url):
-            self.cloudChanged.emit(
-                patch.get("id", ""),
-                bool(patch.get("cloudVisible", False)),
-                bool(patch.get("cloudActive", False)),
-                float(patch.get("cloudProgress", -1.0)),
-                patch.get("cloudTooltip", ""),
-            )
-
-    def emit_image_framing_changed(self, item_id: str, record: dict | None) -> None:
-        self.imageFramingChanged.emit(item_id, record)
 
     # ── Properties ─────────────────────────────────────────────────────────
 
@@ -162,10 +119,6 @@ class PlaylistEditBridge(QObject):
     def itemCountText(self):
         return self._item_count_text
 
-    @Property("QVariant", notify=stateChanged)
-    def playlistData(self):
-        return self._model.tree_data() if self._model else []
-
     # ── State setters (called from Python) ─────────────────────────────────
 
     def set_state(self, *, name: str = "", is_temp: bool = False,
@@ -182,76 +135,6 @@ class PlaylistEditBridge(QObject):
         self.chromeChanged.emit()
         if emit_data_changed:
             self.stateChanged.emit()
-
-    def emit_media_inserted(self, list_id: str, insert_index: int,
-                            item_ids: list[str]) -> None:
-        if not self._model:
-            return
-        nodes = [
-            self._model.media_patch(item_id)
-            for item_id in item_ids
-        ]
-        nodes = [node for node in nodes if node]
-        if nodes:
-            self.mediaInserted.emit(list_id, insert_index, nodes)
-
-    def emit_nodes_inserted(self, list_id: str, insert_index: int,
-                            node_ids: list[str]) -> None:
-        if not self._model:
-            return
-        nodes = [
-            self._model.node_patch(node_id)
-            for node_id in node_ids
-        ]
-        nodes = [node for node in nodes if node]
-        if nodes:
-            self.nodesInserted.emit(list_id, insert_index, nodes)
-
-    def emit_node_replaced(self, node_id: str, replacement_ids: list[str]) -> None:
-        if not self._model:
-            return
-        nodes = [
-            self._model.node_patch(replacement_id)
-            for replacement_id in replacement_ids
-        ]
-        self.nodeReplaced.emit(node_id, [node for node in nodes if node])
-
-    def emit_node_moved(self, node_id: str, target_list_id: str, insert_index: int) -> None:
-        self.nodeMoved.emit(node_id, target_list_id, insert_index)
-
-    def emit_section_changed(self, section_id: str) -> None:
-        if not self._model:
-            return
-        patch = self._model.section_patch(section_id)
-        if not patch:
-            return
-        self.sectionChanged.emit(
-            section_id,
-            patch.get("title", ""),
-            patch.get("color", ""),
-            patch.get("textColor", ""),
-            patch.get("badgeBg", ""),
-            int(patch.get("itemCount", 0)),
-        )
-
-    def emit_section_collapse_changed(self, section_id: str, collapsed: bool) -> None:
-        self.sectionCollapseChanged.emit(section_id, collapsed)
-
-    def emit_section_counts_changed(self) -> None:
-        if not self._model:
-            return
-
-        counts: dict[str, int] = {}
-
-        def visit(nodes: list[dict]) -> None:
-            for node in nodes:
-                if node.get("type") in ("section", "subsection"):
-                    counts[node.get("id", "")] = int(node.get("itemCount", 0))
-                    visit(node.get("children", []))
-
-        visit(self._model.tree_data())
-        if counts:
-            self.sectionCountsChanged.emit(counts)
 
     # ── Slots (called from QML) ────────────────────────────────────────────
 
@@ -306,6 +189,14 @@ class PlaylistEditBridge(QObject):
     @Slot(str)
     def downloadItem(self, item_id: str):
         self.downloadItemSignal.emit(item_id)
+
+    @Slot(str)
+    def cancelOperation(self, operation_id: str) -> None:  # noqa: N802 - QML API
+        self.operationCancelRequested.emit(operation_id)
+
+    @Slot(str)
+    def retryOperation(self, operation_id: str) -> None:  # noqa: N802 - QML API
+        self.operationRetryRequested.emit(operation_id)
 
     @Slot(str, float, float, float, float, float, bool)
     def setImageFraming(  # noqa: N802 - QML API
@@ -399,31 +290,32 @@ class PlaylistEditBridge(QObject):
 
     @Slot(str, str, str, result=bool)
     def canDrop(self, node_id: str, node_type: str, target_list_id: str) -> bool:
-        if not self._model:
+        if not self._tree_session:
             return False
-        return self._model.can_drop_node(node_id, node_type, target_list_id)
+        return self._tree_session.can_drop(node_id, node_type, target_list_id)
 
-    @Slot(str, str, int, result=bool)
-    def moveNode(self, node_id: str, target_list_id: str, insert_index: int) -> bool:
-        if not self._model:
+    @Slot(result=int)
+    def treeStructureRevision(self) -> int:  # noqa: N802
+        return self._tree_session.structure_revision if self._tree_session else -1
+
+    @Slot(str, str, int, str, int, result=bool)
+    def moveNode(
+        self,
+        node_id: str,
+        target_list_id: str,
+        insert_index: int,
+        expected_tree_id: str,
+        expected_structure_revision: int,
+    ) -> bool:
+        if not self._tree_session:
             return False
-        ok = self._model.move_node(
+        ok = self._tree_session.move(
             node_id,
             target_list_id,
             insert_index,
-            publish_reset=False,
+            expected_tree_id,
+            expected_structure_revision,
         )
         if ok:
-            self.emit_section_counts_changed()
             self.dragFinished.emit()
         return ok
-
-    @Slot(int, int)
-    def moveEntry(self, from_index: int, to_index: int):
-        """Called by QML during live drag to reorder entries."""
-        self.moveEntrySignal.emit(from_index, to_index)
-
-    @Slot()
-    def onDragFinished(self):
-        """Called by QML when a drag operation ends."""
-        self.dragFinished.emit()

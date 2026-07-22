@@ -74,7 +74,7 @@ class PlaylistEditImportMixin:
             for i, ni in enumerate(new_items):
                 items.insert(insert_at + i, ni)
         self._save()
-        self._rebuild_list()
+        self._reconcile_playlist()
         self._notifications.success(
             self.tr("{name} opened ({pages} pages)")
             .replace("{name}", str(pdf_stem))
@@ -155,7 +155,7 @@ class PlaylistEditImportMixin:
                 for i, ni in enumerate(new_items):
                     items_list.insert(insert_pos + i, ni)
             self._save()
-            self._rebuild_list()
+            self._reconcile_playlist()
             parts = []
             n_img = sum(1 for it in new_items if it.get("type") == "image")
             n_vid = sum(1 for it in new_items if it.get("type") != "image" and it.get("url"))
@@ -243,7 +243,7 @@ class PlaylistEditImportMixin:
             for i, ni in enumerate(new_items):
                 items.insert(insert_at + i, ni)
         self._save()
-        self._rebuild_list()
+        self._reconcile_playlist()
         self._notifications.success(
             self.tr("{name} opened ({pages} pages)")
             .replace("{name}", str(stem))
@@ -286,9 +286,9 @@ class PlaylistEditImportMixin:
                 self._playlist_repository.save_strict(self._all_playlists)
         except Exception:  # noqa: BLE001 - transactional playlist commit rollback
             self._pl["items"] = previous_items
-            self._rebuild_list()
+            self._reconcile_playlist()
             raise
-        self._rebuild_list()
+        self._reconcile_playlist()
         if len(items) == 1:
             self._notifications.success(self.tr("1 item imported"))
         else:

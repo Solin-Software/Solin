@@ -24,6 +24,7 @@ class MeetingTreeControllerDependencies:
     profile_paths: Any
     runtime_paths: Any
     cache_manager: Any
+    media_tree_runtime: Any
     linked_folder_sync: Any
     media_info_queue_factory: Callable[[QObject], Any]
     projection_aspect_ratio_provider: Callable[[], object] | None = None
@@ -56,6 +57,7 @@ class MeetingTreeControllerFactory:
             profile_paths=dependencies.profile_paths,
             runtime_paths=dependencies.runtime_paths,
             cache_manager=dependencies.cache_manager,
+            media_tree_runtime=dependencies.media_tree_runtime,
             linked_folder_sync=dependencies.linked_folder_sync,
             media_info_queue_factory=dependencies.media_info_queue_factory,
             projection_aspect_ratio_provider=(dependencies.projection_aspect_ratio_provider),

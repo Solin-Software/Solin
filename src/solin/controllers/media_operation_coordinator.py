@@ -7,9 +7,10 @@ from concurrent.futures import CancelledError
 import logging
 from time import monotonic
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 
 from solin.core.foundation.thread_workers import CancellationFlag
+from solin.core.foundation.resource_keys import ResourceClaim
 from solin.core.media.operations import (
     MediaOperationCancelled,
     MediaOperationProgress,
@@ -17,6 +18,7 @@ from solin.core.media.operations import (
     MediaOperationSpec,
     MediaOperationState,
 )
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 
 
 log = logging.getLogger(__name__)
@@ -33,11 +35,13 @@ class _MediaOperationThread(QThread):
         self,
         spec: MediaOperationSpec,
         cancellation: CancellationFlag,
+        resource_lanes: ResourceLaneRegistry,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._spec = spec
         self._cancellation = cancellation
+        self._resource_lanes = resource_lanes
         self._last_progress_at = 0.0
         self._last_state: MediaOperationState | None = None
         self._last_stage = ""
@@ -45,7 +49,13 @@ class _MediaOperationThread(QThread):
     def run(self) -> None:
         operation_id = self._spec.operation_id
         try:
-            result = self._spec.runner(self._report_progress, self._cancellation)
+            result = self._resource_lanes.run(
+                self._spec.conflict_key,
+                lambda: self._spec.runner(
+                    self._report_progress,
+                    self._cancellation,
+                ),
+            )
             if self._cancellation.is_set():
                 self.cancelled.emit(operation_id)
             else:
@@ -79,19 +89,27 @@ class MediaOperationCoordinator(QObject):
     operationChanged = Signal(object)
     operationFinished = Signal(str, str)
 
-    def __init__(self, *, max_workers: int = 2, parent=None) -> None:
+    def __init__(
+        self,
+        *,
+        max_workers: int = 2,
+        resource_lanes: ResourceLaneRegistry | None = None,
+        parent=None,
+    ) -> None:
         if not isinstance(max_workers, int) or isinstance(max_workers, bool) or max_workers < 1:
             raise ValueError("max_workers must be a positive integer")
         super().__init__(parent)
         self._max_workers = max_workers
+        self._resource_lanes = resource_lanes or ResourceLaneRegistry()
         self._queue: deque[str] = deque()
         self._specs: dict[str, MediaOperationSpec] = {}
         self._records: dict[str, MediaOperationRecord] = {}
         self._threads: dict[str, _MediaOperationThread] = {}
         self._thread_ids: dict[_MediaOperationThread, str] = {}
         self._cancellations: dict[str, CancellationFlag] = {}
-        self._active_conflicts: set[str] = set()
+        self._active_conflicts: set[str | ResourceClaim] = set()
         self._closing = False
+        self._commit_results: dict[str, object] = {}
 
     @property
     def active_count(self) -> int:
@@ -114,6 +132,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.QUEUED,
+                subject_id=spec.subject_id,
                 stage=spec.initial_stage,
                 cancellable=True,
                 retryable=False,
@@ -142,6 +161,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=record.operation_type,
                 presentation=record.presentation,
                 state=record.state,
+                subject_id=record.subject_id,
                 stage=record.stage,
                 detail=record.detail,
                 completed=record.completed,
@@ -150,6 +170,22 @@ class MediaOperationCoordinator(QObject):
                 retryable=False,
             )
         )
+
+    def cancel_scope(self, scope_id: str) -> None:
+        """Cancel every queued or active operation owned by one disposable view."""
+
+        self._assert_gui_thread()
+        operation_ids = [
+            operation_id
+            for operation_id, spec in self._specs.items()
+            if spec.scope_id == scope_id
+        ]
+        for operation_id in operation_ids:
+            record = self._records.get(operation_id)
+            if record is not None and record.state == MediaOperationState.FAILED:
+                self.discard(operation_id)
+            else:
+                self.cancel(operation_id)
 
     @Slot(str, result=bool)
     def retry(self, operation_id: str) -> bool:
@@ -165,6 +201,21 @@ class MediaOperationCoordinator(QObject):
             or not spec.retryable
         ):
             return False
+        if operation_id in self._commit_results:
+            self._publish(
+                MediaOperationRecord(
+                    operation_id=operation_id,
+                    scope_id=spec.scope_id,
+                    operation_type=spec.operation_type,
+                    presentation=spec.presentation,
+                    state=MediaOperationState.FINALIZING,
+                    subject_id=spec.subject_id,
+                    stage=record.stage,
+                    cancellable=False,
+                )
+            )
+            self._commit_result(operation_id, self._commit_results[operation_id])
+            return True
         self._queue.append(operation_id)
         self._publish(
             MediaOperationRecord(
@@ -173,6 +224,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.QUEUED,
+                subject_id=spec.subject_id,
                 stage=spec.initial_stage,
                 cancellable=True,
             )
@@ -196,6 +248,32 @@ class MediaOperationCoordinator(QObject):
             return False
         self._records.pop(operation_id, None)
         self._specs.pop(operation_id, None)
+        self._commit_results.pop(operation_id, None)
+        return True
+
+    def discard(self, operation_id: str) -> bool:
+        """Forget terminal work and roll back any uncommitted durable result."""
+        self._assert_gui_thread()
+        if operation_id in self._threads or operation_id in self._queue:
+            return False
+        record = self._records.get(operation_id)
+        spec = self._specs.get(operation_id)
+        if record is None or spec is None or record.state not in {
+            MediaOperationState.READY,
+            MediaOperationState.FAILED,
+            MediaOperationState.CANCELLED,
+        }:
+            return False
+        result = self._commit_results.get(operation_id)
+        if spec.discarded is not None:
+            try:
+                spec.discarded(result)
+            except Exception:  # noqa: BLE001 - durable rollback boundary
+                log.exception("Media operation %s discard failed", operation_id)
+                return False
+        self._records.pop(operation_id, None)
+        self._specs.pop(operation_id, None)
+        self._commit_results.pop(operation_id, None)
         return True
 
     def shutdown(self, wait_ms: int = 8_000) -> tuple[str, ...]:
@@ -223,14 +301,12 @@ class MediaOperationCoordinator(QObject):
 
     def _drain(self) -> None:
         while len(self._threads) < self._max_workers:
-            operation_id = next(
-                (
-                    queued_id
-                    for queued_id in self._queue
-                    if self._specs[queued_id].conflict_key not in self._active_conflicts
-                ),
-                None,
+            eligible = (
+                (self._specs[queued_id].priority, -position, queued_id)
+                for position, queued_id in enumerate(self._queue)
+                if self._specs[queued_id].conflict_key not in self._active_conflicts
             )
+            operation_id = max(eligible, default=(0, 0, None))[2]
             if operation_id is None:
                 return
             self._queue.remove(operation_id)
@@ -239,7 +315,12 @@ class MediaOperationCoordinator(QObject):
     def _start(self, operation_id: str) -> None:
         spec = self._specs[operation_id]
         cancellation = CancellationFlag()
-        thread = _MediaOperationThread(spec, cancellation, self)
+        thread = _MediaOperationThread(
+            spec,
+            cancellation,
+            self._resource_lanes,
+            self,
+        )
         self._threads[operation_id] = thread
         self._thread_ids[thread] = operation_id
         self._cancellations[operation_id] = cancellation
@@ -257,6 +338,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.PREPARING,
+                subject_id=spec.subject_id,
                 stage=spec.initial_stage,
                 cancellable=True,
             )
@@ -277,6 +359,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=value.state,
+                subject_id=spec.subject_id,
                 stage=value.stage,
                 detail=value.detail,
                 completed=value.completed,
@@ -290,12 +373,24 @@ class MediaOperationCoordinator(QObject):
         spec = self._specs.get(operation_id)
         if spec is None:
             return
+        cancellation = self._cancellations.get(operation_id)
+        if cancellation is not None and cancellation.is_set():
+            self._finish_cancelled(operation_id)
+            return
+        self._commit_results[operation_id] = result
+        self._commit_result(operation_id, result)
+
+    def _commit_result(self, operation_id: str, result: object) -> None:
+        spec = self._specs.get(operation_id)
+        if spec is None:
+            return
         try:
             spec.commit(result)
         except Exception as exc:  # noqa: BLE001 - GUI commit exception boundary
             log.exception("Media operation %s commit failed", operation_id)
             self._finish_failed(operation_id, str(exc) or type(exc).__name__)
             return
+        self._commit_results.pop(operation_id, None)
         previous = self._records[operation_id]
         self._publish(
             MediaOperationRecord(
@@ -304,6 +399,7 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.READY,
+                subject_id=spec.subject_id,
                 stage=previous.stage,
                 detail=previous.detail,
                 completed=previous.total or previous.completed,
@@ -311,6 +407,7 @@ class MediaOperationCoordinator(QObject):
             )
         )
         self.operationFinished.emit(operation_id, MediaOperationState.READY.value)
+        QTimer.singleShot(0, lambda: self._release_terminal(operation_id, spec))
 
     @Slot(str, str)
     def _on_failed(self, operation_id: str, message: str) -> None:
@@ -333,6 +430,7 @@ class MediaOperationCoordinator(QObject):
         self._cancellations.pop(operation_id, None)
         if spec is not None:
             self._active_conflicts.discard(spec.conflict_key)
+            self._release_terminal(operation_id, spec)
         if not self._closing:
             self._drain()
 
@@ -347,14 +445,19 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.FAILED,
+                subject_id=spec.subject_id,
                 stage=self._records[operation_id].stage,
                 retryable=spec.retryable,
                 error=message,
             )
         )
         if spec.failed is not None:
-            spec.failed(message, spec.retryable)
+            try:
+                spec.failed(message, spec.retryable)
+            except Exception:  # noqa: BLE001 - observer exception boundary
+                log.exception("Media operation %s failure callback failed", operation_id)
         self.operationFinished.emit(operation_id, MediaOperationState.FAILED.value)
+        QTimer.singleShot(0, lambda: self._release_terminal(operation_id, spec))
 
     def _finish_cancelled(self, operation_id: str) -> None:
         spec = self._specs.get(operation_id)
@@ -367,11 +470,37 @@ class MediaOperationCoordinator(QObject):
                 operation_type=spec.operation_type,
                 presentation=spec.presentation,
                 state=MediaOperationState.CANCELLED,
+                subject_id=spec.subject_id,
             )
         )
         if spec.cancelled is not None:
-            spec.cancelled()
+            try:
+                spec.cancelled()
+            except Exception:  # noqa: BLE001 - observer exception boundary
+                log.exception("Media operation %s cancellation callback failed", operation_id)
         self.operationFinished.emit(operation_id, MediaOperationState.CANCELLED.value)
+        if operation_id not in self._threads:
+            QTimer.singleShot(0, lambda: self._release_terminal(operation_id, spec))
+
+    def _release_terminal(
+        self,
+        operation_id: str,
+        spec: MediaOperationSpec,
+    ) -> None:
+        if operation_id in self._threads or operation_id in self._queue:
+            return
+        record = self._records.get(operation_id)
+        if record is None or record.state not in {
+            MediaOperationState.READY,
+            MediaOperationState.FAILED,
+            MediaOperationState.CANCELLED,
+        }:
+            return
+        if record.state == MediaOperationState.FAILED and spec.retryable:
+            return
+        self._records.pop(operation_id, None)
+        self._specs.pop(operation_id, None)
+        self._commit_results.pop(operation_id, None)
 
     def _publish(self, record: MediaOperationRecord) -> None:
         self._records[record.operation_id] = record

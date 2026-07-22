@@ -1,19 +1,6 @@
 from types import SimpleNamespace
 
-from solin.core.media.cache import MediaCacheManager
-from solin.core.media.thumbnail_store import ThumbnailStore
-from solin.ui.qml.playlist.model import PlaylistEditModel
 from solin.widgets.playlist.widget import PlaylistWidget
-
-
-def _model(tmp_path):
-    return PlaylistEditModel(
-        MediaCacheManager(
-            tmp_path / "media",
-            downloader_factory=lambda _parent: None,
-        ),
-        ThumbnailStore(tmp_path / "thumbs"),
-    )
 
 
 def _playlist():
@@ -41,13 +28,10 @@ def _widget(tmp_path, playlist):
     widget = SimpleNamespace(
         _playlists=[playlist],
         _edit_view=SimpleNamespace(
-            model=_model(tmp_path),
             _pl=None,
-            _rebuild_list=lambda: None,
+            _reconcile_playlist=lambda: None,
         ),
-        _playlist_repository=SimpleNamespace(
-            save=lambda playlists: saves.append(playlists)
-        ),
+        _persist_playlists=lambda: saves.append(playlist),
         _stack=SimpleNamespace(currentIndex=lambda: 0),
     )
     return widget, saves

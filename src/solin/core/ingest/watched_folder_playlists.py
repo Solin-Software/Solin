@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import logging
 import threading
-from typing import Any
+from typing import Any, TypeVar
 
-from solin.core.ingest.local_files import local_file_availability_signature
+from solin.core.foundation.resource_keys import (
+    ResourceClaim,
+    child_folder_resource_claim,
+    folder_read_resource_claim,
+)
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+from solin.core.ingest.local_files import (
+    LocalFileAvailabilitySignature,
+    local_file_availability_signature,
+)
+
+
+_T = TypeVar("_T")
 from solin.core.ingest.watched_folder import (
     WatchedFolderSyncThread,
     get_pending_files,
@@ -22,22 +33,60 @@ from solin.core.ingest.watched_folder import (
 class WatchedFolderPlaylistStore:
     """Facade for watched-folder playlist manifests and sync workers."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        resource_lanes: ResourceLaneRegistry | None = None,
+    ) -> None:
         self._listeners: set[Callable[[], None]] = set()
         self._listener_lock = threading.RLock()
+        self._resource_lanes = resource_lanes or ResourceLaneRegistry()
+        self._resource_lanes_used = False
+
+    def bind_resource_lanes(self, resource_lanes: ResourceLaneRegistry) -> None:
+        """Bind the application-wide registry before the store starts serving work."""
+
+        if not isinstance(resource_lanes, ResourceLaneRegistry):
+            raise TypeError("resource_lanes must be a ResourceLaneRegistry")
+        if self._resource_lanes_used and resource_lanes is not self._resource_lanes:
+            raise RuntimeError("Cannot replace resource lanes after store use")
+        self._resource_lanes = resource_lanes
 
     def scan_root(self, folder_path: str) -> list[dict[str, Any]]:
-        return scan_root(folder_path)
+        return self._run_claimed(
+            folder_read_resource_claim(folder_path),
+            lambda: scan_root(folder_path),
+        )
+
+    def load_all_playlists(self, folder_path: str) -> list[dict[str, Any]]:
+        """Load one consistent linked-playlist catalog under a root read claim."""
+
+        def load_all() -> list[dict[str, Any]]:
+            return [
+                self.load_playlist(str(entry["path"]))
+                for entry in scan_root(folder_path)
+                if entry.get("path")
+            ]
+
+        return self._run_claimed(folder_read_resource_claim(folder_path), load_all)
 
     def load_playlist(self, folder_path: str) -> dict[str, Any]:
-        return load_manifest_playlist(folder_path)
+        return self._run_claimed(
+            child_folder_resource_claim(folder_path),
+            lambda: load_manifest_playlist(folder_path),
+        )
 
     def save_playlist(self, folder_path: str, playlist: dict[str, Any]) -> None:
-        save_manifest_playlist(folder_path, playlist)
+        self._run_claimed(
+            child_folder_resource_claim(folder_path),
+            lambda: save_manifest_playlist(folder_path, playlist),
+        )
         self._publish_changed()
 
     def remove_item(self, folder_path: str, item: dict[str, Any]) -> bool:
-        removed = remove_item_from_manifest(folder_path, item)
+        removed = self._run_claimed(
+            child_folder_resource_claim(folder_path),
+            lambda: remove_item_from_manifest(folder_path, item),
+        )
         if removed:
             self._publish_changed()
         return removed
@@ -69,12 +118,15 @@ class WatchedFolderPlaylistStore:
                 )
 
     def pending_files(self, folder_path: str) -> list[str]:
-        return get_pending_files(folder_path)
+        return self._run_claimed(
+            child_folder_resource_claim(folder_path),
+            lambda: get_pending_files(folder_path),
+        )
 
     def file_availability_signature(
         self,
         urls: Iterable[str],
-    ) -> tuple[tuple[str, bool], ...]:
+    ) -> LocalFileAvailabilitySignature:
         return local_file_availability_signature(urls)
 
     def create_sync_thread(
@@ -85,9 +137,20 @@ class WatchedFolderPlaylistStore:
         fallback_lang_code: str,
         parent: Any,
     ) -> WatchedFolderSyncThread:
+        self._resource_lanes_used = True
         return WatchedFolderSyncThread(
             folder_path,
             media_lang=media_lang,
             fallback_lang_code=fallback_lang_code,
+            resource_lanes=self._resource_lanes,
+            resource_claim=child_folder_resource_claim(folder_path),
             parent=parent,
         )
+
+    def _run_claimed(
+        self,
+        claim: ResourceClaim,
+        action: Callable[[], _T],
+    ) -> _T:
+        self._resource_lanes_used = True
+        return self._resource_lanes.run(claim, action)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 import math
 
@@ -32,6 +32,7 @@ class MediaPresentationState:
     availability: MediaAvailability = MediaAvailability.UNKNOWN
     local_path: str = ""
     thumbnail_source: str = ""
+    source_signature: str = ""
     cached: bool = False
     cloud_progress: float = -1.0
     duration_ticks: int = 0
@@ -41,7 +42,12 @@ class MediaPresentationState:
     def __post_init__(self) -> None:
         if not isinstance(self.availability, MediaAvailability):
             raise TypeError("availability must be a MediaAvailability")
-        for value in (self.local_path, self.thumbnail_source, self.error):
+        for value in (
+            self.local_path,
+            self.thumbnail_source,
+            self.source_signature,
+            self.error,
+        ):
             if not isinstance(value, str):
                 raise TypeError("Media presentation paths and errors must be strings")
         if not isinstance(self.cached, bool):
@@ -96,6 +102,8 @@ class MediaStateRegistry(QObject):
         if not owner_id or not node_id or not purpose:
             raise ValueError("Probe owner, node, and purpose must not be empty")
         identity = (owner_id, node_id, purpose)
+        previous_key = self._keys.get(identity)
+        source_changed = previous_key is not None and previous_key.source != source
         generation = self._generations.get(identity, 0) + 1
         self._generations[identity] = generation
         key = MediaProbeKey(owner_id, node_id, source, purpose, generation)
@@ -104,12 +112,21 @@ class MediaStateRegistry(QObject):
         previous = self._states.get(state_key)
         checking = MediaPresentationState(
             availability=MediaAvailability.CHECKING,
-            local_path=previous.local_path if previous else "",
-            thumbnail_source=previous.thumbnail_source if previous else "",
-            cached=previous.cached if previous else False,
+            local_path=previous.local_path if previous and not source_changed else "",
+            thumbnail_source=(
+                previous.thumbnail_source if previous and not source_changed else ""
+            ),
+            source_signature=(
+                previous.source_signature if previous and not source_changed else ""
+            ),
+            cached=previous.cached if previous and not source_changed else False,
             cloud_progress=-1.0,
-            duration_ticks=previous.duration_ticks if previous else 0,
-            image_aspect_ratio=previous.image_aspect_ratio if previous else 0.0,
+            duration_ticks=(
+                previous.duration_ticks if previous and not source_changed else 0
+            ),
+            image_aspect_ratio=(
+                previous.image_aspect_ratio if previous and not source_changed else 0.0
+            ),
         )
         self._states[state_key] = checking
         self.stateChanged.emit(owner_id, node_id)
@@ -129,6 +146,36 @@ class MediaStateRegistry(QObject):
 
     def state(self, owner_id: str, node_id: str) -> MediaPresentationState:
         return self._states.get((owner_id, node_id), MediaPresentationState())
+
+    def patch(
+        self,
+        owner_id: str,
+        node_id: str,
+        **changes: object,
+    ) -> MediaPresentationState:
+        """Merge UI-known progress into memory without probing the filesystem."""
+
+        state_key = (owner_id, node_id)
+        current = self._states.get(state_key, MediaPresentationState())
+        allowed = {
+            "availability",
+            "local_path",
+            "thumbnail_source",
+            "source_signature",
+            "cached",
+            "cloud_progress",
+            "duration_ticks",
+            "image_aspect_ratio",
+            "error",
+        }
+        unknown = set(changes) - allowed
+        if unknown:
+            raise ValueError(f"Unknown media presentation fields: {sorted(unknown)}")
+        updated = replace(current, **changes)
+        if updated != current:
+            self._states[state_key] = updated
+            self.stateChanged.emit(owner_id, node_id)
+        return updated
 
     def remove(self, owner_id: str, node_id: str) -> None:
         identities = [

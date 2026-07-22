@@ -8,6 +8,7 @@ from enum import StrEnum
 import math
 
 from solin.core.foundation.thread_workers import CancellationFlag
+from solin.core.foundation.resource_keys import ResourceClaim
 
 
 class MediaOperationState(StrEnum):
@@ -68,6 +69,7 @@ MediaOperationRunner = Callable[[ProgressReporter, CancellationFlag], object]
 MediaOperationCommit = Callable[[object], None]
 MediaOperationFailure = Callable[[str, bool], None]
 MediaOperationCancellation = Callable[[], None]
+MediaOperationDiscard = Callable[[object | None], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,26 +77,36 @@ class MediaOperationSpec:
     operation_id: str
     scope_id: str
     operation_type: str
-    conflict_key: str
+    conflict_key: str | ResourceClaim
     presentation: MediaOperationPresentation
     runner: MediaOperationRunner
     commit: MediaOperationCommit
+    subject_id: str = ""
+    priority: int = 0
     initial_stage: str = ""
     retryable: bool = False
     failed: MediaOperationFailure | None = None
     cancelled: MediaOperationCancellation | None = None
+    discarded: MediaOperationDiscard | None = None
 
     def __post_init__(self) -> None:
         for name, value in (
             ("operation_id", self.operation_id),
             ("scope_id", self.scope_id),
             ("operation_type", self.operation_type),
-            ("conflict_key", self.conflict_key),
         ):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must not be empty")
+        if not isinstance(self.conflict_key, (str, ResourceClaim)):
+            raise TypeError("conflict_key must be a string or ResourceClaim")
+        if isinstance(self.conflict_key, str) and not self.conflict_key.strip():
+            raise ValueError("conflict_key must not be empty")
         if not isinstance(self.presentation, MediaOperationPresentation):
             raise TypeError("presentation must be a MediaOperationPresentation")
+        if not isinstance(self.subject_id, str):
+            raise TypeError("subject_id must be a string")
+        if not isinstance(self.priority, int) or isinstance(self.priority, bool):
+            raise TypeError("priority must be an integer")
         if not callable(self.runner) or not callable(self.commit):
             raise TypeError("runner and commit must be callable")
         if not isinstance(self.initial_stage, str):
@@ -108,6 +120,7 @@ class MediaOperationRecord:
     operation_type: str
     presentation: MediaOperationPresentation
     state: MediaOperationState
+    subject_id: str = ""
     stage: str = ""
     detail: str = ""
     completed: int = 0

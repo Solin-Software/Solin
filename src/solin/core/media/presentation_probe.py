@@ -9,6 +9,8 @@ from pathlib import Path
 import stat
 
 from solin.core.media.download_storage import completed_cached_path, is_remote_url
+from solin.core.media.local_source import source_signature_from_stat
+from solin.core.media.thumbnail_store import read_thumbnail_source_signature
 
 
 class ProbedMediaAvailability(StrEnum):
@@ -30,6 +32,8 @@ class MediaPresentationProbeResult:
     local_path: str = ""
     cached: bool = False
     thumbnail_exists: bool = False
+    thumbnail_source_signature: str = ""
+    source_signature: str = ""
     error: str = ""
 
 
@@ -39,11 +43,17 @@ def probe_media_presentation(
     """Resolve local/cache/thumb state without touching any QObject or QPixmap."""
 
     thumbnail_exists = _is_regular_file(request.thumbnail_path)
+    thumbnail_source_signature = (
+        read_thumbnail_source_signature(request.thumbnail_path)
+        if thumbnail_exists
+        else ""
+    )
     source = request.source
     if not source:
         return MediaPresentationProbeResult(
             ProbedMediaAvailability.MISSING,
             thumbnail_exists=thumbnail_exists,
+            thumbnail_source_signature=thumbnail_source_signature,
         )
     if is_remote_url(source):
         try:
@@ -52,6 +62,7 @@ def probe_media_presentation(
             return MediaPresentationProbeResult(
                 ProbedMediaAvailability.AVAILABLE,
                 thumbnail_exists=thumbnail_exists,
+                thumbnail_source_signature=thumbnail_source_signature,
                 error=str(exc),
             )
         return MediaPresentationProbeResult(
@@ -59,6 +70,7 @@ def probe_media_presentation(
             local_path=cached_path or "",
             cached=cached_path is not None,
             thumbnail_exists=thumbnail_exists,
+            thumbnail_source_signature=thumbnail_source_signature,
         )
 
     try:
@@ -67,22 +79,27 @@ def probe_media_presentation(
         return MediaPresentationProbeResult(
             ProbedMediaAvailability.MISSING,
             thumbnail_exists=thumbnail_exists,
+            thumbnail_source_signature=thumbnail_source_signature,
         )
     except OSError as exc:
         return MediaPresentationProbeResult(
             ProbedMediaAvailability.TEMPORARILY_UNAVAILABLE,
             thumbnail_exists=thumbnail_exists,
+            thumbnail_source_signature=thumbnail_source_signature,
             error=str(exc),
         )
     if not stat.S_ISREG(source_stat.st_mode):
         return MediaPresentationProbeResult(
             ProbedMediaAvailability.MISSING,
             thumbnail_exists=thumbnail_exists,
+            thumbnail_source_signature=thumbnail_source_signature,
         )
     return MediaPresentationProbeResult(
         ProbedMediaAvailability.AVAILABLE,
         local_path=os.path.abspath(source),
         thumbnail_exists=thumbnail_exists,
+        thumbnail_source_signature=thumbnail_source_signature,
+        source_signature=source_signature_from_stat(source_stat),
     )
 
 

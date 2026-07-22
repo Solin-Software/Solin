@@ -5,6 +5,7 @@ import os
 import random
 import uuid
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QDialog, QFileDialog
@@ -17,8 +18,22 @@ from ...core.foundation.constants import (
 from ...core.media.formats import MEDIA_EXTS, media_type_from_path
 from ...core.media.identity import contains_media, partition_media_items
 from ...core.media.insertion import MediaInsertResult
+from ...core.media.operations import (
+    MediaOperationPresentation,
+    MediaOperationProgress,
+    MediaOperationSpec,
+    MediaOperationState,
+)
+from ...core.media.thumbnail_identity import thumbnail_storage_id
+from ...core.foundation.resource_keys import child_folder_resource_claim
+from ...core.ingest.watched_folder_files import (
+    WatchedFolderCopyRequest,
+    WatchedFolderCopyResult,
+)
+from ...core.playlists.tree_editing import insert_playlist_media
 from ...core.jw.identifiers import lang_to_meps
 from ...core.playlists.items import create_playlist_item
+from ...ui.qml.media_tree.state import MediaAvailability
 from .dialogs import NameDialog
 
 
@@ -52,7 +67,12 @@ class PlaylistEditActionsMixin:
             is_loading=False,
             item_count=n,
             item_word=word,
-            has_entries=self.model.entry_count() > 0,
+            has_entries=bool(
+                items
+                or self._pl.get("sections")
+                or self._pl.get("markers")
+                or self._tree_session.pending_items()
+            ),
             emit_data_changed=emit_data_changed,
         )
 
@@ -67,36 +87,41 @@ class PlaylistEditActionsMixin:
         if not self._pl:
             return
         added = skipped = 0
-        new_items = []
+        new_items: list[dict[str, Any]] = []
+        pending_items = list(self._tree_session.pending_items())
         for path in paths:
             if Path(path).suffix.lower() not in MEDIA_EXTS:
                 continue
 
-            actual_path = path
             if self._is_watched and self._watched_path:
-                watched_sub = Path(self._watched_path)
-                try:
-                    Path(path).relative_to(watched_sub)
-                except ValueError:
-                    try:
-                        actual_path = self._watched_folder_file_store.copy_file_into_folder(
-                            path,
-                            watched_sub,
-                        )
-                    except OSError as e:
-                        import logging
+                candidate = dict(create_playlist_item(
+                    title=Path(path).stem,
+                    url=path,
+                    **({"section_id": section_id} if section_id else {}),
+                ))
+                if contains_media(
+                    [*self._pl.get("items", []), *pending_items],
+                    candidate,
+                ):
+                    skipped += 1
+                    continue
+                list_id = target_list_id or self._list_id_for_section(section_id)
+                list_index = target_list_index if target_list_index >= 0 else -1
+                self._queue_watched_media_copy(
+                    candidate,
+                    source_path=path,
+                    target_list_id=list_id,
+                    target_list_index=list_index,
+                )
+                pending_items.append(candidate)
+                added += 1
+                continue
 
-                        logging.getLogger(__name__).warning(
-                            "Failed to copy %s to watched folder: %s",
-                            path,
-                            e,
-                        )
-
-            candidate = create_playlist_item(
-                title=Path(actual_path).stem,
-                url=actual_path,
+            candidate = dict(create_playlist_item(
+                title=Path(path).stem,
+                url=path,
                 **({"section_id": section_id} if section_id else {}),
-            )
+            ))
             if contains_media(
                 [*self._pl.get("items", []), *new_items],
                 candidate,
@@ -110,7 +135,7 @@ class PlaylistEditActionsMixin:
             inserted_with_tree = (
                 bool(target_list_id)
                 and target_list_index >= 0
-                and self.model.insert_media_refs(
+                and self._tree_session.insert_media(
                     target_list_id,
                     target_list_index,
                     new_items,
@@ -125,21 +150,16 @@ class PlaylistEditActionsMixin:
             else:
                 for i, ni in enumerate(new_items):
                     items.insert(insert_at + i, ni)
-                self.model.rebuild(self._pl)
+                self._tree_session.refresh()
             self._save()
             if appended_flat:
-                self.model.rebuild(self._pl)
+                self._tree_session.refresh()
             self._sync_playlist_chrome(emit_data_changed=False)
-
-            list_id = target_list_id or self._list_id_for_section(section_id)
-            list_index = target_list_index if target_list_index >= 0 else 2**31 - 1
-            self.bridge.emit_media_inserted(
-                list_id,
-                list_index,
-                [item["id"] for item in new_items],
-            )
-            self.bridge.emit_section_counts_changed()
             QTimer.singleShot(0, self._request_missing_thumbnails)
+        if added and self._is_watched:
+            self._sync_playlist_chrome(emit_data_changed=False)
+            return
+        if added:
             if added == 1:
                 msg = self.tr("1 file added")
             else:
@@ -157,6 +177,146 @@ class PlaylistEditActionsMixin:
                 self._notifications.warning(self.tr("File already in playlist"))
             else:
                 self._notifications.warning(self.tr("Files already in playlist"))
+
+    def _queue_watched_media_copy(
+        self,
+        item: dict[str, Any],
+        *,
+        source_path: str,
+        target_list_id: str,
+        target_list_index: int,
+    ) -> None:
+        playlist = self._pl
+        folder_path = self._watched_path
+        owner_id = self._tree_session.owner_id
+        session_generation = self._tree_session.generation
+        if playlist is None or not folder_path or not owner_id:
+            return
+        initial_item_ids = {
+            str(current.get("id") or "")
+            for current in playlist.get("items", [])
+        }
+        item_id = str(item["id"])
+        operation_id = f"linked-copy:{uuid.uuid4().hex}"
+        stage = self.tr("Preparing media")
+        self._tree_session.add_pending(
+            item,
+            target_list_id=target_list_id,
+            insert_index=target_list_index,
+        )
+        request = WatchedFolderCopyRequest(
+            source=Path(source_path),
+            folder=Path(folder_path),
+            operation_id=operation_id,
+        )
+
+        def run(report, cancellation):
+            return self._watched_folder_file_store.copy_file_transaction(
+                request,
+                progress=lambda completed, total: report(
+                    MediaOperationProgress(
+                        state=MediaOperationState.COPYING,
+                        stage=stage,
+                        detail=Path(source_path).name,
+                        completed=completed,
+                        total=total,
+                    )
+                ),
+                cancellation=cancellation,
+            )
+
+        def commit(value: object) -> None:
+            if not isinstance(value, WatchedFolderCopyResult):
+                raise TypeError("Linked-folder copy returned an invalid result")
+            active_playlist = self._tree_session.playlist
+            if (
+                self._tree_session.owner_id != owner_id
+                or self._tree_session.generation != session_generation
+                or active_playlist is None
+            ):
+                discard(value)
+                return
+            item["url"] = str(value.destination)
+            item["title"] = value.destination.stem
+            if not value.already_present:
+                destination_key = os.path.normcase(
+                    os.path.normpath(os.path.abspath(value.destination))
+                )
+                auto_adopted_ids = {
+                    str(current.get("id") or "")
+                    for current in active_playlist.get("items", [])
+                    if str(current.get("id") or "") not in initial_item_ids
+                    and not str(current.get("url") or "").startswith(
+                        ("http://", "https://")
+                    )
+                    and os.path.normcase(
+                        os.path.normpath(
+                            os.path.abspath(str(current.get("url") or ""))
+                        )
+                    )
+                    == destination_key
+                }
+                if auto_adopted_ids:
+                    active_playlist["items"] = [
+                        current
+                        for current in active_playlist.get("items", [])
+                        if str(current.get("id") or "") not in auto_adopted_ids
+                    ]
+            if contains_media(active_playlist.get("items", []), item):
+                self._tree_session.remove_pending(item_id)
+                self._tree_session.refresh()
+                self._sync_playlist_chrome(emit_data_changed=False)
+                self._notifications.warning(self.tr("File already in playlist"))
+                return
+            inserted = insert_playlist_media(
+                active_playlist,
+                target_list_id,
+                target_list_index,
+                [item],
+            )
+            if not inserted:
+                self._tree_session.remove_pending(item_id)
+                self._tree_session.refresh()
+                discard(value)
+                self._sync_playlist_chrome(emit_data_changed=False)
+                self._notifications.warning(
+                    self.tr("Could not update the linked folder.")
+                )
+                return
+            self._schedule_manifest_save(folder_path, active_playlist)
+            if self._tree_session.owner_id == owner_id:
+                self._tree_session.remove_pending(item_id)
+                self._tree_session.refresh()
+                self._sync_playlist_chrome(emit_data_changed=False)
+                QTimer.singleShot(0, self._request_missing_thumbnails)
+                self._notifications.success(self.tr("1 file added"))
+
+        def discard(value: object | None) -> None:
+            if not isinstance(value, WatchedFolderCopyResult) or value.already_present:
+                return
+            self._media_tree_runtime.schedule_artifact_cleanup(
+                (value.destination,),
+                conflict_key=child_folder_resource_claim(folder_path),
+            )
+
+        submitted = self._media_tree_runtime.operations.submit(
+            MediaOperationSpec(
+                operation_id=operation_id,
+                scope_id=owner_id,
+                subject_id=item_id,
+                operation_type="linked_folder_copy",
+                conflict_key=child_folder_resource_claim(folder_path),
+                presentation=MediaOperationPresentation.TREE_LOCAL,
+                runner=run,
+                commit=commit,
+                priority=100,
+                initial_stage=stage,
+                retryable=True,
+                discarded=discard,
+            )
+        )
+        if not submitted:
+            self._tree_session.remove_pending(item_id)
 
     def _on_jw_media_confirmed(
         self,
@@ -207,21 +367,22 @@ class PlaylistEditActionsMixin:
             return MediaInsertResult(duplicate_items=partition.duplicate_items)
 
         thumb_path = item_data.get("thumbnail_path", "")
-        if thumb_path and os.path.exists(thumb_path):
-            try:
-                self._playlist_thumbnail_store.copy_from(pl_item_id, thumb_path)
-            except OSError as e:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "Failed to copy catalog thumbnail: %s",
-                    e,
-                )
+        if thumb_path:
+            self._media_tree_runtime.thumbnails.copy_file(
+                owner_id=self._tree_session.owner_id,
+                node_id=pl_item_id,
+                storage_id=thumbnail_storage_id(
+                    pl_item_id,
+                    str(pl_item.get("url") or ""),
+                ),
+                store=self._playlist_thumbnail_store,
+                source=thumb_path,
+            )
 
         items = self._pl.setdefault("items", [])
         inserted = False
         if target_list_id and target_index >= 0:
-            inserted = self.model.insert_media_refs(
+            inserted = self._tree_session.insert_media(
                 target_list_id,
                 target_index,
                 [pl_item],
@@ -231,19 +392,11 @@ class PlaylistEditActionsMixin:
             if target_list_id and target_index >= 0:
                 return MediaInsertResult(target_valid=False)
             items.append(pl_item)
-            self.model.rebuild(self._pl)
+            self._tree_session.refresh()
 
         self._save()
         self._sync_playlist_chrome(emit_data_changed=False)
 
-        list_id = target_list_id or "root"
-        list_index = target_index if target_index >= 0 else 2**31 - 1
-        self.bridge.emit_media_inserted(
-            list_id,
-            list_index,
-            [pl_item_id],
-        )
-        self.bridge.emit_section_counts_changed()
         QTimer.singleShot(0, self._request_missing_thumbnails)
         return MediaInsertResult(added_items=(pl_item,))
 
@@ -290,14 +443,21 @@ class PlaylistEditActionsMixin:
             return
         self.project_items.emit(items[idx:] + items[:idx], 0, "")
 
-    @staticmethod
-    def _is_playable(item: dict) -> bool:
+    def _is_playable(self, item: dict) -> bool:
         url = item.get("url", "")
         if not url:
             return False
         if url.startswith(("http://", "https://")):
             return True
-        return os.path.exists(url)
+        item_id = str(item.get("id") or "")
+        state = self._media_tree_runtime.registry.state(
+            self._tree_session.owner_id,
+            item_id,
+        )
+        return state.availability not in {
+            MediaAvailability.MISSING,
+            MediaAvailability.ERROR,
+        }
 
     def _do_play_all(self) -> None:
         self._flush_image_framing_save()
@@ -363,5 +523,4 @@ class PlaylistEditActionsMixin:
         name = dlg.get_name()
         if not name:
             return
-        self.model.finalize_drag()
         self.save_temp_as_permanent.emit(name, copy.deepcopy(self._pl or {}))

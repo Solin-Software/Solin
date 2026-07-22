@@ -359,6 +359,10 @@ class WatchedFolderCard(QFrame):
         lay.addWidget(self._mbtn, alignment=Qt.AlignmentFlag.AlignVCenter)
         self.apply_theme()
 
+    @property
+    def path(self) -> str:
+        return self._path
+
     def _set_style(self, hovered: bool) -> None:
         self._hovered = hovered
         bg = PALETTE.warning_surface_hover if hovered else PALETTE.warning_surface

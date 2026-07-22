@@ -7,7 +7,6 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
-from collections import deque
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +44,8 @@ from solin.core.meetings.tree_merger import (
 )
 from solin.core.meetings.tree_types import iter_nodes
 from solin.core.i18n.meeting_sections import display_meeting_section_title
+from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
+from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
 from tests._paths import FIXTURES_DIR
 from solin.widgets.meetings.tree_controller import (
     MeetingTreeController,
@@ -95,15 +96,53 @@ def test_media_info_request_replaces_pending_work_when_source_changes() -> None:
     assert set(controller._info_request_by_token) == {2}
 
 
-def test_removed_meeting_item_cancels_queued_and_retrying_media_work() -> None:
-    invalidated = []
-    removed_key = ("removed", "metadata", "source-a")
-    kept_key = ("kept", "thumb", "source-b")
+def test_media_info_request_replaces_same_path_when_source_revision_changes() -> None:
+    class _Queue:
+        def __init__(self) -> None:
+            self.invalidated = []
+            self.requests = []
+
+        def invalidate(self, token) -> None:
+            self.invalidated.append(token)
+
+        def request(self, *args, **kwargs) -> None:
+            self.requests.append((args, kwargs))
+
+    queue = _Queue()
     controller = SimpleNamespace(
-        _media_request_queue=deque([
-            {"id": "removed"},
-            {"id": "kept"},
-        ]),
+        _info_queue=queue,
+        _info_request_by_token={},
+        _active_info_requests=set(),
+        _next_token=1,
+        _media_info_source_identity=(
+            MeetingTreeController._media_info_source_identity
+        ),
+    )
+
+    MeetingTreeController._queue_info(
+        controller,
+        "media-1",
+        "C:/media/video.mp4",
+        "video",
+        source_signature="100:1",
+    )
+    MeetingTreeController._queue_info(
+        controller,
+        "media-1",
+        "C:/media/video.mp4",
+        "video",
+        source_signature="100:2",
+    )
+
+    assert queue.invalidated == [1]
+    assert set(controller._info_request_by_token) == {2}
+
+
+def test_removed_meeting_item_cancels_active_media_work() -> None:
+    invalidated = []
+    removed_key = ("removed", "metadata", "source-a", "100:1")
+    kept_key = ("kept", "thumb", "source-b", "")
+    controller = SimpleNamespace(
         _info_request_by_token={3: removed_key, 4: kept_key},
         _active_info_requests={removed_key, kept_key},
         _info_queue=SimpleNamespace(invalidate=invalidated.append),
@@ -115,9 +154,28 @@ def test_removed_meeting_item_cancels_queued_and_retrying_media_work() -> None:
     )
 
     assert invalidated == [3]
-    assert list(controller._media_request_queue) == [{"id": "kept"}]
     assert controller._info_request_by_token == {4: kept_key}
     assert controller._active_info_requests == {kept_key}
+
+
+def test_meeting_source_change_failure_reprobes_before_retry() -> None:
+    request_key = ("media-1", "metadata", "source-a", "100:1")
+    requested = []
+    controller = SimpleNamespace(
+        _info_request_by_token={3: request_key},
+        _active_info_requests={request_key},
+        _tree_session=SimpleNamespace(request_nodes=requested.append),
+    )
+
+    MeetingTreeController._on_info_failed(
+        controller,
+        3,
+        SimpleNamespace(code="source-changed"),
+    )
+
+    assert controller._info_request_by_token == {}
+    assert controller._active_info_requests == set()
+    assert requested == [{"media-1"}]
 
 
 def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> None:
@@ -864,29 +922,17 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
         def stop(self):
             self.stopped += 1
 
-    def test_stale_jwpub_video_file_path_falls_back_to_jw_resolution(self):
-        calls: list[tuple[str, MeetingMedia]] = []
-
-        class FakeService:
-            def resolve_video_async(self, request_id: str, item: MeetingMedia) -> None:
-                calls.append((request_id, item))
-
+    def test_jwpub_file_path_is_deferred_to_the_async_probe(self):
         class FakeController:
             pass
 
         controller = FakeController()
         controller._resolved_urls = {}
-        controller._resolve_to_node_id = {}
-        controller._svc = FakeService()
         controller._url_for_node = (
             lambda node: MeetingTreeController._url_for_node(controller, node)
         )
-        controller._local_media_path = lambda _node: ""
-        controller._has_local_thumbnail = lambda node: False
-        controller._duration_ticks = lambda node: 0
-        controller._media_type_from_ref = lambda ref: "video"
-        controller._queue_info = lambda *args, **kwargs: None
-        controller._emit_cloud_for_node = lambda item_id: None
+        requested: list[set[str]] = []
+        controller._tree_session = SimpleNamespace(request_nodes=requested.append)
 
         node = {
             "id": "video-node",
@@ -902,16 +948,14 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             },
         }
 
-        self.assertEqual(MeetingTreeController._url_for_node(controller, node), "")
+        self.assertEqual(
+            MeetingTreeController._url_for_node(controller, node),
+            "w_LGP_202604_02_r720P.mp4",
+        )
 
-        MeetingTreeController._start_media_request(controller, node)
+        MeetingTreeController._start_media_requests(controller, [node])
 
-        self.assertEqual(len(calls), 1)
-        request_id, item = calls[0]
-        self.assertIn(request_id, controller._resolve_to_node_id)
-        self.assertEqual(controller._resolve_to_node_id[request_id], "video-node")
-        self.assertEqual(item.key_symbol, "w")
-        self.assertEqual(item.track, 2)
+        self.assertEqual(requested, [{"video-node"}])
 
     def test_missing_plain_local_file_still_reports_missing_url(self):
         class FakeController:
@@ -933,64 +977,42 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             )
 
     def test_local_image_thumb_source_uses_file_until_generated_thumb_exists(self):
-        class FakeController:
-            pass
-
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "photo.jpg"
             source.write_bytes(b"image")
-            node = {
-                "id": "image-node",
-                "type": "media",
-                "media_type": "image",
-                "media_ref": {"file_path": str(source)},
-            }
-            controller = FakeController()
-            controller._resolved_urls = {}
-            controller._thumb_source_for = lambda _item_id: ""
-            controller._media_type_from_ref = lambda _ref: "image"
-            controller._url_for_node = (
-                lambda target: MeetingTreeController._url_for_node(controller, target)
-            )
-            controller._local_media_path = lambda _node: str(source)
-
-            source_url = MeetingTreeController._display_thumb_source_for(
-                controller,
-                node,
-                "image-node",
+            roles = media_roles(
+                MediaRoleInput("image-node", "Photo", "image", "Image", str(source)),
+                MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                    local_path=str(source),
+                ),
+                None,
             )
 
+            source_url = str(roles["thumbSource"])
             self.assertTrue(source_url.startswith("file:///"))
             self.assertTrue(source_url.endswith("photo.jpg"))
 
     def test_generated_thumb_source_wins_over_local_image_file_source(self):
-        class FakeController:
-            pass
-
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "photo.jpg"
             source.write_bytes(b"image")
-            node = {
-                "id": "image-node",
-                "type": "media",
-                "media_type": "image",
-                "media_ref": {"file_path": str(source)},
-            }
-            controller = FakeController()
-            controller._thumb_source_for = (
-                lambda _item_id: "image://playlistthumbs/image-node/1"
+            roles = media_roles(
+                MediaRoleInput("image-node", "Photo", "image", "Image", str(source)),
+                MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                    local_path=str(source),
+                    thumbnail_source="image://playlistthumbs/image-node/1",
+                ),
+                None,
             )
 
             self.assertEqual(
-                MeetingTreeController._display_thumb_source_for(
-                    controller,
-                    node,
-                    "image-node",
-                ),
+                roles["thumbSource"],
                 "image://playlistthumbs/image-node/1",
             )
 
-    def test_local_image_uses_source_without_generating_duplicate_thumbnail(self):
+    def test_local_image_probe_is_scheduled_without_synchronous_metadata_work(self):
         class FakeController:
             pass
 
@@ -1007,23 +1029,18 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
                 },
             }
             controller = FakeController()
-            controller._local_media_path = lambda _node: str(source)
             controller._url_for_node = lambda _node: str(source)
-            controller._has_local_thumbnail = lambda _node: False
-            controller._duration_ticks = lambda _node: 0
-            controller._media_type_from_ref = lambda _ref: "image"
+            requested: list[set[str]] = []
+            controller._tree_session = SimpleNamespace(request_nodes=requested.append)
             controller._queue_info = lambda *_args, **_kwargs: self.fail(
-                "local images must not be decoded by the metadata queue"
+                "media discovery must stay in the asynchronous probe"
             )
-            emitted: list[str] = []
-            controller._emit_media_changed = emitted.append
-            controller._emit_cloud_for_node = lambda _item_id: None
 
-            MeetingTreeController._start_media_request(controller, node)
+            MeetingTreeController._start_media_requests(controller, [node])
 
-            self.assertEqual(emitted, ["image-node"])
+            self.assertEqual(requested, [{"image-node"}])
 
-    def test_remote_uncached_media_does_not_start_implicit_metadata_request(self):
+    def test_remote_uncached_media_is_scheduled_through_the_async_probe(self):
         class FakeController:
             pass
 
@@ -1035,22 +1052,18 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             "media_ref": {"mime_type": "video/mp4"},
         }
         controller = FakeController()
-        controller._local_media_path = lambda _node: ""
         controller._url_for_node = lambda target: target["resolved_url"]
-        controller._has_local_thumbnail = lambda _node: False
-        controller._duration_ticks = lambda _node: 0
-        controller._media_type_from_ref = lambda _ref: "video"
+        requested: list[set[str]] = []
+        controller._tree_session = SimpleNamespace(request_nodes=requested.append)
         controller._queue_info = lambda *_args, **_kwargs: self.fail(
             "uncached remote media must remain behind the cloud action"
         )
-        cloud_updates: list[str] = []
-        controller._emit_cloud_for_node = cloud_updates.append
 
-        MeetingTreeController._start_media_request(controller, node)
+        MeetingTreeController._start_media_requests(controller, [node])
 
-        self.assertEqual(cloud_updates, ["video-node"])
+        self.assertEqual(requested, [{"video-node"}])
 
-    def test_remote_uncached_media_fetches_known_thumbnail_without_probing_media(self):
+    def test_remote_uncached_media_fetches_known_thumbnail_after_probe(self):
         class FakeController:
             pass
 
@@ -1064,19 +1077,31 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
             "media_ref": {"mime_type": "video/mp4"},
         }
         controller = FakeController()
-        controller._local_media_path = lambda _node: ""
-        controller._url_for_node = lambda target: target["resolved_url"]
-        controller._has_local_thumbnail = lambda _node: False
+        controller._nodes = [node]
+        controller._find_node = lambda item_id: node if item_id == "video-node" else None
         controller._duration_ticks = lambda _node: 123_000_000
         controller._media_type_from_ref = lambda _ref: "video"
+        controller._tree_session = SimpleNamespace(owner_id="meeting:test")
+        controller._media_tree_runtime = SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _item: MediaPresentationState(
+                    availability=MediaAvailability.AVAILABLE,
+                )
+            )
+        )
+        controller._request_jw_resolution = lambda *_args, **_kwargs: self.fail(
+            "available remote media must not be resolved again"
+        )
         requests: list[tuple[tuple, dict]] = []
         controller._queue_info = lambda *args, **kwargs: requests.append(
             (args, kwargs)
         )
-        cloud_updates: list[str] = []
-        controller._emit_cloud_for_node = cloud_updates.append
 
-        MeetingTreeController._start_media_request(controller, node)
+        MeetingTreeController._on_presentation_state_changed(
+            controller,
+            "meeting:test",
+            "video-node",
+        )
 
         self.assertEqual(
             requests,
@@ -1087,7 +1112,6 @@ class MeetingTreeControllerMediaResolutionTests(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(cloud_updates, ["video-node"])
 
 
 class MeetingTreeControllerEditingTests(unittest.TestCase):
@@ -1104,10 +1128,14 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
 
         controller = FakeController()
         controller._nodes = nodes
-        controller._tree_data_cache = [{"id": "stale"}]
         controller.saved = 0
         controller.count_updates = 0
         controller.chromeChanged = self._Signal()
+        controller.stateChanged = self._Signal()
+        controller._tree_session = SimpleNamespace(
+            tree_id="meeting:test",
+            structure_revision=1,
+        )
         controller._save = lambda: setattr(
             controller,
             "saved",
@@ -1333,6 +1361,8 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             "media",
             "section:section",
             0,
+            "meeting:test",
+            1,
         )
 
         self.assertTrue(moved)
@@ -1343,8 +1373,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         )
         self.assertEqual(controller.saved, 1)
         self.assertEqual(controller.count_updates, 1)
-        self.assertEqual(controller.chromeChanged.calls, [()])
-        self.assertIsNone(controller._tree_data_cache)
+        self.assertEqual(controller.stateChanged.calls, [()])
 
     def test_invalid_move_into_descendant_preserves_tree(self):
         nodes = [
@@ -1369,72 +1398,36 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             "section",
             "subsection:subsection",
             0,
+            "meeting:test",
+            1,
         )
 
         self.assertFalse(moved)
         self.assertEqual(controller._nodes, before)
         self.assertEqual(controller.saved, 0)
         self.assertEqual(controller.count_updates, 0)
-        self.assertEqual(controller._tree_data_cache, [{"id": "stale"}])
 
-    def test_media_requests_are_queued_for_batched_drain(self):
-        class FakeTimer:
-            def __init__(self):
-                self.started = 0
-                self.stopped = 0
-                self.active = False
+    def test_move_from_another_tree_is_rejected(self):
+        nodes = [
+            {"id": "first", "type": "media", "children": []},
+            {"id": "second", "type": "media", "children": []},
+        ]
+        controller = self.controller(nodes)
 
-            def isActive(self):
-                return self.active
-
-            def start(self):
-                self.started += 1
-                self.active = True
-
-            def stop(self):
-                self.stopped += 1
-                self.active = False
-
-        controller = self.controller([
-            {"id": "media-1", "type": "media", "children": []},
-            {
-                "id": "section",
-                "type": "section",
-                "children": [
-                    {"id": "media-2", "type": "media", "children": []},
-                ],
-            },
-            {"id": "media-3", "type": "media", "children": []},
-        ])
-        requested = []
-        controller._media_request_queue = deque()
-        controller._media_request_timer = FakeTimer()
-        controller._start_media_request = lambda node: requested.append(node["id"])
-
-        MeetingTreeController._start_media_requests(controller)
-
-        self.assertEqual(requested, [])
-        self.assertEqual(
-            [node["id"] for node in controller._media_request_queue],
-            ["media-1", "media-2", "media-3"],
-        )
-        self.assertEqual(controller._media_request_timer.started, 1)
-
-        MeetingTreeController._drain_media_request_queue(controller)
-
-        self.assertEqual(requested, ["media-1", "media-2"])
-        self.assertEqual(
-            [node["id"] for node in controller._media_request_queue],
-            ["media-3"],
+        moved = MeetingTreeController.moveNode(
+            controller,
+            "first",
+            "root",
+            1,
+            "meeting:another-tree",
+            1,
         )
 
-        MeetingTreeController._drain_media_request_queue(controller)
+        self.assertFalse(moved)
+        self.assertEqual([node["id"] for node in controller._nodes], ["first", "second"])
+        self.assertEqual(controller.saved, 0)
 
-        self.assertEqual(requested, ["media-1", "media-2", "media-3"])
-        self.assertEqual(controller._media_request_queue, deque())
-        self.assertEqual(controller._media_request_timer.stopped, 1)
-
-    def test_derived_durations_are_persisted_in_one_batch(self):
+    def test_derived_durations_are_coalesced_into_one_complete_snapshot_save(self):
         class FakeTimer:
             def __init__(self):
                 self.starts = 0
@@ -1445,13 +1438,6 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
 
             def stop(self):
                 self.stops += 1
-
-        class FakeStore:
-            def __init__(self):
-                self.calls = []
-
-            def patch_media_batch(self, tree_key, patches):
-                self.calls.append((tree_key, patches))
 
         nodes = [
             {
@@ -1466,22 +1452,25 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
             },
         ]
         timer = FakeTimer()
-        store = FakeStore()
         controller = self.controller(nodes)
         controller._tree_key = "mwb:2026-05-25:T:20260500"
-        controller._store = store
         controller._derived_media_patches = {}
         controller._derived_media_save_timer = timer
+        controller._save = lambda: (
+            setattr(controller, "saved", controller.saved + 1) or True
+        )
         controller._info_request_by_token = {
             1: (
                 "media-1",
                 "metadata",
                 MeetingTreeController._media_info_source_identity("one.mp4"),
+                "",
             ),
             2: (
                 "media-2",
                 "metadata",
                 MeetingTreeController._media_info_source_identity("two.mp4"),
+                "",
             ),
         }
         controller._duration_ticks = MeetingTreeController._duration_ticks.__get__(
@@ -1502,47 +1491,32 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         )
         emitted: list[str] = []
         controller._emit_media_changed = emitted.append
-        controller.storageSaveFailed = self._Signal()
-
         MeetingTreeController._on_duration_ready(controller, 1, 1_000)
         MeetingTreeController._on_duration_ready(controller, 2, 2_000)
 
-        self.assertEqual(store.calls, [])
+        self.assertEqual(controller.saved, 0)
         self.assertEqual(emitted, ["media-1", "media-2"])
         self.assertEqual(timer.starts, 2)
 
         self.assertTrue(
             MeetingTreeController._flush_derived_media_patches(controller)
         )
-        self.assertEqual(len(store.calls), 1)
-        tree_key, patches = store.calls[0]
-        self.assertEqual(tree_key, controller._tree_key)
-        self.assertEqual(
-            patches["media-1"][1]["base_duration_ticks"],
-            10_000_000,
-        )
-        self.assertEqual(
-            patches["media-2"][1]["base_duration_ticks"],
-            20_000_000,
-        )
+        self.assertEqual(controller.saved, 1)
+        self.assertEqual(controller._derived_media_patches, {})
+        self.assertEqual(nodes[0]["base_duration_ticks"], 10_000_000)
+        self.assertEqual(nodes[1]["base_duration_ticks"], 20_000_000)
 
-    def test_cache_completion_starts_local_enrichment_for_matching_media(self):
+    def test_cache_completion_reprobes_the_remote_source(self):
         url = "https://cdn.example/video.mp4"
         nodes = [{"id": "media", "type": "media", "resolved_url": url}]
         controller = self.controller(nodes)
         controller._cloud_progress_by_url = {url: 0.8}
-        controller._url_for_node = lambda node: str(node.get("resolved_url") or "")
-        cloud_updates: list[str] = []
-        requested: list[list[str]] = []
-        controller._emit_cloud_for_url = cloud_updates.append
-        controller._start_media_requests = lambda media: requested.append(
-            [str(node["id"]) for node in media]
-        )
+        requested: list[str] = []
+        controller._tree_session = SimpleNamespace(request_source=requested.append)
 
         MeetingTreeController._on_cache_changed(controller, url)
 
-        self.assertEqual(cloud_updates, [url])
-        self.assertEqual(requested, [["media"]])
+        self.assertEqual(requested, [url])
         self.assertNotIn(url, controller._cloud_progress_by_url)
 
     def test_manual_cloud_download_remains_priority_for_excluded_media(self):
@@ -1563,6 +1537,12 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         manager = FakeCacheManager()
         controller = self.controller([])
         controller._media_cache_manager = manager
+        controller._tree_session = SimpleNamespace(owner_id="meeting:test")
+        controller._media_tree_runtime = SimpleNamespace(
+            registry=SimpleNamespace(
+                state=lambda _owner, _item: SimpleNamespace(cached=False)
+            )
+        )
         controller._url_for_node_id = lambda _item_id: url
         cloud_updates: list[str] = []
         controller._emit_cloud_for_node = cloud_updates.append
@@ -1581,11 +1561,7 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         def emit(self, *args):
             self.calls.append(args)
 
-    def test_local_cache_save_failure_reports_without_raising(self):
-        class FakeStore:
-            def save(self, *_args, **_kwargs):
-                raise OSError(28, "No space left on device")
-
+    def test_local_cache_save_reports_rejected_submission(self):
         class FakeController:
             pass
 
@@ -1596,22 +1572,27 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         controller._deleted_source_keys = set()
         controller._linked_folder_files = {}
         controller._meeting_folder_imports = {}
-        controller._store = FakeStore()
+        controller._store = SimpleNamespace(path=Path("meeting-trees.json"))
         controller._current_overview = lambda: None
-        controller.storageSaveFailed = self._Signal()
+        controller._snapshot_storage_key = (
+            lambda tree_key=None: MeetingTreeController._snapshot_storage_key(
+                controller,
+                tree_key,
+            )
+        )
+        controller._media_tree_runtime = SimpleNamespace(
+            snapshots=SimpleNamespace(request=lambda _key, _writer: 0)
+        )
 
         saved = MeetingTreeController._save_local_cache(controller)
 
         self.assertFalse(saved)
-        self.assertEqual(
-            controller.storageSaveFailed.calls,
-            [("mwb:2026-05-25:T:20260500", "[Errno 28] No space left on device")],
-        )
 
-    def test_local_cache_save_success_reports_saved_tree_key(self):
+    def test_local_cache_save_enqueues_immutable_snapshot(self):
         class FakeStore:
             def __init__(self):
                 self.calls = []
+                self.path = Path("meeting-trees.json")
 
             def save(self, *args, **kwargs):
                 self.calls.append((args, kwargs))
@@ -1629,15 +1610,38 @@ class MeetingTreeControllerStorageFeedbackTests(unittest.TestCase):
         controller._meeting_folder_imports = {}
         controller._store = store
         controller._current_overview = lambda: None
+        controller._snapshot_storage_key = (
+            lambda tree_key=None: MeetingTreeController._snapshot_storage_key(
+                controller,
+                tree_key,
+            )
+        )
+        queued: list[tuple[str, object]] = []
+        controller._media_tree_runtime = SimpleNamespace(
+            snapshots=SimpleNamespace(
+                request=lambda key, writer: queued.append((key, writer)) or 1
+            )
+        )
         controller.storageSaved = self._Signal()
         controller.storageSaveFailed = self._Signal()
 
         saved = MeetingTreeController._save_local_cache(controller)
 
         self.assertTrue(saved)
-        self.assertEqual(controller.storageSaved.calls, [(controller._tree_key,)])
+        self.assertEqual(controller.storageSaved.calls, [])
         self.assertEqual(controller.storageSaveFailed.calls, [])
+        self.assertEqual(len(queued), 1)
+        controller._nodes[0]["id"] = "mutated-after-submit"
+        queued[0][1]()
         self.assertEqual(len(store.calls), 1)
+        self.assertEqual(store.calls[0][0][1][0]["id"], "n1")
+
+        MeetingTreeController._on_snapshot_write_completed(
+            controller,
+            queued[0][0],
+            1,
+        )
+        self.assertEqual(controller.storageSaved.calls, [(controller._tree_key,)])
 
 
 class MeetingTreeStoreTests(unittest.TestCase):
@@ -1663,6 +1667,24 @@ class MeetingTreeStoreTests(unittest.TestCase):
             self.assertEqual(store.path, path)
             self.assertTrue(path.exists())
             self.assertEqual(store.load("mwb:2026-05-25:T:20260500"), (nodes, "hash"))
+
+    def test_cached_snapshot_never_initiates_a_store_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "meeting_trees.json"
+            tree_key = "mwb:2026-05-25:T:20260500"
+            writer = MeetingTreeStore(path)
+            writer.save(tree_key, [], "hash")
+            store = MeetingTreeStore(path)
+
+            self.assertFalse(store.loaded)
+            self.assertIsNone(store.cached_snapshot(tree_key))
+            self.assertFalse(store.loaded)
+
+            snapshot = store.snapshot(tree_key)
+
+            self.assertIsNotNone(snapshot)
+            self.assertTrue(store.loaded)
+            self.assertEqual(store.cached_snapshot(tree_key), snapshot)
 
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2087,7 +2109,34 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             self.calls.append(args)
 
     def _wire_remove_item_controller(self, controller) -> None:
+        class ImmediateOperations:
+            @staticmethod
+            def submit(spec):
+                value = spec.runner(
+                    lambda _progress: None,
+                    SimpleNamespace(is_set=lambda: False),
+                )
+                spec.commit(value)
+                return True
+
         controller._watched_folder_file_store = WatchedFolderFileStore()
+        controller._tree_session = SimpleNamespace(
+            owner_id="meeting:test",
+            remove_pending_node=lambda _item_id: False,
+        )
+        controller._media_tree_runtime = SimpleNamespace(
+            operations=ImmediateOperations()
+        )
+        controller._queue_linked_media_removal = (
+            lambda node, file_path, linked_source: (
+                MeetingTreeController._queue_linked_media_removal(
+                    controller,
+                    node,
+                    file_path,
+                    linked_source,
+                )
+            )
+        )
         controller._cancel_media_info_requests_for_item = lambda _item_id: None
         controller._find_node = (
             lambda node_id, nodes=None: MeetingTreeController._find_node(
@@ -2317,8 +2366,38 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             controller._sync_enabled = True
             controller._meeting_folder_pending_sources = set()
             controller._meeting_folder_imports = {}
+            controller._meeting_folder_scan_generation = 0
+            controller._meeting_folder_scan_operation_id = ""
             controller.chromeChanged = self._Signal()
             controller._watched_folder_file_store = WatchedFolderFileStore()
+            controller._apply_meeting_folder_scan = (
+                lambda folders, monday, pub_type: (
+                    MeetingTreeController._apply_meeting_folder_scan(
+                        controller,
+                        folders,
+                        monday,
+                        pub_type,
+                    )
+                )
+            )
+
+            class ImmediateOperations:
+                @staticmethod
+                def submit(spec):
+                    value = spec.runner(
+                        lambda _progress: None,
+                        SimpleNamespace(is_set=lambda: False),
+                    )
+                    spec.commit(value)
+                    return True
+
+                @staticmethod
+                def cancel(_operation_id):
+                    return None
+
+            controller._media_tree_runtime = SimpleNamespace(
+                operations=ImmediateOperations()
+            )
             captured = {}
 
             controller.set_sync_root = lambda _path: None
@@ -2327,7 +2406,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
                 lambda _source_data, _folder_path: []
             )
             controller._remove_previous_meeting_folder_nodes = lambda _record: None
-            controller._emit_linked_folder_availability_if_changed = lambda: None
+            controller._start_media_requests = lambda: None
 
             def fake_import(source_data, list_id, insert_index):
                 captured["source"] = source_data

@@ -31,34 +31,13 @@ class PlaylistDragDropMixin:
         )
 
     def map_delegate_idx_to_item_idx(self, delegate_idx: int) -> int:
-        if delegate_idx < 0:
-            return -1
-        item_count = 0
-        entries = self.model._entries
-        for i in range(min(delegate_idx, len(entries))):
-            if entries[i]["type"] == "item":
-                item_count += 1
-        return item_count
+        return -1
 
     def get_drop_context(self, delegate_idx: int) -> tuple[int, str]:
-        entries = self.model._entries
-        if not entries:
-            return -1, ""
-        if delegate_idx < 0:
-            return -1, ""
-
-        insert_idx = max(0, min(delegate_idx, len(entries)))
-        item_idx = sum(1 for e in entries[:insert_idx] if e["type"] == "item")
-        context = self.model._drop_context_for_slot(entries, insert_idx, "item")
-        section_id = ""
-        if context["target_type"] == "subsection" and context.get("subsection"):
-            section_id = context["subsection"]["id"]
-        elif context["target_type"] == "section" and context.get("section"):
-            section_id = context["section"]["id"]
-        return item_idx, section_id
+        return -1, ""
 
     def get_drop_context_for_list(self, list_id: str, insert_idx: int) -> tuple[int, str]:
-        item_idx = self.model.flat_insert_index_for_list(list_id or "root", insert_idx)
+        item_idx = self._tree_session.flat_insert_index(list_id or "root", insert_idx)
         section_id = ""
         if list_id.startswith("section:") or list_id.startswith("subsection:"):
             section_id = list_id.split(":", 1)[1]
@@ -125,6 +104,17 @@ class PlaylistDragDropMixin:
                 delegate_idx = root_obj.getIndexAt(local_pos.y())
                 list_id = root_obj.property("externalDropListId") or "root"
                 insert_idx = root_obj.property("externalDropIndex")
+                drop_tree_id = root_obj.property("externalDropTreeId") or ""
+                drop_revision = root_obj.property("externalDropStructureRevision")
+                target_is_current = (
+                    drop_tree_id == self._tree_session.tree_id
+                    and isinstance(drop_revision, int)
+                    and drop_revision == self._tree_session.structure_revision
+                )
+                if not target_is_current:
+                    root_obj.clearExternalDropPreview()
+                    event.ignore()
+                    return
                 if isinstance(insert_idx, int) and insert_idx >= 0:
                     target_idx, section_id = self.get_drop_context_for_list(list_id, insert_idx)
                 else:

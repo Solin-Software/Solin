@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import random
+from typing import Any, cast
 
-from PySide6.QtCore import QCoreApplication, QModelIndex, QPersistentModelIndex
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex
 from PySide6.QtTest import QAbstractItemModelTester
 
 from solin.ui.qml.media_tree.model import MediaTreeModel, ReconcileResult
@@ -14,7 +15,6 @@ from solin.ui.qml.media_tree.snapshot import (
 )
 
 
-_APP = QCoreApplication.instance() or QCoreApplication([])
 _INVALID_INDEX = QModelIndex()
 
 
@@ -73,6 +73,43 @@ def test_model_exposes_a_valid_hierarchy_and_complete_role_defaults() -> None:
     assert tester.model() is model
 
 
+def test_model_projects_the_reconciled_hierarchy_for_recursive_qml() -> None:
+    model = MediaTreeModel("playlist:test")
+    first = _node("first", title="First")
+    last = _node("last", title="Last")
+    subsection = _node(
+        "subsection",
+        MediaTreeNodeType.SUBSECTION,
+        children=(first, last),
+        collapsed=False,
+    )
+    section = _node(
+        "section",
+        MediaTreeNodeType.SECTION,
+        children=(subsection,),
+        color="#4f46e5",
+        collapsed=False,
+    )
+    model.apply_snapshot(_snapshot(1, section))
+
+    tree_data = model.treeData
+    assert [node["id"] for node in tree_data] == ["section"]
+    projected_section = tree_data[0]
+    assert projected_section["type"] == "section"
+    assert projected_section["color"] == "#4f46e5"
+    section_children = cast(list[dict[str, Any]], projected_section["children"])
+    projected_subsection = section_children[0]
+    assert projected_subsection["id"] == "subsection"
+    subsection_children = cast(
+        list[dict[str, Any]],
+        projected_subsection["children"],
+    )
+    assert [node["id"] for node in subsection_children] == [
+        "first",
+        "last",
+    ]
+
+
 def test_reconcile_preserves_identity_across_reorder_and_cross_parent_move() -> None:
     model = MediaTreeModel("playlist:test")
     media = _node("media-1", title="Song")
@@ -113,6 +150,23 @@ def test_reconcile_preserves_identity_across_reorder_and_cross_parent_move() -> 
     assert persistent.parent().data(int(MediaTreeRole.NODE_ID)) == "section-2"
     assert _ids(model) == ["section-2", "section-1"]
     assert resets == []
+
+
+def test_large_reorder_preserves_every_persistent_index_identity() -> None:
+    model = MediaTreeModel("playlist:test")
+    roots = tuple(_node(f"media-{index}", title=f"Media {index}") for index in range(40))
+    model.apply_snapshot(_snapshot(1, *roots))
+    persistent = {
+        node.node_id: QPersistentModelIndex(model.index_for_id(node.node_id))
+        for node in roots
+    }
+
+    model.apply_snapshot(_snapshot(2, *reversed(roots)))
+
+    for node_id, index in persistent.items():
+        assert index.isValid()
+        assert index.data(int(MediaTreeRole.NODE_ID)) == node_id
+        assert index.row() == 39 - int(node_id.removeprefix("media-"))
 
 
 def test_reconcile_rejects_a_type_change_for_a_stable_id() -> None:
@@ -161,6 +215,23 @@ def test_data_changes_emit_only_the_changed_roles() -> None:
     )
 
     assert changes == [[int(MediaTreeRole.TITLE)]]
+
+
+def test_data_only_snapshot_bypasses_structural_planner(monkeypatch) -> None:
+    model = MediaTreeModel("playlist:test")
+    roots = tuple(_node(f"media-{index}", title="Old") for index in range(4_000))
+    model.apply_snapshot(_snapshot(1, *roots))
+
+    def fail_if_planned(_desired):
+        raise AssertionError("Identical topology must use the linear fast path")
+
+    monkeypatch.setattr(model, "_plan_reconciliation", fail_if_planned)
+    changed = tuple(
+        _node(node.node_id, title="New" if index == 2_000 else "Old")
+        for index, node in enumerate(roots)
+    )
+
+    assert model.apply_snapshot(_snapshot(2, *changed)) == ReconcileResult.APPLIED
 
 
 def test_structural_snapshots_are_coalesced_during_interaction() -> None:

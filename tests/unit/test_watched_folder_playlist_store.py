@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+from solin.core.foundation.resource_keys import child_folder_resource_claim
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest import watched_folder_playlists
 from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
 
@@ -69,6 +73,8 @@ def test_watched_folder_playlist_store_creates_sync_thread(monkeypatch):
             *,
             media_lang,
             fallback_lang_code,
+            resource_lanes,
+            resource_claim,
             parent,
         ):
             calls.append(
@@ -76,13 +82,16 @@ def test_watched_folder_playlist_store_creates_sync_thread(monkeypatch):
                     folder_path,
                     media_lang,
                     fallback_lang_code,
+                    resource_lanes,
+                    resource_claim,
                     parent,
                 )
             )
 
     monkeypatch.setattr(watched_folder_playlists, "WatchedFolderSyncThread", _Thread)
 
-    thread = WatchedFolderPlaylistStore().create_sync_thread(
+    resource_lanes = ResourceLaneRegistry()
+    thread = WatchedFolderPlaylistStore(resource_lanes).create_sync_thread(
         "folder",
         media_lang="E",
         fallback_lang_code="T",
@@ -90,4 +99,49 @@ def test_watched_folder_playlist_store_creates_sync_thread(monkeypatch):
     )
 
     assert isinstance(thread, _Thread)
-    assert calls == [("folder", "E", "T", parent)]
+    assert calls == [
+        (
+            "folder",
+            "E",
+            "T",
+            resource_lanes,
+            child_folder_resource_claim("folder"),
+            parent,
+        )
+    ]
+
+
+def test_load_all_playlists_keeps_catalog_on_the_shared_registry(monkeypatch):
+    calls = []
+    root = "watched"
+    store = WatchedFolderPlaylistStore(ResourceLaneRegistry())
+    monkeypatch.setattr(
+        watched_folder_playlists,
+        "scan_root",
+        lambda folder: calls.append(("scan", folder))
+        or [{"path": "watched/one"}, {"path": "watched/two"}],
+    )
+    monkeypatch.setattr(
+        watched_folder_playlists,
+        "load_manifest_playlist",
+        lambda folder: calls.append(("load", folder)) or {"path": folder},
+    )
+
+    assert store.load_all_playlists(root) == [
+        {"path": "watched/one"},
+        {"path": "watched/two"},
+    ]
+    assert calls == [
+        ("scan", root),
+        ("load", "watched/one"),
+        ("load", "watched/two"),
+    ]
+
+
+def test_resource_registry_cannot_change_after_store_use(monkeypatch):
+    store = WatchedFolderPlaylistStore()
+    monkeypatch.setattr(watched_folder_playlists, "scan_root", lambda _folder: [])
+    store.scan_root("watched")
+
+    with pytest.raises(RuntimeError):
+        store.bind_resource_lanes(ResourceLaneRegistry())

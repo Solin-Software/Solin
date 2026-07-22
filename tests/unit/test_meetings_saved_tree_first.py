@@ -325,9 +325,7 @@ def test_show_detail_observes_tree_saved_during_detail_construction(monkeypatch)
 def test_controller_load_saved_tree_uses_snapshot_nodes_without_saving_canonical() -> None:
     controller = SimpleNamespace(
         _refresh_sync_availability=lambda: None,
-        _load_sync_record=lambda: None,
-        _candidate_sync_folder=lambda: "",
-        _linked_folder_availability_signature=lambda: (),
+        _request_sync_refresh=lambda: None,
         _start_media_requests=lambda: None,
         _meeting_folder_pending_sources=set(),
         chromeChanged=_Signal(),
@@ -350,9 +348,7 @@ def test_controller_can_defer_media_enrichment_until_detail_is_visible() -> None
     enrichment_calls: list[str] = []
     controller = SimpleNamespace(
         _refresh_sync_availability=lambda: None,
-        _load_sync_record=lambda: None,
-        _candidate_sync_folder=lambda: "",
-        _linked_folder_availability_signature=lambda: (),
+        _request_sync_refresh=lambda: None,
         _start_media_requests=lambda: enrichment_calls.append("started"),
         _meeting_folder_pending_sources=set(),
         chromeChanged=_Signal(),
@@ -409,9 +405,7 @@ def test_controller_flushes_pending_framing_and_reloads_latest_revision(tmp_path
         _image_framing_save_pending=True,
         _image_framing_save_timer=timer,
         _refresh_sync_availability=lambda: None,
-        _load_sync_record=lambda: None,
-        _candidate_sync_folder=lambda: "",
-        _linked_folder_availability_signature=lambda: (),
+        _request_sync_refresh=lambda: None,
         _start_media_requests=lambda: None,
         _meeting_folder_pending_sources=set(),
         chromeChanged=_Signal(),
@@ -482,7 +476,6 @@ def test_controller_merges_fresh_resolution_into_pending_manifest_publish() -> N
         _start_media_requests=lambda: None,
         _image_framing_save_pending=False,
         _image_framing_save_timer=SimpleNamespace(stop=lambda: None),
-        _materialize_current_nodes_for_sync=lambda: save_events.append("materialize"),
         _schedule_sync_manifest_save=lambda: save_events.append("publish"),
         _save_local_cache=lambda: save_events.append("local") or True,
         _meeting_folder_pending_sources=set(),
@@ -496,7 +489,7 @@ def test_controller_merges_fresh_resolution_into_pending_manifest_publish() -> N
 
     assert controller._nodes[0]["resolved_url"] == "https://cdn.example/fresh.mp4"
     assert controller._nodes[0]["start_trim_ticks"] == 10
-    assert save_events == ["materialize", "publish", "local"]
+    assert save_events == ["publish", "local"]
 
 
 def test_automatic_download_requests_current_and_next_week_through_preparation() -> None:

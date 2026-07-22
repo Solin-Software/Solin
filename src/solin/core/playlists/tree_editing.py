@@ -201,7 +201,7 @@ def insert_playlist_media(
     target = children_for_tree_target(tree, kind, target_id)
     if target is None:
         return False
-    row = max(0, min(insert_index, len(target)))
+    row = _insert_row(insert_index, len(target))
     nodes = [
         {"id": item["id"], "type": "media", "ref": item, "children": []}
         for item in media_items
@@ -228,7 +228,7 @@ def flat_media_insert_index(
     def visit(children: list[PlaylistNode], kind: str, node_id: str) -> int | None:
         nonlocal count
         if kind == target_kind and node_id == target_id:
-            row = max(0, min(insert_index, len(children)))
+            row = _insert_row(insert_index, len(children))
             return count + sum(media_count(child) for child in children[:row])
         for child in children:
             if child["type"] == "media":
@@ -241,6 +241,14 @@ def flat_media_insert_index(
 
     result = visit(tree, "root", "")
     return len(playlist.get("items", [])) if result is None else result
+
+
+def _insert_row(insert_index: int, child_count: int) -> int:
+    """Translate the public ``-1 means append`` convention to a tree row."""
+
+    if insert_index < 0:
+        return child_count
+    return min(insert_index, child_count)
 
 
 def _media_order_key(index: int) -> tuple[float, int, int, int]:

@@ -13,7 +13,12 @@ from solin.controllers.playlist_transfer_controller import (
     PlaylistTransferJob,
     PlaylistTransferProgress,
 )
-from solin.controllers.playlist_transfer_workflow import PlaylistTransferWorkflow
+from solin.controllers.playlist_transfer_workflow import (
+    PlaylistTransferWorkflow,
+    _items_with_persisted_thumbnails,
+)
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
+from solin.core.media.thumbnail_store import ThumbnailStore
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.playlists.jwl_export import (
     JwlPlaylistExportRequest,
@@ -90,6 +95,30 @@ def test_transfer_dialog_stylesheet_is_accepted_by_qt() -> None:
 
     assert not any("Could not parse stylesheet" in message for message in messages)
     dialog.deleteLater()
+
+
+def test_jwl_export_enrichment_uses_only_source_bound_persisted_thumbnail(
+    tmp_path: Path,
+) -> None:
+    store = ThumbnailStore(tmp_path / "thumbs")
+    current_source = os.fspath(tmp_path / "current.mp4")
+    stale_source = os.fspath(tmp_path / "stale.mp4")
+    store.save_bytes(
+        thumbnail_storage_id("media-1", current_source),
+        b"current-thumbnail",
+    )
+
+    current, stale = _items_with_persisted_thumbnails(
+        [
+            {"id": "media-1", "url": current_source},
+            {"id": "media-1", "url": stale_source},
+        ],
+        store.root,
+        lambda: False,
+    )
+
+    assert current["thumbnail_data"] == b"current-thumbnail"
+    assert "thumbnail_data" not in stale
 
 
 def test_transfer_controller_commits_on_ui_thread_without_blocking() -> None:

@@ -23,6 +23,7 @@ class ShutdownServices:
     projection_integrations: Any
     background_song: Any
     media_countdown_automation: Any
+    media_tree_runtime: Any
     media_controller: Any
     ndi: Any
     camera: Any
@@ -59,6 +60,7 @@ class ShutdownController:
         self.stop_remote_services()
         self.stop_notifications()
         self.cleanup_widgets()
+        self.stop_media_tree_runtime()
         self.stop_media_services()
         self.stop_conversion_threads()
         self.close_ipc()
@@ -111,6 +113,11 @@ class ShutdownController:
         services.camera.stop()
         services.obs.stop(wait=True)
         services.zoom.stop(wait=True)
+
+    def stop_media_tree_runtime(self) -> None:
+        alive = self._dependencies.services.media_tree_runtime.shutdown()
+        if alive:
+            log.warning("Media-tree operations still running at shutdown: %s", alive)
 
     def stop_conversion_threads(self) -> None:
         self._dependencies.conversion_threads.stop_all(logger=log)

@@ -36,10 +36,11 @@ Rectangle {
     readonly property bool isLoading: hasController && controller.isLoading
     readonly property bool hasItems: hasController && controller.hasItems
     readonly property string itemCountText: hasController ? controller.itemCountText : ""
-    readonly property var playlistNodes: hasController ? controller.playlistData : []
 
     property string externalDropListId: "root"
     property int externalDropIndex: -1
+    property string externalDropTreeId: ""
+    property int externalDropStructureRevision: -1
     property int dropIndicatorIndex: -1
 
     function picon(name, size, colorHex) {
@@ -69,6 +70,8 @@ Rectangle {
         var index = playlistTree.getIndexAt(local.y)
         externalDropListId = playlistTree.externalDropListId
         externalDropIndex = playlistTree.externalDropIndex
+        externalDropTreeId = playlistTree.externalDropTreeId
+        externalDropStructureRevision = playlistTree.externalDropStructureRevision
         return index
     }
 
@@ -76,6 +79,8 @@ Rectangle {
         playlistTree.clearExternalDropPreview()
         externalDropListId = "root"
         externalDropIndex = -1
+        externalDropTreeId = ""
+        externalDropStructureRevision = -1
         dropIndicatorIndex = -1
     }
 
@@ -255,9 +260,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             playlistController: root.hasController ? controller : null
+            treeModel: typeof playlistModel !== "undefined" ? playlistModel : null
             hasItems: root.hasItems
             loading: root.isLoading
-            playlistNodes: root.playlistNodes
             contentLeftInset: root.contentLeftInset
             contentRightInset: root.contentRightInset
             scrollbarGutter: root.scrollbarGutter

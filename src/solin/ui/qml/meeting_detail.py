@@ -38,10 +38,7 @@ class MeetingDetailQmlHost(QQuickWidget):
             type_name="MeetingDetailView",
             clear_color=PALETTE.bg0,
             image_providers={
-                "playlistthumbs": PlaylistThumbnailProvider(
-                    controller.thumb_cache,
-                    controller.disk_thumbnail,
-                ),
+                "playlistthumbs": PlaylistThumbnailProvider(controller.thumb_cache),
                 "playlisticons": PlaylistIconProvider(),
             },
             context_properties={
@@ -95,15 +92,18 @@ class MeetingDetailQmlHost(QQuickWidget):
         if root is not None:
             root.clearExternalDropPreview()
 
-    def external_drop_target(self, source, point) -> tuple[str, int]:
+    def external_drop_target(self, source, point) -> tuple[str, int, str, int]:
         root = cast(Any, self.rootObject())
         if root is None:
-            return "root", 2**31 - 1
+            return "root", 2**31 - 1, "", -1
 
         local_position = self.mapFrom(source, point)
         root.getIndexAt(local_position.y())
         list_id = root.property("externalDropListId") or "root"
         value = root.property("externalDropIndex")
+        tree_id = str(root.property("externalDropTreeId") or "")
+        revision_value = root.property("externalDropStructureRevision")
+        revision = revision_value if isinstance(revision_value, int) else -1
         insert_index = value if isinstance(value, int) and value >= 0 else 2**31 - 1
         root.clearExternalDropPreview()
-        return str(list_id), insert_index
+        return str(list_id), insert_index, tree_id, revision

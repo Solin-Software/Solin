@@ -40,6 +40,8 @@ def media_roles(
     media: MediaRoleInput,
     state: MediaPresentationState,
     operation: MediaOperationRecord | None,
+    *,
+    source_revision: int = 0,
 ) -> dict[str, MutableRoleValue]:
     """Return every QML role for one media node using only in-memory inputs."""
 
@@ -81,6 +83,13 @@ def media_roles(
     operation_message = ""
     if operation is not None:
         operation_message = operation.error or operation.stage or operation.detail
+    thumbnail_source = state.thumbnail_source
+    if thumbnail_source.startswith("image://") and source_revision > 0:
+        thumbnail_source = f"{thumbnail_source}/{source_revision}"
+    if not thumbnail_source and media.media_type == "image" and state.local_path:
+        thumbnail_source = QUrl.fromLocalFile(
+            os.path.abspath(state.local_path)
+        ).toString()
     return {
         "title": media.title,
         "mediaType": media.media_type,
@@ -90,7 +99,7 @@ def media_roles(
             media.start_trim_ticks,
             media.end_trim_ticks,
         ),
-        "thumbSource": state.thumbnail_source,
+        "thumbSource": thumbnail_source,
         "url": media.url,
         "trimSource": trim_source,
         "trimAvailable": bool(trim_source and not active),
@@ -114,7 +123,7 @@ def media_roles(
         "operationRetryable": bool(operation and operation.retryable),
         "canDrag": not active,
         "canEdit": not active,
-        "canProject": not active and state.availability != MediaAvailability.MISSING,
+        "canProject": not active and state.availability == MediaAvailability.AVAILABLE,
         "canRemove": not active or operation_state == MediaOperationState.FAILED.value,
         "canDownload": cloud_visible and not active,
     }

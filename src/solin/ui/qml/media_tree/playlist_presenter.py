@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from solin.core.media.operations import MediaOperationRecord
@@ -12,6 +13,7 @@ from solin.core.meetings.colors import (
     section_text_from_hue,
 )
 from solin.core.playlists.tree_editing import PlaylistNode, build_playlist_tree
+from solin.core.meetings.tree_editing import children_for_tree_target, parse_tree_list_id
 from solin.styles.theme import current_theme_scheme
 from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
 from solin.ui.qml.media_tree.snapshot import (
@@ -21,6 +23,13 @@ from solin.ui.qml.media_tree.snapshot import (
 )
 from solin.ui.qml.media_tree.state import MediaPresentationState
 from solin.ui.qml.playlist.visuals import playlist_media_badge
+
+
+@dataclass(frozen=True, slots=True)
+class PendingPlaylistMedia:
+    item: dict[str, Any]
+    target_list_id: str = "root"
+    insert_index: int = -1
 
 
 class PlaylistTreePresenter:
@@ -34,6 +43,7 @@ class PlaylistTreePresenter:
         runtime_states: Mapping[str, MediaPresentationState] | None = None,
         operations: Mapping[str, MediaOperationRecord] | None = None,
         source_revisions: Mapping[str, int] | None = None,
+        pending_media: tuple[PendingPlaylistMedia, ...] = (),
     ) -> MediaTreeSnapshot:
         playlist_id = str(playlist.get("id") or "")
         if not playlist_id:
@@ -41,9 +51,25 @@ class PlaylistTreePresenter:
         states = runtime_states or {}
         operation_records = operations or {}
         source_versions = source_revisions or {}
+        tree = build_playlist_tree(playlist)
+        for pending in pending_media:
+            kind, target_id = parse_tree_list_id(pending.target_list_id)
+            target = children_for_tree_target(tree, kind, target_id)
+            if target is None:
+                target = tree
+            row = (
+                len(target)
+                if pending.insert_index < 0
+                else max(0, min(pending.insert_index, len(target)))
+            )
+            item = pending.item
+            target.insert(
+                row,
+                {"id": item["id"], "type": "media", "ref": item, "children": []},
+            )
         roots = tuple(
             self._present_node(node, states, operation_records, source_versions)
-            for node in build_playlist_tree(playlist)
+            for node in tree
         )
         return MediaTreeSnapshot.create(f"playlist:{playlist_id}", revision, roots)
 
@@ -139,6 +165,7 @@ class PlaylistTreePresenter:
                 ),
                 state,
                 operation,
+                source_revision=source_revision,
             ),
         )
 
@@ -152,3 +179,6 @@ def _media_count(node: PlaylistNode) -> int:
 
 def _ticks(value: object) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+__all__ = ["PendingPlaylistMedia", "PlaylistTreePresenter"]

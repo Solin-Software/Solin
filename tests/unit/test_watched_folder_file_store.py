@@ -98,6 +98,117 @@ def test_watched_folder_copy_does_not_duplicate_an_existing_contained_file(tmp_p
     assert [path.name for path in folder.iterdir()] == ["clip.mp4"]
 
 
+def test_watched_folder_copy_reuses_identical_destination_file(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    source = source_folder / "clip.mp4"
+    source.write_bytes(b"same-video")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    existing = folder / source.name
+    existing.write_bytes(source.read_bytes())
+    store = WatchedFolderFileStore()
+
+    result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(source, folder, "copy-identical")
+    )
+
+    assert result.destination == existing
+    assert result.already_present is True
+    assert [path.name for path in folder.iterdir()] == ["clip.mp4"]
+
+
+def test_watched_folder_copy_matches_destination_using_filesystem_case_rules(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    source = source_folder / "clip.mp4"
+    source.write_bytes(b"same-video")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    existing = folder / "CLIP.mp4"
+    existing.write_bytes(source.read_bytes())
+    store = WatchedFolderFileStore()
+
+    result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(source, folder, "copy-case-variant")
+    )
+
+    expected_already_present = os.path.normcase("clip.mp4") == os.path.normcase(
+        "CLIP.mp4"
+    )
+    assert result.already_present is expected_already_present
+    if expected_already_present:
+        assert result.destination == existing
+
+
+def test_watched_folder_copy_keeps_distinct_same_name_media(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    source = source_folder / "clip.mp4"
+    source.write_bytes(b"new-video")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / source.name).write_bytes(b"other-video")
+    store = WatchedFolderFileStore()
+
+    result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(source, folder, "copy-distinct")
+    )
+
+    assert result.destination == folder / "clip (1).mp4"
+    assert result.already_present is False
+    assert result.destination.read_bytes() == b"new-video"
+
+
+def test_watched_folder_copy_reuses_identical_collision_name(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    source = source_folder / "clip.mp4"
+    source.write_bytes(b"new-video")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / source.name).write_bytes(b"other-video")
+    previous_copy = folder / "clip (1).mp4"
+    previous_copy.write_bytes(source.read_bytes())
+    store = WatchedFolderFileStore()
+
+    result = store.copy_file_transaction(
+        WatchedFolderCopyRequest(source, folder, "copy-identical-collision")
+    )
+
+    assert result.destination == previous_copy
+    assert result.already_present is True
+    assert sorted(path.name for path in folder.iterdir()) == [
+        "clip (1).mp4",
+        "clip.mp4",
+    ]
+
+
+def test_watched_folder_copy_preserves_distinct_user_named_variant(tmp_path):
+    source_folder = tmp_path / "source"
+    source_folder.mkdir()
+    original = source_folder / "clip.mp4"
+    variant = source_folder / "clip (1).mp4"
+    original.write_bytes(b"first-video")
+    variant.write_bytes(b"second-video")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    store = WatchedFolderFileStore()
+
+    first = store.copy_file_transaction(
+        WatchedFolderCopyRequest(original, folder, "copy-original")
+    )
+    second = store.copy_file_transaction(
+        WatchedFolderCopyRequest(variant, folder, "copy-variant")
+    )
+
+    assert first.destination == folder / "clip.mp4"
+    assert second.destination == folder / "clip (1).mp4"
+    assert second.already_present is False
+    assert first.destination.read_bytes() == b"first-video"
+    assert second.destination.read_bytes() == b"second-video"
+
+
 def test_watched_folder_scanner_ignores_transaction_staging(tmp_path):
     folder = tmp_path / "folder"
     folder.mkdir()
@@ -167,7 +278,17 @@ def test_watched_folder_file_store_reports_availability_signature(tmp_path):
     )
 
     key = os.path.normcase(os.path.normpath(os.path.abspath(str(media))))
-    assert signature == ((key, True),)
+    source_stat = media.stat()
+    assert signature == (
+        (key, (
+            True,
+            source_stat.st_size,
+            source_stat.st_mtime_ns,
+            source_stat.st_ctime_ns,
+            source_stat.st_dev,
+            source_stat.st_ino,
+        )),
+    )
 
 
 def test_watched_folder_file_store_applies_meeting_processing_policy():

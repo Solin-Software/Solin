@@ -12,6 +12,8 @@ import zipfile
 import pytest
 
 from solin.core.media.download_storage import cached_path_for
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
+from solin.core.media.thumbnail_store import read_thumbnail_source_signature
 from solin.core.playlists.native import (
     NativePlaylistExportRequest,
     NativePlaylistImportRequest,
@@ -138,7 +140,9 @@ def test_native_playlist_round_trip_preserves_state_sources_and_assets(tmp_path)
     local.write_bytes(b"local-media")
     thumbs = tmp_path / "thumbs"
     thumbs.mkdir()
-    (thumbs / "local.jpg").write_bytes(b"jpeg-thumbnail")
+    (thumbs / f"{thumbnail_storage_id('local', os.fspath(local))}.jpg").write_bytes(
+        b"jpeg-thumbnail"
+    )
     cached_url = "https://example.test/downloaded.mp4"
     _cache_remote(tmp_path / "cache", cached_url, b"cached-media")
     jw_url = "https://download.jw.org/files/media_pub/pub-sjjm_T_1_r720P.mp4"
@@ -218,9 +222,20 @@ def test_native_playlist_round_trip_preserves_state_sources_and_assets(tmp_path)
     assert items["cached"]["source_url"] == cached_url
     assert items["jw"]["url"] == "https://resolved.test/jw.mp4"
     assert items["direct"]["url"] == direct_url
+    imported_thumbnail_id = thumbnail_storage_id(
+        items["local"]["id"], items["local"]["url"]
+    )
     assert (
-        tmp_path / "profile-cache" / "thumbs" / f"{items['local']['id']}.jpg"
+        tmp_path / "profile-cache" / "thumbs" / f"{imported_thumbnail_id}.jpg"
     ).read_bytes() == b"jpeg-thumbnail"
+    imported_media_stat = Path(items["local"]["url"]).stat()
+    assert read_thumbnail_source_signature(
+        tmp_path / "profile-cache" / "thumbs" / f"{imported_thumbnail_id}.jpg"
+    ) == (
+        f"{imported_media_stat.st_size}:{imported_media_stat.st_mtime_ns}:"
+        f"{imported_media_stat.st_ctime_ns}:{imported_media_stat.st_dev}:"
+        f"{imported_media_stat.st_ino}"
+    )
     assert set(result.created_files) == {path for path in result.created_files}
     assert progress[-1].can_cancel is False
 

@@ -78,6 +78,25 @@ def test_presenter_does_not_mark_temporary_cloud_failure_as_missing() -> None:
     assert roles["cloudVisible"] is True
 
 
+def test_presenter_versions_provider_url_when_thumbnail_content_changes() -> None:
+    runtime = {
+        "virtual-media": MediaPresentationState(
+            availability=MediaAvailability.AVAILABLE,
+            thumbnail_source="image://playlistthumbs/virtual-media",
+        )
+    }
+
+    snapshot = PlaylistTreePresenter().build(
+        _playlist(),
+        revision=1,
+        runtime_states=runtime,
+        source_revisions={"virtual-media": 4},
+    )
+
+    roles = _roles(snapshot.roots[0].children[1])
+    assert roles["thumbSource"] == "image://playlistthumbs/virtual-media/4"
+
+
 def test_pending_media_keeps_identity_and_disables_conflicting_actions() -> None:
     operation = MediaOperationRecord(
         operation_id="copy-1",

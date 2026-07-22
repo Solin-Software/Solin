@@ -35,6 +35,7 @@ class _TreeNode:
     node_id: str
     node_type: str
     source_revision: int
+    presentation_revision: int
     roles: dict[str, object]
     parent: "_TreeNode | None" = None
     children: list["_TreeNode"] = field(default_factory=list)
@@ -46,6 +47,7 @@ class _TreeNode:
             node_id=snapshot.node_id,
             node_type=snapshot.node_type.value,
             source_revision=snapshot.source_revision,
+            presentation_revision=0,
             roles=snapshot.thawed_roles(),
         )
 
@@ -85,6 +87,11 @@ class _Layout:
 
 
 type _StructuralOperation = _Park | _Remove | _Insert | _Move | _Layout
+type _DesiredTree = tuple[
+    dict[str, MediaTreeNodeSnapshot],
+    dict[str, str],
+    dict[str, list[str]],
+]
 
 
 class ReconcileResult(StrEnum):
@@ -164,7 +171,7 @@ class MediaTreeModel(QAbstractItemModel):
         super().__init__(parent)
         self._tree_id = tree_id
         self._revision = -1
-        self._root = _TreeNode(_ROOT_ID, "root", 0, {})
+        self._root = _TreeNode(_ROOT_ID, "root", 0, 0, {})
         self._nodes: dict[str, _TreeNode] = {}
         self._interaction_depth = 0
         self._pending_snapshot: MediaTreeSnapshot | None = None
@@ -251,6 +258,16 @@ class MediaTreeModel(QAbstractItemModel):
     def mediaCount(self) -> int:  # noqa: N802 - QML API
         return self._media_count
 
+    @Property("QVariantList", notify=revisionChanged)
+    def treeData(self) -> list[dict[str, object]]:  # noqa: N802 - QML API
+        """Return the reconciled hierarchy for recursive QML presentation.
+
+        The Qt model remains the single source of truth.  This projection lets
+        the established recursive surface retain its delegate identity and
+        interaction behavior while consuming the same complete snapshot.
+        """
+        return [self._project_node(node) for node in self._root.children]
+
     @Property(bool, notify=interactionActiveChanged)
     def interactionActive(self) -> bool:  # noqa: N802 - QML API
         return self._interaction_depth > 0
@@ -317,18 +334,20 @@ class MediaTreeModel(QAbstractItemModel):
         )
         if snapshot.revision <= newest_revision:
             return ReconcileResult.STALE
-        self._assert_stable_node_types(snapshot)
+        desired = self._desired_maps(snapshot)
+        self._assert_stable_node_types(desired)
+        topology_matches = self._topology_matches(desired)
 
-        if self._interaction_depth and not self._topology_matches(snapshot):
+        if self._interaction_depth and not topology_matches:
             self._pending_snapshot = snapshot
-            self._apply_common_data(snapshot)
+            self._apply_common_data(desired)
             return ReconcileResult.DEFERRED
 
-        operations = self._plan_reconciliation(snapshot)
+        operations = () if topology_matches else self._plan_reconciliation(desired)
         for operation in operations:
             self._apply_structural_operation(operation)
-        self._apply_common_data(snapshot)
-        self._assert_matches(snapshot)
+        self._apply_common_data(desired)
+        self._assert_matches(desired)
         self._revision = snapshot.revision
         media_count = sum(node.node_type == "media" for node in self._nodes.values())
         if media_count != self._media_count:
@@ -369,6 +388,19 @@ class MediaTreeModel(QAbstractItemModel):
             raise RuntimeError("Foreign QModelIndex passed to MediaTreeModel")
         return node
 
+    def _project_node(self, node: _TreeNode) -> dict[str, object]:
+        projected: dict[str, object] = dict(node.roles)
+        projected.update(
+            {
+                "id": node.node_id,
+                "type": node.node_type,
+                "sourceRevision": node.source_revision,
+                "presentationRevision": node.presentation_revision,
+                "children": [self._project_node(child) for child in node.children],
+            }
+        )
+        return projected
+
     def _assert_model_thread(self) -> None:
         if QThread.currentThread() != self.thread():
             raise RuntimeError("MediaTreeModel snapshots must be applied on its Qt thread")
@@ -376,7 +408,7 @@ class MediaTreeModel(QAbstractItemModel):
     def _desired_maps(
         self,
         snapshot: MediaTreeSnapshot,
-    ) -> tuple[dict[str, MediaTreeNodeSnapshot], dict[str, str], dict[str, list[str]]]:
+    ) -> _DesiredTree:
         nodes: dict[str, MediaTreeNodeSnapshot] = {}
         parents: dict[str, str] = {}
         children: dict[str, list[str]] = {_ROOT_ID: [node.node_id for node in snapshot.roots]}
@@ -389,15 +421,15 @@ class MediaTreeModel(QAbstractItemModel):
             stack.extend((child, node.node_id) for child in reversed(node.children))
         return nodes, parents, children
 
-    def _topology_matches(self, snapshot: MediaTreeSnapshot) -> bool:
-        _nodes, desired_parents, desired_children = self._desired_maps(snapshot)
+    def _topology_matches(self, desired: _DesiredTree) -> bool:
+        _nodes, desired_parents, desired_children = desired
         if set(desired_parents) != set(self._nodes):
             return False
         shadow = _ShadowTree.from_model(self._root)
         return shadow.parents == desired_parents and shadow.children == desired_children
 
-    def _assert_stable_node_types(self, snapshot: MediaTreeSnapshot) -> None:
-        desired_nodes, _parents, _children = self._desired_maps(snapshot)
+    def _assert_stable_node_types(self, desired: _DesiredTree) -> None:
+        desired_nodes, _parents, _children = desired
         for node_id in set(desired_nodes) & set(self._nodes):
             current_type = self._nodes[node_id].node_type
             desired_type = desired_nodes[node_id].node_type.value
@@ -411,9 +443,9 @@ class MediaTreeModel(QAbstractItemModel):
 
     def _plan_reconciliation(
         self,
-        snapshot: MediaTreeSnapshot,
+        desired: _DesiredTree,
     ) -> tuple[_StructuralOperation, ...]:
-        desired_nodes, desired_parents, desired_children = self._desired_maps(snapshot)
+        desired_nodes, desired_parents, desired_children = desired
         desired_ids = set(desired_nodes)
         shadow = _ShadowTree.from_model(self._root)
         operations: list[_StructuralOperation] = []
@@ -568,11 +600,12 @@ class MediaTreeModel(QAbstractItemModel):
 
     def _reorder_children(self, parent_id: str, node_ids: tuple[str, ...]) -> None:
         parent = self._parent_node(parent_id)
-        old_indexes = [self.index_for_id(node.node_id) for node in parent.children]
+        previous_children = tuple(parent.children)
+        old_indexes = [self.index_for_id(node.node_id) for node in previous_children]
         self.layoutAboutToBeChanged.emit()
         parent.children = [self._nodes[node_id] for node_id in node_ids]
         self._reindex_children(parent)
-        new_indexes = [self.index_for_id(node.node_id) for node in parent.children]
+        new_indexes = [self.index_for_id(node.node_id) for node in previous_children]
         self.changePersistentIndexList(old_indexes, new_indexes)
         self.layoutChanged.emit()
 
@@ -581,18 +614,18 @@ class MediaTreeModel(QAbstractItemModel):
         for row in range(first, len(parent.children)):
             parent.children[row].row_index = row
 
-    def _apply_common_data(self, snapshot: MediaTreeSnapshot) -> None:
-        desired_nodes, _parents, _children = self._desired_maps(snapshot)
+    def _apply_common_data(self, desired: _DesiredTree) -> None:
+        desired_nodes, _parents, _children = desired
         changed_nodes: dict[tuple[str, tuple[int, ...]], list[_TreeNode]] = {}
-        for node_id, desired in desired_nodes.items():
+        for node_id, desired_node in desired_nodes.items():
             node = self._nodes.get(node_id)
             if node is None:
                 continue
-            desired_roles = desired.thawed_roles()
+            desired_roles = desired_node.thawed_roles()
             changed_roles: list[int] = []
-            if node.node_type != desired.node_type.value:
+            if node.node_type != desired_node.node_type.value:
                 changed_roles.append(int(MediaTreeRole.NODE_TYPE))
-            if node.source_revision != desired.source_revision:
+            if node.source_revision != desired_node.source_revision:
                 changed_roles.append(int(MediaTreeRole.SOURCE_REVISION))
             role_names = set(node.roles) | set(desired_roles)
             for name in role_names - IDENTITY_ROLE_NAMES:
@@ -600,10 +633,11 @@ class MediaTreeModel(QAbstractItemModel):
                 new_value = desired_roles.get(name, ROLE_DEFAULTS[name])
                 if old_value != new_value:
                     changed_roles.append(int(ROLE_BY_NAME[name]))
-            node.node_type = desired.node_type.value
-            node.source_revision = desired.source_revision
+            node.node_type = desired_node.node_type.value
+            node.source_revision = desired_node.source_revision
             node.roles = desired_roles
             if changed_roles:
+                node.presentation_revision += 1
                 roles = tuple(sorted(changed_roles))
                 parent_id = node.parent.node_id if node.parent is not None else _ROOT_ID
                 changed_nodes.setdefault((parent_id, roles), []).append(node)
@@ -626,8 +660,8 @@ class MediaTreeModel(QAbstractItemModel):
                 list(roles),
             )
 
-    def _assert_matches(self, snapshot: MediaTreeSnapshot) -> None:
-        _nodes, desired_parents, desired_children = self._desired_maps(snapshot)
+    def _assert_matches(self, desired: _DesiredTree) -> None:
+        _nodes, desired_parents, desired_children = desired
         shadow = _ShadowTree.from_model(self._root)
         if shadow.parents != desired_parents or shadow.children != desired_children:
             raise RuntimeError("Applied media-tree topology differs from the snapshot")

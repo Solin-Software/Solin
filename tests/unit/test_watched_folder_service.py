@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 import os
 import uuid
@@ -8,6 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from solin.core.foundation.resource_keys import (
+    child_folder_resource_claim,
+    folder_resource_key,
+)
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest import watched_folder as watched_folder_module
 from solin.core.ingest.manifest import MANIFEST_REPOSITORY
 from solin.core.ingest.local_files import local_file_availability_signature
@@ -39,13 +45,53 @@ class LocalFileAvailabilitySignatureTests(unittest.TestCase):
             key = os.path.normcase(os.path.normpath(os.path.abspath(str(media))))
 
             present = local_file_availability_signature([str(media), remote])
-            self.assertEqual(present, ((key, True),))
+            source_stat = media.stat()
+            self.assertEqual(
+                present,
+                ((key, (
+                    True,
+                    source_stat.st_size,
+                    source_stat.st_mtime_ns,
+                    source_stat.st_ctime_ns,
+                    source_stat.st_dev,
+                    source_stat.st_ino,
+                )),),
+            )
 
             media.unlink()
 
             missing = local_file_availability_signature([str(media), remote])
-            self.assertEqual(missing, ((key, False),))
+            self.assertEqual(missing, ((key, (False, 0, 0, 0, 0, 0)),))
             self.assertNotEqual(present, missing)
+
+    def test_local_file_content_change_updates_signature(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp) / "talk.mp4"
+            media.write_bytes(b"old")
+            before = local_file_availability_signature([str(media)])
+
+            media.write_bytes(b"new-content")
+            after = local_file_availability_signature([str(media)])
+
+            self.assertNotEqual(before, after)
+
+    def test_same_size_replacement_with_preserved_mtime_changes_signature(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            media = Path(tmp) / "talk.mp4"
+            media.write_bytes(b"old")
+            original = media.stat()
+            before = local_file_availability_signature([str(media)])
+            replacement = Path(tmp) / "replacement.mp4"
+            replacement.write_bytes(b"new")
+            os.utime(
+                replacement,
+                ns=(original.st_atime_ns, original.st_mtime_ns),
+            )
+            os.replace(replacement, media)
+
+            after = local_file_availability_signature([str(media)])
+
+            self.assertNotEqual(before, after)
 
 
 class MeetingFolderSourceScannerTests(unittest.TestCase):
@@ -188,6 +234,34 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
         self.assertFalse(meeting_folder_source_needs_processing(source, failed_same_file))
         self.assertTrue(meeting_folder_source_needs_processing(source, changed_file))
 
+    def test_source_signature_detects_atomic_same_size_same_mtime_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            meeting = root / "2026-05-26 MW"
+            meeting.mkdir()
+            media = meeting / "talk.mp4"
+            media.write_bytes(b"first")
+
+            original = scan_meeting_folder_sources(root)[0]["sources"][0]
+            original_stat = media.stat()
+            replacement = meeting / "replacement.tmp"
+            replacement.write_bytes(b"other")
+            os.utime(
+                replacement,
+                ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+            )
+            os.replace(replacement, media)
+
+            changed = scan_meeting_folder_sources(root)[0]["sources"][0]
+
+            self.assertNotEqual(original["signature"], changed["signature"])
+            self.assertTrue(
+                meeting_folder_source_needs_processing(
+                    changed,
+                    {"status": "processed", "signature": original["signature"]},
+                )
+            )
+
 
 def test_watched_folder_cancellation_terminates_libreoffice(monkeypatch, tmp_path):
     process = type(
@@ -220,6 +294,8 @@ def test_watched_folder_cancellation_terminates_libreoffice(monkeypatch, tmp_pat
         str(tmp_path),
         media_lang="E",
         fallback_lang_code="E",
+        resource_lanes=ResourceLaneRegistry(),
+        resource_claim=child_folder_resource_claim(tmp_path),
     )
 
     with pytest.raises(InterruptedError):
@@ -260,7 +336,50 @@ def _sync_thread(tmp_path):
         str(tmp_path),
         media_lang="E",
         fallback_lang_code="E",
+        resource_lanes=ResourceLaneRegistry(),
+        resource_claim=child_folder_resource_claim(tmp_path),
     )
+
+
+def test_sync_holds_child_claim_against_root_mutation(monkeypatch, tmp_path):
+    watched_root = tmp_path / "watched"
+    folder = watched_root / "playlist"
+    folder.mkdir(parents=True)
+    lanes = ResourceLaneRegistry()
+    sync_started = threading.Event()
+    release_sync = threading.Event()
+    mutation_started = threading.Event()
+
+    def reconcile(_folder):
+        sync_started.set()
+        release_sync.wait(1)
+
+    monkeypatch.setattr(watched_folder_module, "reconcile_manifest", reconcile)
+    monkeypatch.setattr(watched_folder_module, "get_pending_files", lambda _folder: [])
+    sync = WatchedFolderSyncThread(
+        str(folder),
+        media_lang="E",
+        fallback_lang_code="E",
+        resource_lanes=lanes,
+        resource_claim=child_folder_resource_claim(folder),
+    )
+    mutation = threading.Thread(
+        target=lambda: lanes.run(
+            folder_resource_key(watched_root),
+            mutation_started.set,
+        )
+    )
+
+    sync.start()
+    assert sync_started.wait(1)
+    mutation.start()
+    assert not mutation_started.wait(0.05)
+    release_sync.set()
+    assert sync.wait(1_000)
+    mutation.join(1)
+
+    assert mutation_started.is_set()
+    assert not mutation.is_alive()
 
 
 def test_cancelled_pdf_render_does_not_publish_partial_cache(monkeypatch, tmp_path):
@@ -534,6 +653,47 @@ def test_scan_subfolder_includes_cache_files_referenced_by_playlist(tmp_path):
     items = watched_folder_module.scan_subfolder(str(tmp_path))
 
     assert [item["url"] for item in items] == [str(page)]
+
+
+def test_scan_subfolder_marks_filename_titles_for_metadata_resolution(tmp_path):
+    video = tmp_path / "gnj_T_02_r720P.mp4"
+    video.write_bytes(b"video")
+
+    items = watched_folder_module.scan_subfolder(str(tmp_path))
+
+    assert len(items) == 1
+    assert items[0]["title"] == "gnj_T_02_r720P"
+    assert items[0]["auto_title"] is True
+
+
+def test_load_manifest_playlist_migrates_legacy_filename_title_provenance(tmp_path):
+    video = tmp_path / "gnj_T_02_r720P.mp4"
+    video.write_bytes(b"video")
+    _write_manifest(
+        tmp_path,
+        {
+            "version": 1,
+            "processed": {},
+            "playlist": {
+                "id": "linked",
+                "name": "Linked",
+                "items": [
+                    {
+                        "id": "video-id",
+                        "title": video.stem,
+                        "url": video.name,
+                        "type": "video",
+                    }
+                ],
+            },
+        },
+    )
+
+    playlist = watched_folder_module.load_manifest_playlist(str(tmp_path))
+
+    assert playlist["items"][0]["auto_title"] is True
+    persisted = _read_manifest(tmp_path)
+    assert persisted["playlist"]["items"][0]["auto_title"] is True
 
 
 def test_watched_playlist_does_not_persist_missing_windows_absolute_urls(tmp_path):

@@ -34,6 +34,8 @@ def _spec(
     *,
     commit=lambda _result: None,
     retryable: bool = False,
+    priority: int = 0,
+    discarded=None,
 ) -> MediaOperationSpec:
     return MediaOperationSpec(
         operation_id=operation_id,
@@ -43,8 +45,10 @@ def _spec(
         presentation=MediaOperationPresentation.TREE_LOCAL,
         runner=runner,
         commit=commit,
+        priority=priority,
         initial_stage="Preparing media…",
         retryable=retryable,
+        discarded=discarded,
     )
 
 
@@ -186,7 +190,87 @@ def test_failed_operation_can_be_retried_idempotently() -> None:
 
     assert attempts == 2
     assert committed == ["ready"]
-    assert coordinator.record("retryable").state == MediaOperationState.READY
+    assert coordinator.record("retryable") is None
+    coordinator.shutdown()
+
+
+def test_retry_after_commit_failure_does_not_repeat_durable_worker() -> None:
+    coordinator = MediaOperationCoordinator()
+    worker_attempts = 0
+    commit_attempts = 0
+
+    def worker(_progress, _cancellation):
+        nonlocal worker_attempts
+        worker_attempts += 1
+        return "already-copied"
+
+    def commit(_result):
+        nonlocal commit_attempts
+        commit_attempts += 1
+        if commit_attempts == 1:
+            raise RuntimeError("domain changed")
+
+    coordinator.submit(
+        _spec(
+            "commit-retry",
+            "folder:a",
+            worker,
+            commit=commit,
+            retryable=True,
+        )
+    )
+    _wait_until(lambda: coordinator.active_count == 0)
+
+    assert coordinator.retry("commit-retry")
+
+    assert worker_attempts == 1
+    assert commit_attempts == 2
+    coordinator.shutdown()
+
+
+def test_discard_rolls_back_uncommitted_worker_result_without_rerunning() -> None:
+    coordinator = MediaOperationCoordinator()
+    worker_attempts = 0
+    discarded: list[object | None] = []
+
+    def worker(_progress, _cancellation):
+        nonlocal worker_attempts
+        worker_attempts += 1
+        return "durable-artifact"
+
+    coordinator.submit(
+        _spec(
+            "discard-result",
+            "folder:a",
+            worker,
+            commit=lambda _result: (_ for _ in ()).throw(RuntimeError("stale target")),
+            retryable=True,
+            discarded=discarded.append,
+        )
+    )
+    _wait_until(lambda: coordinator.active_count == 0)
+
+    assert coordinator.discard("discard-result")
+    assert worker_attempts == 1
+    assert discarded == ["durable-artifact"]
+    assert coordinator.record("discard-result") is None
+    coordinator.shutdown()
+
+
+def test_completed_background_work_does_not_accumulate_terminal_records() -> None:
+    coordinator = MediaOperationCoordinator(max_workers=2)
+    for index in range(50):
+        coordinator.submit(
+            _spec(
+                f"probe-{index}",
+                f"source-{index}",
+                lambda _progress, _cancellation: None,
+            )
+        )
+
+    _wait_until(lambda: coordinator.active_count == 0 and coordinator.queued_count == 0)
+
+    assert all(coordinator.record(f"probe-{index}") is None for index in range(50))
     coordinator.shutdown()
 
 
@@ -216,4 +300,41 @@ def test_cancelling_queued_work_never_starts_its_runner() -> None:
     _wait_until(lambda: coordinator.active_count == 0)
 
     assert queued_started == []
+    coordinator.shutdown()
+
+
+def test_interactive_work_overtakes_queued_background_probes() -> None:
+    coordinator = MediaOperationCoordinator(max_workers=1)
+    release = threading.Event()
+    started: list[str] = []
+
+    def active(_progress, cancellation):
+        started.append("active")
+        while not release.wait(0.005):
+            if cancellation.is_set():
+                return None
+        return None
+
+    coordinator.submit(_spec("active", "active", active))
+    coordinator.submit(
+        _spec(
+            "background",
+            "background",
+            lambda _progress, _cancellation: started.append("background"),
+            priority=-100,
+        )
+    )
+    coordinator.submit(
+        _spec(
+            "interactive",
+            "interactive",
+            lambda _progress, _cancellation: started.append("interactive"),
+            priority=100,
+        )
+    )
+
+    release.set()
+    _wait_until(lambda: coordinator.active_count == 0 and coordinator.queued_count == 0)
+
+    assert started == ["active", "interactive", "background"]
     coordinator.shutdown()

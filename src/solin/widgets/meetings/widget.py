@@ -428,10 +428,18 @@ class StudyDetailView(QWidget):
             if url.isLocalFile()
             and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id, insert_idx = self.qml_widget.external_drop_target(
+        list_id, insert_idx, tree_id, structure_revision = (
+            self.qml_widget.external_drop_target(
             self,
             event.position().toPoint(),
+            )
         )
+        if (
+            tree_id != self.controller.treeIdentity()
+            or structure_revision != self.controller.treeStructureRevision()
+        ):
+            event.ignore()
+            return
         self.controller.add_files(paths, list_id, insert_idx)
         event.acceptProposedAction()
 
@@ -657,10 +665,18 @@ class _MemorialDetailView(QWidget):
             if url.isLocalFile()
             and Path(url.toLocalFile()).suffix.lower() in accepted
         ]
-        list_id, insert_idx = self.qml_widget.external_drop_target(
+        list_id, insert_idx, tree_id, structure_revision = (
+            self.qml_widget.external_drop_target(
             self,
             event.position().toPoint(),
+            )
         )
+        if (
+            tree_id != self.controller.treeIdentity()
+            or structure_revision != self.controller.treeStructureRevision()
+        ):
+            event.ignore()
+            return
         self.controller.add_files(paths, list_id, insert_idx)
         event.acceptProposedAction()
 
@@ -711,6 +727,7 @@ class MeetingsWidget(QWidget):
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
         cache_manager: MediaCacheManager,
+        media_tree_runtime,
         jw_catalog_service_factory: Callable[[QObject], JWMediaCatalogService],
         jw_catalog_thumbnail_session_factory: JWCatalogThumbnailSessionFactory,
         jw_songs_store: JWSongsStore,
@@ -743,6 +760,7 @@ class MeetingsWidget(QWidget):
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
         self._cache_manager = cache_manager
+        self._media_tree_runtime = media_tree_runtime
         self._jw_catalog_service_factory = jw_catalog_service_factory
         self._jw_catalog_thumbnail_session_factory = (
             jw_catalog_thumbnail_session_factory
@@ -767,6 +785,7 @@ class MeetingsWidget(QWidget):
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,
                 cache_manager=self._cache_manager,
+                media_tree_runtime=self._media_tree_runtime,
                 linked_folder_sync=self._meeting_linked_folder_sync,
                 media_info_queue_factory=self._media_info_queue_factory,
                 projection_aspect_ratio_provider=(

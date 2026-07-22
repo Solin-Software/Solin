@@ -31,12 +31,13 @@ import logging
 import os
 import re
 import struct
+import tempfile
 import time
 import zlib
 from pathlib import Path
 from typing import Any, Callable, cast
 
-from PySide6.QtCore import QObject, Signal, QTimer, QUrl
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QUrl
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QVideoSink, QMediaMetaData
 
@@ -51,6 +52,7 @@ from ..core.media.info_queue import (
     retry_delay_seconds,
 )
 from ..core.media.download_storage import completed_cached_path
+from ..core.media.local_source import source_signature_from_stat
 from ..core.network.http import (
     HttpDecodeError,
     HttpError,
@@ -66,23 +68,235 @@ log = logging.getLogger(__name__)
 _DEFAULT_METADATA_READ_BYTES = 512 * 1024
 _MAX_ID3_TAG_BYTES = 8 * 1024 * 1024
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-_MEDIA_INFO_CACHE_SCHEMA = 2
+_MEDIA_INFO_CACHE_SCHEMA = 3
+_SOURCE_CHANGE_RETRY_DELAYS_MS = (100, 300, 1_000)
 
 
 @dataclass(slots=True)
 class _MediaInfoRequestState:
     source_url: str
+    source_identity: str
     media_type: str
     require_thumbnail: bool
     require_title: bool
     require_duration: bool
+    restart_on_source_change: bool
+    source_change_attempts: int = 0
     attempts: int = 0
     fallback_url: str = ""
     origin_failure: MediaInfoFailure | None = None
     embedded_image_failed: bool = False
     partial_pixmap: QPixmap | None = None
     partial_title: str = ""
+    partial_duration_ms: int = 0
     duration_fallback_started: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _DiskCacheLookup:
+    version: MediaInfoVersion
+    index: int
+    url: str
+    media_type: str
+    require_thumbnail: bool
+    require_title: bool
+    require_duration: bool
+    restart_on_source_change: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DiskCacheResult:
+    hit: bool
+    image: QImage | None = None
+    title: str = ""
+    title_resolved: bool = False
+    duration_ms: int = 0
+    source_identity: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingMediaInfoResult:
+    job: MediaInfoJob
+    pixmap: QPixmap
+    title: str
+
+
+def _media_info_cache_source_identity(url: str) -> str:
+    """Return a content-aware cache identity; call only from a worker."""
+
+    if url.startswith(("http://", "https://")):
+        return f"remote:{url}"
+    normalized = os.path.normcase(os.path.abspath(url))
+    try:
+        source_stat = os.stat(url)
+    except OSError:
+        return f"local:{normalized}:unavailable"
+    return f"local:{normalized}:{source_signature_from_stat(source_stat)}"
+
+
+def _media_info_cache_paths(
+    thumb_cache_dir: str,
+    url: str,
+    *,
+    source_identity: str | None = None,
+) -> tuple[str, str]:
+    identity = source_identity or _media_info_cache_source_identity(url)
+    digest = hashlib.md5(identity.encode("utf-8")).hexdigest()
+    base_path = os.path.join(thumb_cache_dir, "extracted", digest)
+    return f"{base_path}.jpg", f"{base_path}.json"
+
+
+def _load_media_info_disk_cache(
+    thumb_cache_dir: str,
+    url: str,
+    *,
+    load_thumbnail: bool,
+) -> _DiskCacheResult:
+    """Load and decode a cache entry entirely outside the Qt GUI thread."""
+
+    source_identity = _media_info_cache_source_identity(url)
+    img_path, meta_path = _media_info_cache_paths(
+        thumb_cache_dir,
+        url,
+        source_identity=source_identity,
+    )
+    try:
+        with open(meta_path, "r", encoding="utf-8") as cache_file:
+            data = json.load(cache_file)
+    except FileNotFoundError:
+        return _DiskCacheResult(False, source_identity=source_identity)
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError) as exc:
+        log.debug("Could not read media info cache %s: %s", meta_path, exc)
+        return _DiskCacheResult(False, source_identity=source_identity)
+    if not isinstance(data, dict):
+        return _DiskCacheResult(False, source_identity=source_identity)
+
+    schema = data.get("schema")
+    outcome = data.get("outcome")
+    if schema not in {2, _MEDIA_INFO_CACHE_SCHEMA}:
+        if data.get("has_thumb") is not True:
+            return _DiskCacheResult(False, source_identity=source_identity)
+        outcome = "ready"
+    if outcome not in {"ready", "absent"}:
+        return _DiskCacheResult(False, source_identity=source_identity)
+
+    title = data.get("title", "")
+    if not isinstance(title, str):
+        title = ""
+    title_resolved = (
+        data.get("title_resolved") is True
+        if schema == _MEDIA_INFO_CACHE_SCHEMA
+        else bool(title)
+    )
+    raw_duration = data.get("duration_ms", 0)
+    duration_ms = (
+        max(0, raw_duration)
+        if isinstance(raw_duration, int) and not isinstance(raw_duration, bool)
+        else 0
+    )
+
+    image = QImage()
+    if outcome == "ready" and load_thumbnail:
+        image = QImage(img_path)
+        if image.isNull():
+            return _DiskCacheResult(False, source_identity=source_identity)
+    current_source_identity = _media_info_cache_source_identity(url)
+    if current_source_identity != source_identity:
+        return _DiskCacheResult(False, source_identity=current_source_identity)
+    return _DiskCacheResult(
+        True,
+        image,
+        title,
+        title_resolved,
+        duration_ms,
+        source_identity,
+    )
+
+
+def _save_media_info_disk_cache(
+    thumb_cache_dir: str,
+    url: str,
+    image: QImage,
+    title: str,
+    *,
+    title_resolved: bool,
+    duration_ms: int,
+    expected_source_identity: str | None = None,
+) -> bool:
+    """Persist an extraction result atomically from a background worker."""
+
+    if expected_source_identity == "":
+        return False
+    source_identity = (
+        expected_source_identity
+        if expected_source_identity is not None
+        else _media_info_cache_source_identity(url)
+    )
+    if _media_info_cache_source_identity(url) != source_identity:
+        return False
+    img_path, meta_path = _media_info_cache_paths(
+        thumb_cache_dir,
+        url,
+        source_identity=source_identity,
+    )
+    temp_paths: list[str] = []
+    try:
+        cache_dir = os.path.dirname(img_path)
+        os.makedirs(cache_dir, exist_ok=True)
+        has_thumb = image is not None and not image.isNull()
+        if has_thumb:
+            image_fd, temp_image_path = tempfile.mkstemp(
+                prefix="media-info-",
+                suffix=".jpg",
+                dir=cache_dir,
+            )
+            os.close(image_fd)
+            temp_paths.append(temp_image_path)
+            if not image.save(temp_image_path, quality=90):
+                raise OSError("Qt could not encode the media info thumbnail")
+        meta_fd, temp_meta_path = tempfile.mkstemp(
+            prefix="media-info-",
+            suffix=".json.tmp",
+            dir=cache_dir,
+            text=True,
+        )
+        os.close(meta_fd)
+        temp_paths.append(temp_meta_path)
+        with open(temp_meta_path, "w", encoding="utf-8") as cache_file:
+            json.dump(
+                {
+                    "schema": _MEDIA_INFO_CACHE_SCHEMA,
+                    "outcome": "ready" if has_thumb else "absent",
+                    "title": title,
+                    "title_resolved": title_resolved,
+                    "has_thumb": has_thumb,
+                    "duration_ms": max(0, int(duration_ms)),
+                },
+                cache_file,
+                ensure_ascii=False,
+            )
+        if _media_info_cache_source_identity(url) != source_identity:
+            return False
+        if has_thumb:
+            os.replace(temp_image_path, img_path)
+            temp_paths.remove(temp_image_path)
+        else:
+            try:
+                os.remove(img_path)
+            except FileNotFoundError:
+                pass
+        os.replace(temp_meta_path, meta_path)
+        temp_paths.remove(temp_meta_path)
+        return True
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        log.debug("Could not save media info cache for %s: %s", url, exc)
+        return False
+    finally:
+        for temp_path in temp_paths:
+            try:
+                os.remove(temp_path)
+            except FileNotFoundError:
+                pass
 
 
 def _failure_from_exception(exc: BaseException) -> MediaInfoFailure:
@@ -1523,6 +1737,8 @@ class MediaInfoQueue(QObject):
     info_ready     = Signal(int, QPixmap, str)   # (index, pixmap, title)
     duration_ready = Signal(int, int)            # (index, duration_ms)
     request_failed = Signal(int, object)          # terminal processing failure
+    _diskCacheLoaded = Signal(object, object)
+    _sourceIdentityChecked = Signal(object, str)
 
     _MAX_CONCURRENT = 2
 
@@ -1546,108 +1762,133 @@ class MediaInfoQueue(QObject):
         self._request_states: dict[int, _MediaInfoRequestState] = {}
         self._retry_timers: dict[int, QTimer] = {}
         self._terminal_source_failures: dict[str, MediaInfoFailure] = {}
+        self._disk_cache_pending: list[_DiskCacheLookup] = []
+        self._disk_cache_active: dict[int, _DiskCacheLookup] = {}
+        self._pending_results: dict[int, _PendingMediaInfoResult] = {}
+        self._diskCacheLoaded.connect(self._on_disk_cache_loaded)
+        self._sourceIdentityChecked.connect(self._on_source_identity_checked)
 
     # ── Disk Cache ────────────────────────────────────────────────────────────
 
-    def _get_cache_paths(self, url: str) -> "tuple[str, str]":
-        """Retorna caminhos absolutos para a imagem (.jpg) e metadados (.json) cacheados."""
-        url_to_hash = self._source_identity(url)
-        h = hashlib.md5(url_to_hash.encode("utf-8")).hexdigest()
-        base_dir = os.path.join(self._thumb_cache_dir, "extracted")
-        base_path = os.path.join(base_dir, h)
-        return f"{base_path}.jpg", f"{base_path}.json"
-
     @staticmethod
-    def _source_identity(url: str) -> str:
+    def _failure_identity(url: str) -> str:
         if url.startswith(("http://", "https://")):
             return url
         return os.path.normcase(os.path.abspath(url))
 
-    def _load_from_disk_cache(
-        self,
-        url: str,
-        *,
-        load_thumbnail: bool = True,
-    ) -> "tuple[QPixmap | None, str, int]":
-        img_path, meta_path = self._get_cache_paths(url)
-
-        if not os.path.exists(meta_path):
-            return None, "", 0
-
-        try:
-            with open(meta_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError) as exc:
-            log.debug("Could not read media info cache %s: %s", meta_path, exc)
-            return None, "", 0
-        if not isinstance(data, dict):
-            return None, "", 0
-
-        # Legacy empty entries were also written for extraction errors. They
-        # cannot prove that a source has no thumbnail, so only legacy positive
-        # records remain valid after the schema upgrade.
-        outcome = data.get("outcome")
-        if data.get("schema") != _MEDIA_INFO_CACHE_SCHEMA:
-            if data.get("has_thumb") is not True:
-                return None, "", 0
-            outcome = "ready"
-        if outcome not in {"ready", "absent"}:
-            return None, "", 0
-
-        title = data.get("title", "")
-        if not isinstance(title, str):
-            title = ""
-        raw_duration = data.get("duration_ms", 0)
-        duration_ms = (
-            max(0, raw_duration)
-            if isinstance(raw_duration, int) and not isinstance(raw_duration, bool)
-            else 0
+    def _disk_cache_is_scheduled(self, index: int) -> bool:
+        return index in self._disk_cache_active or any(
+            lookup.index == index for lookup in self._disk_cache_pending
         )
 
-        px = QPixmap()
-        if outcome == "ready" and not load_thumbnail:
-            pass
-        elif outcome == "ready" and os.path.exists(img_path):
-            px = QPixmap(img_path)
-            if px.isNull():
-                return None, "", 0
-        elif outcome == "ready":
-            return None, "", 0
+    def _schedule_disk_cache_lookup(self, lookup: _DiskCacheLookup) -> None:
+        self._disk_cache_pending.append(lookup)
+        self._pump_disk_cache()
 
-        return px, title, duration_ms
+    def _pump_disk_cache(self) -> None:
+        while (
+            self._disk_cache_pending
+            and len(self._disk_cache_active) < self._MAX_CONCURRENT
+        ):
+            lookup = self._disk_cache_pending.pop(0)
+            if not self._scheduler.is_current(lookup.version):
+                continue
+            self._disk_cache_active[lookup.index] = lookup
 
-    def _save_to_disk_cache(
+            def load(current: _DiskCacheLookup = lookup) -> None:
+                result = _load_media_info_disk_cache(
+                    self._thumb_cache_dir,
+                    current.url,
+                    load_thumbnail=current.require_thumbnail,
+                )
+                try:
+                    self._diskCacheLoaded.emit(current, result)
+                except RuntimeError:
+                    pass
+
+            try:
+                worker = self._worker_pool.submit("media-info-cache-read", load)
+            except RuntimeError:
+                worker = None
+            if worker is not None:
+                continue
+            self._disk_cache_active.pop(lookup.index, None)
+            self._begin_extraction_after_cache(lookup)
+
+    @Slot(object, object)
+    def _on_disk_cache_loaded(self, lookup: object, result: object) -> None:
+        if not isinstance(lookup, _DiskCacheLookup) or not isinstance(
+            result,
+            _DiskCacheResult,
+        ):
+            return
+        if self._disk_cache_active.get(lookup.index) != lookup:
+            return
+        self._disk_cache_active.pop(lookup.index, None)
+        if not self._scheduler.is_current(lookup.version):
+            self._pump_disk_cache()
+            return
+
+        cache_fulfils_request = (
+            result.hit
+            and (not lookup.require_title or result.title_resolved)
+            and (not lookup.require_duration or result.duration_ms > 0)
+        )
+        if cache_fulfils_request:
+            pixmap = (
+                QPixmap.fromImage(result.image)
+                if result.image is not None
+                else QPixmap()
+            )
+            result_title = result.title if lookup.require_title else ""
+            self._cache[lookup.index] = (pixmap, result_title)
+            if lookup.require_duration and result.duration_ms > 0:
+                self._duration_cache[lookup.index] = result.duration_ms
+                QTimer.singleShot(
+                    0,
+                    lambda v=lookup.version, i=lookup.index, duration=result.duration_ms:
+                        self._emit_duration_if_current(v, i, duration),
+                )
+            self._emit_info_later(
+                lookup.version,
+                lookup.index,
+                pixmap,
+                result_title,
+            )
+        else:
+            self._begin_extraction_after_cache(
+                lookup,
+                source_identity=result.source_identity,
+            )
+        self._pump_disk_cache()
+
+    def _schedule_disk_cache_save(
         self,
         url: str,
-        pixmap: QPixmap,
+        image: QImage,
         title: str,
-        duration_ms: int = 0,
+        *,
+        title_resolved: bool,
+        duration_ms: int,
+        source_identity: str,
     ) -> None:
-        img_path, meta_path = self._get_cache_paths(url)
+        cached_image = QImage(image)
+
+        def save() -> None:
+            _save_media_info_disk_cache(
+                self._thumb_cache_dir,
+                url,
+                cached_image,
+                title,
+                title_resolved=title_resolved,
+                duration_ms=duration_ms,
+                expected_source_identity=source_identity,
+            )
+
         try:
-            os.makedirs(os.path.dirname(img_path), exist_ok=True)
-            has_thumb = pixmap is not None and not pixmap.isNull()
-            if has_thumb:
-                pixmap.save(img_path, "JPG", quality=90)
-            else:
-                try:
-                    os.remove(img_path)
-                except FileNotFoundError:
-                    pass
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "schema": _MEDIA_INFO_CACHE_SCHEMA,
-                        "outcome": "ready" if has_thumb else "absent",
-                        "title": title,
-                        "has_thumb": has_thumb,
-                        "duration_ms": max(0, int(duration_ms)),
-                    },
-                    f,
-                    ensure_ascii=False,
-                )
-        except (OSError, UnicodeError, TypeError, ValueError) as exc:
-            log.debug("Could not save media info cache for %s: %s", url, exc)
+            self._worker_pool.submit("media-info-cache-write", save)
+        except RuntimeError:
+            pass
 
     # ── API pública ───────────────────────────────────────────────────────────
 
@@ -1660,12 +1901,14 @@ class MediaInfoQueue(QObject):
         require_thumbnail: bool = True,
         require_title: bool = True,
         require_duration: bool = False,
+        restart_on_source_change: bool = True,
     ) -> None:
         """Solicita extração de info para o item. Idempotente."""
         if (
             self._scheduler.is_scheduled(index)
             or index in self._request_states
             or index in self._retry_timers
+            or self._disk_cache_is_scheduled(index)
         ):
             return
         if index in self._cache:
@@ -1673,33 +1916,37 @@ class MediaInfoQueue(QObject):
                 return
             self._cache.pop(index, None)
 
-        # Fast-Path: Tenta carregar do cache de disco ANTES de qualquer coisa
-        disk_px, disk_title, disk_duration = self._load_from_disk_cache(
-            url,
-            load_thumbnail=require_thumbnail,
-        )
-        if disk_px is not None and (not require_duration or disk_duration > 0):
-            version = self._scheduler.version_for(index)
-            result_title = disk_title if require_title else ""
-            self._cache[index] = (disk_px, result_title)
-            if require_duration and disk_duration > 0:
-                self._duration_cache[index] = disk_duration
-                QTimer.singleShot(
-                    0,
-                    lambda v=version, i=index, duration=disk_duration:
-                        self._emit_duration_if_current(v, i, duration),
-                )
-            self._emit_info_later(
-                version,
-                index,
-                disk_px,
-                result_title,
+        self._schedule_disk_cache_lookup(
+            _DiskCacheLookup(
+                version=self._scheduler.version_for(index),
+                index=index,
+                url=url,
+                media_type=media_type,
+                require_thumbnail=require_thumbnail,
+                require_title=require_title,
+                require_duration=require_duration,
+                restart_on_source_change=restart_on_source_change,
             )
+        )
+
+    def _begin_extraction_after_cache(
+        self,
+        lookup: _DiskCacheLookup,
+        *,
+        source_identity: str = "",
+    ) -> None:
+        if not self._scheduler.is_current(lookup.version):
             return
 
+        index = lookup.index
+        url = lookup.url
+        media_type = lookup.media_type
+        require_thumbnail = lookup.require_thumbnail
+        require_title = lookup.require_title
+        require_duration = lookup.require_duration
         is_remote = url.startswith(("http://", "https://"))
         terminal_failure = self._terminal_source_failures.get(
-            self._source_identity(url)
+            self._failure_identity(url)
         )
         if terminal_failure is not None:
             fallback = None
@@ -1711,10 +1958,12 @@ class MediaInfoQueue(QObject):
             if fallback:
                 self._request_states[index] = _MediaInfoRequestState(
                     source_url=url,
+                    source_identity=source_identity,
                     media_type=media_type,
                     require_thumbnail=require_thumbnail,
                     require_title=require_title,
                     require_duration=require_duration,
+                    restart_on_source_change=lookup.restart_on_source_change,
                     fallback_url=fallback,
                     origin_failure=terminal_failure,
                 )
@@ -1733,10 +1982,12 @@ class MediaInfoQueue(QObject):
 
         self._request_states[index] = _MediaInfoRequestState(
             source_url=url,
+            source_identity=source_identity,
             media_type=media_type,
             require_thumbnail=require_thumbnail,
             require_title=require_title,
             require_duration=require_duration,
+            restart_on_source_change=lookup.restart_on_source_change,
         )
 
         # A thumbnail derivada já foi tentada acima. Para uma origem remota,
@@ -1797,6 +2048,11 @@ class MediaInfoQueue(QObject):
     def invalidate(self, index: int):
         self._cancel_retry(index)
         self._request_states.pop(index, None)
+        self._disk_cache_pending = [
+            lookup for lookup in self._disk_cache_pending if lookup.index != index
+        ]
+        self._disk_cache_active.pop(index, None)
+        self._pending_results.pop(index, None)
         for job in self._scheduler.invalidate(index):
             self._cancel_job(job)
         self._cache.pop(index, None)
@@ -1806,6 +2062,9 @@ class MediaInfoQueue(QObject):
         for index in tuple(self._retry_timers):
             self._cancel_retry(index)
         active_jobs = self._scheduler.clear()
+        self._disk_cache_pending.clear()
+        self._disk_cache_active.clear()
+        self._pending_results.clear()
         self._request_states.clear()
         self._cache.clear()
         self._duration_cache.clear()
@@ -1816,6 +2075,9 @@ class MediaInfoQueue(QObject):
         for index in tuple(self._retry_timers):
             self._cancel_retry(index)
         active_jobs = self._scheduler.shutdown()
+        self._disk_cache_pending.clear()
+        self._disk_cache_active.clear()
+        self._pending_results.clear()
         self._request_states.clear()
         self._terminal_source_failures.clear()
         self._cache.clear()
@@ -2057,13 +2319,21 @@ class MediaInfoQueue(QObject):
         index: int,
         dur_ms: int,
     ):
-        if (
+        if not (
             job.require_duration
             and self._scheduler.accepts_result(job, index)
             and dur_ms > 0
         ):
-            self._duration_cache[index] = dur_ms
-            self.duration_ready.emit(index, dur_ms)
+            return
+        state = self._request_states.get(index)
+        if state is None:
+            return
+        state.partial_duration_ms = dur_ms
+        if (
+            state.source_url.startswith(("http://", "https://"))
+            or not state.source_identity
+        ):
+            self._publish_duration(index, dur_ms)
 
     def _on_ready(
         self,
@@ -2082,7 +2352,7 @@ class MediaInfoQueue(QObject):
         if (
             state is not None
             and state.require_duration
-            and self._duration_cache.get(index, 0) <= 0
+            and state.partial_duration_ms <= 0
             and state.media_type == "audio"
             and state.source_url.startswith(("http://", "https://"))
         ):
@@ -2103,6 +2373,144 @@ class MediaInfoQueue(QObject):
             self._extractors.pop(index, None)
             self._start_remote_audio_duration_fallback(job)
             return
+        if (
+            state is not None
+            and state.source_identity
+            and not state.source_url.startswith(("http://", "https://"))
+        ):
+            self._extractors.pop(index, None)
+            self._schedule_source_identity_check(job, pixmap, title)
+            return
+        self._finalize_ready(job, index, pixmap, title)
+
+    def _schedule_source_identity_check(
+        self,
+        job: MediaInfoJob,
+        pixmap: QPixmap,
+        title: str,
+    ) -> None:
+        pending = _PendingMediaInfoResult(job, QPixmap(pixmap), title)
+        self._pending_results[job.index] = pending
+        state = self._request_states.get(job.index)
+        source_url = state.source_url if state is not None else ""
+
+        def validate() -> None:
+            current_identity = _media_info_cache_source_identity(source_url)
+            try:
+                self._sourceIdentityChecked.emit(job, current_identity)
+            except RuntimeError:
+                pass
+
+        try:
+            worker = self._worker_pool.submit("media-info-cache-validate", validate)
+        except RuntimeError:
+            worker = None
+        if worker is not None:
+            return
+        self._pending_results.pop(job.index, None)
+        if self._scheduler.fail(job, job.index):
+            self._request_states.pop(job.index, None)
+            self._pump()
+
+    @Slot(object, str)
+    def _on_source_identity_checked(
+        self,
+        job: object,
+        current_identity: str,
+    ) -> None:
+        if not isinstance(job, MediaInfoJob):
+            return
+        pending = self._pending_results.get(job.index)
+        if pending is None or pending.job is not job:
+            return
+        self._pending_results.pop(job.index, None)
+        if not self._scheduler.accepts_result(job, job.index):
+            return
+        state = self._request_states.get(job.index)
+        if state is None:
+            return
+        if current_identity != state.source_identity:
+            if not self._scheduler.complete(job, job.index):
+                return
+            self._duration_cache.pop(job.index, None)
+            if state.restart_on_source_change:
+                state.source_change_attempts += 1
+                if state.source_change_attempts <= len(
+                    _SOURCE_CHANGE_RETRY_DELAYS_MS
+                ):
+                    state.source_identity = current_identity
+                    state.partial_pixmap = None
+                    state.partial_title = ""
+                    state.partial_duration_ms = 0
+                    state.duration_fallback_started = False
+                    version = self._scheduler.version_for(job.index)
+                    timer = QTimer(self)
+                    timer.setSingleShot(True)
+                    timer.timeout.connect(
+                        lambda i=job.index, v=version:
+                            self._retry_changed_source(i, v)
+                    )
+                    self._retry_timers[job.index] = timer
+                    timer.start(
+                        _SOURCE_CHANGE_RETRY_DELAYS_MS[
+                            state.source_change_attempts - 1
+                        ]
+                    )
+                    self._pump()
+                    return
+            self._request_states.pop(job.index, None)
+            self.request_failed.emit(
+                job.index,
+                MediaInfoFailure(
+                    MediaInfoFailureKind.TRANSIENT,
+                    "The media source changed during extraction",
+                    "source-changed",
+                ),
+            )
+            self._pump()
+            return
+        self._finalize_ready(
+            job,
+            job.index,
+            pending.pixmap,
+            pending.title,
+        )
+
+    def _retry_changed_source(
+        self,
+        index: int,
+        version: MediaInfoVersion,
+    ) -> None:
+        timer = self._retry_timers.pop(index, None)
+        if timer is not None:
+            timer.deleteLater()
+        state = self._request_states.get(index)
+        if state is None or not self._scheduler.is_current(version):
+            return
+        self._enqueue(
+            index,
+            state.source_url,
+            state.media_type,
+            require_thumbnail=state.require_thumbnail,
+            require_title=state.require_title,
+            require_duration=state.require_duration,
+        )
+        self._pump()
+
+    def _finalize_ready(
+        self,
+        job: MediaInfoJob,
+        index: int,
+        pixmap: QPixmap,
+        title: str,
+    ) -> None:
+        state = self._request_states.get(index)
+        if (
+            state is not None
+            and state.require_duration
+            and state.partial_duration_ms > 0
+        ):
+            self._publish_duration(index, state.partial_duration_ms)
         if (
             state is not None
             and state.require_thumbnail
@@ -2141,21 +2549,29 @@ class MediaInfoQueue(QObject):
             self._pump()
             return
         self._terminal_source_failures.pop(
-            self._source_identity(state.source_url),
+            self._failure_identity(state.source_url),
             None,
         )
         result_pixmap = pixmap if state.require_thumbnail else QPixmap()
         result_title = title if state.require_title else ""
         if state.require_thumbnail:
-            self._save_to_disk_cache(
+            self._schedule_disk_cache_save(
                 state.source_url,
-                result_pixmap,
+                result_pixmap.toImage(),
                 result_title,
-                self._duration_cache.get(index, 0),
+                title_resolved=state.require_title,
+                duration_ms=self._duration_cache.get(index, 0),
+                source_identity=state.source_identity,
             )
         self._cache[index] = (result_pixmap, result_title)
         self.info_ready.emit(index, result_pixmap, result_title)
         self._pump()
+
+    def _publish_duration(self, index: int, duration_ms: int) -> None:
+        if self._duration_cache.get(index) == duration_ms:
+            return
+        self._duration_cache[index] = duration_ms
+        self.duration_ready.emit(index, duration_ms)
 
     def _on_failed(
         self,
@@ -2163,6 +2579,7 @@ class MediaInfoQueue(QObject):
         index: int,
         failure: object = None,
     ) -> None:
+        self._pending_results.pop(index, None)
         if not self._scheduler.fail(job, index):
             return
         self._extractors.pop(index, None)
@@ -2234,7 +2651,7 @@ class MediaInfoQueue(QObject):
             memoized_failure = state.origin_failure or effective_failure
             if memoized_failure.code in {"http-404", "http-410"}:
                 self._terminal_source_failures[
-                    self._source_identity(state.source_url)
+                    self._failure_identity(state.source_url)
                 ] = memoized_failure
             log.info(
                 "Thumbnail extraction stopped (%s/%s) for %s after %d attempt(s): %s",

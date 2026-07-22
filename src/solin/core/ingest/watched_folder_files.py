@@ -10,7 +10,10 @@ from pathlib import Path
 import re
 from typing import Any, Protocol
 
-from solin.core.ingest.local_files import local_file_availability_signature
+from solin.core.ingest.local_files import (
+    LocalFileAvailabilitySignature,
+    local_file_availability_signature,
+)
 from solin.core.ingest.meeting_folder_sources import (
     meeting_folder_source_needs_processing,
     scan_meeting_folder_sources,
@@ -92,6 +95,21 @@ class WatchedFolderFileStore:
                 progress(total, total)
             return WatchedFolderCopyResult(source, source, 0, already_present=True)
 
+        equivalent_destination = self._equivalent_destination(
+            source,
+            folder,
+            cancellation=cancellation,
+        )
+        if equivalent_destination is not None:
+            if progress is not None:
+                progress(total, total)
+            return WatchedFolderCopyResult(
+                source,
+                equivalent_destination,
+                0,
+                already_present=True,
+            )
+
         operation_id = _SAFE_OPERATION_ID.sub("_", request.operation_id).strip("._")
         operation_id = operation_id[:80] or "copy"
         staging = folder / f".{source.name}.{operation_id}{WATCHED_FOLDER_STAGING_SUFFIX}"
@@ -165,7 +183,7 @@ class WatchedFolderFileStore:
     def file_availability_signature(
         self,
         urls: Iterable[str],
-    ) -> tuple[tuple[str, bool], ...]:
+    ) -> LocalFileAvailabilitySignature:
         return local_file_availability_signature(urls)
 
     @staticmethod
@@ -211,3 +229,86 @@ class WatchedFolderFileStore:
                 continue
             os.close(descriptor)
             return destination
+
+    @staticmethod
+    def _equivalent_destination(
+        source: Path,
+        folder: Path,
+        *,
+        cancellation: CancellationProbe | None,
+    ) -> Path | None:
+        stem = source.stem
+        suffix = source.suffix
+        source_name_key = os.path.normcase(source.name)
+        stem_key = os.path.normcase(stem)
+        suffix_key = os.path.normcase(suffix)
+        candidates: list[tuple[int, Path]] = []
+        for candidate in folder.iterdir():
+            if not candidate.is_file():
+                continue
+            candidate_name_key = os.path.normcase(candidate.name)
+            if candidate_name_key == source_name_key:
+                candidates.append((0, candidate))
+                continue
+            if not (
+                candidate_name_key.startswith(f"{stem_key} (")
+                and candidate_name_key.endswith(f"){suffix_key}")
+            ):
+                continue
+            counter_text = candidate.name[
+                len(stem) + 2 : len(candidate.name) - len(suffix) - 1
+            ]
+            if counter_text.isdecimal():
+                candidates.append((int(counter_text), candidate))
+        for _counter, candidate in sorted(candidates):
+            if WatchedFolderFileStore._same_file_content(
+                source,
+                candidate,
+                cancellation=cancellation,
+            ):
+                return candidate
+        return None
+
+    @staticmethod
+    def _same_file_content(
+        source: Path,
+        destination: Path,
+        *,
+        cancellation: CancellationProbe | None,
+    ) -> bool:
+        try:
+            if not destination.is_file():
+                return False
+            source_stat = source.stat()
+            destination_stat = destination.stat()
+            if source_stat.st_size != destination_stat.st_size:
+                return False
+            source_signature = (
+                source_stat.st_size,
+                source_stat.st_mtime_ns,
+            )
+            destination_signature = (
+                destination_stat.st_size,
+                destination_stat.st_mtime_ns,
+            )
+            with source.open("rb") as source_file, destination.open("rb") as target_file:
+                while True:
+                    if cancellation is not None and cancellation.is_set():
+                        raise MediaOperationCancelled("Media copy cancelled")
+                    source_chunk = source_file.read(_DEFAULT_COPY_CHUNK_SIZE)
+                    target_chunk = target_file.read(_DEFAULT_COPY_CHUNK_SIZE)
+                    if source_chunk != target_chunk:
+                        return False
+                    if not source_chunk:
+                        break
+                final_source = os.fstat(source_file.fileno())
+                final_destination = os.fstat(target_file.fileno())
+                return source_signature == (
+                    final_source.st_size,
+                    final_source.st_mtime_ns,
+                ) and destination_signature == (
+                    final_destination.st_size,
+                    final_destination.st_mtime_ns,
+                )
+        except FileNotFoundError:
+            return False

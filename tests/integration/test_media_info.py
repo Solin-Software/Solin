@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import struct
+import threading
+import time
 from types import SimpleNamespace
 import zlib
 
@@ -10,6 +12,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from solin.core.media.info_queue import MediaInfoFailure, MediaInfoFailureKind
+from solin.core.foundation.thread_workers import ThreadedWorkerPool
 from solin.ui import media_info as media_info_module
 from solin.ui.media_info import (
     MediaInfoQueue,
@@ -24,7 +27,9 @@ _APP = QApplication.instance() or QApplication([])
 
 
 class _NoRemoteWorkerPool:
-    def submit(self, _name, _target):
+    def submit(self, name, _target):
+        if name.startswith("media-info-cache-"):
+            return None
         raise AssertionError("this test should not start remote workers")
 
 
@@ -35,6 +40,16 @@ def _media_info_queue(tmp_path, parent=None):
         _NoRemoteWorkerPool(),
         parent,
     )
+
+
+def _wait_until(predicate, timeout: float = 3.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        QApplication.processEvents()
+        if time.monotonic() >= deadline:
+            raise AssertionError("Timed out waiting for media info work")
+        time.sleep(0.002)
+    QApplication.processEvents()
 
 
 class _ManualSignal:
@@ -282,18 +297,304 @@ def test_local_audio_without_cover_finishes_as_authoritative_absence():
 
 def test_legacy_negative_cache_is_not_treated_as_authoritative_absence(tmp_path):
     queue = _media_info_queue(tmp_path)
-    _image_path, metadata_path = queue._get_cache_paths("clip.mp4")
+    _image_path, metadata_path = media_info_module._media_info_cache_paths(
+        queue._thumb_cache_dir,
+        "clip.mp4",
+    )
     Path(metadata_path).parent.mkdir(parents=True)
     Path(metadata_path).write_text(
         json.dumps({"has_thumb": False, "title": "", "duration_ms": 0}),
         encoding="utf-8",
     )
 
-    pixmap, title, duration = queue._load_from_disk_cache("clip.mp4")
+    result = media_info_module._load_media_info_disk_cache(
+        queue._thumb_cache_dir,
+        "clip.mp4",
+        load_thumbnail=True,
+    )
 
-    assert pixmap is None
-    assert title == ""
-    assert duration == 0
+    assert not result.hit
+
+
+def test_disk_cache_lookup_and_decode_run_outside_qt_thread(monkeypatch, tmp_path):
+    workers = ThreadedWorkerPool()
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)
+    gui_thread = threading.get_ident()
+    lookup_threads = []
+    ready = []
+
+    def load_cache(_cache_dir, _url, *, load_thumbnail):
+        lookup_threads.append((threading.get_ident(), load_thumbnail))
+        image = media_info_module.QImage(
+            2,
+            2,
+            media_info_module.QImage.Format.Format_RGB32,
+        )
+        image.fill(0xFF223344)
+        return media_info_module._DiskCacheResult(
+            True,
+            image,
+            'Episódio 2: "Este é meu Filho"',
+            True,
+            12_345,
+        )
+
+    monkeypatch.setattr(media_info_module, "_load_media_info_disk_cache", load_cache)
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: pytest.fail("cache hit unexpectedly started extraction"),
+    )
+    queue.info_ready.connect(lambda *args: ready.append(args))
+
+    queue.request(
+        7,
+        str(tmp_path / "gnj_T_02_r720P.mp4"),
+        require_title=True,
+        require_duration=True,
+    )
+    _wait_until(lambda: bool(ready))
+
+    assert len(lookup_threads) == 1
+    assert lookup_threads[0][0] != gui_thread
+    assert lookup_threads[0][1] is True
+    assert ready[0][2] == 'Episódio 2: "Este é meu Filho"'
+    assert queue._duration_cache[7] == 12_345
+    queue.shutdown()
+    workers.shutdown()
+
+
+def test_local_content_change_invalidates_media_info_disk_cache(tmp_path):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"old")
+    image = media_info_module.QImage(
+        2,
+        2,
+        media_info_module.QImage.Format.Format_RGB32,
+    )
+    image.fill(0xFF223344)
+    cache_dir = str(tmp_path / "thumbs")
+    media_info_module._save_media_info_disk_cache(
+        cache_dir,
+        str(source),
+        image,
+        "Old title",
+        title_resolved=True,
+        duration_ms=1_000,
+    )
+
+    before = media_info_module._load_media_info_disk_cache(
+        cache_dir,
+        str(source),
+        load_thumbnail=True,
+    )
+    source.write_bytes(b"new-content")
+    after = media_info_module._load_media_info_disk_cache(
+        cache_dir,
+        str(source),
+        load_thumbnail=True,
+    )
+
+    assert before.hit
+    assert before.title == "Old title"
+    assert not after.hit
+
+
+def test_inflight_result_is_not_cached_under_a_new_local_revision(tmp_path):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"old")
+    source_identity = media_info_module._media_info_cache_source_identity(
+        str(source)
+    )
+    old_image_path, old_metadata_path = media_info_module._media_info_cache_paths(
+        str(tmp_path / "thumbs"),
+        str(source),
+        source_identity=source_identity,
+    )
+    image = media_info_module.QImage(
+        2,
+        2,
+        media_info_module.QImage.Format.Format_RGB32,
+    )
+    image.fill(0xFF223344)
+
+    source.write_bytes(b"new-content")
+    saved = media_info_module._save_media_info_disk_cache(
+        str(tmp_path / "thumbs"),
+        str(source),
+        image,
+        "Old title",
+        title_resolved=True,
+        duration_ms=1_000,
+        expected_source_identity=source_identity,
+    )
+
+    assert saved is False
+    assert not Path(old_image_path).exists()
+    assert not Path(old_metadata_path).exists()
+
+
+def test_local_result_is_rejected_when_source_changes_during_extraction(
+    monkeypatch,
+    tmp_path,
+):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"old-content")
+    extractors: list[_ManualExtractor] = []
+
+    def factory(*_args):
+        extractor = _ManualExtractor()
+        extractors.append(extractor)
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    workers = ThreadedWorkerPool()
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)
+    ready = []
+    durations = []
+    failures = []
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.duration_ready.connect(lambda *args: durations.append(args))
+    queue.request_failed.connect(lambda *args: failures.append(args))
+
+    queue.request(
+        7,
+        str(source),
+        require_duration=True,
+        restart_on_source_change=False,
+    )
+    _wait_until(lambda: len(extractors) == 1)
+    source.write_bytes(b"new-and-different-content")
+    extractors[0].duration_ready.emit(7, 12_345)
+    extractors[0].info_ready.emit(
+        7,
+        media_info_module.QPixmap(1, 1),
+        "Stale title",
+    )
+
+    _wait_until(lambda: bool(failures))
+
+    assert ready == []
+    assert durations == []
+    assert len(extractors) == 1
+    assert failures[0][0] == 7
+    assert failures[0][1].code == "source-changed"
+    assert queue.get_cached(7) == (None, "")
+    queue.shutdown()
+    workers.shutdown()
+
+
+def test_generic_consumer_restarts_when_source_changes_during_extraction(
+    monkeypatch,
+    tmp_path,
+):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"old-content")
+    extractors: list[_ManualExtractor] = []
+
+    def factory(*_args):
+        extractor = _ManualExtractor()
+        extractors.append(extractor)
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    workers = ThreadedWorkerPool()
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)
+    failures = []
+    queue.request_failed.connect(lambda *args: failures.append(args))
+
+    queue.request(7, str(source))
+    _wait_until(lambda: len(extractors) == 1)
+    source.write_bytes(b"new-and-different-content")
+    extractors[0].info_ready.emit(
+        7,
+        media_info_module.QPixmap(1, 1),
+        "Stale title",
+    )
+
+    _wait_until(lambda: len(extractors) == 2)
+
+    assert failures == []
+    assert queue.get_cached(7) == (None, "")
+    queue.shutdown()
+    workers.shutdown()
+
+
+def test_generic_source_change_retry_is_bounded_and_backed_off(
+    monkeypatch,
+    tmp_path,
+):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"0")
+    extractors: list[_ManualExtractor] = []
+
+    def factory(*_args):
+        extractor = _ManualExtractor()
+        extractors.append(extractor)
+        return extractor
+
+    monkeypatch.setattr(media_info_module, "_create_extractor", factory)
+    monkeypatch.setattr(
+        media_info_module,
+        "_SOURCE_CHANGE_RETRY_DELAYS_MS",
+        (1, 1, 1),
+    )
+    workers = ThreadedWorkerPool()
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)
+    failures = []
+    queue.request_failed.connect(lambda *args: failures.append(args))
+
+    queue.request(7, str(source))
+    for revision in range(1, 5):
+        _wait_until(lambda expected=revision: len(extractors) >= expected)
+        source.write_bytes(b"x" * (revision + 1))
+        extractors[revision - 1].info_ready.emit(
+            7,
+            media_info_module.QPixmap(1, 1),
+            f"Stale title {revision}",
+        )
+    _wait_until(lambda: bool(failures))
+
+    assert len(extractors) == 4
+    assert failures[0][1].code == "source-changed"
+    assert 7 not in queue._request_states
+    assert 7 not in queue._retry_timers
+    queue.shutdown()
+    workers.shutdown()
+
+
+def test_validated_local_duration_survives_thumbnail_format_failure(
+    monkeypatch,
+    tmp_path,
+):
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"stable-content")
+    extractor = _ManualExtractor()
+    monkeypatch.setattr(
+        media_info_module,
+        "_create_extractor",
+        lambda *_args: extractor,
+    )
+    workers = ThreadedWorkerPool()
+    queue = MediaInfoQueue(tmp_path / "media", tmp_path / "thumbs", workers)
+    ready = []
+    durations = []
+    failures = []
+    queue.info_ready.connect(lambda *args: ready.append(args))
+    queue.duration_ready.connect(lambda *args: durations.append(args))
+    queue.request_failed.connect(lambda *args: failures.append(args))
+
+    queue.request(7, str(source), require_duration=True)
+    _wait_until(lambda: queue._extractors.get(7) is extractor)
+    extractor.duration_ready.emit(7, 12_345)
+    extractor.info_ready.emit(7, media_info_module.QPixmap(), "Metadata title")
+    _wait_until(lambda: bool(failures))
+
+    assert ready == []
+    assert durations == [(7, 12_345)]
+    assert failures[0][1].kind is MediaInfoFailureKind.FORMAT
+    queue.shutdown()
+    workers.shutdown()
 
 
 def test_permanent_failure_does_not_emit_ready_or_write_negative_cache(
@@ -320,7 +621,10 @@ def test_permanent_failure_does_not_emit_ready_or_write_negative_cache(
     )
     extractor.thumbnail_failed.emit(7, failure)
 
-    _image_path, metadata_path = queue._get_cache_paths("missing.mp4")
+    _image_path, metadata_path = media_info_module._media_info_cache_paths(
+        queue._thumb_cache_dir,
+        "missing.mp4",
+    )
     assert ready == []
     assert failed == [(7, failure)]
     assert queue.get_cached(7) == (None, "")
@@ -490,7 +794,10 @@ def test_remote_404_is_memoized_without_becoming_thumbnail_absence(
 
     assert len(created) == 1
     assert queue._terminal_source_failures[remote_url] is failure
-    _image_path, metadata_path = queue._get_cache_paths(remote_url)
+    _image_path, metadata_path = media_info_module._media_info_cache_paths(
+        queue._thumb_cache_dir,
+        remote_url,
+    )
     assert not Path(metadata_path).exists()
 
 
@@ -738,7 +1045,7 @@ def test_duration_only_request_does_not_cache_or_emit_opportunistic_media(
     durations = []
     monkeypatch.setattr(
         queue,
-        "_save_to_disk_cache",
+        "_schedule_disk_cache_save",
         lambda *args: disk_writes.append(args),
     )
     queue.info_ready.connect(lambda *args: ready.append(args))

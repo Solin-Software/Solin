@@ -11,6 +11,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from solin.core.foundation.thread_workers import CancellationFlag
+from solin.core.media.operations import MediaOperationCancelled
+
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
     MANIFEST_REPOSITORY,
@@ -283,43 +286,67 @@ class MeetingLinkedFolderSync:
         folder: Path,
         *,
         generated_roots: Iterable[str],
+        cancellation: CancellationFlag | None = None,
+        created_paths_out: list[Path] | None = None,
     ) -> tuple[list[Node], dict[str, str]]:
         copied: dict[tuple[str, str], Path] = {}
         materialized = clone_nodes(nodes)
         linked_files: dict[str, str] = {}
         roots = [Path(root) for root in generated_roots if root]
+        created_paths: list[Path] = []
 
-        for node in iter_nodes(materialized):
-            if node.get("type") != "media":
-                continue
-            node["linked_folder_source"] = str(folder)
-            node_id = str(node.get("id") or "")
-            for owner, field in self._local_url_fields(node):
-                source = str(owner.get(field) or "")
-                if not self._copyable_local_url(source):
+        try:
+            for node in iter_nodes(materialized):
+                if cancellation is not None and cancellation.is_set():
+                    raise MediaOperationCancelled("Meeting media copy cancelled")
+                if node.get("type") != "media":
                     continue
-                source_path = Path(source)
-                dest_dir = self._target_dir_for_node_file(
-                    node,
-                    field,
-                    source_path,
-                    folder,
-                    roots,
-                )
-                if self._is_in_target_location(source_path, folder, dest_dir):
-                    dest_path = source_path
-                else:
-                    cache_key = (
-                        os.path.normcase(os.path.normpath(os.path.abspath(source))),
-                        str(dest_dir),
+                node["linked_folder_source"] = str(folder)
+                node_id = str(node.get("id") or "")
+                for owner, field in self._local_url_fields(node):
+                    source = str(owner.get(field) or "")
+                    if not self._copyable_local_url(source):
+                        continue
+                    source_path = Path(source)
+                    dest_dir = self._target_dir_for_node_file(
+                        node,
+                        field,
+                        source_path,
+                        folder,
+                        roots,
                     )
-                    dest_path = copied.get(cache_key)
-                    if dest_path is None:
-                        dest_path = self._copy_into_directory(source_path, dest_dir)
-                        copied[cache_key] = dest_path
-                owner[field] = str(dest_path)
-                if node_id and field != "thumbnail_local_path":
-                    linked_files[str(dest_path)] = node_id
+                    if self._is_in_target_location(source_path, folder, dest_dir):
+                        dest_path = source_path
+                    else:
+                        cache_key = (
+                            os.path.normcase(os.path.normpath(os.path.abspath(source))),
+                            str(dest_dir),
+                        )
+                        dest_path = copied.get(cache_key)
+                        if dest_path is None:
+                            dest_path = self._copy_into_directory(
+                                source_path,
+                                dest_dir,
+                                cancellation=cancellation,
+                                created_paths=created_paths,
+                            )
+                            copied[cache_key] = dest_path
+                    owner[field] = str(dest_path)
+                    if node_id and field != "thumbnail_local_path":
+                        linked_files[str(dest_path)] = node_id
+        except BaseException:  # noqa: BLE001 - materialization transaction rollback
+            for created_path in reversed(created_paths):
+                try:
+                    created_path.unlink(missing_ok=True)
+                except OSError:
+                    log.warning(
+                        "Could not roll back meeting media copy %s",
+                        created_path,
+                        exc_info=True,
+                    )
+            raise
+        if created_paths_out is not None:
+            created_paths_out.extend(created_paths)
         return materialized, linked_files
 
     def detach_cache_references(
@@ -327,12 +354,16 @@ class MeetingLinkedFolderSync:
         nodes: list[Node],
         folder: Path,
         durable_dir: Path,
+        *,
+        cancellation: CancellationFlag | None = None,
     ) -> list[Node]:
         detached = clone_nodes(nodes)
         sync_cache = folder / CACHE_DIR_NAME
         durable_dir.mkdir(parents=True, exist_ok=True)
 
         for node in iter_nodes(detached):
+            if cancellation is not None and cancellation.is_set():
+                raise MediaOperationCancelled("Meeting sync detach cancelled")
             if node.get("type") != "media":
                 node.pop("linked_folder_source", None)
                 continue
@@ -344,7 +375,13 @@ class MeetingLinkedFolderSync:
                 if not self._is_inside(path, sync_cache):
                     continue
                 if path.is_file():
-                    owner[field] = str(self._copy_into_directory(path, durable_dir))
+                    owner[field] = str(
+                        self._copy_into_directory(
+                            path,
+                            durable_dir,
+                            cancellation=cancellation,
+                        )
+                    )
                     continue
                 if field == "thumbnail_local_path":
                     owner.pop(field, None)
@@ -356,6 +393,20 @@ class MeetingLinkedFolderSync:
             else:
                 node.pop("linked_folder_source", None)
         return detached
+
+    @staticmethod
+    def rollback_materialized_files(paths: Iterable[str | Path]) -> None:
+        """Remove only artifacts recorded as newly created by materialization."""
+        failures: list[Path] = []
+        for value in reversed(tuple(paths)):
+            path = Path(value)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                failures.append(path)
+        if failures:
+            joined = ", ".join(os.fspath(path) for path in failures)
+            raise MeetingSyncError(f"Could not roll back materialized files: {joined}")
 
     def _block_matches(
         self,
@@ -715,18 +766,39 @@ class MeetingLinkedFolderSync:
     def _is_under_any(self, path: Path, roots: Iterable[Path]) -> bool:
         return any(self._is_inside(path, root) for root in roots)
 
-    def _copy_into_directory(self, source: Path, dest_dir: Path) -> Path:
+    def _copy_into_directory(
+        self,
+        source: Path,
+        dest_dir: Path,
+        *,
+        cancellation: CancellationFlag | None = None,
+        created_paths: list[Path] | None = None,
+    ) -> Path:
         if not source.is_file():
             raise MeetingSyncError(f"File is not available: {source}")
         dest_dir.mkdir(parents=True, exist_ok=True)
         destination = self._unique_destination(source, dest_dir)
         if self._same_file(source, destination):
             return destination
+        destination_existed = destination.exists()
         temp = dest_dir / f".{destination.name}.{os.getpid()}.tmp"
         try:
-            shutil.copy2(source, temp)
+            with source.open("rb") as source_file, temp.open("xb") as target_file:
+                while chunk := source_file.read(4 * 1024 * 1024):
+                    if cancellation is not None and cancellation.is_set():
+                        raise MediaOperationCancelled("Meeting media copy cancelled")
+                    target_file.write(chunk)
+                target_file.flush()
+                os.fsync(target_file.fileno())
+            shutil.copystat(source, temp)
+            if cancellation is not None and cancellation.is_set():
+                raise MediaOperationCancelled("Meeting media copy cancelled")
             os.replace(temp, destination)
+            if not destination_existed and created_paths is not None:
+                created_paths.append(destination)
             return destination
+        except MediaOperationCancelled:
+            raise
         except OSError as exc:
             raise MeetingSyncError(f"Could not copy '{source.name}' into linked folder.") from exc
         finally:

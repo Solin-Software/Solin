@@ -56,6 +56,31 @@ def test_registry_preserves_last_known_visuals_while_rechecking() -> None:
     assert checking.duration_ticks == 10_000_000
 
 
+def test_registry_invalidates_visuals_when_node_source_changes() -> None:
+    registry = MediaStateRegistry()
+    key = registry.begin_probe("meeting:1", "media-1", "old.mp4")
+    registry.accept(
+        MediaProbeResult(
+            key,
+            MediaPresentationState(
+                availability=MediaAvailability.AVAILABLE,
+                local_path="old.mp4",
+                thumbnail_source="image://playlistthumbs/media-1/3",
+                duration_ticks=10_000_000,
+                image_aspect_ratio=16 / 9,
+            ),
+        )
+    )
+
+    registry.begin_probe("meeting:1", "media-1", "new.mp4")
+    checking = registry.state("meeting:1", "media-1")
+
+    assert checking.local_path == ""
+    assert checking.thumbnail_source == ""
+    assert checking.duration_ticks == 0
+    assert checking.image_aspect_ratio == 0
+
+
 def test_registry_distinguishes_temporary_unavailability_from_missing() -> None:
     registry = MediaStateRegistry()
     key = registry.begin_probe("playlist:1", "media-1", "cloud.mp4")

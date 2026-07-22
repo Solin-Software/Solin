@@ -84,6 +84,14 @@ def move_tree_node(
     target_list_id: str,
     insert_index: int,
 ) -> bool:
+    """Move *node_id* into a post-removal insertion slot.
+
+    The tree UI replaces the dragged node with a placeholder before it computes
+    the destination index.  Consequently ``insert_index`` already addresses the
+    destination list with the source node removed.  Keeping that contract here
+    avoids adjusting same-parent downward moves twice.
+    """
+
     source, parent_children, original_index = _pop_node_with_parent(nodes, node_id)
     if source is None or parent_children is None or original_index < 0:
         return False
@@ -93,6 +101,10 @@ def move_tree_node(
 
     kind, target_id = parse_tree_list_id(target_list_id)
     if target_id and _contains_node(source, target_id):
+        parent_children.insert(original_index, source)
+        return False
+    target_children = children_for_tree_target(nodes, kind, target_id)
+    if target_children is None:
         parent_children.insert(original_index, source)
         return False
     if not _insert_existing_tree_node(nodes, source, kind, target_id, insert_index):

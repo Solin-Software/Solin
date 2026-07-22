@@ -22,6 +22,7 @@ from solin.controllers.remote_control_controller import (
     RemoteControlDependencies,
 )
 from solin.core.media.formats import MediaKind
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
 from solin.core.remote_control.contracts import (
     CatalogCollection,
@@ -830,9 +831,10 @@ def test_local_images_get_safe_on_demand_remote_thumbnails(tmp_path: Path) -> No
 
     data = asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "image-1"))
 
-    assert node.thumbnail_id == "image-1"
+    storage_id = thumbnail_storage_id("image-1", str(source))
+    assert node.thumbnail_id == storage_id
     assert data is not None and data.startswith(b"\xff\xd8")
-    assert controller._dependencies.playlist_thumbnail_store.exists("image-1")
+    assert controller._dependencies.playlist_thumbnail_store.exists(storage_id)
     assert str(source) not in json.dumps(controller.state.catalog.to_dict())
     controller.stop()
 
@@ -870,15 +872,20 @@ def test_local_video_and_audio_thumbnails_are_generated_and_cached_on_demand(
     video_data, audio_data = asyncio.run(load())
     nodes = controller.state.catalog.collections[0].nodes
 
-    assert [node.thumbnail_id for node in nodes] == ["video-1", "audio-1"]
+    video_storage_id = thumbnail_storage_id("video-1", str(video))
+    audio_storage_id = thumbnail_storage_id("audio-1", str(audio))
+    assert [node.thumbnail_id for node in nodes] == [
+        video_storage_id,
+        audio_storage_id,
+    ]
     assert video_data is not None and video_data.startswith(b"\xff\xd8")
     assert audio_data is not None and audio_data.startswith(b"\xff\xd8")
     assert extractor.requests == [
         (str(video), MediaKind.VIDEO),
         (str(audio), MediaKind.AUDIO),
     ]
-    assert controller._dependencies.playlist_thumbnail_store.exists("video-1")
-    assert not controller._dependencies.playlist_thumbnail_store.exists("audio-1")
+    assert controller._dependencies.playlist_thumbnail_store.exists(video_storage_id)
+    assert not controller._dependencies.playlist_thumbnail_store.exists(audio_storage_id)
     assert (
         asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "audio-1")) == audio_data
     )
@@ -993,7 +1000,8 @@ def test_stored_remote_media_thumbnail_is_resolved_by_catalog_id_only(tmp_path: 
 
     data = asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "video-1"))
 
-    assert node.thumbnail_id == "video-1"
+    storage_id = thumbnail_storage_id("video-1", private_url)
+    assert node.thumbnail_id == storage_id
     assert data is not None and data.startswith(b"\xff\xd8")
     assert controller._dependencies.media_thumbnail_extractor.requests == [
         (private_url, MediaKind.VIDEO)

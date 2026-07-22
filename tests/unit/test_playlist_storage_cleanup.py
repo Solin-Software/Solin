@@ -8,12 +8,12 @@ from solin.core.playlists.cleanup import PlaylistCleanupQueue
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.media.thumbnail_store import ThumbnailStore
+from solin.core.media.thumbnail_identity import thumbnail_storage_id
 from solin.core.playlists.storage import (
     PendingDeletionRepository,
     PlaylistRepository,
     PlaylistStoragePaths,
 )
-from solin.core.playlists.thumbnails import playlist_thumb_path
 
 
 def test_playlist_storage_roundtrips_playlists(tmp_path):
@@ -109,12 +109,14 @@ def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
     media_path = embedded_dir / "clip.mp4"
     media_path.write_bytes(b"media")
     item = {"id": "item-1", "url": str(media_path)}
-    thumb_path = playlist_thumb_path(
-        item["id"],
-        thumb_cache_dir=str(thumb_dir),
+    store = ThumbnailStore(thumb_dir)
+    storage_id = thumbnail_storage_id(item["id"], item["url"])
+    thumb_path = store.save_bytes(
+        storage_id,
+        b"thumb",
+        source_signature="5:10",
     )
-    thumb_path.parent.mkdir(parents=True, exist_ok=True)
-    thumb_path.write_bytes(b"thumb")
+    signature_path = store.source_signature_path(storage_id)
     queue = PlaylistCleanupQueue(
         storage_paths,
         ThumbnailStore(thumb_dir),
@@ -127,6 +129,7 @@ def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
 
     assert media_path.exists()
     assert thumb_path.exists()
+    assert signature_path.exists()
 
     repository.save([{"id": "p1", "items": []}])
     queue.enqueue_items([item])
@@ -134,6 +137,7 @@ def test_cleanup_queue_revalidates_current_playlist_references(tmp_path):
 
     assert media_path.exists()
     assert not thumb_path.exists()
+    assert not signature_path.exists()
 
 
 def test_cleanup_queue_fails_closed_when_playlist_storage_is_corrupt(tmp_path):
@@ -142,10 +146,7 @@ def test_cleanup_queue_fails_closed_when_playlist_storage_is_corrupt(tmp_path):
         pending_deletions_file=tmp_path / "pending.json",
     )
     thumb_dir = tmp_path / "thumbs"
-    thumb_path = playlist_thumb_path(
-        "item-1",
-        thumb_cache_dir=str(thumb_dir),
-    )
+    thumb_path = ThumbnailStore(thumb_dir).path("item-1")
     thumb_path.parent.mkdir(parents=True, exist_ok=True)
     thumb_path.write_bytes(b"thumb")
     storage_paths.playlists_file.write_text("{broken", encoding="utf-8")
@@ -280,6 +281,37 @@ def test_flush_thumbs_dir_fails_closed_when_playlist_storage_is_corrupt(tmp_path
     playlist_cleanup.flush_thumbs_dir(storage_paths, thumb_dir)
 
     assert stale_thumb.exists()
+
+
+def test_flush_thumbs_keeps_only_current_source_bound_identity(tmp_path):
+    storage_paths = PlaylistStoragePaths(
+        playlists_file=tmp_path / "playlists.json",
+        pending_deletions_file=tmp_path / "pending.json",
+    )
+    item = {"id": "item-1", "url": str(tmp_path / "current.mp4")}
+    PlaylistRepository.from_paths(storage_paths).save(
+        [{"id": "p1", "items": [item]}]
+    )
+    store = ThumbnailStore(tmp_path / "thumbs")
+    current = store.save_bytes(
+        thumbnail_storage_id(item["id"], item["url"]),
+        b"current",
+        source_signature="7:10",
+    )
+    stale = store.save_bytes(
+        thumbnail_storage_id(item["id"], str(tmp_path / "old.mp4")),
+        b"stale",
+        source_signature="8:20",
+    )
+    current_signature = current.with_suffix(".jpg.source")
+    stale_signature = stale.with_suffix(".jpg.source")
+
+    playlist_cleanup.flush_thumbs_dir(storage_paths, store.root)
+
+    assert current.exists()
+    assert current_signature.exists()
+    assert not stale.exists()
+    assert not stale_signature.exists()
 
 
 def test_flush_thumbs_dir_fails_closed_when_playlist_item_shape_is_invalid(tmp_path):

@@ -83,6 +83,22 @@ def test_invalid_playlist_move_does_not_mutate_storage() -> None:
     assert playlist == original
 
 
+def test_playlist_reorder_uses_ui_post_removal_slot() -> None:
+    playlist = {
+        "id": "playlist",
+        "sections": [],
+        "markers": [],
+        "items": [
+            {"id": node_id, "section_id": None}
+            for node_id in ("a", "b", "c")
+        ],
+    }
+
+    assert move_playlist_node(playlist, "a", "root", 1)
+
+    assert [item["id"] for item in playlist["items"]] == ["b", "a", "c"]
+
+
 def test_insert_playlist_media_targets_a_visual_tree_slot() -> None:
     playlist = _playlist()
     inserted = {"id": "new-media", "title": "New", "url": "new.mp4"}
@@ -100,6 +116,47 @@ def test_insert_playlist_media_targets_a_visual_tree_slot() -> None:
         if item.get("section_id") == "section-1"
     ]
     assert section_items == ["new-media", "section-media"]
+
+
+def test_negative_media_insert_index_appends_to_root() -> None:
+    playlist = _playlist()
+
+    assert insert_playlist_media(
+        playlist,
+        "root",
+        -1,
+        [{"id": "new-media", "title": "New", "url": "new.mp4"}],
+    )
+
+    assert [node["id"] for node in build_playlist_tree(playlist)] == [
+        "section-1",
+        "root-media",
+        "new-media",
+    ]
+
+
+def test_negative_media_insert_index_appends_inside_section() -> None:
+    playlist = _playlist()
+
+    assert insert_playlist_media(
+        playlist,
+        "section:section-1",
+        -1,
+        [{"id": "new-media", "title": "New", "url": "new.mp4"}],
+    )
+
+    assert [node["id"] for node in build_playlist_tree(playlist)[0]["children"]] == [
+        "section-media",
+        "subsection-1",
+        "new-media",
+    ]
+
+
+def test_negative_flat_media_insert_index_means_append() -> None:
+    playlist = _playlist()
+
+    assert flat_media_insert_index(playlist, "root", -1) == 3
+    assert flat_media_insert_index(playlist, "section:section-1", -1) == 2
 
 
 def test_flat_media_index_counts_nested_virtual_slots() -> None:
