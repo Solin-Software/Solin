@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from _thread import RLock as ReentrantLock
 from collections import OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 import hashlib
 import json
-from threading import RLock
 import uuid
 
 from .contracts import (
@@ -76,8 +76,9 @@ class RemoteControlStateStore:
         server_instance_id: str | None = None,
         collections: Iterable[CatalogCollection] = (),
         playback: ProjectionSnapshot | None = None,
+        publication_lock: ReentrantLock | None = None,
     ) -> None:
-        self._lock = RLock()
+        self._lock = publication_lock or ReentrantLock()
         self._catalog_change_token: object | None = None
         instance_id = server_instance_id or str(uuid.uuid4())
         initial_catalog = CatalogSnapshot(0, tuple(collections))
@@ -241,7 +242,7 @@ class ProjectionCommandSession:
         self._state = state
         self._limit = deduplication_limit
         self._records: OrderedDict[str, _CommandRecord] = OrderedDict()
-        self._lock = RLock()
+        self._lock = ReentrantLock()
 
     @property
     def cached_command_count(self) -> int:

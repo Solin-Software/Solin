@@ -509,6 +509,7 @@ class RemoteControlHttpApplication:
         decision = self._dependencies.command_session.prepare(command)
         if not decision.should_execute:
             assert decision.result is not None
+            self._log_stale_command(command, decision.result, stage="precondition")
             return self._json_response(decision.result.to_dict())
 
         task = asyncio.create_task(self._execute_reserved_command(command))
@@ -543,11 +544,37 @@ class RemoteControlHttpApplication:
                 command,
                 command_error,
             )
+            self._log_stale_command(command, result, stage="execution")
         try:
             await self.publish_snapshot()
         except Exception:  # noqa: BLE001 - snapshot fan-out must not alter command result
             log.exception("Could not publish the completed remote-control command")
         return result
+
+    @staticmethod
+    def _log_stale_command(
+        command: RemoteCommand,
+        result: CommandResult,
+        *,
+        stage: str,
+    ) -> None:
+        error = result.error
+        if error is None or error.code not in {
+            CommandErrorCode.CATALOG_STALE,
+            CommandErrorCode.PLAYBACK_STALE,
+        }:
+            return
+        log.info(
+            "Remote-control command state conflict: type=%s code=%s stage=%s "
+            "submitted_catalog_revision=%s current_catalog_revision=%d "
+            "current_playback_revision=%d",
+            command.type.value,
+            error.code.value,
+            stage,
+            getattr(command, "catalog_revision", None),
+            result.catalog_revision,
+            result.playback_revision,
+        )
 
     def _command_task_finished(self, task: asyncio.Task[CommandResult]) -> None:
         self._command_tasks.discard(task)

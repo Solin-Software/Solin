@@ -8,6 +8,7 @@ the desktop process and are returned only by :meth:`RemoteCatalog.resolve_play`.
 
 from __future__ import annotations
 
+from _thread import RLock as ReentrantLock
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -15,7 +16,6 @@ from enum import StrEnum
 import hashlib
 import json
 import re
-import threading
 from types import MappingProxyType
 from typing import Any, Protocol, TypeAlias
 import uuid
@@ -123,7 +123,13 @@ ResolvedPlay: TypeAlias = ResolvedPlaylistPlay | ResolvedMeetingPlay
 
 
 @dataclass(frozen=True, slots=True)
-class _CatalogView:
+class CatalogBuild:
+    """Side-effect-free candidate containing public and private catalog data.
+
+    A build has no wire revision until the application commits it. This keeps
+    superseded background work from advancing the published catalog epoch.
+    """
+
     collections: tuple[CatalogCollection, ...]
     playlists: tuple[dict[str, Any], ...]
     linked_playlists: tuple[dict[str, Any], ...]
@@ -150,6 +156,7 @@ class RemoteCatalog:
         availability_resolver: AvailabilityResolver | None = None,
         thumbnail_id_resolver: ThumbnailIdResolver | None = None,
         meeting_group_title_resolver: MeetingGroupTitleResolver | None = None,
+        publication_lock: ReentrantLock | None = None,
     ) -> None:
         self._playlist_source = playlist_source
         self._linked_playlist_source = linked_playlist_source
@@ -162,17 +169,53 @@ class RemoteCatalog:
         self._availability_resolver = availability_resolver
         self._thumbnail_id_resolver = thumbnail_id_resolver
         self._meeting_group_title_resolver = meeting_group_title_resolver
-        self._lock = threading.RLock()
+        self._lock = publication_lock or ReentrantLock()
         self._revision = 0
-        self._fingerprint: str | None = None
+        self._published: CatalogBuild | None = None
 
     def snapshot(self) -> CatalogSnapshot:
-        """Return a sanitized immutable view of the current persisted catalog."""
+        """Build and publish a snapshot synchronously.
+
+        Application code that builds on a worker must use :meth:`build` and
+        publish only the newest accepted candidate with :meth:`publish`.
+        """
+
+        return self.publish(self.build())
+
+    def build(self) -> CatalogBuild:
+        """Build a complete candidate without changing published state."""
+
+        return self._build_view()
+
+    def publish(
+        self,
+        build: CatalogBuild,
+        *,
+        revision: int | None = None,
+    ) -> CatalogSnapshot:
+        """Atomically install one candidate and its authoritative wire revision."""
+
+        if not isinstance(build, CatalogBuild):
+            raise TypeError("build must be a CatalogBuild")
+        if revision is not None and (
+            isinstance(revision, bool) or not isinstance(revision, int) or revision < 0
+        ):
+            raise ValueError("revision must be a non-negative integer")
 
         with self._lock:
-            view = self._build_view()
-            revision = self._adopt_view(view)
-            return CatalogSnapshot(revision, view.collections)
+            changed = self._published is None or build.fingerprint != self._published.fingerprint
+            next_revision = (
+                (self._revision + 1 if changed else self._revision)
+                if revision is None
+                else revision
+            )
+            if next_revision < self._revision:
+                raise ValueError("published catalog revision cannot regress")
+            if changed and self._published is not None and next_revision == self._revision:
+                raise ValueError("changed catalog content requires a newer revision")
+            self._published = build
+            self._revision = next_revision
+            return CatalogSnapshot(next_revision, build.collections)
 
     def resolve_play(self, command: PlayCommand) -> ResolvedPlay:
         """Resolve a public play command to private authoritative media data."""
@@ -180,9 +223,8 @@ class RemoteCatalog:
         if not isinstance(command, PlayCommand):
             raise TypeError("command must be a PlayCommand")
         with self._lock:
-            view = self._build_view()
-            revision = self._adopt_view(view)
-            if command.catalog_revision != revision:
+            view = self._published_view()
+            if command.catalog_revision != self._revision:
                 raise CatalogResolutionError(
                     CatalogResolutionCode.STALE_CATALOG,
                     "The catalog changed. Refresh it before playing media.",
@@ -209,8 +251,8 @@ class RemoteCatalog:
         if origin.collection_id is None or origin.node_id is None:
             return None
         with self._lock:
-            view = self._build_view()
-            if view.fingerprint != self._fingerprint:
+            view = self._published
+            if view is None:
                 return None
             public_key = (origin.source, origin.collection_id, origin.node_id)
             if public_key not in view.playable_origins:
@@ -262,8 +304,8 @@ class RemoteCatalog:
         if source is not ProjectionSource.MEETING:
             return None
         with self._lock:
-            view = self._build_view()
-            if view.fingerprint != self._fingerprint:
+            view = self._published
+            if view is None:
                 return None
             collection = next(
                 (
@@ -286,13 +328,16 @@ class RemoteCatalog:
                 return None
             return bytes(cover)
 
-    def _adopt_view(self, view: _CatalogView) -> int:
-        if view.fingerprint != self._fingerprint:
-            self._fingerprint = view.fingerprint
-            self._revision += 1
-        return self._revision
+    def _published_view(self) -> CatalogBuild:
+        view = self._published
+        if view is None:
+            raise CatalogResolutionError(
+                CatalogResolutionCode.INVALID_CATALOG,
+                "The catalog has not been published yet.",
+            )
+        return view
 
-    def _build_view(self) -> _CatalogView:
+    def _build_view(self) -> CatalogBuild:
         playlists = tuple(deepcopy(self._load_playlists()))
         linked_playlists = tuple(deepcopy(self._load_linked_playlists()))
         meetings = tuple(self._load_meetings())
@@ -336,7 +381,7 @@ class RemoteCatalog:
             for node in _walk_catalog_nodes(collection.nodes)
             if node.kind is CatalogNodeKind.MEDIA and node.available
         )
-        return _CatalogView(
+        return CatalogBuild(
             collections,
             playlists,
             linked_playlists,
@@ -738,7 +783,7 @@ class RemoteCatalog:
     def _resolve_playlist(
         self,
         command: PlayCommand,
-        view: _CatalogView,
+        view: CatalogBuild,
     ) -> ResolvedPlaylistPlay:
         collection_id = command.origin.collection_id or ""
         node_id = command.origin.node_id or ""
@@ -795,7 +840,7 @@ class RemoteCatalog:
     def _resolve_meeting(
         self,
         command: PlayCommand,
-        view: _CatalogView,
+        view: CatalogBuild,
     ) -> ResolvedMeetingPlay:
         collection_id = command.origin.collection_id or ""
         node_id = command.origin.node_id or ""

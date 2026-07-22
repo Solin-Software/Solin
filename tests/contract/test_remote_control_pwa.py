@@ -4,9 +4,13 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import textwrap
 import xml.etree.ElementTree as ET
 
 from PIL import Image
+import pytest
 
 from solin.styles.icons import (
     ICON_IMAGE,
@@ -65,6 +69,35 @@ def _sprite_symbol(html: str, name: str) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg"{match.group("attrs")}>{match.group("body")}</svg>'
     )
+
+
+def _javascript_function(source: str, name: str) -> str:
+    start = source.index(f"function {name}(")
+    if source[max(0, start - 6) : start] == "async ":
+        start -= 6
+    opening = source.index("{", start)
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for index in range(opening, len(source)):
+        character = source[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {'"', "'", "`"}:
+            quote = character
+        elif character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"Unclosed JavaScript function: {name}")
 
 
 def test_remote_control_pwa_manifest_and_icons_are_installable() -> None:
@@ -236,8 +269,7 @@ def test_remote_control_media_cards_only_play_from_the_explicit_action() -> None
         flags=re.DOTALL,
     )
     assert any(
-        "width: var(--touch-target);" in rule
-        and "height: var(--touch-target);" in rule
+        "width: var(--touch-target);" in rule and "height: var(--touch-target);" in rule
         for rule in action_rules
     )
 
@@ -251,6 +283,152 @@ def test_remote_control_connection_uses_an_atomic_session_snapshot() -> None:
     assert 'connection: "online"' in app
     assert 'message?.type !== "heartbeat"' not in api
     assert "this.onEvent(message)" in api
+
+
+def test_stale_play_recovery_is_bounded_and_revalidates_the_catalog_origin() -> None:
+    app = (PWA_ROOT / "scripts" / "app.js").read_text(encoding="utf-8")
+    service_worker = (PWA_ROOT / "service-worker.js").read_text(encoding="utf-8")
+
+    recovery = re.search(
+        r"async function executeCommandWithStateRecovery\(.*?\n\}",
+        app,
+        flags=re.DOTALL,
+    )
+    assert recovery is not None
+    body = recovery.group(0)
+    assert "let retriedPlay = false" in body
+    assert 'code === "catalog_stale" && !retriedPlay && recovered && refreshed' in body
+    assert "retriedPlay = true" in body
+    assert "continue" in body
+    assert body.count("newCommandId()") == 1
+    assert "function refreshedPlayCommand(fields)" in app
+    assert "candidate.id === collectionId && candidate.kind === source" in app
+    assert 'node.kind !== "media" || !node.available' in app
+    assert "solin-remote-shell-v16" in service_worker
+
+
+def test_stale_play_recovery_behavior() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to execute the PWA recovery behavior test")
+    app = (PWA_ROOT / "scripts" / "app.js").read_text(encoding="utf-8")
+    functions = "\n\n".join(
+        _javascript_function(app, name)
+        for name in (
+            "executeCommandWithStateRecovery",
+            "refreshedPlayCommand",
+            "findCatalogNode",
+            "postCommandWithAuthenticationRecovery",
+        )
+    )
+    script = textwrap.dedent(
+        """
+        class ApiError extends Error {
+          constructor(message, options = {}) {
+            super(message);
+            this.code = options.code ?? "failed";
+            this.status = options.status ?? 0;
+            this.retryable = Boolean(options.retryable);
+          }
+        }
+
+        let nextId = 0;
+        let scenario;
+        let apiCalls;
+        let recoverCalls;
+        let toasts;
+        const store = { state: {} };
+        const t = (key) => key;
+        const newCommandId = () => `command-${++nextId}`;
+        const isUnauthorized = (error) => error instanceof ApiError && error.status === 401;
+        const showToast = (message, level) => toasts.push({ message, level });
+        const api = {
+          async command(command) {
+            apiCalls.push(JSON.parse(JSON.stringify(command)));
+            const response = scenario.responses.shift() ?? "success";
+            if (response === "403") {
+              throw new ApiError("Forbidden", { code: "forbidden", status: 403 });
+            }
+            if (response === "success") return { ok: true };
+            return { ok: false, error: { code: response, message: response } };
+          },
+        };
+
+        async function recover() {
+          recoverCalls += 1;
+          const catalog = scenario.catalogs.shift();
+          if (catalog) store.state.catalog = catalog;
+          return scenario.recoveries.shift() ?? true;
+        }
+
+        __FUNCTIONS__
+
+        const availableCatalog = (revision = 2) => ({
+          catalogRevision: revision,
+          collections: [{
+            id: "playlist-1",
+            kind: "playlist",
+            nodes: [{ id: "media-1", kind: "media", available: true, children: [] }],
+          }],
+        });
+        const missingCatalog = (revision = 2) => ({ catalogRevision: revision, collections: [] });
+        const play = () => ({
+          type: "play",
+          catalogRevision: 1,
+          origin: { source: "playlist", collectionId: "playlist-1", nodeId: "media-1" },
+        });
+        const assert = (condition, message) => {
+          if (!condition) throw new Error(message);
+        };
+
+        async function run(responses, catalogs = [], recoveries = []) {
+          scenario = { responses: [...responses], catalogs: [...catalogs], recoveries: [...recoveries] };
+          apiCalls = [];
+          recoverCalls = 0;
+          toasts = [];
+          store.state = { view: "app", catalog: availableCatalog(1) };
+          await executeCommandWithStateRecovery(play());
+          return { apiCalls, recoverCalls, toasts };
+        }
+
+        const healed = await run(["catalog_stale", "success"], [availableCatalog(2)]);
+        assert(healed.apiCalls.length === 2, "stale play must retry exactly once");
+        assert(healed.apiCalls[0].commandId !== healed.apiCalls[1].commandId, "retry needs a new id");
+        assert(healed.apiCalls[1].catalogRevision === 2, "retry needs the recovered revision");
+        assert(healed.recoverCalls === 1 && healed.toasts.length === 0, "healed retry stays silent");
+
+        const removed = await run(["catalog_stale"], [missingCatalog(2)]);
+        assert(removed.apiCalls.length === 1, "removed media must not retry");
+        assert(removed.recoverCalls === 1 && removed.toasts.length === 1, "removed media reports change");
+
+        const bounded = await run(
+          ["catalog_stale", "catalog_stale", "success"],
+          [availableCatalog(2), availableCatalog(3)],
+        );
+        assert(bounded.apiCalls.length === 2, "a second stale response must stop retrying");
+        assert(bounded.toasts.length === 1, "a second stale response reports the state change");
+
+        const playbackStale = await run(["playback_stale"], [availableCatalog(2)]);
+        assert(playbackStale.apiCalls.length === 1, "playback stale must never replay a command");
+
+        const authenticated = await run(["403", "success"], [availableCatalog(1)]);
+        assert(authenticated.apiCalls.length === 2, "403 recovery must repeat the HTTP request");
+        assert(
+          authenticated.apiCalls[0].commandId === authenticated.apiCalls[1].commandId,
+          "403 recovery must preserve command idempotency",
+        );
+        """
+    ).replace("__FUNCTIONS__", functions)
+
+    result = subprocess.run(  # noqa: S603 - fixed local Node.js test harness
+        [node, "--input-type=module", "--eval", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_remote_control_setup_is_a_dedicated_three_step_onboarding_flow() -> None:
@@ -292,8 +470,7 @@ def test_remote_control_setup_is_a_dedicated_three_step_onboarding_flow() -> Non
         flags=re.DOTALL,
     )
     assert any(
-        "height: 100dvh;" in rule and "overflow-y: auto;" in rule
-        for rule in setup_view_rules
+        "height: 100dvh;" in rule and "overflow-y: auto;" in rule for rule in setup_view_rules
     )
 
 
