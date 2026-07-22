@@ -55,6 +55,7 @@ from solin.core.media.formats import (
     media_type_from_path,
 )
 from solin.core.media.identity import partition_media_items
+from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.ingest.manifest import (
     CACHE_DIR_NAME,
     MANIFEST_REPOSITORY,
@@ -324,6 +325,8 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
 
     # 1. Arquivos de mídia na raiz da subpasta
     for f in sub.iterdir():
+        if is_watched_folder_staging_path(f):
+            continue
         if not f.is_file():
             continue
         if f.name.startswith("_solin") or f.name.startswith("."):
@@ -413,6 +416,8 @@ def get_pending_files(subfolder_path: str) -> list[str]:
     processed = manifest.get("processed", {})
     pending = []
     for f in sub.iterdir():
+        if is_watched_folder_staging_path(f):
+            continue
         if not f.is_file():
             continue
         ext = f.suffix.lower()

@@ -3,35 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-import os
 from typing import Any
 
-from PySide6.QtCore import QUrl
-
-from solin.core.i18n.strings import (
-    tr_offline_download,
-    tr_offline_downloading,
-    tr_offline_downloading_progress,
-)
-from solin.core.media.duration import format_effective_duration_ticks
-from solin.core.media.operations import MediaOperationRecord, MediaOperationState
+from solin.core.media.operations import MediaOperationRecord
 from solin.core.meetings.colors import (
     accent_from_hue,
     badge_bg_from_hue,
     section_text_from_hue,
 )
 from solin.core.playlists.tree_editing import PlaylistNode, build_playlist_tree
-from solin.core.projection.image_framing import (
-    image_transform_from_record,
-    image_transform_to_record,
-)
 from solin.styles.theme import current_theme_scheme
+from solin.ui.qml.media_tree.media_presenter import MediaRoleInput, media_roles
 from solin.ui.qml.media_tree.snapshot import (
     MediaTreeNodeSnapshot,
     MediaTreeNodeType,
     MediaTreeSnapshot,
 )
-from solin.ui.qml.media_tree.state import MediaAvailability, MediaPresentationState
+from solin.ui.qml.media_tree.state import MediaPresentationState
 from solin.ui.qml.playlist.visuals import playlist_media_badge
 
 
@@ -129,90 +117,29 @@ class PlaylistTreePresenter:
         source_revision: int,
     ) -> MediaTreeNodeSnapshot:
         node_id = str(item["id"])
-        url = str(item.get("url") or "")
-        remote = url.startswith(("http://", "https://"))
-        local_available = state.availability == MediaAvailability.AVAILABLE
-        trim_source = ""
-        if state.local_path:
-            trim_source = QUrl.fromLocalFile(os.path.abspath(state.local_path)).toString()
-        elif remote:
-            trim_source = url
-        elif local_available and url:
-            trim_source = QUrl.fromLocalFile(os.path.abspath(url)).toString()
-        cloud_visible = remote and not state.cached
-        cloud_active = cloud_visible and (
-            state.availability == MediaAvailability.CHECKING
-            or state.cloud_progress >= 0
-        )
-        cloud_tooltip = ""
-        if cloud_visible:
-            if cloud_active and state.cloud_progress >= 0:
-                cloud_tooltip = tr_offline_downloading_progress(
-                    int(round(state.cloud_progress * 100))
-                )
-            elif cloud_active:
-                cloud_tooltip = tr_offline_downloading()
-            else:
-                cloud_tooltip = tr_offline_download()
-
-        base_ticks = _ticks(item.get("base_duration_ticks")) or state.duration_ticks
+        base_ticks = _ticks(item.get("base_duration_ticks"))
         start_ticks = _ticks(item.get("start_trim_ticks"))
         end_ticks = _ticks(item.get("end_trim_ticks"))
         media_type = str(item.get("type") or "video")
-        operation_state = (
-            operation.state.value
-            if operation is not None
-            and operation.state not in {MediaOperationState.CANCELLED}
-            else MediaOperationState.READY.value
-        )
-        active = operation_state not in {
-            MediaOperationState.READY.value,
-            MediaOperationState.FAILED.value,
-        }
-        operation_message = ""
-        if operation is not None:
-            operation_message = operation.error or operation.stage or operation.detail
         return MediaTreeNodeSnapshot.create(
             node_id,
             MediaTreeNodeType.MEDIA,
             source_revision=source_revision,
-            roles={
-                "title": str(item.get("title") or ""),
-                "mediaType": media_type,
-                "badge": playlist_media_badge(media_type),
-                "duration": format_effective_duration_ticks(
-                    base_ticks,
-                    start_ticks,
-                    end_ticks,
+            roles=media_roles(
+                MediaRoleInput(
+                    node_id=node_id,
+                    title=str(item.get("title") or ""),
+                    media_type=media_type,
+                    badge=playlist_media_badge(media_type),
+                    url=str(item.get("url") or ""),
+                    start_trim_ticks=start_ticks,
+                    end_trim_ticks=end_ticks,
+                    base_duration_ticks=base_ticks,
+                    image_framing=item.get("image_framing"),
                 ),
-                "thumbSource": state.thumbnail_source,
-                "url": url,
-                "trimSource": trim_source,
-                "trimAvailable": bool(trim_source and not active),
-                "cloudVisible": cloud_visible,
-                "cloudActive": cloud_active,
-                "cloudProgress": float(state.cloud_progress),
-                "cloudTooltip": cloud_tooltip,
-                "isMissing": state.availability == MediaAvailability.MISSING,
-                "startTrimTicks": start_ticks,
-                "endTrimTicks": end_ticks,
-                "baseDurationTicks": base_ticks,
-                "hasCustomTrim": bool(start_ticks or end_ticks),
-                "imageFraming": image_transform_to_record(
-                    image_transform_from_record(item.get("image_framing"))
-                ),
-                "operationId": operation.operation_id if operation else "",
-                "operationState": operation_state,
-                "operationProgress": operation.progress if operation else -1.0,
-                "operationMessage": operation_message,
-                "operationCancellable": bool(operation and operation.cancellable),
-                "operationRetryable": bool(operation and operation.retryable),
-                "canDrag": not active,
-                "canEdit": not active,
-                "canProject": not active and state.availability != MediaAvailability.MISSING,
-                "canRemove": not active or operation_state == MediaOperationState.FAILED.value,
-                "canDownload": cloud_visible and not active,
-            },
+                state,
+                operation,
+            ),
         )
 
 

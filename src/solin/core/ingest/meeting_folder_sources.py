@@ -13,6 +13,7 @@ from solin.core.foundation.constants import (
     PLAYLIST_EXTS,
     PPTX_EXTS,
 )
+from solin.core.ingest.staging import is_watched_folder_staging_path
 from solin.core.media.formats import (
     AUDIO_EXTS,
     IMAGE_EXTS,
@@ -97,6 +98,8 @@ def scan_meeting_folder_sources(folder_path: str | Path) -> list[dict[str, Any]]
 
         sources: list[dict[str, Any]] = []
         for file_path in sorted(subfolder.iterdir(), key=lambda path: path.name.lower()):
+            if is_watched_folder_staging_path(file_path):
+                continue
             if not file_path.is_file():
                 continue
             if file_path.name.startswith(".") or file_path.name.startswith("_solin"):
