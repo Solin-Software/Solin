@@ -104,6 +104,62 @@ class MeetingFolderSourceScannerTests(unittest.TestCase):
 
             self.assertEqual([playlist["name"] for playlist in playlists], ["Music"])
 
+    def test_playlist_scan_counts_canonical_virtual_manifest_items(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            linked = root / "Virtual playlist"
+            linked.mkdir()
+            _write_manifest(
+                linked,
+                {
+                    "version": 1,
+                    "processed": {},
+                    "playlist": {
+                        "items": [
+                            {
+                                "id": f"remote-{index}",
+                                "title": f"Remote {index}",
+                                "url": f"https://cdn.example/{index}.mp4",
+                                "type": "video",
+                            }
+                            for index in range(5)
+                        ]
+                    },
+                },
+            )
+
+            playlists = watched_folder_module.scan_root(str(root))
+
+            self.assertEqual(playlists[0]["item_count"], 5)
+
+    def test_playlist_scan_adds_new_physical_media_to_manifest_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            linked = root / "Mixed playlist"
+            linked.mkdir()
+            (linked / "local.mp4").write_bytes(b"video")
+            _write_manifest(
+                linked,
+                {
+                    "version": 1,
+                    "processed": {},
+                    "playlist": {
+                        "items": [
+                            {
+                                "id": "remote",
+                                "title": "Remote",
+                                "url": "https://cdn.example/remote.mp4",
+                                "type": "video",
+                            }
+                        ]
+                    },
+                },
+            )
+
+            playlists = watched_folder_module.scan_root(str(root))
+
+            self.assertEqual(playlists[0]["item_count"], 2)
+
     def test_source_processing_decision_suppresses_removed_until_file_changes(self):
         source = {
             "source_key": "file",
