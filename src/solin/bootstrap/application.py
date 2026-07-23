@@ -132,6 +132,7 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
 
     try:
         from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+        from solin.core.meetings.meeting_weeks import meeting_week_bounds
         from solin.core.meetings.tree_store import MeetingTreeStore
         from solin.core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 
@@ -140,16 +141,17 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
             pending_deletions_file=profile_paths.pending_deletions_file,
         )
         lanes = ResourceLaneRegistry()
+        meeting_tree_store = MeetingTreeStore(
+            profile_paths.meeting_trees_file,
+            resource_lanes=lanes,
+        )
         maintenance = ProfileMaintenanceService(
             storage_paths=storage_paths,
             playlist_repository=PlaylistRepository.from_paths(
                 storage_paths,
                 resource_lanes=lanes,
             ),
-            meeting_tree_store=MeetingTreeStore(
-                profile_paths.meeting_trees_file,
-                resource_lanes=lanes,
-            ),
+            meeting_tree_store=meeting_tree_store,
             profile_paths=profile_paths,
             resource_lanes=lanes,
         )
@@ -157,6 +159,14 @@ def _prepare_profile_main_window(profile_paths, cancellation=None):
             maintenance.resource_claim,
             lambda: maintenance.run(cancellation),
         )
+
+        def prune_expired_trees() -> None:
+            meeting_tree_store.prune_before(meeting_week_bounds()[0])
+
+        if cancellation is None:
+            prune_expired_trees()
+        else:
+            cancellation.run_if_active(prune_expired_trees)
     except ProfileMaintenanceCancelled:
         pass
     except Exception:  # noqa: BLE001 - fail-closed maintenance boundary

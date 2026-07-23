@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from datetime import date
+import json
 import os
 from dataclasses import FrozenInstanceError
 
 import pytest
 from PySide6.QtCore import QObject
 
+from solin.bootstrap import application as bootstrap_application
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.lifecycle import ApplicationLifecycle
 from solin.core.foundation.runtime_paths import ProfilePaths, RuntimePaths
+from solin.core.meetings import meeting_weeks
+from solin.core.meetings.tree_store import MeetingTreeStore
 
 
 def test_app_config_is_immutable_and_applies_qt_identity() -> None:
@@ -105,6 +110,56 @@ def test_profile_paths_snapshot_is_immutable_and_creates_profile_cache_dirs(
     )
     with pytest.raises(FrozenInstanceError):
         profile_paths.profile_dir = tmp_path / "other"  # type: ignore[misc]
+
+
+def test_profile_preparation_prunes_only_expired_meeting_tree_records(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data",
+        cache_dir=tmp_path / "cache",
+        profile_id="main",
+    )
+    paths.ensure_dirs()
+    store = MeetingTreeStore(paths.meeting_trees_file)
+    old_tree = "mwb:2026-05-25:T:20260500"
+    boundary_tree = "mwb:2026-06-01:T:20260500"
+    future_tree = "wt:2027-01-04:T:20270100"
+    old_thumbnail = paths.meeting_thumb_cache_dir / "old-media.jpg"
+    old_thumbnail.write_bytes(b"keep cached artifact")
+    store.save(
+        old_tree,
+        [
+            {
+                "id": "old-media",
+                "type": "media",
+                "children": [],
+                "thumbnail_local_path": str(old_thumbnail),
+            }
+        ],
+        "old",
+    )
+    store.save(boundary_tree, [], "boundary")
+    store.save(future_tree, [], "future")
+    main_window_class = object()
+    monkeypatch.setattr(
+        bootstrap_application,
+        "_import_main_window_class",
+        lambda: main_window_class,
+    )
+    monkeypatch.setattr(
+        meeting_weeks,
+        "meeting_week_bounds",
+        lambda: (date(2026, 6, 1), date(2026, 7, 20)),
+    )
+
+    prepared = bootstrap_application._prepare_profile_main_window(paths)
+
+    assert prepared is main_window_class
+    persisted = json.loads(paths.meeting_trees_file.read_text(encoding="utf-8"))
+    assert set(persisted["trees"]) == {boundary_tree, future_tree}
+    assert old_thumbnail.read_bytes() == b"keep cached artifact"
 
 
 def test_application_lifecycle_runs_cleanup_callbacks_once_in_reverse_order() -> None:

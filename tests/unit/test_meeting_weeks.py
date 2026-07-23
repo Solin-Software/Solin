@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import date
 
 from solin.core.meetings.meeting_weeks import (
+    MEETING_WEEK_WINDOW,
     current_monday,
     is_selectable_meeting_week,
+    meeting_week_bounds,
     monday_of_week,
     mwb_issue_for_week,
     selectable_meeting_weeks,
@@ -25,10 +27,17 @@ def test_selectable_meeting_weeks_share_two_back_five_forward_policy():
 
     weeks = selectable_meeting_weeks(today)
 
+    assert MEETING_WEEK_WINDOW.previous_weeks == 2
+    assert MEETING_WEEK_WINDOW.next_weeks == 5
+    assert meeting_week_bounds(today) == (
+        date(2026, 6, 1),
+        date(2026, 7, 20),
+    )
     assert weeks[0] == date(2026, 6, 1)
     assert weeks[-1] == date(2026, 7, 20)
     assert len(weeks) == 8
     assert is_selectable_meeting_week(date(2026, 6, 15), today=today)
+    assert not is_selectable_meeting_week(date(2026, 6, 16), today=today)
     assert not is_selectable_meeting_week(date(2026, 5, 25), today=today)
 
 

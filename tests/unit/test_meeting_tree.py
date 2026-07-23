@@ -1903,6 +1903,72 @@ class MeetingTreeStoreTests(unittest.TestCase):
 
             self.assertEqual(path.read_text(encoding="utf-8"), "{broken")
 
+    def test_prune_before_only_removes_parseable_older_meeting_trees(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "meeting_trees.json"
+            untouched_cache = root / "meeting-cache.bin"
+            untouched_cache.write_bytes(b"keep")
+            old_spoken = "mwb:2026-05-25:T:20260500"
+            old_sign = "wt:2026-05-25:T:sign:20260400"
+            boundary = "mwb:2026-06-01:T:20260500"
+            current = "wt:2026-06-15:T:20260500"
+            far_future = "mwb:2027-01-04:T:20270100"
+            legacy_unknown = "upgrade-week"
+            invalid_date = "wt:not-a-date:T:20260500"
+            writer = MeetingTreeStore(path)
+            for tree_key in (
+                old_spoken,
+                old_sign,
+                boundary,
+                current,
+                far_future,
+            ):
+                writer.save(tree_key, [], tree_key)
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            legacy_record = {
+                "nodes": [],
+                "last_canonical_hash": "legacy",
+                "revision": 1,
+            }
+            persisted["trees"][legacy_unknown] = legacy_record
+            persisted["trees"][invalid_date] = legacy_record
+            path.write_text(json.dumps(persisted), encoding="utf-8")
+            store = MeetingTreeStore(path)
+            changes: list[str] = []
+            store.subscribe(lambda: changes.append("changed"))
+
+            removed = store.prune_before(date(2026, 6, 1))
+
+            self.assertEqual(removed, 2)
+            self.assertEqual(changes, ["changed"])
+            self.assertEqual(untouched_cache.read_bytes(), b"keep")
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                set(persisted["trees"]),
+                {
+                    boundary,
+                    current,
+                    far_future,
+                    legacy_unknown,
+                    invalid_date,
+                },
+            )
+
+            self.assertEqual(store.prune_before(date(2026, 6, 1)), 0)
+            self.assertEqual(changes, ["changed"])
+
+    def test_prune_before_fails_closed_when_store_is_corrupt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "meeting_trees.json"
+            path.write_text("{broken", encoding="utf-8")
+            store = MeetingTreeStore(path)
+
+            with self.assertRaises(json.JSONDecodeError):
+                store.prune_before(date(2026, 6, 1))
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "{broken")
+
     def test_resolution_patch_preserves_user_title_override(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = MeetingTreeStore(Path(tmp) / "meeting_trees.json")

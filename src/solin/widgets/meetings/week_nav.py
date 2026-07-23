@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
@@ -15,9 +15,8 @@ from PySide6.QtWidgets import (
 
 from ...core.i18n.date import week_label, week_label_short
 from ...core.meetings.meeting_weeks import (
-    MEETING_WEEK_FUTURE_LIMIT,
-    MEETING_WEEK_PAST_LIMIT,
     current_monday,
+    meeting_week_bounds,
     selectable_meeting_weeks,
 )
 from ...styles.icons import (
@@ -313,6 +312,7 @@ class WeekNavBar(QWidget):
         self._last_monday = monday
         self._last_db_label = db_label
         today_mon = current_monday()
+        oldest_week, newest_week = meeting_week_bounds(today_mon)
         is_now = monday == today_mon
         display = db_label or week_label(monday)
         self._date_lbl.setText(display)
@@ -329,12 +329,8 @@ class WeekNavBar(QWidget):
         home_color = PALETTE.accent if not is_now else PALETTE.text_muted
         self.home_btn.setIcon(make_icon(ICON_HOME, 16, home_color))
 
-        self.prev_btn.setEnabled(
-            monday > today_mon - timedelta(weeks=MEETING_WEEK_PAST_LIMIT)
-        )
-        self.next_btn.setEnabled(
-            monday < today_mon + timedelta(weeks=MEETING_WEEK_FUTURE_LIMIT)
-        )
+        self.prev_btn.setEnabled(monday > oldest_week)
+        self.next_btn.setEnabled(monday < newest_week)
 
         prev_col = PALETTE.text_secondary if self.prev_btn.isEnabled() else PALETTE.text_dim
         next_col = PALETTE.text_secondary if self.next_btn.isEnabled() else PALETTE.text_dim

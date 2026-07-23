@@ -480,21 +480,23 @@ class MeetingTreeStore:
         self._publish_changed()
         return snapshot
 
-    def remove_old_trees(self, keep: set[str]) -> None:
-        if not keep:
-            return
+    def prune_before(self, cutoff: date) -> int:
+        """Remove parseable meeting trees older than *cutoff* and nothing else."""
+
         with self._lock:
             data = copy.deepcopy(self._runtime_data())
             trees = data.setdefault("trees", {})
-            changed = False
+            removed = 0
             for key in list(trees.keys()):
-                if key not in keep:
-                    trees.pop(key, None)
-                    changed = True
-            if changed:
+                parsed = parse_meeting_tree_key(key)
+                if parsed is not None and parsed.monday < cutoff:
+                    del trees[key]
+                    removed += 1
+            if removed:
                 self._write(data)
-        if changed:
+        if removed:
             self._publish_changed()
+        return removed
 
     def _save_locked(
         self,
