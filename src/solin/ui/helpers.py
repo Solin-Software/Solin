@@ -88,11 +88,20 @@ def make_rounded_thumb(
     return rounded
 
 
-def begin_qml_pointer_cursor(qml_widget: QWidget) -> None:
-    """Set the hand cursor on a QQuickWidget host and its native quick window."""
-    qml_widget.setCursor(Qt.CursorShape.PointingHandCursor)
+def set_qml_pointer_cursor(
+    qml_widget: QWidget,
+    cursor_shape: Qt.CursorShape | int,
+) -> None:
+    """Apply one cursor shape to a QQuickWidget and all native cursor owners."""
+    shape = Qt.CursorShape(cursor_shape)
+    qml_widget.setCursor(shape)
     for window in _qml_cursor_windows(qml_widget):
-        window.setCursor(Qt.CursorShape.PointingHandCursor)
+        window.setCursor(shape)
+
+
+def begin_qml_pointer_cursor(qml_widget: QWidget) -> None:
+    """Set the pointing-hand cursor on a QQuickWidget host."""
+    set_qml_pointer_cursor(qml_widget, Qt.CursorShape.PointingHandCursor)
 
 
 def end_qml_pointer_cursor(qml_widget: QWidget) -> None:
@@ -117,3 +126,54 @@ def _qml_cursor_windows(qml_widget: QWidget) -> list:
     if host_window is not None and not any(host_window is window for window in windows):
         windows.append(host_window)
     return windows
+
+
+class QmlPointerCursorState:
+    """Reconcile generic and nested shaped cursors for one QQuickWidget."""
+
+    def __init__(self, qml_widget: QWidget) -> None:
+        self._qml_widget = qml_widget
+        self._pointer_depth = 0
+        self._shaped_cursors: dict[str, int] = {}
+
+    def enter(self) -> None:
+        self._pointer_depth += 1
+        if not self._shaped_cursors:
+            begin_qml_pointer_cursor(self._qml_widget)
+
+    def enter_shaped(self, cursor_source: str, cursor_shape: int) -> None:
+        self._shaped_cursors.pop(cursor_source, None)
+        self._shaped_cursors[cursor_source] = cursor_shape
+        set_qml_pointer_cursor(self._qml_widget, cursor_shape)
+
+    def update_shaped(self, cursor_source: str, cursor_shape: int) -> None:
+        if cursor_source not in self._shaped_cursors:
+            return
+        self._shaped_cursors[cursor_source] = cursor_shape
+        if next(reversed(self._shaped_cursors)) == cursor_source:
+            set_qml_pointer_cursor(self._qml_widget, cursor_shape)
+
+    def exit_shaped(self, cursor_source: str) -> None:
+        self._shaped_cursors.pop(cursor_source, None)
+        self._apply_current()
+
+    def exit(self) -> None:
+        self._pointer_depth = max(0, self._pointer_depth - 1)
+        self._apply_current()
+
+    def reset(self) -> None:
+        self._pointer_depth = 0
+        self._shaped_cursors.clear()
+        end_qml_pointer_cursor(self._qml_widget)
+
+    def _apply_current(self) -> None:
+        if self._shaped_cursors:
+            active_source = next(reversed(self._shaped_cursors))
+            set_qml_pointer_cursor(
+                self._qml_widget,
+                self._shaped_cursors[active_source],
+            )
+        elif self._pointer_depth > 0:
+            begin_qml_pointer_cursor(self._qml_widget)
+        else:
+            end_qml_pointer_cursor(self._qml_widget)

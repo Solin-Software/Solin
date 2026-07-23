@@ -42,6 +42,11 @@ from solin.ui.qml.media_tree.snapshot import (
 from solin.ui.qml.playlist.bridge import PlaylistEditBridge
 from solin.ui.qml.playlist.visuals import PlaylistIconProvider, PlaylistThumbnailProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
+from solin.ui.helpers import (
+    begin_qml_pointer_cursor,
+    end_qml_pointer_cursor,
+    set_qml_pointer_cursor,
+)
 
 
 _APP = QApplication.instance()
@@ -200,6 +205,11 @@ def pt_br_translator():
 
 class _PlaylistTreeControllerProbe(QObject):
     markerEditRequested = Signal(str)
+    pointerEntered = Signal()
+    pointerCursorEntered = Signal(str, int)
+    pointerCursorChanged = Signal(str, int)
+    pointerCursorExited = Signal(str)
+    pointerExited = Signal()
 
     def __init__(self, nodes: list[dict]) -> None:
         super().__init__()
@@ -254,6 +264,34 @@ class _PlaylistTreeControllerProbe(QObject):
             (node_id, target_list_id, insert_index, structure_revision)
         )
         return True
+
+    @Slot()
+    def pointerEnter(self) -> None:  # noqa: N802 - QML API
+        self.pointerEntered.emit()
+
+    @Slot(str, int)
+    def pointerCursorEnter(  # noqa: N802
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ) -> None:
+        self.pointerCursorEntered.emit(cursor_source, cursor_shape)
+
+    @Slot(str, int)
+    def pointerCursorChange(  # noqa: N802
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ) -> None:
+        self.pointerCursorChanged.emit(cursor_source, cursor_shape)
+
+    @Slot(str)
+    def pointerCursorExit(self, cursor_source: str) -> None:  # noqa: N802
+        self.pointerCursorExited.emit(cursor_source)
+
+    @Slot()
+    def pointerExit(self) -> None:  # noqa: N802 - QML API
+        self.pointerExited.emit()
 
 
 def _playlist_media_node(item_id: str, title: str) -> dict:
@@ -1144,6 +1182,126 @@ def test_shared_playlist_tree_requires_explicit_play_when_protection_is_enabled(
     widget.deleteLater()
 
 
+def test_image_thumbnail_cursor_follows_playback_protection() -> None:
+    image = {
+        **_playlist_media_node("image-1", "Protected image"),
+        "mediaType": "image",
+        "badge": "Image",
+    }
+    widget, _controller, _model, protection = _playlist_tree_host(
+        [image],
+        height=180,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    image_card = _find_visual(root, "mediaCard-image-1")
+    assert image_card is not None
+    framing_area = _find_visual(image_card, "imageFramingInteractionArea")
+    assert framing_area is not None
+
+    assert (
+        framing_area.property("cursorShape")
+        == Qt.CursorShape.PointingHandCursor
+    )
+    protection.set_enabled(True)
+    QTest.qWait(10)
+    assert framing_area.property("cursorShape") == Qt.CursorShape.ArrowCursor
+
+    protection.set_enabled(False)
+    QTest.qWait(10)
+    assert (
+        framing_area.property("cursorShape")
+        == Qt.CursorShape.PointingHandCursor
+    )
+    widget.deleteLater()
+
+
+def test_playlist_tree_forwards_nested_hover_to_the_native_cursor() -> None:
+    image = {
+        **_playlist_media_node("image-1", "Framed image"),
+        "mediaType": "image",
+        "badge": "Image",
+    }
+    widget, controller, _model, _protection = _playlist_tree_host(
+        [image],
+        height=180,
+    )
+    root = widget.rootObject()
+    assert root is not None
+    controller.pointerEntered.connect(lambda: begin_qml_pointer_cursor(widget))
+    controller.pointerCursorEntered.connect(
+        lambda _source, shape: set_qml_pointer_cursor(widget, shape)
+    )
+    controller.pointerCursorChanged.connect(
+        lambda _source, shape: set_qml_pointer_cursor(widget, shape)
+    )
+    controller.pointerCursorExited.connect(
+        lambda _source: end_qml_pointer_cursor(widget)
+    )
+    controller.pointerExited.connect(
+        lambda: end_qml_pointer_cursor(widget)
+    )
+
+    drag_area = _find_visual(root, "dragMouse-image-1")
+    image_card = _find_visual(root, "mediaCard-image-1")
+    assert drag_area is not None
+    assert image_card is not None
+    framing_thumb = _find_visual(image_card, "imageFramingThumbnail")
+    assert framing_thumb is not None
+
+    drag_area.entered.emit()
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.OpenHandCursor
+    assert (
+        widget.quickWindow().cursor().shape()
+        == Qt.CursorShape.OpenHandCursor
+    )
+
+    image_card.setProperty("dragStarted", True)
+    _APP.processEvents()
+    assert drag_area.property("cursorShape") == Qt.CursorShape.ClosedHandCursor
+    controller.pointerCursorChange(
+        "tree-drag:image-1",
+        Qt.CursorShape.ClosedHandCursor.value,
+    )
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.ClosedHandCursor
+    assert widget.quickWindow().cursor().shape() == Qt.CursorShape.ClosedHandCursor
+    image_card.setProperty("dragStarted", False)
+    _APP.processEvents()
+    assert drag_area.property("cursorShape") == Qt.CursorShape.OpenHandCursor
+    controller.pointerCursorChange(
+        "tree-drag:image-1",
+        Qt.CursorShape.OpenHandCursor.value,
+    )
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.OpenHandCursor
+
+    drag_area.exited.emit()
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert widget.quickWindow().cursor().shape() == Qt.CursorShape.ArrowCursor
+
+    framing_thumb.pointerEntered.emit(Qt.CursorShape.PointingHandCursor.value)
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    assert (
+        widget.quickWindow().cursor().shape()
+        == Qt.CursorShape.PointingHandCursor
+    )
+
+    framing_thumb.pointerCursorExited.emit()
+    _APP.processEvents()
+    assert widget.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert widget.quickWindow().cursor().shape() == Qt.CursorShape.ArrowCursor
+    controller.pointerEntered.disconnect()
+    controller.pointerCursorEntered.disconnect()
+    controller.pointerCursorChanged.disconnect()
+    controller.pointerCursorExited.disconnect()
+    controller.pointerExited.disconnect()
+    widget.deleteLater()
+
+
 def _send_thumbnail_wheel(widget: QQuickWidget, modifiers) -> None:
     position = QPointF(widget.width() / 2, widget.height() / 2)
     event = QWheelEvent(
@@ -1188,7 +1346,10 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert root.property("sourceHeight") == 1.0
     interaction_area = root.findChild(QObject, "imageFramingInteractionArea")
     assert interaction_area is not None
-    assert interaction_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
+    assert (
+        interaction_area.property("cursorShape")
+        == Qt.CursorShape.PointingHandCursor
+    )
 
     clicked = QSignalSpy(root.clicked)
     edited = QSignalSpy(root.framingEdited)
@@ -1205,6 +1366,10 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     assert clicked.count() == 1
     root.setProperty("clickActionEnabled", True)
+    assert (
+        interaction_area.property("cursorShape")
+        == Qt.CursorShape.PointingHandCursor
+    )
 
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     QTest.mouseMove(widget, QPoint(50, 44), delay=5)
@@ -1224,17 +1389,20 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert edited.at(0)[5] is True
     assert root.property("framingActive") is True
     assert root.property("panAvailable") is True
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.OpenHandCursor
 
     zoom_before_pan = float(root.property("framingZoom"))
     QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 28))
     QTest.mouseMove(widget, QPoint(50, 80), delay=5)
     assert root.property("panning") is True
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.ClosedHandCursor
     QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(50, 80))
     assert clicked.count() == 1
     assert edited.count() > 1
     assert edited.at(edited.count() - 1)[5] is False
     assert root.property("framingZoom") == pytest.approx(zoom_before_pan)
     assert root.property("panning") is False
+    assert interaction_area.property("cursorShape") == Qt.CursorShape.OpenHandCursor
 
     cover_zoom = float(root.coverZoom())
     for _step in range(20):
@@ -1244,9 +1412,13 @@ def test_image_framing_thumbnail_handles_click_zoom_pan_and_reset() -> None:
     assert root.property("framingZoom") == pytest.approx(cover_zoom)
     assert root.maxPanX() == pytest.approx(0.0, abs=1e-9)
 
+    reset_area = root.findChild(QObject, "imageFramingResetArea")
+    assert reset_area is not None
+    assert reset_area.property("cursorShape") == Qt.CursorShape.PointingHandCursor
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(86, 42))
     assert reset.count() == 1
     assert root.property("framingActive") is False
+    widget.deleteLater()
 
 
 def test_image_framing_thumbnail_loads_a_local_file_source(tmp_path) -> None:

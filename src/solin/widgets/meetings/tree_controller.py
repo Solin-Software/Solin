@@ -262,6 +262,9 @@ class MeetingTreeController(QObject):
     backRequested = Signal()
     projectRequested = Signal(object)
     pointerEntered = Signal()
+    pointerCursorEntered = Signal(str, int)
+    pointerCursorChanged = Signal(str, int)
+    pointerCursorExited = Signal(str)
     pointerExited = Signal()
 
     stateChanged = Signal()
@@ -2907,6 +2910,26 @@ class MeetingTreeController(QObject):
     @Slot()
     def pointerEnter(self):  # noqa: N802
         self.pointerEntered.emit()
+
+    @Slot(str, int)
+    def pointerCursorEnter(  # noqa: N802
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self.pointerCursorEntered.emit(cursor_source, cursor_shape)
+
+    @Slot(str, int)
+    def pointerCursorChange(  # noqa: N802
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self.pointerCursorChanged.emit(cursor_source, cursor_shape)
+
+    @Slot(str)
+    def pointerCursorExit(self, cursor_source: str):  # noqa: N802
+        self.pointerCursorExited.emit(cursor_source)
 
     @Slot()
     def pointerExit(self):  # noqa: N802

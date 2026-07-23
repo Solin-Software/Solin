@@ -132,6 +132,21 @@ Item {
             root.playlistController.pointerEnter()
     }
 
+    function pointerCursorEntered(cursorSource, cursorShape) {
+        if (root.hasController)
+            root.playlistController.pointerCursorEnter(cursorSource, cursorShape)
+    }
+
+    function pointerCursorChanged(cursorSource, cursorShape) {
+        if (root.hasController)
+            root.playlistController.pointerCursorChange(cursorSource, cursorShape)
+    }
+
+    function pointerCursorExited(cursorSource) {
+        if (root.hasController)
+            root.playlistController.pointerCursorExit(cursorSource)
+    }
+
     function pointerExited() {
         if (root.hasController)
             root.playlistController.pointerExit()
@@ -1467,6 +1482,17 @@ Item {
                          ? Qt.ClosedHandCursor
                          : (root.treeHydrating ? Qt.ArrowCursor : Qt.OpenHandCursor)
 
+            onEntered: root.pointerCursorEntered(
+                "tree-drag:" + draggable.nodeId,
+                cursorShape)
+            onExited: root.pointerCursorExited(
+                "tree-drag:" + draggable.nodeId)
+            onCursorShapeChanged: {
+                if (containsMouse)
+                    root.pointerCursorChanged(
+                        "tree-drag:" + draggable.nodeId,
+                        cursorShape)
+            }
             onPressed: function(mouse) {
                 var itemPos = draggable.mapFromItem(dragMouse, mouse.x, mouse.y)
                 draggable.pressX = itemPos.x
@@ -1726,7 +1752,21 @@ Item {
                             if (root.hasController)
                                 root.playlistController.projectItem(mediaRoot.nodeId)
                         }
-                        onPointerEntered: mediaRoot.refreshFramingAspectRatio()
+                        onPointerEntered: function(cursorShape) {
+                            mediaRoot.refreshFramingAspectRatio()
+                            root.pointerCursorEntered(
+                                "image-framing:" + mediaRoot.nodeId,
+                                cursorShape)
+                        }
+                        onPointerCursorChanged: function(cursorShape) {
+                            root.pointerCursorChanged(
+                                "image-framing:" + mediaRoot.nodeId,
+                                cursorShape)
+                        }
+                        onPointerCursorExited: {
+                            root.pointerCursorExited(
+                                "image-framing:" + mediaRoot.nodeId)
+                        }
                         onFramingEdited: function(zoom, normX, normY,
                                                    sourceWidth, sourceHeight,
                                                    snapZoomToCover) {

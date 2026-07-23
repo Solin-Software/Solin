@@ -58,7 +58,9 @@ from ...core.jw.language_context import (
     jw_media_language_context,
 )
 from ...core.jw.songs import JWSongsStore
-from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.helpers import (
+    QmlPointerCursorState,
+)
 from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.meetings.tree_store import (
     MeetingTreeSnapshot,
@@ -187,7 +189,6 @@ class StudyDetailView(QWidget):
         self._meeting_tree_saved_handler = meeting_tree_saved_handler
         self._saved_snapshot = saved_snapshot
         self._watched_folder = watched_folder
-        self._qml_pointer_depth = 0
         self._disposed = False
         self._post_frame_tasks_pending = False
         self._post_frame_window = None
@@ -212,6 +213,13 @@ class StudyDetailView(QWidget):
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
+        self.controller.pointerCursorEntered.connect(
+            self.begin_qml_shaped_pointer_cursor
+        )
+        self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
+        self.controller.pointerCursorExited.connect(
+            self.end_qml_shaped_pointer_cursor
+        )
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaved.connect(self.meeting_tree_saved.emit)
         if self._meeting_tree_saved_handler is not None:
@@ -254,6 +262,7 @@ class StudyDetailView(QWidget):
             playback_protection=self._playback_protection,
             parent=self,
         )
+        self._qml_pointer_cursor = QmlPointerCursorState(self.qml_widget)
         self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
         self._schedule_post_frame_tasks()
@@ -371,17 +380,30 @@ class StudyDetailView(QWidget):
         super().changeEvent(event)
 
     def begin_qml_pointer_cursor(self):
-        self._qml_pointer_depth += 1
-        begin_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.enter()
+
+    def begin_qml_shaped_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self._qml_pointer_cursor.enter_shaped(cursor_source, cursor_shape)
+
+    def update_qml_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self._qml_pointer_cursor.update_shaped(cursor_source, cursor_shape)
+
+    def end_qml_shaped_pointer_cursor(self, cursor_source: str):
+        self._qml_pointer_cursor.exit_shaped(cursor_source)
 
     def end_qml_pointer_cursor(self):
-        self._qml_pointer_depth = max(0, self._qml_pointer_depth - 1)
-        if self._qml_pointer_depth == 0:
-            end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.exit()
 
     def _reset_qml_pointer_cursor(self):
-        self._qml_pointer_depth = 0
-        end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.reset()
 
     def eventFilter(self, obj, event):
         if obj is getattr(self, "qml_widget", None) and event.type() == QEvent.Type.Leave:
@@ -498,7 +520,6 @@ class _MemorialDetailView(QWidget):
             jw_catalog_thumbnail_session_factory
         )
         self._jw_songs_store = jw_songs_store
-        self._qml_pointer_depth = 0
         self._disposed = False
         self.setAcceptDrops(True)
         self._build()
@@ -520,6 +541,13 @@ class _MemorialDetailView(QWidget):
         self.controller.backRequested.connect(self.back_requested.emit)
         self.controller.projectRequested.connect(self.play_requested.emit)
         self.controller.pointerEntered.connect(self.begin_qml_pointer_cursor)
+        self.controller.pointerCursorEntered.connect(
+            self.begin_qml_shaped_pointer_cursor
+        )
+        self.controller.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
+        self.controller.pointerCursorExited.connect(
+            self.end_qml_shaped_pointer_cursor
+        )
         self.controller.pointerExited.connect(self.end_qml_pointer_cursor)
         self.controller.storageSaveFailed.connect(self._on_storage_save_failed)
 
@@ -552,6 +580,7 @@ class _MemorialDetailView(QWidget):
             playback_protection=self._playback_protection,
             parent=self,
         )
+        self._qml_pointer_cursor = QmlPointerCursorState(self.qml_widget)
         self.qml_widget.installEventFilter(self)
         root.addWidget(self.qml_widget, stretch=1)
         self.controller.load_memorial(self._md)
@@ -608,17 +637,30 @@ class _MemorialDetailView(QWidget):
         super().changeEvent(event)
 
     def begin_qml_pointer_cursor(self):
-        self._qml_pointer_depth += 1
-        begin_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.enter()
+
+    def begin_qml_shaped_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self._qml_pointer_cursor.enter_shaped(cursor_source, cursor_shape)
+
+    def update_qml_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ):
+        self._qml_pointer_cursor.update_shaped(cursor_source, cursor_shape)
+
+    def end_qml_shaped_pointer_cursor(self, cursor_source: str):
+        self._qml_pointer_cursor.exit_shaped(cursor_source)
 
     def end_qml_pointer_cursor(self):
-        self._qml_pointer_depth = max(0, self._qml_pointer_depth - 1)
-        if self._qml_pointer_depth == 0:
-            end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.exit()
 
     def _reset_qml_pointer_cursor(self):
-        self._qml_pointer_depth = 0
-        end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.reset()
 
     def eventFilter(self, obj, event):
         if obj is getattr(self, "qml_widget", None) and event.type() == QEvent.Type.Leave:

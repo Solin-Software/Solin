@@ -49,7 +49,9 @@ from ...core.jw.language_context import (
 )
 from ...core.jw.identifiers import is_jw_url
 from ...core.jw.songs import JWSongsStore
-from ...ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
+from ...ui.helpers import (
+    QmlPointerCursorState,
+)
 from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.media.cache import MediaCacheManager
 from ...core.media.formats import media_type_from_path
@@ -219,7 +221,6 @@ class PlaylistEditView(
         self._thumb_request_token: int = 0
         self._thumb_scan_items: list[dict] = []
         self._thumb_scan_index: int = 0
-        self._qml_pointer_depth = 0
         self._thumb_queue = media_info_queue_factory(self)
         self._thumb_queue.info_ready.connect(self._on_info)
         self._thumb_queue.duration_ready.connect(self._on_duration_from_extractor)
@@ -631,6 +632,7 @@ class PlaylistEditView(
         root.setSpacing(0)
 
         self.qml_widget = QQuickWidget(self)
+        self._qml_pointer_cursor = QmlPointerCursorState(self.qml_widget)
         self.qml_widget.installEventFilter(self)
         self.qml_load_handle = configure_qml_host(
             self.qml_widget,
@@ -701,6 +703,11 @@ class PlaylistEditView(
         self.bridge.collapseSectionSignal.connect(self._toggle_section_collapse)
         self.bridge.dragFinished.connect(self._save)
         self.bridge.pointerEntered.connect(self.begin_qml_pointer_cursor)
+        self.bridge.pointerCursorEntered.connect(
+            self.begin_qml_shaped_pointer_cursor
+        )
+        self.bridge.pointerCursorChanged.connect(self.update_qml_pointer_cursor)
+        self.bridge.pointerCursorExited.connect(self.end_qml_shaped_pointer_cursor)
         self.bridge.pointerExited.connect(self.end_qml_pointer_cursor)
 
         # Catalog bridge connections
@@ -2007,17 +2014,30 @@ class PlaylistEditView(
             self.bridge.stateChanged.emit()
 
     def begin_qml_pointer_cursor(self) -> None:
-        self._qml_pointer_depth += 1
-        begin_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.enter()
+
+    def begin_qml_shaped_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ) -> None:
+        self._qml_pointer_cursor.enter_shaped(cursor_source, cursor_shape)
+
+    def update_qml_pointer_cursor(
+        self,
+        cursor_source: str,
+        cursor_shape: int,
+    ) -> None:
+        self._qml_pointer_cursor.update_shaped(cursor_source, cursor_shape)
+
+    def end_qml_shaped_pointer_cursor(self, cursor_source: str) -> None:
+        self._qml_pointer_cursor.exit_shaped(cursor_source)
 
     def end_qml_pointer_cursor(self) -> None:
-        self._qml_pointer_depth = max(0, self._qml_pointer_depth - 1)
-        if self._qml_pointer_depth == 0:
-            end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.exit()
 
     def _reset_qml_pointer_cursor(self) -> None:
-        self._qml_pointer_depth = 0
-        end_qml_pointer_cursor(self.qml_widget)
+        self._qml_pointer_cursor.reset()
 
 # ── Widget principal ───────────────────────────────────────────────────────────
 

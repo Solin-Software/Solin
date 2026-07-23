@@ -25,8 +25,9 @@ Item {
                          real sourceWidth, real sourceHeight,
                          bool snapZoomToCover)
     signal framingReset()
-    signal pointerEntered()
-    signal pointerExited()
+    signal pointerEntered(int cursorShape)
+    signal pointerCursorChanged(int cursorShape)
+    signal pointerCursorExited()
 
     property bool framingActive: false
     property real framingZoom: 1.0
@@ -41,6 +42,10 @@ Item {
     property point pressPosition: Qt.point(0, 0)
     property real pressNormX: 0.0
     property real pressNormY: 0.0
+    readonly property int effectiveCursorShape:
+        resetButton.visible && resetMouse.containsMouse
+        ? Qt.PointingHandCursor
+        : interactionArea.cursorShape
 
     readonly property real safeAspectRatio:
         isFinite(projectionAspectRatio) && projectionAspectRatio > 0
@@ -281,9 +286,6 @@ Item {
                        ? Qt.PointingHandCursor
                        : Qt.ArrowCursor
 
-        onEntered: root.pointerEntered()
-        onExited: root.pointerExited()
-
         onWheel: function(wheel) {
             if (!root.editable
                     || !root.imageReady
@@ -364,6 +366,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.right: parent.right
         anchors.margins: 4
+        z: 1
         width: 22
         height: 22
         radius: 11
@@ -381,11 +384,10 @@ Item {
 
         MouseArea {
             id: resetMouse
+            objectName: "imageFramingResetArea"
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onEntered: root.pointerEntered()
-            onExited: root.pointerExited()
             onClicked: {
                 root.applyFraming(null)
                 root.framingReset()
@@ -394,5 +396,33 @@ Item {
             ToolTip.delay: 350
             ToolTip.text: root.resetToolTip
         }
+    }
+
+    HoverHandler {
+        id: cursorHover
+        objectName: "imageFramingCursorHover"
+        cursorShape: root.effectiveCursorShape
+        property bool registered: false
+
+        function syncRegistration() {
+            if (hovered === registered)
+                return
+            registered = hovered
+            if (registered)
+                root.pointerEntered(root.effectiveCursorShape)
+            else
+                root.pointerCursorExited()
+        }
+
+        onHoveredChanged: syncRegistration()
+        Component.onDestruction: {
+            if (registered)
+                root.pointerCursorExited()
+        }
+    }
+
+    onEffectiveCursorShapeChanged: {
+        if (cursorHover.registered)
+            root.pointerCursorChanged(effectiveCursorShape)
     }
 }

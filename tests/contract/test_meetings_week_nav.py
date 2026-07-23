@@ -23,8 +23,13 @@ def test_meetings_qml_pointer_bridge_remains_wired():
     assert source.count(
         "controller.pointerExited.connect(self.end_qml_pointer_cursor)"
     ) == 2
-    assert "begin_qml_pointer_cursor(self.qml_widget)" in source
-    assert "end_qml_pointer_cursor(self.qml_widget)" in source
+    assert source.count("QmlPointerCursorState(self.qml_widget)") == 2
+    assert source.count(
+        "controller.pointerCursorEntered.connect("
+    ) == 2
+    assert source.count(
+        "controller.pointerCursorExited.connect("
+    ) == 2
     assert "self.pointerEntered.emit()" in controller_source
     assert "self.pointerExited.emit()" in controller_source
     assert not (

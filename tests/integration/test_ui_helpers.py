@@ -6,6 +6,7 @@ import time
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QWidget
 
@@ -82,6 +83,54 @@ def test_qml_pointer_cursor_unsets_all_cursor_targets():
     assert qml_widget.unset_count == 1
     assert qml_widget.quick_window.unset_count == 1
     assert qml_widget.host_window.unset_count == 1
+
+
+def test_qml_pointer_cursor_preserves_the_requested_shape():
+    qml_widget = _QmlWidget()
+
+    helpers.set_qml_pointer_cursor(qml_widget, Qt.CursorShape.OpenHandCursor)
+
+    assert qml_widget.set_values == [Qt.CursorShape.OpenHandCursor]
+    assert qml_widget.quick_window.set_values == [Qt.CursorShape.OpenHandCursor]
+    assert qml_widget.host_window.set_values == [Qt.CursorShape.OpenHandCursor]
+
+
+def test_qml_pointer_cursor_state_restores_nested_cursor_shapes():
+    qml_widget = _QmlWidget()
+    state = helpers.QmlPointerCursorState(qml_widget)
+
+    state.enter()
+    state.enter_shaped("pan", Qt.CursorShape.OpenHandCursor.value)
+    state.enter_shaped("reset", Qt.CursorShape.PointingHandCursor.value)
+    state.exit_shaped("reset")
+    state.update_shaped("pan", Qt.CursorShape.ClosedHandCursor.value)
+    state.exit_shaped("pan")
+
+    assert qml_widget.set_values == [
+        Qt.CursorShape.PointingHandCursor,
+        Qt.CursorShape.OpenHandCursor,
+        Qt.CursorShape.PointingHandCursor,
+        Qt.CursorShape.OpenHandCursor,
+        Qt.CursorShape.ClosedHandCursor,
+        Qt.CursorShape.PointingHandCursor,
+    ]
+
+    state.exit()
+    assert qml_widget.unset_count == 1
+
+
+def test_qml_pointer_cursor_state_handles_out_of_order_sibling_exit():
+    qml_widget = _QmlWidget()
+    state = helpers.QmlPointerCursorState(qml_widget)
+
+    state.enter_shaped("pan", Qt.CursorShape.OpenHandCursor.value)
+    state.enter_shaped("reset", Qt.CursorShape.PointingHandCursor.value)
+    state.exit_shaped("pan")
+
+    assert qml_widget.set_values[-1] == Qt.CursorShape.PointingHandCursor
+
+    state.exit_shaped("reset")
+    assert qml_widget.unset_count == 1
 
 
 def test_fade_in_removes_opacity_effect_after_animation():
