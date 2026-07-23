@@ -153,7 +153,6 @@ class SettingsWidget(
         self._remote_runtime_status_kind = "pending"
         self._auto_share_accessibility_trusted = auto_share_accessibility_trusted
         self._theme_persistent_connections: set[str] = set()
-        self._deferred_services_requested = False
         self._deferred_services_started = False
         self._ui_ready = False
         self._pending_meeting_schedule_focus = False
@@ -171,8 +170,7 @@ class SettingsWidget(
 
     def start_deferred_services(self) -> None:
         """Start non-critical settings services once the first frame is visible."""
-        self._deferred_services_requested = True
-        if self._deferred_services_started or not self._ui_ready:
+        if self._deferred_services_started:
             return
         self._deferred_services_started = True
         self.lang.jw_lang_service.fetch_if_needed()
@@ -384,13 +382,12 @@ class SettingsWidget(
     def _finish_ui_build(self) -> None:
         self._ui_ready = True
         self._loading_placeholder.finish()
+        self._sync_yeartext_ui()
         settings_page = getattr(self, "_settings_page", None)
         if settings_page is not None and settings_page is not self:
             settings_page.setGeometry(self.rect())
             settings_page.show()
         self._refresh_remote_configuration_status()
-        if self._deferred_services_requested:
-            self.start_deferred_services()
         if self._pending_meeting_schedule_focus:
             self._pending_meeting_schedule_focus = False
             self.focus_meeting_schedule()

@@ -47,6 +47,8 @@ class YearlyTextSectionMixin:
         self._manual_expanded = False
         self._manual_anim: QPropertyAnimation | None = None
         self._yt_status_kind = "loading"
+        self._yeartext_result: tuple[str, int, str, str] | None = None
+        self._yeartext_error_message = ""
 
     def _build_yearly_text_card(self):
         card, lay = self._card()
@@ -281,7 +283,7 @@ class YearlyTextSectionMixin:
         cached = self._yt_service.get_cached(api_code, year)
         if cached:
             quote, ref = cached
-            self._apply_yeartext_to_ui(api_code, year, quote, ref)
+            self._accept_yeartext(api_code, year, quote, ref)
         else:
             self._set_status_loading()
             self._yt_service.fetch_async(api_code, year)
@@ -294,25 +296,18 @@ class YearlyTextSectionMixin:
             self._yt_service.fetch_async(api_code, year)
 
     def _on_language_switched(self, _code):
-        self._yt_status_kind = "loading"
-        if not getattr(self, "_ui_ready", True):
-            return
-        self._yt_preview_lbl.hide()
-        self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
-        self._yt_status_lbl.setStyleSheet(
-            self._yearly_status_style(SETTINGS_TEXT)
-        )
-        self._yt_icon_lbl.setPixmap(
-            make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
-        )
-        self._yearly_quote_edit.blockSignals(True)
-        self._yearly_ref_edit.blockSignals(True)
-        self._yearly_quote_edit.setPlainText("")
-        self._yearly_ref_edit.setText("")
-        self._yearly_quote_edit.blockSignals(False)
-        self._yearly_ref_edit.blockSignals(False)
+        self._yeartext_result = None
+        self._set_status_loading()
+        if getattr(self, "_ui_ready", True):
+            self._yearly_quote_edit.blockSignals(True)
+            self._yearly_ref_edit.blockSignals(True)
+            self._yearly_quote_edit.setPlainText("")
+            self._yearly_ref_edit.setText("")
+            self._yearly_quote_edit.blockSignals(False)
+            self._yearly_ref_edit.blockSignals(False)
         self.yearly_text_changed.emit("", "", self._current_api_code())
-        self._check_and_fetch_yeartext()
+        if getattr(self, "_deferred_services_started", True):
+            self._check_and_fetch_yeartext()
 
     def _on_fetch_started(self, api_code, _year):
         if api_code == self._current_api_code():
@@ -322,7 +317,7 @@ class YearlyTextSectionMixin:
         fallback = getattr(self, "_yeartext_fallback_code", None)
         if api_code == self._current_api_code() or api_code == fallback:
             self._yeartext_fallback_code = None
-            self._apply_yeartext_to_ui(api_code, year, quote, reference)
+            self._accept_yeartext(api_code, year, quote, reference)
 
     def _on_yeartext_failed(self, api_code, year, message):
         fallback = getattr(self, "_yeartext_fallback_code", None)
@@ -332,7 +327,7 @@ class YearlyTextSectionMixin:
         if api_code != fallback_code and fallback is None:
             cached_fallback = self._yt_service.get_cached(fallback_code, year)
             if cached_fallback:
-                self._apply_yeartext_to_ui(fallback_code, year, *cached_fallback)
+                self._accept_yeartext(fallback_code, year, *cached_fallback)
                 return
             if not self._yt_service.is_fetching(fallback_code):
                 self._yt_service.fetch_async(fallback_code, year)
@@ -341,8 +336,25 @@ class YearlyTextSectionMixin:
         self._yeartext_fallback_code = None
         self._set_status_error(message)
 
-    def _apply_yeartext_to_ui(self, api_code, year, quote, ref):
+    def _accept_yeartext(self, api_code, year, quote, ref):
         self._yt_status_kind = "success"
+        self._yeartext_error_message = ""
+        self._yeartext_result = (api_code, year, quote, ref)
+        self._yeartext_settings.set_text(quote, ref)
+        self.yearly_text_changed.emit(quote, ref, api_code)
+        self._sync_yeartext_ui()
+
+    def _sync_yeartext_ui(self):
+        if not getattr(self, "_ui_ready", True):
+            return
+        if self._yt_status_kind == "success" and self._yeartext_result is not None:
+            self._render_yeartext_success(*self._yeartext_result)
+        elif self._yt_status_kind == "error":
+            self._render_yeartext_error(self._yeartext_error_message)
+        else:
+            self._render_yeartext_loading()
+
+    def _render_yeartext_success(self, _api_code, year, quote, ref):
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DONE, size=16, color=SETTINGS_SUCCESS).pixmap(16, 16)
         )
@@ -364,11 +376,13 @@ class YearlyTextSectionMixin:
         self._yearly_ref_edit.setText(ref)
         self._yearly_quote_edit.blockSignals(False)
         self._yearly_ref_edit.blockSignals(False)
-        self._yeartext_settings.set_text(quote, ref)
-        self.yearly_text_changed.emit(quote, ref, api_code)
 
     def _set_status_loading(self):
         self._yt_status_kind = "loading"
+        self._yeartext_error_message = ""
+        self._sync_yeartext_ui()
+
+    def _render_yeartext_loading(self):
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_MUTED).pixmap(16, 16)
         )
@@ -382,6 +396,10 @@ class YearlyTextSectionMixin:
 
     def _set_status_error(self, message):
         self._yt_status_kind = "error"
+        self._yeartext_error_message = message
+        self._sync_yeartext_ui()
+
+    def _render_yeartext_error(self, message):
         self._yt_icon_lbl.setPixmap(
             make_icon(ICON_CLOUD_DOWNLOAD, size=16, color=SETTINGS_DANGER).pixmap(16, 16)
         )
