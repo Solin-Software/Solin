@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -26,6 +26,59 @@ if TYPE_CHECKING:
     from ...core.meetings.models import MemorialData, WeekData
 
 __all__ = ("Overview",)
+
+
+class _CardTitleLabel(QLabel):
+    """Keep wrapped card titles from being compressed below their real height."""
+
+    def __init__(self, maximum_width: int, parent=None):
+        super().__init__(parent)
+        self.setWordWrap(True)
+        self.setMaximumWidth(maximum_width)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt override
+        super().setText(text)
+        self._sync_wrapped_height()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().resizeEvent(event)
+        self._sync_wrapped_height()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._sync_wrapped_height()
+
+    def _sync_wrapped_height(self) -> None:
+        if not self.text():
+            target_height = 0
+        else:
+            effective_width = max(
+                1,
+                min(self.width(), self.maximumWidth()),
+            )
+            target_height = max(
+                self.fontMetrics().height(),
+                self.heightForWidth(effective_width),
+            )
+        if self.minimumHeight() == target_height:
+            return
+        self.setMinimumHeight(target_height)
+        self.updateGeometry()
+
+
+def _card_arrow_slot(color: str) -> tuple[QWidget, QLabel]:
+    slot = QWidget()
+    slot.setFixedSize(20, 20)
+    slot.setStyleSheet("background:transparent;")
+    layout = QHBoxLayout(slot)
+    layout.setContentsMargins(0, 0, 0, 0)
+
+    arrow = QLabel()
+    arrow.setPixmap(make_icon(ICON_CHEVRON_RIGHT, 13, color).pixmap(13, 13))
+    arrow.setStyleSheet("background:transparent;")
+    layout.addWidget(arrow, 0, Qt.AlignmentFlag.AlignCenter)
+    return slot, arrow
 
 
 class _PubCard(QFrame):
@@ -115,12 +168,10 @@ class _PubCard(QFrame):
         rl.addWidget(self._pill)
         rl.addSpacing(6)
 
-        self._title_lbl = QLabel("")
-        self._title_lbl.setWordWrap(True)
+        self._title_lbl = _CardTitleLabel(260)
         self._title_lbl.setStyleSheet(
             f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
         )
-        self._title_lbl.setMaximumWidth(260)
         rl.addWidget(self._title_lbl)
         rl.addSpacing(4)
 
@@ -142,17 +193,17 @@ class _PubCard(QFrame):
             f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
         arrow_col = PALETTE.accent if self._is_mwb else MEETING_PURPLE
-        self._arrow = QLabel()
-        self._arrow.setPixmap(
-            make_icon(ICON_CHEVRON_RIGHT, 13, arrow_col).pixmap(13, 13)
-        )
-        self._arrow.setStyleSheet("background:transparent;")
         bot.addWidget(self._status_lbl)
         bot.addStretch()
-        bot.addWidget(self._arrow)
         rl.addLayout(bot)
 
         outer.addWidget(right, 1, Qt.AlignmentFlag.AlignTop)
+        self._arrow_slot, self._arrow = _card_arrow_slot(arrow_col)
+        outer.addWidget(
+            self._arrow_slot,
+            0,
+            Qt.AlignmentFlag.AlignVCenter,
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -387,12 +438,10 @@ class _MemorialCard(QFrame):
         rl.addWidget(self._pill)
         rl.addSpacing(6)
 
-        self._title_lbl = QLabel("")
-        self._title_lbl.setWordWrap(True)
+        self._title_lbl = _CardTitleLabel(260)
         self._title_lbl.setStyleSheet(
             f"color:{PALETTE.text_primary};font-size:15px;font-weight:700;background:transparent;"
         )
-        self._title_lbl.setMaximumWidth(260)
         rl.addWidget(self._title_lbl)
         rl.addSpacing(4)
 
@@ -413,17 +462,17 @@ class _MemorialCard(QFrame):
         self._status_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:10px;background:transparent;"
         )
-        self._arrow = QLabel()
-        self._arrow.setPixmap(
-            make_icon(ICON_CHEVRON_RIGHT, 13, PALETTE.warning).pixmap(13, 13)
-        )
-        self._arrow.setStyleSheet("background:transparent;")
         bot.addWidget(self._status_lbl)
         bot.addStretch()
-        bot.addWidget(self._arrow)
         rl.addLayout(bot)
 
         outer.addWidget(right, 1, Qt.AlignmentFlag.AlignTop)
+        self._arrow_slot, self._arrow = _card_arrow_slot(PALETTE.warning)
+        outer.addWidget(
+            self._arrow_slot,
+            0,
+            Qt.AlignmentFlag.AlignVCenter,
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
