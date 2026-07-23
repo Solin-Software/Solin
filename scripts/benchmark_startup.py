@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Any
+from uuid import uuid4
 
 
 DEFAULT_BASELINE_MS = 4_056.0
@@ -118,6 +119,7 @@ def _run_sample(root: Path) -> dict[str, Any]:
     environment = os.environ.copy()
     environment["SOLIN_STARTUP_TRACE"] = "1"
     environment["SOLIN_STARTUP_BENCHMARK_EXIT"] = "1"
+    environment["SOLIN_IPC_SERVER_NAME"] = f"SolinStartupBenchmark_{uuid4().hex}"
     child = Path(__file__).with_name("_startup_benchmark_child.py")
     process = subprocess.run(
         [sys.executable, str(child), str(root)],
@@ -128,6 +130,11 @@ def _run_sample(root: Path) -> dict[str, Any]:
         env=environment,
         timeout=120,
     )
+    if process.returncode != 0:
+        raise RuntimeError(
+            "Startup benchmark child exited abnormally.\n"
+            f"exit={process.returncode}\nstdout={process.stdout}\nstderr={process.stderr}"
+        )
     for line in reversed(process.stdout.splitlines()):
         try:
             payload = json.loads(line)
@@ -148,8 +155,8 @@ def _build_report(
     baseline_ms: float,
 ) -> dict[str, Any]:
     first_paints = [_phase_value(sample, "first_paint") for sample in samples]
-    shell_first_paints = [
-        _phase_value(sample, "startup_shell_first_paint") for sample in samples
+    loading_first_paints = [
+        _phase_value(sample, "loading_first_paint") for sample in samples
     ]
     shows = [_phase_value(sample, "show_returned") for sample in samples]
     unit_durations = [
@@ -166,8 +173,20 @@ def _build_report(
     unit_p95 = _percentile(unit_durations, 0.95)
     phase_names = (
         "application_imported",
+        "qt_application_created",
         "container_ready",
+        "profile_ready",
         "main_window_imported",
+        "main_window_constructor_started",
+        "main_sidebar_constructed",
+        "main_stack_installed",
+        "projection_bar_constructed",
+        "quick_toolbar_constructed",
+        "main_window_tree_built",
+        "media_routing_controllers_ready",
+        "projection_controllers_ready",
+        "main_window_signals_connected",
+        "main_window_constructor_ready",
         "critical_ui_ready",
         "show_returned",
         "first_paint",
@@ -191,10 +210,10 @@ def _build_report(
             "p50": round(statistics.median(shows), 3),
             "p95": round(_percentile(shows, 0.95), 3),
         },
-        "startup_shell_first_paint_ms": {
-            "samples": [round(value, 3) for value in shell_first_paints],
-            "p50": round(statistics.median(shell_first_paints), 3),
-            "p95": round(_percentile(shell_first_paints, 0.95), 3),
+        "loading_first_paint_ms": {
+            "samples": [round(value, 3) for value in loading_first_paints],
+            "p50": round(statistics.median(loading_first_paints), 3),
+            "p95": round(_percentile(loading_first_paints, 0.95), 3),
         },
         "first_paint_ms": {
             "samples": [round(value, 3) for value in first_paints],
@@ -211,8 +230,8 @@ def _build_report(
         "criteria": {
             "first_paint_p50_at_most_2200_ms": paint_p50 <= 2_200.0,
             "first_paint_p95_at_most_2600_ms": paint_p95 <= 2_600.0,
-            "startup_shell_p95_at_most_1000_ms": (
-                _percentile(shell_first_paints, 0.95) <= 1_000.0
+            "loading_p95_at_most_1000_ms": (
+                _percentile(loading_first_paints, 0.95) <= 1_000.0
             ),
             "reduction_at_least_40_percent": reduction >= 40.0,
             "incremental_unit_p95_below_8_ms": unit_p95 < 8.0,
@@ -223,10 +242,10 @@ def _build_report(
 
 def _print_human_report(report: dict[str, Any]) -> None:
     paint = report["first_paint_ms"]
-    shell = report["startup_shell_first_paint_ms"]
+    loading = report["loading_first_paint_ms"]
     units = report["incremental_units_ms"]
     print(
-        f"Startup shell p50/p95: {shell['p50']:.1f} / {shell['p95']:.1f} ms"
+        f"Loading frame p50/p95: {loading['p50']:.1f} / {loading['p95']:.1f} ms"
     )
     print(
         f"First paint p50/p95: {paint['p50']:.1f} / {paint['p95']:.1f} ms "

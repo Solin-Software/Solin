@@ -58,7 +58,7 @@ class TimerWidget(QWidget):
         )
         self.bridge.pointerEntered.connect(self.begin_qml_pointer_cursor)
         self.bridge.pointerExited.connect(self.end_qml_pointer_cursor)
-        self._qml = QQuickWidget()
+        self._qml = QQuickWidget(self)
         self._qml.installEventFilter(self)
         self.qml_load_handle = configure_qml_host(
             self._qml,

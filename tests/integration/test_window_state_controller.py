@@ -23,7 +23,6 @@ class _WindowPortStub:
     def __init__(self):
         self.resized = None
         self.moved = None
-        self.icon = None
         self.normal_shown = 0
         self.shown = 0
         self.raised = 0
@@ -45,9 +44,6 @@ class _WindowPortStub:
 
     def height(self):
         return 720
-
-    def set_window_icon(self, icon):
-        self.icon = icon
 
     def move(self, x, y):
         self.moved = (x, y)
@@ -82,7 +78,6 @@ def _controller(window_port, geometry_settings):
             resize=window_port.resize,
             width=window_port.width,
             height=window_port.height,
-            set_window_icon=window_port.set_window_icon,
             move=window_port.move,
             is_minimized=window_port.is_minimized,
             show_normal=window_port.show_normal,

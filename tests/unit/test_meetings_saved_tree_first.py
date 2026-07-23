@@ -519,6 +519,9 @@ def test_initial_shell_schedules_automatic_downloads_before_snapshot_result() ->
             update_week=lambda monday_arg: calls.append(f"navbar:{monday_arg}")
         ),
         _monday=monday,
+        _loading_placeholder=SimpleNamespace(
+            finish=lambda: calls.append("placeholder")
+        ),
         _auto_download_timer=SimpleNamespace(
             start=lambda interval: calls.append(f"timer:{interval}")
         ),
@@ -533,6 +536,7 @@ def test_initial_shell_schedules_automatic_downloads_before_snapshot_result() ->
     assert calls == [
         "overview",
         f"navbar:{monday}",
+        "placeholder",
         "timer:3000",
         "snapshot",
         "update",

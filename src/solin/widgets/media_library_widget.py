@@ -94,8 +94,7 @@ class MediaLibraryWidget(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.qml_widget = QQuickWidget()
-        self.qml_widget.setParent(self)
+        self.qml_widget = QQuickWidget(self)
         self.qml_widget.installEventFilter(self)
         self.qml_load_handle = configure_qml_host(
             self.qml_widget,

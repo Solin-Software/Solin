@@ -163,7 +163,7 @@ class QuickAccessToolbar(QQuickWidget):
         camera_settings: CameraSettingsStore,
         background_song_service=None,
     ):
-        super().__init__(None)
+        super().__init__(parent)
         self._obs = obs_service
         self._zoom = zoom_service
         self._camera = camera_service
@@ -209,8 +209,6 @@ class QuickAccessToolbar(QQuickWidget):
         # Instead, position changes use move() only, and the visible pill
         # width is driven entirely by QML layout.
         #
-        if parent is not None:
-            self.setParent(parent)
         self.installEventFilter(self)
 
         # ── Bridge (Python ↔ QML) ─────────────────────────────────────────

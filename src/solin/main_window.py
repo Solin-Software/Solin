@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import ExitStack
+import logging
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from PySide6.QtCore import QObject, QTimer, Signal, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
@@ -130,8 +132,10 @@ from .ui.window_focus import raise_projection_window
 
 
 _STARTUP_SCREEN_SETTLE_MS = 900
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from .bootstrap.application_window import ApplicationWindow
     from .core.ingest.watched_folder import WatchedFolderWatcher
     from .core.ingest.watched_folder_files import WatchedFolderFileStore
     from .core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
@@ -152,9 +156,9 @@ if TYPE_CHECKING:
 # ── MainWindow ────────────────────────────────────────────────────────────────
 
 
-class MainWindow(QMainWindow):
+class MainWindow(QWidget):
     first_frame_presented = Signal()
-    startup_handoff_completed = Signal()
+    _benchmark_close_requested = Signal()
     _auto_share_finished = Signal(int, bool, bool)
     _auto_share_mouse_interference_warning = Signal()
     proj_bar: Any
@@ -201,12 +205,26 @@ class MainWindow(QMainWindow):
         playlist_cleanup_queue_factory: Callable[..., PlaylistCleanupQueue],
         timer_session: TimerSession,
         active_profile: ProfileInfo,
+        *,
+        window_host: ApplicationWindow,
     ):
-        super().__init__()
+        super().__init__(window_host.content_parent())
         from .bootstrap.startup_timeline import startup_timeline
 
         startup = startup_timeline()
         startup.mark("main_window_constructor_started")
+        self._window_host = window_host
+        self._benchmark_close_requested.connect(
+            window_host.close,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._content_layout = QVBoxLayout(self)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(0)
+        self._construction_cleanup = ExitStack()
+        self._construction_cleanup.callback(self._abort_partial_resources)
+        self._construction_finalized = False
+        window_host.register_runtime_candidate(self)
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
@@ -372,30 +390,26 @@ class MainWindow(QMainWindow):
             self,
         )
 
-        self.setWindowTitle(self.tr("Solin"))
-        self.setMinimumSize(635, 600)
+        self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
             WindowStateContext(
-                minimum_width=self.minimumWidth,
-                minimum_height=self.minimumHeight,
-                resize=self.resize,
-                width=self.width,
-                height=self.height,
-                set_window_icon=self.setWindowIcon,
-                move=self.move,
-                is_minimized=self.isMinimized,
-                show_normal=self.showNormal,
-                is_visible=self.isVisible,
-                show=self.show,
-                raise_window=self.raise_,
-                activate_window=self.activateWindow,
-                win_id=self.winId,
-                titlebar_window=self,
+                minimum_width=self._window_host.minimumWidth,
+                minimum_height=self._window_host.minimumHeight,
+                resize=self._window_host.resize,
+                width=self._window_host.width,
+                height=self._window_host.height,
+                move=self._window_host.move,
+                is_minimized=self._window_host.isMinimized,
+                show_normal=self._window_host.showNormal,
+                is_visible=self._window_host.isVisible,
+                show=self._window_host.show,
+                raise_window=self._window_host.raise_,
+                activate_window=self._window_host.activateWindow,
+                win_id=self._window_host.winId,
+                titlebar_window=self._window_host,
             ),
             profile_settings_bundle.window_geometry,
         )
-        self._window_state.restore_size()
-        self._window_state.apply_icon()
 
         self._auto_share_mouse_interference_warning.connect(
             self._notify_auto_share_mouse_interference
@@ -412,7 +426,7 @@ class MainWindow(QMainWindow):
             MainWindowUiContext(
                 parent=self,
                 event_filter=self,
-                set_central_widget=self.setCentralWidget,
+                set_central_widget=self._set_content_widget,
                 active_profile_id=active_profile.id,
                 active_profile_name=active_profile.name,
                 translate=self.tr,
@@ -744,7 +758,7 @@ class MainWindow(QMainWindow):
         )
         self._language_controller = LanguageController(
             LanguageContext(
-                set_window_title=self.setWindowTitle,
+                set_window_title=self._window_host.setWindowTitle,
                 sidebar_title_label=self._sidebar_title_lbl,
                 sidebar_subtitle_label=self._sidebar_subtitle_lbl,
                 nav_buttons=self._nav_buttons_by_name,
@@ -821,10 +835,6 @@ class MainWindow(QMainWindow):
         startup_resources = self._bootstrap_controller.prepare_before_show()
         self._monitor_popup = startup_resources.monitor_popup
         self._ipc_controller = startup_resources.ipc_controller
-        self.startup_handoff_completed.connect(
-            self._start_deferred_startup,
-            Qt.ConnectionType.QueuedConnection,
-        )
         self._shutdown_controller = ShutdownController(
             ShutdownDependencies(
                 projection_session=self.projection_session,
@@ -882,7 +892,7 @@ class MainWindow(QMainWindow):
     def complete_startup_handoff(self) -> None:
         """Release deferred services only after the visible window handoff."""
 
-        self.startup_handoff_completed.emit()
+        self._start_deferred_startup()
 
     def _reconcile_timer_output_after_startup(self) -> None:
         if not getattr(self, "_closing", False):
@@ -913,7 +923,10 @@ class MainWindow(QMainWindow):
         timeline.mark("deferred_startup_complete")
         timeline.emit_json()
         if startup_benchmark_exit_requested():
-            self.close()
+            # Leave the current cooperative-dispatch event before closing the
+            # native window; Windows COM rejects teardown from an input-sync
+            # callback with RPC_E_CANTCALLOUT_ININPUTSYNCCALL.
+            self._benchmark_close_requested.emit()
 
     def _ensure_remote_control_started(self) -> None:
         if self._remote_control is not None or not self._remote_control_settings.enabled():
@@ -1068,6 +1081,11 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         self._install_ui_resources(self._ui_controller.build_ui())
 
+    def _set_content_widget(self, widget: QWidget) -> None:
+        if self._content_layout.count():
+            raise RuntimeError("Main window content can only be installed once.")
+        self._content_layout.addWidget(widget)
+
     def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
         self.stack = resources.stack
         self._lazy_pages = resources.lazy_pages
@@ -1098,7 +1116,7 @@ class MainWindow(QMainWindow):
         if app is not None:
             apply_application_palette(app)
             app.setStyleSheet(stylesheet)
-        self.setStyleSheet(stylesheet)
+        self._window_host.setStyleSheet(stylesheet)
 
     def _apply_theme(self, theme_id: str) -> None:
         theme = activate_theme(theme_id)
@@ -1228,14 +1246,6 @@ class MainWindow(QMainWindow):
             playback_order=playback_order,
         )
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._window_state.center_on_primary_screen()
-        # Apply custom titlebar color once the native window handle exists.
-        # Using a zero-delay singleShot ensures the OS has fully created the
-        # window before we touch DWM / NSWindow.
-        QTimer.singleShot(0, self._window_state.apply_titlebar_color)
-
     def paintEvent(self, event):
         super().paintEvent(event)
         if self._first_frame_presented:
@@ -1247,12 +1257,197 @@ class MainWindow(QMainWindow):
         startup_timeline().mark("first_paint")
         self.first_frame_presented.emit()
 
-    def closeEvent(self, event):
+    def shutdown(self) -> None:
         if getattr(self, "_closing", False):
-            super().closeEvent(event)
             return
         self._closing = True
 
         if self._shutdown_controller is not None:
             self._shutdown_controller.shutdown()
+
+    def commit_construction(self) -> None:
+        if self._construction_finalized:
+            return
+        self._construction_cleanup.pop_all()
+        self._construction_finalized = True
+
+    def abort_construction(self) -> None:
+        if self._construction_finalized:
+            return
+        self._construction_cleanup.close()
+        self._construction_finalized = True
+
+    def _abort_partial_resources(self) -> None:
+        shutdown_controller = getattr(self, "_shutdown_controller", None)
+        if shutdown_controller is not None:
+            self._partial_cleanup_call(
+                "completed shutdown controller",
+                shutdown_controller.shutdown,
+            )
+            return
+
+        ui_preparation = getattr(self, "_ui_preparation", None)
+        self._partial_cleanup_method("UI preparation", ui_preparation, "cancel")
+        self._partial_cleanup_method(
+            "remote control",
+            getattr(self, "_remote_control", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "remote services",
+            getattr(self, "_remote_services", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "media countdown automation",
+            getattr(self, "_media_countdown_automation", None),
+            "shutdown",
+        )
+
+        projection_session = getattr(self, "projection_session", None)
+        if projection_session is not None:
+            projection_windows = getattr(projection_session, "projection_windows", ())
+            for projection_window in tuple(projection_windows):
+                self._partial_cleanup_method(
+                    "projection window",
+                    projection_window,
+                    "close",
+                )
+            self._partial_cleanup_method(
+                "projection window registry",
+                projection_windows,
+                "clear",
+            )
+            self._partial_cleanup_method(
+                "floating projection preview",
+                projection_session,
+                "close_floating_preview",
+            )
+        self._partial_cleanup_method(
+            "timer output",
+            getattr(self, "timer_output", None),
+            "close_all",
+        )
+
+        for attribute, label in (
+            ("_media_download_notifications", "download notifications"),
+            ("_media_playback_notifications", "playback notifications"),
+        ):
+            self._partial_cleanup_method(
+                label,
+                getattr(self, attribute, None),
+                "stop",
+            )
+        self._partial_cleanup_method(
+            "notification center",
+            getattr(self, "notifications", None),
+            "shutdown",
+        )
+
+        for attribute in (
+            "meetings_widget",
+            "playlist_widget",
+            "timer_widget",
+        ):
+            self._partial_cleanup_method(
+                attribute,
+                getattr(self, attribute, None),
+                "cleanup",
+            )
+        lazy_pages = getattr(self, "_lazy_pages", None)
+        self._partial_cleanup_method("lazy browser", lazy_pages, "cleanup_browser")
+
+        self._partial_cleanup_method(
+            "media tree runtime",
+            getattr(self, "media_tree_runtime", None),
+            "shutdown",
+        )
+        self._partial_cleanup_method(
+            "projection integrations",
+            getattr(self, "_projection_integrations", None),
+            "cleanup",
+        )
+        self._partial_cleanup_method(
+            "background song",
+            getattr(self, "_background_song_service", None),
+            "shutdown",
+        )
+        self._partial_cleanup_method(
+            "foreground media controller",
+            getattr(self, "media_ctrl", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "background media controller",
+            getattr(self, "_background_media_controller", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "NDI receiver",
+            getattr(self, "_ndi_service", None),
+            "stop",
+            wait=True,
+        )
+        self._partial_cleanup_method(
+            "camera service",
+            getattr(self, "_camera_service", None),
+            "stop",
+        )
+        self._partial_cleanup_method(
+            "OBS service",
+            getattr(self, "_obs_service", None),
+            "stop",
+            wait=True,
+        )
+        self._partial_cleanup_method(
+            "Zoom service",
+            getattr(self, "_zoom_service", None),
+            "stop",
+            wait=True,
+        )
+        conversion_threads = getattr(self, "_conversion_threads", None)
+        if conversion_threads is not None:
+            self._partial_cleanup_call(
+                "conversion threads",
+                conversion_threads.stop_all,
+                logger=log,
+            )
+        self._partial_cleanup_method(
+            "IPC controller",
+            getattr(self, "_ipc_controller", None),
+            "close",
+        )
+
+    @staticmethod
+    def _partial_cleanup_method(
+        label: str,
+        owner: Any,
+        method_name: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        if owner is None:
+            return
+        method = getattr(owner, method_name, None)
+        if callable(method):
+            MainWindow._partial_cleanup_call(label, method, *args, **kwargs)
+
+    @staticmethod
+    def _partial_cleanup_call(
+        label: str,
+        callback: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        try:
+            callback(*args, **kwargs)
+        except Exception:  # noqa: BLE001 - fail-safe partial startup teardown
+            log.warning(
+                "Could not clean up %s after startup failure",
+                label,
+                exc_info=True,
+            )
+
+    def closeEvent(self, event):
+        self.shutdown()
         super().closeEvent(event)

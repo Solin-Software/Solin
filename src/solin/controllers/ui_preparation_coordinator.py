@@ -6,7 +6,9 @@ import logging
 from time import perf_counter_ns
 from typing import Any
 
-from PySide6.QtCore import QAbstractEventDispatcher, QMetaObject, QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot
+
+from solin.ui.cooperative_dispatch import CooperativeDispatch
 
 
 log = logging.getLogger(__name__)
@@ -24,7 +26,6 @@ class UiPreparationCoordinator(QObject):
         parent: QObject,
         *,
         on_demand_tasks: Mapping[int, Any] | None = None,
-        dispatcher: QAbstractEventDispatcher | None = None,
     ) -> None:
         super().__init__(parent)
         self._tasks = dict(tasks)
@@ -34,8 +35,7 @@ class UiPreparationCoordinator(QObject):
         self._started = False
         self._cancelled = False
         self._completed = False
-        self._dispatcher = dispatcher or QAbstractEventDispatcher.instance()
-        self._idle_connection: QMetaObject.Connection | None = None
+        self._dispatch = CooperativeDispatch(self._dispatch_next, self)
         self._dispatch_durations_ms: list[float] = []
         for index, task in self._tasks.items():
             task.completed.connect(lambda current=index: self._task_finished(current))
@@ -71,10 +71,7 @@ class UiPreparationCoordinator(QObject):
         if not self._pending:
             self._complete()
             return
-        if self._dispatcher is not None:
-            self._idle_connection = self._dispatcher.aboutToBlock.connect(
-                self._start_next_if_idle
-            )
+        self._dispatch.request()
 
     def prioritize(self, index: int) -> None:
         if self._cancelled:
@@ -90,12 +87,14 @@ class UiPreparationCoordinator(QObject):
         except ValueError:
             return
         self._pending.appendleft(index)
+        if self._started and self._active_index is None:
+            self._dispatch.request()
 
     def cancel(self) -> None:
         if self._cancelled:
             return
         self._cancelled = True
-        self._disconnect_idle_dispatch()
+        self._dispatch.cancel()
         self._pending.clear()
         for task in self._tasks.values():
             task.cancel()
@@ -104,7 +103,7 @@ class UiPreparationCoordinator(QObject):
         self._active_index = None
 
     @Slot()
-    def _start_next_if_idle(self) -> None:
+    def _dispatch_next(self) -> None:
         if self._cancelled or not self._started or self._active_index is not None:
             return
         while self._pending:
@@ -125,6 +124,7 @@ class UiPreparationCoordinator(QObject):
                 )
             if task.is_terminal:
                 self._active_index = None
+                self._dispatch.request()
             return
         self._complete()
 
@@ -133,19 +133,15 @@ class UiPreparationCoordinator(QObject):
             self._active_index = None
         if not self._pending and self._active_index is None:
             self._complete()
+        elif self._active_index is None:
+            self._dispatch.request()
 
     def _complete(self) -> None:
         if self._completed or self._cancelled:
             return
         self._completed = True
-        self._disconnect_idle_dispatch()
+        self._dispatch.cancel()
         self.completed.emit()
-
-    def _disconnect_idle_dispatch(self) -> None:
-        connection = self._idle_connection
-        self._idle_connection = None
-        if connection is not None:
-            QObject.disconnect(connection)
 
 
 __all__ = ["UiPreparationCoordinator"]

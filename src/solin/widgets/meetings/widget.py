@@ -24,9 +24,8 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QObject, Signal, Slot, QTimer,
-    QCoreApplication, QEvent, QRect, Qt,
+    QCoreApplication, QEvent,
 )
-from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget,
 )
@@ -85,6 +84,7 @@ from .week_nav import WeekNavBar, WeekPicker
 from ...ui.media_info import MediaInfoQueue
 from ...ui.async_load import AsyncLoadHandle
 from ...ui.incremental_load import IncrementalLoadHandle
+from ...ui.loading_placeholder import DeferredLoadingPlaceholder
 
 
 _POST_FRAME_TASK_FALLBACK_MS = 500
@@ -748,6 +748,10 @@ class MeetingsWidget(QWidget):
 
         startup = startup_timeline()
         startup.mark("meetings_constructor_started")
+        self._loading_placeholder = DeferredLoadingPlaceholder(
+            self.tr("Loading…"),
+            self,
+        )
         self._lang_mgr  = lang_manager
         self._notifications = notifications
         self._playback_protection = playback_protection
@@ -876,6 +880,7 @@ class MeetingsWidget(QWidget):
     def _finish_initial_shell(self) -> None:
         self._overview.finish_build()
         self._navbar.update_week(self._monday)
+        self._loading_placeholder.finish()
         from ...bootstrap.startup_timeline import startup_timeline
 
         startup_timeline().mark("meetings_shell_built")
@@ -997,26 +1002,10 @@ class MeetingsWidget(QWidget):
         self._stack.addWidget(self._overview)
         self._root_layout.addWidget(self._stack, stretch=1)
 
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        if hasattr(self, "_stack"):
-            return
-        painter = QPainter(self)
-        painter.setPen(QColor(str(PALETTE.text_muted)))
-        painter.drawText(
-            self.rect().adjusted(0, 0, 0, -18),
-            Qt.AlignmentFlag.AlignCenter,
-            self.tr("Loading…"),
-        )
-        bar = QRect((self.width() - 220) // 2, self.height() // 2 + 16, 220, 3)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(str(PALETTE.surface)))
-        painter.drawRoundedRect(bar, 1, 1)
-        painter.setBrush(QColor(str(PALETTE.accent)))
-        painter.drawRoundedRect(QRect(bar.x(), bar.y(), 72, bar.height()), 1, 1)
-
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background:{PALETTE.bg0};")
+        if not hasattr(self, "_stack"):
+            self._loading_placeholder.refresh_theme()
         if hasattr(self, "_stack"):
             self._stack.setStyleSheet(f"background:{PALETTE.bg0};")
         if hasattr(self, "_navbar"):
@@ -1027,6 +1016,14 @@ class MeetingsWidget(QWidget):
         for detail in getattr(self, "_details", {}).values():
             if hasattr(detail, "apply_theme"):
                 detail.apply_theme()
+
+    def changeEvent(self, event) -> None:
+        if (
+            event.type() == QEvent.Type.LanguageChange
+            and not hasattr(self, "_stack")
+        ):
+            self._loading_placeholder.set_text(self.tr("Loading…"))
+        super().changeEvent(event)
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
@@ -1615,10 +1612,10 @@ class MeetingsWidget(QWidget):
         self._destination_sessions.clear()
         self._clear_details()
         try:
-            self._preparation.shutdown(wait_ms=100)
+            self._preparation.shutdown()
         except Exception:  # noqa: BLE001 - background service shutdown boundary
             log_ignored_exception(__name__, "Could not shut down meeting preparation")
         try:
-            self._memorial_svc.shutdown(wait_ms=100, delete_when_stopped=True)
+            self._memorial_svc.shutdown(delete_when_stopped=True)
         except Exception:  # noqa: BLE001 - background service shutdown boundary
             log_ignored_exception(__name__, "Could not shut down memorial service")

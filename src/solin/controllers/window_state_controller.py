@@ -6,9 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication
 
-from ..core.foundation.resources import application_asset_path
 from ..styles.theme import PALETTE
 from ..ui.titlebar import apply_titlebar_color
 from ..core.windowing.settings import WindowGeometrySettingsStore
@@ -25,7 +24,6 @@ class WindowStateContext:
     resize: Callable[[int, int], None]
     width: Callable[[], int]
     height: Callable[[], int]
-    set_window_icon: Callable[[QIcon], None]
     move: Callable[[int, int], None]
     is_minimized: Callable[[], bool]
     show_normal: Callable[[], None]
@@ -68,11 +66,6 @@ class WindowStateController:
     def save_size(self) -> None:
         context = self._context
         self._geometry_settings.save_size(context.width(), context.height())
-
-    def apply_icon(self) -> None:
-        icon_path = application_asset_path("icon.ico")
-        if icon_path.is_file():
-            self._context.set_window_icon(QIcon(str(icon_path)))
 
     def center_on_primary_screen(self) -> None:
         primary = QGuiApplication.primaryScreen()

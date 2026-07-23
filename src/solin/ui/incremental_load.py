@@ -6,7 +6,9 @@ from enum import StrEnum
 import logging
 from time import perf_counter_ns
 
-from PySide6.QtCore import QAbstractEventDispatcher, QMetaObject, QObject, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot
+
+from .cooperative_dispatch import CooperativeDispatch
 
 
 log = logging.getLogger(__name__)
@@ -32,15 +34,12 @@ class IncrementalLoadHandle(QObject):
         self,
         units: Iterable[Callable[[], None]],
         parent: QObject,
-        *,
-        dispatcher: QAbstractEventDispatcher | None = None,
     ) -> None:
         super().__init__(parent)
         self._units = deque(units)
-        self._dispatcher = dispatcher or QAbstractEventDispatcher.instance()
         self._state = IncrementalLoadState.PENDING
         self._unit_durations_ms: list[float] = []
-        self._idle_connection: QMetaObject.Connection | None = None
+        self._dispatch = CooperativeDispatch(self._run_next_unit, self)
 
     @property
     def state(self) -> IncrementalLoadState:
@@ -61,18 +60,13 @@ class IncrementalLoadHandle(QObject):
     def start(self) -> None:
         if self._state is not IncrementalLoadState.PENDING:
             return
-        if self._dispatcher is None:
-            self._fail("Qt event dispatcher is unavailable")
-            return
         self._set_state(IncrementalLoadState.LOADING)
-        self._idle_connection = self._dispatcher.aboutToBlock.connect(
-            self._run_next_unit
-        )
+        self._dispatch.request()
 
     def cancel(self) -> None:
         if self.is_terminal:
             return
-        self._disconnect()
+        self._dispatch.cancel()
         self._units.clear()
         self._set_state(IncrementalLoadState.CANCELLED)
 
@@ -82,7 +76,7 @@ class IncrementalLoadHandle(QObject):
             return
         if self._state is IncrementalLoadState.PENDING:
             self.start()
-        self._disconnect()
+        self._dispatch.cancel()
         while self._state is IncrementalLoadState.LOADING:
             self._run_next_unit()
 
@@ -107,24 +101,19 @@ class IncrementalLoadHandle(QObject):
             log.warning("Incremental UI unit exceeded one frame: %.1f ms", elapsed_ms)
         if not self._units:
             self._complete()
+        else:
+            self._dispatch.request()
 
     def _complete(self) -> None:
-        self._disconnect()
+        self._dispatch.cancel()
         self._set_state(IncrementalLoadState.READY)
         self.completed.emit()
 
     def _fail(self, message: str) -> None:
-        self._disconnect()
+        self._dispatch.cancel()
         self._units.clear()
         self._set_state(IncrementalLoadState.FAILED)
         self.failed.emit(message)
-
-    def _disconnect(self) -> None:
-        connection = self._idle_connection
-        self._idle_connection = None
-        if connection is None:
-            return
-        QObject.disconnect(connection)
 
     def _set_state(self, state: IncrementalLoadState) -> None:
         if self._state is state:

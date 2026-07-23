@@ -4,11 +4,12 @@ import time
 from concurrent.futures import Future
 
 from PySide6.QtCore import QObject, Qt, QThread
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.ui_preparation_coordinator import UiPreparationCoordinator
 from solin.ui.async_load import AsyncLoadHandle
 from solin.ui.incremental_load import IncrementalLoadHandle, IncrementalLoadState
+from solin.ui.loading_placeholder import DeferredLoadingPlaceholder
 
 
 _APP = QApplication.instance() or QApplication([])
@@ -22,7 +23,7 @@ def _spin_until(predicate, timeout: float = 2.0) -> None:
     assert predicate()
 
 
-def test_incremental_handle_runs_exactly_one_unit_per_idle_dispatch() -> None:
+def test_incremental_handle_runs_exactly_one_unit_per_cooperative_dispatch() -> None:
     parent = QObject()
     calls: list[int] = []
     handle = IncrementalLoadHandle(
@@ -175,7 +176,7 @@ def test_coordinator_keeps_on_demand_tasks_out_of_eager_completion() -> None:
     coordinator.completed.connect(lambda: completions.append(True))
 
     coordinator.start()
-    coordinator._start_next_if_idle()
+    coordinator._dispatch_next()
     eager.complete_now()
 
     assert completions == [True]
@@ -203,3 +204,57 @@ def test_coordinator_cancels_eager_and_on_demand_tasks() -> None:
 
     assert eager.state is IncrementalLoadState.CANCELLED
     assert on_demand.state is IncrementalLoadState.CANCELLED
+
+
+def test_deferred_loading_placeholder_moves_smoothly_in_both_directions() -> None:
+    travel = 148.0
+
+    assert DeferredLoadingPlaceholder._chunk_offset(0, travel) == 0.0
+    assert DeferredLoadingPlaceholder._chunk_offset(400, travel) == 74.0
+    assert DeferredLoadingPlaceholder._chunk_offset(800, travel) == 148.0
+    assert DeferredLoadingPlaceholder._chunk_offset(1_200, travel) == 74.0
+    assert DeferredLoadingPlaceholder._chunk_offset(1_600, travel) == 0.0
+
+
+def test_deferred_loading_placeholder_tracks_parent_and_stops_when_finished() -> None:
+    host = QWidget()
+    host.resize(640, 480)
+    placeholder = DeferredLoadingPlaceholder("Loading…", host)
+
+    host.show()
+    _APP.processEvents()
+
+    assert placeholder.isVisible()
+    assert placeholder.geometry() == host.rect()
+    assert placeholder._frame_timer.isActive()
+
+    host.resize(800, 600)
+    _APP.processEvents()
+
+    assert placeholder.geometry() == host.rect()
+
+    placeholder.finish()
+
+    assert placeholder.active is False
+    assert placeholder.isVisible() is False
+    assert placeholder._frame_timer.isActive() is False
+    host.close()
+
+
+def test_visible_loading_animation_does_not_starve_incremental_work() -> None:
+    host = QWidget()
+    placeholder = DeferredLoadingPlaceholder("Loading…", host)
+    calls: list[int] = []
+    handle = IncrementalLoadHandle(
+        (lambda: calls.append(1), lambda: calls.append(2), lambda: calls.append(3)),
+        host,
+    )
+
+    host.show()
+    handle.start()
+    _spin_until(lambda: handle.is_terminal)
+
+    assert placeholder._frame_timer.isActive()
+    assert handle.state is IncrementalLoadState.READY
+    assert calls == [1, 2, 3]
+    host.close()

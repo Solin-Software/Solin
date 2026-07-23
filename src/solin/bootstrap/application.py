@@ -1,4 +1,5 @@
 import os
+import logging
 import sys
 
 _QT_LOGGING_RULES = (
@@ -25,8 +26,8 @@ from solin.bootstrap.config import default_app_config
 from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.file_open import (
     ApplicationFileOpenRouter,
-    dispatch_pending_files,
 )
+log = logging.getLogger(__name__)
 from solin.core.foundation.resources import application_asset_path
 from solin.bootstrap.profile_flow import wire_profile_switch
 from solin.bootstrap.runtime_args import parse_runtime_args
@@ -34,6 +35,7 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
+from solin.core.foundation.constants import IPC_SERVER_NAME
 from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
@@ -274,10 +276,8 @@ def _build_main_window_service_factories(
     return factories
 
 
-def _launch_main_window(
-    app,
+def _build_main_window_runtime(
     lang_manager,
-    file_args,
     runtime_paths,
     profile_paths,
     profile_settings,
@@ -290,12 +290,11 @@ def _launch_main_window(
     application_maintenance,
     timer_session,
     active_profile,
+    *,
+    window_host,
     main_window_class=None,
 ):
-    """
-    Cria e exibe o MainWindow para o perfil já ativo.
-    Retorna a instância do MainWindow.
-    """
+    """Build application content for an already visible native window host."""
     timeline = startup_timeline()
     MainWindow = main_window_class or _import_main_window_class()
     from solin.core.meetings.tree_store import MeetingTreeStore
@@ -320,8 +319,6 @@ def _launch_main_window(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
-    from solin.styles.theme import PALETTE
-    from solin.ui.titlebar import apply_titlebar_color
 
     playlist_storage_paths = PlaylistStoragePaths(
         playlists_file=profile_paths.playlists_file,
@@ -396,61 +393,69 @@ def _launch_main_window(
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(main_window_profile_settings.media)
     timeline.mark("critical_ui_started")
-    window = MainWindow(
-        lang_manager,
-        runtime_paths,
-        profile_paths,
-        main_window_profile_settings,
-        main_window_service_factories,
-        media.cache_manager,
-        media_controller,
-        background_media_controller,
-        media.create_info_queue,
-        media.create_info_service,
-        media.create_browser_download_service,
-        media.create_browser_image_fetch_service,
-        font_manager,
-        jw_catalog_service_factory,
-        jw_catalog_thumbnail_session_factory,
-        jw_songs_store,
-        jwpub_checksum_store,
-        playlist_storage_paths,
-        playlist_repository,
-        queue_pending_deletion,
-        meeting_tree_store,
-        resource_lanes,
-        meeting_linked_folder_sync,
-        profile_media_store,
-        jwpub_import_thread_factory,
-        document_conversion_service,
-        clip_fetch_thread_factory,
-        cache_scan_session_factory,
-        qr_generation_session_factory,
-        playlist_thumbnail_store,
-        meeting_thumbnail_store,
-        watched_folder_file_store,
-        watched_folder_playlist_store,
-        lambda parent: WifiReceiveServer(
-            embedded_dir=profile_paths.embedded_dir,
-            parent=parent,
-        ),
-        WatchedFolderWatcher,
-        PlaylistCleanupQueue,
-        timer_session,
-        active_profile,
-    )
-    media_controller.setParent(window)
-    background_media_controller.setParent(window)
+    try:
+        runtime = MainWindow(
+            lang_manager,
+            runtime_paths,
+            profile_paths,
+            main_window_profile_settings,
+            main_window_service_factories,
+            media.cache_manager,
+            media_controller,
+            background_media_controller,
+            media.create_info_queue,
+            media.create_info_service,
+            media.create_browser_download_service,
+            media.create_browser_image_fetch_service,
+            font_manager,
+            jw_catalog_service_factory,
+            jw_catalog_thumbnail_session_factory,
+            jw_songs_store,
+            jwpub_checksum_store,
+            playlist_storage_paths,
+            playlist_repository,
+            queue_pending_deletion,
+            meeting_tree_store,
+            resource_lanes,
+            meeting_linked_folder_sync,
+            profile_media_store,
+            jwpub_import_thread_factory,
+            document_conversion_service,
+            clip_fetch_thread_factory,
+            cache_scan_session_factory,
+            qr_generation_session_factory,
+            playlist_thumbnail_store,
+            meeting_thumbnail_store,
+            watched_folder_file_store,
+            watched_folder_playlist_store,
+            lambda parent: WifiReceiveServer(
+                embedded_dir=profile_paths.embedded_dir,
+                parent=parent,
+            ),
+            WatchedFolderWatcher,
+            PlaylistCleanupQueue,
+            timer_session,
+            active_profile,
+            window_host=window_host,
+        )
+    except Exception:  # noqa: BLE001 - transactional startup rollback boundary
+        window_host.abort_runtime_construction()
+        for controller in (media_controller, background_media_controller):
+            stop = getattr(controller, "stop", None)
+            if not callable(stop):
+                continue
+            try:
+                stop()
+            except Exception:  # noqa: BLE001 - startup rollback must preserve root error
+                log.warning(
+                    "Could not stop media controller after startup failure",
+                    exc_info=True,
+                )
+        raise
+    media_controller.setParent(runtime)
+    background_media_controller.setParent(runtime)
     timeline.mark("critical_ui_ready")
-    window.show()
-    timeline.mark("show_returned")
-
-    apply_titlebar_color(window, PALETTE.titlebar)
-
-    if file_args:
-        QTimer.singleShot(200, lambda: dispatch_pending_files(window, file_args))
-
-    return window
+    return runtime
 
 
 def _launch_zoom_poll_window(filepath: str, lang_manager):
@@ -491,12 +496,7 @@ def _launch_profile_window(
     lang_manager,
     file_args,
     profile_id: str,
-    *,
-    show_startup_shell: bool = True,
 ):
-    from solin.core.meetings.meeting_weeks import current_monday
-    from solin.core.timer.application import TimerSession
-    from solin.core.timer.infrastructure import QSettingsTimerRepository
     from solin.styles.theme import (
         activate_theme,
         app_stylesheet,
@@ -513,16 +513,32 @@ def _launch_profile_window(
     apply_application_palette(container.app, theme)
     container.app.setStyleSheet(app_stylesheet(theme))
     startup_timeline().mark("profile_ready")
-    timer_session = TimerSession(
-            QSettingsTimerRepository.for_profile_settings(profile_context.settings),
-            current_week_monday=current_monday(),
+
+    from solin.core.windowing.settings import WindowGeometrySettingsStore
+    from solin.bootstrap.application_window import ApplicationWindow
+
+    geometry_settings = WindowGeometrySettingsStore.for_profile_settings(
+        profile_context.settings
     )
+    width, height = geometry_settings.size(1200, 760)
+    window = ApplicationWindow(
+        width=width,
+        height=height,
+        pending_files=file_args,
+    )
+    container.window_ref[0] = window
 
     def build_main_window(main_window_class=None):
-        window = _launch_main_window(
-            container.app,
+        from solin.core.meetings.meeting_weeks import current_monday
+        from solin.core.timer.application import TimerSession
+        from solin.core.timer.infrastructure import QSettingsTimerRepository
+
+        timer_session = TimerSession(
+            QSettingsTimerRepository.for_profile_settings(profile_context.settings),
+            current_week_monday=current_monday(),
+        )
+        runtime = _build_main_window_runtime(
             lang_manager,
-            file_args,
             container.runtime_paths,
             profile_context.paths,
             profile_context.settings,
@@ -535,80 +551,67 @@ def _launch_profile_window(
             container.deferred_maintenance.start,
             timer_session,
             active_profile,
-            main_window_class,
+            window_host=window,
+            main_window_class=main_window_class,
         )
-        container.window_ref[0] = window
+        window.install_runtime(runtime)
         wire_profile_switch(
             container.app,
             container.window_ref,
             container.profile_service,
         )
-        return window
-
-    if not show_startup_shell:
-        window = build_main_window(_prepare_profile_main_window(profile_context.paths))
-        window.first_frame_presented.connect(
-            window.complete_startup_handoff,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        return window
-
-    from solin.core.windowing.settings import WindowGeometrySettingsStore
-    from solin.core.foundation.thread_workers import CancellationFlag
-    from solin.ui.async_load import AsyncLoadHandle
-    from solin.bootstrap.startup_shell import StartupShellWindow
-
-    geometry_settings = WindowGeometrySettingsStore.for_profile_settings(
-        profile_context.settings
-    )
-    width, height = geometry_settings.size(1200, 760)
-    shell = StartupShellWindow(width=width, height=height)
-    container.window_ref[0] = shell
-    startup_cancellation = CancellationFlag()
+        return runtime
 
     def install_main_window(main_window_class) -> None:
-        window = build_main_window(main_window_class)
-        shell.set_target_window(window)
+        if not window.begin_hydration():
+            return
+        build_main_window(main_window_class)
 
-        def reveal_main_window() -> None:
-            shell.set_load_handle(None)
-            shell.set_target_window(None)
-            shell.close()
-            window.raise_()
-            window.activateWindow()
-            window.complete_startup_handoff()
+    def finish_startup_handoff() -> None:
+        window.complete_startup_handoff()
 
-        window.first_frame_presented.connect(
-            reveal_main_window,
-            Qt.ConnectionType.QueuedConnection,
-        )
-
-    load_handle = AsyncLoadHandle(
-        lambda: _prepare_profile_main_window(
-            profile_context.paths,
-            startup_cancellation,
-        ),
-        install_main_window,
-        shell,
-        thread_name_prefix="solin-startup-import",
-        cancel_load=startup_cancellation.set,
+    window.application_frame_presented.connect(
+        finish_startup_handoff,
+        Qt.ConnectionType.QueuedConnection,
     )
-    shell.set_load_handle(load_handle)
 
-    def show_startup_error(message: str) -> None:
-        from PySide6.QtWidgets import QMessageBox
+    def start_runtime_preparation() -> None:
+        from solin.bootstrap.application_window import ApplicationWindowState
+        from solin.core.foundation.thread_workers import CancellationFlag
+        from solin.ui.async_load import AsyncLoadHandle
 
-        QMessageBox.critical(shell, "Solin", message)
-        shell.set_load_handle(None)
-        shell.close()
+        if window.state is not ApplicationWindowState.LOADING:
+            return
+        startup_cancellation = CancellationFlag()
+        load_handle = AsyncLoadHandle(
+            lambda: _prepare_profile_main_window(
+                profile_context.paths,
+                startup_cancellation,
+            ),
+            install_main_window,
+            window,
+            thread_name_prefix="solin-startup-import",
+            cancel_load=startup_cancellation.set,
+        )
+        window.set_load_handle(load_handle)
 
-    load_handle.failed.connect(show_startup_error)
-    shell.show()
-    # The shell is already registered with the window system. Starting the
-    # owned import worker here overlaps module I/O with delivery of its first
-    # frame without moving any QWidget construction off the application thread.
-    load_handle.start()
-    return shell
+        def show_startup_error(message: str) -> None:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(window, "Solin", message)
+            window.set_load_handle(None)
+            window.close()
+
+        load_handle.failed.connect(show_startup_error)
+        load_handle.start()
+
+    window.loading_frame_presented.connect(
+        start_runtime_preparation,
+        Qt.ConnectionType.QueuedConnection,
+    )
+    window.show()
+    startup_timeline().mark("show_returned")
+    return window
 
 
 def main():
@@ -676,11 +679,22 @@ def main():
         sys.exit(_run_zoom_poll_standalone(app, csv_args[0], lang_manager))
 
     # ── Single-instance ───────────────────────────────────────────────────────
-    if try_forward_to_running(file_args):
+    ipc_server_name = (
+        os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
+    )
+    if try_forward_to_running(file_args, server_name=ipc_server_name):
         sys.exit(0)
-    single_instance = SingleInstanceServer(app, _main_window_ref, file_args)
+    single_instance = SingleInstanceServer(
+        app,
+        _main_window_ref,
+        file_args,
+        server_name=ipc_server_name,
+    )
     single_instance_started = single_instance.start()
-    if not single_instance_started and try_forward_to_running(file_args):
+    if not single_instance_started and try_forward_to_running(
+        file_args,
+        server_name=ipc_server_name,
+    ):
         sys.exit(0)
     if single_instance_started:
         container.lifecycle.register_single_instance(single_instance)
@@ -715,7 +729,6 @@ def main():
                 lang_manager,
                 file_args,
                 profile_id,
-                show_startup_shell=True,
             )
             QTimer.singleShot(400, screen.close)
 
@@ -731,7 +744,6 @@ def main():
             lang_manager,
             file_args,
             requested_profile_id,
-            show_startup_shell=True,
         )
 
     elif profile_service.has_profiles() and len(profile_service.profiles) == 1:
@@ -746,7 +758,6 @@ def main():
             lang_manager,
             file_args,
             last_id,
-            show_startup_shell=True,
         )
 
     else:
@@ -774,7 +785,6 @@ def main():
                 lang_manager,
                 file_args,
                 profile_id,
-                show_startup_shell=True,
             )
             # Fecha a tela de perfil de vez depois da animação
             QTimer.singleShot(400, screen.close)

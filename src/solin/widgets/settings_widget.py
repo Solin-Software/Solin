@@ -16,10 +16,8 @@ from PySide6.QtCore import (
     Signal,
     QEvent,
     QObject,
-    QRect,
     QTimer,
 )
-from PySide6.QtGui import QColor, QPainter
 
 from ..core.i18n.manager import LanguageManager
 from ..ui.screens import ScreenManager
@@ -40,8 +38,9 @@ from ..core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from ..core.remote_control.security import RemoteControlCredentialsStore
 from ..core.remote_control.settings import RemoteControlSettingsStore
 from ..core.foundation.settings_store import ProfileAppSettingsStore
-from ..styles.theme import PALETTE, available_themes, current_theme, normalize_theme_id
+from ..styles.theme import available_themes, current_theme, normalize_theme_id
 from ..ui.controls import NoScrollComboBox
+from ..ui.loading_placeholder import DeferredLoadingPlaceholder
 from .settings.about_section import AboutSectionMixin
 from .settings.auto_keys_section import AutoKeysSectionMixin
 from .settings.auto_share_section import AutoShareSectionMixin
@@ -220,6 +219,10 @@ class SettingsWidget(
         from ..ui.incremental_load import IncrementalLoadHandle
 
         self._mark_startup("settings_placeholder_constructed")
+        self._loading_placeholder = DeferredLoadingPlaceholder(
+            self.tr("Loading…"),
+            self,
+        )
         self._mark_startup("settings_stack_constructed")
         self._apply_loading_placeholder_theme()
         self._mark_startup("settings_placeholder_styled")
@@ -380,6 +383,7 @@ class SettingsWidget(
 
     def _finish_ui_build(self) -> None:
         self._ui_ready = True
+        self._loading_placeholder.finish()
         settings_page = getattr(self, "_settings_page", None)
         if settings_page is not None and settings_page is not self:
             settings_page.setGeometry(self.rect())
@@ -392,25 +396,9 @@ class SettingsWidget(
             self.focus_meeting_schedule()
 
     def _apply_loading_placeholder_theme(self) -> None:
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        if self._ui_ready:
-            return
-        painter = QPainter(self)
-        painter.setPen(QColor(str(PALETTE.text_muted)))
-        painter.drawText(
-            self.rect().adjusted(0, 0, 0, -18),
-            Qt.AlignmentFlag.AlignCenter,
-            self.tr("Loading…"),
-        )
-        bar = QRect((self.width() - 220) // 2, self.height() // 2 + 16, 220, 3)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(str(PALETTE.surface)))
-        painter.drawRoundedRect(bar, 1, 1)
-        painter.setBrush(QColor(str(PALETTE.accent)))
-        painter.drawRoundedRect(QRect(bar.x(), bar.y(), 72, bar.height()), 1, 1)
+        placeholder = getattr(self, "_loading_placeholder", None)
+        if placeholder is not None:
+            placeholder.refresh_theme()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -507,6 +495,8 @@ class SettingsWidget(
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.LanguageChange:
+            if not self._ui_ready:
+                self._loading_placeholder.set_text(self.tr("Loading…"))
             self.retranslateUi()
         super().changeEvent(event)
 

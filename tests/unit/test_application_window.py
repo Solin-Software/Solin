@@ -1,0 +1,214 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtQuickWidgets import QQuickWidget
+from PySide6.QtWidgets import QApplication, QWidget
+
+from solin.bootstrap.application_window import (
+    ApplicationWindow,
+    ApplicationWindowState,
+)
+
+
+_APP = QApplication.instance() or QApplication([])
+
+
+class _CancellableLoad:
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+class _Runtime(QWidget):
+    first_frame_presented = Signal()
+    switch_profile_requested = Signal()
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.shutdown_called = False
+        self.handoff_completed = False
+        self.opened_files: list[str] = []
+        self.events: list[object] = []
+        self.construction_aborted = False
+        self.construction_committed = False
+
+    def abort_construction(self) -> None:
+        self.construction_aborted = True
+
+    def commit_construction(self) -> None:
+        self.construction_committed = True
+
+    def complete_startup_handoff(self) -> None:
+        self.handoff_completed = True
+        self.events.append("handoff")
+
+    def open_media_files(self, paths: list[str]) -> None:
+        self.opened_files.extend(paths)
+        self.events.append(("open", list(paths)))
+
+    def shutdown(self) -> None:
+        self.shutdown_called = True
+
+
+def test_application_window_keeps_one_native_window_through_hydration() -> None:
+    script = """
+import json
+import time
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QApplication, QWidget
+from solin.bootstrap.application_window import ApplicationWindow
+
+class Runtime(QWidget):
+    first_frame_presented = Signal()
+    switch_profile_requested = Signal()
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._painted = False
+    def abort_construction(self): pass
+    def commit_construction(self): pass
+    def complete_startup_handoff(self): pass
+    def open_media_files(self, paths): pass
+    def shutdown(self): pass
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self._painted:
+            self._painted = True
+            self.first_frame_presented.emit()
+
+app = QApplication([])
+window = ApplicationWindow(width=900, height=700, pending_files=[])
+loading_frames = []
+application_frames = []
+window.loading_frame_presented.connect(lambda: loading_frames.append(True))
+window.application_frame_presented.connect(lambda: application_frames.append(True))
+window.show()
+deadline = time.monotonic() + 1.0
+while not loading_frames and time.monotonic() < deadline:
+    app.processEvents()
+    time.sleep(0.005)
+native_id = int(window.winId())
+window.begin_hydration()
+runtime = Runtime(window.content_parent())
+window.register_runtime_candidate(runtime)
+runtime_paint_state = []
+runtime.first_frame_presented.connect(lambda: runtime_paint_state.append({
+    "window_visible": window.isVisible(),
+    "loading_visible": window._loading_canvas.isVisible(),
+    "same_native_id": int(window.winId()) == native_id,
+}))
+window.install_runtime(runtime)
+deadline = time.monotonic() + 1.0
+while not application_frames and time.monotonic() < deadline:
+    app.processEvents()
+    time.sleep(0.005)
+visible_top_levels = [widget for widget in app.topLevelWidgets() if widget.isVisible()]
+print(json.dumps({
+    "loading": loading_frames,
+    "application": application_frames,
+    "runtime_paint_state": runtime_paint_state,
+    "same_native_id": int(window.winId()) == native_id,
+    "window_visible": window.isVisible(),
+    "top_levels": len(visible_top_levels),
+    "size": [window.width(), window.height()],
+}))
+window.close()
+"""
+    environment = os.environ.copy()
+    environment["QT_QPA_PLATFORM"] = "offscreen"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[2],
+        env=environment,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert json.loads(result.stdout) == {
+        "loading": [True],
+        "application": [True],
+        "runtime_paint_state": [{
+            "window_visible": True,
+            "loading_visible": True,
+            "same_native_id": True,
+        }],
+        "same_native_id": True,
+        "window_visible": True,
+        "top_levels": 1,
+        "size": [900, 700],
+    }
+
+
+def test_application_window_primes_quick_surface_before_first_show() -> None:
+    window = ApplicationWindow(width=900, height=700, pending_files=[])
+
+    assert isinstance(window._quick_surface_anchor, QQuickWidget)
+    assert window._quick_surface_anchor.parentWidget() is window.content_parent()
+    assert window._quick_surface_anchor.size().toTuple() == (1, 1)
+    assert window._content_stack.currentWidget() is window._loading_canvas
+
+
+def test_application_window_queues_files_until_runtime_is_ready() -> None:
+    pending = ["before.mp4"]
+    window = ApplicationWindow(width=900, height=700, pending_files=pending)
+    window.open_media_files(["during.mp4", "before.mp4"])
+    assert pending == ["before.mp4", "during.mp4"]
+
+    assert window.begin_hydration() is True
+    runtime = _Runtime(window.content_parent())
+    window.register_runtime_candidate(runtime)
+    window.install_runtime(runtime)
+    runtime.first_frame_presented.emit()
+    assert window.state is ApplicationWindowState.HYDRATING
+    window.open_media_files(["between.mp4"])
+    window.complete_startup_handoff()
+
+    assert window.state is ApplicationWindowState.READY
+    assert pending == []
+    assert runtime.construction_committed is True
+    assert runtime.construction_aborted is False
+    assert runtime.opened_files == ["before.mp4", "during.mp4", "between.mp4"]
+    assert runtime.events == [
+        "handoff",
+        ("open", ["before.mp4", "during.mp4", "between.mp4"]),
+    ]
+
+
+def test_closing_application_window_cancels_load_and_shuts_down_runtime() -> None:
+    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    load = _CancellableLoad()
+    window.set_load_handle(load)
+    assert window.begin_hydration() is True
+    runtime = _Runtime(window.content_parent())
+    window.register_runtime_candidate(runtime)
+    window.install_runtime(runtime)
+
+    window.closeEvent(QCloseEvent())
+
+    assert window.state is ApplicationWindowState.CLOSING
+    assert load.cancelled is True
+    assert runtime.shutdown_called is True
+
+
+def test_closing_during_runtime_construction_aborts_partial_resources() -> None:
+    window = ApplicationWindow(width=900, height=700, pending_files=[])
+    assert window.begin_hydration() is True
+    runtime = _Runtime(window.content_parent())
+    window.register_runtime_candidate(runtime)
+
+    window.closeEvent(QCloseEvent())
+
+    assert window.state is ApplicationWindowState.CLOSING
+    assert runtime.construction_aborted is True
+    assert runtime.construction_committed is False
+    assert runtime.shutdown_called is False

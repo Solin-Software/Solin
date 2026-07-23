@@ -41,7 +41,7 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
     assert runtime_args.media_files == (str(csv_file),)
 
 
-def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkeypatch):
+def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypatch):
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace()
@@ -142,6 +142,8 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             playlist_cleanup_queue_factory,
             received_timer_session,
             received_active_profile,
+            *,
+            window_host,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
@@ -188,12 +190,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
-
-        def show(self):
-            events.append("show")
-
-        def open_media_files(self, paths):
-            events.append(("open_media_files", paths))
+            self.window_host = window_host
 
     monkeypatch.setitem(
         sys.modules,
@@ -226,10 +223,9 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         or service_factories,
     )
 
-    window = main._launch_main_window(
-        app=object(),
+    window_host = object()
+    window = main._build_main_window_runtime(
         lang_manager="lang",
-        file_args=file_args,
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
@@ -242,6 +238,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         application_maintenance=application_maintenance,
         timer_session=timer_session,
         active_profile=active_profile,
+        window_host=window_host,
     )
 
     assert window.lang_manager == "lang"
@@ -319,6 +316,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     assert callable(window.playlist_cleanup_queue_factory)
     assert window.timer_session is timer_session
     assert window.active_profile is active_profile
+    assert window.window_host is window_host
     assert events == [
         ("profile_settings_bundle", profile_settings),
         (
@@ -332,15 +330,11 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
                 application_maintenance,
             ),
         ),
-        "show",
-        ("titlebar", window, "#1A231F"),
-        ("timer", 200),
-        ("open_media_files", ["clip.mp4", "song.mp3"]),
     ]
-    assert file_args == []
+    assert file_args == ["clip.mp4", "song.mp3"]
 
 
-def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeypatch):
+def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monkeypatch):
     events = []
     runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
@@ -431,6 +425,8 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             playlist_cleanup_queue_factory,
             received_timer_session,
             received_active_profile,
+            *,
+            window_host,
         ):
             self.lang_manager = lang_manager
             self.runtime_paths = received_runtime_paths
@@ -477,9 +473,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.playlist_cleanup_queue_factory = playlist_cleanup_queue_factory
             self.timer_session = received_timer_session
             self.active_profile = received_active_profile
-
-        def show(self):
-            events.append("show")
+            self.window_host = window_host
 
     monkeypatch.setitem(
         sys.modules,
@@ -512,10 +506,9 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         or service_factories,
     )
 
-    main._launch_main_window(
-        app=object(),
+    window_host = object()
+    runtime = main._build_main_window_runtime(
         lang_manager="lang",
-        file_args=[],
         runtime_paths=runtime_paths,
         profile_paths=profile_paths,
         profile_settings=profile_settings,
@@ -528,6 +521,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         application_maintenance=application_maintenance,
         timer_session=timer_session,
         active_profile=active_profile,
+        window_host=window_host,
     )
 
     assert events == [
@@ -543,9 +537,8 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
                 application_maintenance,
             ),
         ),
-        "show",
-        ("titlebar", "#1A231F"),
     ]
+    assert runtime.window_host is window_host
 
 
 def test_run_zoom_poll_standalone_keeps_window_alive_until_event_loop(monkeypatch):

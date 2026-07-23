@@ -57,7 +57,7 @@ class TimerOutputWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self._qml = QQuickWidget()
+        self._qml = QQuickWidget(self)
         configure_qml_host(
             self._qml,
             type_name="ClockFace",
