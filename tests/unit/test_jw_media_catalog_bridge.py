@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import unittest
 import tempfile
+import time
+import unittest
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication
@@ -231,6 +232,95 @@ class JWMediaCatalogBridgeProgressTests(unittest.TestCase):
 
         self.assertEqual(self.thumbnail_factory.session.reset_count, 1)
         self.assertTrue(self.thumbnail_factory.session.closed)
+
+    def test_close_preserves_catalog_and_clears_only_transient_state(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        catalog_items = [item("a"), item("b")]
+        self.bridge._all_items = catalog_items
+        self.bridge._filtered_items = list(catalog_items)
+        self.bridge._model.set_items(catalog_items)
+        self.bridge._search_query = "video"
+        self.bridge._current_page = 2
+        self.bridge._include_audio_description = True
+        self.bridge._pending_item = item("pending")
+        self.bridge._show_placement = True
+        self.bridge._placement_options = [{"id": "bottom"}]
+
+        self.bridge.closeModal()
+
+        self.assertEqual(self.bridge._all_items, catalog_items)
+        self.assertEqual(self.bridge.searchQuery, "")
+        self.assertEqual(self.bridge.currentPage, 1)
+        self.assertFalse(self.bridge.includeAudioDescription)
+        self.assertIsNone(self.bridge._pending_item)
+        self.assertFalse(self.bridge.showPlacement)
+        self.assertEqual(self.bridge.placementOptions, [])
+        self.assertEqual(self.thumbnail_factory.session.reset_count, 0)
+
+    def test_reopen_uses_preserved_catalog_without_starting_another_fetch(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        self.bridge._all_items = [item("cached")]
+        self.bridge._catalog_fetched_at = time.time()
+
+        fetch_calls: list[str] = []
+        self.bridge._catalog_service.fetch_all_videos = (
+            lambda language: fetch_calls.append(language) or "request"
+        )
+
+        self.bridge.openModal()
+
+        self.assertEqual(fetch_calls, [])
+
+    def test_reopen_revalidates_expired_catalog_without_clearing_visible_items(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        cached = item("cached")
+        self.bridge._all_items = [cached]
+        self.bridge._filtered_items = [cached]
+        self.bridge._model.set_items([cached])
+        self.bridge._catalog_fetched_at = 1.0
+
+        fetch_calls: list[str] = []
+        self.bridge._catalog_service.fetch_all_videos = (
+            lambda language: fetch_calls.append(language) or "refresh"
+        )
+
+        self.bridge.openModal()
+
+        self.assertEqual(fetch_calls, ["E"])
+        self.assertEqual(self.bridge._all_items, [cached])
+        self.assertEqual(self.bridge.model.rowCount(), 1)
+        self.assertTrue(self.bridge.isLoading)
+
+    def test_failed_refresh_keeps_cached_catalog_visible(self):
+        self.bridge = JWMediaCatalogBridge(
+            self._catalog_service,
+            self.thumbnail_factory,
+            insertion_handler=self._insert,
+        )
+        cached = item("cached")
+        self.bridge._all_items = [cached]
+        self.bridge._filtered_items = [cached]
+        self.bridge._model.set_items([cached])
+        self.bridge._is_loading = True
+        self.bridge._active_catalog_request_id = "refresh"
+
+        self.bridge._on_fetch_failed("refresh", "network unavailable")
+
+        self.assertEqual(self.bridge._all_items, [cached])
+        self.assertEqual(self.bridge.errorMessage, "")
+        self.assertFalse(self.bridge.isLoading)
 
     def test_duplicate_selection_is_rejected_before_placement(self):
         insertions = []

@@ -25,14 +25,12 @@ from solin.core.jw.catalog import (
     JWMediaCatalogFetchCancelled,
     JWMediaItem,
     JWMediaQuery,
-    catalog_item_for_delivery,
     fetch_jw_video_catalog,
     fetch_jw_videos,
+    is_catalog_refresh_due,
 )
 
 log = logging.getLogger(__name__)
-
-_CATALOG_PROGRESS_EMIT_INTERVAL_S = 0.25
 
 
 class _CancelToken:
@@ -53,8 +51,11 @@ class _CancelToken:
 
 
 class _FetchSignals(QObject):
-    succeeded = Signal(str, list, float, bool)  # request_id, list[dict], fetched_at, from_cache
-    progress = Signal(str, list, int, int)      # request_id, partial items, completed, total
+    # Python-owned payloads use object instead of QVariantList. Catalogs contain
+    # thousands of dictionaries and are consumed only by Python slots; QVariant
+    # marshalling would recursively convert the full list at every signal hop.
+    succeeded = Signal(str, object, float, bool)
+    progress = Signal(str, object, int, int)
     failed = Signal(str, str)                   # request_id, error
 
 
@@ -111,7 +112,6 @@ class _CatalogWorker(QRunnable):
         *,
         cache_paths: JWMediaCatalogCachePaths,
         force: bool,
-        cache_thumbnails: bool,
         cancel_token: _CancelToken,
     ) -> None:
         super().__init__()
@@ -119,36 +119,16 @@ class _CatalogWorker(QRunnable):
         self.language = language
         self.cache_paths = cache_paths
         self.force = force
-        self.cache_thumbnails = cache_thumbnails
         self.cancel_token = cancel_token
         self.signals = _FetchSignals()
         self.setAutoDelete(True)
 
     def run(self) -> None:
         try:
-            last_progress_emit = 0.0
-
             def _progress(items: list[JWMediaItem], completed: int, total: int) -> None:
-                nonlocal last_progress_emit
                 if self.cancel_token.is_cancelled():
                     raise JWMediaCatalogFetchCancelled()
-                now = time.monotonic()
-                should_emit = (
-                    last_progress_emit <= 0
-                    or now - last_progress_emit >= _CATALOG_PROGRESS_EMIT_INTERVAL_S
-                    or bool(total and completed >= total)
-                )
-                if not should_emit:
-                    return
-                last_progress_emit = now
-                emit_items = [
-                    catalog_item_for_delivery(
-                        item,
-                        self.cache_thumbnails,
-                        self.cache_paths,
-                    ).to_dict()
-                    for item in items
-                ]
+                emit_items = [item.to_dict() for item in items]
                 if self.cancel_token.is_cancelled():
                     raise JWMediaCatalogFetchCancelled()
                 self.signals.progress.emit(self.request_id, emit_items, completed, total)
@@ -162,14 +142,7 @@ class _CatalogWorker(QRunnable):
                 should_cancel=self.cancel_token.is_cancelled,
             )
             self.cancel_token.raise_if_cancelled()
-            emit_items = [
-                catalog_item_for_delivery(
-                    item,
-                    self.cache_thumbnails,
-                    self.cache_paths,
-                ).to_dict()
-                for item in items
-            ]
+            emit_items = [item.to_dict() for item in items]
             self.signals.succeeded.emit(self.request_id, emit_items, fetched_at, from_cache)
         except JWMediaCatalogFetchCancelled:
             return
@@ -183,8 +156,8 @@ class JWMediaCatalogService(QObject):
     """Qt async facade for JW media browsing surfaces."""
 
     fetch_started = Signal(str)                 # request_id
-    videos_ready = Signal(str, list, float, bool)  # request_id, items, fetched_at, from_cache
-    videos_progress = Signal(str, list, int, int)  # request_id, items, completed, total
+    videos_ready = Signal(str, object, float, bool)  # request_id, items, fetched_at, from_cache
+    videos_progress = Signal(str, object, int, int)  # request_id, items, completed, total
     fetch_failed = Signal(str, str)             # request_id, error
 
     def __init__(
@@ -240,9 +213,14 @@ class JWMediaCatalogService(QObject):
         *,
         request_id: str = "",
         force: bool = False,
-        cache_thumbnails: bool = False,
     ) -> str:
-        """Start an async full-catalog fetch and return the request id."""
+        """Start an async metadata-only full-catalog fetch.
+
+        Thumbnail lookup and download belong to the independently bounded
+        thumbnail session owned by the presentation surface. This keeps catalog
+        delivery proportional to metadata size instead of the entire thumbnail
+        cache.
+        """
 
         lang = (language or "E").upper()
         rid = request_id or _catalog_request_id(lang)
@@ -255,7 +233,6 @@ class JWMediaCatalogService(QObject):
             lang,
             cache_paths=self._cache_paths,
             force=force,
-            cache_thumbnails=cache_thumbnails,
             cancel_token=token,
         )
         worker.signals.progress.connect(self._on_progress)
@@ -278,6 +255,11 @@ class JWMediaCatalogService(QObject):
             token.cancel()
         self._workers.pop(request_id, None)
         self._active.discard(request_id)
+
+    @staticmethod
+    def catalog_refresh_due(fetched_at: float) -> bool:
+        """Return whether an in-memory catalog should be revalidated."""
+        return is_catalog_refresh_due(fetched_at)
 
     def cancel_all(self, *, wait_ms: int = 0) -> None:
         """Cancel all active catalog/media fetches owned by this service."""

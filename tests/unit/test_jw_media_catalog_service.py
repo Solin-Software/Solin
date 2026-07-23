@@ -75,6 +75,154 @@ class JWMediaCatalogLatestDeltaTests(unittest.TestCase):
         self.assertIn("guid-old", {media_item.guid for media_item in items})
         save_snapshot.assert_called_once()
 
+    def test_fresh_complete_snapshot_skips_category_discovery(self):
+        cached = item("cached")
+        snapshot = {
+            "_fetched_at": time.time(),
+            "completed_categories": ["LatestVideos", "CatA"],
+            "all_categories": ["LatestVideos", "CatA"],
+            "items": [cached.to_dict()],
+        }
+
+        with (
+            patch.object(svc, "_load_catalog_snapshot", return_value=snapshot),
+            patch.object(svc, "_discover_video_categories") as discover,
+        ):
+            items, _fetched_at, from_cache = svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
+
+        self.assertTrue(from_cache)
+        self.assertEqual([media_item.id for media_item in items], [cached.id])
+        discover.assert_not_called()
+
+    def test_stale_snapshot_is_published_before_refresh_discovery(self):
+        cached = item("cached")
+        events: list[tuple[str, int]] = []
+
+        def discover_categories(_language, **_kwargs):
+            events.append(("discover", 0))
+            return ["LatestVideos", "CatA"]
+
+        def publish(items, _completed, _total):
+            events.append(("progress", len(items)))
+
+        with (
+            patch.object(
+                svc,
+                "_load_catalog_snapshot",
+                return_value=self.stale_snapshot([cached]),
+            ),
+            patch.object(
+                svc,
+                "_discover_video_categories",
+                side_effect=discover_categories,
+            ),
+            patch.object(
+                svc,
+                "_fetch_category_media",
+                return_value=({}, time.time(), False),
+            ),
+            patch.object(svc, "_parse_category_media", return_value=[cached]),
+            patch.object(svc, "_save_catalog_snapshot"),
+        ):
+            svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+                progress_callback=publish,
+            )
+
+        self.assertEqual(events[0], ("progress", 1))
+        self.assertEqual(events[1], ("discover", 0))
+
+    def test_cold_catalog_publishes_latest_before_category_discovery(self):
+        latest = item("latest")
+        events: list[tuple[str, int]] = []
+
+        def fetch_category(_language, category, **_kwargs):
+            events.append((f"fetch:{category}", 0))
+            return {}, time.time(), False
+
+        def parse_category(_raw, query):
+            return [latest] if query.category == "LatestVideos" else []
+
+        def discover_categories(_language, **_kwargs):
+            events.append(("discover", 0))
+            return ["LatestVideos", "CatA"]
+
+        def publish(items, _completed, _total):
+            events.append(("progress", len(items)))
+
+        with (
+            patch.object(svc, "_load_catalog_snapshot", return_value=None),
+            patch.object(
+                svc,
+                "_fetch_category_media",
+                side_effect=fetch_category,
+            ),
+            patch.object(
+                svc,
+                "_parse_category_media",
+                side_effect=parse_category,
+            ),
+            patch.object(
+                svc,
+                "_discover_video_categories",
+                side_effect=discover_categories,
+            ),
+            patch.object(svc, "_save_catalog_snapshot"),
+        ):
+            svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+                progress_callback=publish,
+            )
+
+        self.assertEqual(
+            events[:3],
+            [
+                ("fetch:LatestVideos", 0),
+                ("progress", 1),
+                ("discover", 0),
+            ],
+        )
+        self.assertEqual(
+            [event for event in events if event[0] == "fetch:LatestVideos"],
+            [("fetch:LatestVideos", 0)],
+        )
+
+    def test_fast_category_scan_coalesces_partial_snapshot_writes(self):
+        categories = ["LatestVideos", "CatA", "CatB", "CatC", "CatD"]
+
+        def parse_category(_raw, query):
+            return [item(str(query.category))]
+
+        with (
+            patch.object(svc, "_load_catalog_snapshot", return_value=None),
+            patch.object(
+                svc,
+                "_fetch_category_media",
+                return_value=({}, time.time(), True),
+            ),
+            patch.object(svc, "_parse_category_media", side_effect=parse_category),
+            patch.object(
+                svc,
+                "_discover_video_categories",
+                return_value=categories,
+            ),
+            patch.object(svc.time, "monotonic", return_value=10.0),
+            patch.object(svc, "_save_catalog_snapshot") as save_snapshot,
+        ):
+            svc.fetch_jw_video_catalog(
+                "E",
+                cache_paths=cache_paths(),
+            )
+
+        # One resumable checkpoint plus the mandatory final snapshot, rather
+        # than rewriting the growing catalog once per category.
+        self.assertEqual(save_snapshot.call_count, 2)
+
     def test_latest_delta_with_no_new_items_only_marks_snapshot_checked(self):
         old_1 = item("old-1", published="2026-01-02T00:00:00Z")
         old_2 = item("old-2", published="2026-01-01T00:00:00Z")

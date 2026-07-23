@@ -227,7 +227,9 @@ Rectangle {
 
             onFinished: {
                 modalRoot.visible = false
-                if (modalRoot.hasBridge) catalogBridge.reset()
+                searchField.text = ""
+                searchDebounce.stop()
+                if (modalRoot.hasBridge) catalogBridge.closeModal()
             }
         }
 

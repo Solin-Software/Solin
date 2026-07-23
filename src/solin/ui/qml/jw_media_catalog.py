@@ -307,6 +307,7 @@ class JWMediaCatalogBridge(QObject):
         self._catalog_complete: bool = False
         self._include_audio_description: bool = False
         self._active_catalog_request_id: str = ""
+        self._catalog_fetched_at: float = 0.0
         self._pending_progress: tuple[str, list[dict[str, Any]], int, int] | None = None
         self._progress_apply_timer = QTimer(self)
         self._progress_apply_timer.setSingleShot(True)
@@ -442,6 +443,7 @@ class JWMediaCatalogBridge(QObject):
         self._current_page = 1
         self._model.clear()
         self._catalog_complete = False
+        self._catalog_fetched_at = 0.0
         self._progress_apply_timer.stop()
         self._pending_progress = None
         self._load_completed = 0
@@ -454,7 +456,6 @@ class JWMediaCatalogBridge(QObject):
 
         self._active_catalog_request_id = self._catalog_service.fetch_all_videos(
             self._lang_code,
-            cache_thumbnails=False,
         )
 
     @Slot()
@@ -551,8 +552,46 @@ class JWMediaCatalogBridge(QObject):
     @Slot()
     def openModal(self) -> None:
         """Called when the modal is opened.  Fetch catalog if needed."""
-        if not self._all_items and not self._is_loading:
+        if self._is_loading:
+            return
+        if not self._all_items:
             self.fetchAll()
+        elif self._catalog_service.catalog_refresh_due(self._catalog_fetched_at):
+            self._refresh_catalog()
+
+    @Slot()
+    def closeModal(self) -> None:
+        """Clear transient modal state while preserving the loaded catalog."""
+        filter_changed = False
+        page_changed = False
+
+        if self._search_query:
+            self._search_query = ""
+            self.searchQueryChanged.emit()
+            filter_changed = True
+        if self._include_audio_description:
+            self._include_audio_description = False
+            self.includeAudioDescriptionChanged.emit()
+            filter_changed = True
+        if self._current_page != 1:
+            self._current_page = 1
+            self.pageChanged.emit()
+            page_changed = True
+
+        if filter_changed:
+            self._apply_filter(keep_page=True)
+        if (filter_changed or page_changed) and self._all_items:
+            self._update_page()
+
+        if self._pending_item is not None:
+            self._pending_item = None
+            self.pendingItemChanged.emit()
+        if self._show_placement:
+            self._show_placement = False
+            self.showPlacementChanged.emit()
+        if self._placement_options:
+            self._placement_options = []
+            self.placementOptionsChanged.emit()
 
     @Slot()
     def reset(self) -> None:
@@ -568,6 +607,7 @@ class JWMediaCatalogBridge(QObject):
         self._is_loading = False
         self._error_message = ""
         self._active_catalog_request_id = ""
+        self._catalog_fetched_at = 0.0
         self._load_completed = 0
         self._load_total = 0
         self._catalog_complete = False
@@ -659,9 +699,11 @@ class JWMediaCatalogBridge(QObject):
         """Handle ``JWMediaCatalogService.videos_ready``."""
         if request_id != self._active_catalog_request_id:
             return
+        self._active_catalog_request_id = ""
         self._progress_apply_timer.stop()
         self._pending_progress = None
         self._all_items = list(items)
+        self._catalog_fetched_at = float(fetched_at or 0.0)
         self._catalog_complete = True
         self._load_completed = self._load_total or self._load_completed
         self._apply_filter(keep_page=True)
@@ -673,9 +715,15 @@ class JWMediaCatalogBridge(QObject):
         """Handle ``JWMediaCatalogService.fetch_failed``."""
         if self._active_catalog_request_id and request_id != self._active_catalog_request_id:
             return
+        self._active_catalog_request_id = ""
         self._progress_apply_timer.stop()
         self._pending_progress = None
         log.warning("[CatalogBridge] Fetch failed (rid=%s): %s", request_id, error)
+        if self._all_items:
+            # A refresh failure must not replace a usable cached catalog with an
+            # error screen. The old timestamp remains, so the next open retries.
+            self._set_loading(False)
+            return
         self._error_message = error
         self.errorMessageChanged.emit()
         self._set_loading(False)
@@ -770,6 +818,23 @@ class JWMediaCatalogBridge(QObject):
         if self._is_loading != value:
             self._is_loading = value
             self.isLoadingChanged.emit()
+
+    def _refresh_catalog(self) -> None:
+        """Revalidate an expired in-memory catalog without clearing its page."""
+        if self._is_loading:
+            return
+        if self._error_message:
+            self._error_message = ""
+            self.errorMessageChanged.emit()
+        self._progress_apply_timer.stop()
+        self._pending_progress = None
+        self._load_completed = 0
+        self._load_total = 0
+        self.loadProgressChanged.emit()
+        self._set_loading(True)
+        self._active_catalog_request_id = self._catalog_service.fetch_all_videos(
+            self._lang_code,
+        )
 
     def _submit_pending(self, target_list_id: str, target_index: int) -> bool:
         """Insert the pending item and publish feedback from the real outcome."""

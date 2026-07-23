@@ -26,7 +26,7 @@ import os
 import re
 import time
 import urllib.parse
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -47,6 +47,8 @@ _FETCH_TIMEOUT_S = 15
 _THUMB_TIMEOUT_S = 15
 _MAX_THUMB_BYTES = 5 * 1024 * 1024
 _CATALOG_REFRESH_INTERVAL_S = 12 * 60 * 60
+_CATALOG_PROGRESS_INTERVAL_S = 0.25
+_CATALOG_CHECKPOINT_INTERVAL_S = 1.0
 # Set to False to use the previous full-refresh behavior for stale catalogs.
 USE_LATEST_DELTA_CATALOG_REFRESH = True
 _LATEST_CATEGORY_KEY = "LatestVideos"
@@ -95,6 +97,19 @@ _EXPECTED_FETCH_ERRORS = (
     UnicodeError,
     ValueError,
 )
+
+
+def is_catalog_refresh_due(
+    fetched_at: float,
+    *,
+    now: float | None = None,
+) -> bool:
+    """Return whether a completed catalog snapshot should be revalidated."""
+    checked_at = float(fetched_at or 0.0)
+    if checked_at <= 0:
+        return True
+    current_time = time.time() if now is None else float(now)
+    return max(0.0, current_time - checked_at) >= _CATALOG_REFRESH_INTERVAL_S
 
 
 @dataclass(frozen=True)
@@ -157,7 +172,35 @@ class JWMediaItem:
     first_published: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # This is a hot path for catalogs with thousands of immutable,
+        # primitive-only records. dataclasses.asdict() recursively deep-copies
+        # every field; an explicit projection preserves the public schema
+        # without that unnecessary cost.
+        return {
+            "id": self.id,
+            "title": self.title,
+            "language": self.language,
+            "media_type": self.media_type,
+            "source": self.source,
+            "download_url": self.download_url,
+            "thumbnail_url": self.thumbnail_url,
+            "thumbnail_path": self.thumbnail_path,
+            "subtitles_url": self.subtitles_url,
+            "duration_seconds": self.duration_seconds,
+            "duration_ticks": self.duration_ticks,
+            "filesize": self.filesize,
+            "label": self.label,
+            "frame_width": self.frame_width,
+            "frame_height": self.frame_height,
+            "pub": self.pub,
+            "docid": self.docid,
+            "issue": self.issue,
+            "track": self.track,
+            "guid": self.guid,
+            "natural_key": self.natural_key,
+            "primary_category": self.primary_category,
+            "first_published": self.first_published,
+        }
 
 
 def fetch_jw_videos(
@@ -237,12 +280,11 @@ def fetch_jw_video_catalog(
     from_cache = False
 
     loaded_completed: set[str] = set()
-    snapshot_age_s = 0.0
+    stored_categories: list[str] = []
 
     if snapshot:
         from_cache = True
         fetched_at = float(snapshot.get("_fetched_at", fetched_at) or fetched_at)
-        snapshot_age_s = max(0.0, time.time() - fetched_at)
         for item_data in snapshot.get("items", []):
             if isinstance(item_data, dict):
                 try:
@@ -251,6 +293,83 @@ def fetch_jw_video_catalog(
                 except TypeError:
                     continue
         loaded_completed = set(snapshot.get("completed_categories", []))
+        stored_categories = [
+            str(category)
+            for category in snapshot.get("all_categories", [])
+            if category
+        ]
+
+    stored_required = set(stored_categories)
+    stored_complete = bool(stored_required) and stored_required.issubset(
+        loaded_completed
+    )
+    snapshot_refresh_required = bool(
+        snapshot
+        and stored_complete
+        and is_catalog_refresh_due(fetched_at)
+    )
+    sorted_cached_items = (
+        _sort_catalog_items(items_by_id.values())
+        if snapshot and items_by_id
+        else []
+    )
+
+    # A complete snapshot is authoritative for its freshness window. Category
+    # discovery is part of refresh, not a prerequisite for displaying a catalog
+    # that was already built successfully.
+    if snapshot and stored_complete and not snapshot_refresh_required:
+        return sorted_cached_items, fetched_at, True
+
+    # Stale-while-revalidate: make a valid previous snapshot available before
+    # any category discovery or network request. The caller can render known
+    # videos immediately while this worker refreshes in the background.
+    if sorted_cached_items and progress_callback:
+        stored_total = len(stored_categories)
+        progress_callback(
+            sorted_cached_items,
+            0 if snapshot_refresh_required else min(
+                len(loaded_completed),
+                stored_total,
+            ),
+            stored_total,
+        )
+
+    # On a cold cache, LatestVideos is useful content and does not depend on
+    # traversing the category tree. Publish it first so category discovery
+    # cannot delay the first usable page.
+    prefetched_categories: set[str] = set()
+    if snapshot is None:
+        try:
+            latest_raw, latest_fetched_at, latest_from_cache = _fetch_category_media(
+                lang,
+                _LATEST_CATEGORY_KEY,
+                cache_paths=cache_paths,
+                force=force,
+                should_cancel=should_cancel,
+            )
+            raise_if_cancelled()
+            fetched_at = max(fetched_at, latest_fetched_at)
+            from_cache = from_cache or latest_from_cache
+            for item in _parse_category_media(
+                latest_raw,
+                JWMediaQuery(language=lang, category=_LATEST_CATEGORY_KEY),
+            ):
+                items_by_id[item.guid or item.id] = item
+            prefetched_categories.add(_LATEST_CATEGORY_KEY)
+            if progress_callback and items_by_id:
+                progress_callback(
+                    _sort_catalog_items(items_by_id.values()),
+                    1,
+                    0,
+                )
+        except JWMediaCatalogFetchCancelled:
+            raise
+        except _EXPECTED_FETCH_ERRORS as exc:
+            log.debug(
+                "[JWMediaCatalog] Could not prefetch %s: %s",
+                _LATEST_CATEGORY_KEY,
+                exc,
+            )
 
     raise_if_cancelled()
     categories = _discover_video_categories(
@@ -265,7 +384,7 @@ def fetch_jw_video_catalog(
     refresh_required = bool(
         snapshot
         and snapshot_complete
-        and snapshot_age_s >= _CATALOG_REFRESH_INTERVAL_S
+        and is_catalog_refresh_due(fetched_at)
     )
 
     if refresh_required and USE_LATEST_DELTA_CATALOG_REFRESH:
@@ -299,17 +418,9 @@ def fetch_jw_video_catalog(
     # Even if the checkpoint is older than the normal refresh interval, keep
     # its completed category set so the next launch continues where it stopped.
     completed = set() if refresh_required else set(loaded_completed)
-
-    if snapshot and progress_callback and items_by_id:
-        progress_callback(
-            _sort_catalog_items(items_by_id.values()),
-            0 if refresh_required else len(loaded_completed),
-            total,
-        )
-
-    # If a previous snapshot was complete and fresh enough, return it immediately.
-    if snapshot and snapshot_complete and not refresh_required:
-        return _sort_catalog_items(items_by_id.values()), fetched_at, True
+    completed.update(prefetched_categories)
+    last_progress_at = time.monotonic()
+    last_checkpoint_at = 0.0
 
     for idx, category in enumerate(categories, start=1):
         raise_if_cancelled()
@@ -330,17 +441,33 @@ def fetch_jw_video_catalog(
             for item in _parse_category_media(raw, JWMediaQuery(language=lang, category=category)):
                 items_by_id[item.guid or item.id] = item
             completed.add(category)
-            sorted_items = _sort_catalog_items(items_by_id.values())
-            _save_catalog_snapshot(
-                lang,
-                sorted_items,
-                completed,
-                categories,
-                fetched_at,
-                cache_paths,
+            now = time.monotonic()
+            checkpoint_due = (
+                last_checkpoint_at <= 0
+                or now - last_checkpoint_at >= _CATALOG_CHECKPOINT_INTERVAL_S
             )
-            if progress_callback:
+            progress_due = bool(
+                progress_callback
+                and (
+                    now - last_progress_at >= _CATALOG_PROGRESS_INTERVAL_S
+                    or idx >= total
+                )
+            )
+            if checkpoint_due or progress_due:
+                sorted_items = _sort_catalog_items(items_by_id.values())
+            if checkpoint_due:
+                _save_catalog_snapshot(
+                    lang,
+                    sorted_items,
+                    completed,
+                    categories,
+                    fetched_at,
+                    cache_paths,
+                )
+                last_checkpoint_at = now
+            if progress_due and progress_callback:
                 progress_callback(sorted_items, idx, total)
+                last_progress_at = now
         except JWMediaCatalogFetchCancelled:
             raise
         except _EXPECTED_FETCH_ERRORS as exc:
@@ -1015,16 +1142,6 @@ def _stable_item_id(*parts: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def catalog_item_for_delivery(
-    item: JWMediaItem,
-    cache_thumbnails: bool,
-    cache_paths: JWMediaCatalogCachePaths,
-) -> JWMediaItem:
-    if cache_thumbnails:
-        return _with_cached_thumbnail(item, cache_paths)
-    return _with_existing_thumbnail(item, cache_paths)
-
-
 def _catalog_identity_index(items: Iterable[JWMediaItem]) -> set[str]:
     identities: set[str] = set()
     for item in items:
@@ -1067,7 +1184,11 @@ def _load_catalog_snapshot(
     cache_paths: JWMediaCatalogCachePaths,
 ) -> dict[str, Any] | None:
     path = _catalog_snapshot_path(language, cache_paths)
-    payload = _load_json_cache(path)
+    # Catalog freshness is governed by _CATALOG_REFRESH_INTERVAL_S. Keeping a
+    # structurally valid older snapshot available enables stale-while-revalidate
+    # and an offline catalog instead of discarding useful data at the generic
+    # JSON-cache TTL boundary.
+    payload = _load_json_cache(path, ignore_ttl=True)
     return payload["data"] if payload else None
 
 
@@ -1226,8 +1347,8 @@ __all__ = [
     "JWMediaQuery",
     "USE_LATEST_DELTA_CATALOG_REFRESH",
     "cached_thumbnail_path",
-    "catalog_item_for_delivery",
     "ensure_thumbnail_cached",
     "fetch_jw_video_catalog",
     "fetch_jw_videos",
+    "is_catalog_refresh_due",
 ]
