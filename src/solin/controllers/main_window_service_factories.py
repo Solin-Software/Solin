@@ -21,3 +21,4 @@ class MainWindowServiceFactories:
     memorial: Callable[[QObject], Any]
     remote_services: Callable[[QWidget], Any]
     auto_share_workers: Callable[[], Any]
+    application_maintenance: Callable[[], None]

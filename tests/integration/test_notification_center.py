@@ -2,7 +2,8 @@ from pathlib import Path
 
 from pyqttoast import ToastPosition, ToastPreset
 
-from solin.ui.notifications import NotificationCenter, SynchronizedToast
+from solin.ui.notifications import NotificationCenter
+from solin.ui.toast_backend import SynchronizedToast
 
 
 class _FakeToast:

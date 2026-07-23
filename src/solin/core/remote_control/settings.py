@@ -8,7 +8,7 @@ from typing import Final
 
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
-from solin.core.remote_control.certificates import parse_private_lan_ipv4
+from solin.core.remote_control.private_network import parse_private_lan_ipv4
 
 
 REMOTE_CONTROL_PORT: Final = 8765

@@ -169,36 +169,45 @@ def _make_controller(window, *, ipc_active=False, platform="win32"):
             monitor_popup_factory=lambda: _MonitorPopup(window),
             ipc_controller_factory=lambda: _IpcController(window),
             remote_services_factory=lambda: _RemoteServices(window, window.lang),
-            apply_stylesheet=window.setStyleSheet,
         ),
         app_getter=lambda: _App(ipc_active),
         platform=platform,
-        stylesheet="test-stylesheet",
     )
 
 
-def test_finish_startup_preserves_startup_order_and_initializes_state():
+def test_startup_phases_preserve_order_and_initialize_state():
     window = _Window(obs_enabled=True, zoom_enabled=True)
     window.obs_scene_session.remember("Camera")
 
-    resources = _make_controller(window).finish_startup()
+    controller = _make_controller(window)
+    prepared = controller.prepare_before_show()
 
     assert window.events == [
         "projection",
-        "obs",
-        "obs-btn",
-        "obs-stream",
         "connect:zoom.connection_changed",
         "connect:zoom.participants_updated",
         "connect:zoom.sharing_state_changed",
         "connect:zoom.share_error",
+        "monitor",
+    ]
+
+    deferred = controller.start_after_first_frame()
+
+    assert window.events == [
+        "projection",
+        "connect:zoom.connection_changed",
+        "connect:zoom.participants_updated",
+        "connect:zoom.sharing_state_changed",
+        "connect:zoom.share_error",
+        "monitor",
+        "obs",
+        "obs-btn",
+        "obs-stream",
         "zoom",
         "background-song",
         "media-countdown",
-        "monitor",
         "ipc",
         "remote",
-        "style",
     ]
     assert window.projection_session.idle_media_path == ""
     assert window.projection_session.floating_preview_window is None
@@ -206,32 +215,34 @@ def test_finish_startup_preserves_startup_order_and_initializes_state():
     assert window.projection_session.tab_projection_active is False
     assert window._jwl_tmp_files == set()
     assert window.obs_scene_session.pre_media_scene == ""
-    assert resources.ipc_controller.obs_scene_memory_at_start == ""
-    assert resources.monitor_popup is not None
-    assert resources.remote_services.started is True
-    assert window.stylesheets == ["test-stylesheet"]
+    assert prepared.ipc_controller.obs_scene_memory_at_start == ""
+    assert prepared.monitor_popup is not None
+    assert deferred.remote_services.started is True
+    assert window.stylesheets == []
 
 
-def test_finish_startup_skips_disabled_services_and_app_owned_ipc():
+def test_deferred_startup_skips_disabled_services_and_app_owned_ipc():
     window = _Window(obs_enabled=False, zoom_enabled=True)
 
-    resources = _make_controller(
+    controller = _make_controller(
         window,
         ipc_active=True,
         platform="linux",
-    ).finish_startup()
+    )
+    prepared = controller.prepare_before_show()
+    deferred = controller.start_after_first_frame()
 
     assert "obs" not in window.events
     assert "zoom" not in window.events
     assert "ipc" not in window.events
-    assert resources.ipc_controller.started is False
-    assert resources.remote_services.started is True
+    assert prepared.ipc_controller.started is False
+    assert deferred.remote_services.started is True
 
 
-def test_finish_startup_wires_zoom_and_monitor_signals():
+def test_prepare_before_show_wires_zoom_and_monitor_signals():
     window = _Window()
 
-    resources = _make_controller(window).finish_startup()
+    resources = _make_controller(window).prepare_before_show()
 
     assert window._zoom_service.connection_changed.connected_names == [
         "on_zoom_connection_changed"
@@ -255,6 +266,21 @@ def test_finish_startup_wires_zoom_and_monitor_signals():
     assert resources.monitor_popup.idle_media_changed.connected_names == [
         "on_idle_media_changed"
     ]
+
+
+def test_startup_phases_are_idempotent():
+    window = _Window()
+    controller = _make_controller(window)
+
+    first_prepared = controller.prepare_before_show()
+    second_prepared = controller.prepare_before_show()
+    first_deferred = controller.start_after_first_frame()
+    second_deferred = controller.start_after_first_frame()
+
+    assert first_prepared is second_prepared
+    assert first_deferred is second_deferred
+    assert window.events.count("projection") == 1
+    assert window.events.count("remote") == 1
 
 
 def test_bootstrap_uses_explicit_dependencies_instead_of_main_window():

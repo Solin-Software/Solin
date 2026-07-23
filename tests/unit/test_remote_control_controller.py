@@ -275,20 +275,121 @@ def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path)
     controller.stop()
 
 
-def test_clearing_watched_folder_invalidates_remote_catalog(tmp_path: Path) -> None:
+def test_disabled_start_does_not_build_catalog_or_create_tls(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    builds = []
+    controller._catalog.build = lambda: builds.append(True)
+
+    controller.start()
+
+    assert builds == []
+    assert controller._catalog_refresh_inflight is None
+    assert controller._tls_store is None
+    assert controller.state.catalog_revision == 0
+    controller.stop()
+
+
+def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.credentials.has_credentials = lambda: True
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    identity = SimpleNamespace(
+        trust_anchor_fingerprint_sha256="00",
+        trust_certificate_der=lambda: b"certificate",
+    )
+    controller._tls_store = SimpleNamespace(load_or_create=lambda _address: identity)
+    started_at_revisions = []
+    server = SimpleNamespace(is_running=True)
+
+    def start_server(_identity):
+        started_at_revisions.append(controller.state.catalog_revision)
+        return server
+
+    controller._start_server = start_server
+
+    controller.start()
+
+    assert controller._server is None
+    assert controller._catalog_refresh_inflight is not None
+    deadline = time.monotonic() + 2
+    while controller._catalog_refresh_inflight is not None:
+        _APP.processEvents()
+        time.sleep(0.001)
+        assert time.monotonic() < deadline
+
+    assert started_at_revisions == [1]
+    assert controller._server is server
+    controller._server = None
+    controller.stop()
+
+
+def test_clearing_watched_folder_marks_catalog_dirty_without_building_while_disabled(
+    tmp_path: Path,
+) -> None:
     controller, *_ = _controller(tmp_path, [])
     initial_generation = controller._catalog_refresh_generation
 
     controller._dependencies.settings_widget.watched_folder_changed.emit("")
 
     assert controller._catalog_refresh_generation == initial_generation + 1
-    assert controller._catalog_refresh_timer.isActive()
-    controller._catalog_refresh_timer.stop()
+    assert controller._catalog_dirty is True
+    assert controller._catalog_refresh_timer.isActive() is False
+    controller.stop()
+
+
+def test_catalog_invalidated_while_disabled_is_rebuilt_before_reenable(
+    tmp_path: Path,
+) -> None:
+    playlists = [{"id": "playlist-1", "name": "Initial", "items": []}]
+    controller, *_ = _controller(tmp_path, playlists)
+    controller._refresh_catalog()
+    initial_revision = controller.state.catalog_revision
+    enabled = False
+    controller._dependencies.settings.enabled = lambda: enabled
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.credentials.has_credentials = lambda: True
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    controller._tls_store = SimpleNamespace(
+        load_or_create=lambda _address: SimpleNamespace()
+    )
+    started_at_revisions: list[int] = []
+    server = SimpleNamespace(is_running=True)
+    controller._start_server = lambda _identity: (
+        started_at_revisions.append(controller.state.catalog_revision) or server
+    )
+
+    playlists[0]["name"] = "Updated while disabled"
+    controller._schedule_catalog_refresh()
+
+    assert controller._catalog_dirty is True
+    assert controller._catalog_refresh_inflight is None
+
+    enabled = True
+    controller.reconfigure()
+
+    assert controller._server is None
+    deadline = time.monotonic() + 2
+    while controller._catalog_refresh_inflight is not None:
+        _APP.processEvents()
+        time.sleep(0.001)
+        assert time.monotonic() < deadline
+
+    assert controller._catalog_dirty is False
+    assert controller.state.catalog_revision > initial_revision
+    assert started_at_revisions == [controller.state.catalog_revision]
+    controller._server = None
     controller.stop()
 
 
 def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
+    controller._dependencies.settings.enabled = lambda: True
     caller_thread = threading.get_ident()
     worker_threads: list[int] = []
     original_build = controller._catalog.build
@@ -335,6 +436,47 @@ def test_catalog_invalidation_during_scan_keeps_single_debounced_followup(
     assert scheduled == []
     controller._catalog_refresh_timer.stop()
     controller._catalog_refresh_inflight = None
+    controller.stop()
+
+
+def test_catalog_invalidation_during_scan_does_not_retry_after_disable(
+    tmp_path: Path,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    enabled = True
+    controller._dependencies.settings.enabled = lambda: enabled
+    started = threading.Event()
+    release = threading.Event()
+    build_calls: list[bool] = []
+    original_build = controller._catalog.build
+
+    def build():
+        build_calls.append(True)
+        started.set()
+        assert release.wait(timeout=2)
+        return original_build()
+
+    controller._catalog.build = build
+    controller._schedule_catalog_refresh()
+    controller._catalog_refresh_timer.stop()
+    controller._start_catalog_refresh()
+    assert started.wait(timeout=1)
+
+    enabled = False
+    controller._schedule_catalog_refresh()
+    release.set()
+
+    deadline = time.monotonic() + 2
+    while controller._catalog_refresh_inflight is not None:
+        _APP.processEvents()
+        time.sleep(0.001)
+        assert time.monotonic() < deadline
+    for _ in range(5):
+        _APP.processEvents()
+
+    assert build_calls == [True]
+    assert controller._catalog_dirty is True
+    assert controller._catalog_refresh_timer.isActive() is False
     controller.stop()
 
 
@@ -403,6 +545,7 @@ def test_synchronous_catalog_refresh_supersedes_an_inflight_build(
         ],
     }
     controller, *_rest, media_projection = _controller(tmp_path, [playlist])
+    controller._dependencies.settings.enabled = lambda: True
     controller._refresh_catalog()
 
     playlist["items"][0]["url"] = str(second_path)
@@ -499,6 +642,7 @@ def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Pa
         publish_profile=lambda: events.append("profile"),
         publish_snapshot=lambda: events.append("catalog"),
     )
+    controller._dependencies.settings.enabled = lambda: True
     localization = {
         "locale": "pt-BR",
         "messages": {"app.remoteControl": "Controle remoto"},
@@ -512,7 +656,9 @@ def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Pa
 
     build_localization.assert_called_once_with("pt_BR")
     assert controller._localization_payload() == localization
-    assert events == ["profile", "catalog"]
+    assert events == ["profile"]
+    assert controller._catalog_refresh_timer.isActive()
+    controller._catalog_refresh_timer.stop()
     controller._server = None
     controller.stop()
 

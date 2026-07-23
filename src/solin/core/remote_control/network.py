@@ -6,7 +6,7 @@ from ipaddress import IPv4Address
 
 from PySide6.QtNetwork import QAbstractSocket, QNetworkInterface
 
-from .certificates import parse_private_lan_ipv4
+from .private_network import parse_private_lan_ipv4
 
 
 @dataclass(frozen=True, slots=True)

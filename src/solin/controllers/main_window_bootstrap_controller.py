@@ -7,8 +7,6 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication
 
-from ..styles.theme import app_stylesheet
-
 
 @dataclass(frozen=True, slots=True)
 class MainWindowStartupDependencies:
@@ -27,15 +25,20 @@ class MainWindowStartupDependencies:
     monitor_popup_factory: Callable[[], Any]
     ipc_controller_factory: Callable[[], Any]
     remote_services_factory: Callable[[], Any]
-    apply_stylesheet: Callable[[str], None]
 
 
 @dataclass(frozen=True, slots=True)
-class MainWindowStartupResources:
-    """Long-lived resources created while completing main-window startup."""
+class MainWindowPreparedResources:
+    """Resources required by the visible shell before its first frame."""
 
     monitor_popup: Any
     ipc_controller: Any
+
+
+@dataclass(frozen=True, slots=True)
+class MainWindowDeferredResources:
+    """Long-lived resources created only after the first frame."""
+
     remote_services: Any
 
 
@@ -48,30 +51,41 @@ class MainWindowBootstrapController:
         *,
         app_getter: Callable[[], object | None] | None = None,
         platform: str | None = None,
-        stylesheet: str | None = None,
     ) -> None:
         self._dependencies = dependencies
         self._app_getter = app_getter or QCoreApplication.instance
         self._platform = platform or sys.platform
-        self._stylesheet = stylesheet
+        self._prepared: MainWindowPreparedResources | None = None
+        self._deferred: MainWindowDeferredResources | None = None
 
-    def finish_startup(self) -> MainWindowStartupResources:
+    def prepare_before_show(self) -> MainWindowPreparedResources:
+        if self._prepared is not None:
+            return self._prepared
         self.initialize_projection_session()
-        self.start_obs_integration()
         self.connect_zoom_signals()
+        monitor_popup = self.build_monitor_popup()
+        ipc_controller = self.create_ipc_controller()
+        self._prepared = MainWindowPreparedResources(
+            monitor_popup=monitor_popup,
+            ipc_controller=ipc_controller,
+        )
+        return self._prepared
+
+    def start_after_first_frame(self) -> MainWindowDeferredResources:
+        if self._deferred is not None:
+            return self._deferred
+        prepared = self.prepare_before_show()
+        self.start_obs_integration()
         self.start_zoom_if_enabled()
         self.start_background_song_service()
         self.start_media_countdown_automation()
-        monitor_popup = self.build_monitor_popup()
-        ipc_controller = self.create_ipc_controller()
+        ipc_controller = prepared.ipc_controller
         self.start_ipc_if_needed(ipc_controller)
         remote_services = self.start_remote_services()
-        self.apply_stylesheet()
-        return MainWindowStartupResources(
-            monitor_popup=monitor_popup,
-            ipc_controller=ipc_controller,
+        self._deferred = MainWindowDeferredResources(
             remote_services=remote_services,
         )
+        return self._deferred
 
     def initialize_projection_session(self) -> None:
         dependencies = self._dependencies
@@ -140,6 +154,3 @@ class MainWindowBootstrapController:
         remote_services = self._dependencies.remote_services_factory()
         remote_services.start()
         return remote_services
-
-    def apply_stylesheet(self) -> None:
-        self._dependencies.apply_stylesheet(self._stylesheet or app_stylesheet())

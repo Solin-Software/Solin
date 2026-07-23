@@ -33,7 +33,7 @@ class _PubCard(QFrame):
 
     _CW, _CH = 80, 108
 
-    def __init__(self, pub_type: str, parent=None):
+    def __init__(self, pub_type: str, parent=None, *, defer_content: bool = False):
         super().__init__(parent)
         self._pub_type = pub_type
         self._is_mwb = pub_type == "mwb"
@@ -44,7 +44,15 @@ class _PubCard(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(148)
         self._apply_style(active=False)
+        self._content_ready = False
+        if not defer_content:
+            self.build_content()
+
+    def build_content(self) -> None:
+        if self._content_ready:
+            return
         self._build()
+        self._content_ready = True
         self.set_loading()
 
     def _apply_style(self, active: bool):
@@ -60,6 +68,8 @@ class _PubCard(QFrame):
 
     def apply_theme(self) -> None:
         self._apply_style(self._style_active)
+        if not self._content_ready:
+            return
         self._cover.setStyleSheet(
             f"background:{PALETTE.media_placeholder};"
             f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
@@ -300,7 +310,7 @@ class _MemorialCard(QFrame):
 
     _CW, _CH = 80, 108
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, defer_content: bool = False):
         super().__init__(parent)
         self._last_pct: int = -1
         self._progress_style_set = False
@@ -309,7 +319,15 @@ class _MemorialCard(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(148)
         self._apply_style(active=False)
+        self._content_ready = False
+        if not defer_content:
+            self.build_content()
+
+    def build_content(self) -> None:
+        if self._content_ready:
+            return
         self._build()
+        self._content_ready = True
         self.set_loading()
 
     def _apply_style(self, active: bool):
@@ -324,6 +342,8 @@ class _MemorialCard(QFrame):
 
     def apply_theme(self) -> None:
         self._apply_style(self._style_active)
+        if not self._content_ready:
+            return
         self._cover.setStyleSheet(
             f"background:{PALETTE.media_placeholder};"
             f"border-radius:8px;border:1px solid {PALETTE.border_muted};"
@@ -524,14 +544,23 @@ class Overview(QWidget):
     open_wt = Signal()
     open_memorial = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, defer_cards: bool = False):
         super().__init__(parent)
         self._scroll: QScrollArea | None = None
         self._content: QWidget | None = None
         self.apply_theme()
-        self._build()
+        self._begin_build()
+        if not defer_cards:
+            self.install_content()
+            self.build_mwb_card()
+            self.populate_mwb_card()
+            self.build_wt_card()
+            self.populate_wt_card()
+            self.build_memorial_card()
+            self.populate_memorial_card()
+            self.finish_build()
 
-    def _build(self):
+    def _begin_build(self):
         scroll = QScrollArea()
         self._scroll = scroll
         scroll.setWidgetResizable(True)
@@ -541,27 +570,44 @@ class Overview(QWidget):
         cl = QVBoxLayout(content)
         cl.setContentsMargins(16, 12, 16, 24)
         cl.setSpacing(12)
-
-        self.mwb_card = _PubCard("mwb")
-        self.mwb_card.open_requested.connect(self.open_mwb)
-
-        self.wt_card = _PubCard("wt")
-        self.wt_card.open_requested.connect(self.open_wt)
-
-        self.memorial_card = _MemorialCard()
-        self.memorial_card.open_requested.connect(self.open_memorial)
-        self.memorial_card.setVisible(False)
-
-        cl.addWidget(self.mwb_card)
-        cl.addWidget(self.wt_card)
-        cl.addWidget(self.memorial_card)
-        cl.addStretch()
-        scroll.setWidget(content)
+        self._content_layout = cl
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll)
         self.apply_theme()
+
+    def install_content(self) -> None:
+        if self._scroll is not None and self._content is not None:
+            self._scroll.setWidget(self._content)
+
+    def build_mwb_card(self) -> None:
+        self.mwb_card = _PubCard("mwb", defer_content=True)
+        self.mwb_card.open_requested.connect(self.open_mwb)
+        self._content_layout.addWidget(self.mwb_card)
+
+    def populate_mwb_card(self) -> None:
+        self.mwb_card.build_content()
+
+    def build_wt_card(self) -> None:
+        self.wt_card = _PubCard("wt", defer_content=True)
+        self.wt_card.open_requested.connect(self.open_wt)
+        self._content_layout.addWidget(self.wt_card)
+
+    def populate_wt_card(self) -> None:
+        self.wt_card.build_content()
+
+    def build_memorial_card(self) -> None:
+        self.memorial_card = _MemorialCard(defer_content=True)
+        self.memorial_card.open_requested.connect(self.open_memorial)
+        self.memorial_card.setVisible(False)
+        self._content_layout.addWidget(self.memorial_card)
+
+    def populate_memorial_card(self) -> None:
+        self.memorial_card.build_content()
+
+    def finish_build(self) -> None:
+        self._content_layout.addStretch()
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background:{PALETTE.bg0};")

@@ -295,6 +295,8 @@ class YearlyTextSectionMixin:
 
     def _on_language_switched(self, _code):
         self._yt_status_kind = "loading"
+        if not getattr(self, "_ui_ready", True):
+            return
         self._yt_preview_lbl.hide()
         self._yt_status_lbl.setText(self.tr("Fetching annual text\u2026"))
         self._yt_status_lbl.setStyleSheet(

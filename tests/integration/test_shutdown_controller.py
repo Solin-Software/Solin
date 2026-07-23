@@ -85,8 +85,8 @@ def _dependencies(events=None):
         projection_session=_ProjectionSession(events),
         timer_output=_Recorder(events, "timer"),
         services=ShutdownServices(
-            remote_control=_Recorder(events, "remote-control"),
-            remote_services=_Recorder(events, "remote"),
+            remote_control=lambda: _Recorder(events, "remote-control"),
+            remote_services=lambda: _Recorder(events, "remote"),
             download_notifications=_Recorder(events, "downloads"),
             playback_notifications=_Recorder(events, "playback-notifications"),
             notifications=_Recorder(events, "notifications"),
@@ -99,7 +99,7 @@ def _dependencies(events=None):
             camera=_Recorder(events, "camera"),
             obs=_Recorder(events, "obs"),
             zoom=_Recorder(events, "zoom"),
-            ipc=_Recorder(events, "ipc"),
+            ipc=lambda: _Recorder(events, "ipc"),
         ),
         widget_providers=(lambda: widget,),
         conversion_threads=registry,
@@ -229,3 +229,37 @@ def test_shutdown_controller_uses_explicit_dependencies():
     controller = ShutdownController(_dependencies())
 
     assert not hasattr(controller, "_window")
+
+
+def test_shutdown_allows_deferred_resources_that_were_never_created():
+    dependencies = _dependencies()
+    services = dependencies.services
+    dependencies = ShutdownDependencies(
+        projection_session=dependencies.projection_session,
+        timer_output=dependencies.timer_output,
+        services=ShutdownServices(
+            remote_control=services.remote_control,
+            remote_services=lambda: None,
+            download_notifications=services.download_notifications,
+            playback_notifications=services.playback_notifications,
+            notifications=services.notifications,
+            projection_integrations=services.projection_integrations,
+            background_song=services.background_song,
+            media_countdown_automation=services.media_countdown_automation,
+            media_tree_runtime=services.media_tree_runtime,
+            media_controller=services.media_controller,
+            ndi=services.ndi,
+            camera=services.camera,
+            obs=services.obs,
+            zoom=services.zoom,
+            ipc=lambda: None,
+        ),
+        widget_providers=dependencies.widget_providers,
+        conversion_threads=dependencies.conversion_threads,
+        jwl_temp_files=dependencies.jwl_temp_files,
+        queue_pending_deletion=dependencies.queue_pending_deletion,
+        save_window_state=dependencies.save_window_state,
+        cleanup_lazy_pages=dependencies.cleanup_lazy_pages,
+    )
+
+    ShutdownController(dependencies).shutdown()

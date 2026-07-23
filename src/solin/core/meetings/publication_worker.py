@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from collections.abc import Iterable, Mapping
 from datetime import date
 from os import PathLike
@@ -69,6 +70,15 @@ class JwpubWorker(QObject):
         self._lang            = "T"
         self._is_sign_language = False
         self._request_generation = 0
+        self._cancelled = threading.Event()
+
+    def request_cancel(self) -> None:
+        """Request cancellation safely from the main thread."""
+        self._cancelled.set()
+
+    def _emit_if_active(self, signal, *args) -> None:
+        if not self._cancelled.is_set():
+            signal.emit(*args)
 
     def _new_week_data(self, monday: date, **values) -> meeting_models.WeekData:
         return meeting_models.WeekData(
@@ -80,7 +90,8 @@ class JwpubWorker(QObject):
         )
 
     def _emit_error(self, key: str, publication: str, message: str) -> None:
-        self.error.emit(
+        self._emit_if_active(
+            self.error,
             key,
             publication,
             message,
@@ -90,7 +101,8 @@ class JwpubWorker(QObject):
         )
 
     def _emit_progress(self, key: str, publication: str, percent: int) -> None:
-        self.progress.emit(
+        self._emit_if_active(
+            self.progress,
             key,
             publication,
             percent,
@@ -139,6 +151,8 @@ class JwpubWorker(QObject):
         force=True (retry de erro / troca de idioma) pula a fase de servir e faz
         uma revalidação limpa, mantendo a semântica de "recarregar de verdade".
         """
+        if self._cancelled.is_set():
+            return
         self._lang = language or "T"
         self._is_sign_language = bool(is_sign_language)
         self._request_generation = max(0, int(generation))
@@ -182,7 +196,8 @@ class JwpubWorker(QObject):
                 persisted_source_checksum=wt_source_checksum,
             )
         finally:
-            self.load_finished.emit(
+            self._emit_if_active(
+                self.load_finished,
                 monday.isoformat(),
                 self._lang,
                 self._is_sign_language,
@@ -325,7 +340,7 @@ class JwpubWorker(QObject):
             return
         if content is None:
             wd.mwb_status = "empty"
-            self.mwb_done.emit(key, wd)
+            self._emit_if_active(self.mwb_done, key, wd)
             return
 
         wd.mwb_pub_dir     = pub_dir
@@ -339,7 +354,7 @@ class JwpubWorker(QObject):
         sync_cbs_from_publication_refs(wd)
         if content.publication_refs:
             wd.cbs_status = "loading"
-        self.mwb_done.emit(key, wd)
+        self._emit_if_active(self.mwb_done, key, wd)
         if content.publication_refs:
             try:
                 self._load_mwb_publication_refs(
@@ -354,7 +369,7 @@ class JwpubWorker(QObject):
                     issue,
                 )
                 wd.cbs_status = "error"
-                self.cbs_done.emit(key, wd)
+                self._emit_if_active(self.cbs_done, key, wd)
 
     # ── WT ────────────────────────────────────────────────────────────────────
 
@@ -579,7 +594,7 @@ class JwpubWorker(QObject):
             return
         if content is None:
             wd.wt_status = "empty"
-            self.wt_done.emit(key, wd)
+            self._emit_if_active(self.wt_done, key, wd)
             return
         wd.wt_pub_dir     = pub_dir
         wd.wt_issue       = issue
@@ -587,7 +602,7 @@ class JwpubWorker(QObject):
         wd.wt_all_media   = content.media_items
         wd.wt_cover_bytes = content.cover_bytes
         wd.wt_status      = "ready"
-        self.wt_done.emit(key, wd)
+        self._emit_if_active(self.wt_done, key, wd)
 
     def _sync_loaded_publication_refs(self, wd: meeting_models.WeekData, lang: str) -> None:
         sync_cbs_from_publication_refs(wd)
@@ -633,7 +648,7 @@ class JwpubWorker(QObject):
             wd.mwb_publication_refs = list(cached)
             self._sync_loaded_publication_refs(wd, lang)
             wd.cbs_status = "ready"
-            self.cbs_done.emit(key, wd)
+            self._emit_if_active(self.cbs_done, key, wd)
 
         # ── Fase 2 (SWR): revalida/baixa; só re-emite se algo mudou ───────────
         loaded, downloaded = build(cache_only=False)
@@ -641,11 +656,11 @@ class JwpubWorker(QObject):
             wd.mwb_publication_refs = loaded
             self._sync_loaded_publication_refs(wd, lang)
             wd.cbs_status = "ready"
-            self.cbs_done.emit(key, wd)
+            self._emit_if_active(self.cbs_done, key, wd)
         elif not cached and not loaded:
             wd.mwb_publication_refs = []
             wd.cbs_status = "empty"
-            self.cbs_done.emit(key, wd)
+            self._emit_if_active(self.cbs_done, key, wd)
 
     def _load_publication_ref_items(
         self,
@@ -731,7 +746,8 @@ class JwpubWorker(QObject):
         """Resolve URL de vídeo em background. Resultado via video_resolved signal."""
         result = resolve_meeting_video(key_symbol, track, issue_tag, meps_doc_id, lang,
                                 is_sign_language=is_sign_language)
-        self.video_resolved.emit(
+        self._emit_if_active(
+            self.video_resolved,
             request_id,
             result.get("url", ""),
             result.get("title", ""),
@@ -757,6 +773,7 @@ class JwpubWorker(QObject):
                 url,
                 dest,
                 progress=lambda pct: self._emit_progress(key, pub_ui, pct),
+                cancelled=self._cancelled.is_set,
             )
             # New .jwpub on disk — wipe the stale extract dir so the next
             # _ensure_extract() call unpacks the fresh content instead of

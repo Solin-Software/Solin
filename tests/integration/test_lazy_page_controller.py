@@ -1,3 +1,5 @@
+from PySide6.QtWidgets import QStackedWidget, QWidget
+
 from solin.controllers.lazy_page_controller import (
     LazyPageContext,
     LazyPageController,
@@ -18,6 +20,7 @@ class _WidgetStub:
 class _StackStub:
     def __init__(self):
         self._widgets = [_WidgetStub() for _ in range(10)]
+        self._current_widget = self._widgets[0]
 
     def widget(self, index):
         return self._widgets[index]
@@ -28,8 +31,21 @@ class _StackStub:
     def removeWidget(self, widget):
         self._widgets.remove(widget)
 
+    def currentWidget(self):
+        return self._current_widget
+
+    def setCurrentWidget(self, widget):
+        assert widget in self._widgets
+        self._current_widget = widget
+
     def count(self):
         return len(self._widgets)
+
+    def indexOf(self, widget):
+        try:
+            return self._widgets.index(widget)
+        except ValueError:
+            return -1
 
 
 class _WindowStub:
@@ -177,6 +193,35 @@ def test_lazy_page_controller_replaces_stack_placeholder_in_place():
     assert old_widget.deleted is True
 
 
+def test_lazy_page_controller_preserves_selected_page_when_replacing_placeholder():
+    window = _WindowStub()
+    controller = _controller(window)
+    old_widget = window.stack.widget(LazyPageController.BROWSER_INDEX)
+    window.stack.setCurrentWidget(old_widget)
+    replacement = _WidgetStub()
+
+    controller._replace_stack_widget(LazyPageController.BROWSER_INDEX, replacement)
+
+    assert window.stack.currentWidget() is replacement
+
+
+def test_lazy_page_controller_reveals_browser_when_selected_qt_placeholder_is_replaced():
+    window = _WindowStub()
+    window.stack = QStackedWidget()
+    for _index in range(10):
+        window.stack.addWidget(QWidget())
+    controller = _controller(window)
+    placeholder = window.stack.widget(LazyPageController.BROWSER_INDEX)
+    window.stack.setCurrentWidget(placeholder)
+    browser = QWidget()
+    controller._browser_widget = browser
+
+    controller._install_browser_widget()
+
+    assert window.stack.currentWidget() is browser
+    assert window.stack.indexOf(placeholder) == -1
+
+
 def test_lazy_page_controller_delegates_browser_lifecycle():
     window = _WindowStub()
     controller = _controller(window)
@@ -272,7 +317,7 @@ def test_lazy_page_controller_applies_theme_to_materialized_pages_only(monkeypat
     assert controller.wifi_receive_widget is None
 
 
-def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
+def test_lazy_page_controller_builds_owned_browser_with_deferred_native_tabs(monkeypatch):
     import solin.widgets.browser.widget as browser_module
 
     class _BrowserFactory:
@@ -286,6 +331,7 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             image_fetch_service,
             aspect_ratio_provider,
             playback_protection,
+            defer_initial_tabs,
             parent=None,
         ):
             self.lang_manager = lang_manager
@@ -295,7 +341,13 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
             self.image_fetch_service = image_fetch_service
             self.aspect_ratio_provider = aspect_ratio_provider
             self.playback_protection = playback_protection
+            self.defer_initial_tabs = defer_initial_tabs
             self.parent = parent
+            self.initial_tabs_preparation = type(
+                "Preparation",
+                (),
+                {"completed": _SignalStub(), "start": lambda self: None},
+            )()
 
     window = _WindowStub()
     controller = _controller(window)
@@ -312,7 +364,22 @@ def test_lazy_page_controller_builds_browser_without_window_parent(monkeypatch):
     assert browser.image_fetch_service is window.browser_image_fetch_service
     assert browser.aspect_ratio_provider is window.projection_aspect_ratio_provider
     assert browser.playback_protection is window.playback_protection
-    assert browser.parent is None
+    assert browser.defer_initial_tabs is True
+    assert browser.parent is window
+
+
+def test_lazy_page_controller_reconciles_toolbar_after_browser_install():
+    window = _WindowStub()
+    controller = _controller(window)
+    browser = _WidgetStub()
+    reconciled: list[bool] = []
+    controller._browser_widget = browser
+    controller.set_browser_installed_callback(lambda: reconciled.append(True))
+
+    controller._install_browser_widget()
+
+    assert window.stack.widget(LazyPageController.BROWSER_INDEX) is browser
+    assert reconciled == [True]
 
 
 def test_lazy_page_controller_builds_wifi_with_injected_jwpub_factory(monkeypatch):

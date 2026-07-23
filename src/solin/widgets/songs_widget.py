@@ -179,6 +179,8 @@ class SongsWidget(MediaLibraryWidget):
         songs_store,
         jw_cache_dir,
         media_ctrl=None,
+        *,
+        defer_qml: bool = False,
         parent=None,
     ):
         super().__init__(
@@ -188,5 +190,6 @@ class SongsWidget(MediaLibraryWidget):
             media_ctrl,
             songs_store=songs_store,
             jw_cache_dir=jw_cache_dir,
+            defer_qml=defer_qml,
             parent=parent,
         )

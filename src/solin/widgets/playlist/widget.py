@@ -183,6 +183,7 @@ class PlaylistEditView(
         all_playlists: list[dict],
         schedule_cleanup: Callable[[list[dict]], None],
         projection_aspect_ratio_provider: Callable[[], object] | None = None,
+        defer_qml: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -204,6 +205,7 @@ class PlaylistEditView(
         self._jw_songs_store = jw_songs_store
         self._all_playlists = all_playlists
         self._schedule_cleanup = schedule_cleanup
+        self._defer_qml = defer_qml
         self._pl: Optional[dict] = None
         self._is_temp: bool = False
         self._is_watched: bool = False          # linked folder mode
@@ -351,6 +353,7 @@ class PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self.qml_load_handle.cancel()
         self._wf_refresh_shutdown = True
         owner_id = self._tree_session.owner_id
         if owner_id:
@@ -629,7 +632,7 @@ class PlaylistEditView(
 
         self.qml_widget = QQuickWidget(self)
         self.qml_widget.installEventFilter(self)
-        configure_qml_host(
+        self.qml_load_handle = configure_qml_host(
             self.qml_widget,
             type_name="PlaylistEditView",
             clear_color=QML_THEME["mediaPlaceholder"],
@@ -645,6 +648,7 @@ class PlaylistEditView(
                 "playbackProtection": self._playback_protection,
             },
             mouse_tracking=True,
+            defer_load=self._defer_qml,
         )
 
         root.addWidget(self.qml_widget, stretch=1)
@@ -2047,6 +2051,8 @@ class PlaylistWidget(QWidget):
         jw_songs_store: JWSongsStore,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         projection_aspect_ratio_provider: Callable[[], object] | None = None,
+        defer_editor_qml: bool = False,
+        defer_build: bool = False,
         parent=None,
     ):
         super().__init__(parent)
@@ -2073,6 +2079,7 @@ class PlaylistWidget(QWidget):
         self._jw_songs_store = jw_songs_store
         self._media_info_queue_factory = media_info_queue_factory
         self._projection_aspect_ratio_provider = projection_aspect_ratio_provider
+        self._defer_editor_qml = defer_editor_qml
         self._cleanup_queue = playlist_cleanup_queue_factory(
             storage_paths,
             self._playlist_thumbnail_store,
@@ -2083,8 +2090,24 @@ class PlaylistWidget(QWidget):
         self._cleanup_timer.timeout.connect(self._cleanup_queue.flush)
         self._playlists = self._playlist_repository.load()
         self._watched_folder = watched_folder
-        self._build_ui()
-        self._setup_watcher()
+        self._ui_ready = False
+        self._list_view = None
+        self._edit_view = None
+        self._playlist_transfers = None
+        self._folder_watcher = None
+        self._pending_native_imports: list[tuple[list[str], bool]] = []
+        if defer_build:
+            from ...ui.incremental_load import IncrementalLoadHandle
+
+            self.preparation_handle = IncrementalLoadHandle(
+                (self._build_ui, self._setup_watcher, self._complete_ui_build),
+                self,
+            )
+        else:
+            self.preparation_handle = None
+            self._build_ui()
+            self._setup_watcher()
+            self._complete_ui_build()
 
     # ── Build ──────────────────────────────────────────────────────────────
 
@@ -2106,8 +2129,42 @@ class PlaylistWidget(QWidget):
             schedule_cleanup=self._schedule_cleanup,
             parent=self,
         )
-        # Index 1: playlist edit (also used for watched folders)
-        self._edit_view = PlaylistEditView(
+        # Index 1 remains a stable slot; the heavyweight editor is created
+        # only when a playlist is actually opened.
+        self._edit_view: PlaylistEditView | None = None
+        self._edit_placeholder = QWidget(self)
+
+        self._stack.addWidget(self._list_view)  # 0
+        self._stack.addWidget(self._edit_placeholder)  # 1
+        root.addWidget(self._stack)
+
+        self._list_view.open_playlist.connect(self._open_playlist)
+        self._list_view.open_watched_folder.connect(self._open_watched_folder)
+        self._list_view.import_requested.connect(self._on_playlist_import_requested)
+        self._list_view.export_playlist_requested.connect(
+            self._on_playlist_export_requested
+        )
+        self._list_view.export_watched_folder_requested.connect(
+            self._on_watched_folder_export_requested
+        )
+
+        self._playlist_transfers = PlaylistTransferWorkflow(
+            parent=self,
+            notifications=self._notifications,
+            language_manager=self.lang,
+            playlists=self._playlists,
+            playlist_repository=self._playlist_repository,
+            profile_paths=self._profile_paths,
+            profile_media_store=self._profile_media_store,
+            media_cache_manager=self._media_cache_manager,
+            refresh_playlists=self._list_view.refresh,
+            open_playlist=self._open_playlist,
+        )
+
+    def _ensure_edit_view(self) -> PlaylistEditView:
+        if self._edit_view is not None:
+            return self._edit_view
+        edit_view = PlaylistEditView(
             self.lang,
             media_ctrl=self._media_ctrl,
             notifications=self._notifications,
@@ -2132,42 +2189,26 @@ class PlaylistWidget(QWidget):
             projection_aspect_ratio_provider=self._projection_aspect_ratio_provider,
             all_playlists=self._playlists,
             schedule_cleanup=self._schedule_cleanup,
+            defer_qml=self._defer_editor_qml,
             parent=self,
         )
-
-        self._stack.addWidget(self._list_view)   # 0
-        self._stack.addWidget(self._edit_view)   # 1
-        root.addWidget(self._stack)
-
-        self._list_view.open_playlist.connect(self._open_playlist)
-        self._list_view.open_watched_folder.connect(self._open_watched_folder)
-        self._list_view.import_requested.connect(self._on_playlist_import_requested)
-        self._list_view.export_playlist_requested.connect(
-            self._on_playlist_export_requested
-        )
-        self._list_view.export_watched_folder_requested.connect(
-            self._on_watched_folder_export_requested
-        )
-        self._edit_view.back_requested.connect(self._go_back)
-        self._edit_view.project_items.connect(self._on_project_items)
-        self._edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
-        self._edit_view.export_requested.connect(self._on_edit_export_requested)
-        self._edit_view.import_jwl_requested.connect(
+        self._edit_view = edit_view
+        self._stack.insertWidget(1, edit_view)
+        self._stack.removeWidget(self._edit_placeholder)
+        self._edit_placeholder.deleteLater()
+        edit_view.back_requested.connect(self._go_back)
+        edit_view.project_items.connect(self._on_project_items)
+        edit_view.save_temp_as_permanent.connect(self._on_save_temp_playlist)
+        edit_view.export_requested.connect(self._on_edit_export_requested)
+        edit_view.import_jwl_requested.connect(
             self._on_edit_jwl_import_requested
         )
+        edit_view.qml_load_handle.start()
+        return edit_view
 
-        self._playlist_transfers = PlaylistTransferWorkflow(
-            parent=self,
-            notifications=self._notifications,
-            language_manager=self.lang,
-            playlists=self._playlists,
-            playlist_repository=self._playlist_repository,
-            profile_paths=self._profile_paths,
-            profile_media_store=self._profile_media_store,
-            media_cache_manager=self._media_cache_manager,
-            refresh_playlists=self._list_view.refresh,
-            open_playlist=self._open_playlist,
-        )
+    @property
+    def is_temporary_edit(self) -> bool:
+        return bool(self._edit_view is not None and self._edit_view._is_temp)
 
     def _setup_watcher(self):
         self._folder_watcher = self._watched_folder_watcher_factory(self)
@@ -2187,6 +2228,19 @@ class PlaylistWidget(QWidget):
         self._wf_root_refresh_pending = False
         self._wf_pending_sub_path: str = ""
 
+    def _complete_ui_build(self) -> None:
+        self._ui_ready = True
+        self.update()
+        pending_imports = tuple(self._pending_native_imports)
+        self._pending_native_imports.clear()
+        for paths, open_after in pending_imports:
+            self.import_native_playlists(paths, open_after=open_after)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.preparation_handle is not None:
+            self.preparation_handle.start()
+
     def _schedule_cleanup(self, items: list[dict]) -> None:
         self._cleanup_queue.enqueue_items(items)
         self._cleanup_timer.start()
@@ -2196,19 +2250,22 @@ class PlaylistWidget(QWidget):
     def _open_playlist(self, pl_id: str):
         pl = next((p for p in self._playlists if p["id"] == pl_id), None)
         if not pl: return
-        self._edit_view.load_playlist(pl)
+        self._ensure_edit_view().load_playlist(pl)
         self._stack.setCurrentIndex(1)
 
     def _open_watched_folder(self, folder_path: str):
-        self._edit_view.load_watched_folder(folder_path)
+        self._ensure_edit_view().load_watched_folder(folder_path)
         self._stack.setCurrentIndex(1)
 
     def _go_back(self):
+        edit_view = self._edit_view
+        if edit_view is None:
+            return
         # If coming back from a watched folder, clear the watched state
-        if self._edit_view._is_watched:
-            self._edit_view._reset_watched_folder_refresh_retry()
-            self._edit_view._is_watched = False
-            self._edit_view._watched_path = ""
+        if edit_view._is_watched:
+            edit_view._reset_watched_folder_refresh_retry()
+            edit_view._is_watched = False
+            edit_view._watched_path = ""
         self._list_view.refresh()
         self._list_view.refresh_watched()
         self._stack.setCurrentIndex(0)
@@ -2227,6 +2284,11 @@ class PlaylistWidget(QWidget):
         open_after: bool = False,
     ) -> None:
         """Import native packages opened by argv, IPC, or file association."""
+        if self._playlist_transfers is None:
+            self._pending_native_imports.append((list(paths), bool(open_after)))
+            if self.preparation_handle is not None:
+                self.preparation_handle.start()
+            return
         self._playlist_transfers.import_playlists(
             paths,
             "solin",
@@ -2269,7 +2331,10 @@ class PlaylistWidget(QWidget):
 
     @Slot(str)
     def _on_edit_export_requested(self, playlist_format: str) -> None:
-        snapshot = self._edit_view.playlist_export_snapshot(playlist_format)
+        edit_view = self._edit_view
+        if edit_view is None:
+            return
+        snapshot = edit_view.playlist_export_snapshot(playlist_format)
         if snapshot is not None:
             self._playlist_transfers.export_playlist(snapshot, playlist_format)
 
@@ -2280,13 +2345,16 @@ class PlaylistWidget(QWidget):
         insert_at: int,
         section_id: str,
     ) -> None:
-        expected_playlist_id = self._edit_view.current_playlist_id
+        edit_view = self._edit_view
+        if edit_view is None:
+            return
+        expected_playlist_id = edit_view.current_playlist_id
         if not expected_playlist_id:
             return
         self._playlist_transfers.import_jwl_items(
             paths,
             section_id=section_id,
-            completed=lambda items: self._edit_view.commit_imported_jwl_items(
+            completed=lambda items: edit_view.commit_imported_jwl_items(
                 items,
                 insert_at=insert_at,
                 expected_playlist_id=expected_playlist_id,
@@ -2298,22 +2366,33 @@ class PlaylistWidget(QWidget):
     def set_watched_folder(self, path: str) -> None:
         """Chamado pelo main_window quando a configuração muda."""
         self._watched_folder = path
-        self._list_view.set_watched_folder(path)
-        self._folder_watcher.set_root(path)
+        if self._list_view is not None:
+            self._list_view.set_watched_folder(path)
+        if self._folder_watcher is not None:
+            self._folder_watcher.set_root(path)
 
     def _on_folder_changed(self) -> None:
         """O watcher detectou mudança na pasta raiz ou subpastas (debounced)."""
-        if self._stack.currentIndex() == 1 and self._edit_view._is_watched:
-            self._edit_view.supersede_watched_folder_refresh()
+        edit_view = self._edit_view
+        if (
+            edit_view is not None
+            and self._stack.currentIndex() == 1
+            and edit_view._is_watched
+        ):
+            edit_view.supersede_watched_folder_refresh()
         self._wf_root_refresh_pending = True
         self._wf_refresh_debounce.start()
 
     def _on_subfolder_changed(self, path: str) -> None:
         """Mudança em subpasta específica — debounced."""
-        if (self._stack.currentIndex() == 1
-                and self._edit_view._is_watched
-                and self._edit_view._watched_path == path):
-            self._edit_view.supersede_watched_folder_refresh()
+        edit_view = self._edit_view
+        if (
+            edit_view is not None
+            and self._stack.currentIndex() == 1
+            and edit_view._is_watched
+            and edit_view._watched_path == path
+        ):
+            edit_view.supersede_watched_folder_refresh()
             self._wf_pending_sub_path = path
             self._wf_refresh_debounce.start()
 
@@ -2324,18 +2403,21 @@ class PlaylistWidget(QWidget):
         self._wf_root_refresh_pending = False
         self._wf_pending_sub_path = ""
 
+        edit_view = self._edit_view
         edit_is_open = (
-            self._stack.currentIndex() == 1
-            and self._edit_view._is_watched
+            edit_view is not None
+            and self._stack.currentIndex() == 1
+            and edit_view._is_watched
         )
         if refresh_root and not edit_is_open:
             self._list_view.refresh_watched()
         subfolder_matches = (
             bool(subfolder_path)
-            and self._edit_view._watched_path == subfolder_path
+            and edit_view is not None
+            and edit_view._watched_path == subfolder_path
         )
         if edit_is_open and (refresh_root or subfolder_matches):
-            self._edit_view.refresh_watched_folder()
+            edit_view.refresh_watched_folder()
 
         if refresh_root or subfolder_path:
             self._watched_folder_playlist_store.notify_external_change()
@@ -2364,11 +2446,14 @@ class PlaylistWidget(QWidget):
         pl.setdefault("items", [])
         self._playlists.append(pl)
         self._persist_playlists()
-        self._list_view.refresh()
-        self._edit_view.load_playlist(pl)
+        if self._list_view is not None:
+            self._list_view.refresh()
+        edit_view = self._edit_view
+        if edit_view is not None:
+            edit_view.load_playlist(pl)
 
     def open_pdf_as_temp_playlist(self, items: list, pdf_stem: str) -> str:
-        playlist_id = self._edit_view.load_temp_playlist(
+        playlist_id = self._ensure_edit_view().load_temp_playlist(
             items,
             self.lang,
             name=f"📄  {pdf_stem}",
@@ -2382,14 +2467,15 @@ class PlaylistWidget(QWidget):
         url   = item.get("url", "")
         title = item.get("title", "")
         pl = [dict(playlist_item) for playlist_item in items]
-        source = getattr(self._edit_view, "_pl", None) or {}
+        edit_view = self._edit_view
+        source = getattr(edit_view, "_pl", None) or {}
         container_id = str(source.get("id") or "")
         origin_kind = (
             "temporary"
-            if getattr(self._edit_view, "_is_temp", False)
+            if getattr(edit_view, "_is_temp", False)
             else "playlist"
         )
-        if getattr(self._edit_view, "_is_watched", False):
+        if getattr(edit_view, "_is_watched", False):
             origin_kind = "linked_folder" if container_id else "temporary"
         for playlist_item in pl:
             playlist_item["origin_kind"] = origin_kind
@@ -2406,7 +2492,7 @@ class PlaylistWidget(QWidget):
         *,
         name: str | None = None,
     ) -> str:
-        playlist_id = self._edit_view.load_temp_playlist(items, lang, name=name)
+        playlist_id = self._ensure_edit_view().load_temp_playlist(items, lang, name=name)
         self._stack.setCurrentIndex(1)
         return playlist_id
 
@@ -2415,22 +2501,26 @@ class PlaylistWidget(QWidget):
         """Persist an original media duration through the active playlist owner."""
         if not item_id or duration_ms <= 0:
             return
-        self._edit_view.notify_duration(item_id, duration_ms)
+        if self._edit_view is not None:
+            self._edit_view.notify_duration(item_id, duration_ms)
 
     def append_temp_playlist_items(
         self,
         playlist_id: str,
         items: list[dict],
     ) -> bool:
-        playlist = self._edit_view._pl
+        edit_view = self._edit_view
+        if edit_view is None:
+            return False
+        playlist = edit_view._pl
         if (
-            not self._edit_view._is_temp
+            not edit_view._is_temp
             or playlist is None
             or playlist.get("id") != playlist_id
         ):
             return False
         playlist.setdefault("items", []).extend(copy.deepcopy(items))
-        self._edit_view._reconcile_playlist()
+        edit_view._reconcile_playlist()
         return True
 
     def get_playlist_names(self) -> list[tuple[str, str]]:
@@ -2469,10 +2559,12 @@ class PlaylistWidget(QWidget):
             )
 
         self._persist_playlists()
+        edit_view = self._edit_view
         if (self._stack.currentIndex() == 1
-                and self._edit_view._pl
-                and self._edit_view._pl["id"] == pl_id):
-            self._edit_view._reconcile_playlist()
+                and edit_view is not None
+                and edit_view._pl
+                and edit_view._pl["id"] == pl_id):
+            edit_view._reconcile_playlist()
         return MediaInsertResult(
             added_items=tuple(added_items),
             duplicate_items=partition.duplicate_items,
@@ -2488,7 +2580,8 @@ class PlaylistWidget(QWidget):
         }
         self._playlists.append(pl)
         self._persist_playlists()
-        self._list_view.refresh()
+        if self._list_view is not None:
+            self._list_view.refresh()
         return pl["id"]
 
     def _persist_playlists(self) -> None:
@@ -2496,6 +2589,7 @@ class PlaylistWidget(QWidget):
         self._media_tree_runtime.snapshots.request(
             f"playlists:{self._playlist_repository.path}",
             lambda: self._playlist_repository.save_strict(snapshot),
+            conflict_key=file_resource_key(self._playlist_repository.path),
         )
 
     # ── i18n ──────────────────────────────────────────────────────────────
@@ -2506,35 +2600,46 @@ class PlaylistWidget(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self._list_view.retranslateUi()
-        self._edit_view.retranslateUi()
+        if self._list_view is not None:
+            self._list_view.retranslateUi()
+        if self._edit_view is not None:
+            self._edit_view.retranslateUi()
 
     def apply_theme(self) -> None:
-        self._list_view.apply_theme()
-        self._edit_view.apply_theme()
+        if self._list_view is not None:
+            self._list_view.apply_theme()
+        if self._edit_view is not None:
+            self._edit_view.apply_theme()
 
     def cleanup(self) -> None:
         """Stop background work owned by child views."""
+        if self.preparation_handle is not None:
+            self.preparation_handle.cancel()
         self._cleanup_timer.stop()
-        self._wf_refresh_debounce.stop()
-        for signal, slot in (
-            (self._folder_watcher.changed, self._on_folder_changed),
-            (self._folder_watcher.subfolder_changed, self._on_subfolder_changed),
-        ):
+        if hasattr(self, "_wf_refresh_debounce"):
+            self._wf_refresh_debounce.stop()
+        if self._folder_watcher is not None:
+            for signal, slot in (
+                (self._folder_watcher.changed, self._on_folder_changed),
+                (self._folder_watcher.subfolder_changed, self._on_subfolder_changed),
+            ):
+                try:
+                    signal.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+        if self._playlist_transfers is not None:
             try:
-                signal.disconnect(slot)
-            except (RuntimeError, TypeError):
-                pass
-        try:
-            self._playlist_transfers.shutdown()
-        except Exception:  # noqa: BLE001 - widget cleanup boundary
-            log_ignored_exception(__name__, "Could not stop playlist transfers")
-        try:
-            self._list_view.cleanup()
-        except Exception:  # noqa: BLE001 - widget cleanup boundary
-            log_ignored_exception(__name__, "Could not cleanup playlist list view")
-        try:
-            self._edit_view.cleanup()
-        except Exception:  # noqa: BLE001 - widget cleanup boundary
-            log_ignored_exception(__name__, "Could not cleanup playlist edit view")
+                self._playlist_transfers.shutdown()
+            except Exception:  # noqa: BLE001 - widget cleanup boundary
+                log_ignored_exception(__name__, "Could not stop playlist transfers")
+        if self._list_view is not None:
+            try:
+                self._list_view.cleanup()
+            except Exception:  # noqa: BLE001 - widget cleanup boundary
+                log_ignored_exception(__name__, "Could not cleanup playlist list view")
+        if self._edit_view is not None:
+            try:
+                self._edit_view.cleanup()
+            except Exception:  # noqa: BLE001 - widget cleanup boundary
+                log_ignored_exception(__name__, "Could not cleanup playlist edit view")
         self._cleanup_queue.flush()

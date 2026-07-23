@@ -32,10 +32,11 @@ class MediaTreeRuntime(QObject):
         media_cache_dir: str | Path,
         *,
         max_workers: int = 2,
+        resource_lanes: ResourceLaneRegistry | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self.resource_lanes = ResourceLaneRegistry()
+        self.resource_lanes = resource_lanes or ResourceLaneRegistry()
         self.presentation_workers = ThreadedWorkerPool()
         self.registry = MediaStateRegistry(self)
         self.operations = MediaOperationCoordinator(

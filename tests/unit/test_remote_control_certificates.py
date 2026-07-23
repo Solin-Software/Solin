@@ -13,12 +13,14 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 import pytest
 
 from solin.core.remote_control.certificates import (
-    PRIVATE_LAN_NETWORKS,
     TLSCertificateStore,
     TLSProvisioningState,
     TrustAnchorRotationRequiredError,
-    parse_private_lan_ipv4,
     verification_code,
+)
+from solin.core.remote_control.private_network import (
+    PRIVATE_LAN_NETWORKS,
+    parse_private_lan_ipv4,
 )
 from solin.core.remote_control.server import RemoteControlServerBinding
 

@@ -40,7 +40,6 @@ class LanguageSectionMixin:
         if key not in self._theme_persistent_connections:
             svc.languages_ready.connect(self._on_jw_languages_ready)
             self._theme_persistent_connections.add(key)
-        svc.fetch_if_needed()
         self._lang_card = card
         return card
 

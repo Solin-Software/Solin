@@ -102,6 +102,28 @@ def test_default_password_hash_uses_required_scrypt_cost() -> None:
     )
 
 
+def test_hasher_construction_does_not_run_scrypt_but_invalid_login_does_once(
+    monkeypatch,
+) -> None:
+    derivations = []
+
+    def derive(_password, _salt, parameters):
+        derivations.append(parameters)
+        return b"x" * parameters.length
+
+    monkeypatch.setattr(ScryptPasswordHasher, "_derive", staticmethod(derive))
+    settings = _MemorySettings()
+    hasher = ScryptPasswordHasher()
+    store = RemoteControlCredentialsStore.create(
+        ProfileAppSettingsStore(cast(Any, settings)),
+        password_hasher=hasher,
+    )
+
+    assert derivations == []
+    assert store.authenticate("operator", "valid password") is False
+    assert derivations == [DEFAULT_SCRYPT_PARAMETERS]
+
+
 def test_credentials_are_profile_scoped_versioned_and_never_store_plaintext() -> None:
     store, settings = _credentials_store()
     password = "correct horse battery staple"

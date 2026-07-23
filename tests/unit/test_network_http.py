@@ -20,7 +20,7 @@ def test_get_json_uses_requests_with_timeout_and_headers(monkeypatch) -> None:
         calls.append((url, headers, params, timeout, stream, bool(verify)))
         return _Response()
 
-    monkeypatch.setattr(http.requests, "get", fake_get)
+    monkeypatch.setattr(requests, "get", fake_get)
 
     assert http.get_json(
         "https://example.test/data.json",
@@ -43,7 +43,7 @@ def test_get_json_wraps_transport_errors(monkeypatch) -> None:
     def fake_get(*_args, **_kwargs):
         raise requests.ConnectionError("offline")
 
-    monkeypatch.setattr(http.requests, "get", fake_get)
+    monkeypatch.setattr(requests, "get", fake_get)
 
     with pytest.raises(http.HttpTransportError):
         http.get_json("https://example.test/data.json", timeout=12)
@@ -62,7 +62,7 @@ def test_get_json_wraps_status_errors(monkeypatch) -> None:
         def close(self):
             return None
 
-    monkeypatch.setattr(http.requests, "get", lambda *_args, **_kwargs: _Response())
+    monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: _Response())
 
     with pytest.raises(http.HttpStatusError) as exc_info:
         http.get_json("https://example.test/missing.json", timeout=12)
@@ -80,7 +80,7 @@ def test_get_json_wraps_decode_errors(monkeypatch) -> None:
         def raise_for_status(self):
             return None
 
-    monkeypatch.setattr(http.requests, "get", lambda *_args, **_kwargs: _Response())
+    monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: _Response())
 
     with pytest.raises(http.HttpDecodeError):
         http.get_json("https://example.test/data.json", timeout=12)
@@ -106,7 +106,7 @@ def test_stream_get_yields_bytes_and_closes_response(monkeypatch) -> None:
             self.closed = True
 
     response = _Response()
-    monkeypatch.setattr(http.requests, "get", lambda *_args, **_kwargs: response)
+    monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: response)
 
     with http.stream_get("https://example.test/media.mp4", timeout=12) as stream:
         assert stream.content_length == 6
@@ -131,7 +131,7 @@ def test_get_bytes_enforces_response_limit(monkeypatch) -> None:
         def close(self):
             return None
 
-    monkeypatch.setattr(http.requests, "get", lambda *_args, **_kwargs: _Response())
+    monkeypatch.setattr(requests, "get", lambda *_args, **_kwargs: _Response())
 
     with pytest.raises(http.HttpResponseTooLargeError):
         http.get_bytes("https://example.test/image.jpg", timeout=12, max_bytes=5)

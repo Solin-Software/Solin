@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path, PureWindowsPath
+import shutil
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, TYPE_CHECKING
 
 from solin.core.foundation.exception_logging import log_ignored_exception
 from solin.core.foundation.runtime_paths import ProfilePaths
@@ -13,6 +17,14 @@ from solin.core.playlists.storage import (
     PlaylistRepository,
     PlaylistStoragePaths,
 )
+from solin.core.foundation.resource_keys import (
+    ResourceClaim,
+    file_resource_key,
+    folder_resource_key,
+)
+from solin.core.foundation.resource_lanes import ResourceLaneRegistry
+from solin.core.foundation.thread_workers import CancellationFlag
+from solin.core.meetings.thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
 
 if TYPE_CHECKING:
     from solin.core.meetings.tree_store import MeetingTreeStore
@@ -20,6 +32,360 @@ if TYPE_CHECKING:
 
 _REFERENCE_STATE_ERRORS = (OSError, UnicodeError, TypeError, ValueError)
 _MISSING = object()
+
+
+@dataclass(frozen=True, slots=True)
+class _FileGeneration:
+    exists: bool
+    size: int
+    modified_ns: int
+    device: int
+    inode: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileCleanupReferences:
+    media_paths: frozenset[str]
+    playlist_thumbnail_ids: frozenset[str]
+    meeting_thumbnail_names: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _InventoryEntry:
+    path: Path
+    generation: _FileGeneration
+    contained_media_paths: frozenset[str] = frozenset()
+    children: tuple[tuple[Path, _FileGeneration], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileMaintenanceInventory:
+    files: tuple[_InventoryEntry, ...]
+    directories: tuple[_InventoryEntry, ...]
+
+
+class MaintenanceSnapshotChanged(RuntimeError):
+    """Raised when persisted references changed during orphan cleanup."""
+
+
+class ProfileMaintenanceCancelled(RuntimeError):
+    """Raised when startup cancellation stops profile housekeeping."""
+
+
+class ProfileMaintenanceService:
+    """Fail-closed orphan cleanup from one immutable repository snapshot."""
+
+    def __init__(
+        self,
+        *,
+        storage_paths: PlaylistStoragePaths,
+        playlist_repository: PlaylistRepository,
+        meeting_tree_store: MeetingTreeStore,
+        profile_paths: ProfilePaths,
+        resource_lanes: ResourceLaneRegistry,
+    ) -> None:
+        self._storage_paths = storage_paths
+        self._playlist_repository = playlist_repository
+        self._meeting_tree_store = meeting_tree_store
+        self._profile_paths = profile_paths
+        self._resource_lanes = resource_lanes
+        self._pending_repository = PendingDeletionRepository.from_paths(
+            storage_paths,
+            resource_lanes=resource_lanes,
+        )
+        self._inventory = capture_profile_maintenance_inventory(profile_paths)
+
+    @property
+    def resource_claim(self) -> ResourceClaim:
+        return ResourceClaim(
+            exclusive_key=file_resource_key(self._storage_paths.pending_deletions_file),
+            shared_keys=(
+                file_resource_key(self._playlist_repository.path),
+                file_resource_key(self._meeting_tree_store.path),
+            ),
+        )
+
+    def run(self, cancellation: CancellationFlag | None = None) -> None:
+        paths = (
+            self._playlist_repository.path,
+            self._meeting_tree_store.path,
+            self._storage_paths.pending_deletions_file,
+        )
+        generation = tuple(_file_generation(path) for path in paths)
+        playlists = self._playlist_repository.load_strict()
+        meeting_data = self._meeting_tree_store.load_all_strict()
+        pending = self._pending_repository.load_strict()
+        _raise_if_maintenance_cancelled(cancellation)
+        self._ensure_generation(paths, generation)
+        references = build_profile_cleanup_references(playlists, meeting_data)
+        file_candidates, directory_candidates = self._candidates(references)
+
+        for candidate in file_candidates:
+            self._ensure_generation(paths, generation)
+            self._resource_lanes.run(
+                file_resource_key(candidate.path),
+                lambda current=candidate: _run_maintenance_action(
+                    cancellation,
+                    lambda: _unlink_if_unchanged(current),
+                ),
+            )
+        for candidate in directory_candidates:
+            self._ensure_generation(paths, generation)
+            self._resource_lanes.run(
+                folder_resource_key(candidate.path),
+                lambda current=candidate: _run_maintenance_action(
+                    cancellation,
+                    lambda: _rmtree_if_unchanged(current),
+                ),
+            )
+
+        still_pending = []
+        for raw_path in pending:
+            candidate = Path(raw_path)
+            normalized = _normalized_path(candidate)
+            thumbnail_id = ThumbnailStore.storage_id_from_filename(candidate.name)
+            if (
+                normalized in references.media_paths
+                or thumbnail_id in references.playlist_thumbnail_ids
+            ):
+                continue
+            self._ensure_generation(paths, generation)
+            try:
+                self._resource_lanes.run(
+                    file_resource_key(candidate),
+                    lambda current=candidate: _run_maintenance_action(
+                        cancellation,
+                        lambda: current.unlink(missing_ok=True),
+                    ),
+                )
+            except OSError:
+                still_pending.append(raw_path)
+        self._ensure_generation(paths, generation)
+        _run_maintenance_action(
+            cancellation,
+            lambda: self._pending_repository.save_strict(still_pending),
+        )
+
+    def _candidates(
+        self,
+        references: ProfileCleanupReferences,
+    ) -> tuple[tuple[_InventoryEntry, ...], tuple[_InventoryEntry, ...]]:
+        profile_paths = self._profile_paths
+        media_roots = {
+            Path(profile_paths.images_dir),
+            Path(profile_paths.embedded_dir),
+        }
+        thumbnail_root = Path(profile_paths.thumb_cache_dir)
+        meeting_root = Path(
+            meeting_thumb_dir(
+                meeting_thumb_cache_dir=profile_paths.meeting_thumb_cache_dir
+            )
+        )
+        files: list[_InventoryEntry] = []
+        for entry in self._inventory.files:
+            path = entry.path
+            if path.parent in media_roots:
+                if _normalized_path(path) not in references.media_paths:
+                    files.append(entry)
+                continue
+            if path.parent == thumbnail_root:
+                storage_id = ThumbnailStore.storage_id_from_filename(path.name)
+                if (
+                    storage_id is None
+                    or storage_id not in references.playlist_thumbnail_ids
+                ):
+                    files.append(entry)
+                continue
+            if (
+                path.parent == meeting_root
+                and path.name not in references.meeting_thumbnail_names
+            ):
+                files.append(entry)
+
+        directories = tuple(
+            entry
+            for entry in self._inventory.directories
+            if entry.contained_media_paths
+            and entry.contained_media_paths.isdisjoint(references.media_paths)
+        )
+        return tuple(files), directories
+
+    @staticmethod
+    def _ensure_generation(
+        paths: tuple[Path, ...],
+        expected: tuple[_FileGeneration, ...],
+    ) -> None:
+        if tuple(_file_generation(path) for path in paths) != expected:
+            raise MaintenanceSnapshotChanged(
+                "Playlist or meeting references changed during maintenance"
+            )
+
+
+def build_profile_cleanup_references(
+    playlists: list[dict],
+    meeting_data: dict[str, Any],
+) -> ProfileCleanupReferences:
+    playlist_items = _playlist_items_for_cleanup(playlists)
+    media_paths = {
+        _normalized_path(item["url"])
+        for item in playlist_items
+        if item["url"] and os.path.isabs(item["url"])
+    }
+    playlist_thumbnail_ids = {
+        thumbnail_storage_id(item["id"], item["url"])
+        for item in playlist_items
+        if item["id"]
+    }
+    meeting_thumbnail_names: set[str] = set()
+    for _tree_key, node in _strict_meeting_nodes(meeting_data):
+        if node.get("type") != "media":
+            continue
+        ref = node.get("media_ref")
+        if ref is not None and not isinstance(ref, dict):
+            raise ValueError("Meeting media_ref must be an object")
+        location = str((ref or {}).get("file_path") or "")
+        if location:
+            media_paths.add(_normalized_path(location))
+        item_id = str(node.get("id") or "")
+        if item_id:
+            meeting_thumbnail_names.add(meeting_thumb_cache_key(item_id))
+        for field in ("thumbnail_cache_key", "thumbnail_local_path"):
+            value = str(node.get(field) or "")
+            if value:
+                meeting_thumbnail_names.add(_stored_file_name(value))
+    return ProfileCleanupReferences(
+        media_paths=frozenset(media_paths),
+        playlist_thumbnail_ids=frozenset(playlist_thumbnail_ids),
+        meeting_thumbnail_names=frozenset(meeting_thumbnail_names),
+    )
+
+
+def capture_profile_maintenance_inventory(
+    profile_paths: ProfilePaths,
+) -> ProfileMaintenanceInventory:
+    """Capture deletion candidates before the profile can accept user work."""
+
+    files = tuple(
+        _InventoryEntry(path, _file_generation(path))
+        for directory in (
+            profile_paths.images_dir,
+            profile_paths.embedded_dir,
+            profile_paths.thumb_cache_dir,
+            meeting_thumb_dir(
+                meeting_thumb_cache_dir=profile_paths.meeting_thumb_cache_dir
+            ),
+        )
+        for path in _files_in(directory)
+    )
+    directories = tuple(
+        _InventoryEntry(
+            directory,
+            _file_generation(directory),
+            frozenset(_normalized_path(page) for page in directory.glob("page_*.jpg")),
+            tuple(
+                (child, _file_generation(child))
+                for child in sorted(_files_in(directory))
+            ),
+        )
+        for root in (
+            profile_paths.pdf_pages_dir,
+            profile_paths.pptx_pages_dir,
+            profile_paths.docx_pages_dir,
+        )
+        for directory in _directories_in(root)
+    )
+    return ProfileMaintenanceInventory(files=files, directories=directories)
+
+
+def _unlink_if_unchanged(entry: _InventoryEntry) -> None:
+    if _file_generation(entry.path) == entry.generation:
+        entry.path.unlink(missing_ok=True)
+
+
+def _rmtree_if_unchanged(entry: _InventoryEntry) -> None:
+    current_children = tuple(
+        (child, _file_generation(child))
+        for child in sorted(_files_in(entry.path))
+    )
+    if (
+        _file_generation(entry.path) == entry.generation
+        and current_children == entry.children
+    ):
+        shutil.rmtree(entry.path, ignore_errors=True)
+
+
+def _raise_if_maintenance_cancelled(
+    cancellation: CancellationFlag | None,
+) -> None:
+    if cancellation is not None and cancellation.is_set():
+        raise ProfileMaintenanceCancelled
+
+
+def _run_maintenance_action(
+    cancellation: CancellationFlag | None,
+    action: Callable[[], None],
+) -> None:
+    if cancellation is None:
+        action()
+        return
+    if not cancellation.run_if_active(action):
+        raise ProfileMaintenanceCancelled
+
+
+def _strict_meeting_nodes(meeting_data: dict[str, Any]):
+    from solin.core.meetings.tree_types import iter_nodes_strict
+
+    if not isinstance(meeting_data, dict):
+        raise ValueError("Meeting tree storage root must be an object")
+    trees = meeting_data.get("trees", {})
+    if not isinstance(trees, dict):
+        raise ValueError("Meeting tree storage 'trees' must be an object")
+    for tree_key, record in trees.items():
+        if not isinstance(record, dict) or "nodes" not in record:
+            raise ValueError(f"Meeting tree '{tree_key}' must contain nodes")
+        for node in iter_nodes_strict(
+            record["nodes"],
+            context=f"trees[{tree_key!r}].nodes",
+        ):
+            yield tree_key, node
+
+
+def _file_generation(path: Path) -> _FileGeneration:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return _FileGeneration(False, 0, 0, 0, 0)
+    return _FileGeneration(
+        True,
+        stat.st_size,
+        stat.st_mtime_ns,
+        stat.st_dev,
+        stat.st_ino,
+    )
+
+
+def _normalized_path(path: str | os.PathLike[str]) -> str:
+    return os.path.normcase(os.path.normpath(os.path.abspath(os.fspath(path))))
+
+
+def _stored_file_name(path: str) -> str:
+    native = Path(path).name
+    windows = PureWindowsPath(path).name
+    return windows if len(windows) < len(native) else native
+
+
+def _files_in(directory: str | os.PathLike[str]) -> tuple[Path, ...]:
+    root = Path(directory)
+    if not root.is_dir():
+        return ()
+    return tuple(path for path in root.iterdir() if path.is_file())
+
+
+def _directories_in(directory: str | os.PathLike[str]) -> tuple[Path, ...]:
+    root = Path(directory)
+    if not root.is_dir():
+        return ()
+    return tuple(path for path in root.iterdir() if path.is_dir())
 
 
 def _playlist_repository(paths: PlaylistStoragePaths) -> PlaylistRepository:

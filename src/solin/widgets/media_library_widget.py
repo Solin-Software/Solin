@@ -42,6 +42,7 @@ class MediaLibraryWidget(QWidget):
         songs_store: JWSongsStore | None = None,
         clip_fetch_thread_factory: ClipFetchThreadFactory | None = None,
         jw_cache_dir: str | os.PathLike[str],
+        defer_qml: bool = False,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -49,6 +50,7 @@ class MediaLibraryWidget(QWidget):
         self.lang = lang_manager
         self._cache_manager = cache_manager
         self._jw_cache_dir = jw_cache_dir
+        self._defer_qml = defer_qml
         self.items: list[dict] = []
         self.filtered_items: list[dict] = []
         if self.kind == "songs":
@@ -95,7 +97,7 @@ class MediaLibraryWidget(QWidget):
         self.qml_widget = QQuickWidget()
         self.qml_widget.setParent(self)
         self.qml_widget.installEventFilter(self)
-        configure_qml_host(
+        self.qml_load_handle = configure_qml_host(
             self.qml_widget,
             type_name="MediaLibraryView",
             clear_color=PALETTE.bg0,
@@ -105,6 +107,7 @@ class MediaLibraryWidget(QWidget):
                 "controller": self.bridge,
             },
             mouse_tracking=True,
+            defer_load=self._defer_qml,
         )
         root.addWidget(self.qml_widget, stretch=1)
 
@@ -644,6 +647,7 @@ class MediaLibraryWidget(QWidget):
         except Exception:  # noqa: BLE001 - Qt signal cleanup boundary
             log_ignored_exception(__name__, "Could not disconnect media cache batch signals")
         if hasattr(self, "qml_widget"):
+            self.qml_load_handle.cancel()
             try:
                 self.qml_widget.removeEventFilter(self)
             except Exception:  # noqa: BLE001 - Qt event-filter cleanup boundary

@@ -9,6 +9,7 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QFont, QFontDatabase
 from PySide6.QtSvg import QSvgRenderer
 
+from functools import lru_cache
 import sys
 
 from solin.styles.theme import PALETTE
@@ -91,8 +92,9 @@ def make_emoji_flag_icon(emoji: str, size: int = 24) -> QIcon:
     return QIcon(pix)
 
 
-def make_flag_icon(svg_str: str, size: int = 24) -> QIcon:
-    """Renderiza SVG de bandeira (multi-color) como QIcon, sem substituição de cor."""
+@lru_cache(maxsize=128)
+def _render_flag_icon(svg_str: str, size: int) -> QIcon:
+    """Render one immutable multicolor flag icon on the GUI thread."""
     data = QByteArray(svg_str.encode("utf-8"))
     renderer = QSvgRenderer(data)
     if not renderer.isValid():
@@ -105,9 +107,13 @@ def make_flag_icon(svg_str: str, size: int = 24) -> QIcon:
     return QIcon(pix)
 
 
-def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
-    """Renderiza SVG string como QIcon, substituindo 'currentColor' por *color*."""
-    color = str(color or PALETTE.text_secondary)
+def make_flag_icon(svg_str: str, size: int = 24) -> QIcon:
+    return QIcon(_render_flag_icon(svg_str, size))
+
+
+@lru_cache(maxsize=512)
+def _render_icon(svg_str: str, size: int, color: str) -> QIcon:
+    """Render one immutable themed icon on the GUI thread."""
     svg = svg_str.replace("currentColor", color)
     data = QByteArray(svg.encode("utf-8"))
     renderer = QSvgRenderer(data)
@@ -115,10 +121,16 @@ def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
         return QIcon()
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pix)
-    renderer.render(p)
-    p.end()
+    painter = QPainter(pix)
+    renderer.render(painter)
+    painter.end()
     return QIcon(pix)
+
+
+def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
+    """Renderiza SVG string como QIcon, substituindo 'currentColor' por *color*."""
+    color = str(color or PALETTE.text_secondary)
+    return QIcon(_render_icon(svg_str, size, color))
 
 
 # ── Qt widget icons (usa currentColor para fácil coloração) ───────────────────

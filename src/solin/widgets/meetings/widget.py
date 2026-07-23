@@ -24,8 +24,9 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QObject, Signal, Slot, QTimer,
-    QCoreApplication, QEvent
+    QCoreApplication, QEvent, QRect, Qt,
 )
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QStackedWidget,
 )
@@ -82,6 +83,8 @@ from .visuals import (
 )
 from .week_nav import WeekNavBar, WeekPicker
 from ...ui.media_info import MediaInfoQueue
+from ...ui.async_load import AsyncLoadHandle
+from ...ui.incremental_load import IncrementalLoadHandle
 
 
 _POST_FRAME_TASK_FALLBACK_MS = 500
@@ -741,6 +744,10 @@ class MeetingsWidget(QWidget):
         parent=None,
     ):
         super().__init__(parent)
+        from ...bootstrap.startup_timeline import startup_timeline
+
+        startup = startup_timeline()
+        startup.mark("meetings_constructor_started")
         self._lang_mgr  = lang_manager
         self._notifications = notifications
         self._playback_protection = playback_protection
@@ -793,6 +800,7 @@ class MeetingsWidget(QWidget):
                 ),
             )
         )
+        startup.mark("meetings_controller_factory_ready")
         self._set_lang_from_mgr()
 
         self._preparation.tree_changed.connect(self._on_tree_changed)
@@ -806,6 +814,7 @@ class MeetingsWidget(QWidget):
         self._memorial_svc.memorial_ready.connect(self._on_memorial_ready)
         self._memorial_svc.memorial_status.connect(self._on_memorial_status)
         self._memorial_svc.memorial_progress.connect(self._on_memorial_progress)
+        startup.mark("meetings_memorial_service_ready")
 
         if lang_manager and hasattr(lang_manager, "language_changed"):
             lang_manager.language_changed.connect(self._on_lang_changed)
@@ -816,12 +825,9 @@ class MeetingsWidget(QWidget):
                 self._on_media_lang_changed
             )
 
-        self._build()
-        self._navigate_to(self._monday)
         self._auto_download_timer = QTimer(self)
         self._auto_download_timer.setSingleShot(True)
         self._auto_download_timer.timeout.connect(self.sync_automatic_downloads)
-        self._auto_download_timer.start(3000)
 
         self._folder_watcher = self._watched_folder_watcher_factory(self)
         self._folder_watcher.changed.connect(self._on_folder_changed)
@@ -830,6 +836,77 @@ class MeetingsWidget(QWidget):
         self._wf_debounce.setSingleShot(True)
         self._wf_debounce.setInterval(600)
         self._wf_debounce.timeout.connect(self._do_folder_refresh)
+        startup.mark("meetings_watchers_ready")
+        initial_monday = self._monday
+        initial_context = self._current_media_context()
+        self._snapshot_preparation = AsyncLoadHandle(
+            lambda: (
+                initial_monday,
+                initial_context.api_code,
+                initial_context.is_sign_language,
+                self._meeting_tree_store.snapshots_for_week(
+                    initial_monday,
+                    initial_context.api_code,
+                    initial_context.is_sign_language,
+                ),
+            ),
+            self._apply_initial_snapshots,
+            self,
+            thread_name_prefix="meeting-startup",
+        )
+        self.preparation_handle = IncrementalLoadHandle(
+            (
+                self._build_root,
+                self._build_navbar,
+                self._build_overview,
+                self._install_overview,
+                lambda: self._overview.install_content(),
+                lambda: self._overview.build_mwb_card(),
+                lambda: self._overview.populate_mwb_card(),
+                lambda: self._overview.build_wt_card(),
+                lambda: self._overview.populate_wt_card(),
+                lambda: self._overview.build_memorial_card(),
+                lambda: self._overview.populate_memorial_card(),
+                self._finish_initial_shell,
+            ),
+            self,
+        )
+        startup.mark("meetings_preparation_ready")
+
+    def _finish_initial_shell(self) -> None:
+        self._overview.finish_build()
+        self._navbar.update_week(self._monday)
+        from ...bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("meetings_shell_built")
+        self._auto_download_timer.start(3000)
+        self._snapshot_preparation.start()
+        self.update()
+
+    def _apply_initial_snapshots(
+        self,
+        result: tuple[date, str, bool, dict[str, MeetingTreeSnapshot]],
+    ) -> None:
+        monday, language, is_sign_language, snapshots = result
+        context = self._current_media_context()
+        if (
+            monday != self._monday
+            or language != context.api_code
+            or bool(is_sign_language) != context.is_sign_language
+        ):
+            return
+        cache_key = self._saved_snapshot_cache_key_for(
+            monday,
+            language,
+            is_sign_language,
+        )
+        self._saved_snapshots[cache_key] = snapshots
+        db_label = snapshots.get("mwb").overview.title if snapshots.get("mwb") else ""
+        self._navbar.update_week(monday, db_label)
+        self._refresh_overview_cards(monday)
+        self._ensure_week(monday)
+        if self._memorial_svc.is_memorial_week(monday):
+            self._memorial_svc.load()
 
     def _current_media_context(self) -> JWMediaLanguageContext:
         return jw_media_language_context(self._lang_mgr, default_api_code="T")
@@ -890,27 +967,53 @@ class MeetingsWidget(QWidget):
         self._memorial_svc.set_lang(context.api_code)
 
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
+        self._build_root()
+        self._build_navbar()
+        self._build_overview()
+        self._install_overview()
 
+    def _build_root(self) -> None:
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
+        self._root_layout.setSpacing(0)
+
+    def _build_navbar(self) -> None:
         self._navbar = WeekNavBar()
         self._navbar.prev_week.connect(self._go_prev)
         self._navbar.next_week.connect(self._go_next)
         self._navbar.home_requested.connect(self._go_home)
         self._navbar.pick_requested.connect(self._show_picker)
-        root.addWidget(self._navbar)
+        self._root_layout.addWidget(self._navbar)
 
+    def _build_overview(self) -> None:
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background:{PALETTE.bg0};")
-        self._overview = Overview()
+        self._overview = Overview(defer_cards=True)
         self._overview.open_mwb.connect(lambda: self._open_detail("mwb"))
         self._overview.open_wt.connect(lambda: self._open_detail("wt"))
         self._overview.open_memorial.connect(self._open_memorial_detail)
-        self._stack.addWidget(self._overview)
-        root.addWidget(self._stack, stretch=1)
 
-        self._navbar.update_week(self._monday)
+    def _install_overview(self) -> None:
+        self._stack.addWidget(self._overview)
+        self._root_layout.addWidget(self._stack, stretch=1)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if hasattr(self, "_stack"):
+            return
+        painter = QPainter(self)
+        painter.setPen(QColor(str(PALETTE.text_muted)))
+        painter.drawText(
+            self.rect().adjusted(0, 0, 0, -18),
+            Qt.AlignmentFlag.AlignCenter,
+            self.tr("Loading…"),
+        )
+        bar = QRect((self.width() - 220) // 2, self.height() // 2 + 16, 220, 3)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(str(PALETTE.surface)))
+        painter.drawRoundedRect(bar, 1, 1)
+        painter.setBrush(QColor(str(PALETTE.accent)))
+        painter.drawRoundedRect(QRect(bar.x(), bar.y(), 72, bar.height()), 1, 1)
 
     def apply_theme(self) -> None:
         self.setStyleSheet(f"background:{PALETTE.bg0};")
@@ -1502,6 +1605,8 @@ class MeetingsWidget(QWidget):
 
     def cleanup(self) -> None:
         """Para serviços com QThread antes da janela principal ser destruída."""
+        self.preparation_handle.cancel()
+        self._snapshot_preparation.cancel()
         timer = getattr(self, "_auto_download_timer", None)
         if timer:
             timer.stop()

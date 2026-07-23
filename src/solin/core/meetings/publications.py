@@ -42,6 +42,7 @@ from .jwpub_cache import JwpubChecksumStore
 from .publication_worker import JwpubWorker
 
 log = logging.getLogger(__name__)
+_STOPPING_PUBLICATION_SERVICES: set[object] = set()
 
 
 @dataclass(slots=True)
@@ -135,6 +136,9 @@ class JwpubService(QObject):
     def shutdown(self, wait_ms: int = 3000, delete_when_stopped: bool = False) -> None:
         """Encerra explicitamente a worker thread de reuniões."""
         self._pending_loads.clear()
+        worker = getattr(self, "_worker", None)
+        if worker is not None:
+            worker.request_cancel()
         thread: QThread | None = getattr(self, "_thread", None)
         if thread is None:
             return
@@ -154,7 +158,13 @@ class JwpubService(QObject):
                 return
             if still_running and delete_when_stopped:
                 self.setParent(None)
-                thread.finished.connect(self.deleteLater)
+                _STOPPING_PUBLICATION_SERVICES.add(self)
+
+                def release_service() -> None:
+                    _STOPPING_PUBLICATION_SERVICES.discard(self)
+                    self.deleteLater()
+
+                thread.finished.connect(release_service)
 
     def __del__(self):
         try:

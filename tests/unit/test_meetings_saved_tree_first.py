@@ -510,6 +510,35 @@ def test_automatic_download_requests_current_and_next_week_through_preparation()
     )
 
 
+def test_initial_shell_schedules_automatic_downloads_before_snapshot_result() -> None:
+    monday = date(2026, 5, 25)
+    calls: list[str] = []
+    widget = SimpleNamespace(
+        _overview=SimpleNamespace(finish_build=lambda: calls.append("overview")),
+        _navbar=SimpleNamespace(
+            update_week=lambda monday_arg: calls.append(f"navbar:{monday_arg}")
+        ),
+        _monday=monday,
+        _auto_download_timer=SimpleNamespace(
+            start=lambda interval: calls.append(f"timer:{interval}")
+        ),
+        _snapshot_preparation=SimpleNamespace(
+            start=lambda: calls.append("snapshot")
+        ),
+        update=lambda: calls.append("update"),
+    )
+
+    MeetingsWidget._finish_initial_shell(widget)
+
+    assert calls == [
+        "overview",
+        f"navbar:{monday}",
+        "timer:3000",
+        "snapshot",
+        "update",
+    ]
+
+
 def test_destination_empty_state_is_terminal_instead_of_loading() -> None:
     monday = date(2026, 5, 25)
     widget = SimpleNamespace(

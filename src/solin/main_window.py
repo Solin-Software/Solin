@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
-from PySide6.QtCore import QObject, QTimer, Signal, QEvent
+from PySide6.QtCore import QObject, QTimer, Signal, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -72,13 +72,6 @@ from .controllers.projection_window_controller import (
     ProjectionWindowContext,
     ProjectionWindowController,
 )
-from .controllers.remote_control_controller import (
-    RemoteControlController,
-    RemoteControlDependencies,
-)
-from .controllers.remote_media_thumbnail_extractor import (
-    RemoteMediaThumbnailExtractor,
-)
 from .controllers.shutdown_controller import (
     ShutdownController,
     ShutdownDependencies,
@@ -128,11 +121,15 @@ from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
+from .core.foundation.resource_lanes import ResourceLaneRegistry
 from .core.meetings.jwpub_cache import JwpubChecksumStore
 from .core.profiles.models import ProfileInfo
 from .widgets.projection.monitor_manager import MonitorManagerPopup
 from .ui.qml.timer_bridge import TimerBridge
 from .ui.window_focus import raise_projection_window
+
+
+_STARTUP_SCREEN_SETTLE_MS = 900
 
 if TYPE_CHECKING:
     from .core.ingest.watched_folder import WatchedFolderWatcher
@@ -156,6 +153,8 @@ if TYPE_CHECKING:
 
 
 class MainWindow(QMainWindow):
+    first_frame_presented = Signal()
+    startup_handoff_completed = Signal()
     _auto_share_finished = Signal(int, bool, bool)
     _auto_share_mouse_interference_warning = Signal()
     proj_bar: Any
@@ -185,6 +184,7 @@ class MainWindow(QMainWindow):
         playlist_repository: PlaylistRepository,
         queue_pending_deletion: Callable[[str], None],
         meeting_tree_store: MeetingTreeStore,
+        resource_lanes: ResourceLaneRegistry,
         meeting_linked_folder_sync: MeetingLinkedFolderSync,
         profile_media_store: ProfileMediaStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
@@ -203,6 +203,10 @@ class MainWindow(QMainWindow):
         active_profile: ProfileInfo,
     ):
         super().__init__()
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup = startup_timeline()
+        startup.mark("main_window_constructor_started")
         self.lang = lang_manager
         self.runtime_paths = runtime_paths
         self.profile_paths = profile_paths
@@ -210,6 +214,7 @@ class MainWindow(QMainWindow):
         self.media_cache_manager = media_cache_manager
         self.media_tree_runtime = MediaTreeRuntime(
             media_cache_manager.media_cache_dir,
+            resource_lanes=resource_lanes,
             parent=self,
         )
         watched_folder_playlist_store.bind_resource_lanes(
@@ -257,6 +262,12 @@ class MainWindow(QMainWindow):
         self._monitor_popup = None
         self._ipc_controller = None
         self._remote_services = None
+        self._remote_control = None
+        self._remote_media_thumbnail_extractor = None
+        self._media_info_queue_factory = media_info_queue_factory
+        self._first_frame_presented = False
+        self._deferred_startup_started = False
+        self._application_maintenance = service_factories.application_maintenance
         self._jwl_tmp_files: set[str] = set()
         self._conversion_threads = OwnedQThreadRegistry()
         self._shutdown_controller = None
@@ -316,6 +327,11 @@ class MainWindow(QMainWindow):
             self.timer_engine,
             timer_session,
             self._monitor_allocation,
+        )
+        self._timer_output_startup_timer = QTimer(self)
+        self._timer_output_startup_timer.setSingleShot(True)
+        self._timer_output_startup_timer.timeout.connect(
+            self._reconcile_timer_output_after_startup
         )
         self.timer_monitors = TimerMonitorController(
             screen_manager=self.screen_mgr,
@@ -528,6 +544,7 @@ class MainWindow(QMainWindow):
             browser_image_fetch_service_factory=browser_image_fetch_service_factory,
         )
         self._build_ui()
+        startup.mark("main_window_tree_built")
         self._playlist_imports = PlaylistImportController(
             PlaylistImportContext(
                 dialog_parent=self,
@@ -601,6 +618,7 @@ class MainWindow(QMainWindow):
                 import_native_playlists=self._import_native_playlists_from_shell,
             ),
         )
+        startup.mark("media_routing_controllers_ready")
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(
             ProjectionIntegrationContext(
@@ -632,9 +650,7 @@ class MainWindow(QMainWindow):
                 camera_service=self._camera_service,
                 projection_windows=self.projection_session.all_windows,
                 playlist_edit_is_temp=lambda: getattr(
-                    self.playlist_widget._edit_view,
-                    "_is_temp",
-                    False,
+                    self.playlist_widget, "is_temporary_edit", False
                 ),
                 meeting_service=lambda: self.meetings_widget.get_service(),
                 dialog_parent=self,
@@ -774,53 +790,12 @@ class MainWindow(QMainWindow):
                 open_meeting_schedule_settings=self._open_meeting_schedule_settings,
             ),
         )
+        startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
-
-        self._remote_media_thumbnail_extractor = RemoteMediaThumbnailExtractor(
-            media_info_queue_factory,
-            self,
+        self.settings_widget.remote_control_settings_changed.connect(
+            self._ensure_remote_control_started
         )
-        self._remote_control = RemoteControlController(
-            RemoteControlDependencies(
-                runtime_paths=self.runtime_paths,
-                active_profile_id=self.active_profile.id,
-                active_profile_name=self.active_profile.name,
-                active_profile_locale=lambda: self.lang.current_code,
-                settings=self._remote_control_settings,
-                credentials=self._remote_control_credentials,
-                playlist_repository=self.playlist_repository,
-                meeting_tree_store=self.meeting_tree_store,
-                watched_folder_settings=self._watched_folder_settings,
-                watched_folder_playlist_store=self._watched_folder_playlist_store,
-                playlist_thumbnail_store=self._playlist_thumbnail_store,
-                meeting_thumbnail_store=self._meeting_thumbnail_store,
-                media_thumbnail_extractor=self._remote_media_thumbnail_extractor,
-                projection_session=self.projection_session,
-                projection_bar=self.proj_bar,
-                media_controller=self.media_ctrl,
-                media_projection=self._media_projection,
-                projection_stop=self._projection_stop,
-                playback_protection=self.playback_protection,
-                settings_widget=self.settings_widget,
-            ),
-            self,
-        )
-        self._remote_control.runtime_status_reported.connect(
-            self._quick_toolbar.set_remote_control_status
-        )
-        self._remote_control.session_inventory_reported.connect(
-            self._quick_toolbar.set_remote_sessions
-        )
-        self._remote_control.session_revocation_reported.connect(
-            self._quick_toolbar.set_remote_session_revocation_result
-        )
-        self._quick_toolbar.remote_session_disconnect_requested.connect(
-            self._remote_control.revoke_session
-        )
-        self._quick_toolbar.remote_sessions_disconnect_all_requested.connect(
-            self._remote_control.revoke_sessions
-        )
-        self.lang.language_changed.connect(self._remote_control.on_language_changed)
+        startup.mark("main_window_signals_connected")
 
         self._bootstrap_controller = MainWindowBootstrapController(
             MainWindowStartupDependencies(
@@ -841,21 +816,22 @@ class MainWindow(QMainWindow):
                     open_media_files=self.open_media_files,
                 ),
                 remote_services_factory=lambda: service_factories.remote_services(self),
-                apply_stylesheet=self._apply_global_stylesheet,
             )
         )
-        startup_resources = self._bootstrap_controller.finish_startup()
+        startup_resources = self._bootstrap_controller.prepare_before_show()
         self._monitor_popup = startup_resources.monitor_popup
         self._ipc_controller = startup_resources.ipc_controller
-        self._remote_services = startup_resources.remote_services
-        self._remote_control.start()
+        self.startup_handoff_completed.connect(
+            self._start_deferred_startup,
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._shutdown_controller = ShutdownController(
             ShutdownDependencies(
                 projection_session=self.projection_session,
                 timer_output=self.timer_output,
                 services=ShutdownServices(
-                    remote_control=self._remote_control,
-                    remote_services=self._remote_services,
+                    remote_control=lambda: self._remote_control,
+                    remote_services=lambda: self._remote_services,
                     download_notifications=self._media_download_notifications,
                     playback_notifications=self._media_playback_notifications,
                     notifications=self.notifications,
@@ -868,7 +844,7 @@ class MainWindow(QMainWindow):
                     camera=self._camera_service,
                     obs=self._obs_service,
                     zoom=self._zoom_service,
-                    ipc=self._ipc_controller,
+                    ipc=lambda: self._ipc_controller,
                 ),
                 widget_providers=(
                     lambda: self.meetings_widget,
@@ -882,12 +858,125 @@ class MainWindow(QMainWindow):
                 queue_pending_deletion=queue_pending_deletion,
                 save_window_state=self._window_state.save_size,
                 cleanup_lazy_pages=self._lazy_pages.cleanup_browser,
+                cancel_ui_preparation=self._ui_preparation.cancel,
             )
         )
+        startup.mark("main_window_constructor_ready")
 
-        # Show the clock window on any monitor reserved for the timer once the
-        # screens have settled (mirrors the media projection startup timing).
-        QTimer.singleShot(900, self.timer_output.reconcile)
+    def _start_deferred_startup(self) -> None:
+        if self._deferred_startup_started or getattr(self, "_closing", False):
+            return
+        self._deferred_startup_started = True
+        resources = self._bootstrap_controller.start_after_first_frame()
+        self._remote_services = resources.remote_services
+        self._application_maintenance()
+        self.settings_widget.start_deferred_services()
+        self._ui_preparation.start()
+        self._ensure_remote_control_started()
+        self._timer_output_startup_timer.start(_STARTUP_SCREEN_SETTLE_MS)
+
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("deferred_startup_started")
+
+    def complete_startup_handoff(self) -> None:
+        """Release deferred services only after the visible window handoff."""
+
+        self.startup_handoff_completed.emit()
+
+    def _reconcile_timer_output_after_startup(self) -> None:
+        if not getattr(self, "_closing", False):
+            self.timer_output.reconcile()
+
+    def _on_ui_preparation_completed(self) -> None:
+        if getattr(self, "_closing", False):
+            return
+        from .bootstrap.startup_timeline import (
+            startup_benchmark_exit_requested,
+            startup_timeline,
+        )
+
+        timeline = startup_timeline()
+        timeline.record_measurements(
+            "ui_preparation_dispatch",
+            self._ui_preparation.dispatch_durations_ms,
+        )
+        timeline.record_measurements(
+            "ui_preparation_units",
+            self._ui_preparation.unit_durations_ms,
+        )
+        for task_index, durations in self._ui_preparation.unit_durations_by_task.items():
+            timeline.record_measurements(
+                f"ui_preparation_task_{task_index}",
+                durations,
+            )
+        timeline.mark("deferred_startup_complete")
+        timeline.emit_json()
+        if startup_benchmark_exit_requested():
+            self.close()
+
+    def _ensure_remote_control_started(self) -> None:
+        if self._remote_control is not None or not self._remote_control_settings.enabled():
+            return
+        self._remote_control = self._create_remote_control()
+        self._remote_control.start()
+
+    def _create_remote_control(self):
+        from .controllers.remote_control_controller import (
+            RemoteControlController,
+            RemoteControlDependencies,
+        )
+        from .controllers.remote_media_thumbnail_extractor import (
+            RemoteMediaThumbnailExtractor,
+        )
+
+        extractor = RemoteMediaThumbnailExtractor(
+            self._media_info_queue_factory,
+            self,
+        )
+        self._remote_media_thumbnail_extractor = extractor
+        controller = RemoteControlController(
+            RemoteControlDependencies(
+                runtime_paths=self.runtime_paths,
+                active_profile_id=self.active_profile.id,
+                active_profile_name=self.active_profile.name,
+                active_profile_locale=lambda: self.lang.current_code,
+                settings=self._remote_control_settings,
+                credentials=self._remote_control_credentials,
+                playlist_repository=self.playlist_repository,
+                meeting_tree_store=self.meeting_tree_store,
+                watched_folder_settings=self._watched_folder_settings,
+                watched_folder_playlist_store=self._watched_folder_playlist_store,
+                playlist_thumbnail_store=self._playlist_thumbnail_store,
+                meeting_thumbnail_store=self._meeting_thumbnail_store,
+                media_thumbnail_extractor=extractor,
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                media_projection=self._media_projection,
+                projection_stop=self._projection_stop,
+                playback_protection=self.playback_protection,
+                settings_widget=self.settings_widget,
+            ),
+            self,
+        )
+        controller.runtime_status_reported.connect(
+            self._quick_toolbar.set_remote_control_status
+        )
+        controller.session_inventory_reported.connect(
+            self._quick_toolbar.set_remote_sessions
+        )
+        controller.session_revocation_reported.connect(
+            self._quick_toolbar.set_remote_session_revocation_result
+        )
+        self._quick_toolbar.remote_session_disconnect_requested.connect(
+            controller.revoke_session
+        )
+        self._quick_toolbar.remote_sessions_disconnect_all_requested.connect(
+            controller.revoke_sessions
+        )
+        self.lang.language_changed.connect(controller.on_language_changed)
+        return controller
 
     def _route_browser_destination(
         self,
@@ -983,6 +1072,8 @@ class MainWindow(QMainWindow):
         self.stack = resources.stack
         self._lazy_pages = resources.lazy_pages
         self._navigation = resources.navigation
+        self._ui_preparation = resources.preparation
+        self._ui_preparation.completed.connect(self._on_ui_preparation_completed)
         self.right_col = resources.right_col
         self.proj_bar = resources.projection_bar
         self.songs_widget = resources.songs_widget
@@ -1144,6 +1235,17 @@ class MainWindow(QMainWindow):
         # Using a zero-delay singleShot ensures the OS has fully created the
         # window before we touch DWM / NSWindow.
         QTimer.singleShot(0, self._window_state.apply_titlebar_color)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._first_frame_presented:
+            return
+        self._first_frame_presented = True
+
+        from .bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("first_paint")
+        self.first_frame_presented.emit()
 
     def closeEvent(self, event):
         if getattr(self, "_closing", False):

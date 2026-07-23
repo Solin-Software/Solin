@@ -97,6 +97,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
     jw_songs_store = object()
     jwpub_checksum_store = object()
     installation_settings = object()
+    application_maintenance = lambda: None
     timer_session = object()
     active_profile = object()
 
@@ -124,6 +125,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             playlist_repository,
             queue_pending_deletion,
             meeting_tree_store,
+            resource_lanes,
             meeting_linked_folder_sync,
             profile_media_store,
             jwpub_import_thread_factory,
@@ -169,6 +171,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             self.playlist_repository = playlist_repository
             self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
+            self.resource_lanes = resource_lanes
             self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
@@ -236,6 +239,7 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
         installation_settings=installation_settings,
+        application_maintenance=application_maintenance,
         timer_session=timer_session,
         active_profile=active_profile,
     )
@@ -322,9 +326,10 @@ def test_launch_main_window_schedules_startup_media_after_window_is_shown(monkey
             (
                     "lang",
                     runtime_paths,
-                    profile_settings_bundle,
-                    jwpub_checksum_store,
+                profile_settings_bundle,
+                jwpub_checksum_store,
                 installation_settings,
+                application_maintenance,
             ),
         ),
         "show",
@@ -381,6 +386,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
     jw_songs_store = object()
     jwpub_checksum_store = object()
     installation_settings = object()
+    application_maintenance = lambda: None
     timer_session = object()
     active_profile = object()
 
@@ -408,6 +414,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             playlist_repository,
             queue_pending_deletion,
             meeting_tree_store,
+            resource_lanes,
             meeting_linked_folder_sync,
             profile_media_store,
             jwpub_import_thread_factory,
@@ -453,6 +460,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             self.playlist_repository = playlist_repository
             self.queue_pending_deletion = queue_pending_deletion
             self.meeting_tree_store = meeting_tree_store
+            self.resource_lanes = resource_lanes
             self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
@@ -517,6 +525,7 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
         jw_songs_store=jw_songs_store,
         jwpub_checksum_store=jwpub_checksum_store,
         installation_settings=installation_settings,
+        application_maintenance=application_maintenance,
         timer_session=timer_session,
         active_profile=active_profile,
     )
@@ -528,9 +537,10 @@ def test_launch_main_window_without_startup_media_does_not_schedule_open(monkeyp
             (
                     "lang",
                     runtime_paths,
-                    profile_settings_bundle,
-                    jwpub_checksum_store,
+                profile_settings_bundle,
+                jwpub_checksum_store,
                 installation_settings,
+                application_maintenance,
             ),
         ),
         "show",

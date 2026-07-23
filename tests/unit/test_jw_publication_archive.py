@@ -70,6 +70,30 @@ def test_download_jwpub_archive_raises_transport_independent_error(tmp_path):
         )
 
 
+def test_download_jwpub_archive_cancels_between_chunks_without_writing(tmp_path):
+    cancelled = False
+
+    class CancellableStream(_Stream):
+        def iter_bytes(self, chunk_size: int):
+            nonlocal cancelled
+            yield b"ab"
+            cancelled = True
+            yield b"cd"
+
+    destination = tmp_path / "cancelled.jwpub"
+
+    with pytest.raises(JwpubArchiveDownloadError, match="cancelled"):
+        download_jwpub_archive(
+            "https://example.test/mwb.jwpub",
+            destination,
+            stream_factory=lambda *_args, **_kwargs: CancellableStream(),
+            chunk_size=2,
+            cancelled=lambda: cancelled,
+        )
+
+    assert not destination.exists()
+
+
 def test_resolve_meeting_video_returns_simple_result(monkeypatch):
     class Resolver:
         def resolve_video(self, request):

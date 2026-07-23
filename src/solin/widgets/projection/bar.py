@@ -78,6 +78,7 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba, tooltip_stylesheet
 from solin.ui.themed_tooltip import install_themed_tooltip
+from solin.ui.incremental_load import IncrementalLoadHandle
 from solin.widgets.circular_timer import CircularTimerWidget
 from solin.ui.media_info import MediaInfoQueue
 from solin.widgets.common.themed_slider import ThemedHorizontalSlider
@@ -259,7 +260,20 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self._build_bar_ui()
-        self._build_overlay()
+        from solin.bootstrap.startup_timeline import startup_timeline
+
+        startup_timeline().mark("projection_bar_shell_constructed")
+        self.overlay: QWidget | None = None
+        self._overlay_ready = False
+        self.overlay_preparation_handle = IncrementalLoadHandle(
+            (
+                self._build_overlay,
+                self._build_overlay_preview,
+                self._build_overlay_timer,
+                self._finish_overlay,
+            ),
+            self,
+        )
         self._connect_media()
         self._playback_protection.enabledChanged.connect(
             self._sync_protected_media_controls
@@ -491,6 +505,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     # ── Overlay ───────────────────────────────────────────────────────────
 
     def _build_overlay(self):
+        if self.overlay is not None:
+            return
+        from solin.bootstrap.startup_timeline import startup_timeline
+
+        startup = startup_timeline()
         parent = self._container if self._container else self
         self.overlay = QWidget(parent)
         self.overlay.setVisible(False)
@@ -499,9 +518,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay.setStyleSheet(f"background: {PALETTE.bg0};")
         self.overlay.raise_()
 
-        ov_lay = QVBoxLayout(self.overlay)
-        ov_lay.setContentsMargins(0, 0, 0, 0)
-        ov_lay.setSpacing(0)
+        self._overlay_layout = QVBoxLayout(self.overlay)
+        self._overlay_layout.setContentsMargins(0, 0, 0, 0)
+        self._overlay_layout.setSpacing(0)
 
         # ── Topo ─────────────────────────────────────────────────────────
         ov_top = QWidget()
@@ -569,20 +588,24 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         ov_top_lay.addWidget(self.ov_set_idle_btn)
         ov_top_lay.addWidget(self.ov_fullscreen_btn)
         ov_top_lay.addWidget(self.ov_panel_btn)
-        ov_lay.addWidget(ov_top)
+        self._overlay_layout.addWidget(ov_top)
+        startup.mark("projection_overlay_header_constructed")
 
         # ── Body: preview + painel lateral ───────────────────────────────
         body = QWidget()
         self._overlay_body = body
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         body.setStyleSheet(f"background: {PALETTE.bg0};")
-        body_lay = QHBoxLayout(body)
-        body_lay.setContentsMargins(0, 0, 0, 0)
-        body_lay.setSpacing(0)
+        self._overlay_body_layout = QHBoxLayout(body)
+        self._overlay_body_layout.setContentsMargins(0, 0, 0, 0)
+        self._overlay_body_layout.setSpacing(0)
 
         # Stack de conteúdo (preview / timer)
         self.overlay_stack = QStackedWidget()
         self.overlay_stack.setStyleSheet("background: transparent;")
+
+    def _build_overlay_preview(self) -> None:
+        from solin.bootstrap.startup_timeline import startup_timeline
 
         self.preview_content = ImagePreviewWidget()
         self.preview_content.setSizePolicy(
@@ -598,22 +621,38 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self.preview_content.installEventFilter(self)
         self.overlay_stack.addWidget(self.preview_content)   # index 0
+        startup_timeline().mark("projection_overlay_preview_constructed")
+
+    def _build_overlay_timer(self) -> None:
+        from solin.bootstrap.startup_timeline import startup_timeline
 
         self.circular_timer = CircularTimerWidget()
         self.overlay_stack.addWidget(self.circular_timer)    # index 1
+        startup_timeline().mark("projection_overlay_timer_constructed")
+
+    def _finish_overlay(self) -> None:
+        from solin.bootstrap.startup_timeline import startup_timeline
 
         # Painel de playlist (inicia fechado = largura 0)
         self.playlist_panel = PlaylistPanel(lang=self.lang)
         self._thumb_queue.info_ready.connect(self._on_thumbnail_ready)
         self.playlist_panel.item_clicked.connect(self._on_panel_item_clicked)
+        startup_timeline().mark("projection_overlay_playlist_constructed")
 
-        body_lay.addWidget(self.overlay_stack, stretch=1)
-        body_lay.addWidget(self.playlist_panel)
+        self._overlay_body_layout.addWidget(self.overlay_stack, stretch=1)
+        self._overlay_body_layout.addWidget(self.playlist_panel)
 
-        ov_lay.addWidget(body, stretch=1)
+        self._overlay_layout.addWidget(self._overlay_body, stretch=1)
+        self._overlay_ready = True
+        startup_timeline().mark("projection_bar_overlay_constructed")
+
+    def _ensure_overlay_ready(self) -> None:
+        if self._overlay_ready:
+            return
+        self.overlay_preparation_handle.complete_now()
 
     def _update_overlay_geometry(self):
-        if not self._container:
+        if not self._container or self.overlay is None:
             return
         c = self._container
         self.overlay.setGeometry(0, 0, c.width(), max(0, c.height() - self._BAR_H))
@@ -656,6 +695,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _expand(self):
         if self._expanded:
             return
+        self._ensure_overlay_ready()
         self._expanded = True
         self.expanded_changed.emit(True)
         self._update_overlay_geometry()
@@ -893,6 +933,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def set_projected_title(self, title: str) -> None:
         if not title:
             return
+        self._ensure_overlay_ready()
         short = (title[:22] + "…") if len(title) > 22 else title
         self.proj_title.setText(short)
         self.proj_title.setToolTip(title)
@@ -909,12 +950,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._mode = mode
 
     def hide_add_to_destination_action(self) -> None:
+        self._ensure_overlay_ready()
         self.ov_add_destination_btn.setVisible(False)
 
     def is_obs_scene_media(self) -> bool:
         return self._obs_scene_is_media
 
     def activate_video(self, title: str, keep_expanded: bool = False, is_audio: bool = False):
+        self._ensure_overlay_ready()
         self.cancel_auto_share_playback_wait()
         self._cancel_announcement_mode()
         self._enter_mode("video")
@@ -997,6 +1040,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         keep_expanded: bool = False,
         initial_transform: ImageTransform | None = None,
     ):
+        self._ensure_overlay_ready()
         self._enter_mode("image")
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
@@ -1102,6 +1146,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.preview_content.setPixmap(pixmap)
 
     def activate_live_stream(self, title: str, keep_expanded: bool = False):
+        self._ensure_overlay_ready()
         self._cancel_announcement_mode()
         self._enter_mode("live_stream")
         self._last_buffer_progress = (0, 0)
@@ -1170,6 +1215,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         target_dt: QDateTime,
         presentation: MediaCountdownPresentation,
     ) -> None:
+        self._ensure_overlay_ready()
         self._enter_mode("timer")
         self._timer_presentation = presentation
         self._last_buffer_progress = (0, 0)
@@ -1442,6 +1488,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             " font-weight: 700; letter-spacing: 1px; min-width: 90px;"
         )
         self.close_btn.setStyleSheet(self._close_button_stylesheet())
+        if self.overlay is None:
+            return
         self._apply_icon_button_styles()
         self.overlay.setStyleSheet(f"background: {PALETTE.bg0};")
         self._overlay_header.setStyleSheet(
@@ -1478,6 +1526,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.close_btn.setToolTip(self.tr("Stop projection"))
         self.prev_btn.setToolTip(self.tr("Previous"))
         self.next_btn.setToolTip(self.tr("Next"))
+        if self.overlay is None:
+            self.set_screen_count(self._screen_count)
+            self._offline_badge.setToolTip(self.tr("Playing offline"))
+            self.obs_scene_btn.setToolTip(self.tr("Hide media from OBS"))
+            return
         self.minimize_btn.setToolTip(self.tr("Minimize"))
         self.ov_panel_btn.setToolTip(self.tr("Show playlist"))
         self.ov_send_temp_btn.setToolTip(self.tr("Open as temporary playlist"))

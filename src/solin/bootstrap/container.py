@@ -8,6 +8,7 @@ from typing import Any, TYPE_CHECKING
 
 from solin.bootstrap.config import AppConfig
 from solin.bootstrap.lifecycle import ApplicationLifecycle
+from solin.bootstrap.maintenance import DeferredApplicationMaintenance
 from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.foundation.settings_store import (
     GlobalSettingsStore,
@@ -48,6 +49,7 @@ class ApplicationContainer:
     profile_runtime: ProfileRuntimeContextFactory
     onboarding_service: OnboardingService
     lifecycle: ApplicationLifecycle
+    deferred_maintenance: DeferredApplicationMaintenance
     window_ref: list[Any | None] = field(default_factory=lambda: [None])
 
 
@@ -132,6 +134,11 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     lifecycle.register_cleanup(media.shutdown)
     lifecycle.register_cleanup(font_manager.shutdown)
     lifecycle.register_cleanup(jw_songs_store.shutdown)
+    deferred_maintenance = DeferredApplicationMaintenance(
+        installation_settings,
+        runtime_paths,
+    )
+    lifecycle.register_cleanup(deferred_maintenance.shutdown)
 
     return ApplicationContainer(
         app=app,
@@ -151,4 +158,5 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         profile_runtime=profile_runtime,
         onboarding_service=onboarding_service,
         lifecycle=lifecycle,
+        deferred_maintenance=deferred_maintenance,
     )

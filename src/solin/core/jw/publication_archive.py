@@ -104,9 +104,12 @@ def download_jwpub_archive(
     stream_factory: StreamFactory = stream_get,
     timeout: int = 60,
     chunk_size: int = 256 * 1024,
+    cancelled: Callable[[], bool] | None = None,
 ) -> None:
     """Download a JWPUB archive to ``destination`` and report integer progress."""
     try:
+        if cancelled is not None and cancelled():
+            raise JwpubArchiveDownloadError("Download cancelled")
         with stream_factory(
             url,
             timeout=timeout,
@@ -117,6 +120,8 @@ def download_jwpub_archive(
             chunks: list[bytes] = []
             last_pct = -1
             for chunk in response.iter_bytes(chunk_size):
+                if cancelled is not None and cancelled():
+                    raise JwpubArchiveDownloadError("Download cancelled")
                 chunks.append(chunk)
                 done += len(chunk)
                 pct = int(done / total * 100) if total else 0
@@ -124,6 +129,8 @@ def download_jwpub_archive(
                     last_pct = pct
                     progress(pct)
 
+        if cancelled is not None and cancelled():
+            raise JwpubArchiveDownloadError("Download cancelled")
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"".join(chunks))
     except (HttpError, OSError, ValueError) as exc:

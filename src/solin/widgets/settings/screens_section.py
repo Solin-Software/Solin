@@ -126,6 +126,8 @@ class ScreensSectionMixin:
             lay.addWidget(s_row)
 
     def _refresh_screens(self):
+        if not hasattr(self, "_screens_card_lay"):
+            return
         self._populate_screens()
 
     def _apply_screens_theme(self):
